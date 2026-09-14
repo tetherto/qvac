@@ -1,4 +1,5 @@
 #include <chrono>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
@@ -11,6 +12,42 @@
 #include "model-interface/MultiRequestBatcher.hpp"
 
 using namespace qvac_lib_inference_addon_llama::batching;
+
+namespace {
+/// The chunk every active slot was granted by the last fillBatch(), or
+/// `kMixedChunk` when they differ. Chunks are budgeted per slot, but these
+/// tests set up uniform active sets, so this keeps their assertions as
+/// direct as they were when one chunk size covered the whole batch.
+///
+/// A slot with tokens to feed that was granted *nothing* also returns
+/// `kMixedChunk`. Skipping those instead would make this blind to the one
+/// regression per-slot budgeting can cause that a global chunk size could
+/// not — starving a single slot while its neighbours look correct — which
+/// is exactly what the assertions translated to use this helper used to
+/// catch for free, `chunkSize` being one value for the whole batch.
+constexpr unsigned kMixedChunk = std::numeric_limits<unsigned>::max();
+
+unsigned uniformChunk(const MultiRequestBatcher& batcher) {
+  constexpr uint32_t kSeqScanLimit = 64;
+  unsigned seen = 0;
+  for (uint32_t seqId = 0; seqId < kSeqScanLimit; seqId++) {
+    const unsigned granted = batcher.chunkSizeFor(seqId);
+    if (granted == 0) {
+      const Request* req = batcher.requestAt(seqId);
+      if (req != nullptr && req->hasTokensToFeed()) {
+        return kMixedChunk;
+      }
+      continue;
+    }
+    if (seen == 0) {
+      seen = granted;
+    } else if (seen != granted) {
+      return kMixedChunk;
+    }
+  }
+  return seen;
+}
+} // namespace
 
 /// Simulates llama_decode() for testing. Each batch entry whose logits
 /// flag is set produces a "logit row" stored under its batch index, mimicking
@@ -269,15 +306,16 @@ protected:
 
 /// Test 4 requests with batchSize=2 (only 2 concurrent slots).
 /// Mixed sequence sizes: req 0=3, req 1=6, req 2=3, req 3=3 tokens.
-/// kMaxChunkSize=12 (large), so chunk size is determined by smallest remaining
-/// among active sequences. This synchronizes boundaries for slot reuse.
+/// kMaxChunkSize=12 (large) and the batch is ample, so each slot takes its
+/// own remaining prompt in one step — a short sequence does not hold a
+/// longer one back.
 ///
 /// Flow:
 /// - Step 1: Add req 0 (3 tokens) and req 1 (6 tokens) - 3rd rejected
-/// - Step 2: Batch 1 = min(3,6)=3 → 3+3=6 tokens. Seq 0 done, slot 0 free.
+/// - Step 2: Batch 1 = 3+6=9 tokens. Both prefills complete, slot 0 freed.
 /// - Step 3: Add req 2 (3 tokens) into slot 0
-/// - Step 4: Batch 2 = min(3 remaining seq 1, 3 req 2)=3 → 3+3=6 tokens. Both
-/// done.
+/// - Step 4: Batch 2 = 3 tokens. Seq 1 is prefill-complete and awaiting a
+///   sample, so only slot 0 feeds.
 /// - Step 5: Add req 3 (3 tokens) into slot 0
 /// - Step 6: Batch 3 = 3 tokens (only req 3 active). Done.
 TEST_F(MultiRequestBatcherTest, BatchFourRequestsWithBatchSizeTwo) {
@@ -310,10 +348,15 @@ TEST_F(MultiRequestBatcherTest, BatchFourRequestsWithBatchSizeTwo) {
           seqIdReject),
       MultiRequestBatcher::AddStatus::ErrNoFreeSlot);
 
-  // === Step 2: Batch 1 = min(3, 6)=3 tokens per seq → 6 tokens total ===
-  // seq 0 (3 tokens) finishes; seq 1 has 3 tokens remaining.
+  // === Step 2: Batch 1 = 3 + 6 = 9 tokens ===
+  // Each slot takes its whole remaining prompt: seq 0's 3 tokens do not cap
+  // seq 1's 6. Both prefills complete this step.
   auto result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 3);
+  EXPECT_EQ(batcher.chunkSizeFor(seqId0), 3u);
+  EXPECT_EQ(batcher.chunkSizeFor(seqId1), 6u);
+  EXPECT_EQ(result.totalTokens, 9u);
+  EXPECT_EQ(result.prefillTokens, 9u);
+  EXPECT_EQ(result.decodeTokens, 0u);
   EXPECT_EQ(result.numActiveSequences, 2);
 
   llama_batch& lBatch = *batch;
@@ -325,15 +368,18 @@ TEST_F(MultiRequestBatcherTest, BatchFourRequestsWithBatchSizeTwo) {
   EXPECT_EQ(lBatch.token[2], 300);
   EXPECT_EQ(lBatch.pos[2], 2);
   EXPECT_EQ(lBatch.logits[2], 1);
-  // Sequence 1: first 3 of 6 tokens, no logits yet.
+  // Sequence 1: all 6 tokens, last has logits.
   EXPECT_EQ(lBatch.seq_id[3][0], 1);
   EXPECT_EQ(lBatch.token[3], 101);
   EXPECT_EQ(lBatch.token[4], 201);
   EXPECT_EQ(lBatch.token[5], 301);
-  EXPECT_EQ(lBatch.pos[5], 2);
-  EXPECT_EQ(lBatch.logits[5], 0);
+  EXPECT_EQ(lBatch.token[6], 401);
+  EXPECT_EQ(lBatch.token[7], 501);
+  EXPECT_EQ(lBatch.token[8], 601);
+  EXPECT_EQ(lBatch.pos[8], 5);
+  EXPECT_EQ(lBatch.logits[8], 1);
 
-  batcher.advance(result.chunkSize);
+  batcher.advance();
   // seq 0 is prefill-complete; caller marks finished to free its slot.
   EXPECT_TRUE(batcher.markFinished(seqId0));
   auto finished0 = batcher.extractFinished();
@@ -349,11 +395,13 @@ TEST_F(MultiRequestBatcherTest, BatchFourRequestsWithBatchSizeTwo) {
       MultiRequestBatcher::AddStatus::Ok);
   EXPECT_EQ(seqId2, 0);
 
-  // === Step 4: Batch 2 = min(3 remaining of seq 1, 3 of req 2)=3 → 6 tokens
-  // ===
+  // === Step 4: Batch 2 = 3 tokens (only slot 0 feeds) ===
+  // Seq 1 finished its prefill in step 2 and has no sampled token to feed
+  // yet, so it is idle rather than active.
   result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 3);
-  EXPECT_EQ(result.numActiveSequences, 2);
+  EXPECT_EQ(uniformChunk(batcher), 3);
+  EXPECT_EQ(result.totalTokens, 3u);
+  EXPECT_EQ(result.numActiveSequences, 1);
 
   // Slot 0 (was request 2): tokens 102, 202, 302 starting at pos 0.
   EXPECT_EQ(lBatch.seq_id[0][0], 0);
@@ -362,16 +410,8 @@ TEST_F(MultiRequestBatcherTest, BatchFourRequestsWithBatchSizeTwo) {
   EXPECT_EQ(lBatch.token[1], 202);
   EXPECT_EQ(lBatch.token[2], 302);
   EXPECT_EQ(lBatch.logits[2], 1);
-  // Slot 1 (still seq 1): remaining tokens 401, 501, 601 starting at pos 3.
-  EXPECT_EQ(lBatch.seq_id[3][0], 1);
-  EXPECT_EQ(lBatch.token[3], 401);
-  EXPECT_EQ(lBatch.pos[3], 3);
-  EXPECT_EQ(lBatch.token[4], 501);
-  EXPECT_EQ(lBatch.token[5], 601);
-  EXPECT_EQ(lBatch.pos[5], 5);
-  EXPECT_EQ(lBatch.logits[5], 1);
 
-  batcher.advance(result.chunkSize);
+  batcher.advance();
   EXPECT_TRUE(batcher.markFinished(seqId2));
   EXPECT_TRUE(batcher.markFinished(seqId1));
   auto finished12 = batcher.extractFinished();
@@ -390,7 +430,7 @@ TEST_F(MultiRequestBatcherTest, BatchFourRequestsWithBatchSizeTwo) {
 
   // === Step 6: Batch 3 = 3 tokens (only req 3 active) ===
   result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 3);
+  EXPECT_EQ(uniformChunk(batcher), 3);
   EXPECT_EQ(result.numActiveSequences, 1);
   EXPECT_EQ(lBatch.seq_id[0][0], 0);
   EXPECT_EQ(lBatch.token[0], 103);
@@ -398,7 +438,7 @@ TEST_F(MultiRequestBatcherTest, BatchFourRequestsWithBatchSizeTwo) {
   EXPECT_EQ(lBatch.token[2], 303);
   EXPECT_EQ(lBatch.logits[2], 1);
 
-  batcher.advance(result.chunkSize);
+  batcher.advance();
   EXPECT_TRUE(batcher.markFinished(seqId3));
   auto finished3 = batcher.extractFinished();
   ASSERT_EQ(finished3.size(), 1);
@@ -427,10 +467,17 @@ TEST_F(MultiRequestBatcherTest, ChunkSizePerSequencePrefillOnly) {
       batcher.addRequest({400, 401, 402, 403, 404}, seqId3),
       MultiRequestBatcher::AddStatus::Ok);
 
-  // Batch 1: chunk = min(3, min(2,2,2,5)) = 2 → 2+2+2+2 = 8 tokens.
-  // Sequences 0, 1, 2 finish (2/2 tokens). Seq 3 has 3 tokens left.
+  // Batch 1: each slot takes min(maxChunkSize, its remaining) — 2, 2, 2 and
+  // a full chunk of 3 for the longer seq 3 → 9 tokens. The three 2-token
+  // prompts do not cap seq 3 at 2.
+  // Sequences 0, 1, 2 finish (2/2 tokens). Seq 3 has 2 tokens left.
   auto result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 2);
+  EXPECT_EQ(batcher.chunkSizeFor(seqId0), 2u);
+  EXPECT_EQ(batcher.chunkSizeFor(seqId1), 2u);
+  EXPECT_EQ(batcher.chunkSizeFor(seqId2), 2u);
+  EXPECT_EQ(batcher.chunkSizeFor(seqId3), 3u);
+  EXPECT_EQ(result.totalTokens, 9u);
+  EXPECT_EQ(result.prefillTokens, 9u);
   EXPECT_EQ(result.numActiveSequences, 4);
 
   llama_batch& lBatch = *batch;
@@ -442,12 +489,13 @@ TEST_F(MultiRequestBatcherTest, ChunkSizePerSequencePrefillOnly) {
   EXPECT_EQ(lBatch.token[5], 301);
   EXPECT_EQ(lBatch.token[6], 400);
   EXPECT_EQ(lBatch.token[7], 401);
+  EXPECT_EQ(lBatch.token[8], 402);
   EXPECT_EQ(lBatch.logits[1], 1); // seq 0 last
   EXPECT_EQ(lBatch.logits[3], 1); // seq 1 last
   EXPECT_EQ(lBatch.logits[5], 1); // seq 2 last
-  EXPECT_EQ(lBatch.logits[7], 0); // seq 3 not last
+  EXPECT_EQ(lBatch.logits[8], 0); // seq 3 not last
 
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   EXPECT_TRUE(batcher.markFinished(seqId0));
   EXPECT_TRUE(batcher.markFinished(seqId1));
@@ -459,17 +507,280 @@ TEST_F(MultiRequestBatcherTest, ChunkSizePerSequencePrefillOnly) {
     EXPECT_EQ(req.stopReason, StopReason::Finished);
   }
 
-  // Batch 2: chunk = min(3, 3) = 3 → only seq 3 active, 3 tokens.
+  // Batch 2: only seq 3 active, its last 2 tokens.
   result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 3);
+  EXPECT_EQ(uniformChunk(batcher), 2);
+  EXPECT_EQ(result.totalTokens, 2u);
   EXPECT_EQ(result.numActiveSequences, 1);
   EXPECT_EQ(lBatch.seq_id[0][0], 3);
-  EXPECT_EQ(lBatch.token[0], 402);
-  EXPECT_EQ(lBatch.pos[0], 2);
-  EXPECT_EQ(lBatch.token[1], 403);
-  EXPECT_EQ(lBatch.token[2], 404);
-  EXPECT_EQ(lBatch.pos[2], 4);
-  EXPECT_EQ(lBatch.logits[2], 1);
+  EXPECT_EQ(lBatch.token[0], 403);
+  EXPECT_EQ(lBatch.pos[0], 3);
+  EXPECT_EQ(lBatch.token[1], 404);
+  EXPECT_EQ(lBatch.pos[1], 4);
+  EXPECT_EQ(lBatch.logits[1], 1);
+}
+
+/// Regression: a generating slot feeds exactly one token per step. While the
+/// chunk was a single global minimum across all active slots, that one token
+/// became the chunk for everyone, throttling any concurrent prefill to one
+/// prompt token per decode step — a request admitted next to a generating one
+/// then needed as many steps to reach its first token as its prompt had
+/// tokens. Budgets are per slot, so the prefill keeps its full chunk.
+TEST_F(
+    MultiRequestBatcherTest, GeneratingSlotDoesNotThrottleConcurrentPrefill) {
+  constexpr unsigned kMaxChunkSize = 8;
+  constexpr unsigned kMaxTokensPerSeq = 100;
+  constexpr size_t kBatchSize = 2;
+
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, kBatchSize);
+  LlamaBatch batch(kMaxChunkSize * kBatchSize, 0, kBatchSize);
+
+  // Seq 0 prefills alone and reaches the generation phase.
+  uint32_t seqId0 = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11}, seqId0), MultiRequestBatcher::AddStatus::Ok);
+  auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.totalTokens, 2u);
+  mocked_llama_decode(*batch);
+  batcher.advance();
+  batcher.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
+    return mocked_llama_sampler_sample(seqId, logitIdx);
+  });
+
+  // Seq 1 arrives while seq 0 is generating.
+  uint32_t seqId1 = 0;
+  ASSERT_EQ(
+      batcher.addRequest({20, 21, 22, 23, 24}, seqId1),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.numActiveSequences, 2);
+  EXPECT_EQ(result.numPrefillingSequences, 1);
+  // The generating slot feeds its one sampled token ...
+  EXPECT_EQ(batcher.chunkSizeFor(seqId0), 1u);
+  // ... while the newcomer still prefills its whole prompt in this step.
+  EXPECT_EQ(batcher.chunkSizeFor(seqId1), 5u);
+  EXPECT_EQ(result.decodeTokens, 1u);
+  EXPECT_EQ(result.prefillTokens, 5u);
+  EXPECT_EQ(result.totalTokens, 6u);
+
+  // Heterogeneous chunks are the new code path, so pin the batch layout they
+  // produce and not just the grants: the generating slot takes index 0, the
+  // prefilling slot the next five, and only the last of those carries the
+  // logits row. A regression that budgeted correctly but mis-placed the
+  // logits flag would leave the newcomer unable to sample.
+  llama_batch& lBatch = *batch;
+  EXPECT_EQ(lBatch.n_tokens, 6);
+  EXPECT_EQ(lBatch.seq_id[0][0], static_cast<llama_seq_id>(seqId0));
+  EXPECT_EQ(lBatch.logits[0], 1);
+  for (int i = 1; i <= 5; i++) {
+    EXPECT_EQ(lBatch.seq_id[i][0], static_cast<llama_seq_id>(seqId1));
+    EXPECT_EQ(lBatch.token[i], 20 + (i - 1));
+    EXPECT_EQ(lBatch.pos[i], i - 1);
+    EXPECT_EQ(lBatch.logits[i], i == 5 ? 1 : 0);
+  }
+
+  mocked_llama_decode(*batch);
+  batcher.advance();
+  // One step was enough: the late arrival is ready to sample its first token.
+  const Request* late = batcher.requestAt(seqId1);
+  ASSERT_NE(late, nullptr);
+  EXPECT_TRUE(late->isPrefillComplete());
+
+  // And it really can sample — the logits row recorded above is reachable.
+  batcher.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
+    return mocked_llama_sampler_sample(seqId, logitIdx);
+  });
+  late = batcher.requestAt(seqId1);
+  ASSERT_NE(late, nullptr);
+  EXPECT_EQ(late->generatedTokens.size(), 1u);
+}
+
+/// The water-fill's redistribution round: capacity binds, but not evenly.
+/// Slots whose want fits the current equal share are granted it outright and
+/// the surplus flows to the rest, which then split a *larger* share than the
+/// first round offered. The three pre-existing capacity tests all resolve in
+/// a single pass (every want above the share, or capacity never binding), so
+/// without this the multi-round path — and with it the bound that keeps the
+/// sum of the grants inside `batch.capacity()`, which is what stops fillBatch
+/// writing past the llama_batch — is never executed.
+TEST(MultiRequestBatcherCapacityTest, WaterFillRedistributesSurplus) {
+  constexpr unsigned maxChunkSize = 8;
+  constexpr unsigned maxTokensPerSeq = 100;
+  constexpr size_t batchSize = 4;
+  constexpr int32_t batchCapacity = 10;
+
+  MultiRequestBatcher batcher(maxChunkSize, maxTokensPerSeq, batchSize);
+  LlamaBatch batch(batchCapacity, 0, batchSize);
+
+  // Two 1-token prompts and two 8-token prompts. Round 1: share = 10/4 = 2,
+  // so the two short slots take 1 each and 8 tokens remain for two slots.
+  // Round 2: share = 8/2 = 4 — still under their want of 8 — so they split
+  // it evenly. Grants: 1, 1, 4, 4 = 10, exactly capacity.
+  uint32_t shortA = 0, shortB = 0, longA = 0, longB = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10}, shortA), MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({20}, shortB), MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({30, 31, 32, 33, 34, 35, 36, 37}, longA),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({40, 41, 42, 43, 44, 45, 46, 47}, longB),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  const auto result = batcher.fillBatch(batch);
+
+  EXPECT_EQ(result.numActiveSequences, 4u);
+  EXPECT_EQ(batcher.chunkSizeFor(shortA), 1u);
+  EXPECT_EQ(batcher.chunkSizeFor(shortB), 1u);
+  EXPECT_EQ(batcher.chunkSizeFor(longA), 4u);
+  EXPECT_EQ(batcher.chunkSizeFor(longB), 4u);
+  EXPECT_EQ(result.totalTokens, 10u);
+  EXPECT_EQ(result.prefillTokens, 10u);
+
+  // The bound that makes this memory-safe, asserted directly.
+  EXPECT_LE(result.totalTokens, static_cast<unsigned>(batchCapacity));
+  EXPECT_EQ((*batch).n_tokens, batchCapacity);
+
+  // The short slots consumed their whole prompt, so they carry a logits row;
+  // the long ones are mid-prefill and must not.
+  EXPECT_EQ((*batch).logits[0], 1);
+  EXPECT_EQ((*batch).logits[1], 1);
+  EXPECT_EQ((*batch).logits[5], 0);
+  EXPECT_EQ((*batch).logits[9], 0);
+}
+
+/// The even-split branch grants `share` to every survivor, and `share` is by
+/// construction below each survivor's want — so no slot is ever handed more
+/// than it has left to feed even when the remainders are uneven.
+TEST(MultiRequestBatcherCapacityTest, EvenSplitNeverExceedsRemainingToFeed) {
+  constexpr unsigned maxChunkSize = 8;
+  constexpr unsigned maxTokensPerSeq = 100;
+  constexpr size_t batchSize = 3;
+  constexpr int32_t batchCapacity = 7;
+
+  MultiRequestBatcher batcher(maxChunkSize, maxTokensPerSeq, batchSize);
+  LlamaBatch batch(batchCapacity, 0, batchSize);
+
+  // Wants 3, 8, 8 against capacity 7. Round 1: share = 7/3 = 2, nothing
+  // fits, so all three split 2 each = 6 tokens, one left unused. The slot
+  // with only 3 tokens left takes 2, not 3 — and critically not more.
+  uint32_t small = 0, bigA = 0, bigB = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11, 12}, small),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({20, 21, 22, 23, 24, 25, 26, 27}, bigA),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(
+      batcher.addRequest({30, 31, 32, 33, 34, 35, 36, 37}, bigB),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  const auto result = batcher.fillBatch(batch);
+
+  EXPECT_EQ(batcher.chunkSizeFor(small), 2u);
+  EXPECT_EQ(batcher.chunkSizeFor(bigA), 2u);
+  EXPECT_EQ(batcher.chunkSizeFor(bigB), 2u);
+  EXPECT_EQ(result.totalTokens, 6u);
+  EXPECT_LE(result.totalTokens, static_cast<unsigned>(batchCapacity));
+
+  // Mid-prefill on every slot, so no logits row anywhere.
+  for (int i = 0; i < (*batch).n_tokens; i++) {
+    EXPECT_EQ((*batch).logits[i], 0);
+  }
+}
+
+/// Committing a step is one-shot. A second advance() with no fillBatch()
+/// between must not replay the budgets: that would run currentPos ahead of
+/// the KV cache with nothing decoded, and nothing downstream would notice.
+///
+/// The prompt deliberately outlasts one chunk (7 tokens at maxChunkSize 2).
+/// A slot whose prefill *completes* in the first step stops satisfying
+/// `hasTokensToFeed()`, so advance()'s own filter would skip it on a second
+/// call and the test would pass whether or not committing is one-shot. Only
+/// a still-prefilling slot is actually exposed to a double-commit.
+TEST_F(MultiRequestBatcherTest, SecondAdvanceWithoutFillBatchIsNoOp) {
+  MultiRequestBatcher batcher(2, 100, 2);
+  LlamaBatch batch(16, 0, 2);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11, 12, 13, 14, 15, 16}, seqId),
+      MultiRequestBatcher::AddStatus::Ok);
+
+  const auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.totalTokens, 2u);
+  mocked_llama_decode(*batch);
+  batcher.advance();
+
+  const Request* req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  // Mid-prefill, so the slot still has tokens to feed and advance() would
+  // happily move it again if the commit were not consumed.
+  ASSERT_TRUE(req->hasTokensToFeed());
+  const llama_pos posAfterCommit = req->currentPos;
+  const size_t fedAfterCommit = req->prefillFedCount;
+  ASSERT_EQ(posAfterCommit, 2);
+  ASSERT_EQ(fedAfterCommit, 2u);
+
+  batcher.advance();
+  batcher.advance();
+
+  req = batcher.requestAt(seqId);
+  ASSERT_NE(req, nullptr);
+  EXPECT_EQ(req->currentPos, posAfterCommit);
+  EXPECT_EQ(req->prefillFedCount, fedAfterCommit);
+}
+
+/// A budget belongs to the request it was computed for. Freeing a slot drops
+/// it, so a later occupant of the same seqId cannot be advanced by tokens it
+/// never had in the batch.
+TEST_F(MultiRequestBatcherTest, FreeingASlotDropsItsChunkBudget) {
+  MultiRequestBatcher batcher(8, 100, 2);
+  LlamaBatch batch(16, 0, 2);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11, 12, 13}, seqId),
+      MultiRequestBatcher::AddStatus::Ok);
+  const auto result = batcher.fillBatch(batch);
+  ASSERT_EQ(result.totalTokens, 4u);
+  ASSERT_EQ(batcher.chunkSizeFor(seqId), 4u);
+
+  EXPECT_TRUE(batcher.cancel(seqId));
+  EXPECT_EQ(batcher.chunkSizeFor(seqId), 0u);
+
+  // The slot is reusable and its new occupant starts from a clean budget.
+  uint32_t reused = 0;
+  ASSERT_EQ(
+      batcher.addRequest({20, 21}, reused), MultiRequestBatcher::AddStatus::Ok);
+  EXPECT_EQ(reused, seqId);
+  EXPECT_EQ(batcher.chunkSizeFor(reused), 0u);
+
+  // A stray advance() cannot move the newcomer: the budget went with the
+  // cancelled request, and the commit for that step was already consumed.
+  batcher.advance();
+  const Request* fresh = batcher.requestAt(reused);
+  ASSERT_NE(fresh, nullptr);
+  EXPECT_EQ(fresh->currentPos, 0);
+  EXPECT_EQ(fresh->prefillFedCount, 0u);
+}
+
+/// extractFinished() frees slots too, so it must drop budgets as well.
+TEST_F(MultiRequestBatcherTest, ExtractFinishedDropsChunkBudget) {
+  MultiRequestBatcher batcher(8, 100, 2);
+  LlamaBatch batch(16, 0, 2);
+
+  uint32_t seqId = 0;
+  ASSERT_EQ(
+      batcher.addRequest({10, 11}, seqId), MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_EQ(batcher.fillBatch(batch).totalTokens, 2u);
+  ASSERT_EQ(batcher.chunkSizeFor(seqId), 2u);
+
+  EXPECT_TRUE(batcher.markFinished(seqId));
+  ASSERT_EQ(batcher.extractFinished().size(), 1u);
+  EXPECT_EQ(batcher.chunkSizeFor(seqId), 0u);
 }
 
 TEST_F(MultiRequestBatcherTest, RejectsOversizedRequests) {
@@ -507,7 +818,7 @@ TEST(MultiRequestBatcherCapacityTest, FillBatchClampsChunkToCapacity) {
   auto result = batcher.fillBatch(batch);
 
   EXPECT_EQ(result.numActiveSequences, 4u);
-  EXPECT_EQ(result.chunkSize, 1u);
+  EXPECT_EQ(uniformChunk(batcher), 1u);
   EXPECT_EQ((*batch).n_tokens, batchCapacity);
 }
 
@@ -529,7 +840,7 @@ TEST(
 
   auto result = batcher.fillBatch(batch);
 
-  EXPECT_EQ(result.chunkSize, maxChunkSize);
+  EXPECT_EQ(uniformChunk(batcher), maxChunkSize);
   EXPECT_EQ((*batch).n_tokens, 4);
 }
 
@@ -554,7 +865,7 @@ TEST(
   auto result = batcher.fillBatch(batch);
 
   EXPECT_EQ(result.numActiveSequences, 4u);
-  EXPECT_EQ(result.chunkSize, 0u);
+  EXPECT_EQ(result.totalTokens, 0u);
   EXPECT_EQ((*batch).n_tokens, 0);
 }
 
@@ -611,9 +922,9 @@ TEST_F(MultiRequestBatcherTest, PendingPrefillTokensClearedAfterPrefill) {
   // Drive prefill in two chunks of 3 + 2 to confirm the buffer holds
   // remaining tokens during prefill, then drains to empty.
   auto result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 5);
+  EXPECT_EQ(uniformChunk(batcher), 5);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   // Prefill drained: pendingPrefillTokens must be empty, capacity not held.
   // We mark finished then extract to inspect the Request.
@@ -655,12 +966,12 @@ TEST_F(MultiRequestBatcherTest, PrefillAndGenerationWithMockedDecode) {
       MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 3);
+  EXPECT_EQ(uniformChunk(batcher), 3);
   EXPECT_EQ(result.numActiveSequences, 2);
 
   // "Decode" the prefill batch
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   // Verify mock saw all 6 tokens
   EXPECT_EQ(mocked_decoded_[0].size(), 3);
@@ -688,11 +999,11 @@ TEST_F(MultiRequestBatcherTest, PrefillAndGenerationWithMockedDecode) {
     });
 
     auto genResult = batcher.fillBatch(batch);
-    EXPECT_EQ(genResult.chunkSize, 1);
+    EXPECT_EQ(uniformChunk(batcher), 1);
     EXPECT_EQ(genResult.numActiveSequences, 2);
 
     mocked_llama_decode(*batch);
-    batcher.advance(genResult.chunkSize);
+    batcher.advance();
 
     // No request is finished yet - the caller hasn't marked them.
     EXPECT_EQ(batcher.extractFinished().size(), 0);
@@ -790,9 +1101,9 @@ TEST_F(MultiRequestBatcherTest, SamplerReceivesMatchingLogitIndex) {
       MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.chunkSize, 3);
+  ASSERT_EQ(uniformChunk(batcher), 3);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   std::map<uint32_t, int> seenIndices;
   batcher.sampleAndAppendIdle([&](uint32_t seqId, int logitIdx) {
@@ -833,9 +1144,9 @@ TEST_F(MultiRequestBatcherTest, NoSampleWhenChunkDoesNotFinishPrefill) {
       MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.chunkSize, 2);
+  ASSERT_EQ(uniformChunk(batcher), 2);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   int sampleCount = 0;
   batcher.sampleAndAppendIdle([&](uint32_t seqId, int logitIdx) {
@@ -865,9 +1176,9 @@ TEST_F(MultiRequestBatcherTest, NullSampleIsNotRecorded) {
       batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.chunkSize, 2);
+  ASSERT_EQ(uniformChunk(batcher), 2);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   batcher.sampleAndAppendIdle([](uint32_t, int) { return LLAMA_TOKEN_NULL; });
 
@@ -895,9 +1206,9 @@ TEST_F(MultiRequestBatcherTest, FinishingSampleIsNotRecorded) {
       batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.chunkSize, 2);
+  ASSERT_EQ(uniformChunk(batcher), 2);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   // First sample continues the sequence and is recorded.
   batcher.sampleAndAppendIdle([](uint32_t, int) { return 40; });
@@ -906,9 +1217,9 @@ TEST_F(MultiRequestBatcherTest, FinishingSampleIsNotRecorded) {
   ASSERT_EQ(req->generatedTokens.size(), 1u);
 
   auto genResult = batcher.fillBatch(batch);
-  ASSERT_EQ(genResult.chunkSize, 1);
+  ASSERT_EQ(uniformChunk(batcher), 1);
   mocked_llama_decode(*batch);
-  batcher.advance(genResult.chunkSize);
+  batcher.advance();
 
   const auto rateWindowEnd = req->lastTokenAt;
 
@@ -943,9 +1254,9 @@ TEST_F(MultiRequestBatcherTest, TerminalFirstSampleStillStampsTtft) {
       batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.chunkSize, 2);
+  ASSERT_EQ(uniformChunk(batcher), 2);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
     batcher.markFinished(sid);
@@ -979,9 +1290,9 @@ TEST_F(MultiRequestBatcherTest, PredictionLimitSampleIsCounted) {
       batcher.addRequest({10, 20}, seqId), MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.chunkSize, 2);
+  ASSERT_EQ(uniformChunk(batcher), 2);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   batcher.sampleAndAppendIdle([&batcher](uint32_t sid, int) {
     batcher.markFinished(sid, StopReason::PredictionLimit);
@@ -999,7 +1310,7 @@ TEST_F(MultiRequestBatcherTest, PredictionLimitSampleIsCounted) {
   // Counted but never fed: the slot is finished, so nothing may queue behind
   // it and `fillBatch` has no work left.
   EXPECT_EQ(req->remainingToFeed(), 0u);
-  EXPECT_EQ(batcher.fillBatch(batch).chunkSize, 0u);
+  EXPECT_EQ(batcher.fillBatch(batch).totalTokens, 0u);
 }
 
 TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
@@ -1017,8 +1328,8 @@ TEST_F(MultiRequestBatcherTest, PromptSizeEqualsMaxFinishesImmediately) {
       MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 3);
-  batcher.advance(result.chunkSize);
+  EXPECT_EQ(uniformChunk(batcher), 3);
+  batcher.advance();
 
   // Should be finished immediately after prefill: the prompt filled the
   // slot's whole share of the context window, so there is no room to
@@ -1049,12 +1360,12 @@ TEST_F(MultiRequestBatcherTest, GeneratingSlotThatFillsWindowReportsOverflow) {
       MultiRequestBatcher::AddStatus::Ok);
 
   auto prefill = batcher.fillBatch(batch);
-  batcher.advance(prefill.chunkSize);
+  batcher.advance();
   ASSERT_TRUE(batcher.extractFinished().empty());
 
   batcher.sampleAndAppendIdle([](uint32_t, int) { return 40; });
   auto step = batcher.fillBatch(batch);
-  batcher.advance(step.chunkSize);
+  batcher.advance();
 
   auto finished = batcher.extractFinished();
   ASSERT_EQ(finished.size(), 1);
@@ -1222,11 +1533,11 @@ TEST(MediaBarrierFlowTest, BarrierBlocksThenResumesAtNewPosition) {
   EXPECT_FALSE(batcher.nextAwaitingMedia().has_value());
 
   auto result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 1u);
+  EXPECT_EQ(uniformChunk(batcher), 1u);
   EXPECT_EQ(result.numActiveSequences, 1u);
   EXPECT_EQ((*batch).token[0], 10);
   EXPECT_EQ((*batch).logits[0], 0) << "pre-barrier token must not get logits";
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   const auto awaiting = batcher.nextAwaitingMedia();
   ASSERT_TRUE(awaiting.has_value());
@@ -1236,7 +1547,7 @@ TEST(MediaBarrierFlowTest, BarrierBlocksThenResumesAtNewPosition) {
 
   // While awaiting media the slot must not feed.
   result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 0u);
+  EXPECT_EQ(result.totalTokens, 0u);
 
   bool prefillCompleted = false;
   EXPECT_TRUE(batcher.completeMediaBarrier(
@@ -1249,12 +1560,12 @@ TEST(MediaBarrierFlowTest, BarrierBlocksThenResumesAtNewPosition) {
   llama_pos completedPos = -1;
   size_t completedCount = 0;
   result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 2u);
+  EXPECT_EQ(uniformChunk(batcher), 2u);
   EXPECT_EQ((*batch).token[0], 20);
   EXPECT_EQ((*batch).token[1], 30);
   EXPECT_EQ((*batch).pos[0], 1 + kMediaPos);
   EXPECT_EQ((*batch).logits[1], 1) << "prompt end must carry logits";
-  batcher.advance(result.chunkSize, [&](uint32_t, llama_pos pos, size_t count) {
+  batcher.advance([&](uint32_t, llama_pos pos, size_t count) {
     completedPos = pos;
     completedCount = count;
   });
@@ -1286,7 +1597,7 @@ TEST(MediaBarrierFlowTest, AwaitingMediaSlotDoesNotStallTextSlot) {
   auto result = batcher.fillBatch(batch);
   EXPECT_EQ(result.numActiveSequences, 1u)
       << "media-blocked slot must be excluded from the fill";
-  EXPECT_EQ(result.chunkSize, 3u);
+  EXPECT_EQ(uniformChunk(batcher), 3u);
   EXPECT_EQ((*batch).seq_id[0][0], 1);
 
   const auto awaiting = batcher.nextAwaitingMedia();
@@ -1294,12 +1605,12 @@ TEST(MediaBarrierFlowTest, AwaitingMediaSlotDoesNotStallTextSlot) {
   EXPECT_EQ(awaiting->seqId, 0u);
   EXPECT_EQ(awaiting->currentPos, 0);
 
-  batcher.advance(result.chunkSize);
+  batcher.advance();
   EXPECT_TRUE(batcher.completeMediaBarrier(0, 3));
 
   result = batcher.fillBatch(batch);
   EXPECT_EQ(result.numActiveSequences, 1u);
-  EXPECT_EQ(result.chunkSize, 2u);
+  EXPECT_EQ(uniformChunk(batcher), 2u);
   EXPECT_EQ((*batch).seq_id[0][0], 0);
   EXPECT_EQ((*batch).pos[0], 3);
 }
@@ -1321,8 +1632,8 @@ TEST(MediaBarrierFlowTest, TrailingBarrierCompletesPrefill) {
       MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  EXPECT_EQ(result.chunkSize, 1u);
-  batcher.advance(result.chunkSize);
+  EXPECT_EQ(uniformChunk(batcher), 1u);
+  batcher.advance();
 
   bool prefillCompleted = false;
   ASSERT_TRUE(batcher.nextAwaitingMedia().has_value());
@@ -1390,9 +1701,9 @@ TEST_F(MultiRequestBatcherTest, SamplingStampsObservedTokenTimes) {
       MultiRequestBatcher::AddStatus::Ok);
 
   auto result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.chunkSize, 3);
+  ASSERT_EQ(uniformChunk(batcher), 3);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
 
   const Request* req = batcher.requestAt(seqId0);
   ASSERT_NE(req, nullptr);
@@ -1413,9 +1724,9 @@ TEST_F(MultiRequestBatcherTest, SamplingStampsObservedTokenTimes) {
 
   // Second generation step: feed the sample, decode, sample again.
   result = batcher.fillBatch(batch);
-  ASSERT_EQ(result.chunkSize, 1);
+  ASSERT_EQ(uniformChunk(batcher), 1);
   mocked_llama_decode(*batch);
-  batcher.advance(result.chunkSize);
+  batcher.advance();
   batcher.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
     return mocked_llama_sampler_sample(seqId, logitIdx);
   });
