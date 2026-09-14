@@ -70,6 +70,19 @@
 
 ### Fixed
 
+- `RuntimeStats.avgConcurrentSeq` is now a token-weighted mean rather than a
+  per-step one, so it measures how much traffic shared the backend instead of
+  how finely the scheduler sliced its work. The previous step-weighted mean
+  rose the more a co-resident prefill was throttled, which meant removing the
+  one-token-per-step prefill clamp read as a concurrency regression even
+  though the backend decoded exactly the same sequences over the same tokens.
+- The continuous-batching MTMD smoke test now pairs the image with a
+  *generating* text request instead of a one-word answer. Paired with a
+  one-word answer the text slot finished after ~2 decode steps while the image
+  still had a dozen media segments to encode, so the only way to clear the
+  co-residency bar was for the text slot to be starved — which is exactly what
+  the media-barrier prefill clamp used to do, and exactly what this test is
+  meant to catch.
 - A tool grammar applied for one request no longer leaks into a following
   request that carries no tools on the same loaded model, and no longer leaves
   its lazy-grammar triggers attached to a later per-request `grammar` or
@@ -115,6 +128,7 @@
   values already were. A model-supplied template controls that text, so it
   could previously forge log lines or, for a large template, write one very
   large record per failing request.
+- A sequence in the generation phase no longer throttles concurrently prefilling sequences to one prompt token per decode step. `MultiRequestBatcher` fed every active slot a single shared chunk size, computed as the minimum `remainingToFeed()` across them; a generating slot reports `1`, so as soon as any one request started generating, every request still feeding its prompt was cut to one token per step and needed roughly as many decode steps to reach its first token as its prompt had tokens. Slots are now budgeted individually and water-filled against the batch capacity, so a generating slot takes its one token while a concurrent prefill keeps its full micro-batch. On a `parallel: 4` model answering six concurrent requests, time to first token for the stalled group drops from ~1710 ms to ~308 ms, aggregate throughput rises ~25% and wall clock falls ~21%. Peak batch size is unchanged — the sum of the per-slot budgets is bounded by the same `batch.capacity()` the shared chunk was. Note that a step taken while a large prefill is co-resident now carries more tokens, so an already-generating sequence sees a correspondingly larger spread in per-token latency.
 
 ## [0.52.0] - 2026-09-10
 
