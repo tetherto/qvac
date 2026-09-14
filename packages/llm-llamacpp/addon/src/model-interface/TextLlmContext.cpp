@@ -41,6 +41,10 @@ bool isFileInitialized(const std::filesystem::path& path) {
   return !errorCode && size != 0;
 }
 
+std::string mtpDraftCachePath(const std::string& cacheKey) {
+  return cacheKey + ".mtp-draft";
+}
+
 } // namespace
 
 // NOLINTNEXTLINE(readability-identifier-naming,readability-function-cognitive-complexity)
@@ -197,7 +201,7 @@ void TextLlmContext::initializeCommonState() {
   // LLAMA_CONTEXT_TYPE_MTP context over the same (bundled-MTP) model and wire
   // up common_speculative. If the model has no MTP head or context creation
   // fails, we log and continue without speculation (spec_ stays null).
-  const bool specTypeIsMtp =
+  mtpDraftRequested_ =
       std::find(
           params_.speculative.types.begin(),
           params_.speculative.types.end(),
@@ -207,7 +211,7 @@ void TextLlmContext::initializeCommonState() {
   // own path and never calls runSpeculativeGeneration, so building an MTP draft
   // context + common_speculative per slot is pure memory waste (and stats stay
   // 0). Gate construction on single-context and warn on the unsupported combo.
-  if (specTypeIsMtp && params_.n_parallel > 1) {
+  if (mtpDraftRequested_ && params_.n_parallel > 1) {
     QLOG_IF(
         Priority::WARNING,
         "[TextLlm] spec-type=draft-mtp is ignored under continuous batching "
@@ -222,7 +226,7 @@ void TextLlmContext::initializeCommonState() {
   // it leaves `nMax` unclamped. GGML_ASSERT aborts the process rather than
   // throwing, so the `catch` below cannot turn either into a load error.
   // Refuse the combination up front, as with continuous batching.
-  const bool mtpBatchTooSmall = specTypeIsMtp && params_.n_batch < 2;
+  const bool mtpBatchTooSmall = mtpDraftRequested_ && params_.n_batch < 2;
   if (mtpBatchTooSmall) {
     QLOG_IF(
         Priority::WARNING,
@@ -230,7 +234,7 @@ void TextLlmContext::initializeCommonState() {
         "batch is id_last + >=1 draft token); running non-speculatively\n");
   }
   const bool wantMtpDraft =
-      specTypeIsMtp && params_.n_parallel <= 1 && !mtpBatchTooSmall;
+      mtpDraftRequested_ && params_.n_parallel <= 1 && !mtpBatchTooSmall;
   if (wantMtpDraft) {
     // Shared with MtmdLlmContext -- see LlmContext::buildMtpDraftContext. The
     // return value is unused here: this context has no media path, so there is
@@ -1750,11 +1754,42 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
   }
 
   nPast_ = metadataNPast;
-  // The MTP draft context is not part of the persisted cache; a load restores
-  // only the target KV. Clear the draft so it starts empty and re-seeds via
-  // decodeAndSpecProcess during the next generation instead of drafting against
-  // a cache that diverges from the freshly-restored target. No-op off-MTP.
-  rollbackDraftContext();
+  if (ctxDraft_) {
+    const std::string draftPath = mtpDraftCachePath(cacheKey);
+    bool draftRestored = false;
+    if (isFileInitialized(draftPath)) {
+      spec_.reset();
+      size_t draftTokenCount = 0;
+      SessionMetadata draftMetadata;
+      const auto draftBytes = llama_state_seq_load_file(
+          ctxDraft_.get(),
+          draftPath.c_str(),
+          seqId_,
+          draftMetadata.data(),
+          draftMetadata.size(),
+          &draftTokenCount);
+      auto* draftMem = llama_get_memory(ctxDraft_.get());
+      draftRestored =
+          draftBytes != 0 && SessionMetadata::isComplete(draftTokenCount) &&
+          draftMetadata.nPast() == metadataNPast &&
+          draftMetadata.cacheTokens() == metadataCacheTokens &&
+          draftMem != nullptr &&
+          llama_memory_seq_pos_max(draftMem, seqId_) + 1 == metadataNPast &&
+          static_cast<llama_pos>(llama_memory_seq_token_count(
+              draftMem, seqId_)) == metadataCacheTokens &&
+          rebuildMtpSpeculator("TextLlm");
+    }
+    if (!draftRestored) {
+      teardownSpeculative();
+      specDisabledByCache_ = true;
+      QLOG_IF(
+          Priority::WARNING,
+          "[TextLlm] persisted cache has no matching MTP draft state; "
+          "using non-speculative decoding for this cache session\n");
+    } else {
+      specDisabledByCache_ = false;
+    }
+  }
   restoredKvGuard.dismiss();
   return true;
 }
@@ -1769,6 +1804,8 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
   // unused slots.
   const SessionMetadata metadata = SessionMetadata::capture(*this);
   const std::string tmpCacheKey = cacheKey + ".tmp";
+  const std::string draftCacheKey = mtpDraftCachePath(cacheKey);
+  const std::string tmpDraftCacheKey = draftCacheKey + ".tmp";
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
       tmpCacheKey.c_str(),
@@ -1782,6 +1819,30 @@ void TextLlmContext::saveCache(const std::string& cacheKey) const {
         ADDON_ID,
         toString(UnableToSaveSessionFile),
         "TextLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
+  }
+  if (ctxDraft_ && spec_) {
+    llama_synchronize(ctxDraft_.get());
+    const auto draftBytes = llama_state_seq_save_file(
+        ctxDraft_.get(),
+        tmpDraftCacheKey.c_str(),
+        seqId_,
+        metadata.data(),
+        metadata.size());
+    if (draftBytes == 0) {
+      std::error_code targetEc;
+      std::filesystem::remove(tmpCacheKey, targetEc);
+      std::error_code draftEc;
+      std::filesystem::remove(tmpDraftCacheKey, draftEc);
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToSaveSessionFile),
+          "TextLlmContext::saveCache: failed to save MTP draft cache '" +
+              draftCacheKey + "'");
+    }
+    CacheManager::atomicPromoteFile(tmpDraftCacheKey, draftCacheKey);
+  } else {
+    std::error_code ec;
+    std::filesystem::remove(draftCacheKey, ec);
   }
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
 }
@@ -1886,6 +1947,11 @@ void TextLlmContext::resetState(bool resetStats) {
 
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
+
+  if (specDisabledByCache_ && mtpDraftRequested_ && params_.n_parallel <= 1 &&
+      params_.n_batch >= 2) {
+    specDisabledByCache_ = !buildMtpDraftContext("TextLlm");
+  }
 }
 
 llama_context* TextLlmContext::getCtx() { return modelCtx_.lctx; }
@@ -1982,10 +2048,10 @@ bool TextLlmContext::handleReasoningEOS(
   common_batch_clear(batch);
   common_batch_add(batch, tokenId, nPast, {seqId_}, true);
   if (decodeAndSpecProcess(batch) != 0) {
-    QLOG_IF(
-        Priority::ERROR,
-        "[TextLlm] Failed to decode closing tag during replacement\n");
-    return true;
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        "TextLlmContext: failed to decode closing tag during replacement");
   }
   ++nPast;
   ++lastGeneratedTokenCount_;

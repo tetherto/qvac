@@ -1219,6 +1219,47 @@ TEST_F(LoadFitNormalizationTest, UnsupportedSpecTypesAreActuallyFiltered) {
       result.params.speculative.types.end());
 }
 
+TEST_F(LoadFitNormalizationTest, DuplicateSpecTypeAliasesAreRejected) {
+  auto config = baseConfig();
+  config["spec-type"] = "draft-mtp";
+  config["spec_type"] = "draft-mtp";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, UnknownSpecTypeUsesStructuredError) {
+  auto config = baseConfig();
+  config["spec-type"] = "not-a-speculator";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, MissingSpecOptionValueIsRejectedSafely) {
+  auto config = baseConfig();
+  config["spec-type"] = "draft-mtp";
+  config["spec-draft-n-max"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, NonPositiveSpecDraftMaximumIsRejected) {
   for (const std::string value : {"0", "-2"}) {
     auto config = baseConfig();

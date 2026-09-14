@@ -189,6 +189,22 @@ declare namespace LlmLlamacpp {
         "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
         /** Enable MTP self-speculative decoding for models with a next-n head. */
         "spec-type"?: "draft-mtp";
+        /** Maximum number of draft tokens proposed per MTP verification round. */
+        "spec-draft-n-max"?: number | string;
+        /** Minimum number of draft tokens proposed per MTP verification round. */
+        "spec-draft-n-min"?: number | string;
+        /** Minimum probability for accepting a speculative draft token. */
+        "spec-draft-p-min"?: number | string;
+        /** Enable backend sampling for the MTP draft context. */
+        "spec-draft-backend-sampling"?: boolean | string;
+        /** Device used by the MTP draft context. */
+        "spec-draft-device"?: string;
+        /** Number of MTP draft layers offloaded to the GPU. */
+        "spec-draft-ngl"?: number | string;
+        /** K-cache type used by the MTP draft context. */
+        "spec-draft-type-k"?: string;
+        /** V-cache type used by the MTP draft context. */
+        "spec-draft-type-v"?: string;
         /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
         "tensor-split"?: string;
         "cache-type-k"?: string;

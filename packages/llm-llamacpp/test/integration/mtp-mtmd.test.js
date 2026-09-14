@@ -108,7 +108,7 @@ safeTest('mtmd context: text turn drafts through the MTP head', { timeout: 600_0
 
 safeTest('mtmd context: one-token MTP text turn commits to KV', { timeout: 600_000 }, async (t) => {
   const cachePath = path.join(os.tmpdir(), `qvac-mtp-mtmd-one-token-${Date.now()}.bin`)
-  t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
+  t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
 
   const addon = await loadMtmdMtp(t, { n_predict: '1' })
   const response = await addon.run(TEXT_PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })

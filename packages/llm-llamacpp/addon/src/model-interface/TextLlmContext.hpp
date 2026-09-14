@@ -536,6 +536,8 @@ private:
   // failing on models whose boundary capture would only be exercised
   // at generation time.
   bool isPrefillOnlyRequest_ = false;
+  bool mtpDraftRequested_ = false;
+  bool specDisabledByCache_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
   // prefill-entry snapshot (cancel during prefill), the reasoning-boundary

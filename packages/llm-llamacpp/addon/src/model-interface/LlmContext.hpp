@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -509,6 +510,7 @@ public:
     specPromptEvalMs_ = 0.0;
     specGenerationMs_ = 0.0;
     lastGenerationUsedSpec_ = false;
+    specRequestStart_ = std::chrono::steady_clock::now();
   }
 
   /**
@@ -544,6 +546,11 @@ public:
   applyGenerationParams(const GenerationParams& params) {
     return []() {};
   }
+
+  /// Restore and persist the complete per-sequence state owned by this
+  /// context. Speculative contexts include both target and draft state.
+  [[nodiscard]] virtual bool loadCache(const std::string& cacheKey) = 0;
+  virtual void saveCache(const std::string& cacheKey) const = 0;
 
   /**
    * The reset state method. It resets the context.
@@ -628,6 +635,8 @@ protected:
   int64_t specPromptTokens_ = 0;
   double specPromptEvalMs_ = 0.0;
   double specGenerationMs_ = 0.0;
+  std::chrono::steady_clock::time_point specRequestStart_ =
+      std::chrono::steady_clock::now();
   bool lastGenerationUsedSpec_ = false;
   std::atomic<bool> stopGeneration_ = false;
 
@@ -700,17 +709,10 @@ protected:
         spec_.reset();
         return false;
       }
-      params.speculative.draft.ctx_tgt = getCtx();
-      params.speculative.draft.ctx_dft = ctxDraft_.get();
-      // Clamp the unvalidated spec-draft-n-max at the source so fabric's MTP
-      // draft loop is bounded: it uses its own construction-time params.n_max
-      // (clamped to n_mtp_layers only for chain_heads archs) and ignores the
-      // per-round dp.n_max hint. K_MAX_SPEC_DRAFT matches
-      // runSpeculativeGeneration.
-      params.speculative.draft.n_max =
-          std::clamp(params.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
-      spec_.reset(common_speculative_init(
-          params.speculative, std::max<uint32_t>(1, params.n_parallel)));
+      if (!rebuildMtpSpeculator(logTag)) {
+        ctxDraft_.reset();
+        return false;
+      }
       probeTargetSeqRmTypeOnce();
       QLOG_IF(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
@@ -728,6 +730,44 @@ protected:
               e.what()));
       spec_.reset();
       ctxDraft_.reset();
+      return false;
+    }
+  }
+
+  // Recreate common_speculative around an existing target + draft context.
+  // A persisted draft KV restore replaces the context state but not the
+  // driver's pending hidden rows, so keeping the old driver would pair the
+  // restored prefix with state from the previous cache session.
+  bool rebuildMtpSpeculator(const char* logTag) {
+    if (!ctxDraft_) {
+      spec_.reset();
+      return false;
+    }
+    common_params& params = getParams();
+    try {
+      spec_.reset();
+      params.speculative.draft.ctx_tgt = getCtx();
+      params.speculative.draft.ctx_dft = ctxDraft_.get();
+      params.speculative.draft.n_max =
+          std::clamp(params.speculative.draft.n_max, 1, K_MAX_SPEC_DRAFT);
+      spec_.reset(common_speculative_init(
+          params.speculative, std::max<uint32_t>(1, params.n_parallel)));
+      if (!spec_) {
+        QLOG_IF(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            string_format(
+                "[%s] common_speculative could not be recreated\n", logTag));
+        return false;
+      }
+      return true;
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          string_format(
+              "[%s] common_speculative rebuild failed (%s)\n",
+              logTag,
+              e.what()));
+      spec_.reset();
       return false;
     }
   }
@@ -869,7 +909,6 @@ protected:
     // decode-time based and excludes output-callback wall time.
     const auto preGenerationPerf = llama_perf_context(getCtx());
     specPromptTokens_ = preGenerationPerf.n_p_eval;
-    specPromptEvalMs_ = preGenerationPerf.t_p_eval_ms;
     std::optional<llama_perf_context_data> preDraftPerf;
     if (ctxDraft_) {
       preDraftPerf = llama_perf_context(ctxDraft_.get());
@@ -948,6 +987,10 @@ protected:
     // at position -1. Sample the first generated token and treat it as id_last.
     bool sampled = false;
     llama_token idLast = specSampleFirstToken(sampled);
+    specPromptEvalMs_ =
+        std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - specRequestStart_)
+            .count();
     if (specShouldRecoverReasoning(idLast)) {
       // First generated token is EOS inside <think>: recover inline (close
       // marker decoded via specBatch, then sample the answer), mirroring the
@@ -975,6 +1018,10 @@ protected:
       if (stopGeneration_.load()) {
         stopGeneration_.store(false);
         return cancelSpec();
+      }
+      if (params.n_predict > 0 &&
+          generated >= static_cast<unsigned>(params.n_predict)) {
+        return finishSpec(/*ok=*/true);
       }
       if (!specEnsurePendingTokenHeadroom()) {
         return finishSpec(/*ok=*/false);
@@ -1194,6 +1241,12 @@ protected:
           if (stopGeneration_.load()) {
             stopGeneration_.store(false);
             return cancelSpec();
+          }
+          if (params.n_predict > 0 &&
+              generated >= static_cast<unsigned>(params.n_predict)) {
+            finished = true;
+            reasoningRecovered = true;
+            break;
           }
           if (!specEnsurePendingTokenHeadroom()) {
             return finishSpec(/*ok=*/false);

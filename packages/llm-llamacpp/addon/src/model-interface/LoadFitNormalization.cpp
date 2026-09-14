@@ -1148,10 +1148,34 @@ NormalizedLoad normalizeLoadForFit(
     }
   }
 
+  if (configFilemap.contains("spec-type") &&
+      configFilemap.contains("spec_type")) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        qvac_errors::general_error::toString(
+            qvac_errors::general_error::InvalidArgument),
+        string_format(
+            "%s: spec-type and spec_type cannot both be specified\n",
+            K_LEGACY_PARSER_NAME.data()));
+  }
+
   for (const std::string& key : {"spec-type", "spec_type"}) {
     if (auto iter = configFilemap.find(key); iter != configFilemap.end()) {
-      auto types =
-          common_speculative_types_from_names(split(iter->second, ','));
+      std::vector<common_speculative_type> types;
+      try {
+        types = common_speculative_types_from_names(split(iter->second, ','));
+      } catch (const std::exception& e) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            qvac_errors::general_error::toString(
+                qvac_errors::general_error::InvalidArgument),
+            string_format(
+                "%s: invalid %s value '%s': %s\n",
+                K_LEGACY_PARSER_NAME.data(),
+                key.c_str(),
+                iter->second.c_str(),
+                e.what()));
+      }
       // Only `draft-mtp` self-speculation is wired in this addon. `spec-type`
       // accepts a comma list, so warn (don't fail) on any other parsed type so
       // a silently-inert drafter is visible in the logs.
@@ -1250,7 +1274,7 @@ NormalizedLoad normalizeLoadForFit(
 
   // handle config arguments
   auto checkArg = [&](int argIndex) {
-    if (argIndex >= size) {
+    if (argIndex + 1 >= size) {
       throw qvac_errors::StatusError(
           ADDON_ID,
           qvac_errors::general_error::toString(
@@ -1315,7 +1339,7 @@ NormalizedLoad normalizeLoadForFit(
 
       // arg with single value
       checkArg(argIndex);
-      const std::string& val = configVector[++argIndex];
+      const std::string& val = configVector.at(++argIndex);
       if (opt.handler_int != nullptr) {
         const int parsedValue = std::stoi(val);
         if (arg == "--spec-draft-n-max" && parsedValue < 1) {
@@ -1331,7 +1355,7 @@ NormalizedLoad normalizeLoadForFit(
 
       // arg with 2 values
       checkArg(argIndex);
-      const std::string& val2 = configVector[++argIndex];
+      const std::string& val2 = configVector.at(++argIndex);
       if (opt.handler_str_str != nullptr) {
         opt.handler_str_str(params, val, val2);
         continue;

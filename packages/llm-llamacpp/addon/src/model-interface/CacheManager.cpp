@@ -4,11 +4,9 @@
 #include <system_error>
 
 #include <inference-addon-cpp/Errors.hpp>
-#include <llama.h>
 
 #include "addon/LlmErrors.hpp"
 #include "utils/LoggingMacros.hpp"
-#include "utils/ScopeGuard.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -131,125 +129,10 @@ bool CacheManager::loadCache() {
   if (cacheDisabled_ || sessionPath_.empty()) {
     return false;
   }
-
-  auto* ctx = llmContext_->getCtx();
-  size_t nTokenCount = 0;
-  SessionMetadata sessionMetadata;
-
-  QLOG_IF(
-      Priority::DEBUG,
-      string_format(
-          "%s: attempting to load saved session from '%s'\n",
-          __func__,
-          sessionPath_.c_str()));
-  if (!isFileInitialized(sessionPath_)) {
-    QLOG_IF(
-        Priority::DEBUG,
-        string_format(
-            "%s: session file does not exist or is empty\n", __func__));
-    return false;
-  }
-
-  if (llama_state_seq_load_file(
-          ctx,
-          sessionPath_.c_str(),
-          llmContext_->getSeqId(),
-          sessionMetadata.data(),
-          sessionMetadata.size(),
-          &nTokenCount) == 0) {
-    std::string errorMsg = string_format(
-        "%s: failed to load session file '%s'\n",
-        __func__,
-        sessionPath_.c_str());
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
-  }
-
-  QLOG_IF(Priority::DEBUG, string_format("%s: loaded a session\n", __func__));
-
-  // The load above already restored this sequence's KV cells. Any path that
-  // rejects the session below (or returns false without accepting it) must roll
-  // those cells back, otherwise a failed/declined load strands live KV under
-  // getSeqId() while the caller believes nothing was loaded. Arm the rollback
-  // now and dismiss it only on the single accepted path.
-  ScopeGuard restoredKvGuard([this, ctx] {
-    if (auto* mem = llama_get_memory(ctx); mem != nullptr) {
-      llama_memory_seq_rm(mem, llmContext_->getSeqId(), -1, -1);
-    }
-  });
-
-  if (nTokenCount > 1 && nTokenCount < sessionMetadata.size()) {
-    std::string errorMsg = string_format(
-        "%s: cache file '%s' uses an unsupported metadata layout with %zu "
-        "fields\n",
-        __func__,
-        sessionPath_.c_str(),
-        nTokenCount);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
-  }
-
-  if (nTokenCount < sessionMetadata.size()) {
-    return false;
-  }
-  if (sessionMetadata.nPast() > llama_n_ctx(ctx)) {
-    std::string errorMsg = string_format(
-        "%s: cache file '%s' contains %zu tokens, which exceeds the current "
-        "context size of %d tokens\n",
-        __func__,
-        sessionPath_.c_str(),
-        static_cast<size_t>(sessionMetadata.nPast()),
-        llama_n_ctx(ctx));
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(ContextLengthExeeded), errorMsg);
-  }
-  sessionMetadata.applyTo(*llmContext_);
-
-  auto* mem = llama_get_memory(ctx);
-  if (mem == nullptr) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        string_format(
-            "%s: llama memory is null after loading session file '%s'\n",
-            __func__,
-            sessionPath_.c_str()));
-  }
-
-  const llama_pos restoredNPast =
-      llama_memory_seq_pos_max(mem, llmContext_->getSeqId()) + 1;
-  const auto expectedNPast = static_cast<llama_pos>(sessionMetadata.nPast());
-  if (restoredNPast != expectedNPast) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        string_format(
-            "%s: cache file '%s' restored nPast=%d, but metadata expected "
-            "nPast=%d\n",
-            __func__,
-            sessionPath_.c_str(),
-            restoredNPast,
-            expectedNPast));
-  }
-  const llama_pos restoredCacheTokens = static_cast<llama_pos>(
-      llama_memory_seq_token_count(mem, llmContext_->getSeqId()));
-  const auto expectedCacheTokens =
-      static_cast<llama_pos>(sessionMetadata.cacheTokens());
-  if (restoredCacheTokens != expectedCacheTokens) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        string_format(
-            "%s: cache file '%s' restored cacheTokens=%d, but metadata "
-            "expected cacheTokens=%d\n",
-            __func__,
-            sessionPath_.c_str(),
-            restoredCacheTokens,
-            expectedCacheTokens));
-  }
-  llama_memory_seq_rm(mem, -1, sessionMetadata.nPast(), -1);
-  restoredKvGuard.dismiss();
-  return true;
+  // Keep every cache entry point on the driver's virtual lifecycle. The
+  // derived context also owns the MTP draft state, which a target-only restore
+  // cannot synchronize.
+  return llmContext_->loadCache(sessionPath_);
 }
 
 void CacheManager::saveCache() {
@@ -307,30 +190,10 @@ bool CacheManager::discardActiveCacheIfBackingStoreMissing() {
 }
 
 void CacheManager::writeCacheFile(const std::string& path) {
-  llama_context* ctx = llmContext_->getCtx();
-  const std::string tmpPath = path + ".tmp";
   QLOG_IF(
       Priority::DEBUG,
       string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
-  const SessionMetadata sessionMetadata =
-      SessionMetadata::capture(*llmContext_);
-  if (llama_state_seq_save_file(
-          ctx,
-          tmpPath.c_str(),
-          llmContext_->getSeqId(),
-          sessionMetadata.data(),
-          sessionMetadata.size()) == 0) {
-    std::error_code ec;
-    std::filesystem::remove(tmpPath, ec);
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToSaveSessionFile),
-        string_format(
-            "%s: failed to save session file to '%s'\n",
-            __func__,
-            path.c_str()));
-  }
-  atomicPromoteFile(tmpPath, path);
+  llmContext_->saveCache(path);
 }
 
 void CacheManager::atomicPromoteFile(

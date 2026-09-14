@@ -260,6 +260,10 @@ safeTest(
     const first = await addon.run(PROMPT)
     const firstOutput = await collectResponse(first)
     t.ok(firstOutput.includes('</think>'), 'turn 1 completed its reasoning block')
+    t.ok(
+      first.stats.thinkingBlockDiscards > 0,
+      `turn 1 compacted its reasoning block (thinkingBlockDiscards=${first.stats.thinkingBlockDiscards})`
+    )
 
     const second = await addon.run(PROMPT)
     const secondOutput = await collectResponse(second)
@@ -316,12 +320,13 @@ safeTest(
       'predictionLimit',
       `budget cutoff reports predictionLimit on the spec path (got '${stats.stopReason}')`
     )
+    t.is(stats.generatedTokens, nPredict, 'small MTP run reports exactly n_predict tokens')
   }
 )
 
 safeTest('Qwen3.5-0.8B MTP commits a one-token generation', { timeout: 600_000 }, async (t) => {
   const cachePath = path.join(os.tmpdir(), `qvac-mtp-one-token-${Date.now()}.bin`)
-  t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
+  t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
 
   const addon = await loadAddon(t, { withSpec: true, overrides: { n_predict: '1' } })
   const response = await addon.run(PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })
@@ -402,17 +407,16 @@ safeTest(
   'Qwen3.5-0.8B MTP still drafts after a cache save/load round-trip',
   { timeout: 600_000 },
   async (t) => {
-    // Exercises the loadCache path with MTP active: a cache save/load restores
-    // only the target KV, so loadCache must clear the (unpersisted) draft context
-    // to keep it from diverging. Re-running with the same cacheKey loads the
-    // saved cache; MTP must survive the load and keep drafting.
+    // Exercises the loadCache path with MTP active. Re-running with the same
+    // cacheKey restores the paired target and draft states, so MTP must survive
+    // the load and keep drafting.
     //
     // cacheKey must be an ABSOLUTE .bin path (the addon writes the cache file
     // there, and cleanupIntegrationCacheFiles rejects relative paths) — mirrors
     // cache-state-machine.test.js's `path.join(dirPath, '<name>.bin')`.
     const [, dirPath] = await ensureModel({ modelName: MODEL.name })
     const cachePath = path.join(dirPath, 'mtp-cache-roundtrip.bin')
-    t.teardown(() => cleanupIntegrationCacheFiles(cachePath))
+    t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
 
     const addon = await loadAddon(t, { withSpec: true })
     const runOpts = { cacheKey: cachePath, saveCacheToDisk: true }
@@ -428,7 +432,36 @@ safeTest(
     console.log(
       `  after cache reuse: draftAccepted=${s2.draftAccepted} draftTotal=${s2.draftTotal}`
     )
-    t.ok(s2.draftTotal > 0, 'MTP still drafts after the cache load (draft context re-seeded)')
+    t.ok(s2.draftTotal > 0, 'MTP still drafts after the paired cache load')
+  }
+)
+
+safeTest(
+  'Qwen3.5-0.8B MTP restores target and draft state in a fresh addon',
+  { timeout: 600_000 },
+  async (t) => {
+    const [, dirPath] = await ensureModel({ modelName: MODEL.name })
+    const cachePath = path.join(dirPath, 'mtp-cache-cold-load.bin')
+    t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
+
+    const firstAddon = await loadAddon(t, { withSpec: true })
+    const first = await firstAddon.run(PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })
+    const firstOutput = await collectResponse(first)
+    t.ok(firstOutput.length > 0, 'first addon wrote a populated MTP cache')
+    await firstAddon.unload()
+
+    const secondAddon = await loadAddon(t, { withSpec: true })
+    const second = await secondAddon.run(PROMPT, {
+      cacheKey: cachePath,
+      saveCacheToDisk: true
+    })
+    const secondOutput = await collectResponse(second)
+    t.ok(secondOutput.length > 0, 'fresh addon produced output from the persisted cache')
+    t.ok(second.stats.draftTotal > 0, 'fresh addon restored enough draft state to propose tokens')
+    t.ok(
+      second.stats.draftAccepted > 0,
+      `fresh addon accepted MTP drafts after cold load (draftAccepted=${second.stats.draftAccepted})`
+    )
   }
 )
 

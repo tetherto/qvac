@@ -552,6 +552,8 @@ private:
   bool isPrefillOnlyRequest_ = false;
   bool mtpDraftRequested_ = false;
   bool specDisabledByMedia_ = false;
+  bool specDisabledByCache_ = false;
+  bool specBuildFailed_ = false;
 
   // Per-request toggle for post-generation thinking-block KV compaction.
   // Default-off, except Qwen3-family models opt in during initialization;

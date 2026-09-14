@@ -40,6 +40,10 @@ bool isFileInitialized(const std::filesystem::path& path) {
   const auto size = std::filesystem::file_size(path, errorCode);
   return !errorCode && size != 0;
 }
+
+std::string mtpDraftCachePath(const std::string& cacheKey) {
+  return cacheKey + ".mtp-draft";
+}
 } // namespace
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -267,6 +271,10 @@ void MtmdLlmContext::initializeMtpDraftContext() {
   // separate open finding, not something this extraction changes.
   if (buildMtpDraftContext("MtmdLlm")) {
     specDisabledByMedia_ = false;
+    specDisabledByCache_ = false;
+    specBuildFailed_ = false;
+  } else {
+    specBuildFailed_ = true;
   }
 }
 
@@ -637,6 +645,21 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   if (nChunks == 0) {
     const char* errorMsg = "[MtmdLlm] Unable to eval prompt\n";
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
+  }
+
+  bool hasMediaChunk = false;
+  for (size_t i = 0; i < nChunks; ++i) {
+    const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
+    if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
+      hasMediaChunk = true;
+      break;
+    }
+  }
+  if (hasMediaChunk && spec_) {
+    teardownSpeculative();
+    specDisabledByMedia_ = true;
+  } else if (!hasMediaChunk && specDisabledByMedia_ && !specBuildFailed_) {
+    initializeMtpDraftContext();
   }
 
   // Snapshot the sequence state at prefill entry on recurrent / hybrid
@@ -1795,9 +1818,9 @@ void MtmdLlmContext::resetState(bool resetStats) {
   // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` at n_batch == 1. (The
   // 2-token `common_context_can_seq_rm` probe is no longer a concern here --
   // `probeTargetSeqRmTypeOnce` runs it only on the first draft-context build.)
-  if (specDisabledByMedia_ && mtpDraftRequested_ && params_.n_parallel <= 1 &&
-      params_.n_batch >= 2) {
-    initializeMtpDraftContext();
+  if (specDisabledByCache_) {
+    specDisabledByCache_ = false;
+    specDisabledByMedia_ = true;
   }
 }
 
@@ -2274,11 +2297,42 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   }
 
   llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
-  // The MTP draft context is not persisted in the cache; clear it so the next
-  // generation re-seeds it via decodeAndSpecProcess rather than drafting
-  // against a stale cache that diverges from the restored target. No-op
-  // off-MTP.
-  rollbackDraftContext();
+  if (ctxDraft_) {
+    const std::string draftPath = mtpDraftCachePath(cacheKey);
+    bool draftRestored = false;
+    if (isFileInitialized(draftPath)) {
+      spec_.reset();
+      size_t draftTokenCount = 0;
+      SessionMetadata draftMetadata;
+      const auto draftBytes = llama_state_seq_load_file(
+          ctxDraft_.get(),
+          draftPath.c_str(),
+          seqId_,
+          draftMetadata.data(),
+          draftMetadata.size(),
+          &draftTokenCount);
+      auto* draftMem = llama_get_memory(ctxDraft_.get());
+      draftRestored =
+          draftBytes != 0 && mtmdSessionMetadataIsComplete(draftTokenCount) &&
+          draftMetadata.nPast() == getNPast() &&
+          draftMetadata.cacheTokens() == getCacheTokens() &&
+          draftMem != nullptr &&
+          llama_memory_seq_pos_max(draftMem, seqId_) + 1 == getNPast() &&
+          static_cast<llama_pos>(llama_memory_seq_token_count(
+              draftMem, seqId_)) == getCacheTokens() &&
+          rebuildMtpSpeculator("MtmdLlm");
+    }
+    if (!draftRestored) {
+      teardownSpeculative();
+      specDisabledByCache_ = true;
+      QLOG_IF(
+          Priority::WARNING,
+          "[MtmdLlm] persisted cache has no matching MTP draft state; "
+          "using non-speculative decoding for this cache session\n");
+    } else {
+      specDisabledByCache_ = false;
+    }
+  }
   restoredKvGuard.dismiss();
   return true;
 }
@@ -2292,6 +2346,8 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
   // physical KV-cell count that diverges under M-RoPE survives restore.
   const SessionMetadata metadata = SessionMetadata::capture(*this);
   const std::string tmpCacheKey = cacheKey + ".tmp";
+  const std::string draftCacheKey = mtpDraftCachePath(cacheKey);
+  const std::string tmpDraftCacheKey = draftCacheKey + ".tmp";
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
       tmpCacheKey.c_str(),
@@ -2305,6 +2361,30 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
         ADDON_ID,
         toString(UnableToSaveSessionFile),
         "MtmdLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
+  }
+  if (ctxDraft_ && spec_) {
+    llama_synchronize(ctxDraft_.get());
+    const auto draftBytes = llama_state_seq_save_file(
+        ctxDraft_.get(),
+        tmpDraftCacheKey.c_str(),
+        seqId_,
+        metadata.data(),
+        metadata.size());
+    if (draftBytes == 0) {
+      std::error_code targetEc;
+      std::filesystem::remove(tmpCacheKey, targetEc);
+      std::error_code draftEc;
+      std::filesystem::remove(tmpDraftCacheKey, draftEc);
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToSaveSessionFile),
+          "MtmdLlmContext::saveCache: failed to save MTP draft cache '" +
+              draftCacheKey + "'");
+    }
+    CacheManager::atomicPromoteFile(tmpDraftCacheKey, draftCacheKey);
+  } else {
+    std::error_code ec;
+    std::filesystem::remove(draftCacheKey, ec);
   }
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
 }
