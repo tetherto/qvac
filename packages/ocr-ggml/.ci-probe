@@ -1,2 +1,2 @@
 ci-probe marker, not published
-ts-checks await port
+probe 9: ocr-ggml only, await ts-checks + review fixes
