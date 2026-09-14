@@ -298,12 +298,12 @@ endfunction()
 #   * GGML_BACKEND_DL / GGML_BACKEND_DIR so backend_env.cpp preloads the ggml
 #     backend modules from the test binary dir,
 #   * copy qvac__fabric@0.bare next to the test binary,
-#   * stage @qvac/fabric's dlopen'd ggml backends (Linux/Android) alongside it,
+#   * stage @qvac/fabric's dlopen'd ggml backends alongside it,
 #   * $ORIGIN / @loader_path rpath so the copies resolve,
 #   * the Windows delay-load helper the imported module target doesn't carry.
 # ---------------------------------------------------------------------------
 function(qvac_addon_stage_fabric_for_test test_target fabric_target)
-  if((ANDROID OR UNIX) AND NOT APPLE)
+  if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
     target_compile_definitions(${test_target} PRIVATE GGML_BACKEND_DL)
   endif()
   target_compile_definitions(${test_target} PRIVATE
@@ -320,8 +320,10 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
     COMMENT "Copying qvac__fabric@0.bare to test directory")
 
   bare_target(_qvac_host)
+  set(_qvac_fabric_test_backend_dir
+    "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${_qvac_host}/qvac__fabric")
   file(GLOB _qvac_fabric_test_backends
-    "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${_qvac_host}/qvac__fabric/*.so")
+    "${_qvac_fabric_test_backend_dir}/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
   if(_qvac_fabric_test_backends)
     add_custom_command(TARGET ${test_target} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
