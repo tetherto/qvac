@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.41.0] - 2026-09-10
+
+This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. llama.cpp, ggml and the vector-index API are now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer.
+
+### Changed
+
+- The llama/ggml runtime, its compute backends and the `ggml_vec_index_*` vector-index API are now provided by the `@qvac/fabric` npm dependency (`^0.13.0`) rather than the static `qvac-fabric` vcpkg port. The addon no longer bundles them; on desktop it resolves the single `@qvac/fabric` install and loads the backend modules from `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to this addon's own `prebuilds/` on mobile (where the package tree isn't resolvable from the packed worklet bundle). `@qvac/fabric` carries the prebuilt runtime inside its own tarball, so run `npm install` before `bare-make generate`/`build` and do not prune the dependency at runtime.
+- `^0.13.0` is a hard floor, not a courtesy bump: `0.12.0` first shipped the `vector-index` feature, and `0.13.0` is the first build that actually exports the `ggml_vec_index_*` symbols on Darwin and iOS (the visibility fix against `CXX_VISIBILITY_PRESET hidden`). Against `0.12.0` a Darwin consumer links cleanly and then SIGSEGVs on the first call.
+- `CMakeLists.txt` now builds on the shared `cmake/qvac-addon` template, replacing the hand-rolled preamble (vcpkg triplet overlay, libc++ flags, lint-cpp config sync, C++20 block, Windows lean-header defines, `--exclude-libs,ALL`, `JS_LOGGER`/`BACKENDS_SUBDIR`). This also picks up the Android 16 KB page-size link flags and the Apple compiler-rt `force_load` that the template applies to every addon.
+- `BACKENDS_SUBDIR` moved from `<host>/embed-llamacpp` to `<host>/qvac__fabric`, matching where the shared runtime stages its backends.
+- The `vk-profiling` build feature is gone. Vulkan profiling is now a property of the shared runtime, selected when building `@qvac/fabric`.
+
+### Removed
+
+- `qvac-fabric` from `vcpkg.json`. The addon's remaining vcpkg dependencies are `opencl` (Android), `qvac-lib-inference-addon-cpp` and `qvac-lint-cpp`.
+
+## [0.40.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). Carries the fix that keeps the `ggml_vec_index_*` C API exportable under hidden visibility — this package is the only consumer of that API — plus metadata-only GGUF loading under `no_alloc`; no API change for this package.
+
 ## [0.39.0] - 2026-09-08
 
 ### Changed
