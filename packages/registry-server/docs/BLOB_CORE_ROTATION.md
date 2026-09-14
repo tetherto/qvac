@@ -55,11 +55,13 @@ metadata peer does not model this rotation procedure.
 5. Resume ingestion and add a canary model through the normal model-ingestion
    workflow.
 
-6. Run the inventory again. Confirm that it contains a new core key, then download
-   one model from before the rotation and the canary model through the normal
-   registry client.
+6. Run the inventory again. Confirm that it contains a new core key and provide
+   the new core keys to the separate production reseeding workflow.
+
+7. After production reseeding is confirmed complete, download one model from
+   before the rotation and the canary model through the normal registry client.
 
 Do not remove old Corestore data. Rotation limits future growth; it does not
 migrate, delete, compact, or reclaim historical blobs. Reusing a generation—or
 unsetting the variable to return to `models`—resumes writes to an existing core.
-Production blind-peer reseeding is handled separately.
+Production blob distribution and reseeding are separate from this procedure.

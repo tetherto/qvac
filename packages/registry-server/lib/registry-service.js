@@ -514,7 +514,7 @@ class RegistryService extends ReadyResource {
     const models = await this.view.findModelsByPath({}).toArray()
     if (models.length > 0) {
       try {
-        const { core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
+        const { core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
         await this._mirrorBlobCore(core)
       } catch (err) {
         this.logger.warn(
