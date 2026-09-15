@@ -259,13 +259,13 @@ function rendersToolBlock(messages: HistoryMsg[], toolBlock: ChatHistory[]): boo
  *   - The tool block travels only with the turn that writes it into the
  *     cache; see `skipToolBlock` below.
  */
-function prepareMessagesForCache(
+async function prepareMessagesForCache(
   session: KvCacheSession,
   turn: TurnHandle,
   cacheExists: boolean,
   history: HistoryMsg[],
   tools?: Tool[]
-): CachePayload {
+): Promise<CachePayload> {
   const toolBlock = tools?.length ? transformMessages(tools) : []
 
   if (!(cacheExists && history.length > 0)) {
@@ -282,9 +282,9 @@ function prepareMessagesForCache(
   // saved boundary would slice the history down to an empty payload
   // (e.g. after a cancelled mid-decode), it falls back to the full
   // non-system history and signals the caller to drop the bad entry.
-  // The session owns the entry; `dropStaleSavedCount` clears it
-  // without touching the on-disk file (the file is still trustworthy
-  // — only the boundary count is wrong).
+  // The session owns the entry; `dropStaleSavedCount` clears it in memory
+  // and on disk without touching the cache file (the file is still
+  // trustworthy — only the boundary count is wrong).
   const { messages, clearStaleCount } = decideCachedHistorySlice(
     turn.savedCount,
     cacheExists,
@@ -292,7 +292,7 @@ function prepareMessagesForCache(
   )
 
   if (clearStaleCount) {
-    session.dropStaleSavedCount(turn)
+    await session.dropStaleSavedCount(turn)
   }
 
   // The block is never trimmed back out of the cache, so re-sending it every
@@ -540,9 +540,9 @@ export async function* completion(
   // `cacheExists` is implied by `beginTurn` — the session either found
   // an existing cache or just primed one. Pass `true` to the message
   // selector so the slicing branches engage.
-  let payload: ReturnType<typeof prepareMessagesForCache>
+  let payload: Awaited<ReturnType<typeof prepareMessagesForCache>>
   try {
-    payload = prepareMessagesForCache(
+    payload = await prepareMessagesForCache(
       session,
       turn,
       /* cacheExists */ true,
