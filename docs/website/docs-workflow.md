@@ -450,7 +450,7 @@ Divergence must be repaired deliberately, not resolved by an automatic merge com
 
 ### 3. SDK release docs (local, skill-driven)
 
-**Where:** the `qv-sdk-changelog` Cursor skill, Step 8 (`.cursor/skills/qv-sdk-changelog/SKILL.md`). There is no GitHub Actions docs-release workflow — generation runs locally during release prep and ships in the SDK release PR alongside the changelog.
+**Where:** the `qv-sdk-changelog` Cursor skill, Step 8 (`.agents/skills/qv-sdk-changelog/SKILL.md`). There is no GitHub Actions docs-release workflow — generation runs locally during release prep and ships in the SDK release PR alongside the changelog.
 
 **When:** while preparing an `@qvac/sdk` release (after the changelog / `CHANGELOG_LLM.md` is generated). Skipped for non-`sdk` packages.
 

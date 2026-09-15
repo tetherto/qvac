@@ -139,3 +139,53 @@ TEST_F(
       << result.output;
   EXPECT_EQ(result.reasoningTokens, REASONING_BUDGET) << result.output;
 }
+
+// The cap must survive a second request on the same loaded model. fabric's
+// reasoning-budget matcher is stateful across requests:
+// `common_sampler::reset()` clears `prev` and the sampler chain and nothing
+// else (common/sampling.cpp:124-128), so an `rbudget` left in
+// REASONING_BUDGET_DONE by a request that exhausted its cap survives into the
+// next one.
+//
+// SCOPE, stated because it is easy to over-read this test: Qwen3 emits its own
+// `<think>`, and a sampled start tag re-arms the matcher out of DONE with a
+// fresh budget (common/reasoning-budget.cpp:146-160). So this case passes with
+// or without the rebuild term in `configureTemplateDerivedSampling`, and it is
+// here to pin that self-re-arming rather than to guard the rebuild. The case
+// that needs the rebuild is a template that *force-opens* the channel, where
+// no start tag is ever sampled and only `common_sampler_init`'s prefill feed
+// arms the matcher — unreachable here, because no model in the unit-test set
+// ships such a template.
+TEST_F(ReasoningBudgetModelTest, LoadTimeBudgetSurvivesASecondRequest) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+
+  auto config = config_;
+  config["reasoning-budget"] = std::to_string(REASONING_BUDGET);
+  auto model = createModel(std::move(config));
+  ASSERT_TRUE(model->isLoaded());
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      R"([{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"What is the capital of France? Answer in one word."}])";
+
+  // The same prompt twice, deliberately: an identical render is what makes
+  // `samplingChanged` false and so exposes a missing rebuild. Varying the
+  // prompt would mask the bug.
+  const std::string first = model->processPrompt(prompt);
+  ASSERT_EQ(
+      countTokens(model->getContext(), sliceReasoning(first)), REASONING_BUDGET)
+      << "the first request must exhaust the cap for this to test anything: "
+      << first;
+
+  const std::string second = model->processPrompt(prompt);
+  EXPECT_NE(second.find(THINKING_START_TAG), std::string::npos) << second;
+  EXPECT_NE(second.find(THINKING_END_TAG), std::string::npos) << second;
+  EXPECT_EQ(
+      countTokens(model->getContext(), sliceReasoning(second)),
+      REASONING_BUDGET)
+      << "the second request reused an exhausted reasoning-budget matcher, so "
+         "its cap went unenforced: "
+      << second;
+}

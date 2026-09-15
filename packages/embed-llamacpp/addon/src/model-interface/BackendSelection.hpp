@@ -51,14 +51,23 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
-  void* (*ggml_backend_reg_get_proc_address)(
-      ggml_backend_reg_t reg, const char* name);
-  // QVAC-23763: splitModeDeviceNames() needs props.device_id to tell one
-  // physical card registered under two backends from two distinct cards. May
-  // be null; that path then falls back to scoping by registry.
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
+};
+
+struct SplitDevice {
+  std::string name;
+  ggml_backend_dev_t handle;
+  size_t sourceGpuIndex;
+  bool isOpenCl;
+  bool isRpc = false;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDevice> devices;
+  size_t sourceGpuCount = 0;
+  std::vector<std::string> rejectedDevices;
 };
 
 std::pair<BackendType, std::string> chooseBackend(
@@ -84,46 +93,29 @@ std::pair<BackendType, std::string> chooseBackend(
     const std::optional<MainGpu>& mainGpu = std::nullopt,
     const std::vector<std::string>& backendOverride = {});
 
-/// @brief Count GPU devices available for multi-GPU split mode.
-/// Returns the number of discrete GPUs when any are present; otherwise
-/// falls back to the iGPU count. This mirrors backends like Vulkan which
-/// exclude iGPUs by default when discrete GPUs exist.
+/// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
-/// True only when at least one GPU device is present AND every available
-/// GPU/iGPU device's backend provides split buffers, because qvac-fabric
-/// requires split buffers from each device it distributes over and throws on
-/// the first one that lacks them. Callers should degrade row -> layer when this
-/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
-/// this is false in every shipped configuration.
-bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
+/// @brief Select the Fabric-compatible split list for layer split mode.
+/// RPC devices first, then discrete GPUs if any are eligible, else integrated;
+/// discrete duplicates dropped by raw `ggml_backend_dev_props::device_id`
+/// (byte for byte as fabric compares, so CUDA `-vN` devices stay distinct, and
+/// a null id is kept). `sourceGpuIndex` keeps each device's position in the raw
+/// GPU registry so positional tensor shares can be remapped onto the final
+/// list.
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
 
-/// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
-/// registry.
-bool gpuBackendSupportsRowSplit();
+/// @brief `getSplitDeviceSelection()` against the real ggml registry.
+SplitDeviceSelection getSplitDeviceSelection();
 
-/// @brief The device names to pass as `--device` in multi-GPU split mode: every
-/// discrete GPU, deduplicated by `props.device_id` so a card registered under
-/// two backends is named once, preferring @p selectedDeviceName's registry.
-///
-/// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
-/// registers twice, as CUDA0 and Vulkan0, so the old unconditional omission of
-/// `--device` would spread a single card across two backends. Deduping rather
-/// than scoping to one registry keeps a second physical card on a mixed-vendor
-/// host, and preferring the selected registry keeps a `backend` override
-/// binding, which omitting `--device` would not.
-///
-/// A device whose backend publishes no bus id falls back to registry scoping,
-/// since it cannot be matched against its own duplicate.
-///
-/// Empty when every GPU/iGPU device comes from one registry, which is every
-/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
-/// caller then keeps omitting `--device`.
+/// @brief Eligible split devices, preferring discrete and deduplicating by id.
+std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
+
+/// @brief Device names for split mode, preferring the selected backend when
+/// one physical GPU is registered by more than one backend.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName);
 
-/// @brief `splitModeDeviceNames()` against the real ggml backend registry.
 std::vector<std::string>
 splitModeDeviceNames(const std::string& selectedDeviceName);
 } // namespace backend_selection
