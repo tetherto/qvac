@@ -36,6 +36,11 @@ on:
   # the job on cache-models' trusted-save branch, letting PR-head code write an
   # entry every addon lane afterwards restores. Dispatch covers on-demand runs.
   workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Restore the archive even on a hit, exactly as the cron does. That download is what resets the cache server's prune clock; the probe alone does not."
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -92,6 +97,7 @@ jobs:
           hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
           enable-cross-os: 'true'
           seed-probe: 'true'
+          force-refresh: ${{ inputs.force_refresh || false }}
 
       - name: Download GGUF models from registry
         if: steps.model-cache.outputs.cache-hit != 'true'

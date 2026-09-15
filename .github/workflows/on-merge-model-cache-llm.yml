@@ -34,6 +34,11 @@ on:
   # the job on cache-models' trusted-save branch, letting PR-head code write an
   # entry every addon lane afterwards restores. Dispatch covers on-demand runs.
   workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Restore the archive even on a hit, exactly as the cron does. That download is what resets the cache server's prune clock; the probe alone does not."
+        type: boolean
+        default: false
 
 # A cancelled job cannot save the ~19 GB archive it did not finish uploading.
 concurrency:
@@ -83,6 +88,7 @@ jobs:
         with:
           package: llm-llamacpp
           seed-probe: 'true'
+          force-refresh: ${{ inputs.force_refresh || false }}
 
   # actions/cache only WARNS when the cache server rejects a reservation, so the
   # seed job above reports success whether or not an entry was written. This

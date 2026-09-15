@@ -37,6 +37,11 @@ on:
   # to the merge commit -- PR-head code next to live credentials. Dispatch
   # already covers on-demand runs.
   workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Restore the archive even on a hit, exactly as the cron does. That download is what resets the cache server's prune clock; the probe alone does not."
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -97,6 +102,7 @@ jobs:
           paths: packages/vla-ggml/model/vla
           hash-files-glob: .github/actions/download-vla-models/action.yml
           seed-probe: 'true'
+          force-refresh: ${{ inputs.force_refresh || false }}
 
       # Gated as a whole, unlike the integration lane. There the pi05 and GR00T
       # pulls run unconditionally because the tests also need the oracle dirs
@@ -158,6 +164,7 @@ jobs:
             packages/vla-ggml/test/groot-oracle
           hash-files-glob: .github/actions/download-vla-groot-parity/action.yml
           seed-probe: 'true'
+          force-refresh: ${{ inputs.force_refresh || false }}
 
       - name: Download GR00T parity artefacts from S3
         if: steps.groot-cache.outputs.cache-hit != 'true'

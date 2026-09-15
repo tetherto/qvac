@@ -36,6 +36,11 @@ on:
   # to the merge commit -- PR-head code next to live credentials. Dispatch
   # already covers on-demand runs.
   workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Restore the archive even on a hit, exactly as the cron does. That download is what resets the cache server's prune clock; the probe alone does not."
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -96,6 +101,7 @@ jobs:
           paths: packages/translation-nmtcpp/model
           hash-files-glob: .github/actions/download-translation-models/action.yml
           seed-probe: 'true'
+          force-refresh: ${{ inputs.force_refresh || false }}
 
       - name: Download NMT models from S3
         if: steps.model-cache.outputs.cache-hit != 'true'
