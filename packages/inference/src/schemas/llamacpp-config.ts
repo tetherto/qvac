@@ -245,10 +245,10 @@ export const embedConfigBaseSchema = z.object({
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
   splitMode: z
-    .enum(['none', 'layer', 'row'])
+    .enum(['none', 'layer'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism)."
+      "How to split the model across GPUs: `'none'` (default, single GPU) or `'layer'` (pipeline parallelism)."
     ),
   tensorSplit: z
     .string()
