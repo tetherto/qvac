@@ -29,14 +29,21 @@ const TRANSIENT_ERROR_CODES = new Set([
 // CI's cache-models action warms from and keys its cache on, and it pins the
 // HuggingFace revision; a second copy of the URL in this file is how the two
 // end up fetching different bytes under one filename.
-const MANIFEST_PATH = path.join(__dirname, 'models.manifest.json')
+//
+// Loaded with a literal require(), not fs.readFileSync. Mobile builds pack this
+// file into a single bundle via bare-pack, which follows static require()
+// calls; a dynamic read is invisible to that traversal and drops the manifest
+// from the bundle, so the lookup fails on-device even though the file was there
+// at build time. Same reason embed-llamacpp/test/integration/utils.js does it
+// this way.
+const MANIFEST_NAME = 'test/integration/models.manifest.json'
 
 function loadDefaultModel() {
-  const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
-  const names = Object.keys(manifest.models || {})
+  const manifest = require('./models.manifest.json')
+  const names = Object.keys((manifest && manifest.models) || {})
   if (names.length !== 1) {
     throw new Error(
-      `Expected exactly one model in ${MANIFEST_PATH}, found ${names.length}. ` +
+      `Expected exactly one model in ${MANIFEST_NAME}, found ${names.length}. ` +
         'Pass an explicit model to ensureModelPath() if the set has grown.'
     )
   }
