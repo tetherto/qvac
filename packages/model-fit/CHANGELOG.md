@@ -1,6 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [0.11.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own.
+- The fitter projects memory for models it does not itself run, so 10549.1.0 matters to it only where the projection must agree with the loader — and the MoE expert-cache fixes change what the loader tolerates at large context.
+
+### Added
+
+- `fit()` results now carry a per-device memory projection, and `@qvac/model-fit/process` gains the matching surface ([#4174](https://github.com/tetherto/qvac/pull/4174)). Landed after `0.10.0` with no version bump of its own, so this release is what publishes it.
+
+### Breaking
+
+- GPU devices are filtered to the supported backends and `split-mode: 'row'` is dropped ([#4330](https://github.com/tetherto/qvac/pull/4330)). A caller passing `'row'` no longer receives a degraded-to-`'layer'` projection; the value is rejected. This matches `@qvac/llm-llamacpp` and `@qvac/embed-llamacpp`, which made the same change, so the fitter and the loaders agree on what is accepted. Landed after `0.10.0` with no version bump of its own.
 
 ### Fixed
 
