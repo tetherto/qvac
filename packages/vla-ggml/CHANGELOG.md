@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking (logs):** backend selection emits one structured
+  `[backend-selection] selected=… path=… skipped=…` line in place of the previous
+  prose (`preferring CUDA GPU`, `… selected by backend override`), matching
+  `@qvac/llm-llamacpp` and `@qvac/embed-llamacpp` so one log grep answers "what
+  did this load run on" across all three addons. Not an API, but anything
+  matching those strings needs updating. No `skipped_reason` here: this picker
+  has no per-candidate exclusion reasons, and its Adreno gate logs each
+  rejection as it makes it.
+
 ### Added
 
 - `load({ backendRequired: true })` makes the `backend` priority list binding. By

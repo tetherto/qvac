@@ -726,7 +726,8 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .adrenoVersion = choice.adrenoVersion,
                 .isMaliGpu = choice.isMaliGpu,
                 .isOpenCl = isOpenCl,
-                .isMetal = isMetal};
+                .isMetal = isMetal,
+                .trace = std::move(choice.trace)};
           },
       .splitDevices =
           [](const std::string& selectedDeviceName,
@@ -1019,6 +1020,7 @@ NormalizedLoad normalizeLoadForFit(
 
     backend_selection::SplitDeviceSelection splitSelection;
     SelectedBackend selected = dependencies.resolveBackend(request);
+    const ExclusionReason selectionSkipReason = selected.trace.skippedReason;
     if (selected.type == BackendType::GPU &&
         splitMode != LLAMA_SPLIT_MODE_NONE) {
       splitSelection = dependencies.splitDevices(selected.name, constraints);
@@ -1076,6 +1078,9 @@ NormalizedLoad normalizeLoadForFit(
       }
     }
     result.adrenoVersion = selected.adrenoVersion;
+    result.runtimeBackendFamily =
+        static_cast<int64_t>(backendFamilyCodeOf(selected.type, selected.name));
+    result.runtimeBackendSkipReason = static_cast<int64_t>(selectionSkipReason);
 
     // QVAC-21257: optional runtime override for the multimodal projector
     // (mmproj / vision encoder) backend. The default is auto-selected per
@@ -1217,6 +1222,27 @@ NormalizedLoad normalizeLoadForFit(
         params.devices.push_back(device.handle);
       }
       params.devices.push_back(nullptr);
+      if (splitSelection.heterogeneous) {
+        std::string perDevice;
+        for (const backend_selection::SplitDevice& device :
+             splitSelection.devices) {
+          if (device.isRpc) {
+            continue;
+          }
+          if (!perDevice.empty()) {
+            perDevice += ", ";
+          }
+          perDevice += device.name + " (" + device.registry + ")";
+        }
+        QLOG_IF(
+            Priority::WARNING,
+            string_format(
+                "[LlamaModel] split mode spans different backends: %s. An "
+                "even tensor-split will pace the model to the slowest card; "
+                "set backend with backend-required to use one backend, or "
+                "set tensor-split to weight it.\n",
+                perDevice.c_str()));
+      }
       QLOG_IF(
           Priority::INFO,
           string_format(
@@ -1230,7 +1256,15 @@ NormalizedLoad normalizeLoadForFit(
     isGpu = useGpu;
     isOpenCl = isGpu && selected.isOpenCl;
     isMetal = isGpu && selected.isMetal;
-    isCuda = isGpu && selected.name.find("cuda") != std::string::npos;
+    isCuda = isGpu && (selected.name.find("cuda") != std::string::npos ||
+                       std::ranges::any_of(
+                           splitSelection.devices,
+                           [](const backend_selection::SplitDevice& device) {
+                             return backend_selection::backendFamilyCodeOf(
+                                        backend_selection::BackendType::GPU,
+                                        device.name) ==
+                                    backend_selection::BackendFamilyCode::Cuda;
+                           }));
   }
 
   tuneLoadConfigMap(

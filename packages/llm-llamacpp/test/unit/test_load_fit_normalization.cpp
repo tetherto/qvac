@@ -408,6 +408,57 @@ TEST_F(LoadFitNormalizationTest, CpuFallbackClearsGpuPlacement) {
   EXPECT_EQ(result.runtimeBackendDevice, 0);
 }
 
+TEST_F(LoadFitNormalizationTest, RuntimeStatsDescribeTheFinalSplitBackend) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  lfn::SelectedBackend selected{
+      .type = backend_selection::GPU, .name = "cuda0"};
+  selected.trace.skippedReason =
+      backend_selection::ExclusionReason::KvCacheTypeUnsupported;
+  auto dependencies = backend(selected, {});
+  const auto selection = splitSelection({"vulkan0"});
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(
+      result.runtimeBackendFamily,
+      static_cast<int64_t>(backend_selection::BackendFamilyCode::Vulkan));
+  EXPECT_EQ(
+      result.runtimeBackendSkipReason,
+      static_cast<int64_t>(
+          backend_selection::ExclusionReason::KvCacheTypeUnsupported));
+}
+
+TEST_F(LoadFitNormalizationTest, EmptySplitReportsCpuAndKeepsSkipReason) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  lfn::SelectedBackend selected{
+      .type = backend_selection::GPU, .name = "cuda0"};
+  selected.trace.skippedReason =
+      backend_selection::ExclusionReason::KvCacheTypeUnsupported;
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(selected, {}));
+
+  EXPECT_EQ(
+      result.runtimeBackendFamily,
+      static_cast<int64_t>(backend_selection::BackendFamilyCode::Cpu));
+  EXPECT_EQ(
+      result.runtimeBackendSkipReason,
+      static_cast<int64_t>(
+          backend_selection::ExclusionReason::KvCacheTypeUnsupported));
+}
+
 TEST_F(
     LoadFitNormalizationTest,
     SplitModeUsesEligibleSetWhenRawMainGpuTargetsRejectedDevice) {

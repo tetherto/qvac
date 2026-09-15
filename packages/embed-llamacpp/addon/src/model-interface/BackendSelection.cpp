@@ -501,19 +501,38 @@ const char* exclusionReasonName(backend_selection::ExclusionReason reason) {
   return "unknown";
 }
 
-const char* cascadeLogFor(DeviceFamily family) {
-  switch (family) {
-  case DeviceFamily::OpenClAdreno:
-  case DeviceFamily::OpenClOther:
-    return "Chosen GPU OpenCL";
-  case DeviceFamily::Cuda:
-    return "Chosen GPU CUDA";
-  case DeviceFamily::Gpu:
-    return "Chosen GPU Backend";
-  case DeviceFamily::Igpu:
-    return "Chosen iGPU Backend";
+const char* selectionPathName(backend_selection::SelectionPath path) {
+  using backend_selection::SelectionPath;
+  switch (path) {
+  case SelectionPath::Cascade:
+    return "cascade";
+  case SelectionPath::Override:
+    return "override";
+  case SelectionPath::Cpu:
+    return "cpu";
   }
-  return "Chosen GPU Backend";
+  return "unknown";
+}
+
+/// The one line that says what selection decided and why. Same format as
+/// llm-llamacpp's, so one log grep works across both addons. QVAC-23763.
+void emitSelectionLog(
+    const BackendInterface& bckI, const backend_selection::SelectionTrace& t) {
+  std::string text = string_format(
+      "[backend-selection] selected=%s registry=%s path=%s",
+      t.selectedName.empty() ? "none" : t.selectedName.c_str(),
+      t.selectedRegistry.empty() ? "-" : t.selectedRegistry.c_str(),
+      ::selectionPathName(t.path));
+  if (t.skippedName.empty()) {
+    text += " skipped=none";
+  } else {
+    text += string_format(
+        " skipped=%s skipped_registry=%s skipped_reason=%s",
+        t.skippedName.c_str(),
+        t.skippedRegistry.empty() ? "-" : t.skippedRegistry.c_str(),
+        ::exclusionReasonName(t.skippedReason));
+  }
+  bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
 }
 
 /// First surviving candidate of @p family. Callers iterate family-major and
@@ -867,9 +886,45 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
   auto settle = [&](const Candidate& c, SelectionPath path) {
     choice.type = BackendType::GPU;
     choice.name = c.name;
+    choice.trace.skippedName.clear();
+    choice.trace.skippedRegistry.clear();
+    choice.trace.skippedReason = ExclusionReason::None;
+    std::vector<const Candidate*> ordered;
+    if (path == SelectionPath::Override) {
+      for (const std::string& family : request.backendOverride) {
+        for (const DeviceFamily deviceFamily : ::K_OVERRIDE_ORDER) {
+          for (const Candidate& candidate : enumeration.candidates) {
+            if (candidate.family == deviceFamily &&
+                ::backendNameMatchesFamily(candidate.name, family)) {
+              ordered.push_back(&candidate);
+            }
+          }
+        }
+      }
+    } else {
+      for (const DeviceFamily family : ::K_CASCADE_ORDER) {
+        for (const Candidate& candidate : enumeration.candidates) {
+          if (candidate.family == family) {
+            ordered.push_back(&candidate);
+          }
+        }
+      }
+    }
+    for (const Candidate* candidate : ordered) {
+      if (candidate == &c) {
+        break;
+      }
+      if (candidate->excluded != ExclusionReason::None) {
+        choice.trace.skippedName = candidate->name;
+        choice.trace.skippedRegistry = candidate->registry;
+        choice.trace.skippedReason = candidate->excluded;
+        break;
+      }
+    }
     choice.trace.selectedName = c.name;
     choice.trace.selectedRegistry = c.registry;
     choice.trace.path = path;
+    ::emitSelectionLog(bckI, choice.trace);
     return choice;
   };
 
@@ -891,9 +946,6 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
             continue;
           }
           if (::backendNameMatchesFamily(c.name, family)) {
-            std::string text = string_format(
-                "Chosen %s Backend (backend override)", family.c_str());
-            bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
             return settle(c, SelectionPath::Override);
           }
         }
@@ -944,8 +996,6 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
 
   for (const DeviceFamily family : ::K_CASCADE_ORDER) {
     if (const Candidate* c = ::firstUsable(enumeration, family); c != nullptr) {
-      bckI.llamaLogCallback(
-          GGML_LOG_LEVEL_INFO, ::cascadeLogFor(family), nullptr);
       return settle(*c, SelectionPath::Cascade);
     }
   }
@@ -965,8 +1015,8 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
   }
 
-  bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
   choice.trace.path = SelectionPath::Cpu;
+  ::emitSelectionLog(bckI, choice.trace);
   return choice;
 }
 
@@ -1055,11 +1105,13 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       continue;
     }
     const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
-    const std::string registryName =
-        lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
+    const char* registryPtr =
+        reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr;
+    const std::string registryName = lowerCopy(registryPtr);
     const std::string deviceName = lowerCopy(name);
     SplitDevice selected{
         .name = name,
+        .registry = registryPtr != nullptr ? registryPtr : "",
         .handle = dev,
         .sourceGpuIndex = sourceGpuIndex,
         .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
@@ -1085,6 +1137,18 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       result.devices.end(),
       std::make_move_iterator(local.begin()),
       std::make_move_iterator(local.end()));
+  std::string localRegistry;
+  for (const SplitDevice& device : result.devices) {
+    if (device.isRpc) {
+      continue;
+    }
+    if (localRegistry.empty()) {
+      localRegistry = device.registry;
+    } else if (device.registry != localRegistry) {
+      result.heterogeneous = true;
+      break;
+    }
+  }
   return result;
 }
 
@@ -1126,6 +1190,19 @@ backend_selection::getSplitDeviceSelection(
     });
     return std::ranges::find(selectedNames, name) == selectedNames.end();
   });
+  selection.heterogeneous = false;
+  std::string localRegistry;
+  for (const SplitDevice& device : selection.devices) {
+    if (device.isRpc) {
+      continue;
+    }
+    if (localRegistry.empty()) {
+      localRegistry = device.registry;
+    } else if (device.registry != localRegistry) {
+      selection.heterogeneous = true;
+      break;
+    }
+  }
   return selection;
 }
 
@@ -1205,7 +1282,8 @@ bool backend_selection::gpuBackendSupportsRowSplit() {
   return backend_selection::gpuBackendSupportsRowSplit(bckI);
 }
 
-std::vector<std::string> backend_selection::splitModeDeviceNames(
+backend_selection::SplitDeviceList
+backend_selection::splitModeDeviceNamesDetailed(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints) {
   // Kept in ggml's enumeration order, so the list matches what qvac-fabric
@@ -1281,7 +1359,10 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
   // used. A deliberately selected iGPU, `main-gpu: 'integrated'`, is the
   // exception: scope to that one device.
   if (selectedIsIgpu) {
-    return {selectedDeviceName};
+    SplitDeviceList single;
+    single.names.push_back(selectedDeviceName);
+    single.registries.push_back(selectedRegistry);
+    return single;
   }
 
   // Dedupe by device_id rather than scoping to the selected registry. The
@@ -1311,7 +1392,7 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
     }
   }
 
-  std::vector<std::string> names;
+  SplitDeviceList out;
   std::vector<std::string> seenIds;
   for (const auto& candidate : devices) {
     if (candidate.isIgpu) {
@@ -1322,7 +1403,8 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
     // one card twice.
     if (!selectedRegistryHasAllIds || candidate.deviceId.empty()) {
       if (candidate.registry == selectedRegistry) {
-        names.push_back(candidate.name);
+        out.names.push_back(candidate.name);
+        out.registries.push_back(candidate.registry);
       }
       continue;
     }
@@ -1335,9 +1417,27 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
       continue;
     }
     seenIds.push_back(candidate.deviceId);
-    names.push_back(candidate.name);
+    out.names.push_back(candidate.name);
+    out.registries.push_back(candidate.registry);
   }
-  return names;
+
+  // QVAC-23763: a split spanning more than one registry. Membership is
+  // deliberately unchanged - #4126 keeps a card only another backend
+  // registers - so this only makes the situation visible.
+  for (const std::string& registry : out.registries) {
+    if (registry != out.registries.front()) {
+      out.heterogeneous = true;
+      break;
+    }
+  }
+  return out;
+}
+
+std::vector<std::string> backend_selection::splitModeDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints) {
+  return splitModeDeviceNamesDetailed(bckI, selectedDeviceName, constraints)
+      .names;
 }
 
 std::vector<std::string> backend_selection::splitModeDeviceNames(
@@ -1354,5 +1454,23 @@ std::vector<std::string> backend_selection::splitModeDeviceNames(
       .ggml_backend_dev_get_props = ggml_backend_dev_get_props,
       .llamaLogCallback = nullptr};
   return backend_selection::splitModeDeviceNames(
+      bckI, selectedDeviceName, constraints);
+}
+
+backend_selection::SplitDeviceList
+backend_selection::splitModeDeviceNamesDetailed(
+    const std::string& selectedDeviceName, const LoadConstraints& constraints) {
+  BackendInterface bckI{
+      .ggml_backend_dev_count = ggml_backend_dev_count,
+      .ggml_backend_dev_backend_reg = ggml_backend_dev_backend_reg,
+      .ggml_backend_dev_get = ggml_backend_dev_get,
+      .ggml_backend_reg_name = ggml_backend_reg_name,
+      .ggml_backend_dev_description = ggml_backend_dev_description,
+      .ggml_backend_dev_name = ggml_backend_dev_name,
+      .ggml_backend_dev_type = ggml_backend_dev_type,
+      .ggml_backend_reg_get_proc_address = ggml_backend_reg_get_proc_address,
+      .ggml_backend_dev_get_props = ggml_backend_dev_get_props,
+      .llamaLogCallback = nullptr};
+  return backend_selection::splitModeDeviceNamesDetailed(
       bckI, selectedDeviceName, constraints);
 }

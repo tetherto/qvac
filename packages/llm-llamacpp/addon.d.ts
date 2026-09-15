@@ -1,6 +1,10 @@
 import type { FinetuneOptions, GenerationParams } from "./index";
 declare const STOP_REASONS: readonly ["none", "eos", "antiprompt", "predictionLimit", "sequenceLimit", "contextOverflow"];
 export type StopReason = (typeof STOP_REASONS)[number];
+declare const BACKEND_FAMILIES: readonly ["none", "cpu", "vulkan", "cuda", "metal", "opencl", "rocm", "sycl", "other"];
+export type BackendFamily = (typeof BACKEND_FAMILIES)[number];
+declare const BACKEND_SKIP_REASONS: readonly ["none", "finetuning-on-adreno-below-800", "finetuning-on-adreno-800-plus", "bitnet-on-adreno-below-800", "bitnet-on-adreno-800-plus", "kv-cache-type-unsupported"];
+export type BackendSkipReason = (typeof BACKEND_SKIP_REASONS)[number];
 export interface AddonMessage {
     type: "text";
     input: string;

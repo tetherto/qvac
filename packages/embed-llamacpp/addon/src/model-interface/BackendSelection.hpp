@@ -174,6 +174,7 @@ BackendChoice chooseBackend(
 
 struct SplitDevice {
   std::string name;
+  std::string registry;
   ggml_backend_dev_t handle = nullptr;
   size_t sourceGpuIndex = 0;
   bool isOpenCl = false;
@@ -184,6 +185,7 @@ struct SplitDeviceSelection {
   std::vector<SplitDevice> devices;
   size_t sourceGpuCount = 0;
   std::vector<std::string> rejectedDevices;
+  bool heterogeneous = false;
 };
 
 SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
@@ -261,8 +263,32 @@ std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});
 
+/// @brief `splitModeDeviceNames()` plus each device's registry.
+///
+/// QVAC-23763: the caller needs the registries to tell a homogeneous split from
+/// one spanning two backends, and the production `splitModeDeviceNames()`
+/// overload passes a null log callback, so this cannot warn from inside. It
+/// returns the fact instead and lets the caller log it. Same shape as
+/// llm-llamacpp's.
+struct SplitDeviceList {
+  std::vector<std::string> names;
+  /// Parallel to @c names.
+  std::vector<std::string> registries;
+  /// True when @c names spans more than one registry.
+  bool heterogeneous = false;
+};
+
+SplitDeviceList splitModeDeviceNamesDetailed(
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
+
 /// @brief `splitModeDeviceNames()` against the real ggml backend registry.
 std::vector<std::string> splitModeDeviceNames(
+    const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
+
+/// @brief `splitModeDeviceNamesDetailed()` against the real ggml registry.
+SplitDeviceList splitModeDeviceNamesDetailed(
     const std::string& selectedDeviceName,
     const LoadConstraints& constraints = {});
 } // namespace backend_selection

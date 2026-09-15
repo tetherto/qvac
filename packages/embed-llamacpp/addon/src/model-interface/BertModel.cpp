@@ -602,6 +602,28 @@ BertModelSetup setupParams(
           }
           deviceList += device.name;
         }
+        if (splitSelection.heterogeneous) {
+          std::string perDevice;
+          for (const SplitDevice& device : splitSelection.devices) {
+            if (device.isRpc) {
+              continue;
+            }
+            if (!perDevice.empty()) {
+              perDevice += ", ";
+            }
+            perDevice += device.name + " (" + device.registry + ")";
+          }
+          qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+              GGML_LOG_LEVEL_WARN,
+              string_format(
+                  "[BertModel] split mode spans different backends: %s. An "
+                  "even tensor-split will pace the model to the slowest card; "
+                  "set backend with backend-required to use one backend, or "
+                  "set tensor-split to weight it.\n",
+                  perDevice.c_str())
+                  .c_str(),
+              nullptr);
+        }
         qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
             GGML_LOG_LEVEL_INFO,
             string_format(

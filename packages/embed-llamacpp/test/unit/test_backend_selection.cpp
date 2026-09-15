@@ -1582,3 +1582,99 @@ TEST_F(BackendSelectionTest, MainGpuBusIdWithoutPublishedIdsFallsThrough) {
       chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:65:00.0"}).name,
       "cuda0");
 }
+
+// ---- selection trace (QVAC-23763 R12) ----
+//
+// embed reports no backend stats of its own, so there is no backendFamily
+// counterpart here. The trace is still populated, because the structured log
+// line is built from it and because a future embed stats surface would read it.
+
+TEST_F(BackendSelectionTest, TracePopulatedOnCascade) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::GPU;
+  const BackendChoice choice = chooseBackend(request, bckI);
+  EXPECT_EQ(choice.trace.selectedName, "cuda0");
+  EXPECT_EQ(choice.trace.selectedRegistry, "standard");
+  EXPECT_EQ(choice.trace.path, SelectionPath::Cascade);
+  EXPECT_TRUE(choice.trace.skippedName.empty());
+}
+
+TEST_F(BackendSelectionTest, TracePopulatedOnOverride) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  const BackendChoice choice =
+      chooseWithRequired(mockBackend, {"vulkan"}, false);
+  EXPECT_EQ(choice.trace.selectedName, "vulkan0");
+  EXPECT_EQ(choice.trace.path, SelectionPath::Override);
+}
+
+TEST_F(BackendSelectionTest, TraceOnCpu) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  BackendRequest request;
+  request.preferred = BackendType::CPU;
+  const BackendChoice choice = chooseBackend(request, bckI);
+  EXPECT_EQ(choice.trace.path, SelectionPath::Cpu);
+  EXPECT_TRUE(choice.trace.selectedName.empty());
+}
+
+// ---- heterogeneous split detection (QVAC-23763 R15) ----
+
+static backend_selection::SplitDeviceSelection splitSelectionFor(
+    MockBackendInterface& mockBackend, const std::string& selectedDeviceName) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  return getSplitDeviceSelection(bckI, selectedDeviceName, {});
+}
+
+TEST_F(BackendSelectionTest, SplitSelectionFlagsAHeterogeneousSplit) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(TESLA_DESC, VULKAN1_BACK, VULKAN_REG),
+      "0000:b3:00.0"));
+
+  const auto split = splitSelectionFor(mockBackend, "cuda0");
+  ASSERT_EQ(split.devices.size(), 2U);
+  EXPECT_EQ(split.devices[0].name, "CUDA0");
+  EXPECT_EQ(split.devices[0].registry, "CUDA");
+  EXPECT_EQ(split.devices[1].name, "Vulkan1");
+  EXPECT_EQ(split.devices[1].registry, "Vulkan");
+  EXPECT_TRUE(split.heterogeneous);
+}
+
+TEST_F(BackendSelectionTest, SplitSelectionDoesNotFlagAHomogeneousSplit) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA1_BACK, CUDA_REG),
+      "0000:b3:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG),
+      "0000:65:00.0"));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG),
+      "0000:b3:00.0"));
+
+  const auto split = splitSelectionFor(mockBackend, "cuda0");
+  ASSERT_EQ(split.devices.size(), 2U);
+  EXPECT_EQ(split.devices[0].name, "CUDA0");
+  EXPECT_EQ(split.devices[1].name, "CUDA1");
+  EXPECT_FALSE(split.heterogeneous);
+}
+
+// A single-registry host must not produce a heterogeneous warning.
+TEST_F(BackendSelectionTest, SplitSelectionSingleRegistryIsNotHeterogeneous) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
+  const auto split = splitSelectionFor(mockBackend, "vulkan0");
+  EXPECT_EQ(split.devices.size(), 2U);
+  EXPECT_FALSE(split.heterogeneous);
+}

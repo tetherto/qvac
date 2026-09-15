@@ -191,7 +191,7 @@ for (const kv of KV_COMBOS) {
     // selection is lazy, so the log lands a tick later and an immediate check
     // reads an empty buffer.
     t.absent(
-      specLogger.logs.some((l) => /Chosen GPU CUDA/.test(l)),
+      specLogger.logs.some((l) => /\[backend-selection\].*selected=cuda/.test(l)),
       'a TBQ/PQ row did not land on CUDA'
     )
 
