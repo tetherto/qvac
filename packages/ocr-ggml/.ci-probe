@@ -1,2 +1,2 @@
 ci-probe marker, not published
-probe 12: exercise await ts-checks
+probe 13: cpp-lint fabric overlay + skip-tolerant gate
