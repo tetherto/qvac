@@ -27,6 +27,8 @@ test('stripMultiGpuKeys: returns empty array and mutates nothing when no multi-G
 })
 
 test('stripMultiGpuKeys: preserves diffusion backend and VRAM controls', (t) => {
+  // These select placement and memory budgets, not device enumeration or
+  // multi-GPU splitting, so they remain valid on a single-GPU mobile device.
   const config: Record<string, unknown> = {
     backend: 'cuda0',
     params_backend: 'diffusion=cpu',
