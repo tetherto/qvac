@@ -35,6 +35,10 @@ test('contract diffusion load config: memory controls and removed options', (t) 
       })
     )
   }
+  t.is(validate({ max_vram: 'six' }), false)
+  t.is(validate({ max_vram: 'cuda0=6,broken' }), false)
+  t.is(validate({ backend: '' }), false)
+  t.is(validate({ params_backend: 'diffusion=cpu,te' }), true)
   for (const key of ['clip_on_cpu', 'vae_on_cpu', 'control_net_cpu']) {
     t.is(validate({ [key]: false }), false)
   }

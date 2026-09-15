@@ -358,7 +358,8 @@ def preserve_forbidden_fields(output_dir: Path) -> None:
                     )
             names = ", ".join(repr(key) for key in sorted(set(forbidden) | field_names))
             guidance = ", ".join(
-                f"{snake_case(key)!r}: {value!r}" for key, value in sorted(forbidden.items())
+                f"{snake_case(key)!r}: {value!r}"
+                for key, value in sorted(forbidden.items())
             )
             first_body_line = node.body[0].lineno - 1
             if (

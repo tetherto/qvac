@@ -49,6 +49,23 @@ const cacheModeSchema = z.enum([
   'cache-dit'
 ])
 
+const BACKEND_SPEC_PATTERN =
+  /^\s*[^,=\s]+(?:\s*=\s*[^,=\s]+)?(?:\s*,\s*[^,=\s]+(?:\s*=\s*[^,=\s]+)?)*\s*$/
+const MAX_VRAM_SPEC_PATTERN =
+  /^\s*(?:[+-]?(?:\d+(?:\.\d*)?|\.\d+)|[^,=\s]+\s*=\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+))(?:\s*,\s*[^,=\s]+\s*=\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+))*\s*$/
+
+const backendSpecSchema = z
+  .string()
+  .min(1)
+  .max(4096)
+  .regex(BACKEND_SPEC_PATTERN, 'must be a comma-separated backend specification')
+
+const maxVramSpecSchema = z
+  .string()
+  .min(1)
+  .max(4096)
+  .regex(MAX_VRAM_SPEC_PATTERN, 'must be a number or comma-separated device budgets')
+
 function removedBackendOption(key: string, guidance: string) {
   return (
     z
@@ -185,15 +202,13 @@ export const sdcppConfigSchema = z.object({
     "Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, " +
       "or modelConfig.backend: 'vae=cpu' to run its graph on CPU."
   ),
-  backend: z
-    .string()
+  backend: backendSpecSchema
     .optional()
     .describe(
       'Runtime backend for diffusion and video graphs, globally or per module, ' +
         "for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'."
     ),
-  params_backend: z
-    .string()
+  params_backend: backendSpecSchema
     .optional()
     .describe(
       'Parameter residency for diffusion and video, independent of graph execution. ' +
@@ -203,7 +218,7 @@ export const sdcppConfigSchema = z.object({
         'assignments override CPU residency only for the specified modules.'
     ),
   max_vram: z
-    .union([z.number(), z.string()])
+    .union([z.number().finite(), maxVramSpecSchema])
     .optional()
     .describe(
       'VRAM budget in GiB for diffusion and video graph-cut execution. Positive ' +

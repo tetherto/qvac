@@ -26,7 +26,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict
+from pydantic_core import CoreSchema, core_schema
 
 
 class GeneratedBaseModel(BaseModel):
@@ -34,15 +35,23 @@ class GeneratedBaseModel(BaseModel):
     __forbidden_fields__: ClassVar[frozenset[str]] = frozenset()
     __forbidden_field_guidance__: ClassVar[dict[str, str]] = {}
 
-    @model_validator(mode="before")
     @classmethod
-    def reject_forbidden_fields(cls, value: Any) -> Any:
-        if isinstance(value, Mapping):
-            forbidden = cls.__forbidden_fields__.intersection(value)
-            if forbidden:
-                details = '; '.join(
-                    f"{field}: {cls.__forbidden_field_guidance__.get(field, 'This field is no longer supported.')}"
-                    for field in sorted(forbidden)
-                )
-                raise ValueError(details)
-        return value
+    def __get_pydantic_core_schema__(cls, source: Any, handler: Any) -> CoreSchema:
+        schema = handler(source)
+        if not cls.__forbidden_fields__:
+            return schema
+
+        def reject_forbidden_fields(value: Any) -> Any:
+            if isinstance(value, Mapping):
+                forbidden = cls.__forbidden_fields__.intersection(value)
+                if forbidden:
+                    details = "; ".join(
+                        f"{field}: {cls.__forbidden_field_guidance__.get(field, 'This field is no longer supported.')}"
+                        for field in sorted(forbidden)
+                    )
+                    raise ValueError(details)
+            return value
+
+        return core_schema.no_info_before_validator_function(
+            reject_forbidden_fields, schema
+        )
