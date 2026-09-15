@@ -61,12 +61,21 @@ same index `tensorSplit` uses), then a final `"host"` row. Each row carries
 `totalBytes`/`freeBytes` (the raw backend gauge), `marginBytes` (the margin
 the fitter applied to that row, `marginMiB` × 1 MiB) and
 `modelBytes`/`contextBytes`/`computeBytes` (the projected demand at the
-**resolved** parameters). The budget the verdict was judged against is
-`freeBytes - marginBytes`, so headroom on a row is
+parameters the result reports — on a FAILURE the fitter restores the caller's
+originals, so nothing was resolved). The budget the verdict was judged against
+is `freeBytes - marginBytes`, so headroom on a row is
 `freeBytes - marginBytes - (modelBytes + contextBytes + computeBytes)`; the
 raw `freeBytes` alone reads positive for a `does-not-fit` that missed by less
 than the margin. A `does-not-fit` with numbers shows how far it missed; a
 `fits` shows how much headroom the margin left.
+
+That identity holds on a device with its own memory. On one that shares the
+host pool — Metal on Apple silicon, Vulkan/OpenCL on Adreno and Mali — fabric
+additionally clamps the row to a share of what is left of host memory, so the
+budget is at most `freeBytes - marginBytes` and the headroom above is an upper
+bound. Read a non-negative result on those rows as "the per-device gauge did
+not rule it out", not as free space. The clamp's own inputs are not on the row
+today; treat the verdict, not the arithmetic, as the answer to "does it fit".
 
 The device rows are not `nDevices`. `nDevices` is `ggml_backend_dev_count()`
 and includes the CPU device, whose demand is folded into the `"host"` row, so

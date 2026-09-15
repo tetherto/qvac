@@ -100,16 +100,19 @@ export interface FitBuftOverride {
 }
 /**
  * Projected memory for one device — or the trailing `"host"` row — at the
- * resolved parameters, in bytes. `totalBytes`/`freeBytes` are the budget the
- * verdict was judged against; the remaining fields are the projected demand.
+ * parameters the result reports, in bytes. `freeBytes`/`marginBytes` give the
+ * budget the verdict was judged against; the remaining fields are the
+ * projected demand.
  */
 export interface FitProjectionRow {
     /** Device name as the backend reports it, or `"host"` for the host row. */
     name: string;
     totalBytes: number;
     /**
-     * Raw backend gauge, before the margin. The budget the verdict was judged
-     * against is `freeBytes - marginBytes`; headroom is that minus the demand.
+     * Raw backend gauge, before the margin. On a device with its own memory the
+     * budget is `freeBytes - marginBytes` and headroom is that minus the demand.
+     * A device sharing the host pool (Apple silicon, Adreno/Mali) is clamped
+     * below that, so the figure is an upper bound there.
      */
     freeBytes: number;
     /** The margin applied to this row, in bytes (`marginMiB` × 1 MiB). */

@@ -137,14 +137,16 @@ struct BuftOverride {
   std::string bufferType;
 };
 
-/// Projected memory for one device (or the host row) at the resolved
-/// parameters, in bytes. `total`/`free` are the budget the verdict was judged
-/// against; `model`/`context`/`compute` are the projected demand.
+/// Projected memory for one device (or the host row) at the parameters the
+/// result reports, in bytes. `free`/`margin` give the budget the verdict was
+/// judged against; `model`/`context`/`compute` are the projected demand.
 struct FitProjectionRow {
   /// Device name as the backend reports it, or "host" for the host row.
   std::string name;
   uint64_t totalBytes = 0;
-  /// Raw backend gauge. The fitter judged against `freeBytes - marginBytes`.
+  /// Raw backend gauge. The fitter judged against `freeBytes - marginBytes`,
+  /// except on a device sharing the host pool (Apple silicon, Adreno/Mali),
+  /// which fabric clamps below that.
   uint64_t freeBytes = 0;
   /// The margin applied to this row, in bytes (`marginMiB` * MiB).
   uint64_t marginBytes = 0;
