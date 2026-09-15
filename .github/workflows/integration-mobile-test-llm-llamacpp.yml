@@ -474,7 +474,11 @@ jobs:
           manifest-path: addon/packages/llm-llamacpp/test/integration/models.manifest.json
           s3-prefix: qvac_models_compiled/mobile-pilot/llm/
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          output-map: ${{ runner.temp }}/llm-url-map.json
+          # github.workspace, not runner.temp: _work/_temp is swept mid-job on
+          # the self-hosted fleet, which has already made this map disappear
+          # between the presign step and the prestage step that reads it
+          # (ENOENT on _work/_temp/llm-url-map.json, run 33382613103 attempt 4).
+          output-map: ${{ github.workspace }}/llm-url-map.json
           model-names: ${{ steps.mobileset.outputs.names }}
           mode: presign
 
@@ -513,7 +517,7 @@ jobs:
         working-directory: addon/packages/llm-llamacpp
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
-          PRESTAGE_URL_MAP: ${{ runner.temp }}/llm-url-map.json
+          PRESTAGE_URL_MAP: ${{ github.workspace }}/llm-url-map.json
         run: |
           node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -528,7 +532,7 @@ jobs:
         working-directory: addon/packages/llm-llamacpp
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
-          PRESTAGE_URL_MAP: ${{ runner.temp }}/llm-url-map.json
+          PRESTAGE_URL_MAP: ${{ github.workspace }}/llm-url-map.json
         run: |
           node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/ios-prestage-block.txt"
           {
