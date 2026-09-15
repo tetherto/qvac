@@ -60,5 +60,6 @@ jobs:
           gh workflow run "cpp-tests-embed.yml" \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$TARGET_REF" \
+            -f "ref=$TARGET_REF" \
             -f "workdir=packages/embed-llamacpp"
           echo "dispatched cpp-tests-embed.yml on $TARGET_REF"

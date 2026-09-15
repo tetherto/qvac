@@ -192,28 +192,46 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:cpp:build
 
-      # Only trusted events may write the shared cache (see
-      # .github/AGENTS.md), and only when this run actually produced
-      # archives: hashFiles is empty for an empty directory.
-      # vcpkg only writes archives for packages it COMPILES, so when the
-      # workspace layer serves the restore the host layer never fills and stays
-      # cold forever. Copy across explicitly; -n so we never clobber another
-      # user's archive, and the whole thing is best-effort.
-      - name: Warm the host vcpkg cache
+      # The two layers must feed each other or whichever is warm starves the
+      # other: a warm host means vcpkg compiles nothing, so the workspace stays
+      # empty, so the save below is skipped and an evicted actions/cache entry
+      # can never come back. Trusted events only -- the host dir outlives the
+      # job. Copy via a temp name and mv, because other runner instances on this
+      # box read the directory concurrently and a half-written zip extracts
+      # dirty; umask 000 because chmod 1777 on the root is not inherited by the
+      # bucket dirs vcpkg shards into.
+      - name: Sync the host and workspace vcpkg caches
         if: >-
           env.VCPKG_CACHE_PERSISTENT == 'true' &&
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule')
         shell: bash
         run: |
           set +e
-          [ -d "${VCPKG_CACHE_DIR}" ] || exit 0
           host_dir=$(echo "${VCPKG_BINARY_SOURCES}" | tr ';' '\n' | grep '^files,' | head -n 1 | cut -d, -f2)
           [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || exit 0
           [ "${host_dir}" = "${VCPKG_CACHE_DIR}" ] && exit 0
-          cp -rn "${VCPKG_CACHE_DIR}"/. "${host_dir}"/ 2>/dev/null
-          echo "warmed ${host_dir} from ${VCPKG_CACHE_DIR}"
+          mkdir -p "${VCPKG_CACHE_DIR}"
+          umask 000
+
+          sync_dir() {
+            find "$1" -type f -name '*.zip' 2>/dev/null | while read -r f; do
+              out="$2/${f#$1/}"
+              [ -f "$out" ] && continue
+              mkdir -p "$(dirname "$out")" 2>/dev/null
+              tmp="$out.tmp.$$"
+              cp "$f" "$tmp" 2>/dev/null && mv -f "$tmp" "$out" 2>/dev/null
+              rm -f "$tmp" 2>/dev/null
+            done
+          }
+          sync_dir "${host_dir}" "${VCPKG_CACHE_DIR}"
+          sync_dir "${VCPKG_CACHE_DIR}" "${host_dir}"
+
+          echo "host=$(find "${host_dir}" -name '*.zip' 2>/dev/null | wc -l) archives, workspace=$(find "${VCPKG_CACHE_DIR}" -name '*.zip' 2>/dev/null | wc -l)"
           exit 0
 
+      # Only trusted events may write the shared cache (see .github/AGENTS.md),
+      # and only when there are archives to write: hashFiles is empty for an
+      # empty directory.
       - name: Save vcpkg cache (trusted contexts)
         if: >-
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') &&

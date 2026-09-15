@@ -2178,18 +2178,18 @@ test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
 // on the box, so the step that copies archives into it must carry the same trust
 // gate as the cache write. It was gated only on VCPKG_CACHE_PERSISTENT at first,
 // which is true on any self-hosted runner including a pull_request_target run.
-test('cache policy: the host-cache warming step is gated on trusted events', () => {
+test('cache policy: the host-cache sync step is gated on trusted events', () => {
   const offenders = []
   for (const { path, step } of eachCppTestsCacheStep({
-    match: /name: Warm the host vcpkg cache/, includeExempt: true,
+    match: /name: Sync the host and workspace vcpkg caches/, includeExempt: true,
   })) {
     const missing = TRUSTED_CACHE_EVENTS.filter((e) => !step.includes(`github.event_name == '${e}'`))
     if (missing.length) {
-      offenders.push(`${path}: the host-cache warming step does not gate on ${missing.join(', ')}`)
+      offenders.push(`${path}: the host-cache sync step does not gate on ${missing.join(', ')}`)
     }
   }
   // Every cpp-tests workflow with a persistent host layer must have the step.
-  assert.ok(eachCppTestsCacheStep({ match: /name: Warm the host vcpkg cache/, includeExempt: true }).length >= 5)
+  assert.ok(eachCppTestsCacheStep({ match: /name: Sync the host and workspace vcpkg caches/, includeExempt: true }).length >= 5)
   assert.deepEqual(offenders, [])
 })
 

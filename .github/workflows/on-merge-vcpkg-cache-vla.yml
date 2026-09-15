@@ -59,5 +59,6 @@ jobs:
           gh workflow run "cpp-tests-vla.yml" \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$TARGET_REF" \
+            -f "ref=$TARGET_REF" \
             -f "workdir=packages/vla-ggml"
           echo "dispatched cpp-tests-vla.yml on $TARGET_REF"

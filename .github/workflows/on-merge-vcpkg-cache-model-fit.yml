@@ -59,5 +59,6 @@ jobs:
           gh workflow run "cpp-tests-model-fit.yml" \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$TARGET_REF" \
+            -f "ref=$TARGET_REF" \
             -f "workdir=packages/model-fit"
           echo "dispatched cpp-tests-model-fit.yml on $TARGET_REF"
