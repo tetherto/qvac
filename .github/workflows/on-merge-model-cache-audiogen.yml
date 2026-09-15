@@ -5,7 +5,7 @@ name: On Merge Model Cache (AudioGen)
 # cache-models takes its restore-only branch, so nothing writes them.
 #
 # Two entries, not one. The call site sets
-#   cache-key-suffix: ${{ inputs.run_rtf_benchmarks && 'all-dit-variants' || '' }}
+#   cache-key-suffix: ${{ inputs.run_rtf_benchmarks && 'all-dit-variants' || 'turbo-q4' }}
 # so the default leg and the RTF benchmark leg use different keys and different
 # download scripts. Seeding only one leaves the other cold.
 
@@ -66,7 +66,7 @@ jobs:
         include:
           # Mirrors the two branches of the call site's ternary.
           - label: default
-            cache_key_suffix: ""
+            cache_key_suffix: turbo-q4
             download_script: download-models:registry
           - label: rtf-benchmarks
             cache_key_suffix: all-dit-variants
@@ -95,7 +95,8 @@ jobs:
         working-directory: ${{ github.workspace }}/packages/audiogen-ggml
         run: npm install
 
-      # Must match integration-test-audiogen-ggml.yml:222-229 exactly.
+      # Must match integration-test-audiogen-ggml.yml's "Cache AudioGen GGML GGUF
+      # models" step exactly. Named, not line-numbered: line numbers rot.
       - name: Cache AudioGen GGML GGUF models
         id: model-cache
         uses: ./.github/actions/cache-models
@@ -141,7 +142,7 @@ jobs:
       matrix:
         include:
           - label: default
-            cache_key_suffix: ""
+            cache_key_suffix: turbo-q4
           - label: rtf-benchmarks
             cache_key_suffix: all-dit-variants
 

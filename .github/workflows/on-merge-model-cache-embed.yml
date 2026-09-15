@@ -72,7 +72,8 @@ jobs:
         with:
           node-version: lts/*
 
-      # Must match integration-test-embed-llamacpp.yml:96-99 exactly.
+      # Must match integration-test-embed-llamacpp.yml's "Cache integration test
+      # models" step exactly. Named, not line-numbered: line numbers rot.
       - name: Seed integration test models
         uses: ./.github/actions/cache-models
         with:

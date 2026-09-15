@@ -87,7 +87,8 @@ jobs:
         working-directory: ${{ github.workspace }}/packages/tts-ggml
         run: npm install
 
-      # Must match integration-test-tts-ggml.yml:231-239 exactly.
+      # Must match integration-test-tts-ggml.yml's "Cache TTS GGML GGUF models"
+      # step exactly. Named, not line-numbered: line numbers rot.
       - name: Cache TTS GGML GGUF models
         id: model-cache
         uses: ./.github/actions/cache-models

@@ -103,7 +103,8 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      # Must match integration-test-asr-ggml.yml:370-383.
+      # Must match integration-test-asr-ggml.yml's "Cache integration test models"
+      # step in the integration-tests job. Named, not line-numbered: the line moves.
       - name: Cache integration test models
         id: model-cache
         uses: ./.github/actions/cache-models
