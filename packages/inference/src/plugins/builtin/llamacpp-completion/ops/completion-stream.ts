@@ -16,10 +16,6 @@ import {
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
 import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
-import {
-  isAddonPreMutationRefusal,
-  isAddonContextOverflowError
-} from '@/plugins/builtin/llamacpp-completion/ops/context-overflow'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import {
   decideCachedHistorySlice,
@@ -72,6 +68,14 @@ interface ProcessModelResponseResult extends CompletionResult {
    * to an empty payload.
    */
   producedTokens: boolean
+  /**
+   * False only when the addon reports the `none` stop reason it gives a
+   * cancelled run, which it rewinds to the pre-request state before saving.
+   * Any other value, including a missing one, is treated as a finished run
+   * whose output is in the cache file: the safe reading, since it costs a
+   * re-prefill rather than a duplicated turn.
+   */
+  generationFinished: boolean
 }
 
 interface ChatHistory {
@@ -319,7 +323,8 @@ async function* processModelResponse(
   generationParams?: CompletionGenerationParams,
   cacheOptions?: CacheRunOptions,
   dialect?: ToolDialect,
-  onResponse?: (response: { cancel(): Promise<void> }) => void
+  onResponse?: (response: { cancel(): Promise<void> }) => void,
+  onRunSettled?: () => void
 ): AsyncGenerator<{ token: string }, ProcessModelResponseResult, unknown> {
   const runOptions: CacheRunOptions & {
     generationParams?: CompletionGenerationParams
@@ -354,6 +359,8 @@ async function* processModelResponse(
     yield { token: tokenStr }
   }
   const modelExecutionMs = nowMs() - modelStart
+  // The addon has finished, and saved the cache file if it was going to.
+  onRunSettled?.()
 
   if (cacheOptions?.saveCacheToDisk && cacheOptions.cacheKey) {
     logCacheSave(cacheOptions.cacheKey)
@@ -366,13 +373,15 @@ async function* processModelResponse(
 
   const responseWithStats = response as unknown as ResponseWithStats
   const stats = withEmittedTokens(normalizeCompletionStats(responseWithStats.stats), emittedPieces)
+  const stopReason = responseWithStats.stats?.stopReason
 
   return {
     ...buildStreamResult(modelExecutionMs, stats),
     toolCalls: toolCallsResult,
     responseText: accumulatedText,
     producedTokens,
-    stoppedAtContextBoundary: responseWithStats.stats?.stopReason === 'contextOverflow'
+    stoppedAtContextBoundary: stopReason === 'contextOverflow',
+    generationFinished: stopReason !== 'none'
   }
 }
 
@@ -476,11 +485,13 @@ export async function* completion(
     )
   }
 
-  // ---- KV-cache path. The session owns every bookkeeping layer; the
-  // handler registers one deferred unwind (`rollback`, or the non-destructive
-  // `releaseTurn` on a recognised pre-mutation refusal) that `commitTurn`
-  // short-circuits on the happy path. Cancellations / zero-token replies /
-  // rename failures all still unwind destructively through the same hook. ----
+  // ---- KV-cache path. The session owns every bookkeeping layer; the handler
+  // registers one deferred unwind that `commitTurn` short-circuits on the happy
+  // path. It is the non-destructive `releaseTurn` when the committed file is
+  // known to be intact — a throw before the addon run settled, or a cancel the
+  // addon rewound — and the destructive `rollback` for everything else,
+  // including zero-token replies, budget and context stops, and rename
+  // failures. ----
 
   const session = createKvCacheSession(modelId, { logger: requestLogger })
   const systemPromptFromHistory = extractSystemPrompt(history)
@@ -532,8 +543,9 @@ export async function* completion(
   // flips the turn's internal `committed` flag so this becomes a no-op
   // on the happy path. Scope unwinding is LIFO — registered after the
   // `removeEventListener` defer above so rollback runs before the
-  // listener detach. A thrown overflow, pre-mutation refusal, or pre-addon
-  // attachment failure never persists the turn; the committed cache stays valid.
+  // listener detach. `preserveCacheOnUnwind` selects the non-destructive
+  // `releaseTurn` when the file on disk is known to still hold the last
+  // committed turn; `releaseTurn` still drops a cache this turn primed.
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
@@ -559,6 +571,7 @@ export async function* completion(
   logMessagesToAddon(messagesToSend, 'PROMPT_SEND')
 
   let result
+  let addonRunSettled = false
   try {
     result = yield* processModelResponse(
       model,
@@ -567,10 +580,17 @@ export async function* completion(
       mergedGenerationParams,
       { cacheKey: turn.cachePath, saveCacheToDisk: true },
       dialect,
-      setActiveResponse
+      setActiveResponse,
+      () => {
+        addonRunSettled = true
+      }
     )
   } catch (error) {
-    preserveCacheOnUnwind = isAddonContextOverflowError(error) || isAddonPreMutationRefusal(error)
+    // The addon writes the cache file only after a run completes and skips the
+    // save on every error path, so a run that threw left the committed file as
+    // it was. An engine-side throw after the run settled is the opposite: the
+    // file already holds this turn while no boundary was recorded for it.
+    preserveCacheOnUnwind = !addonRunSettled
     throw error
   }
   const shouldCommitTurn = shouldCommitCachedTurn({
@@ -580,6 +600,13 @@ export async function* completion(
     predict: mergedGenerationParams?.predict ?? (modelConfig as { predict?: number }).predict,
     stoppedAtContextBoundary: result.stoppedAtContextBoundary
   })
+  // A cancelled run is rewound by the addon to the pre-request state before the
+  // file is re-saved, so the committed cache is intact. Every other non-commit
+  // finish (zero tokens, budget or context stop) was saved as-is and must go.
+  // An abort that landed after the addon reported a stop reason is the latter.
+  if (!shouldCommitTurn) {
+    preserveCacheOnUnwind = signal.aborted && !result.generationFinished
+  }
 
   if (typeof kvCache === 'string') {
     // Custom-key path: the addon wrote the new cache state inline at
