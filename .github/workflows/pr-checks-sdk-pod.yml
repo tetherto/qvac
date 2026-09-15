@@ -394,6 +394,10 @@ jobs:
                 rm -rf node_modules package-lock.json
               fi
 
+              # QVAC-25129: validate coordinated SDK/addon changes before the
+              # addon release exists. Inert once its engine overlay is removed.
+              run "PR diffusion addon dependency" node "$WS/.github/scripts/prepare-diffusion-sdk-overlay.mjs" "$WS"
+
               # npm run --if-present reads package.json scripts and works regardless
               # of the installer (bun lacks --if-present).
               if [ "$SRC" = "workspace" ]; then
