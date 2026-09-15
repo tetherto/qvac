@@ -296,29 +296,41 @@ export const KNOWN_COLLISIONS = [
   {
     a: 'integration-test-asr-ggml.yml',
     b: 'cpp-test-coverage-asr-ggml.yml',
+    shorter: '',
+    longer: 'cpp-tests',
     why: "asr's C++ coverage lane caches packages/asr-ggml/models under suffix cpp-tests; the integration lane's empty suffix reaches it",
   },
   {
     a: 'integration-test-asr-ggml.yml',
     b: 'integration-test-asr-ggml.yml',
+    shorter: '',
+    longer: '',
     why: "pin-model-manifest and the integration job share a path list and suffix but hash different globs, so one prefix covers both keys",
   },
   {
     a: 'integration-test-translation-nmtcpp.yml',
     b: 'packages/translation-nmtcpp/project.json',
+    shorter: '',
+    longer: '',
     why: 'the nx lane and the per-addon lane cache the same directory under different globs; resolving it needs one download definition (see #3903)',
   },
   {
     a: 'integration-test-vla.yml',
     b: 'packages/vla-ggml/project.json',
+    shorter: '',
+    longer: '',
     why: 'same as translation: nx and the per-addon lane share a path list',
   },
 ]
 
+// Matched on the file pair AND the suffix pair. File-pair alone would let the
+// asr self-entry (pin-model-manifest vs the integration job, both empty suffix)
+// permanently suppress every future intra-file collision in that workflow.
 const isKnown = (c) =>
   KNOWN_COLLISIONS.some(
     (k) =>
-      (k.a === c.a.file && k.b === c.b.file) || (k.a === c.b.file && k.b === c.a.file),
+      (k.a === c.a.file && k.b === c.b.file && k.shorter === c.shorter && k.longer === c.longer) ||
+      (k.a === c.b.file && k.b === c.a.file && k.shorter === c.longer && k.longer === c.shorter),
   )
 
 export function findAllPrefixCollisions(files) {

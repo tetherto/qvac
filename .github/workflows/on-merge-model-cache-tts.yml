@@ -64,7 +64,8 @@ jobs:
     needs: runner_names
     # Self-hosted: only these runners reach the cache server holding the entry.
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
-    timeout-minutes: 120
+    # One restore of an ~8.5 GB entry, not a seed's download-and-upload.
+    timeout-minutes: 45
     name: keep-alive-model-cache
     permissions:
       contents: read

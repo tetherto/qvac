@@ -119,7 +119,7 @@ outputs:
     # 'false', which is truthy in a GitHub expression and would short-circuit
     # the later terms. Only an empty value (step skipped) may fall through, so
     # the probe is compared explicitly.
-    value: ${{ steps.probe.outputs.cache-hit == 'true' && 'true' || steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
+    value: ${{ steps.probe.outputs.cache-hit == 'true' && 'true' || steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit || steps.cache-keep-alive.outputs.cache-hit }}
 
 runs:
   using: composite
@@ -231,25 +231,41 @@ runs:
     - name: Cache test models (restore-only, untrusted contexts)
       id: cache-restore-only
       if: >-
-        steps.probe.outputs.cache-hit != 'true' && (
-        inputs.restore-only == 'true' || (
+        steps.probe.outputs.cache-hit != 'true' &&
+        inputs.restore-only != 'true' &&
         github.event_name != 'push' &&
         github.event_name != 'workflow_dispatch' &&
         github.event_name != 'merge_group' &&
         github.event_name != 'schedule' &&
-        github.event.pull_request.head.repo.full_name != github.repository ))
+        github.event.pull_request.head.repo.full_name != github.repository
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
-        # Empty in keep-alive mode. restore-keys would let this latch onto ANY
-        # entry under the prefix -- an obsolete one, or another suffix's -- and
-        # refresh THAT entry's prune clock instead, keeping a stale entry alive
-        # forever while the one the lane actually wants ages out. Observed: a
-        # keep-alive run restored `models-tts-ggml-v1-seed-...` left over from an
-        # earlier experiment. On the fork-PR path the prefix is still wanted, so
-        # it is suppressed only when restore-only was asked for explicitly.
-        restore-keys: ${{ inputs.restore-only == 'true' && '' || format('models-{0}-{1}{2}-', inputs.package, inputs.cache-version, inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '') }}
+        restore-keys: |
+          models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-
+        enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
+
+    # Keep-alive: refresh ONE entry's prune clock, nothing else.
+    #
+    # A separate step rather than a conditional `restore-keys:` on the step
+    # above, because the `A && '' || B` idiom silently does not work in GitHub
+    # expressions: '' is falsy, so it always yields B. The prefix would still
+    # have been emitted and this would have shipped as a no-op.
+    #
+    # No restore-keys is the entire point. With them this latches onto whatever
+    # sits under the prefix -- an obsolete entry, or another suffix's -- and
+    # refreshes THAT entry instead, keeping a stale entry alive forever while
+    # the one the lane asks for ages out. Observed in a real run: a keep-alive
+    # restored `models-tts-ggml-v1-seed-...` left over from an earlier
+    # experiment. Exact key or nothing.
+    - name: Keep the cache entry alive (exact key only)
+      id: cache-keep-alive
+      if: steps.probe.outputs.cache-hit != 'true' && inputs.restore-only == 'true'
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
+        key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Download any models NOT provided by the restore, as an ordinary step with
