@@ -51,16 +51,86 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
+  void* (*ggml_backend_reg_get_proc_address)(
+      ggml_backend_reg_t reg, const char* name);
+  // QVAC-23763: splitModeDeviceNames() needs props.device_id to tell one
+  // physical card registered under two backends from two distinct cards. May
+  // be null; that path then falls back to scoping by registry.
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
+  // QVAC-23763: whether @p device can run the op a KV cache of @p kvType needs.
+  // Kept so this struct stays a copy of llm-llamacpp's, which is what makes the
+  // two BackendSelection.cpp files diffable.
+  //
+  // The production initialisers in this package deliberately leave it null.
+  // embed exposes no cache-type config, so nothing populates
+  // LoadConstraints::kvCacheTypes and the probe would never be consulted;
+  // wiring it would be dead code. Null means "unknown" and fails OPEN, so that
+  // is safe - but it also means **whoever adds cache-type support to embed must
+  // set this**, or the filter will silently do nothing.
+  //
+  // Deliberately last so existing initialisers keep compiling.
+  bool (*deviceSupportsKvCacheType)(
+      ggml_backend_dev_t device, enum ggml_type kvType);
 };
+
+/// @brief Why a candidate device was passed over.
+///
+/// QVAC-23763: llm-llamacpp expresses the Adreno/BitNet/finetune guards and the
+/// KV-cache capability filter through this. embed has none of those rules
+/// today, so only None is ever set - the enum exists to keep the two
+/// implementations the same shape.
+enum class ExclusionReason : std::uint8_t {
+  None = 0,
+  KvCacheTypeUnsupported,
+};
+
+enum class ExclusionKind : std::uint8_t { PreferOther, Incapable };
+
+/// Total by construction: a new ExclusionReason must be classified here.
+ExclusionKind kindOf(ExclusionReason reason);
+
+/// @brief What the load requires of a device beyond its being a GPU.
+struct LoadConstraints {
+  std::vector<enum ggml_type> kvCacheTypes;
+};
+
+enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
+
+/// @brief How the choice was reached, and what it beat.
+struct SelectionTrace {
+  std::string selectedName;
+  std::string selectedRegistry;
+  SelectionPath path = SelectionPath::Cpu;
+  std::string skippedName;
+  std::string skippedRegistry;
+  ExclusionReason skippedReason = ExclusionReason::None;
+};
+
+/// @brief Everything selection needs to know about the caller's intent.
+struct BackendRequest {
+  BackendType preferred = BackendType::CPU;
+  std::optional<MainGpu> mainGpu;
+  std::vector<std::string> backendOverride;
+  LoadConstraints constraints;
+};
+
+/// @brief The chosen backend, plus how it was chosen.
+struct BackendChoice {
+  BackendType type = BackendType::CPU;
+  std::string name = "none";
+  SelectionTrace trace;
+};
+
+BackendChoice
+chooseBackend(const BackendRequest& request, const BackendInterface& bckI);
 
 struct SplitDevice {
   std::string name;
-  ggml_backend_dev_t handle;
-  size_t sourceGpuIndex;
-  bool isOpenCl;
+  ggml_backend_dev_t handle = nullptr;
+  size_t sourceGpuIndex = 0;
+  bool isOpenCl = false;
   bool isRpc = false;
 };
 
@@ -70,6 +140,13 @@ struct SplitDeviceSelection {
   std::vector<std::string> rejectedDevices;
 };
 
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+SplitDeviceSelection getSplitDeviceSelection();
+std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
+
+/// @brief Adapter for the positional form. Retained so existing callers and
+/// tests are unaffected by the request/choice split; prefer the overload above
+/// for new code.
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
@@ -93,29 +170,46 @@ std::pair<BackendType, std::string> chooseBackend(
     const std::optional<MainGpu>& mainGpu = std::nullopt,
     const std::vector<std::string>& backendOverride = {});
 
-/// @brief Count devices in the final Fabric-compatible split set.
+/// @brief Count GPU devices available for multi-GPU split mode.
+/// Returns the number of discrete GPUs when any are present; otherwise
+/// falls back to the iGPU count. This mirrors backends like Vulkan which
+/// exclude iGPUs by default when discrete GPUs exist.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief Select the Fabric-compatible split list for layer split mode.
-/// RPC devices first, then discrete GPUs if any are eligible, else integrated;
-/// discrete duplicates dropped by raw `ggml_backend_dev_props::device_id`
-/// (byte for byte as fabric compares, so CUDA `-vN` devices stay distinct, and
-/// a null id is kept). `sourceGpuIndex` keeps each device's position in the raw
-/// GPU registry so positional tensor shares can be remapped onto the final
-/// list.
-SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+/// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
+/// True only when at least one GPU device is present AND every available
+/// GPU/iGPU device's backend provides split buffers, because qvac-fabric
+/// requires split buffers from each device it distributes over and throws on
+/// the first one that lacks them. Callers should degrade row -> layer when this
+/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
+/// this is false in every shipped configuration.
+bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
 
-/// @brief `getSplitDeviceSelection()` against the real ggml registry.
-SplitDeviceSelection getSplitDeviceSelection();
+/// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
+/// registry.
+bool gpuBackendSupportsRowSplit();
 
-/// @brief Eligible split devices, preferring discrete and deduplicating by id.
-std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
-
-/// @brief Device names for split mode, preferring the selected backend when
-/// one physical GPU is registered by more than one backend.
+/// @brief The device names to pass as `--device` in multi-GPU split mode: every
+/// discrete GPU, deduplicated by `props.device_id` so a card registered under
+/// two backends is named once, preferring @p selectedDeviceName's registry.
+///
+/// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
+/// registers twice, as CUDA0 and Vulkan0, so the old unconditional omission of
+/// `--device` would spread a single card across two backends. Deduping rather
+/// than scoping to one registry keeps a second physical card on a mixed-vendor
+/// host, and preferring the selected registry keeps a `backend` override
+/// binding, which omitting `--device` would not.
+///
+/// A device whose backend publishes no bus id falls back to registry scoping,
+/// since it cannot be matched against its own duplicate.
+///
+/// Empty when every GPU/iGPU device comes from one registry, which is every
+/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
+/// caller then keeps omitting `--device`.
 std::vector<std::string> splitModeDeviceNames(
     const BackendInterface& bckI, const std::string& selectedDeviceName);
 
+/// @brief `splitModeDeviceNames()` against the real ggml backend registry.
 std::vector<std::string>
 splitModeDeviceNames(const std::string& selectedDeviceName);
 } // namespace backend_selection

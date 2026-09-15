@@ -19,6 +19,7 @@ struct MockDevice {
   std::string backend_name;
   std::string regName;
   enum ggml_backend_dev_type type;
+  bool hasSplitBuffers = false;
   std::string deviceId;
   /// Index of the device whose `ggml_backend_reg_t` this one reports; unset
   /// means its own. The iGPU retention rule compares registry IDENTITY, so a
@@ -85,6 +86,7 @@ public:
         &MockBackendInterface::staticDevDescription,
         &MockBackendInterface::staticDevName,
         &MockBackendInterface::staticDevType,
+        &MockBackendInterface::staticRegGetProcAddress,
         &MockBackendInterface::staticDevGetProps,
         &MockBackendInterface::staticLlamaLogCallback};
   }
@@ -163,6 +165,21 @@ private:
     return GGML_BACKEND_DEVICE_TYPE_CPU;
   }
 
+  // `staticDevBackendReg` hands back the device pointer as the registry
+  // handle, so recover the MockDevice from it to answer per-device.
+  static void*
+  staticRegGetProcAddress(ggml_backend_reg_t reg, const char* name) {
+    if (g_currentInstance == nullptr || reg == nullptr || name == nullptr) {
+      return nullptr;
+    }
+    MockDevice* dev = reinterpret_cast<MockDevice*>(reg);
+    if (dev->hasSplitBuffers &&
+        std::string(name) == "ggml_backend_split_buffer_type") {
+      // Callers only test the address for presence, so any non-null will do.
+      return reinterpret_cast<void*>(dev);
+    }
+    return nullptr;
+  }
   // Only `device_id` is read by the code under test; a device with no id
   // leaves it null, which is how a backend without VK_EXT_pci_bus_info reports.
   static void
@@ -912,6 +929,12 @@ TEST_F(BackendSelectionTest, CudaPreferredOverVulkan) {
 TEST_F(BackendSelectionTest, CudaPreferredOverVulkanRegardlessOfDeviceOrder) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
+TEST_F(BackendSelectionTest, IntegratedCudaPreferredOverVulkan) {
+  mockBackend.addDevice(createIGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createIGPUDevice(NVIDIA_DESC, CUDA0_BACK));
   expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 

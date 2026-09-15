@@ -712,36 +712,28 @@ NormalizationDependencies
 productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
   return {
       .resolveBackend =
-          [logCallback](
-              backend_selection::BackendType preferred,
-              const std::optional<backend_selection::MainGpu>& mainGpu,
-              const ModelMetaData& metadata,
-              bool isFinetuning,
-              const std::vector<std::string>& backendOverride) {
-            std::optional<int> adrenoVersion;
-            bool isMaliGpu = false;
-            auto [type, name] = backend_selection::chooseBackend(
-                preferred,
-                logCallback,
-                mainGpu,
-                &metadata,
-                &adrenoVersion,
-                isFinetuning,
-                &isMaliGpu,
-                backendOverride);
-            const bool isOpenCl = name.find("opencl") != std::string::npos;
-            const bool isMetal = name.find("metal") != std::string::npos ||
-                                 name.rfind("mtl", 0) == 0;
+          [logCallback](const backend_selection::BackendRequest& request) {
+            backend_selection::BackendChoice choice =
+                backend_selection::chooseBackend(request, logCallback);
+            const bool isOpenCl =
+                choice.name.find("opencl") != std::string::npos;
+            const bool isMetal =
+                choice.name.find("metal") != std::string::npos ||
+                choice.name.rfind("mtl", 0) == 0;
             return SelectedBackend{
-                .type = type,
-                .name = std::move(name),
-                .adrenoVersion = adrenoVersion,
-                .isMaliGpu = isMaliGpu,
+                .type = choice.type,
+                .name = std::move(choice.name),
+                .adrenoVersion = choice.adrenoVersion,
+                .isMaliGpu = choice.isMaliGpu,
                 .isOpenCl = isOpenCl,
                 .isMetal = isMetal};
           },
       .splitDevices =
-          []() { return backend_selection::getSplitDeviceSelection(); }};
+          [](const std::string& selectedDeviceName,
+             const backend_selection::LoadConstraints& constraints) {
+            return backend_selection::getSplitDeviceSelection(
+                selectedDeviceName, constraints);
+          }};
 }
 
 NormalizedLoad normalizeLoadForFit(
@@ -992,13 +984,38 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
+
+    LoadConstraints constraints;
+    for (const char* key :
+         {"cache-type-k", "cache_type_k", "cache-type-v", "cache_type_v"}) {
+      const auto it = configFilemap.find(key);
+      if (it == configFilemap.end()) {
+        continue;
+      }
+      const enum ggml_type kvType = kvCacheTypeFromString(it->second);
+      if (kvType != GGML_TYPE_COUNT &&
+          std::ranges::find(constraints.kvCacheTypes, kvType) ==
+              constraints.kvCacheTypes.end()) {
+        constraints.kvCacheTypes.push_back(kvType);
+      }
+    }
+
+    BackendRequest request;
+    request.preferred = preferredBackend;
+    request.metadata = &metadata;
+    request.mainGpu = mainGpu;
+    request.isFinetuning = finetuneOverrides.active;
+    request.backendOverride = backendOverride;
+    request.constraints = constraints;
+    if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+      request.mainGpu.reset();
+    }
+
     backend_selection::SplitDeviceSelection splitSelection;
-    SelectedBackend selected;
-    if (preferredBackend == BackendType::GPU &&
+    SelectedBackend selected = dependencies.resolveBackend(request);
+    if (selected.type == BackendType::GPU &&
         splitMode != LLAMA_SPLIT_MODE_NONE) {
-      splitSelection = dependencies.splitDevices();
-      // This path never calls chooseBackend, so apply its Adreno restrictions
-      // to the split set; an emptied list falls through to the CPU branch.
+      splitSelection = dependencies.splitDevices(selected.name, constraints);
       backend_selection::applyAdrenoRestrictions(
           splitSelection, metadata, finetuneOverrides.active);
       if (!splitSelection.devices.empty()) {
@@ -1028,34 +1045,29 @@ NormalizedLoad normalizeLoadForFit(
             maxAdrenoVersion = device.adrenoVersion;
           }
         }
-        selected = {
-            .type = BackendType::GPU,
-            .name = primary.name,
-            .adrenoVersion = maxAdrenoVersion,
-            .isOpenCl = anyDevice(&backend_selection::SplitDevice::isOpenCl),
-            .isMetal = anyDevice(&backend_selection::SplitDevice::isMetal)};
-      } else if (!splitSelection.rejectedDevices.empty()) {
-        std::string rejected;
-        for (const std::string& device : splitSelection.rejectedDevices) {
-          if (!rejected.empty()) {
-            rejected += ", ";
+        selected.name = primary.name;
+        selected.adrenoVersion = maxAdrenoVersion;
+        selected.isOpenCl =
+            anyDevice(&backend_selection::SplitDevice::isOpenCl);
+        selected.isMetal = anyDevice(&backend_selection::SplitDevice::isMetal);
+      } else {
+        if (!splitSelection.rejectedDevices.empty()) {
+          std::string rejected;
+          for (const std::string& device : splitSelection.rejectedDevices) {
+            if (!rejected.empty()) {
+              rejected += ", ";
+            }
+            rejected += device;
           }
-          rejected += device;
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] no eligible GPU backend found; rejected %s; "
+                  "falling back to CPU\n",
+                  rejected.c_str()));
         }
-        QLOG_IF(
-            Priority::WARNING,
-            string_format(
-                "[LlamaModel] no eligible GPU backend found; rejected %s; "
-                "falling back to CPU\n",
-                rejected.c_str()));
+        selected = {};
       }
-    } else {
-      selected = dependencies.resolveBackend(
-          preferredBackend,
-          mainGpu,
-          metadata,
-          finetuneOverrides.active,
-          backendOverride);
     }
     result.adrenoVersion = selected.adrenoVersion;
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Backend selection is restructured around one candidate list with a per-device
+  exclusion reason, matching `@qvac/llm-llamacpp`. No behaviour change here,
+  but it gives the two implementations the same shape and provides the seam
+  needed for future capability filters.
+
 ## [0.41.0] - 2026-09-15
 
 This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. llama.cpp, ggml and the vector-index API are now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer.

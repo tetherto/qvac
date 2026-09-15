@@ -150,6 +150,20 @@
   large record per failing request.
 - A sequence in the generation phase no longer throttles concurrently prefilling sequences to one prompt token per decode step. `MultiRequestBatcher` fed every active slot a single shared chunk size, computed as the minimum `remainingToFeed()` across them; a generating slot reports `1`, so as soon as any one request started generating, every request still feeding its prompt was cut to one token per step and needed roughly as many decode steps to reach its first token as its prompt had tokens. Slots are now budgeted individually and water-filled against the batch capacity, so a generating slot takes its one token while a concurrent prefill keeps its full micro-batch. On a `parallel: 4` model answering six concurrent requests, time to first token for the stalled group drops from ~1710 ms to ~308 ms, aggregate throughput rises ~25% and wall clock falls ~21%. Peak batch size is unchanged — the sum of the per-slot budgets is bounded by the same `batch.capacity()` the shared chunk was. Note that a step taken while a large prefill is co-resident now carries more tokens, so an already-generating sequence sees a correspondingly larger spread in per-token latency.
 
+### Changed
+
+- Backend selection filters candidate devices by what the load actually needs
+  before the cascade picks one, instead of rejecting the load after a backend
+  was already chosen. A TurboQuant/PolarQuant KV-cache type on an NVIDIA host
+  that also has Vulkan now runs on Vulkan; previously it failed the load.
+- The capability question is asked of ggml (`ggml_backend_dev_supports_op` on
+  the `SET_ROWS` a KV cache builds) rather than inferred from the device name,
+  so the answer corrects itself when a backend gains those kernels.
+- A GPU load still fails when no available GPU can run the requested cache type
+  on a Metal-only or CUDA-only host, rather than silently dropping to
+  CPU, which would be far slower than the `device: 'gpu'` that was asked for.
+  The error names each device that was passed over and why.
+
 ## [0.52.1] - 2026-09-14
 
 ### Changed

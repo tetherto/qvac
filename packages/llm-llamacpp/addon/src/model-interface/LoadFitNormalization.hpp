@@ -78,18 +78,15 @@ struct SelectedBackend {
   bool isMetal = false;
 };
 
-/// Args: preferred type, main-gpu override, model metadata, isFinetuning,
-/// and the parsed `backend` priority list (empty when the caller did not set
-/// one). QVAC-23763.
-using BackendResolver = std::function<SelectedBackend(
-    backend_selection::BackendType,
-    const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
-    bool, const std::vector<std::string>&)>;
+using BackendResolver =
+    std::function<SelectedBackend(const backend_selection::BackendRequest&)>;
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   /// Authoritative eligible device set for every multi-GPU split mode.
-  std::function<backend_selection::SplitDeviceSelection()> splitDevices;
+  std::function<backend_selection::SplitDeviceSelection(
+      const std::string&, const backend_selection::LoadConstraints&)>
+      splitDevices;
 };
 
 struct NormalizedLoad {

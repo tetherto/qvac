@@ -66,8 +66,140 @@ struct BackendInterface {
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
+  // QVAC-23763: whether @p device can run the op a KV cache of @p kvType needs,
+  // which is SET_ROWS writing kvType from F32 - exactly what llama_kv_cache
+  // builds, and exactly what a backend's supports_op table answers. Asking ggml
+  // the capability question beats matching the device name against "cuda",
+  // because the answer then corrects itself when a backend gains those kernels.
+  //
+  // Deliberately last so existing positional initialisers keep compiling. Null
+  // means "unknown" and fails OPEN - no exclusion, pre-QVAC-23763 behaviour -
+  // so an initialiser that omits it stays correct, just unfiltered.
+  bool (*deviceSupportsKvCacheType)(
+      ggml_backend_dev_t device, enum ggml_type kvType);
 };
 
+/// @brief Map a `cache-type-k`/`cache-type-v` value to its ggml_type.
+///
+/// Returns GGML_TYPE_COUNT when the string names no type. The caller drops that
+/// rather than erroring, because tuneLoadConfigMap still validates the value
+/// and is the right place for the message.
+enum ggml_type kvCacheTypeFromString(const std::string& name);
+
+/// @brief Why a candidate device was passed over.
+///
+/// QVAC-23763: selection used to express these by clearing whole buckets, which
+/// destroyed the reason along with the candidate. Keeping the reason is what
+/// lets the caller say *why* a higher-priority backend was not chosen.
+enum class ExclusionReason : std::uint8_t {
+  None = 0,
+  FinetuneAdrenoBelow800,
+  FinetuneAdreno800Plus,
+  BitnetAdrenoBelow800,
+  BitnetAdreno800Plus,
+  /// The device's backend cannot run the requested KV-cache type.
+  KvCacheTypeUnsupported,
+};
+
+/// @brief Whether landing on CPU because every GPU carries this reason is an
+/// acceptable outcome or an error.
+///
+/// PreferOther means the guard actively wants another backend, and CPU is a
+/// legitimate destination - this is every Adreno/BitNet/finetune rule, and
+/// falling to CPU is what they already do. Incapable means the device cannot
+/// run the load at all; if nothing else can either, that is worth failing over
+/// rather than silently running somewhere far slower than the caller asked for.
+enum class ExclusionKind : std::uint8_t { PreferOther, Incapable };
+
+/// Total by construction: a new ExclusionReason must be classified before this
+/// compiles.
+ExclusionKind kindOf(ExclusionReason reason);
+
+/// @brief What the load requires of a device beyond its being a GPU.
+///
+/// Default-constructed means no extra constraint, which is every pre-QVAC-23763
+/// caller.
+struct LoadConstraints {
+  /// KV-cache types the device must be able to write with SET_ROWS from F32.
+  /// Empty when the caller set no cache-type, or set one that is not quantized.
+  std::vector<enum ggml_type> kvCacheTypes;
+};
+
+enum class SelectionPath : std::uint8_t { Cascade, Override, Cpu };
+
+/// @brief How the choice was reached, and what it beat.
+struct SelectionTrace {
+  std::string selectedName;
+  std::string selectedRegistry;
+  SelectionPath path = SelectionPath::Cpu;
+  /// The highest-priority candidate that was passed over, and why. Empty when
+  /// nothing was passed over.
+  std::string skippedName;
+  std::string skippedRegistry;
+  ExclusionReason skippedReason = ExclusionReason::None;
+};
+
+/// @brief Everything selection needs to know about the caller's intent.
+struct BackendRequest {
+  BackendType preferred = BackendType::CPU;
+  const ModelMetaData* metadata = nullptr;
+  std::optional<MainGpu> mainGpu;
+  bool isFinetuning = false;
+  std::vector<std::string> backendOverride;
+  LoadConstraints constraints;
+};
+
+/// @brief The chosen backend, plus how it was chosen.
+struct BackendChoice {
+  BackendType type = BackendType::CPU;
+  std::string name = "none";
+  std::optional<int> adrenoVersion;
+  bool isMaliGpu = false;
+  SelectionTrace trace;
+};
+
+BackendChoice
+chooseBackend(const BackendRequest& request, const BackendInterface& bckI);
+
+/// @brief `chooseBackend()` against the real ggml backend registry.
+BackendChoice chooseBackend(
+    const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
+
+struct SplitDevice {
+  std::string name;
+  ggml_backend_dev_t handle = nullptr;
+  size_t sourceGpuIndex = 0;
+  bool isRpc = false;
+  std::optional<int> adrenoVersion;
+  bool isOpenCl = false;
+  bool isMetal = false;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDevice> devices;
+  size_t sourceGpuCount = 0;
+  std::vector<std::string> rejectedDevices;
+};
+
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+SplitDeviceSelection getSplitDeviceSelection();
+
+/// @brief The authoritative split set after applying load constraints and
+/// preferring the selected backend when one physical GPU has multiple backend
+/// registrations.
+SplitDeviceSelection getSplitDeviceSelection(
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints);
+SplitDeviceSelection getSplitDeviceSelection(
+    const std::string& selectedDeviceName, const LoadConstraints& constraints);
+
+void applyAdrenoRestrictions(
+    SplitDeviceSelection& selection, const ModelMetaData& metadata,
+    bool isFinetuning);
+
+/// @brief Adapter for the positional form. Retained so existing callers and
+/// tests are unaffected by the request/choice split; prefer the overload above
+/// for new code.
 std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, const BackendInterface& bckI,
     const ModelMetaData* metadata = nullptr,
@@ -110,62 +242,52 @@ std::pair<BackendType, std::string> chooseBackend(
     bool* outIsMaliGpu = nullptr,
     const std::vector<std::string>& backendOverride = {});
 
-/// @brief Count devices in the final Fabric-compatible split set.
+/// @brief Count GPU devices available for multi-GPU split mode.
+/// Returns the number of discrete GPUs when any are present; otherwise
+/// falls back to the iGPU count. This mirrors backends like Vulkan which
+/// exclude iGPUs by default when discrete GPUs exist.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-struct SplitDevice {
-  std::string name;
-  ggml_backend_dev_t handle = nullptr;
-  size_t sourceGpuIndex = 0;
-  bool isRpc = false;
-  std::optional<int> adrenoVersion;
-  bool isOpenCl = false;
-  bool isMetal = false;
-};
-
-struct SplitDeviceSelection {
-  std::vector<SplitDevice> devices;
-  size_t sourceGpuCount = 0;
-  std::vector<std::string> rejectedDevices;
-};
-
-/// @brief The authoritative allowlisted device set for multi-GPU modes.
-SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
-
-/// @brief `getSplitDeviceSelection()` against the real ggml registry.
-SplitDeviceSelection getSplitDeviceSelection();
-
-/// @brief Apply the Adreno workload restrictions to a split device set.
+/// @brief The ordered device names to hand to `--device` for
+/// LLAMA_SPLIT_MODE_TENSOR.
 ///
-/// For one-bit (TQ1_0/TQ2_0) BitNet and for finetuning, using the max tier
-/// across the set's local devices:
-///   - Adreno <800: CPU only  -> clears @p selection.devices
-///   - Adreno 800+: prefer Vulkan over OpenCL -> drops the OpenCL devices
-void applyAdrenoRestrictions(
-    SplitDeviceSelection& selection, const ModelMetaData& metadata,
-    bool isFinetuning);
-
-/// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
+/// QVAC-24253. Tensor mode is the one split mode qvac-fabric selects devices
+/// for with no type filter and no deduplication: its branch in `src/llama.cpp`
+/// keeps everything whose buffer type is not the CPU buffer type, so
+/// integrated GPUs are included unconditionally and a physical GPU registered
+/// by two backends (e.g. Vulkan and HIP under GGML_BACKEND_DL) is added twice
+/// and receives two shards. Tensor mode therefore always needs an explicit
+/// list.
 ///
-/// Selection mirrors qvac-fabric's device ordering while applying this addon's
-/// supported-backend allowlist:
-///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible.
-///   - RPC devices are prepended and do not suppress a local integrated GPU.
-///   - Local discrete GPUs when any are present, otherwise the first
-///     integrated GPU plus any later one sharing its backend registry handle.
+/// Selection mirrors qvac-fabric's own filtered branch (`src/llama.cpp`) so the
+/// pinned list matches what fabric would have picked for `layer`/`row`:
+///   - RPC devices are excluded. ggml reports them as
+///     `GGML_BACKEND_DEVICE_TYPE_GPU` (`ggml-rpc.cpp`, with a TODO), and fabric
+///     segregates them precisely so they do not count as discrete GPUs;
+///     otherwise the local iGPU is dropped on an iGPU + RPC host. The
+///     authoritative handle-based split selection adds RPC devices separately.
+///   - Discrete GPUs when any are present, otherwise the integrated ones.
 ///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
 ///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets
 ///     the description to the raw device name, which is identical for two
 ///     identical cards, so a 2x RTX 4090 host would silently collapse to one.
 ///     A device whose `device_id` is null is kept rather than dropped.
+///   - Devices that cannot meet @p constraints are excluded, and duplicate
+///     representations prefer @p selectedDeviceName's registry.
 ///
 /// Returns an empty vector when no GPU device is present; callers must then
 /// leave `--device` alone rather than emitting an empty list.
-std::vector<std::string>
-getTensorSplitDeviceNames(const BackendInterface& bckI);
+std::vector<std::string> getTensorSplitDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName = {},
+    const LoadConstraints& constraints = {});
 
 /// @brief `getTensorSplitDeviceNames()` against the real ggml backend registry.
-std::vector<std::string> getTensorSplitDeviceNames();
+std::vector<std::string> getTensorSplitDeviceNames(
+    const std::string& selectedDeviceName = {},
+    const LoadConstraints& constraints = {});
+
+/// @brief Current-main compatibility name for the filtered tensor split list.
+std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one GPU device is present AND every available
@@ -194,15 +316,17 @@ bool gpuBackendSupportsRowSplit();
 /// A device whose backend publishes no bus id falls back to registry scoping,
 /// since it cannot be matched against its own duplicate.
 ///
-/// Empty when every GPU/iGPU device comes from one registry, which is every
-/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
-/// caller then keeps omitting `--device`.
+/// Empty when every usable GPU/iGPU device comes from one registry and no
+/// device was excluded by @p constraints, or when @p selectedDeviceName
+/// matches nothing. The caller then keeps omitting `--device`.
 std::vector<std::string> splitModeDeviceNames(
-    const BackendInterface& bckI, const std::string& selectedDeviceName);
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 
 /// @brief `splitModeDeviceNames()` against the real ggml backend registry.
-std::vector<std::string>
-splitModeDeviceNames(const std::string& selectedDeviceName);
+std::vector<std::string> splitModeDeviceNames(
+    const std::string& selectedDeviceName,
+    const LoadConstraints& constraints = {});
 
 /// @brief Inputs to the CUDA PTX JIT cache check, gathered from the
 /// environment so the policy below stays testable.
@@ -230,7 +354,4 @@ bool shouldWarnAboutJitCache(const JitCacheEnv& env);
 /// @brief `shouldWarnAboutJitCache()` against the real environment. Always
 /// false off linux, where this module is not built as a loadable CUDA backend.
 bool shouldWarnAboutJitCache();
-
-/// Returns an empty vector when callers must fall back to CPU.
-std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 } // namespace backend_selection
