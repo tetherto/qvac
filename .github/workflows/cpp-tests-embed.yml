@@ -179,10 +179,8 @@ jobs:
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
       # Exports TOOLCHAIN_FINGERPRINT for the cache key below. Must run before
-      # both cache steps. See the action for why the key cannot omit it. Skipped
-      # where the cache directory persists, since no key is computed there.
+      # both cache steps. See the action for why the key cannot omit it.
       - name: Fingerprint the toolchain
-        if: env.VCPKG_CACHE_PERSISTENT != 'true'
         uses: ./.github/actions/vcpkg-toolchain-fingerprint
 
       # This job runs PR-head code, so only trusted events may write the shared
@@ -194,11 +192,10 @@ jobs:
       # without it restores, yields nothing usable and can never re-save.
       - name: Get vcpkg cache (restore + save, trusted contexts)
         if: >-
-          env.VCPKG_CACHE_PERSISTENT != 'true' && (
           github.event_name == 'push' ||
           github.event_name == 'workflow_dispatch' ||
           github.event_name == 'merge_group' ||
-          github.event_name == 'schedule')
+          github.event_name == 'schedule'
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: >-
@@ -215,11 +212,10 @@ jobs:
 
       - name: Get vcpkg cache (restore-only, untrusted contexts)
         if: >-
-          env.VCPKG_CACHE_PERSISTENT != 'true' && (
           github.event_name != 'push' &&
           github.event_name != 'workflow_dispatch' &&
           github.event_name != 'merge_group' &&
-          github.event_name != 'schedule')
+          github.event_name != 'schedule'
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: >-

@@ -50,10 +50,14 @@ runs:
           exit 1
         fi
 
+        # The host layer is shared with every later job on the box, so only
+        # trusted events may write it. The workspace layer is job-local until
+        # actions/cache saves it, and that save is gated by the caller.
         mode="read"
         if [ "${INPUT_TRUSTED}" = "true" ]; then mode="readwrite"; fi
 
         persistent="false"
+        host_dir=""
         cache_dir="${GITHUB_WORKSPACE}/${INPUT_WORKDIR}/vcpkg/cache"
 
         if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
@@ -88,24 +92,36 @@ runs:
               chmod 1777 "${candidate}" 2> /dev/null || true
             fi
             if [ -w "${candidate}" ]; then
-              cache_dir="${candidate}"
+              host_dir="${candidate}"
               persistent="true"
               break
             fi
           done
 
-          # Fall back to the workspace rather than failing the job.
+          # Not fatal: the workspace layer below still applies.
           if [ "${persistent}" != "true" ]; then
-            echo "::warning::no writable host cache dir (${candidates}); falling back to the workspace"
+            echo "::warning::no writable host cache dir (${candidates}); workspace layer only"
           fi
         fi
 
         mkdir -p "${cache_dir}"
 
-        echo "VCPKG_BINARY_SOURCES=clear;files,${cache_dir},${mode}" >> "${GITHUB_ENV}"
+        # Two layers, host first. The host layer is free to read and warm
+        # whenever a job lands on a box that built this package before. The
+        # workspace layer is carried by the caller's actions/cache, which is
+        # repo-global, so it covers every run that lands somewhere else --
+        # including a different host or pool. vcpkg reads sources in order and
+        # writes to each writable one, so a build populates both.
+        sources="clear"
+        if [ -n "${host_dir}" ]; then
+          sources="${sources};files,${host_dir},${mode}"
+        fi
+        sources="${sources};files,${cache_dir},readwrite"
+
+        echo "VCPKG_BINARY_SOURCES=${sources}" >> "${GITHUB_ENV}"
         echo "VCPKG_CACHE_DIR=${cache_dir}" >> "${GITHUB_ENV}"
         echo "VCPKG_CACHE_PERSISTENT=${persistent}" >> "${GITHUB_ENV}"
-        echo "vcpkg binary cache: ${cache_dir} (${mode}, persistent=${persistent})"
+        echo "vcpkg binary sources: ${sources}"
 
     - if: runner.os == 'Windows'
       shell: powershell
@@ -124,6 +140,7 @@ runs:
         $mode = if ($env:INPUT_TRUSTED -eq 'true') { 'readwrite' } else { 'read' }
 
         $persistent = 'false'
+        $hostDir = ''
         # Native path required: a mixed-separator path resolves elsewhere and
         # vcpkg silently finds nothing.
         $cacheDir = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:INPUT_WORKDIR 'vcpkg/cache')))
@@ -145,7 +162,7 @@ runs:
               $probe = Join-Path $candidate ".write-probe-$env:GITHUB_RUN_ID"
               Set-Content -Path $probe -Value 'ok' -ErrorAction Stop
               Remove-Item $probe -Force
-              $cacheDir = [IO.Path]::GetFullPath($candidate)
+              $hostDir = [IO.Path]::GetFullPath($candidate)
               $persistent = 'true'
               break
             } catch {
@@ -154,13 +171,18 @@ runs:
           }
 
           if ($persistent -ne 'true') {
-            Write-Output "::warning::no writable host cache dir ($($candidates -join ', ')); falling back to the workspace"
+            Write-Output "::warning::no writable host cache dir ($($candidates -join ', ')); workspace layer only"
           }
         }
 
         New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 
-        echo "VCPKG_BINARY_SOURCES=clear;files,$cacheDir,$mode" >> $env:GITHUB_ENV
+        # Two layers, host first -- see the bash branch for why.
+        $sources = 'clear'
+        if ($hostDir) { $sources = "$sources;files,$hostDir,$mode" }
+        $sources = "$sources;files,$cacheDir,readwrite"
+
+        echo "VCPKG_BINARY_SOURCES=$sources" >> $env:GITHUB_ENV
         echo "VCPKG_CACHE_DIR=$cacheDir" >> $env:GITHUB_ENV
         echo "VCPKG_CACHE_PERSISTENT=$persistent" >> $env:GITHUB_ENV
-        Write-Output "vcpkg binary cache: $cacheDir ($mode, persistent=$persistent)"
+        Write-Output "vcpkg binary sources: $sources"
