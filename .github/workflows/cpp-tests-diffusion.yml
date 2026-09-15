@@ -235,9 +235,17 @@ jobs:
         run: |
           set +e
           host_dir=$(echo "${VCPKG_BINARY_SOURCES}" | tr ';' '\n' | grep '^files,' | head -n 1 | cut -d, -f2)
-          [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || exit 0
-          [ "${host_dir}" = "${VCPKG_CACHE_DIR}" ] && exit 0
-          mkdir -p "${VCPKG_CACHE_DIR}"
+          ws_dir="${VCPKG_CACHE_DIR}"
+          # Windows hands these over with backslashes, which this shell cannot
+          # traverse; cygpath is present in the runner's Git bash.
+          if command -v cygpath > /dev/null 2>&1; then
+            host_dir=$(cygpath -u "${host_dir}" 2>/dev/null || echo "${host_dir}")
+            ws_dir=$(cygpath -u "${ws_dir}" 2>/dev/null || echo "${ws_dir}")
+          fi
+          echo "sync: host=${host_dir} workspace=${ws_dir}"
+          [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || { echo "sync: no host dir"; exit 0; }
+          [ "${host_dir}" = "${ws_dir}" ] && exit 0
+          mkdir -p "${ws_dir}"
           umask 000
 
           sync_dir() {
@@ -250,10 +258,10 @@ jobs:
               rm -f "$tmp" 2>/dev/null
             done
           }
-          sync_dir "${host_dir}" "${VCPKG_CACHE_DIR}"
-          sync_dir "${VCPKG_CACHE_DIR}" "${host_dir}"
+          sync_dir "${host_dir}" "${ws_dir}"
+          sync_dir "${ws_dir}" "${host_dir}"
 
-          echo "host=$(find "${host_dir}" -name '*.zip' 2>/dev/null | wc -l) archives, workspace=$(find "${VCPKG_CACHE_DIR}" -name '*.zip' 2>/dev/null | wc -l)"
+          echo "sync: host=$(find "${host_dir}" -name '*.zip' 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -name '*.zip' 2>/dev/null | wc -l)"
           exit 0
 
       # Only trusted events may write the shared cache (see .github/AGENTS.md),
