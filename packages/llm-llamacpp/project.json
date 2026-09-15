@@ -9,6 +9,7 @@
         "cwd": "packages/llm-llamacpp",
         "ci": {
           "hasCppLint": true,
+          "includeCudaSdk": true,
           "hasTsChecks": true,
           "tsChecksMode": "dts+lint",
           "hasFabricLockstep": true,
@@ -28,7 +29,11 @@
         "cwd": "packages/llm-llamacpp",
         "ci": {
           "artifactNamePrefix": "llama-cpp-",
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "includeCuda": true,
+          "includeCudaWin32": true,
+          "includeCudaArm64": true,
+          "includeCudaArm64Jetson": true
         }
       },
       "inputs": [
@@ -88,6 +93,7 @@
           "hasAppleClangWorkaround": true,
           "needsUnitTestModelCache": true,
           "hasResultsCountValidation": true,
+          "includeCudaSdk": true,
           "coverageOn": "ubuntu-24.04",
           "platforms": [
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },

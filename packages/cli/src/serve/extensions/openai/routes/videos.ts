@@ -509,7 +509,12 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
       let params: VideoClientParams
       try {
-        params = extractVideoCreateParams(req.body, initImage, sdkModelId)
+        params = extractVideoCreateParams(
+          req.body,
+          initImage,
+          sdkModelId,
+          req.qvacModel!.entry.config
+        )
       } catch (err) {
         if (err instanceof InvalidVideoStrengthError) {
           throw new HttpError(400, 'invalid_strength', err.message)

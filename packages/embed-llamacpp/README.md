@@ -30,9 +30,9 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | CUDA (NVIDIA), Vulkan |
+| Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA (NVIDIA), Vulkan |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
-| Windows | x64 | 10+ | ✅ Tier 1 | CUDA (NVIDIA), Vulkan |
+| Windows | x64 | 10+ | Tier 1 | CUDA (NVIDIA), Vulkan |
 
 **Note on CUDA (Linux and Windows, NVIDIA):**
 The CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred over
@@ -153,7 +153,7 @@ The `config` is a plain JS object whose keys are forwarded directly to the nativ
 | `embd_normalize` | string of integer                             | `"2"`         | Embedding normalization (`-1` = none, `0` = max abs int16, `1` = taxicab, `2` = euclidean, `>2` = p-norm) |
 | `flash_attn`     | `"on"` \| `"off"` \| `"auto"`                 | `"auto"`      | Enable / disable flash attention                                                         |
 | `main-gpu`       | string of integer \| `"integrated"` \| `"dedicated"` | —      | GPU selection for multi-GPU systems                                                      |
-| `backend`        | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm`, `sycl`, or `auto` | — | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU |
+| `backend`        | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `hip`, `rocm`, `sycl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU |
 | `verbosity`      | string of `"0"`–`"3"` (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | `"0"` | Native logging verbosity. The `addonLogging.setLogger` callback receives only messages at or above this threshold. Use `"2"` for llama.cpp INFO logs and `"3"` for DEBUG logs. The verbosity level is process-global and is updated each time a model is constructed, so the most recently constructed model's `config.verbosity` wins for all subsequent native log dispatch. |
 
 #### Native addon logging

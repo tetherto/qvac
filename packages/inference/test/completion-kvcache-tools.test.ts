@@ -12,17 +12,16 @@ import { ModelType } from '@/schemas'
 // -----------------------------------------------------------------------------
 // Tool definitions must reach the model on every kv-cache path.
 //
-// The primed prefix is rendered on its own, so it can only contain a message
-// list that every chat template accepts. A system message plus tool
-// definitions is not such a list: Qwen3.5 raises
-// `No user query found in messages.` because its tool block is anchored on the
-// last user query, and the addon answers a template failure by re-rendering
-// without Jinja — which silently drops the tools. Static mode then never
-// resent them, on the assumption they were already cached, so the model
+// A prefix rendered on its own can only hold a message list that every chat
+// template accepts. A system message plus tool definitions is not such a list:
+// Qwen3.5 raises `No user query found in messages.` because its tool block is
+// anchored on the last user query, and the addon answers a template failure by
+// re-rendering without Jinja — which silently drops the tools. Static mode then
+// never resent them, on the assumption they were already cached, so the model
 // received no tools at all and answered in prose.
 //
-// These tests pin the split that avoids it — nothing but the system prompt
-// goes into the prefix, and the tools travel with a turn — plus the three ways
+// These tests pin the split that avoids it — the cache holds whatever a
+// committed turn sent, and the tools travel with a turn — plus the three ways
 // "the block is already cached" can be wrong: a changed tool set, a turn whose
 // message list the template won't render tools for, and a sliding context
 // window that can evict the block.
@@ -33,7 +32,7 @@ import { ModelType } from '@/schemas'
 type LooseHandler = (request: unknown) => AsyncGenerator<unknown, unknown, unknown>
 
 type RecordedCall = {
-  messages: { role?: string; type?: string; name?: string }[]
+  messages: { role?: string; type?: string; name?: string; content?: string }[]
   prefill: boolean
 }
 
@@ -92,13 +91,13 @@ async function setIsolatedHome(): Promise<void> {
   env['HOME'] = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-kvcache-tools-'))
 }
 
-// The session refuses to continue unless the prime left a non-empty cache
-// file behind, so the stand-in addon has to produce one.
+// `commitTurn` records a boundary only against a cache file that exists, so the
+// stand-in addon has to produce one wherever it is told to save.
 async function writeCacheFile(cachePath: string): Promise<void> {
   const fs = await import('bare-fs')
   const path = await import('bare-path')
   fs.mkdirSync(path.dirname(cachePath), { recursive: true })
-  fs.writeFileSync(cachePath, 'primed')
+  fs.writeFileSync(cachePath, 'kv-cache-bytes')
 }
 
 /**
@@ -159,7 +158,7 @@ function completer(modelId: string, kvCacheKey: string) {
   }
 }
 
-test('completion: kv-cache keeps tools out of the prefix and sends them with the turn', async (t) => {
+test('completion: kv-cache sends the tool block with the turn', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
@@ -173,20 +172,10 @@ test('completion: kv-cache keeps tools out of the prefix and sends them with the
     [areaTool]
   )
 
-  const primeCalls = calls.filter((call) => call.prefill)
+  const prefillCalls = calls.filter((call) => call.prefill)
   const turnCalls = calls.filter((call) => !call.prefill)
 
-  t.is(primeCalls.length, 1, 'the prefix was primed once')
-  t.absent(
-    primeCalls[0]!.messages.some(isToolEntry),
-    'the primed prefix carries no tool definitions'
-  )
-  t.alike(
-    primeCalls[0]!.messages.map((msg) => msg.role),
-    ['system'],
-    'the primed prefix is the system prompt alone'
-  )
-
+  t.is(prefillCalls.length, 0, 'a cold turn makes no prefill-only call of its own')
   t.is(turnCalls.length, 1, 'the turn reached the model once')
   t.alike(
     toolNames(turnCalls[0]!),
@@ -221,10 +210,10 @@ test('completion: kv-cache sends the tool block once, not on every warm turn', a
   await complete([first], [areaTool])
   await complete([first, reply, second], [areaTool])
 
-  const primeCalls = calls.filter((call) => call.prefill)
+  const prefillCalls = calls.filter((call) => call.prefill)
   const turnCalls = calls.filter((call) => !call.prefill)
 
-  t.is(primeCalls.length, 1, 'the prefix was primed once across both turns')
+  t.is(prefillCalls.length, 0, 'neither turn makes a prefill-only call')
   t.is(turnCalls.length, 2, 'both turns reached the model')
 
   t.alike(
@@ -250,7 +239,7 @@ test('completion: kv-cache sends the tool block once, not on every warm turn', a
 // that history was committed — not that this tool block is the one in the
 // cache. A tool set that shows up after a tools-free turn, or changes
 // mid-session, must still reach the model: it keys into its own cache through
-// `configHash`, which primes fresh and so passes the gate.
+// `configHash`, so it starts cold and passes the gate.
 test('completion: kv-cache sends a tool set that appears late or changes', async (t) => {
   await setIsolatedHome()
   clearRegistry()
@@ -434,7 +423,7 @@ async function runRefusalScenario(
   const fileSurvivedRefusal =
     committedPath !== undefined &&
     fs.existsSync(committedPath) &&
-    fs.readFileSync(committedPath, 'utf8') === 'primed'
+    fs.readFileSync(committedPath, 'utf8') === 'kv-cache-bytes'
   await complete(grown)
   return { refusal, fileSurvivedRefusal, turnCalls: calls.filter((call) => !call.prefill) }
 }
@@ -466,7 +455,7 @@ test('completion: kv-cache survives an overflow rejection between turns', async 
   t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
   t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'turn two is refused')
   t.is(turnCalls.length, 3, 'all three turns reached the model')
-  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not the full history')
 
   unregisterModel(modelId)
   clearRegistry()
@@ -496,7 +485,7 @@ test('completion: kv-cache survives a generationParams rejection between turns',
   t.ok(fileSurvivedRefusal, 'the committed cache file is still on disk after the refusal')
   t.ok(refusal instanceof Error && /json_schema/.test(refusal.message), 'turn two is refused')
   t.is(turnCalls.length, 3, 'all three turns reached the model')
-  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not the full history')
 
   unregisterModel(modelId)
   clearRegistry()
@@ -533,7 +522,7 @@ test('completion: kv-cache survives a scheduler admission rejection between turn
   t.is(typed.requiredTokens, 780, 'the total is the reservation plus the prompt')
   t.is(typed.ctxSize, 512, 'the cap is the effective per-request ceiling')
   t.is(turnCalls.length, 3, 'all three turns reached the model')
-  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not the full history')
 
   unregisterModel(modelId)
   clearRegistry()
@@ -566,15 +555,15 @@ test('completion: kv-cache survives an addon media-load failure between turns', 
     'turn two fails with the media error'
   )
   t.is(turnCalls.length, 3, 'all three turns reached the model')
-  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+  t.is(turnCalls[2]!.messages.length, 1, 'the retry is warm — a delta, not the full history')
 
   unregisterModel(modelId)
   clearRegistry()
 })
 
-// A recognised refusal on the FIRST turn has no committed cache to keep —
-// the fresh prime is rolled back and the retry re-primes from scratch.
-test('completion: kv-cache drops the fresh prime when the first turn is refused', async (t) => {
+// A recognised refusal on the FIRST turn has no committed cache to keep — the
+// file this turn created is rolled back and the retry starts cold again.
+test('completion: kv-cache drops the cache it created when the first turn is refused', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
@@ -602,11 +591,11 @@ test('completion: kv-cache drops the fresh prime when the first turn is refused'
   t.ok(refusal instanceof Error && refusal.name === 'CONTEXT_OVERFLOW', 'the first turn is refused')
   t.ok(
     cachePaths.length > 0 && !fs.existsSync(cachePaths[cachePaths.length - 1]!),
-    'the fresh prime is not left behind'
+    'the cache the refused turn created is not left behind'
   )
 
   await complete([first])
-  t.is(calls.filter((call) => call.prefill).length, 2, 'the retry re-primes from scratch')
+  t.is(calls.filter((call) => call.prefill).length, 0, 'no prefill-only call on either attempt')
   t.is(calls.filter((call) => !call.prefill).length, 2, 'the retry turn reaches the model')
 
   unregisterModel(modelId)
@@ -675,7 +664,7 @@ test('completion: kv-cache survives a missing-attachment rejection between turns
   const fs = await import('bare-fs')
   const committedPath = cachePaths[cachePaths.length - 1]!
   t.ok(
-    fs.existsSync(committedPath) && fs.readFileSync(committedPath, 'utf8') === 'primed',
+    fs.existsSync(committedPath) && fs.readFileSync(committedPath, 'utf8') === 'kv-cache-bytes',
     'the committed cache bytes survive the rejection'
   )
   t.ok(refusal instanceof AttachmentNotFoundError, 'the caller gets the typed attachment error')
@@ -683,7 +672,7 @@ test('completion: kv-cache survives a missing-attachment rejection between turns
   await complete([first, assistant('25.'), user('And base 4 height 3?')])
   const turnCalls = calls.filter((call) => !call.prefill)
   t.is(turnCalls.length, 2, 'the rejected turn never reached the model')
-  t.is(turnCalls[1]!.messages.length, 1, 'the retry is warm — a delta, not a re-primed history')
+  t.is(turnCalls[1]!.messages.length, 1, 'the retry is warm — a delta, not the full history')
 
   unregisterModel(modelId)
   clearRegistry()
@@ -729,4 +718,122 @@ test('completion: kv-cache tolerates a cached attachment vanishing from disk', a
     unregisterModel(modelId)
     clearRegistry()
   }
+})
+
+test('completion: kv-cache seeds the configured system prompt when the history omits one', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-sysprompt-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, {
+    tools: true,
+    system_prompt: 'Always answer with the single word BANANA.'
+  })
+
+  const complete = completer(modelId, 'sysprompt-regression-key')
+  await complete([user('What is the capital of France?')])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 1, 'the turn reached the model once')
+  const systemMessages = turnCalls[0]!.messages.filter((msg) => msg.role === 'system')
+  t.is(systemMessages.length, 1, 'the configured system prompt is sent with the turn')
+  t.is(
+    systemMessages[0]!.content,
+    'Always answer with the single word BANANA.',
+    'the configured instruction reaches the model'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache keeps the caller system message over the configured one', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-sysprompt-override-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, {
+    tools: true,
+    system_prompt: 'Always answer with the single word BANANA.'
+  })
+
+  const complete = completer(modelId, 'sysprompt-override-key')
+  await complete([
+    { role: 'system', content: 'Answer in French.' },
+    user('What is the capital of France?')
+  ] as HistoryEntry[])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  const systemMessages = turnCalls[0]!.messages.filter((msg) => msg.role === 'system')
+  t.is(systemMessages.length, 1, 'only one system message is sent')
+  t.is(systemMessages[0]!.content, 'Answer in French.', 'the caller system message wins')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// `prependToolsToHistory` on the no-kv-cache path puts the block after the
+// system message, and a template that anchors its tool section on that message
+// renders the two orders differently.
+test('completion: kv-cache places the tool block after the system message', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-system-order-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'tools-system-order-key')
+  await complete(
+    [system('Answer in French.'), user('Area of a triangle, base 10 height 5?')],
+    [areaTool]
+  )
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 1, 'the turn reached the model once')
+  t.alike(
+    turnCalls[0]!.messages.map((msg) => (isToolEntry(msg) ? 'tool' : msg.role)),
+    ['system', 'tool', 'user'],
+    'the tool block sits between the system message and the user turn'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache sends the system message on the cold turn only', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-system-coldwarm-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'system-coldwarm-key')
+  const sys = system('Answer in French.')
+  const first = user('Capital of France?')
+  const reply = assistant('Paris.')
+  const second = user('And of Spain?')
+
+  await complete([sys, first])
+  await complete([sys, first, reply, second])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+
+  t.alike(
+    turnCalls[0]!.messages.map((msg) => msg.role),
+    ['system', 'user'],
+    'the cold turn carries the system message into the cache'
+  )
+  t.alike(
+    turnCalls[1]!.messages.map((msg) => msg.role),
+    ['user'],
+    'the warm turn sends only the unsaved tail, the system message left to the cache'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
 })

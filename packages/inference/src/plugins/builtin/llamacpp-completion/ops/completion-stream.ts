@@ -11,7 +11,6 @@ import type {
 } from '@/schemas/index'
 import {
   logCacheDisabled,
-  logCacheInit,
   logCacheSave,
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
@@ -169,38 +168,6 @@ export function transformMessages(
   return transformed
 }
 
-/**
- * Prime the cache prefix with the system prompt only.
- *
- * Tools deliberately stay out of the prefix: a message list with no user turn
- * is not a renderable conversation for every chat template (Qwen3.5 raises
- * `No user query found in messages.` because it anchors its tool block on the
- * last user query), and a template failure degrades the whole render rather
- * than just the tool block. Tools travel with the turn instead.
- */
-async function initSystemPromptCache(
-  model: AnyModel,
-  cachePathToUse: string,
-  systemPromptToUse: string,
-  cacheKey: string,
-  onResponse?: (response: { cancel(): Promise<void> }) => void
-) {
-  const primeMessages: ChatHistory[] = [{ role: 'system', content: systemPromptToUse }]
-
-  logCacheInit(cacheKey, systemPromptToUse)
-  logMessagesToAddon(primeMessages, 'CACHE_INIT')
-
-  const primeResponse = await runModel(model, primeMessages, {
-    cacheKey: cachePathToUse,
-    saveCacheToDisk: true,
-    prefill: true
-  })
-  // Register the prime so an abort during a cold-cache prefill cancels it.
-  onResponse?.(primeResponse)
-
-  await primeResponse.await()
-}
-
 type HistoryMsg = {
   role: string
   content: string
@@ -208,12 +175,30 @@ type HistoryMsg = {
 }
 
 /**
- * Attach the tool block ahead of a turn payload, mirroring the no-kv-cache
- * path (`prependToolsToHistory`).
+ * Put the model's configured system prompt in front of a history that carries
+ * none. `transform.ts` strips `system_prompt` from the config handed to the
+ * addon, so the conversation is the only way it reaches the model.
+ */
+export function seedConfiguredSystemPrompt<T extends { role: string; content: string }>(
+  history: T[],
+  modelConfig: unknown
+): T[] {
+  const configured = (modelConfig as { system_prompt?: string }).system_prompt
+  if (!configured || extractSystemPrompt(history) !== null) return history
+  // Every caller's message type makes everything past role and content optional.
+  return [{ role: 'system', content: configured } as T, ...history]
+}
+
+/**
+ * Attach the tool block to a turn payload, mirroring the no-kv-cache path
+ * (`prependToolsToHistory`): after a system message when the payload carries
+ * one, ahead of everything otherwise.
  */
 function withToolBlock(messages: ChatHistory[], toolBlock: ChatHistory[]): ChatHistory[] {
   if (toolBlock.length === 0) return messages
-  return [...toolBlock, ...messages]
+  const systemIndex = messages.findIndex((msg) => msg.role === 'system')
+  if (systemIndex === -1) return [...toolBlock, ...messages]
+  return [...messages.slice(0, systemIndex + 1), ...toolBlock, ...messages.slice(systemIndex + 1)]
 }
 
 interface CachePayload {
@@ -242,54 +227,29 @@ function rendersToolBlock(messages: HistoryMsg[], toolBlock: ChatHistory[]): boo
 /**
  * Pick the messages that need to reach the model for the next turn.
  *
- * Tools are never baked into the primed prefix — a prefix with no user turn is
- * not a renderable conversation for every template — so they travel with a
- * turn instead.
- *
- *   - Empty history: nothing to slice; send whatever non-system messages
- *     exist. (The call site always reports the cache as existing, so this
- *     is the only way into this branch.)
- *   - Cache hit with a recorded `savedCount`: send only the unsaved tail
- *     (`history.slice(savedCount)`), so a multi-message turn (e.g. a
- *     consumer pushing both an assistant transcript and a follow-up user
- *     message between completions) all reaches the model.
- *   - Cache hit with a stale/missing `savedCount`: fall back to the full
- *     non-system history. The session is told (`dropStaleSavedCount`) so
- *     the bad boundary doesn't propagate into the next turn.
- *   - The tool block travels only with the turn that writes it into the
- *     cache; see `skipToolBlock` below.
+ * The cache holds whatever a committed turn sent, the tool block included, so
+ * the block travels with a turn rather than being written into the prefix on
+ * its own, and only with the turn that writes it into the cache — see
+ * `skipToolBlock` below.
  */
 function prepareMessagesForCache(
   session: KvCacheSession,
   turn: TurnHandle,
-  cacheExists: boolean,
   history: HistoryMsg[],
   tools?: Tool[]
 ): CachePayload {
   const toolBlock = tools?.length ? transformMessages(tools) : []
-
-  if (!(cacheExists && history.length > 0)) {
-    const historyWithoutSystem = history.filter((msg) => msg.role !== 'system')
-    return {
-      messages: withToolBlock(transformMessages(historyWithoutSystem), toolBlock),
-      toolBlockCached: rendersToolBlock(historyWithoutSystem, toolBlock)
-    }
-  }
 
   // Slice from the turn's `savedCount` so callers can
   // stage multiple messages between completions. `decideCachedHistorySlice`
   // also guards against the QVAC-17780 stale-count regression: if the
   // saved boundary would slice the history down to an empty payload
   // (e.g. after a cancelled mid-decode), it falls back to the full
-  // non-system history and signals the caller to drop the bad entry.
+  // history and signals the caller to drop the bad entry.
   // The session owns the entry; `dropStaleSavedCount` clears it
   // without touching the on-disk file (the file is still trustworthy
   // — only the boundary count is wrong).
-  const { messages, clearStaleCount } = decideCachedHistorySlice(
-    turn.savedCount,
-    cacheExists,
-    history
-  )
+  const { messages, clearStaleCount } = decideCachedHistorySlice(turn.savedCount, history)
 
   if (clearStaleCount) {
     session.dropStaleSavedCount(turn)
@@ -394,11 +354,19 @@ export async function* completion(
     logger?: Logger
   }
 ): AsyncGenerator<{ token: string }, CompletionResult, unknown> {
-  const { history, modelId, kvCache, tools, generationParams, responseFormat } = params
+  const {
+    history: requestHistory,
+    modelId,
+    kvCache,
+    tools,
+    generationParams,
+    responseFormat
+  } = params
   const { signal, scope } = opts
   const requestLogger = opts.logger ?? logger
 
   const modelConfig = getModelConfig(modelId)
+  const history = seedConfiguredSystemPrompt(requestHistory, modelConfig)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
   const toolsActive = !!tools?.length && toolsEnabled
   const dialect =
@@ -489,28 +457,12 @@ export async function* completion(
   // rather than a warm prefix holding the old block.
   const configHash = generateConfigHash(systemPromptFromHistory, toolsActive ? tools : undefined)
 
-  const systemPromptToUse =
-    systemPromptFromHistory ||
-    (modelConfig as { system_prompt?: string }).system_prompt ||
-    'You are a helpful assistant.'
-
-  const primeIfMissing = async (cachePath: string) => {
-    await initSystemPromptCache(
-      model,
-      cachePath,
-      systemPromptToUse,
-      typeof kvCache === 'string' ? kvCache : 'auto',
-      setActiveResponse
-    )
-  }
-
   let turn: TurnHandle
   if (typeof kvCache === 'string') {
     turn = await session.beginTurn({
       kind: 'custom',
       customKey: kvCache,
       configHash,
-      primeIfMissing,
       signal
     })
   } else {
@@ -523,7 +475,6 @@ export async function* completion(
       kind: 'auto',
       configHash,
       history: cacheMessages,
-      primeIfMissing,
       signal
     })
   }
@@ -537,18 +488,9 @@ export async function* completion(
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
-  // `cacheExists` is implied by `beginTurn` — the session either found
-  // an existing cache or just primed one. Pass `true` to the message
-  // selector so the slicing branches engage.
   let payload: ReturnType<typeof prepareMessagesForCache>
   try {
-    payload = prepareMessagesForCache(
-      session,
-      turn,
-      /* cacheExists */ true,
-      history,
-      toolsActive ? tools : undefined
-    )
+    payload = prepareMessagesForCache(session, turn, history, toolsActive ? tools : undefined)
   } catch (error) {
     // A missing attachment is caller input rejected before the addon runs,
     // so the committed cache is untouched and must survive.
