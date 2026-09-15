@@ -397,9 +397,23 @@ async function describeBindingForDebug(addonPackage: string): Promise<string> {
         `resolve(${hostPkg}) threw: ${error instanceof Error ? error.message : String(error)}`
       )
     }
-    parts.push(
-      `require.addon=${typeof (globalThis as { require?: { addon?: unknown } }).require?.addon}`
-    )
+    // What is actually inside the platform package on this runner?
+    const platformRoot = root.replace(/[^/]+\/$/, '') + `${addonPackage.split('/')[1]}-linux-x64/`
+    try {
+      parts.push(`platform ls=${fs.readdirSync(platformRoot).join(',')}`)
+      const ver = JSON.parse(String(fs.readFileSync(platformRoot + 'package.json'))).version
+      parts.push(`platform version=${ver}`)
+      parts.push(`platform index.js=${String(fs.readFileSync(platformRoot + 'index.js')).trim()}`)
+      parts.push(`platform addon ls=${fs.readdirSync(platformRoot + 'addon').join(',')}`)
+      parts.push(
+        `platform prebuilds ls=${fs.readdirSync(platformRoot + 'addon/prebuilds').join(',')}`
+      )
+      parts.push(
+        `platform host ls=${fs.readdirSync(platformRoot + 'addon/prebuilds/linux-x64').join(',')}`
+      )
+    } catch (error) {
+      parts.push(`platform probe failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
     for (const sub of ['prebuilds', 'binding.js', 'index.js', 'addonLogging.js']) {
       let info = 'missing'
       try {
@@ -414,7 +428,7 @@ async function describeBindingForDebug(addonPackage: string): Promise<string> {
     parts.push(`tree-probe failed: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  for (const sub of ['', '/binding.js', '/addonLogging', '/package']) {
+  for (const sub of ['', '/binding.js', '/addonLogging', '/package', '-linux-x64']) {
     const specifier = `${addonPackage}${sub}`
     let resolvedUrl = 'n/a'
     try {
