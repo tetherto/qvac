@@ -162,3 +162,48 @@ test('per-call conditioning options are rejected for Audio8 models', (t) => {
     t.ok(error instanceof PluginRequestValidationFailedError)
   }
 })
+
+test('a per-call emotion outside CosyVoice3 vocabulary is rejected by the SDK', (t) => {
+  // The request schema validates `emotion` against Parler's 12 values because a
+  // request carries only an opaque modelId. Once the engine is known, the eight
+  // CosyVoice3 has no trained instruction for must be rejected here rather than
+  // reaching the addon as a raw throw.
+  for (const emotion of ['surprise', 'fear', 'news']) {
+    const request = ttsRequestSchema.parse({
+      type: 'textToSpeech',
+      modelId: 'cosyvoice3',
+      text: 'Hello.',
+      emotion
+    })
+
+    try {
+      assertParlerJobOptionsSupported(
+        { getEngineType: () => 'cosyvoice3' },
+        getParlerJobOptions(request),
+        'textToSpeech'
+      )
+      t.fail(`expected emotion "${emotion}" to be rejected for CosyVoice3`)
+    } catch (error) {
+      t.ok(error instanceof PluginRequestValidationFailedError)
+    }
+  }
+})
+
+test('every CosyVoice3 emotion stays accepted per call', (t) => {
+  for (const emotion of ['anger', 'happy', 'neutral', 'sad']) {
+    const request = ttsRequestSchema.parse({
+      type: 'textToSpeech',
+      modelId: 'cosyvoice3',
+      text: 'Hello.',
+      emotion
+    })
+
+    t.execution(() =>
+      assertParlerJobOptionsSupported(
+        { getEngineType: () => 'cosyvoice3' },
+        getParlerJobOptions(request),
+        'textToSpeech'
+      )
+    )
+  }
+})
