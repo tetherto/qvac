@@ -3,26 +3,18 @@ description: >-
   Point vcpkg at its binary cache and say whether that directory survives the
   job. Exports VCPKG_BINARY_SOURCES, VCPKG_CACHE_DIR and VCPKG_CACHE_PERSISTENT.
 
-# Two shapes, picked by where the job is running.
+# Two cache layers, host first:
+#   - self-hosted: a directory on the HOST, shared by every runner instance on
+#     the box and surviving the workspace wipe. Reading it costs no download.
+#   - always: the workspace directory, carried between runs by the caller's
+#     actions/cache, which is repo-global and so covers landing on a host that
+#     has never built this package.
 #
-# Self-hosted: a directory on the HOST, shared by every runner instance on that
-# box and surviving the workspace wipe. There are several runners per host, so a
-# workspace-relative path gave each its own copy -- saved on
-# C:\actions-runner-2\...\vcpkg\cache, restored on C:\actions-runner-4\..., zero
-# packages reused. Central by host is the fix.
+# Must run AFTER setup-vcpkg, which writes VCPKG_BINARY_SOURCES itself and would
+# otherwise win.
 #
-# GitHub-hosted: no persistent disk, so the directory stays under the workspace
-# and the caller's actions/cache steps carry it between runs. Those steps key
-# off VCPKG_CACHE_PERSISTENT so they skip themselves on self-hosted legs.
-#
-# Must run AFTER setup-vcpkg, which writes VCPKG_BINARY_SOURCES to $GITHUB_ENV
-# itself (setup-vcpkg/action.yml:94) and would otherwise win.
-#
-# Trust: on a shared persistent directory a fork PR's build output would be
-# visible to every later job on the host, and vcpkg identifies archives by ABI
-# hash alone -- no signature. So untrusted events get `read`, and only the
-# trusted four get `readwrite`. Same rule the actions/cache split already
-# applies; see .github/AGENTS.md.
+# The host layer outlives the job and vcpkg identifies archives by ABI hash with
+# no signature, so untrusted events get `read` there. See .github/AGENTS.md.
 
 inputs:
   workdir:
@@ -50,9 +42,8 @@ runs:
           exit 1
         fi
 
-        # The host layer is shared with every later job on the box, so only
-        # trusted events may write it. The workspace layer is job-local until
-        # actions/cache saves it, and that save is gated by the caller.
+        # Host layer is shared; workspace layer is job-local until the caller's
+        # actions/cache saves it, and that save is gated there.
         mode="read"
         if [ "${INPUT_TRUSTED}" = "true" ]; then mode="readwrite"; fi
 
@@ -61,27 +52,14 @@ runs:
         cache_dir="${GITHUB_WORKSPACE}/${INPUT_WORKDIR}/vcpkg/cache"
 
         if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
-          # First writable candidate wins. VCPKG_HOST_CACHE_DIR lets the host
-          # owner override without a code change; /opt/qvac is preferred once it
-          # exists, but needs root to create; /var/tmp is already mode 1777 on
-          # every Linux image, so the first runner to arrive can create the
-          # directory itself and every other runner user can then write it --
-          # no provisioning, no ticket. /var/tmp rather than /tmp because /tmp
-          # is tmpfs on some images (a multi-GB cache in RAM) and is cleared on
-          # reboot. $HOME is the always-works backstop.
+          # First writable candidate wins. /opt/qvac needs root, so it is only
+          # used if someone provisioned it. /var/tmp is already 1777 on every
+          # image, so the first runner creates the directory and the rest can
+          # write it -- /var/tmp not /tmp, which is tmpfs on some images and
+          # cleared on reboot. $HOME is per-user, so it is the last resort.
           #
-          # These are deliberately NOT nested under an existing `qvac` dir: one
-          # was created by an earlier run before this action set 1777, and
-          # /var/tmp's sticky bit then locks every other user out of it.
-          #
-          # Runner instances on one host do not all run as the same user, so a
-          # shared directory created by one is not writable by the next unless it
-          # is mode 1777 -- observed on both /var/tmp/qvac and /Users/Shared/qvac
-          # in run 34952627622. We therefore create with 1777 (sticky, so nobody
-          # can delete another user's archives) and move on if an existing
-          # directory refuses us. $HOME always succeeds, and while it is per-user
-          # rather than per-host it still survives the workspace wipe, so a leg
-          # that lands there is warm on its next run instead of cold forever.
+          # Names must not collide with a directory an earlier run created before
+          # this action set 1777: the sticky bit would lock everyone else out.
           candidates=""
           if [ -n "${VCPKG_HOST_CACHE_DIR:-}" ]; then
             candidates="${VCPKG_HOST_CACHE_DIR}"
@@ -94,9 +72,8 @@ runs:
           for candidate in ${candidates}; do
             if [ ! -d "${candidate}" ]; then
               mkdir -p "${candidate}" 2> /dev/null || continue
-              # Only when we created it: make it usable by the other runner
-              # users on this host. Failure is not fatal, it just means the next
-              # user falls through to their own candidate.
+              # Instances on one host run as different users; 1777 lets them
+              # all write, sticky stops them deleting each other's archives.
               chmod 1777 "${candidate}" 2> /dev/null || true
             fi
             if [ -w "${candidate}" ]; then
@@ -114,12 +91,8 @@ runs:
 
         mkdir -p "${cache_dir}"
 
-        # Two layers, host first. The host layer is free to read and warm
-        # whenever a job lands on a box that built this package before. The
-        # workspace layer is carried by the caller's actions/cache, which is
-        # repo-global, so it covers every run that lands somewhere else --
-        # including a different host or pool. vcpkg reads sources in order and
-        # writes to each writable one, so a build populates both.
+        # vcpkg reads sources in order and writes every writable one, so a
+        # build populates both layers.
         sources="clear"
         if [ -n "${host_dir}" ]; then
           sources="${sources};files,${host_dir},${mode}"

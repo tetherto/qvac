@@ -3,21 +3,12 @@ description: >-
   Hash the toolchain that will build this job's vcpkg packages and export it as
   TOOLCHAIN_FINGERPRINT, for folding into the vcpkg binary cache key.
 
-# vcpkg names every cached package by an ABI hash over the compiler, the triplet
-# and the vcpkg tree. A cache key that does not move with those produces the
-# worst available outcome: the entry restores, vcpkg reports "Restored 0
-# package(s)" and rebuilds, and because actions/cache skips the save on an exact
-# primary-key hit, the dead entry is never replaced until a human bumps the key.
+# vcpkg keys every cached package by an ABI hash over the compiler and the
+# vcpkg tree, and neither is pinned. A cache key that does not move with them
+# restores an entry whose archives all miss, then rebuilds -- and an exact
+# primary-key hit suppresses the save, so the dead entry never heals.
 #
-# So the probe covers both halves that can drift under a job:
-#   - the compiler (Apple clang + SDK on darwin, ${CC:-clang} elsewhere, the VS
-#     toolset and Windows SDK on Windows)
-#   - the vcpkg tree itself, which setup-vcpkg does not pin: it clones
-#     microsoft/vcpkg at HEAD on macOS and takes the runner image's
-#     VCPKG_INSTALLATION_ROOT on Linux/Windows
-#
-# Evidence for both halves is on the QVAC-24711 PR rather than here, so it stays
-# linkable after log retention expires.
+# Evidence is on the QVAC-24711 PR, which stays linkable after logs expire.
 
 runs:
   using: composite
@@ -28,21 +19,16 @@ runs:
         set -euo pipefail
 
         if [ "${RUNNER_OS}" = "macOS" ]; then
-          # Ask xcrun for the Apple clang that will build, not whatever `clang`
-          # resolves to now: the homebrew llvm on PATH here is moved aside later
-          # in these jobs. The SDK build version moves whenever the SDK does.
+          # xcrun, not PATH: the homebrew llvm here is moved aside later.
           probe="$(xcrun clang --version)
         sdk=$(xcrun --show-sdk-build-version)"
         else
           probe="$("${CC:-clang}" --version)"
         fi
 
-        # The vcpkg tool feeds every ABI hash, so it belongs in the key. Hash the
-        # BINARY rather than running it or reading the tree's git rev: VCPKG_ROOT
-        # is a git checkout on some hosts and an unpacked image dir on others, so
-        # rev-parse split one toolchain across two keys; and `vcpkg version` is
-        # not on PATH at this point on linux. The file is always there and
-        # hashing it has no exit code or stderr to mishandle.
+        # Hash the binary, not `vcpkg version` (not on PATH here on linux) and
+        # not the tree's git rev (VCPKG_ROOT is a checkout on only some hosts,
+        # which split one toolchain across two keys).
         vcpkg_bin="${VCPKG_ROOT:-}/vcpkg"
         if [ ! -x "${vcpkg_bin}" ]; then
           vcpkg_bin="$(command -v vcpkg 2> /dev/null || true)"
@@ -86,8 +72,7 @@ runs:
         $toolsFile = Join-Path $vsPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
         $toolsVersion = (Get-Content $toolsFile -Raw).Trim()
 
-        # Version-aware, not lexicographic: 10.0.9.0 must not sort above
-        # 10.0.26100.0 just because it is shorter.
+        # Version-aware: 10.0.9.0 must not sort above 10.0.26100.0.
         $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Include'
         $sdkVersion = (Get-ChildItem $sdkRoot -Directory |
           Where-Object { $_.Name -as [version] } |
@@ -99,8 +84,7 @@ runs:
           exit 1
         }
 
-        # Hash the vcpkg binary -- see the bash branch for why not the git rev
-        # and not `vcpkg version`. No native call, so nothing to mishandle.
+        # Hash the binary -- see the bash branch.
         $vcpkgBin = Join-Path $env:VCPKG_ROOT 'vcpkg.exe'
         if (-not (Test-Path $vcpkgBin)) {
           $onPath = Get-Command vcpkg -ErrorAction SilentlyContinue
