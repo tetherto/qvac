@@ -1240,12 +1240,26 @@ class AudioUnderstandRequest(GeneratedBaseModel):
         Field(
             alias="lmTemperature",
             description="LM sampling temperature (default 0.85).",
-            gt=0.0,
+            ge=0.0,
         ),
     ] = None
-    lm_top_p: Annotated[float | None, Field(alias="lmTopP", gt=0.0, le=1.0)] = None
+    lm_top_p: Annotated[
+        float | None,
+        Field(
+            alias="lmTopP",
+            description="LM nucleus-sampling probability (default 0.9).",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
     lm_top_k: Annotated[
-        int | None, Field(alias="lmTopK", gt=0, le=9007199254740991)
+        int | None,
+        Field(
+            alias="lmTopK",
+            description="LM top-k cutoff; 0 disables top-k filtering.",
+            ge=0,
+            le=9007199254740991,
+        ),
     ] = None
     source_audio: Annotated[
         AudioUnderstandRequestSourceAudioBase64

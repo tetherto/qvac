@@ -275,10 +275,18 @@ const cover = audioGen({
 
 - `referenceAudio` — Optional timbre reference. Provide it to nudge the generated timbre toward the reference recording; omit it to let the engine pick freely.
 - `taskType` — `"text2music"` (default) for caption-driven generation, `"cover-nofsq"` to re-render `sourceAudio` with a new caption while keeping its structure, or `"lego"` to regenerate a single instrument layer of `sourceAudio`. The vocabulary is exported as `AUDIOGEN_TASK_TYPES`.
-- `sourceAudio` — The source recording for the cover. Required when `taskType` is `"cover-nofsq"`.
+- `sourceAudio` — The source recording the task works from. Required when `taskType` is `"cover-nofsq"` or `"lego"`.
 - `audioCoverStrength` — Fraction of DiT steps (0..1) that keep the source context. `"cover-nofsq"` currently requires `1`; the SDK rejects any other value, so omit it or pass `1`.
 - `coverNoiseStrength` — Blends the initial noise toward the source latent (0..1). Closer to `0` gives more variation; closer to `1` stays nearer the source. Default `0`.
 - `track` — The instrument layer `"lego"` regenerates. Required when `taskType` is `"lego"` and rejected on any other task. One of `AUDIOGEN_TRACKS`: `"vocals"`, `"backing_vocals"`, `"drums"`, `"bass"`, `"guitar"`, `"keyboard"`, `"percussion"`, `"strings"`, `"synth"`, `"fx"`, `"brass"`, `"woodwinds"`.
+
+<Callout type="warning">
+  `"lego"` runs on the **base** DiT only — the engine rejects both the turbo and
+  the sft variants. Every `AUDIOGEN_ACESTEP_*` DiT constant on this page is one
+  of those, so a lego request built from them fails in the engine. The base DiT
+  is not in the registry variant set yet: pass it as an explicit `ditModelSrc`
+  path.
+</Callout>
 
 ```ts
 // Lego: keep the song, rebuild one layer of it.

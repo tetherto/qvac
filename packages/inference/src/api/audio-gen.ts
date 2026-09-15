@@ -125,154 +125,73 @@ export function audioUnderstand(params: AudioUnderstandClientParams): AudioUnder
     requestId
   }
 
-  const progressQueue: AudioGenProgress[] = []
-  let progressDone = false
-  let progressError: Error | undefined
-  let progressResolve: (() => void) | undefined
   let seen: AudioGenUnderstandResult | undefined
 
-  let resolveDescription: (result: AudioGenUnderstandResult) => void = () => {}
-  let rejectDescription: (error: unknown) => void = () => {}
-  const description = new Promise<AudioGenUnderstandResult>((resolve, reject) => {
-    resolveDescription = resolve
-    rejectDescription = reject
-  })
-  description.catch(() => {})
-
-  let resolveStats: (stats: AudioGenStats | undefined) => void = () => {}
-  let rejectStats: (error: unknown) => void = () => {}
-  const stats = new Promise<AudioGenStats | undefined>((resolve, reject) => {
-    resolveStats = resolve
-    rejectStats = reject
-  })
-  stats.catch(() => {})
-
-  let resolveDiagnostics: (diagnostics: InferenceBackendDiagnostics | undefined) => void = () => {}
-  let rejectDiagnostics: (error: unknown) => void = () => {}
-  const diagnostics = new Promise<InferenceBackendDiagnostics | undefined>((resolve, reject) => {
-    resolveDiagnostics = resolve
-    rejectDiagnostics = reject
-  })
-  diagnostics.catch(() => {})
-
-  function notifyProgress() {
-    progressResolve?.()
-    progressResolve = undefined
-  }
-
-  async function processResponses() {
-    let receivedDone = false
-    try {
-      for await (const response of stream(request)) {
-        if (
-          !response ||
-          typeof response !== 'object' ||
-          !('type' in response) ||
-          response.type !== 'audioUnderstand'
-        ) {
-          continue
+  const { progressStream, payload, stats, diagnostics } = collectRun(
+    request,
+    requestId,
+    audioUnderstandResponseSchema,
+    {
+      absorb(frame) {
+        if (frame.understand !== undefined) seen = frame.understand
+      },
+      settle(frame) {
+        const result = frame.stats?.understand ?? seen
+        if (result === undefined) {
+          throw new InvalidResponseError('audioUnderstand description')
         }
-        const chunk = audioUnderstandResponseSchema.parse(response)
-
-        if (chunk.progress) {
-          progressQueue.push(chunk.progress)
-          notifyProgress()
-        }
-
-        if (chunk.understand !== undefined) {
-          seen = chunk.understand
-        }
-
-        if (chunk.done) {
-          receivedDone = true
-          if (chunk.stopReason === 'cancelled') {
-            const error = new InferenceCancelledError(requestId)
-            rejectDescription(error)
-            rejectStats(error)
-            rejectDiagnostics(error)
-            break
-          }
-          // The engine repeats the description on the terminal stats, so the
-          // streamed item is only a fallback if that is ever absent.
-          const result = chunk.stats?.understand ?? seen
-          if (result === undefined) {
-            throw new InvalidResponseError('audioUnderstand description')
-          }
-          resolveDescription(result)
-          resolveStats(chunk.stats)
-          resolveDiagnostics(chunk.diagnostics)
-          break
-        }
+        return result
       }
-
-      if (!receivedDone) {
-        throw new InvalidResponseError('audioUnderstand terminal response')
-      }
-    } catch (error) {
-      progressError =
-        error instanceof Error ? error : new InvalidResponseError('audioUnderstand', error)
-      rejectDescription(progressError)
-      rejectStats(progressError)
-      rejectDiagnostics(progressError)
-    } finally {
-      progressDone = true
-      notifyProgress()
     }
-  }
+  )
 
-  async function* progressStream(): AsyncGenerator<AudioGenProgress> {
-    while (true) {
-      const tick = progressQueue.shift()
-      if (tick) {
-        yield tick
-        continue
-      }
-      if (progressDone) {
-        if (progressError !== undefined) throw progressError
-        return
-      }
-      await new Promise<void>((resolve) => {
-        progressResolve = resolve
-      })
-    }
-  }
-
-  void processResponses()
-
-  return { requestId, progressStream: progressStream(), description, stats, diagnostics }
+  return { requestId, progressStream, description: payload, stats, diagnostics }
 }
 
 type AudioRunRequest = AudioGenStreamRequest | AudioEditStreamRequest
 type AudioRunFrame = AudioGenStreamResponse | AudioEditStreamResponse
 
 /**
- * Consumes one generation or editing stream into the shared run shape:
- * progress ticks are queued for `progressStream`, PCM chunks accumulate into
- * `audio`, and the terminal frame settles `stats` and `diagnostics`.
+ * One audiogen run, whatever it produces. Progress ticks queue for
+ * `progressStream`, each frame is offered to the sink, and the terminal frame
+ * settles the sink's payload alongside `stats` and `diagnostics`. Generation,
+ * editing and understanding differ only in that payload, so they share this.
  */
-function collectAudioRun(
-  request: AudioRunRequest,
+interface RunSink<TFrame, TPayload> {
+  /** Absorb a non-terminal frame. */
+  absorb(frame: TFrame): void
+  /** Build the payload from the terminal frame, or throw if it is incomplete. */
+  settle(frame: TFrame): TPayload
+}
+
+interface RunFrame {
+  progress?: AudioGenProgress | undefined
+  done?: boolean | undefined
+  stopReason?: string | undefined
+  stats?: AudioGenStats | undefined
+  diagnostics?: InferenceBackendDiagnostics | undefined
+}
+
+function collectRun<TFrame extends RunFrame, TPayload>(
+  request: AudioRunRequest | AudioUnderstandRequest,
   requestId: string,
-  responseSchema: z.ZodType<AudioRunFrame>
-): AudioGenResult {
+  responseSchema: z.ZodType<TFrame>,
+  sink: RunSink<TFrame, TPayload>
+) {
   const wireType = request.type
 
   const progressQueue: AudioGenProgress[] = []
-  const pcmChunks: Uint8Array[] = []
-  let sampleRate: number | undefined
-  let channels: number | undefined
-  let bitsPerSample: number | undefined
   let progressDone = false
   let progressError: Error | undefined
   let progressResolve: (() => void) | undefined
 
-  let resolveAudio: (audio: AudioGenAudio) => void = () => {}
-  let rejectAudio: (error: unknown) => void = () => {}
-  const audio = new Promise<AudioGenAudio>((resolve, reject) => {
-    resolveAudio = resolve
-    rejectAudio = reject
+  let resolvePayload: (payload: TPayload) => void = () => {}
+  let rejectPayload: (error: unknown) => void = () => {}
+  const payload = new Promise<TPayload>((resolve, reject) => {
+    resolvePayload = resolve
+    rejectPayload = reject
   })
-  audio.catch(() => {})
+  payload.catch(() => {})
 
   let resolveStats: (stats: AudioGenStats | undefined) => void = () => {}
   let rejectStats: (error: unknown) => void = () => {}
@@ -293,6 +212,12 @@ function collectAudioRun(
   function notifyProgress() {
     progressResolve?.()
     progressResolve = undefined
+  }
+
+  function rejectAll(error: unknown) {
+    rejectPayload(error)
+    rejectStats(error)
+    rejectDiagnostics(error)
   }
 
   async function processResponses() {
@@ -307,40 +232,24 @@ function collectAudioRun(
         ) {
           continue
         }
-        const chunk = responseSchema.parse(response)
+        const frame = responseSchema.parse(response)
 
-        if (chunk.progress) {
-          progressQueue.push(chunk.progress)
+        if (frame.progress) {
+          progressQueue.push(frame.progress)
           notifyProgress()
         }
 
-        if (chunk.data !== undefined) {
-          pcmChunks.push(decodeBase64(chunk.data))
-          sampleRate = chunk.sampleRate
-          channels = chunk.channels
-          bitsPerSample = chunk.bitsPerSample
-        }
+        sink.absorb(frame)
 
-        if (chunk.done) {
+        if (frame.done) {
           receivedDone = true
-          if (chunk.stopReason === 'cancelled') {
-            const error = new InferenceCancelledError(requestId)
-            rejectAudio(error)
-            rejectStats(error)
-            rejectDiagnostics(error)
+          if (frame.stopReason === 'cancelled') {
+            rejectAll(new InferenceCancelledError(requestId))
             break
           }
-          if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
-            throw new InvalidResponseError(`${wireType} audio chunk`)
-          }
-          resolveAudio({
-            pcm: concatenateChunks(pcmChunks),
-            sampleRate,
-            channels,
-            bitsPerSample
-          })
-          resolveStats(chunk.stats)
-          resolveDiagnostics(chunk.diagnostics)
+          resolvePayload(sink.settle(frame))
+          resolveStats(frame.stats)
+          resolveDiagnostics(frame.diagnostics)
           break
         }
       }
@@ -350,9 +259,7 @@ function collectAudioRun(
       }
     } catch (error) {
       progressError = error instanceof Error ? error : new InvalidResponseError(wireType, error)
-      rejectAudio(progressError)
-      rejectStats(progressError)
-      rejectDiagnostics(progressError)
+      rejectAll(progressError)
     } finally {
       progressDone = true
       notifyProgress()
@@ -378,11 +285,49 @@ function collectAudioRun(
 
   void processResponses()
 
-  return {
+  return { requestId, progressStream: progressStream(), payload, stats, diagnostics }
+}
+
+/**
+ * Consumes one generation or editing stream: PCM chunks accumulate into
+ * `audio`, carrying the format reported alongside them.
+ */
+function collectAudioRun(
+  request: AudioRunRequest,
+  requestId: string,
+  responseSchema: z.ZodType<AudioRunFrame>
+): AudioGenResult {
+  const wireType = request.type
+  const pcmChunks: Uint8Array[] = []
+  let sampleRate: number | undefined
+  let channels: number | undefined
+  let bitsPerSample: number | undefined
+
+  const { progressStream, payload, stats, diagnostics } = collectRun(
+    request,
     requestId,
-    progressStream: progressStream(),
-    audio,
-    stats,
-    diagnostics
-  }
+    responseSchema,
+    {
+      absorb(frame) {
+        if (frame.data === undefined) return
+        pcmChunks.push(decodeBase64(frame.data))
+        sampleRate = frame.sampleRate
+        channels = frame.channels
+        bitsPerSample = frame.bitsPerSample
+      },
+      settle() {
+        if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
+          throw new InvalidResponseError(`${wireType} audio chunk`)
+        }
+        return {
+          pcm: concatenateChunks(pcmChunks),
+          sampleRate,
+          channels,
+          bitsPerSample
+        } satisfies AudioGenAudio
+      }
+    }
+  )
+
+  return { requestId, progressStream, audio: payload, stats, diagnostics }
 }

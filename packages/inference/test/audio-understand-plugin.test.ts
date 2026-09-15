@@ -217,14 +217,38 @@ test('audioUnderstand rejects source audio the addon cannot accept', async (t) =
     type: 'audioUnderstand',
     requestId: 'audio-understand-request-bad-input',
     modelId,
-    // Outside the [-1, 1] range the engine requires.
-    sourceAudio: { type: 'base64', value: stereoFloat32Base64([1.5, -0.5]) }
+    // Non-finite is what the engine rejects here: `understand()` vets its audio
+    // with `requireFinitePcm`, so a sample above 1.0 is its business, not ours.
+    sourceAudio: { type: 'base64', value: stereoFloat32Base64([Number.NaN, -0.5]) }
   })
 
   const error = await rejection(stream.next())
   t.ok(error instanceof InvalidAudioInputError)
   t.is(calls.length, 0, 'the native job is never admitted')
   t.is(getRequestRegistry().get('audio-understand-request-bad-input'), null)
+})
+
+test('audioUnderstand passes a hot source through to the engine', async (t) => {
+  const modelId = 'audio-understand-hot-input'
+  const calls: RecordedCall[] = []
+  const model = createUnderstandModel(
+    createResponse([{ understand: understandResult() }], {}),
+    calls
+  )
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const stream = audioUnderstand({
+    type: 'audioUnderstand',
+    requestId: 'audio-understand-request-hot-input',
+    modelId,
+    sourceAudio: { type: 'base64', value: stereoFloat32Base64([1.5, -0.5]) }
+  })
+
+  for await (const _frame of stream) void _frame
+  t.is(calls.length, 1, 'a sample above 1.0 reaches the engine, as the addon allows')
 })
 
 test('audioUnderstand cancels the native job and terminates as cancelled', async (t) => {

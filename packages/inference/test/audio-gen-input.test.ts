@@ -118,34 +118,44 @@ test('resolveAudioGenPcm rejects non-finite samples and oversized clips before t
   )
 })
 
-test('resolveAudioGenPcm rejects raw samples outside the closed [-1, 1] range', async (t) => {
-  // The addon requires normalized samples, and raw PCM is the one input the
-  // FFmpeg decode path does not vet — so the check lives on the raw entry
-  // points and is exercised through them, not through a standalone helper.
+test('resolveAudioGenPcm keeps out-of-range samples only off the edit path', async (t) => {
+  // The addon vets an edit source with `requireNormalizedPcm` and every other
+  // input with `requireFinitePcm`, which takes any finite sample. Generation
+  // and understanding must therefore pass a hot buffer straight through; only
+  // an edit source is held to `[-1, 1]`.
+  const hot = { type: 'base64' as const, value: stereoFloat32Bytes([0, 1.5]).toString('base64') }
+
+  const generation = await resolveAudioGenPcm(hot, 'sourceAudio')
+  t.alike(Array.from(generation), [0, 1.5], 'generation takes any finite sample')
+
+  const editError = await rejection(
+    resolveAudioGenPcm(hot, 'sourceAudio', { requireNormalized: true })
+  )
+  t.ok(editError instanceof InvalidAudioInputError, 'an edit source is held to the range')
+  t.ok(/sourceAudio must contain samples in \[-1, 1\]/.test((editError as Error).message))
+
   const inRange = await resolveAudioGenPcm(
     { type: 'base64', value: stereoFloat32Bytes([-1, 1, 0, 0.5]).toString('base64') },
-    'sourceAudio'
+    'sourceAudio',
+    { requireNormalized: true }
   )
   t.alike(Array.from(inRange), [-1, 1, 0, 0.5], 'the endpoints are inside the range')
-
-  const aboveError = await rejection(
-    resolveAudioGenPcm(
-      { type: 'base64', value: stereoFloat32Bytes([0, 1.5]).toString('base64') },
-      'sourceAudio'
-    )
-  )
-  t.ok(aboveError instanceof InvalidAudioInputError)
-  t.ok(/sourceAudio must contain samples in \[-1, 1\]/.test((aboveError as Error).message))
 
   const dir = createTempDir()
   t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
   const rawPath = path.join(dir, 'clipped.f32le')
   fs.writeFileSync(rawPath, stereoFloat32Bytes([-1.5, 0]))
   const belowError = await rejection(
-    resolveAudioGenPcm({ type: 'filePath', value: rawPath }, 'referenceAudio')
+    resolveAudioGenPcm({ type: 'filePath', value: rawPath }, 'referenceAudio', {
+      requireNormalized: true
+    })
   )
   t.ok(belowError instanceof InvalidAudioInputError, 'raw PCM files are checked too')
   t.ok(/\[-1, 1\]/.test((belowError as Error).message))
+  t.ok(
+    (await resolveAudioGenPcm({ type: 'filePath', value: rawPath }, 'referenceAudio')).length > 0,
+    'and left alone when the caller does not ask for the range'
+  )
 })
 
 test('resolveAudioGenPcm rejects oversized decodable files before invoking the decoder', async (t) => {

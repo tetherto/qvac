@@ -737,21 +737,24 @@ test('audioGen restricts the LM controls to the text2music task', (t) => {
       parseGeneration({ [control]: true, taskType: 'text2music' }).success,
       `${control} on an explicit text2music`
     )
-    const onLego = parseGeneration({ [control]: true, taskType: 'lego', track: 'drums' })
+    const onLego = parseGeneration({ ...legoBase, [control]: true })
     t.absent(onLego.success, `${control} is rejected on lego`)
     t.alike(issuePaths(onLego), [control])
   }
   t.ok(
-    parseGeneration({ generateLrc: false, taskType: 'lego', track: 'drums' }).success,
+    parseGeneration({ ...legoBase, generateLrc: false }).success,
     'an unset control never blocks another task'
   )
 })
 
+/** A lego request needs both a layer to rebuild and a source to rebuild it from. */
+const legoBase = { taskType: 'lego', track: 'drums', sourceAudio: '/tmp/song.wav' }
+
 test('audioGen binds track to the lego task', (t) => {
   t.ok(AUDIOGEN_TASK_TYPES.includes('lego'), 'lego is a published task type')
-  t.ok(parseGeneration({ taskType: 'lego', track: AUDIOGEN_TRACKS[0] }).success)
+  t.ok(parseGeneration({ ...legoBase, track: AUDIOGEN_TRACKS[0] }).success)
 
-  const missingTrack = parseGeneration({ taskType: 'lego' })
+  const missingTrack = parseGeneration({ taskType: 'lego', sourceAudio: '/tmp/song.wav' })
   t.absent(missingTrack.success, 'lego has nothing to rebuild without a track')
   t.alike(issuePaths(missingTrack), ['track'])
 
@@ -760,9 +763,38 @@ test('audioGen binds track to the lego task', (t) => {
   t.alike(issuePaths(strayTrack), ['track'])
 
   t.absent(
-    parseGeneration({ taskType: 'lego', track: 'kazoo' }).success,
+    parseGeneration({ ...legoBase, track: 'kazoo' }).success,
     'track is limited to the published vocabulary'
   )
+})
+
+test('audioGen requires a source for the lego task', (t) => {
+  const missingSource = parseGeneration({ taskType: 'lego', track: 'drums' })
+  t.absent(missingSource.success, 'the engine rejects a lego run with no source')
+  t.alike(issuePaths(missingSource), ['sourceAudio'])
+  t.ok(
+    !missingSource.success &&
+      missingSource.error.issues.some((issue) => /requires sourceAudio/.test(issue.message)),
+    'the message names what is missing'
+  )
+  t.ok(parseGeneration(legoBase).success, 'a source settles it')
+})
+
+test('audioGen keeps the LM rewrites away from pre-supplied codes', (t) => {
+  const audioCodes = [1, 2, 3]
+  for (const control of ['simpleMode', 'rewriteQuery'] as const) {
+    const withCodes = parseGeneration({ [control]: true, audioCodes, lyrics: 'a line to keep' })
+    t.absent(withCodes.success, `${control} cannot take pre-supplied audioCodes`)
+    t.ok(
+      !withCodes.success &&
+        withCodes.error.issues.some((issue) => /pre-supplied audioCodes/.test(issue.message)),
+      `${control} says why`
+    )
+    t.ok(
+      parseGeneration({ [control]: false, audioCodes }).success,
+      `${control} left off never blocks codes`
+    )
+  }
 })
 
 // ---------------------------------------------------------------------------

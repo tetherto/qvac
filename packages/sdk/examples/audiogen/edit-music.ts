@@ -16,11 +16,19 @@ import {
 // Usage:
 //   bun examples/audiogen/edit-music.ts <source.wav|mp3|...> "original pop song" "guitar pop-rock" [output.wav]
 //
+// The source must run at least REPAINT_END seconds: the Repaint below asks for
+// a fixed window, and a range past the end of the source is rejected with
+// `repaint.start must be within the source duration`.
+//
 // The source is a file path: the SDK decodes it (any FFmpeg-decodable format)
 // to the 48 kHz stereo float PCM the engine expects. Pass raw interleaved
 // stereo 48 kHz Float32 LE PCM in [-1, 1] as a Buffer instead when the audio
 // is already in memory — for example the `pcm` of an earlier `audioGen()` run,
 // converted from Int16 to Float32.
+// Repaint window, in seconds from the start of the source.
+const REPAINT_START = 10
+const REPAINT_END = 20
+
 const sourcePath = process.argv[2]
 const fromCaption = process.argv[3] ?? 'Original pop song'
 const toCaption = process.argv[4] ?? 'Guitar pop-rock'
@@ -61,12 +69,12 @@ try {
         to: { caption: toCaption }
       },
       {
-        // Regenerate seconds 10-20 as a synth solo; the rest of the clip is kept.
+        // Regenerate the repaint window as a synth solo; the rest is kept.
         type: 'repaint',
         caption: 'analog synth solo',
         lyrics: '[Instrumental]',
-        start: 10,
-        end: 20,
+        start: REPAINT_START,
+        end: REPAINT_END,
         mode: 'balanced',
         strength: 0.5
       }

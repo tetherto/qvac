@@ -26,10 +26,12 @@ export function audioEditStream(
     request,
     async start(model, ctx) {
       // The source is decoded before the run is admitted so the model slot is
-      // never held by a request that fails on input decoding. The resolver
-      // also settles the addon's `[-1, 1]` requirement for raw PCM, which the
-      // decoder path already guarantees.
-      const pcm = await resolveAudioGenPcm(request.sourceAudio, 'sourceAudio')
+      // never held by a request that fails on input decoding. Editing is the
+      // one path where the addon demands normalized samples, so the resolver
+      // settles `[-1, 1]` here for raw and decoded input alike.
+      const pcm = await resolveAudioGenPcm(request.sourceAudio, 'sourceAudio', {
+        requireNormalized: true
+      })
       if (ctx.signal.aborted) return undefined
 
       // The addon validates each operation as it is chained (Flow-Edit on a

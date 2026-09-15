@@ -199,6 +199,14 @@ export const audioGenConfigSchema = z.discriminatedUnion('engine', [
 const unitIntervalSchema = z.number().min(0).max(1)
 
 /**
+ * LM sampling knobs. Generation and understanding drive the same sampler, so
+ * both paths share one definition: the addon accepts any finite value here and
+ * reads `lmTopK: 0` as "top-k off", which a `positive()` bound would reject.
+ */
+const lmTemperatureSchema = z.number().nonnegative()
+const lmTopKSchema = z.number().int().nonnegative()
+
+/**
  * Wire form of a reference/source audio input. `filePath` inputs are decoded
  * server-side (any format the SDK's audio decoder supports, plus raw PCM);
  * `base64` inputs must already be interleaved stereo 48 kHz Float32 LE PCM.
@@ -333,20 +341,13 @@ const audioGenGenerationShape = {
     .describe(
       'MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.'
     ),
-  lmTemperature: z
-    .number()
-    .nonnegative()
+  lmTemperature: lmTemperatureSchema
     .optional()
     .describe('LM sampling temperature (ACE-Step default: 0.85).'),
   lmTopP: unitIntervalSchema
     .optional()
     .describe('LM nucleus-sampling probability (ACE-Step default: 0.9).'),
-  lmTopK: z
-    .number()
-    .int()
-    .nonnegative()
-    .optional()
-    .describe('LM top-k cutoff; 0 disables top-k filtering.'),
+  lmTopK: lmTopKSchema.optional().describe('LM top-k cutoff; 0 disables top-k filtering.'),
   lmCfgScale: z
     .number()
     .nonnegative()
@@ -436,7 +437,7 @@ function validateCoverTask(
  * `lego` is silently ignored by the engine.
  */
 function validateLegoTask(
-  value: { taskType?: string | undefined; track?: string | undefined },
+  value: { taskType?: string | undefined; track?: string | undefined; sourceAudio?: unknown },
   ctx: z.RefinementCtx
 ) {
   if (value.taskType === 'lego' && value.track === undefined) {
@@ -444,6 +445,13 @@ function validateLegoTask(
       code: 'custom',
       path: ['track'],
       message: "taskType 'lego' requires track"
+    })
+  }
+  if (value.taskType === 'lego' && value.sourceAudio === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['sourceAudio'],
+      message: "taskType 'lego' requires sourceAudio"
     })
   }
   if (value.track !== undefined && value.taskType !== 'lego') {
@@ -458,6 +466,9 @@ function validateLegoTask(
 /**
  * The four LM-driven controls only run on the `text2music` path. An unset
  * `taskType` is that path, so only an explicit other task rejects them.
+ *
+ * Simple Mode and Query Rewriting additionally need the LM to produce the
+ * codes, so neither combines with pre-supplied `audioCodes` on any task.
  */
 const TEXT_TO_MUSIC_ONLY_CONTROLS = [
   'simpleMode',
@@ -469,6 +480,7 @@ const TEXT_TO_MUSIC_ONLY_CONTROLS = [
 function validateTextToMusicControls(
   value: {
     taskType?: string | undefined
+    audioCodes?: unknown
     simpleMode?: boolean | undefined
     rewriteQuery?: boolean | undefined
     generateLrc?: boolean | undefined
@@ -483,6 +495,15 @@ function validateTextToMusicControls(
       message:
         'simpleMode and rewriteQuery cannot be combined: Simple Mode writes the lyrics, Query Rewriting rewrites around existing ones'
     })
+  }
+  for (const control of ['simpleMode', 'rewriteQuery'] as const) {
+    if (value[control] === true && value.audioCodes !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [control],
+        message: `${control} cannot take pre-supplied audioCodes`
+      })
+    }
   }
   if (value.taskType === undefined || value.taskType === 'text2music') return
   for (const control of TEXT_TO_MUSIC_ONLY_CONTROLS) {
@@ -502,6 +523,7 @@ function validateAudioGenRequest(
     maxFrames?: number | undefined
     taskType?: string | undefined
     sourceAudio?: unknown
+    audioCodes?: unknown
     audioCoverStrength?: number | undefined
     track?: string | undefined
     simpleMode?: boolean | undefined
@@ -754,13 +776,9 @@ const audioUnderstandShape = {
     .min(1)
     .optional()
     .describe("Language hint (e.g. 'es') forced into the result instead of the LM's guess."),
-  lmTemperature: z
-    .number()
-    .positive()
-    .optional()
-    .describe('LM sampling temperature (default 0.85).'),
-  lmTopP: z.number().positive().max(1).optional(),
-  lmTopK: z.number().int().positive().optional()
+  lmTemperature: lmTemperatureSchema.optional().describe('LM sampling temperature (default 0.85).'),
+  lmTopP: unitIntervalSchema.optional().describe('LM nucleus-sampling probability (default 0.9).'),
+  lmTopK: lmTopKSchema.optional().describe('LM top-k cutoff; 0 disables top-k filtering.')
 }
 export const audioUnderstandClientParamsSchema = z
   .object({
