@@ -1,6 +1,7 @@
 #include "js-interface/JSAdapter.hpp"
 
 #include <optional>
+#include <cmath>
 #include <string>
 
 #include "inference-addon-cpp/Errors.hpp"
@@ -80,6 +81,7 @@ EngineType JSAdapter::readEngineType(
     js::Object configurationParams, js_env_t* env) {
   const std::string explicitType =
       readOptionalString(configurationParams, env, "engineType");
+  if (explicitType == "pocket") return EngineType::Pocket;
   if (explicitType == "chatterbox") return EngineType::Chatterbox;
   if (explicitType == "supertonic") return EngineType::Supertonic;
   if (explicitType == "cosyvoice3")
@@ -91,8 +93,8 @@ EngineType JSAdapter::readEngineType(
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', 'parler' "
-        "or 'audio8' (got '" +
+        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', 'parler', "
+        "'audio8' or 'pocket' (got '" +
             explicitType + "')");
   }
 
@@ -353,4 +355,41 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
   return cfg;
 }
+
+pocket::PocketConfig JSAdapter::buildPocketConfig(js::Object params, js_env_t* env) {
+  pocket::PocketConfig cfg; auto& o = cfg.options;
+  o.flow_lm_path = readOptionalString(params, env, "pocketFlowModelPath");
+  o.mimi_path = readOptionalString(params, env, "pocketMimiModelPath");
+  o.frontend_path = readOptionalString(params, env, "pocketFrontendPath");
+  o.voice_path = readOptionalString(params, env, "pocketVoicePath");
+  o.reference_audio_path = readOptionalString(params, env, "referenceAudio");
+  // Validate before narrowing JS doubles to C++ integers/floats. Numeric strings
+  // and fractional/out-of-range integers are deliberately not coerced.
+  const auto number = [&](const char* key, double fallback, double min, double max, bool integer = true) {
+    auto* value = params.getProperty(env, key);
+    if (js::is<js::Undefined>(env, value)) return fallback;
+    if (!js::is<js::Number>(env, value))
+      throw qvac_errors::StatusError(general_error::InvalidArgument, std::string(key)+" must be a number");
+    const double n = js::Number::fromValue(value).as<double>(env);
+    if (!std::isfinite(n) || n < min || n > max || (integer && std::floor(n) != n))
+      throw qvac_errors::StatusError(general_error::InvalidArgument, std::string("invalid Pocket ")+key);
+    return n;
+  };
+  o.n_threads = number("threads", o.n_threads, 1, 1024);
+  o.context = number("nCtx", o.context, 1, 8192);
+  o.max_tokens = number("maxTokens", o.max_tokens, 1, 1024);
+  o.steps = number("steps", o.steps, 1, 64);
+  o.frames_after_eos = number("framesAfterEos", o.frames_after_eos, -1, 100);
+  o.seed = number("seed", o.seed, 0, 4294967295.0);
+  o.output_sample_rate = number("outputSampleRate", o.output_sample_rate, 8000, 192000);
+  o.temperature = number("temperature", o.temperature, 0, 10, false);
+  o.noise_clamp = number("noiseClamp", o.noise_clamp, 0, 3.402823466e38, false);
+  o.eos_threshold = number("eosThreshold", o.eos_threshold, -3.402823466e38, 3.402823466e38, false);
+  const auto language = readOptionalString(params, env, "language");
+  if ((!language.empty() && language != "en") || readOptionalBool(params, env, "useGPU").value_or(false) ||
+      number("nGpuLayers", 0, 0, 0) != 0)
+    throw qvac_errors::StatusError(general_error::InvalidArgument, "Pocket currently supports English on CPU");
+  return cfg;
+}
+
 }

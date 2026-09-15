@@ -40,7 +40,15 @@ configure_file(${VCPKG_INSTALLED_PATH}/tools/lint-cpp/hooks/pre-commit
                ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit COPYONLY)
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/ModelInterfaces.hpp")
-find_package(tts-cpp CONFIG REQUIRED)
+find_package(tts-cpp CONFIG REQUIRED COMPONENTS pocket)
+# Older configs may not implement component checks. Reject those explicitly.
+if(NOT tts-cpp_pocket_FOUND)
+  message(FATAL_ERROR
+    "tts-ggml requires a tts-cpp package containing Pocket TTS. "
+    "The selected registry source pin is too old. Install the updated "
+    "speech repository's engines/tts and set tts-cpp_DIR to its "
+    "share/tts-cpp directory; see README.md for local build instructions.")
+endif()
 find_package(mecab CONFIG REQUIRED)
 # Pull in ggml directly (in addition to the transitive
 # find_package(ggml) that tts-cppConfig.cmake already does) so the
@@ -133,7 +141,39 @@ if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
   endif()
 endif()
 
+# Developer builds may consume the shared speech ggml package on macOS.
+# Package its dylibs alongside the addon, using cmake-bare's SONAME-aware
+# install rules; the module's @loader_path rpath already points here.
+if(APPLE)
+  foreach(_library ggml::ggml ggml::ggml-base ggml::ggml-cpu tts-cpp::tts-cpp)
+    if(TARGET ${_library})
+      get_target_property(_library_type ${_library} TYPE)
+      if(_library_type STREQUAL "SHARED_LIBRARY")
+        list(APPEND BACKEND_DL_LIBS INSTALL TARGET ${_library})
+      elseif(_library_type STREQUAL "UNKNOWN_LIBRARY")
+        # ggml-config.cmake uses UNKNOWN IMPORTED targets even for dylibs.
+        # Preserve the complete symlink chain so the versioned LC_ID_DYLIB
+        # names resolve without depending on the developer's install prefix.
+        get_target_property(_dylib ${_library} IMPORTED_LOCATION)
+        if(_dylib MATCHES "\\.dylib$")
+          list(APPEND BACKEND_DYLIB_FILES "${_dylib}")
+          while(IS_SYMLINK "${_dylib}")
+            get_filename_component(_dylib_dir "${_dylib}" DIRECTORY)
+            file(READ_SYMLINK "${_dylib}" _dylib_link)
+            get_filename_component(_dylib "${_dylib_link}" ABSOLUTE BASE_DIR "${_dylib_dir}")
+            list(APPEND BACKEND_DYLIB_FILES "${_dylib}")
+          endwhile()
+        endif()
+      endif()
+    endif()
+  endforeach()
+endif()
+
 add_bare_module(tts-ggml EXPORTS ${BACKEND_DL_LIBS})
+if(BACKEND_DYLIB_FILES)
+  list(REMOVE_DUPLICATES BACKEND_DYLIB_FILES)
+  install(FILES ${BACKEND_DYLIB_FILES} DESTINATION ${BACKENDS_SUBDIR_VALUE})
+endif()
 
 # Stage every loose MODULE backend (Vulkan / OpenCL on Android, CUDA on desktop, ...)
 # into the same per-host/per-module subdir cmake-bare's INSTALL TARGET
@@ -164,6 +204,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parler/ParlerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/supertonic/SupertonicModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/cosyvoice/CosyvoiceModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/pocket/PocketModel.cpp
 )
 
 target_include_directories(
