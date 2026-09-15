@@ -23,7 +23,7 @@ for filename in ["/proc/meminfo", "/proc/swaps", "/proc/pressure/memory",
     print(source.read_text() if source.exists() else "unavailable", flush=True)
 for key in ["GGML_VK_PREFER_HOST_MEMORY", "GGML_VK_DISABLE_ASYNC",
             "GGML_VK_SUBALLOCATION_BLOCK_SIZE", "GGML_VK_FORCE_MAX_BUFFER_SIZE",
-            "GGML_VK_FORCE_MAX_ALLOCATION_SIZE", "OMP_NUM_THREADS"]:
+            "GGML_VK_FORCE_MAX_ALLOCATION_SIZE", "OMP_NUM_THREADS", "GLIBC_TUNABLES"]:
     print("SETTING", key, repr(os.environ.get(key)), flush=True)
 for command in [["lscpu"], ["nvidia-smi"], ["nvidia-smi", "-q"]]:
     print("DIAGNOSTIC", command, flush=True)
@@ -62,6 +62,9 @@ alloc_ctx = api("ggml_backend_alloc_ctx_tensors_from_buft", ptr, ptr, ptr)
 set_usage = api("ggml_backend_buffer_set_usage", None, ptr, c.c_int)
 fill = api("ggml_backend_tensor_memset", None, ptr, c.c_uint8, c.c_size_t, c.c_size_t)
 copy = api("ggml_backend_tensor_copy", None, ptr, ptr)
+data_pointer = api("ggml_get_data", ptr, ptr)
+set_tensor = api("ggml_backend_tensor_set", None, ptr, ptr, c.c_size_t, c.c_size_t)
+set_tensor_async = api("ggml_backend_tensor_set_async", None, ptr, ptr, ptr, c.c_size_t, c.c_size_t)
 read = api("ggml_backend_tensor_get", None, ptr, ptr, c.c_size_t, c.c_size_t)
 sync = api("ggml_backend_synchronize", None, ptr)
 free_buf = api("ggml_backend_buffer_free", None, ptr)
@@ -118,5 +121,40 @@ try:
                 free_ctx(target[0])
                 free_buf(source[2])
                 free_ctx(source[0])
+    # Real layers stage many tensors into one buffer. Compare that pattern with
+    # one large copy, including the backend's queued-transfer path. This only
+    # measures the published binary; it does not change the addon or engine.
+    size = 192 * 1024 * 1024
+    source = tensor(host_buft(backend_device(gpu)), size)
+    target = tensor(default_buft(gpu), size)
+    try:
+        fill(source[1], 42, 0, size)
+        address = data_pointer(source[1])
+        assert address
+        for chunk_mib in [192, 8, 1, 0.25]:
+            chunk = int(chunk_mib * 1024 * 1024)
+            for mode in ["synchronous", "queued"]:
+                fill(target[1], 7, 0, size)
+                sync(gpu)
+                start = time.perf_counter()
+                for offset in range(0, size, chunk):
+                    if mode == "queued":
+                        set_tensor_async(gpu, target[1], address + offset, offset, chunk)
+                    else:
+                        set_tensor(target[1], address + offset, offset, chunk)
+                sync(gpu)
+                elapsed = round(1000 * (time.perf_counter() - start), 3)
+                for offset in [0, size - 32]:
+                    output = c.create_string_buffer(32)
+                    read(target[1], output, offset, 32)
+                    assert output.raw == bytes([42]) * 32, "chunked copy differs"
+                print(json.dumps({"pattern": "layer_tensor_chunks", "mode": mode,
+                                  "MiB": 192, "chunk_MiB": chunk_mib,
+                                  "milliseconds": elapsed, "bytes_verified": True}), flush=True)
+    finally:
+        free_buf(target[2])
+        free_ctx(target[0])
+        free_buf(source[2])
+        free_ctx(source[0])
 finally:
     free_backend(gpu)
