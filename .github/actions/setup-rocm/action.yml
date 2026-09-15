@@ -135,5 +135,11 @@ runs:
         echo "ROCM_PATH=$rocm_prefix" >> "$GITHUB_ENV"
         echo "HIP_PATH=$rocm_prefix" >> "$GITHUB_ENV"
         echo "$rocm_prefix/bin" >> "$GITHUB_PATH"
-        echo "VCPKG_KEEP_ENV_VARS=ROCM_PATH;HIP_PATH" >> "$GITHUB_ENV"
+        # Merge, not assign: setup-cuda sets the same var, last one would win.
+        keep="ROCM_PATH;HIP_PATH"
+        if [ -n "${VCPKG_KEEP_ENV_VARS:-}" ]; then
+          # Strip a trailing ';', an empty keep-list entry is log noise.
+          keep="${VCPKG_KEEP_ENV_VARS%;};${keep}"
+        fi
+        echo "VCPKG_KEEP_ENV_VARS=$keep" >> "$GITHUB_ENV"
         echo "LD_LIBRARY_PATH=$rocm_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"

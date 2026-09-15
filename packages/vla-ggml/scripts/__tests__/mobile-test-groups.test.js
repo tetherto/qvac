@@ -36,15 +36,15 @@ test('the runner extractor reads the committed integration.auto.cjs', () => {
 
 test('deferred runners are declared, not silently absent', () => {
   // pi05 mobile coverage is deferred pending a project-owned CDN mirror, and
-  // pi05.test.js is gated on-device by `_skipMobilePi05`. Recording it here is
-  // what keeps "not scheduled" distinguishable from "forgotten".
-  assert.deepEqual(groups.deferred, ['runPi05Test'])
+  // the backend selection smoke test is specific to the Linux NVIDIA runner.
+  // Recording both keeps "not scheduled" distinguishable from "forgotten".
+  const deferred = ['runPi05Test', 'runBackendSelectionTest']
+  assert.deepEqual(groups.deferred, deferred)
   for (const platform of platformNames(groups)) {
     const scheduled = Object.values(groups[platform]).flat()
-    assert.ok(
-      !scheduled.includes('runPi05Test'),
-      `runPi05Test must not be scheduled on ${platform}`
-    )
+    for (const runner of deferred) {
+      assert.ok(!scheduled.includes(runner), `${runner} must not be scheduled on ${platform}`)
+    }
   }
 })
 
