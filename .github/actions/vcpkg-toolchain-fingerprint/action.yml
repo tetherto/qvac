@@ -40,7 +40,7 @@ runs:
         # setup-vcpkg leaves VCPKG_ROOT pointing at a git checkout on every
         # platform, but tolerate a tree that is not one rather than failing the
         # whole C++ job over a cache key.
-        vcpkg_rev="$(git -C "${VCPKG_ROOT}" rev-parse HEAD 2> /dev/null || echo "unknown")"
+        vcpkg_rev="$(git -C "${VCPKG_ROOT:-}" rev-parse HEAD 2> /dev/null || echo "unknown")"
         probe="${probe}
         vcpkg=${vcpkg_rev}"
 
@@ -84,8 +84,24 @@ runs:
           exit 1
         }
 
-        $vcpkgRev = (& git -C $env:VCPKG_ROOT rev-parse HEAD 2>$null)
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($vcpkgRev)) { $vcpkgRev = 'unknown' }
+        # Native stderr is a TERMINATING error under ErrorActionPreference=Stop,
+        # so a $VCPKG_ROOT that is not a git checkout would fail the whole step
+        # rather than fall back. Drop to Continue for the call and merge stderr
+        # into the output stream so it arrives as records, not as an exception.
+        $vcpkgRev = 'unknown'
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+          $revOut = (& git -C "$env:VCPKG_ROOT" rev-parse HEAD 2>&1)
+          if ($LASTEXITCODE -eq 0 -and $revOut) {
+            $candidate = ($revOut | Select-Object -First 1).ToString().Trim()
+            if ($candidate -match '\A[0-9a-f]{40}\z') { $vcpkgRev = $candidate }
+          }
+        } catch {
+          $vcpkgRev = 'unknown'
+        } finally {
+          $ErrorActionPreference = $prevEAP
+        }
 
         $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$vcpkgRev"
         Write-Output "--- toolchain ---"
