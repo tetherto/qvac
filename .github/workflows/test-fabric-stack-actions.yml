@@ -8,6 +8,11 @@ on:
       - ".github/actions/wait-and-download-fabric-prebuilds/**"
       - ".github/scripts/test/fixtures/fabric-actions/**"
       - ".github/workflows/test-fabric-stack-actions.yml"
+      # cpp-lint consumes the overlay too (QVAC-24913). It runs under
+      # pull_request_target, which loads its YAML from the base branch, so a PR
+      # editing it cannot exercise its own copy — the compile-visibility job
+      # below is where that wiring gets tested before it lands.
+      - ".github/workflows/cpp-lint.yaml"
   workflow_dispatch:
 
 permissions:
@@ -396,6 +401,168 @@ jobs:
             echo "::error::Planted symlink reached the consumer tree"
             exit 1
           fi
+
+  # QVAC-24913. Everything above proves the overlay moves FILES. This proves it
+  # moves what the COMPILER RESOLVES, which is the property cpp-lint depends on
+  # and the one that was actually broken: clang-tidy parses the addon's
+  # translation units, so a stale include/ makes it report every signature the
+  # PR has already moved past as an error.
+  #
+  # Reproduces the real failure in miniature. On PR #4154 model-fit called
+  # common_fit_params with 9 arguments against a published header declaring 8:
+  #
+  #   FitParams.cpp:377: error: no matching function for call to 'common_fit_params'
+  #   fit.h:19: note: candidate function not viable: requires 8 arguments, but 9 were provided
+  #
+  # The consumer tree starts with the 8-arg header at the exact path cpp-lint
+  # compiles against (-isystem node_modules/@qvac/fabric/prebuilds/include),
+  # so the first compile MUST fail. The real overlay action then runs with the
+  # same platform/arch pair cpp-lint passes, and the second compile MUST pass.
+  # A green first compile would mean the fixture stopped reproducing the bug,
+  # so it is asserted as a failure rather than skipped.
+  overlay-changes-compiler-visibility:
+    name: Overlay changes what the compiler resolves
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Create published-fabric consumer and PR-built fabric tree
+        shell: bash
+        env:
+          TEST_ROOT: ${{ runner.temp }}/fabric-overlay-compile
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("node:fs")
+            const path = require("node:path")
+            const root = process.argv[1]
+
+            // Where npm install leaves the published fabric, and where
+            // cpp-lint points -isystem.
+            const installed = path.join(
+              root,
+              "consumer/node_modules/@qvac/fabric/prebuilds",
+            )
+            const prBuilt = path.join(root, "pr-fabric")
+
+            for (const directory of [
+              path.join(installed, "include"),
+              path.join(installed, "share"),
+              path.join(installed, "linux-x64"),
+              path.join(prBuilt, "include"),
+              path.join(prBuilt, "share"),
+              path.join(prBuilt, "linux-x64"),
+            ]) {
+              fs.mkdirSync(directory, { recursive: true })
+            }
+
+            const published = [
+              "#pragma once",
+              "int common_fit_params(const char* path_model, int* mparams,",
+              "                      int* cparams, float* tensor_split,",
+              "                      int* tensor_buft_overrides,",
+              "                      unsigned long* margins,",
+              "                      unsigned int n_ctx_min, int log_level);",
+              "",
+            ].join("\n")
+
+            // The bump: one added `bool` before log_level.
+            const prHeader = [
+              "#pragma once",
+              "int common_fit_params(const char* path_model, int* mparams,",
+              "                      int* cparams, float* tensor_split,",
+              "                      int* tensor_buft_overrides,",
+              "                      unsigned long* margins,",
+              "                      unsigned int n_ctx_min, bool swa_full,",
+              "                      int log_level);",
+              "",
+            ].join("\n")
+
+            fs.writeFileSync(path.join(installed, "include/fit.h"), published)
+            fs.writeFileSync(path.join(prBuilt, "include/fit.h"), prHeader)
+
+            // The overlay action requires share/ (cmake only) and the platform
+            // directory to be present on both sides.
+            fs.writeFileSync(
+              path.join(installed, "share/qvac-fabric.cmake"),
+              "# published",
+            )
+            fs.writeFileSync(
+              path.join(prBuilt, "share/qvac-fabric.cmake"),
+              "# pr-built",
+            )
+            fs.writeFileSync(
+              path.join(installed, "linux-x64/qvac_fabric.so"),
+              "published",
+            )
+            fs.writeFileSync(
+              path.join(prBuilt, "linux-x64/tetherto_fabric.so"),
+              "pr-built",
+            )
+
+            // Stands in for FitParams.cpp:377.
+            fs.writeFileSync(
+              path.join(root, "consumer/fit_params.cpp"),
+              [
+                "#include <fit.h>",
+                "int call() {",
+                "  return common_fit_params(nullptr, nullptr, nullptr, nullptr,",
+                "                           nullptr, nullptr, 0u, true, 0);",
+                "}",
+                "",
+              ].join("\n"),
+            )
+          ' "$TEST_ROOT"
+
+      - name: Compile against published fabric (must fail)
+        id: before
+        continue-on-error: true
+        shell: bash
+        env:
+          TEST_ROOT: ${{ runner.temp }}/fabric-overlay-compile
+        run: |
+          set -uo pipefail
+          clang++ -std=c++20 -fsyntax-only \
+            -isystem "$TEST_ROOT/consumer/node_modules/@qvac/fabric/prebuilds/include" \
+            "$TEST_ROOT/consumer/fit_params.cpp"
+
+      - name: Verify the stale header actually broke the build
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.before.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "::error::Fixture no longer reproduces QVAC-24913 — the 9-arg call compiled against the 8-arg header, so the overlay assertion below proves nothing"
+            exit 1
+          fi
+          echo "Reproduced: 9-arg call rejected by the published 8-arg header."
+
+      # Same action, same inputs cpp-lint.yaml passes.
+      - name: Overlay PR fabric prebuilds
+        uses: ./.github/actions/overlay-local-fabric
+        with:
+          workdir: ${{ runner.temp }}/fabric-overlay-compile/consumer
+          prebuilds-root: ${{ runner.temp }}/fabric-overlay-compile/pr-fabric
+          platform: linux
+          arch: x64
+
+      - name: Compile against overlaid fabric (must pass)
+        shell: bash
+        env:
+          TEST_ROOT: ${{ runner.temp }}/fabric-overlay-compile
+        run: |
+          set -euo pipefail
+          clang++ -std=c++20 -fsyntax-only \
+            -isystem "$TEST_ROOT/consumer/node_modules/@qvac/fabric/prebuilds/include" \
+            "$TEST_ROOT/consumer/fit_params.cpp"
+          echo "Overlay fixed the signature mismatch at the include path cpp-lint uses."
 
   wait-and-download:
     name: Wait and download fabric prebuilds

@@ -48,11 +48,8 @@ on:
         required: false
         default: ""
         type: string
-      # GPR dist-tag override, as main's per-package files offered. Empty keeps
-      # the tag publish-logic derives from the branch, so a dispatch behaves the
-      # same as a push unless the operator picks one.
-      # `auto` rather than main's "" option: an empty choice option is an
-      # actionlint syntax error, and these files are kept lint-clean.
+      # GPR dist-tag override. `auto` keeps the branch-derived tag; main's ""
+      # option is an actionlint error.
       tag:
         description: "GPR dist-tag override (auto = use the branch-derived tag)"
         required: false
@@ -86,11 +83,8 @@ jobs:
       post-integration-rows: ${{ steps.rows.outputs.post-integration-rows }}
       verify-generated-rows: ${{ steps.rows.outputs.verify-generated-rows }}
     steps:
-      # fetch-depth: 0 is load-bearing. dorny diffs against github.event.before;
-      # in a shallow clone it cannot resolve that commit (a merge commit in
-      # particular) and falls back to reporting every file as added, which
-      # selects all 13 packages and publishes them. trigger-reusable-lib does
-      # the same.
+      # fetch-depth: 0 is load-bearing: shallow, dorny cannot resolve
+      # github.event.before and reports every file as added, selecting all 13.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
@@ -180,6 +174,10 @@ jobs:
           post_integration_rows=$(echo "$rows" | jq -c '[.[] | select(.testGateMode == "post-publish-integration")]')
           verify_generated_rows=$(echo "$rows" | jq -c '[.[] | select(.verifyGenerated == true)]')
 
+          # Log the resolved rows: otherwise a run's publish config is invisible.
+          echo "Selected packages: $packages"
+          echo "Rows: $rows"
+
           echo "any=$any" >> "$GITHUB_OUTPUT"
           echo "matrix=$rows" >> "$GITHUB_OUTPUT"
           echo "prebuild-rows=$prebuild_rows" >> "$GITHUB_OUTPUT"
@@ -202,9 +200,8 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard (${{ matrix.package }})
     needs: detect
-    # Both events, as main's per-package files gate it. publish-npm accepts a
-    # 'skipped' guard, so a push-only condition would let a workflow_dispatch
-    # from a release-* branch reach npm with no version or changelog check.
+    # Both events, as main gates it: publish-npm accepts a 'skipped' guard, so
+    # push-only would let a release-* dispatch reach npm ungated.
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       startsWith(github.ref_name, 'release-')
@@ -278,8 +275,8 @@ jobs:
       packages: ${{ format('["{0}"]', matrix.package) }}
     secrets: inherit
 
-  # Wrapper drift gate (#3850). Separate from publish on purpose: it installs and
-  # runs untrusted code, which must not happen in a credentialed job.
+  # Wrapper drift gate (#3850). Separate job: it runs third-party code, which
+  # must not happen inside the credentialed publish jobs.
   verify-generated:
     name: Verify generated wrappers (${{ matrix.package }})
     needs: detect
@@ -295,7 +292,8 @@ jobs:
       workdir: ${{ matrix.workdir }}
 
   # decoder-audio is the only package whose mobile run blocked publish on main.
-  # Static job because `uses:` cannot take an expression.
+  # Static job because `uses:` cannot take an expression. tts-ggml's mobile run
+  # was post-publish and informational, so it is not restored.
   mobile-gate-decoder-audio:
     name: Mobile gate (decoder-audio)
     needs: detect
@@ -322,8 +320,9 @@ jobs:
       - verify-generated
       - mobile-gate-decoder-audio
     # Test gates are per-package in the steps below: needs.<job>.result is the
-    # matrix-wide aggregate. verify-generated and mobile-gate are enforced here
-    # instead, fail-closed; each is skipped only when no package needs it.
+    # matrix-wide aggregate and `matrix` is unavailable in a job-level `if:`.
+    # verify-generated and mobile-gate-decoder-audio are enforced here, aggregate
+    # and all, and are skipped only when no selected package applies.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
       (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
@@ -433,10 +432,8 @@ jobs:
       - pre-publish-integration
       - verify-generated
       - mobile-gate-decoder-audio
-    # Test gates are per-package in the steps below (see publish-gpr's `if:`).
-    # merge-guard stays here: detect's identity gate ensures its aggregate == the
-    # one package. verify-generated and mobile-gate-decoder-audio are enforced here
-    # too, same reasoning as publish-gpr.
+    # Gates as in publish-gpr. merge-guard stays job-level: detect's identity
+    # gate makes the aggregate equal the one package.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
       (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
@@ -511,10 +508,8 @@ jobs:
           workdir: ${{ matrix.workdir }}
           tag: ${{ matrix.npmTagOverride || inputs.npm_tag }}
 
-      # asr-ggml, audiogen-ggml and tts-ggml ship one npm package per platform
-      # plus a JS-only meta package carrying version-locked optionalDependencies.
-      # Ported from main's per-package on-merge workflows. npm only: GPR keeps
-      # publishing the unsliced -mono package.
+      # asr/audiogen/tts ship one npm package per platform plus a JS-only meta
+      # with version-locked optionalDependencies. npm only; GPR stays unsliced.
       - name: Slice platform packages
         if: matrix.slicePlatformPackages
         run: node scripts/ci/slice-platform-packages.mjs --workdir ${{ matrix.workdir }} --out-dir "${{ runner.temp }}/platform-packages"
@@ -527,9 +522,8 @@ jobs:
           registry-url: https://registry.npmjs.org/
           scope: "@qvac"
 
-      # Platform packages first, meta last: there is no npm transaction, so
-      # meta-last keeps the name consumers depend on from ever appearing
-      # without its binaries.
+      # Meta last: no npm transaction, so the name consumers depend on must
+      # never appear without its binaries.
       - name: Publish platform packages to npm
         if: matrix.slicePlatformPackages
         shell: bash
@@ -541,9 +535,8 @@ jobs:
           for dir in "$OUT_DIR"/*/; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
-            # Skip only on a confirmed hit, publish only on a confirmed miss. Any
-            # other npm view failure is a registry error, and publishing blind
-            # would 403 on an immutable version and abort before the meta ships.
+            # Skip on a confirmed hit, publish on a confirmed miss; any other
+            # npm view failure is a registry error, so do not publish blind.
             set +e
             VIEW_OUT=$(npm view "${NAME}@${VERSION}" version 2>&1)
             VIEW_RC=$?
@@ -584,8 +577,8 @@ jobs:
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
     steps:
-      # publish-npm only: a GPR dev publish must not reopen the integration
-      # matrix, which already ran on the PR (#4175).
+      # Keyed on publish-npm only: a GPR dev publish must not reopen this gate
+      # (#4175). publish-gpr-skip-policy.test.mjs guards it.
       - id: gate
         shell: bash
         run: |

@@ -158,12 +158,13 @@ export const customTree: Node[] = [
     type: 'page',
     icon: resolveIcon('Video'),
   },
-  {
-    name: 'World simulation',
-    url: '/ai-capabilities/world-simulation',
-    type: 'page',
-    icon: resolveIcon('Rotate3d'),
-  },
+  // Unpublished until v0.20 — see docs/website/content/_unpublished/ai-capabilities/world-simulation.mdx
+  // {
+  //   name: 'World simulation',
+  //   url: '/ai-capabilities/world-simulation',
+  //   type: 'page',
+  //   icon: resolveIcon('Rotate3d'),
+  // },
   {
     name: 'Music generation',
     url: '/ai-capabilities/music-generation',
