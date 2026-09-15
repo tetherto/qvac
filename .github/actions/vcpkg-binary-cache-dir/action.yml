@@ -57,23 +57,32 @@ runs:
         cache_dir="${GITHUB_WORKSPACE}/${INPUT_WORKDIR}/vcpkg/cache"
 
         if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
-          # VCPKG_HOST_CACHE_DIR lets the host owner relocate this without a code
-          # change; the defaults are writable by the runner user on our images.
+          # First writable candidate wins. VCPKG_HOST_CACHE_DIR lets the host
+          # owner override without a code change; /opt/qvac is the provisioned
+          # location, preferred once it exists and is owned by the runner user;
+          # the last one needs no provisioning at all, so a fresh host is warm
+          # from its second run rather than waiting on infra.
+          candidates=""
           if [ -n "${VCPKG_HOST_CACHE_DIR:-}" ]; then
-            host_dir="${VCPKG_HOST_CACHE_DIR}"
+            candidates="${VCPKG_HOST_CACHE_DIR}"
           elif [ "${RUNNER_OS}" = "macOS" ]; then
-            host_dir="/Users/Shared/qvac/vcpkg-cache"
+            candidates="/opt/qvac/vcpkg-cache /Users/Shared/qvac/vcpkg-cache"
           else
-            host_dir="/opt/qvac/vcpkg-cache"
+            candidates="/opt/qvac/vcpkg-cache /var/tmp/qvac/vcpkg-cache"
           fi
 
-          # Fall back to the workspace rather than failing the job: a host that
-          # has not been provisioned yet still builds, just cold.
-          if mkdir -p "${host_dir}" 2> /dev/null && [ -w "${host_dir}" ]; then
-            cache_dir="${host_dir}"
-            persistent="true"
-          else
-            echo "::warning::${host_dir} is not writable; falling back to the workspace cache"
+          for candidate in ${candidates}; do
+            if mkdir -p "${candidate}" 2> /dev/null && [ -w "${candidate}" ]; then
+              cache_dir="${candidate}"
+              persistent="true"
+              break
+            fi
+          done
+
+          # Fall back to the workspace rather than failing the job: a host with
+          # no writable candidate still builds, just cold.
+          if [ "${persistent}" != "true" ]; then
+            echo "::warning::no writable host cache dir (${candidates}); falling back to the workspace"
           fi
         fi
 
