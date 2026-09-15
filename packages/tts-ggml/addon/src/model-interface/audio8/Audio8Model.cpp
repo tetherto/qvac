@@ -265,6 +265,7 @@ void Audio8Model::loadLocked() {
   backendName_ = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_ = backendIdFromName(backendName_);
+  codecOnCoreml_ = engine_->codec_on_coreml();
   const bool wantsGpu = cfg_.nGpuLayers.has_value()
                             ? (*cfg_.nGpuLayers != 0)
                             : cfg_.useGpu.value_or(false);
@@ -350,6 +351,7 @@ Audio8Model::Output Audio8Model::synthesize(const AnyInput& input) {
   sampleRate_ = result.sample_rate;
   generatedFrames_ = result.frames;
   totalSamples_ = static_cast<int64_t>(result.pcm.size());
+  codecOnCoreml_ = result.codec_synthesis_backend.rfind("coreml", 0) == 0;
   audioDurationMs_ = static_cast<double>(result.duration_s) * 1000.0;
   totalTime_ = std::chrono::duration<double>(t1 - t0).count();
   realTimeFactor_ =
@@ -396,6 +398,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats Audio8Model::runtimeStats() const {
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back("codecOnCoreml", static_cast<int64_t>(codecOnCoreml_));
   return stats;
 }
 

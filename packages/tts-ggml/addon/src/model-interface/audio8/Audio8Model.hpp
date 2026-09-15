@@ -130,6 +130,10 @@ private:
   int backendId_ = 0;
   std::string backendName_ = "CPU";
   bool gpuUnsupported_ = false;
+  // Sidecar load status until the first synthesis, then where the last
+  // synthesis actually ran its codec (a loaded sidecar that cannot serve a
+  // call falls back to ggml); the LM stays on backendName_ either way.
+  bool codecOnCoreml_ = false;
 };
 
 } // namespace qvac::ttsggml::audio8

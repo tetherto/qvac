@@ -801,6 +801,14 @@ interface RuntimeStats {
    * unit its `tokensPerSecond` counts, in batch and in streaming alike.
    */
   generatedFrames?: number;
+  /**
+   * Audio8 only: 1 when this synthesis ran the codec's synthesis stack on the
+   * Apple Core ML sidecar -- a compiled `audio8-codec-decoder.mlmodelc` next
+   * to the decoder GGUF on macOS / iOS -- 0 when it ran on the ggml backend
+   * `backendId` reports (which the language model always uses). A loaded
+   * sidecar that cannot serve a call falls back to ggml and reports 0 for it.
+   */
+  codecOnCoreml?: number;
 }
 
 interface NativeStats {
