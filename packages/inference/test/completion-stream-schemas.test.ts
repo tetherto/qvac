@@ -1,5 +1,6 @@
 import test from 'brittle'
 import {
+  completionClientParamsSchema,
   completionStreamResponseSchema,
   completionStatsSchema,
   generationParamsSchema,
@@ -117,4 +118,64 @@ test('completionStreamResponseSchema: round-trips backendDevice through completi
       t.is(statsEvent.stats.backendDevice, 'cpu')
     }
   }
+})
+
+test('generationParamsSchema: accepts tool_choice modes and a tool name, rejects other shapes', (t) => {
+  for (const tool_choice of ['auto', 'none', 'required', 'get_weather']) {
+    t.is(generationParamsSchema.safeParse({ tool_choice }).success, true, tool_choice)
+  }
+  t.is(generationParamsSchema.safeParse({ tool_choice: '' }).success, false, 'empty string')
+  t.is(
+    generationParamsSchema.safeParse({ tool_choice: { type: 'function' } }).success,
+    false,
+    'OpenAI object form is mapped by the caller, not accepted here'
+  )
+})
+
+const weatherTool = {
+  type: 'function' as const,
+  name: 'get_weather',
+  description: 'Get weather for a city',
+  parameters: { type: 'object' as const, properties: { city: { type: 'string' as const } } }
+}
+
+const baseCompletion = {
+  modelId: 'model',
+  history: [{ role: 'user', content: 'Weather in Lugano?' }],
+  stream: true
+}
+
+function acceptsCompletion(params: Record<string, unknown>): boolean {
+  return completionClientParamsSchema.safeParse({ ...baseCompletion, ...params }).success
+}
+
+test('completionClientParamsSchema: a demanding tool_choice needs matching tools', (t) => {
+  t.is(
+    acceptsCompletion({ generationParams: { tool_choice: 'required' } }),
+    false,
+    'required, no tools'
+  )
+  t.is(
+    acceptsCompletion({ generationParams: { tool_choice: 'get_weather' } }),
+    false,
+    'name, no tools'
+  )
+  t.is(
+    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'get_time' } }),
+    false,
+    'name not among the declared tools'
+  )
+  t.is(
+    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'required' } }),
+    true
+  )
+  t.is(
+    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'get_weather' } }),
+    true
+  )
+})
+
+test('completionClientParamsSchema: auto and none need no tools', (t) => {
+  t.is(acceptsCompletion({ generationParams: { tool_choice: 'auto' } }), true)
+  t.is(acceptsCompletion({ generationParams: { tool_choice: 'none' } }), true)
 })
