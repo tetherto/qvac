@@ -191,8 +191,13 @@ struct ggml_tensor* pi05BuildSiglipBlockGraph(
   struct ggml_tensor* kf16 = ggml_cast(ctx, k, GGML_TYPE_F16);
   struct ggml_tensor* vf16 = ggml_cast(ctx, v, GGML_TYPE_F16);
   struct ggml_tensor* attnOut = ggml_flash_attn_ext(
-      ctx, q, kf16, vf16, /*mask=*/nullptr,
-      1.0f / std::sqrt(static_cast<float>(headDim)), /*max_bias=*/0.0f,
+      ctx,
+      q,
+      kf16,
+      vf16,
+      /*mask=*/nullptr,
+      1.0f / std::sqrt(static_cast<float>(headDim)),
+      /*max_bias=*/0.0f,
       /*logit_softcap=*/0.0f);
   ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_3d(ctx, attnOut, hidden, nPatches, batch);
@@ -402,7 +407,13 @@ struct ggml_tensor* pi05BuildGemmaVlmBlockGraph(
   // benchmarked on Intel Iris Xe / Adreno / Metal; desktop-class target).
   const float scale = 1.0f / std::sqrt(static_cast<float>(headDim));
   struct ggml_tensor* attnOut = ggml_flash_attn_ext(
-      ctx, q, kf16, vf16, attnMask, scale, /*max_bias=*/0.0f,
+      ctx,
+      q,
+      kf16,
+      vf16,
+      attnMask,
+      scale,
+      /*max_bias=*/0.0f,
       /*logit_softcap=*/0.0f);
   ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_2d(ctx, attnOut, hidden, seqLen);
@@ -584,17 +595,16 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
     struct ggml_context* ctx, struct ggml_tensor* xExp,
     struct ggml_tensor* actPositions, struct ggml_tensor* kBuf,
     struct ggml_tensor* vBuf, struct ggml_tensor* modPreAttn,
-    struct ggml_tensor* modPreFfw,
-    std::vector<struct ggml_tensor*>& kvWrites,
+    struct ggml_tensor* modPreFfw, std::vector<struct ggml_tensor*>& kvWrites,
     const Pi05ExpertBlockWeights& w, int expertHidden, int nHeads, int nKvHeads,
     int headDim, int prefixLen, int nAct, float rmsNormEps,
     float ropeFreqBase) {
   if (ctx == nullptr || xExp == nullptr || actPositions == nullptr ||
       kBuf == nullptr || vBuf == nullptr || modPreAttn == nullptr ||
-      modPreFfw == nullptr ||
-      w.attn_q_w == nullptr || w.attn_k_w == nullptr || w.attn_v_w == nullptr ||
-      w.attn_o_w == nullptr || w.mlp_gate_w == nullptr ||
-      w.mlp_up_w == nullptr || w.mlp_down_w == nullptr) {
+      modPreFfw == nullptr || w.attn_q_w == nullptr || w.attn_k_w == nullptr ||
+      w.attn_v_w == nullptr || w.attn_o_w == nullptr ||
+      w.mlp_gate_w == nullptr || w.mlp_up_w == nullptr ||
+      w.mlp_down_w == nullptr) {
     return nullptr;
   }
 
@@ -679,11 +689,21 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
     return nullptr;
   }
   struct ggml_tensor* kAct = ggml_view_3d(
-      ctx, kBuf, headDim, nAct, nKvHeads, static_cast<size_t>(headDim) * es,
+      ctx,
+      kBuf,
+      headDim,
+      nAct,
+      nKvHeads,
+      static_cast<size_t>(headDim) * es,
       static_cast<size_t>(jointLen) * headDim * es,
       static_cast<size_t>(prefixLen) * headDim * es);
   struct ggml_tensor* vAct = ggml_view_3d(
-      ctx, vBuf, headDim, nAct, nKvHeads, static_cast<size_t>(headDim) * es,
+      ctx,
+      vBuf,
+      headDim,
+      nAct,
+      nKvHeads,
+      static_cast<size_t>(headDim) * es,
       static_cast<size_t>(jointLen) * headDim * es,
       static_cast<size_t>(prefixLen) * headDim * es);
   // Ordering invariant: these tail writes must execute BEFORE this block's
@@ -705,7 +725,13 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
   // benchmarked on Intel Iris Xe / Adreno / Metal; desktop-class target).
   const float scale = 1.0f / std::sqrt(static_cast<float>(headDim));
   struct ggml_tensor* attnOut = ggml_flash_attn_ext(
-      ctx, q, kBuf, vBuf, /*mask=*/nullptr, scale, /*max_bias=*/0.0f,
+      ctx,
+      q,
+      kBuf,
+      vBuf,
+      /*mask=*/nullptr,
+      scale,
+      /*max_bias=*/0.0f,
       /*logit_softcap=*/0.0f);
   ggml_flash_attn_ext_set_prec(attnOut, GGML_PREC_F32);
   attnOut = ggml_reshape_2d(ctx, attnOut, nHeads * headDim, nAct);
@@ -740,18 +766,15 @@ Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
     const std::vector<struct ggml_tensor*>& vBufs,
     const std::vector<struct ggml_tensor*>& modsPreAttn,
     const std::vector<struct ggml_tensor*>& modsPreFfw,
-    struct ggml_tensor* modFinal,
-    std::vector<struct ggml_tensor*>& kvWrites,
+    struct ggml_tensor* modFinal, std::vector<struct ggml_tensor*>& kvWrites,
     const std::vector<Pi05ExpertBlockWeights>& blocks,
     struct ggml_tensor* actionOutProjW, struct ggml_tensor* actionOutProjB,
     int expertHidden, int nHeads, int nKvHeads, int headDim, int prefixLen,
     int nAct, float rmsNormEps, float ropeFreqBase) {
   Pi05ExpertODEStepOutputs out{nullptr, nullptr};
   if (ctx == nullptr || xExp == nullptr || actPositions == nullptr ||
-      modFinal == nullptr || blocks.empty() ||
-      kBufs.size() != blocks.size() ||
-      vBufs.size() != blocks.size() ||
-      modsPreAttn.size() != blocks.size() ||
+      modFinal == nullptr || blocks.empty() || kBufs.size() != blocks.size() ||
+      vBufs.size() != blocks.size() || modsPreAttn.size() != blocks.size() ||
       modsPreFfw.size() != blocks.size() || actionOutProjW == nullptr ||
       actionOutProjB == nullptr) {
     return out;
@@ -1725,7 +1748,10 @@ static bool pi05Inference(
     std::vector<float> sincosAll(static_cast<size_t>(m.cond_dim) * nSteps);
     for (int s = 0; s < nSteps; ++s) {
       pi05ComputeTimeSincos(
-          1.0f + s * dt, m.cond_dim, m.min_period, m.max_period,
+          1.0f + s * dt,
+          m.cond_dim,
+          m.min_period,
+          m.max_period,
           sincosAll.data() + static_cast<size_t>(s) * m.cond_dim);
     }
     Pi05StagedGuard pc;
@@ -1737,18 +1763,26 @@ static bool pi05Inference(
         ggml_new_tensor_2d(pc.sg.ctx, GGML_TYPE_F32, m.cond_dim, nSteps);
     ggml_set_input(sincosAllT);
     struct ggml_tensor* condsAll = pi05BuildTimeMlpGraph(
-        pc.sg.ctx, sincosAllT, m.time_mlp_in_w, m.time_mlp_in_b,
-        m.time_mlp_out_w, m.time_mlp_out_b);
+        pc.sg.ctx,
+        sincosAllT,
+        m.time_mlp_in_w,
+        m.time_mlp_in_b,
+        m.time_mlp_out_w,
+        m.time_mlp_out_b);
     if (condsAll == nullptr) {
       return false;
     }
     std::vector<struct ggml_tensor*> mA(nBlocks), mF(nBlocks);
     for (int l = 0; l < nBlocks; ++l) {
       mA[l] = pi05Linear(
-          pc.sg.ctx, condsAll, m.expert_blocks[l].pre_attn_ada_w,
+          pc.sg.ctx,
+          condsAll,
+          m.expert_blocks[l].pre_attn_ada_w,
           m.expert_blocks[l].pre_attn_ada_b);
       mF[l] = pi05Linear(
-          pc.sg.ctx, condsAll, m.expert_blocks[l].pre_ffw_ada_w,
+          pc.sg.ctx,
+          condsAll,
+          m.expert_blocks[l].pre_ffw_ada_w,
           m.expert_blocks[l].pre_ffw_ada_b);
       ggml_set_output(mA[l]);
       ggml_set_output(mF[l]);
@@ -1756,7 +1790,9 @@ static bool pi05Inference(
       ggml_build_forward_expand(pc.sg.gf, mF[l]);
     }
     struct ggml_tensor* mFin = pi05Linear(
-        pc.sg.ctx, condsAll, m.expert_final_norm_ada_w,
+        pc.sg.ctx,
+        condsAll,
+        m.expert_final_norm_ada_w,
         m.expert_final_norm_ada_b);
     ggml_set_output(mFin);
     ggml_build_forward_expand(pc.sg.gf, mFin);
@@ -1776,10 +1812,14 @@ static bool pi05Inference(
     const size_t perSite = static_cast<size_t>(modDim) * nSteps;
     for (int l = 0; l < nBlocks; ++l) {
       ggml_backend_tensor_get(
-          mA[l], modPreAttnAll.data() + static_cast<size_t>(l) * perSite, 0,
+          mA[l],
+          modPreAttnAll.data() + static_cast<size_t>(l) * perSite,
+          0,
           perSite * sizeof(float));
       ggml_backend_tensor_get(
-          mF[l], modPreFfwAll.data() + static_cast<size_t>(l) * perSite, 0,
+          mF[l],
+          modPreFfwAll.data() + static_cast<size_t>(l) * perSite,
+          0,
           perSite * sizeof(float));
     }
     ggml_backend_tensor_get(
@@ -1794,7 +1834,8 @@ static bool pi05Inference(
         for (int s = 0; s < nSteps; ++s) {
           float* col = buf.data() + static_cast<size_t>(site) * perSite +
                        static_cast<size_t>(s) * modDim;
-          for (int i = 0; i < eh; ++i) col[i] += 1.0f;
+          for (int i = 0; i < eh; ++i)
+            col[i] += 1.0f;
         }
       }
     };
@@ -1821,15 +1862,18 @@ static bool pi05Inference(
     ggml_backend_buffer_t buf = nullptr;
     struct ggml_context* ctx = nullptr;
     ~Pi05KvBufGuard() {
-      if (buf) ggml_backend_buffer_free(buf);
-      if (ctx) ggml_free(ctx);
+      if (buf)
+        ggml_backend_buffer_free(buf);
+      if (ctx)
+        ggml_free(ctx);
     }
   } kvg;
   {
     struct ggml_init_params kvParams{
         ggml_tensor_overhead() *
             (static_cast<size_t>(2) * m.expert_n_layers + 8),
-        nullptr, /*no_alloc=*/true};
+        nullptr,
+        /*no_alloc=*/true};
     kvg.ctx = ggml_init(kvParams);
     if (kvg.ctx == nullptr) {
       return false;
@@ -1839,10 +1883,16 @@ static bool pi05Inference(
   std::vector<struct ggml_tensor*> vBufs(m.expert_n_layers);
   for (int l = 0; l < m.expert_n_layers; ++l) {
     kBufs[l] = ggml_new_tensor_3d(
-        kvg.ctx, GGML_TYPE_F16, m.expert_head_dim, jointLen,
+        kvg.ctx,
+        GGML_TYPE_F16,
+        m.expert_head_dim,
+        jointLen,
         m.expert_n_kv_heads);
     vBufs[l] = ggml_new_tensor_3d(
-        kvg.ctx, GGML_TYPE_F16, m.expert_head_dim, jointLen,
+        kvg.ctx,
+        GGML_TYPE_F16,
+        m.expert_head_dim,
+        jointLen,
         m.expert_n_kv_heads);
   }
   kvg.buf = ggml_backend_alloc_ctx_tensors(kvg.ctx, kvBackend);
@@ -1852,10 +1902,14 @@ static bool pi05Inference(
   // Write the prefix slice once (F16). MQA (n_kv_heads=1) → contiguous at 0.
   for (int l = 0; l < m.expert_n_layers; ++l) {
     ggml_backend_tensor_set(
-        kBufs[l], kCache.data() + static_cast<size_t>(l) * perLayerKv, 0,
+        kBufs[l],
+        kCache.data() + static_cast<size_t>(l) * perLayerKv,
+        0,
         perLayerKv * sizeof(ggml_fp16_t));
     ggml_backend_tensor_set(
-        vBufs[l], vCache.data() + static_cast<size_t>(l) * perLayerKv, 0,
+        vBufs[l],
+        vCache.data() + static_cast<size_t>(l) * perLayerKv,
+        0,
         perLayerKv * sizeof(ggml_fp16_t));
   }
 
@@ -1944,15 +1998,19 @@ static bool pi05Inference(
     for (int l = 0; l < nBlocks; ++l) {
       ggml_backend_tensor_set(
           modPreAttnT[l],
-          modPreAttnAll.data() + static_cast<size_t>(l) * perSite + col, 0,
+          modPreAttnAll.data() + static_cast<size_t>(l) * perSite + col,
+          0,
           static_cast<size_t>(modDim) * sizeof(float));
       ggml_backend_tensor_set(
           modPreFfwT[l],
-          modPreFfwAll.data() + static_cast<size_t>(l) * perSite + col, 0,
+          modPreFfwAll.data() + static_cast<size_t>(l) * perSite + col,
+          0,
           static_cast<size_t>(modDim) * sizeof(float));
     }
     ggml_backend_tensor_set(
-        modFinalT, modFinalAll.data() + col, 0,
+        modFinalT,
+        modFinalAll.data() + col,
+        0,
         static_cast<size_t>(modDim) * sizeof(float));
     // GPU (multi-backend scheduler) pins graph inputs in dedicated split
     // buffers, so action positions uploaded once above survive every

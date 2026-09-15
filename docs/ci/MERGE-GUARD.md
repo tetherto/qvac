@@ -184,4 +184,4 @@ Never give a new job its own top-level `pull_request_target` trigger with no `ne
 
 - [`docs/ci/LABELS.md`](LABELS.md) — fork-ci environment and retired `verified` label.
 - [`docs/ci/TEAMS.md`](TEAMS.md) — who can approve the `fork-ci` environment.
-- `qv-merge-guard-wire` skill (`.cursor/skills/qv-merge-guard-wire/`) — this doc's content as an actionable Claude/Cursor skill.
+- `qv-merge-guard-wire` skill (`.agents/skills/qv-merge-guard-wire/`) — this doc's content as an actionable Claude/Cursor skill.

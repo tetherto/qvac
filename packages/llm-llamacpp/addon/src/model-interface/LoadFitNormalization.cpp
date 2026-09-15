@@ -204,6 +204,63 @@ FlashAttnState resolveFlashAttn(
   return {.enabled = truthy, .mayEnable = truthy || autoy};
 }
 
+void remapTensorSplit(
+    load_fit_normalization::ConfigMap& config,
+    const backend_selection::SplitDeviceSelection& selection) {
+  auto hyphen = config.find("tensor-split");
+  auto underscore = config.find("tensor_split");
+  if (hyphen != config.end() && underscore != config.end()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "both 'tensor-split' and 'tensor_split' are present; use one or the "
+        "other.");
+  }
+  auto value = hyphen != config.end() ? hyphen : underscore;
+  if (value == config.end()) {
+    return;
+  }
+  std::string normalized = value->second;
+  std::ranges::replace(normalized, '/', ',');
+  const std::vector<std::string> proportions = split(normalized, ',');
+
+  // Fabric is handed the tokens counted here, not the caller's string: it keeps
+  // empty and blank fields that split() drops, and would reject them.
+  auto joinShares = [](const std::vector<std::string>& shares) {
+    std::string joined;
+    for (const std::string& share : shares) {
+      if (!joined.empty()) {
+        joined += ',';
+      }
+      joined += share;
+    }
+    return joined;
+  };
+
+  // Equal counts resolve to the final order: the addon pins params.devices
+  // itself, so fabric applies share i to final device i.
+  if (proportions.size() == selection.devices.size()) {
+    value->second = joinShares(proportions);
+    return;
+  }
+  if (proportions.size() != selection.sourceGpuCount) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "%s: tensor-split has %zu values, which matches neither the %zu "
+            "registered GPU devices nor the %zu eligible devices.\n",
+            K_LEGACY_PARSER_NAME.data(),
+            proportions.size(),
+            selection.sourceGpuCount,
+            selection.devices.size()));
+  }
+  std::vector<std::string> remapped;
+  remapped.reserve(selection.devices.size());
+  for (const backend_selection::SplitDevice& device : selection.devices) {
+    remapped.push_back(proportions[device.sourceGpuIndex]);
+  }
+  value->second = joinShares(remapped);
+}
+
 } // namespace
 
 namespace load_fit_normalization {
@@ -578,25 +635,22 @@ void tuneLoadConfigMap(
                 it->second.c_str(),
                 side));
       }
-      // QVAC-23763: CUDA has no TurboQuant/PolarQuant kernels. This used to
-      // reject the load here, after chooseBackend had already settled on CUDA -
-      // which spent a fallback opportunity as an error on every host that also
-      // had Vulkan.
-      //
-      // Selection now passes such a device over before the cascade picks, so
-      // reaching this point means either the filter did not run or it disagreed
-      // with this rule. Kept as an assertion rather than deleted: it is the
-      // second line of defence, and an InternalError says plainly that the
-      // invariant broke rather than blaming the caller's config.
+      // QVAC-23763: CUDA has no TurboQuant/PolarQuant kernels at all. Unlike
+      // the OpenCL case above, standard quantized types are fine, so only
+      // TBQ/PQ is rejected, exactly like Metal. CPU is deliberately still
+      // allowed: ggml-tbq-quants is a core (CPU) implementation and the
+      // existing OpenCL/Metal messages already point users there.
       if (isCuda) {
         if (!isTurboQuantKvType(it->second))
           return;
         throw qvac_errors::StatusError(
-            qvac_errors::general_error::InternalError,
+            qvac_errors::general_error::InvalidArgument,
             string_format(
-                "[LlamaModel] internal: cache-type-%s=%s reached CUDA after "
-                "capability filtering, which should have passed that device "
-                "over. Please report this.\n",
+                "[LlamaModel] cache-type-%s=%s is a TurboQuant/PolarQuant "
+                "KV-cache type and is not supported on the CUDA backend. "
+                "Either pick a different cache type "
+                "(f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl) or switch "
+                "device to a Vulkan GPU or CPU.\n",
                 side,
                 it->second.c_str()));
       }
@@ -661,24 +715,23 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
           [logCallback](const backend_selection::BackendRequest& request) {
             backend_selection::BackendChoice choice =
                 backend_selection::chooseBackend(request, logCallback);
+            const bool isOpenCl =
+                choice.name.find("opencl") != std::string::npos;
+            const bool isMetal =
+                choice.name.find("metal") != std::string::npos ||
+                choice.name.rfind("mtl", 0) == 0;
             return SelectedBackend{
                 .type = choice.type,
                 .name = std::move(choice.name),
                 .adrenoVersion = choice.adrenoVersion,
-                .isMaliGpu = choice.isMaliGpu};
+                .isMaliGpu = choice.isMaliGpu,
+                .isOpenCl = isOpenCl,
+                .isMetal = isMetal};
           },
-      .gpuBackendSupportsRowSplit =
-          []() { return backend_selection::gpuBackendSupportsRowSplit(); },
-      .splitModeDeviceNames =
+      .splitDevices =
           [](const std::string& selectedDeviceName,
              const backend_selection::LoadConstraints& constraints) {
-            return backend_selection::splitModeDeviceNames(
-                selectedDeviceName, constraints);
-          },
-      .tensorSplitDeviceNames =
-          [](const std::string& selectedDeviceName,
-             const backend_selection::LoadConstraints& constraints) {
-            return backend_selection::getTensorSplitDeviceNames(
+            return backend_selection::getSplitDeviceSelection(
                 selectedDeviceName, constraints);
           }};
 }
@@ -720,6 +773,30 @@ NormalizedLoad normalizeLoadForFit(
   std::optional<std::string> loadMode;
   for (const std::string& key : {"load-mode", "load_mode"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      // fabric's deprecated mmap / direct-io flags assign params.load_mode too,
+      // and the generic loop runs after this block, so one of them would
+      // silently overwrite the mode validated here.
+      for (const std::string& alias :
+           {"mmap",
+            "no-mmap",
+            "no_mmap",
+            "direct-io",
+            "direct_io",
+            "no-direct-io",
+            "no_direct_io"}) {
+        if (configFilemap.contains(alias)) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InvalidArgument),
+              string_format(
+                  "%s: '%s' cannot be combined with '%s'; use one or the "
+                  "other.\n",
+                  K_LEGACY_PARSER_NAME.data(),
+                  key.c_str(),
+                  alias.c_str()));
+        }
+      }
       const std::string value = toLowerAscii(it->second);
       if (loadMode.has_value() && loadMode.value() != value) {
         throw qvac_errors::StatusError(
@@ -752,6 +829,60 @@ NormalizedLoad normalizeLoadForFit(
               loadMode->c_str()));
     }
     params.load_mode = mode->second;
+  }
+
+  // The deprecated mmap and direct-io flags are separate options that both
+  // assign params.load_mode, and llama_load_mode is a flat selector rather
+  // than a bitfield, so the generic loop would let whichever ran last erase
+  // the other. Flags agreeing on a mode are left to it.
+  struct DeprecatedLoadFlag {
+    const char* key;
+    bool isPositive;
+    llama_load_mode enabled;
+  };
+  static constexpr DeprecatedLoadFlag kDeprecatedLoadFlags[] = {
+      {"mmap", true, LLAMA_LOAD_MODE_MMAP},
+      {"no-mmap", false, LLAMA_LOAD_MODE_MMAP},
+      {"no_mmap", false, LLAMA_LOAD_MODE_MMAP},
+      {"direct-io", true, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"direct_io", true, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"no-direct-io", false, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"no_direct_io", false, LLAMA_LOAD_MODE_DIRECT_IO}};
+
+  std::optional<llama_load_mode> deprecatedMode;
+  const char* deprecatedKey = nullptr;
+  for (const auto& flag : kDeprecatedLoadFlags) {
+    const auto it = configFilemap.find(flag.key);
+    if (it == configFilemap.end()) {
+      continue;
+    }
+    bool requested = true;
+    if (!it->second.empty()) {
+      if (common_arg_utils::is_truthy(it->second)) {
+        requested = true;
+      } else if (common_arg_utils::is_falsey(it->second)) {
+        requested = false;
+      } else {
+        // The generic loop reports the unknown value against the key itself.
+        continue;
+      }
+    }
+    const llama_load_mode mode =
+        flag.isPositive == requested ? flag.enabled : LLAMA_LOAD_MODE_NONE;
+    if (deprecatedMode.has_value() && deprecatedMode.value() != mode) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "%s: '%s' and '%s' select different load modes; use 'load-mode' "
+              "instead.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              deprecatedKey,
+              flag.key));
+    }
+    deprecatedMode = mode;
+    deprecatedKey = flag.key;
   }
 
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
@@ -789,15 +920,24 @@ NormalizedLoad normalizeLoadForFit(
     const std::string val = toLowerAscii(it->second);
     if (val == "layer") {
       splitMode = LLAMA_SPLIT_MODE_LAYER;
-    } else if (val == "row") {
-      splitMode = LLAMA_SPLIT_MODE_ROW;
     } else if (val == "tensor") {
       splitMode = LLAMA_SPLIT_MODE_TENSOR;
+    } else if (val == "row") {
+      // Row split needs split buffers, which only SYCL provides and this addon
+      // does not allow; rejected rather than silently degraded to 'layer'.
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: split-mode 'row' is no longer accepted; it never took "
+              "effect "
+              "on any shipped backend. Use 'layer' or 'tensor' (accepted "
+              "values: 'none', 'layer', 'tensor').\n",
+              K_LEGACY_PARSER_NAME.data()));
     } else if (val != "none") {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
           string_format(
-              "%s: invalid split-mode '%s', must be 'none', 'layer', 'row', or "
+              "%s: invalid split-mode '%s', must be 'none', 'layer', or "
               "'tensor'.\n",
               K_LEGACY_PARSER_NAME.data(),
               it->second.c_str()));
@@ -839,25 +979,12 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
 
-    // QVAC-23763: extracted and erased here like main-gpu, so the passthrough
-    // loop never forwards it to llama.cpp's argument parser.
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
 
-    // Erased for the same reason, and read after `backend` so the "set without
-    // a backend" check can see whether one was given. A separators-only or
-    // `auto` value parses to an empty list and counts as not given, which is
-    // the right reading: it expresses no preference to make binding.
     const bool backendRequired =
         tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
 
-    // QVAC-23763: the KV-cache types the load asks for, so selection can pass
-    // over a device that cannot run them instead of the load being refused
-    // after one was already chosen.
-    //
-    // Read, NOT erased: unlike main-gpu and backend, these keys are meant to
-    // reach llama.cpp's parser through the passthrough loop below. Erasing them
-    // would silently downgrade every quantized-KV load to f16.
     LoadConstraints constraints;
     for (const char* key :
          {"cache-type-k", "cache_type_k", "cache-type-v", "cache_type_v"}) {
@@ -866,8 +993,6 @@ NormalizedLoad normalizeLoadForFit(
         continue;
       }
       const enum ggml_type kvType = kvCacheTypeFromString(it->second);
-      // An unrecognised value is left to tuneLoadConfigMap, which owns
-      // validating it and has the better message.
       if (kvType != GGML_TYPE_COUNT &&
           std::ranges::find(constraints.kvCacheTypes, kvType) ==
               constraints.kvCacheTypes.end()) {
@@ -877,10 +1002,6 @@ NormalizedLoad normalizeLoadForFit(
     if (backendRequired) {
       constraints.requiredBackendFamilies = backendOverride;
     }
-    constraints.requireExplicitDeviceList =
-        splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value() &&
-        !std::holds_alternative<MainGpuType>(mainGpu.value());
-
     BackendRequest request;
     request.preferred = preferredBackend;
     request.metadata = &metadata;
@@ -888,9 +1009,69 @@ NormalizedLoad normalizeLoadForFit(
     request.isFinetuning = finetuneOverrides.active;
     request.backendOverride = backendOverride;
     request.backendRequired = backendRequired;
-    request.constraints = std::move(constraints);
+    request.constraints = constraints;
+    if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+      request.mainGpu.reset();
+    }
 
-    const SelectedBackend selected = dependencies.resolveBackend(request);
+    backend_selection::SplitDeviceSelection splitSelection;
+    SelectedBackend selected = dependencies.resolveBackend(request);
+    if (selected.type == BackendType::GPU &&
+        splitMode != LLAMA_SPLIT_MODE_NONE) {
+      splitSelection = dependencies.splitDevices(selected.name, constraints);
+      backend_selection::applyAdrenoRestrictions(
+          splitSelection, metadata, finetuneOverrides.active);
+      if (!splitSelection.devices.empty()) {
+        // name (-> mmproj_backend) is the first local device; RPC cannot host
+        // the projector. adrenoVersion is the max tier over local devices: ggml
+        // reports an RPC endpoint string as that device's description.
+        // isOpenCl/isMetal are true when any participant has them.
+        const auto& devices = splitSelection.devices;
+        const auto local = std::ranges::find_if(
+            devices, [](const backend_selection::SplitDevice& device) {
+              return !device.isRpc;
+            });
+        const backend_selection::SplitDevice& primary =
+            local != devices.end() ? *local : devices.front();
+        const auto anyDevice =
+            [&devices](bool backend_selection::SplitDevice::* trait) {
+              return std::ranges::any_of(
+                  devices, [trait](const backend_selection::SplitDevice& d) {
+                    return d.*trait;
+                  });
+            };
+        std::optional<int> maxAdrenoVersion;
+        for (const backend_selection::SplitDevice& device : devices) {
+          if (!device.isRpc && device.adrenoVersion.has_value() &&
+              (!maxAdrenoVersion.has_value() ||
+               device.adrenoVersion.value() > maxAdrenoVersion.value())) {
+            maxAdrenoVersion = device.adrenoVersion;
+          }
+        }
+        selected.name = primary.name;
+        selected.adrenoVersion = maxAdrenoVersion;
+        selected.isOpenCl =
+            anyDevice(&backend_selection::SplitDevice::isOpenCl);
+        selected.isMetal = anyDevice(&backend_selection::SplitDevice::isMetal);
+      } else {
+        if (!splitSelection.rejectedDevices.empty()) {
+          std::string rejected;
+          for (const std::string& device : splitSelection.rejectedDevices) {
+            if (!rejected.empty()) {
+              rejected += ", ";
+            }
+            rejected += device;
+          }
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] no eligible GPU backend found; rejected %s; "
+                  "falling back to CPU\n",
+                  rejected.c_str()));
+        }
+        selected = {};
+      }
+    }
     result.adrenoVersion = selected.adrenoVersion;
 
     // QVAC-21257: optional runtime override for the multimodal projector
@@ -933,7 +1114,9 @@ NormalizedLoad normalizeLoadForFit(
       }
     }
 
-    if (selected.type == BackendType::GPU) {
+    const bool useGpu = selected.type == BackendType::GPU;
+
+    if (useGpu) {
       params.mmproj_backend = selected.name;
 #ifdef __ANDROID__
       // QVAC-21867: auto-default the projector backend by GPU class.
@@ -976,48 +1159,25 @@ NormalizedLoad normalizeLoadForFit(
                                                : mmprojDefaultReason));
       params.mmproj_use_gpu = mmprojUseGpu;
 
-      // Row-split needs a backend that provides split buffers.
-      // Degrade row -> layer to keep the model loadable. This is ROW-only by
-      // design: qvac-fabric only demands split buffers under
-      // LLAMA_SPLIT_MODE_ROW (src/llama-model.cpp make_gpu_buft_list), while
-      // LLAMA_SPLIT_MODE_TENSOR goes through the meta device and needs none.
-      // Routing tensor mode through this probe would silently degrade it to
-      // 'layer' on every backend this package ships.
-      if (splitMode == LLAMA_SPLIT_MODE_ROW &&
-          !dependencies.gpuBackendSupportsRowSplit()) {
-        QLOG_IF(
-            Priority::WARNING,
-            "[LlamaModel] split-mode 'row' is not supported by this GPU "
-            "backend (no split-buffer support), falling back to split-mode "
-            "'layer'\n");
-        splitMode = LLAMA_SPLIT_MODE_LAYER;
-      }
-
       params.split_mode = splitMode;
       result.runtimeBackendDevice = 1;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
-        if (std::holds_alternative<MainGpuType>(mainGpu.value())) {
-          QLOG_IF(
-              Priority::WARNING,
-              "[LlamaModel] main-gpu 'dedicated'/'integrated' ignored in "
-              "multi-GPU split-mode; use an integer device index instead\n");
-        } else if (std::holds_alternative<int>(mainGpu.value())) {
-          configFilemap["main-gpu"] =
-              std::to_string(std::get<int>(mainGpu.value()));
-        } else {
-          // Exact selectors are resolved during backend selection. This marker
-          // is rewritten to the selected device's position in the final list.
-          configFilemap["main-gpu"] = "0";
-        }
+        QLOG_IF(
+            Priority::WARNING,
+            "[LlamaModel] main-gpu is ignored in multi-GPU split-mode\n");
+      }
+      if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+        remapTensorSplit(configFilemap, splitSelection);
       }
     } else if (selected.type == BackendType::CPU) {
       params.mmproj_use_gpu = false;
       if (mmprojUseGpuOverride.value_or(false)) {
         QLOG_IF(
             Priority::WARNING,
-            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available, "
-            "running the multimodal projector on CPU\n");
+            "[LlamaModel] mmproj-use-gpu ignored: no GPU backend available or "
+            "no eligible split device, running the multimodal projector on "
+            "CPU\n");
       }
       result.runtimeBackendDevice = 0;
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
@@ -1026,9 +1186,11 @@ NormalizedLoad normalizeLoadForFit(
         QLOG_IF(
             Priority::WARNING,
             "[LlamaModel] split-mode, tensor-split and main-gpu ignored: "
-            "no GPU backend available, falling back to CPU\n");
+            "no GPU backend available or no eligible split device, falling "
+            "back to CPU\n");
         splitMode = LLAMA_SPLIT_MODE_NONE;
         configFilemap.erase("tensor-split");
+        configFilemap.erase("tensor_split");
       }
     } else {
       throw qvac_errors::StatusError(
@@ -1036,107 +1198,35 @@ NormalizedLoad normalizeLoadForFit(
           "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
           "'cpu'.\n");
     }
-    // In multi-GPU split mode we intentionally omit --device so llama.cpp
-    // distributes layers/rows across all available GPUs rather than pinning
-    // to the single backend that chooseBackend selected.
-    //
-    // QVAC-24253: tensor mode is the exception and must pass an explicit list.
-    // 'layer' and 'row' route through qvac-fabric's filtered device selection,
-    // which excludes integrated GPUs unless they are all that is available and
-    // dedupes a physical GPU registered by two backends. SPLIT_MODE_TENSOR
-    // takes a different branch that does neither, so omitting --device there
-    // splits weights and the KV cache onto the iGPU on any dGPU + iGPU host —
-    // pacing the whole model by the weakest participant — and shards a
-    // dual-registered GPU twice. main-gpu cannot correct it: fabric's pruning
-    // is gated on split_mode == NONE, and string forms are dropped above.
-    //
-    // QVAC-23763: omitting --device stops being safe for 'layer' and 'row'
-    // too once one physical card registers under two backends, so they pass
-    // the chosen backend's own devices instead. splitModeDeviceNames() returns
-    // empty on a single-registry host, where --device stays omitted as before.
-    auto remapMainGpu = [&](const std::vector<std::string>& devices) {
-      const auto mainGpuIt = configFilemap.find("main-gpu");
-      if (mainGpuIt == configFilemap.end()) {
-        return;
-      }
-      const auto selectedPos = std::ranges::find(devices, selected.name);
-      if (selectedPos != devices.end()) {
-        mainGpuIt->second = std::to_string(selectedPos - devices.begin());
-        return;
-      }
-      configFilemap.erase(mainGpuIt);
-      QLOG_IF(
-          Priority::WARNING,
-          "[LlamaModel] main-gpu dropped: the selected device is not in the "
-          "scoped --device list\n");
-    };
-
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
       configVector.emplace_back("--device");
       configVector.emplace_back(selected.name);
-    } else if (splitMode == LLAMA_SPLIT_MODE_TENSOR) {
-      const std::vector<std::string> tensorDevices =
-          dependencies.tensorSplitDeviceNames(
-              selected.name, request.constraints);
-      if (tensorDevices.empty()) {
-        // No enumerable GPU device: leave --device alone rather than emitting
-        // an empty list, and let fabric's own selection and checks decide.
-        QLOG_IF(
-            Priority::WARNING,
-            "[LlamaModel] split-mode 'tensor': no GPU device could be "
-            "enumerated for an explicit device list; falling back to "
-            "qvac-fabric's own device selection\n");
-      } else {
-        std::string deviceList;
-        for (const std::string& device : tensorDevices) {
-          if (!deviceList.empty()) {
-            deviceList += ",";
-          }
-          deviceList += device;
+    } else {
+      std::string deviceList;
+      params.devices.clear();
+      params.devices.reserve(splitSelection.devices.size() + 1);
+      for (const backend_selection::SplitDevice& device :
+           splitSelection.devices) {
+        if (!deviceList.empty()) {
+          deviceList += ",";
         }
-        configVector.emplace_back("--device");
-        configVector.emplace_back(deviceList);
-        remapMainGpu(tensorDevices);
-        QLOG_IF(
-            Priority::INFO,
-            string_format(
-                "[LlamaModel] split-mode 'tensor': pinning to %zu device(s): "
-                "%s\n",
-                tensorDevices.size(),
-                deviceList.c_str()));
+        deviceList += device.name;
+        params.devices.push_back(device.handle);
       }
-    } else if (
-        selected.type == BackendType::GPU &&
-        dependencies.splitModeDeviceNames) {
-      const std::vector<std::string> splitDevices =
-          dependencies.splitModeDeviceNames(selected.name, request.constraints);
-      if (!splitDevices.empty()) {
-        std::string deviceList;
-        for (const std::string& deviceName : splitDevices) {
-          if (!deviceList.empty()) {
-            deviceList += ',';
-          }
-          deviceList += deviceName;
-        }
-        QLOG_IF(
-            Priority::INFO,
-            string_format(
-                "[LlamaModel] split-mode: naming each discrete GPU once in "
-                "--device (%s), preferring %s where a card is registered under "
-                "more than one backend\n",
-                deviceList.c_str(),
-                selected.name.c_str()));
-        configVector.emplace_back("--device");
-        configVector.emplace_back(std::move(deviceList));
-        remapMainGpu(splitDevices);
-      }
+      params.devices.push_back(nullptr);
+      QLOG_IF(
+          Priority::INFO,
+          string_format(
+              "[LlamaModel] split mode: pinning to %zu eligible device(s): "
+              "%s\n",
+              splitSelection.devices.size(),
+              deviceList.c_str()));
     }
     configFilemap.erase("device");
 
-    isGpu = selected.type == BackendType::GPU;
-    isOpenCl = isGpu && selected.name.find("opencl") != std::string::npos;
-    isMetal = isGpu && (selected.name.find("metal") != std::string::npos ||
-                        selected.name.rfind("mtl", 0) == 0);
+    isGpu = useGpu;
+    isOpenCl = isGpu && selected.isOpenCl;
+    isMetal = isGpu && selected.isMetal;
     isCuda = isGpu && selected.name.find("cuda") != std::string::npos;
   }
 
@@ -1270,10 +1360,13 @@ NormalizedLoad normalizeLoadForFit(
 
   int size = static_cast<int>(configVector.size());
 
-  std::unordered_map<std::string, common_arg*> argToOptions;
+  std::unordered_map<std::string, std::pair<common_arg*, bool>> argToOptions;
   for (auto& opt : ctxArg.options) {
     for (const auto& arg : opt.args) {
-      argToOptions[arg] = &opt;
+      argToOptions[arg] = {&opt, /* isPositive */ true};
+    }
+    for (const auto& arg : opt.args_neg) {
+      argToOptions[arg] = {&opt, /* isPositive */ false};
     }
   }
 
@@ -1287,6 +1380,10 @@ NormalizedLoad normalizeLoadForFit(
           "Expected value for argument");
     }
   };
+
+  // configFilemap is unordered, so two spellings of one boolean option would
+  // otherwise apply in an arbitrary order and the last one would win.
+  std::unordered_map<const common_arg*, bool> appliedBooleans;
 
   for (int argIndex = 0; argIndex < size; argIndex++) {
     const std::string argPrefix = "--";
@@ -1306,7 +1403,9 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument),
           errorMsg);
     }
-    auto opt = *argToOptions[arg];
+    auto& entry = argToOptions[arg];
+    auto opt = *entry.first;
+    const bool isPositive = entry.second;
     if (opt.has_value_from_env()) {
       QLOG_IF(
           Priority::DEBUG,
@@ -1320,6 +1419,49 @@ NormalizedLoad normalizeLoadForFit(
     try {
       if (opt.handler_void != nullptr) {
         opt.handler_void(params);
+        continue;
+      }
+
+      if (opt.handler_bool != nullptr) {
+        bool requested = true;
+        if (argIndex + 1 < size &&
+            !configVector[argIndex + 1].starts_with(argPrefix)) {
+          const std::string& boolVal = configVector[++argIndex];
+          if (common_arg_utils::is_truthy(boolVal)) {
+            requested = true;
+          } else if (common_arg_utils::is_falsey(boolVal)) {
+            requested = false;
+          } else {
+            throw qvac_errors::StatusError(
+                ADDON_ID,
+                qvac_errors::general_error::toString(
+                    qvac_errors::general_error::InvalidArgument),
+                string_format(
+                    "%s: unknown value for %s: '%s'. Accepted (lower-case): "
+                    "on, enabled, true, 1, off, disabled, false, 0.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    arg.c_str(),
+                    boolVal.c_str()));
+          }
+        }
+        const bool effective = isPositive == requested;
+        const auto [applied, first] =
+            appliedBooleans.emplace(entry.first, effective);
+        if (!first) {
+          if (applied->second != effective) {
+            throw qvac_errors::StatusError(
+                ADDON_ID,
+                qvac_errors::general_error::toString(
+                    qvac_errors::general_error::InvalidArgument),
+                string_format(
+                    "%s: '%s' was given contradictory values; supply one "
+                    "spelling.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    opt.args.back()));
+          }
+          continue;
+        }
+        opt.handler_bool(params, effective);
         continue;
       }
 

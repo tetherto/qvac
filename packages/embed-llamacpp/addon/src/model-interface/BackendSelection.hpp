@@ -172,6 +172,29 @@ chooseBackend(const BackendRequest& request, const BackendInterface& bckI);
 BackendChoice chooseBackend(
     const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
 
+struct SplitDevice {
+  std::string name;
+  ggml_backend_dev_t handle = nullptr;
+  size_t sourceGpuIndex = 0;
+  bool isOpenCl = false;
+  bool isRpc = false;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDevice> devices;
+  size_t sourceGpuCount = 0;
+  std::vector<std::string> rejectedDevices;
+};
+
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+SplitDeviceSelection getSplitDeviceSelection();
+SplitDeviceSelection getSplitDeviceSelection(
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints);
+SplitDeviceSelection getSplitDeviceSelection(
+    const std::string& selectedDeviceName, const LoadConstraints& constraints);
+std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
+
 /// @brief Adapter for the positional form. Retained so existing callers and
 /// tests are unaffected by the request/choice split; prefer the overload above
 /// for new code.

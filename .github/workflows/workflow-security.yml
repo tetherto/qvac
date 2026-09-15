@@ -2,8 +2,8 @@ name: Workflow security
 
 # Canonical GitHub Actions workflow-security validator running on Tier-1 PRs per
 # QVAC-21551. Audits THIS repo's own workflow and composite-action definitions
-# for the high-risk patterns codified in .cursor/rules/devops/github-actions.mdc
-# and .cursor/rules/devops/secrets-and-credentials.mdc — template injection,
+# for the high-risk patterns codified in .github/AGENTS.md and the A1-A14 checklist
+# in .agents/skills/qv-devops-pr-review — template injection,
 # dangerous triggers / "pwn requests", unpinned action refs, excessive
 # permissions, cache poisoning, credential persistence, and more. It is the §B4
 # enforcement surface in docs/devops/TIER-1-SCOPE.md, the workflow-hardening
@@ -15,7 +15,7 @@ name: Workflow security
 #      machine-modellable high-risk patterns; the reproducible backbone of the gate.
 #   2. job `workflow-security-agent` — a Claude Code agent
 #      (anthropics/claude-code-action) that runs the repo-specific A1–A14 checklist
-#      from .cursor/skills/qv-devops-pr-review that zizmor CANNOT model: the
+#      from .agents/skills/qv-devops-pr-review that zizmor CANNOT model: the
 #      mandatory `# v<ver>` pin comment, per-job
 #      timeout-minutes, filename conventions, state-mutating concurrency, etc. This
 #      automates what was previously the human `qv-devops-pr-review` fallback.
@@ -98,7 +98,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Deliberate deviation from the github-actions.mdc § Concurrency guidance that
+  # Deliberate deviation from the repository's CI concurrency guidance that
   # state-mutating workflows use cancel-in-progress: false. Each job's only
   # external mutation is an idempotent upsert of a single PR comment, so
   # newest-commit-wins is the desired behavior: superseding an in-flight run
@@ -446,9 +446,9 @@ jobs:
             model.
 
             Read these first — they are the source of truth:
-            - .cursor/rules/devops/github-actions.mdc
-            - .cursor/rules/devops/secrets-and-credentials.mdc
-            - .cursor/skills/qv-devops-pr-review/SKILL.md   (the A1-A14 checklist)
+            - .github/AGENTS.md
+            - docs/agent-automation.md
+            - .agents/skills/qv-devops-pr-review/SKILL.md   (the A1-A14 checklist)
 
             Audit ONLY the files whose paths are listed in `changed_files.txt` in the
             repo root (one path per line). If that file is empty, report no findings.
@@ -465,7 +465,8 @@ jobs:
             `workflow-security-agent-report.md` in the repo root, structured as:
             - a one-line summary (total findings + highest tier High/Medium/Low);
             - a table with columns: File | Line | Check (e.g. A7) | Tier | Why;
-            - each row cites the rule (e.g. "github-actions.mdc § Permissions").
+            - each row cites the source (for example, ".github/AGENTS.md" or
+              "qv-devops-pr-review A2").
             Keep it concise. Write NOTHING to disk except that one report file, and do
             not run shell commands. If there are no findings, still write the report
             stating that explicitly.
