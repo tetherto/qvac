@@ -8,7 +8,8 @@
  * GGML backend notes:
  *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl, supertonic3
  *   - GPU backends: vulkan (linux/win32/Mali android), metal (darwin/ios),
- *     opencl (Adreno android, e.g. Samsung Galaxy S25)
+ *     opencl (Adreno android, e.g. Samsung Galaxy S25), cuda (linux-x64
+ *     lanes whose prebuild bundles it; wins the cascade over vulkan)
  *   - canonical reports are tagged `addon: 'tts-ggml'`
  *
  * Usage:
@@ -22,9 +23,9 @@
 const fs = require('fs')
 const path = require('path')
 
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'cuda']
 const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic2', 'supertonic3']
-const VALID_BACKENDS = ['cpu', 'gpu', 'vulkan', 'metal', 'opencl', 'mobile-accelerated']
+const VALID_BACKENDS = ['cpu', 'gpu', 'cuda', 'vulkan', 'metal', 'opencl', 'mobile-accelerated']
 const VALID_VARIANTS = ['q4', 'q4_0', 'q8_0', 'f16', 'f32', 'english', 'mtl']
 const VALID_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'pl', 'tr', 'sv', 'da', 'fi', 'no', 'el', 'ms', 'sw', 'ar', 'ko']
 const NOISY_STDDEV_RATIO = 0.15
@@ -371,8 +372,15 @@ function normalizeDesktopRecord (report, sourceFile, source = 'desktop-ci') {
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || ''
   const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
   const backendHint = (report.labels && report.labels.backend) || ''
-  const backend = normalizeBackend(platformName, useGPU, backendHint,
-    needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel))
+  // Like resolveMobileBackend, the observed backend (summary.backendId /
+  // labels.activeBackend) beats the matrix hint: a lane pinned to CUDA via
+  // TTS_CPP_GPU_BACKEND runs entries whose hints still say vulkan.
+  const backendId = toNumberOrNull(summary.backendId)
+  const activeBackend = String((report.labels && report.labels.activeBackend) || '').toLowerCase()
+  const backend = (backendId !== null && BACKEND_BY_ID[backendId]) ||
+    activeBackend ||
+    normalizeBackend(platformName, useGPU, backendHint,
+      needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel))
   const numThreads = report.requested && report.requested.numThreads !== undefined
     ? report.requested.numThreads
     : (report.config && report.config.numThreads !== undefined ? report.config.numThreads : null)

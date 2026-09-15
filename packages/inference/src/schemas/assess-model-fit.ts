@@ -121,6 +121,18 @@ export const modelFitBasisSchema = z.enum([
   'device-budget'
 ])
 
+/**
+ * What kind of evidence a verdict rests on.
+ *
+ * - `calibration`: a two-sided estimate from coefficients measured on this
+ *   platform. The only evidence that can support `likely-fits`.
+ * - `computed-only`: a floor computed from catalog facts alone — artifact bytes,
+ *   plus the KV cache for llama.cpp models. It omits every engine cost that
+ *   only a real load can tell, so it can refuse a model but never confirm one.
+ *   This is what an uncalibrated platform, including Android and iOS, reports.
+ */
+export const modelFitEvidenceSchema = z.enum(['calibration', 'computed-only'])
+
 export const modelFitBudgetSchema = z.object({
   totalBytes: z
     .number()
@@ -144,11 +156,28 @@ export const modelFitBudgetSchema = z.object({
 export const modelFitModelResultSchema = z.object({
   name: z.string().describe('Catalog name of the assessed model.'),
   verdict: modelFitVerdictSchema,
-  estimate: byteRangeSchema.optional().describe('Absent when this model assessed as `unknown`.'),
+  evidence: modelFitEvidenceSchema
+    .optional()
+    .describe(
+      'What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.'
+    ),
+  estimate: byteRangeSchema
+    .optional()
+    .describe(
+      'Two-sided bound from calibrated coefficients. Absent under computed-only evidence, or when this model assessed as `unknown` for want of any evidence.'
+    ),
+  floorBytes: z
+    .number()
+    .optional()
+    .describe(
+      'Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.'
+    ),
   estimatorVersion: z
     .string()
     .optional()
-    .describe('Estimator that produced the bounds, e.g. `llm-v1`.'),
+    .describe(
+      'Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.'
+    ),
   reasons: z.array(z.string()).describe('Why this model got this verdict.')
 })
 
@@ -158,14 +187,79 @@ export const assessModelFitResultSchema = z.object({
     'The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.'
   ),
   execution: modelFitExecutionSchema.describe('The declared execution mode this result assumed.'),
+  evidence: modelFitEvidenceSchema
+    .optional()
+    .describe(
+      'The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.'
+    ),
   budget: modelFitBudgetSchema.optional().describe('Absent when memory evidence was unusable.'),
-  estimate: byteRangeSchema.optional().describe('Absent when the combined verdict is `unknown`.'),
+  estimate: byteRangeSchema
+    .optional()
+    .describe(
+      'Combined two-sided bound. Absent when the combined verdict is `unknown` for want of evidence, and under computed-only evidence, which has no upper bound.'
+    ),
+  floorBytes: z
+    .number()
+    .optional()
+    .describe(
+      'Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.'
+    ),
   models: z.array(modelFitModelResultSchema).describe('Per-candidate verdicts, in input order.'),
   reasons: z.array(z.string()).describe('Why the combined verdict came out this way.'),
   assumptions: z
     .array(z.string())
     .describe('Everything the result took for granted, including estimator defaults.')
 })
+
+// ============== Native probe (pre-load) ==============
+
+/**
+ * The other fit question, kept in this file on purpose: `assessModelFit` above
+ * answers "should I download this?" from calibrated coefficients and a checksum,
+ * while the native probe answers "will the load I am about to run fit?" by
+ * reading the GGUF on disk in a disposable child. Two evidence classes, so two
+ * verdict vocabularies:
+ *
+ * - `likely-fits` / `likely-too-large` hedge because a formula is an estimate.
+ * - `fit` / `does-not-fit` do not, because the probe measured this build of this
+ *   file against this device.
+ *
+ * Precedence when both have spoken about the same model: the probe wins, because
+ * it saw the artifact and the resolved load settings. `assessModelFit` is the
+ * answer available before the bytes are on disk. Neither denies a load today.
+ */
+export const nativeProbeVerdictSchema = z.enum(['fit', 'does-not-fit', 'unknown'])
+
+export const nativeProbePlanSchema = z.object({
+  nCtx: z.number().int().describe('Context the probe resolved for this load, in tokens.'),
+  nGpuLayers: z.number().int().describe('Layers the probe would offload.'),
+  nGpuDevices: z.number().int().describe('GPU devices the offload would span.')
+})
+
+export const nativeProbeFitSchema = z
+  .object({
+    verdict: nativeProbeVerdictSchema.describe(
+      'Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.'
+    ),
+    basis: z
+      .literal('native-probe')
+      .describe(
+        'Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings.'
+      ),
+    estimatorVersion: z
+      .string()
+      .describe(
+        'Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy — `native-probe-v1` withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker.'
+      ),
+    reason: z
+      .string()
+      .describe('Machine-readable reason for the verdict. Never parsed out of log text.'),
+    message: z.string().optional().describe('Human-readable detail, when the reason has any.'),
+    plan: nativeProbePlanSchema
+      .optional()
+      .describe('Placement the probe projected. Present only on a `fit` verdict.')
+  })
+  .meta({ title: 'NativeProbeFit' })
 
 export const assessModelFitRequestSchema = assessModelFitInputSchema.extend({
   type: z.literal('assessModelFit')
@@ -175,12 +269,16 @@ export const assessModelFitResponseSchema = assessModelFitResultSchema.extend({
   type: z.literal('assessModelFit')
 })
 
+export type NativeProbeVerdict = z.infer<typeof nativeProbeVerdictSchema>
+export type NativeProbePlan = z.infer<typeof nativeProbePlanSchema>
+export type NativeProbeFit = z.infer<typeof nativeProbeFitSchema>
 export type ModelFitVerdict = z.infer<typeof modelFitVerdictSchema>
 export type ModelFitModelRef = z.infer<typeof modelFitModelRefSchema>
 export type ModelFitWorkload = z.infer<typeof modelFitWorkloadSchema>
 export type ModelFitCandidate = z.infer<typeof modelFitCandidateSchema>
 export type ModelFitExecution = z.infer<typeof modelFitExecutionSchema>
 export type ModelFitBasis = z.infer<typeof modelFitBasisSchema>
+export type ModelFitEvidence = z.infer<typeof modelFitEvidenceSchema>
 export type ModelFitBudget = z.infer<typeof modelFitBudgetSchema>
 export type ModelFitModelResult = z.infer<typeof modelFitModelResultSchema>
 export type AssessModelFitInput = z.input<typeof assessModelFitInputSchema>

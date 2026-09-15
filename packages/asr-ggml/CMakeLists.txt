@@ -7,9 +7,10 @@ option(ENABLE_COVERAGE "Enable coverage" OFF)
 # speech-cpp dependencies in vcpkg.json. CUDA is opt-in because it needs
 # nvcc on the build host; published prebuilds ship without it, and the
 # runtime needs only the NVIDIA driver plus resolvable CUDA runtime
-# libraries. On linux-x64, linux-arm64 and win32-x64 the cuda feature
-# flips the ggml-speech port into hybrid GGML_BACKEND_DL mode: every
-# backend (CPU variants, Vulkan, CUDA) arrives as a runtime-loadable
+# libraries. Every linux-x64 and linux-arm64 build of the ggml-speech
+# port, and win32-x64 with the cuda feature, runs in hybrid
+# GGML_BACKEND_DL mode: every backend (CPU variants, Vulkan, CUDA when
+# enabled) arrives as a runtime-loadable
 # MODULE (.so / .dll) that the loose-file pickup below stages next to
 # the .bare, and only the CUDA module links the CUDA runtime, so hosts
 # that cannot resolve it skip it and fall back to Vulkan or CPU. No
@@ -102,7 +103,7 @@ message(STATUS "Building asr-ggml with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}
 #   2. Loose MODULE files that ggml-config deliberately omits from
 #      GGML_AVAILABLE_BACKENDS' IMPORTED set (Vulkan + OpenCL on
 #      Android; CPU variants + Vulkan + CUDA on hybrid desktop builds:
-#      linux-arm64, linux-x64 / win32-x64 with ASR_CUDA) — the loader
+#      linux-arm64, every linux-x64 build, win32-x64 with ASR_CUDA) — the loader
 #      picks them up at runtime via `ggml_backend_load_all_from_path()`.
 # Hybrid-mode caveat: the ggml-speech vcpkg port builds Android with
 # GGML_BACKEND_DL=ON + GGML_CPU_STATIC=ON, so only the CPU backend

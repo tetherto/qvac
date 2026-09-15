@@ -62,8 +62,9 @@ Has {{ fn.overloads.length }} overloads.
 **Throws**:
 
 {% for t in ov.throws %}
-- `{{ t.error }}` — {{ t.description or "—" }}
-{% endfor %}
+{% if t.error %}- `{{ t.error }}` — {{ t.description or "—" }}
+{% else %}- {{ t.description }}
+{% endif %}{% endfor %}
 
 {% endif %}
 {% if ov.examples and ov.examples.length > 0 %}
@@ -92,8 +93,9 @@ Has {{ fn.overloads.length }} overloads.
 **Throws**:
 
 {% for t in fn.throws %}
-- `{{ t.error }}` — {{ t.description or "—" }}
-{% endfor %}
+{% if t.error %}- `{{ t.error }}` — {{ t.description or "—" }}
+{% else %}- {{ t.description }}
+{% endif %}{% endfor %}
 
 {% endif %}
 {% if fn.examples and fn.examples.length > 0 %}

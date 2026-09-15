@@ -1350,6 +1350,28 @@ function jobDependsOnAuthorize(job) {
   return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text)
 }
 
+/**
+ * A job's `if:` value alone, flattened to one line. Both block-scalar styles
+ * (`|`/`|-`/`|+` and `>`/`>-`/`>+`) and the inline form are handled.
+ *
+ * Scoped to the condition rather than the whole job on purpose: several jobs
+ * forward the same expression as an input — sanity-checks passes
+ * `run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}` — and
+ * matching job text would accept that as a gate when the `if:` has none.
+ */
+function jobCondition(jobText) {
+  const block = jobText.match(/^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|[ \t]*\n)*)/m)
+  if (block) {
+    return block[1]
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(' ')
+  }
+  const inline = jobText.match(/^ {4}if:[ \t]*(.+)$/m)
+  return inline ? inline[1].trim() : ''
+}
+
 const reusablePrivilege = new Map()
 
 /**
@@ -1402,6 +1424,12 @@ function jobRunsPrivilegedForkSurface(job) {
   return true
 }
 
+// always(), !cancelled(), success() and failure() each suppress the implicit
+// "all needs succeeded" check over the WHOLE of needs. A job carrying one of
+// them is no longer skipped by a failed or skipped fork-approval, so its
+// `needs:` entry stops being a gate and becomes mere ordering.
+const STATUS_CHECK_FUNCTION = /\b(?:always|cancelled|success|failure)\s*\(\s*\)/
+
 test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated fork run)', () => {
   for (const path of forkCiTargets()) {
     for (const job of eachJob(read(path))) {
@@ -1412,6 +1440,21 @@ test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated 
         job.text,
         /needs:[\s\S]*?\bfork-approval\b/,
         `${path}: job '${job.name}' gates on authorize but does not depend on fork-approval (fail-open)`,
+      )
+
+      // QVAC-24913. Same hazard as validate-artifacts above: once a status-check
+      // function is in the condition, `needs: [fork-approval, authorize]` no
+      // longer skips this job when either is skipped, so the ONLY thing keeping
+      // a fork PR off a credentialed self-hosted runner is the allowed clause
+      // written out in the `if:`. jobDependsOnAuthorize() is satisfied by the
+      // needs: entry alone, so without this assertion deleting that clause left
+      // the entire suite green.
+      const condition = jobCondition(job.text)
+      if (!STATUS_CHECK_FUNCTION.test(condition)) continue
+      assert.match(
+        condition,
+        /needs\.authorize\.outputs\.allowed == 'true'/,
+        `${path}: job '${job.name}' suppresses implicit needs-skipping with a status-check function, so it must if-gate on needs.authorize.outputs.allowed == 'true' explicitly (fail-open)`,
       )
     }
   }
@@ -1651,7 +1694,7 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
 
 test('mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs', () => {
   // (1) `${{ github.event.inputs.package }}` must never be interpolated into a
-  // run: script — it goes through an `env:` block per github-actions.mdc, else a
+  // run: script — it goes through an `env:` block per .github/AGENTS.md, else a
   // crafted spec (`"; curl … | bash; echo "`) breaks out of the scope check that
   // renders after the quotes break; (2) the model-match operator defaults to
   // EQUALS so a maxDevices:1 dispatch bills the exact fleet model, not a CONTAINS
@@ -1775,6 +1818,80 @@ test('mobile shards pass grep explicitly and retain host-phase failure logs', ()
   assert.match(collectLogs, /\*Test\*spec\*output\*/)
   assert.match(collectLogs, /\*Standard\*Output\*/)
   assert.match(collectLogs, /Host phase log:/)
+})
+
+// A native abort() kills the app before Bare flushes its console buffer, so the
+// .ips crash report is the only place the faulting stack survives.
+test('iOS mobile runs collect on-device crash reports', () => {
+  const generateTestspec = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
+  )
+  const collectLogs = read(
+    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
+  )
+
+  // Must run in the test phase: Device Farm skips post_test when the test phase
+  // exits non-zero, i.e. exactly when a crash report is what we need.
+  const wdioCall = generateTestspec.indexOf('node node_modules/@wdio/cli/bin/wdio.js')
+  const crashPull = generateTestspec.lastIndexOf('pymobiledevice3 crash pull')
+  const androidLogcat = generateTestspec.indexOf('adb logcat -d -b all')
+  // Anchor on the emitted YAML key, not the word — prose above mentions it too.
+  const postTestPhase = generateTestspec.indexOf('  post_test:\n    commands:')
+  assert.ok(crashPull > 0, 'iOS crash-report pull must exist')
+  assert.ok(androidLogcat > 0, 'Android logcat collection must stay in post_test')
+  assert.ok(
+    crashPull < postTestPhase,
+    'crash pull must be emitted in the test phase — post_test never runs on a failed test',
+  )
+
+  // Re-exits with wdio's own code, so wrapping cannot change a run's verdict.
+  const exitLine = generateTestspec.indexOf('exit $WDIO_RC')
+  const rcCapture = generateTestspec.indexOf('WDIO_RC=$?')
+  assert.ok(rcCapture > wdioCall, 'wdio exit code must be captured right after the run')
+  assert.ok(exitLine > crashPull, 'the wrapper must re-exit after collecting logs')
+  assert.match(
+    generateTestspec.slice(0, wdioCall),
+    /if \[ "\$PLATFORM" = "iOS" \]/,
+    'wrapper must be iOS-only',
+  )
+  assert.doesNotMatch(
+    generateTestspec.slice(wdioCall, exitLine),
+    /^\s+set -e$/m,
+    'set -e must not be re-enabled around log collection',
+  )
+
+  assert.match(generateTestspec, /\[CRASH_REPORT_START\]/)
+  assert.match(generateTestspec, /\[CRASH_REPORT_END\]/)
+
+  // Device Farm reuses phones and every shard is the same bundle id, so the
+  // reports already present before wdio ran are snapshotted by NAME and
+  // subtracted afterwards. An mtime window cannot distinguish them.
+  assert.ok(
+    generateTestspec.indexOf('BEFORE_LIST') < wdioCall,
+    'the pre-run crash snapshot must be taken before wdio starts',
+  )
+  assert.match(generateTestspec.slice(crashPull), /grep -Fxq "\$\(basename "\$f"\)" "\$BEFORE_LIST"/)
+  assert.doesNotMatch(generateTestspec, /-mmin/, 'no rolling time window — names are exact')
+
+  // A snapshot that never ran is not an empty phone. Both pulls are guarded,
+  // the snapshot's status is kept, and a report can only be presented as this
+  // run's when that status is good — otherwise it is labelled UNVERIFIED.
+  assert.match(generateTestspec, /SNAP_RC=\$\?/, "the snapshot's exit status must be captured")
+  assert.strictEqual(
+    (generateTestspec.match(/command -v pymobiledevice3 >\/dev\/null 2>&1/g) || []).length,
+    3,
+    'install check plus both pulls are guarded',
+  )
+  assert.match(
+    generateTestspec,
+    /if \[ -n "\$NEWEST" \] && \[ "\$SNAP_RC" -eq 0 \]/,
+    'a verified report requires a successful snapshot',
+  )
+  assert.match(generateTestspec, /CRASH_REPORT_START_UNVERIFIED/)
+
+  // ...and they have to reach the uploaded artifact.
+  assert.match(collectLogs, /-type d -name "crash-reports"/)
+  assert.match(collectLogs, /Extracted iOS crash report/)
 })
 
 test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {

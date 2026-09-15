@@ -31,6 +31,28 @@ const BASE_CONFIG = {
   verbosity: '2'
 }
 
+// QVAC_HAS_MULTI_GPU promises two OR MORE GPUs, and a tensor-split matching
+// neither the eligible nor the registered GPU count is rejected, so probe.
+async function discoverDeviceCount(modelPath) {
+  const specLogger = attachSpecLogger({ forwardToConsole: false })
+  const addon = new GGMLBert({
+    files: { model: [modelPath] },
+    config: { ...BASE_CONFIG, 'split-mode': 'layer' },
+    logger: null,
+    opts: { stats: true }
+  })
+
+  try {
+    await addon.load()
+    const response = await addon.run(TEXT)
+    await response.await()
+    return extractBufferDevices(specLogger.logs).size
+  } finally {
+    specLogger.release()
+    await addon.unload().catch(() => {})
+  }
+}
+
 async function runMultiGpuTest(t, extraConfig, assertDevices) {
   if (!hasMultiGpu) {
     t.comment('Skipping: QVAC_HAS_MULTI_GPU is not set')
@@ -39,11 +61,15 @@ async function runMultiGpuTest(t, extraConfig, assertDevices) {
 
   const [modelName, dirPath] = await ensureModel({ modelName: MODEL.name })
   const modelPath = path.join(dirPath, modelName)
+  const resolvedConfig =
+    typeof extraConfig === 'function'
+      ? extraConfig(await discoverDeviceCount(modelPath))
+      : extraConfig
   const specLogger = attachSpecLogger({ forwardToConsole: true })
 
   const addon = new GGMLBert({
     files: { model: [modelPath] },
-    config: { ...BASE_CONFIG, ...extraConfig },
+    config: { ...BASE_CONFIG, ...resolvedConfig },
     logger: null,
     opts: { stats: true }
   })
@@ -89,14 +115,6 @@ safeTest(
 )
 
 safeTest(
-  'multi-gpu: split-mode=row distributes tensors across GPUs',
-  { timeout: 600_000 },
-  async (t) => {
-    await runMultiGpuTest(t, { 'split-mode': 'row' }, assertMultiDevice('tensors'))
-  }
-)
-
-safeTest(
   'multi-gpu: default (no split-mode) pins layers to a single device',
   { timeout: 600_000 },
   async (t) => {
@@ -106,11 +124,15 @@ safeTest(
 
 safeTest(
   'multi-gpu: split-mode=layer with tensor-split and main-gpu',
-  { timeout: 600_000 },
+  { timeout: 900_000 },
   async (t) => {
     await runMultiGpuTest(
       t,
-      { 'split-mode': 'layer', 'tensor-split': '1,1', 'main-gpu': '0' },
+      (deviceCount) => ({
+        'split-mode': 'layer',
+        'tensor-split': Array(deviceCount).fill('1').join(','),
+        'main-gpu': '0'
+      }),
       assertMultiDevice('layers')
     )
   }

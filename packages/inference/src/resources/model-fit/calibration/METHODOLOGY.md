@@ -3,8 +3,14 @@
 `assessModelFit` turns catalog metadata into a memory bound. The metadata gives
 the parts that are computable — artifact bytes and the KV cache — and this
 directory holds the parts that are not: the runtime overhead that only a real
-load can tell you. A platform without validated coefficients here assesses as
-`unknown`, because an uncalibrated formula is not evidence.
+load can tell you. A platform without validated coefficients here never reports
+`likely-fits`, because an uncalibrated formula is not evidence of a fit. It does
+still compare the computed floor — artifact bytes plus the KV cache, every
+measured term at zero — against the budget (`floor.ts`, evidence
+`computed-only`): every measured term is non-negative, so a model whose floor
+alone exceeds the budget is `likely-too-large` without a fixture. Android and
+iOS ship on that floor alone; their `likely-fits` will come from the engine's
+own dry-run fitter, not from a calibration run.
 
 ## What is computed vs measured
 

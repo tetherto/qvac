@@ -1,6 +1,14 @@
 #include "SdCtxHandlers.hpp"
 
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <cstddef>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
 
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -14,6 +22,185 @@
 namespace qvac_lib_inference_addon_sd {
 
 using namespace qvac_errors;
+
+namespace {
+
+std::string_view trim(std::string_view value) {
+  const auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
+  while (!value.empty() && isSpace(value.front())) {
+    value.remove_prefix(1);
+  }
+  while (!value.empty() && isSpace(value.back())) {
+    value.remove_suffix(1);
+  }
+  return value;
+}
+
+bool equalsIgnoreCase(std::string_view lhs, std::string_view rhs) {
+  return lhs.size() == rhs.size() &&
+         std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) {
+           return std::tolower(static_cast<unsigned char>(a)) ==
+                  std::tolower(static_cast<unsigned char>(b));
+         });
+}
+
+bool isWholeSpecDefaultKey(std::string_view key) {
+  return key.empty() || key == "*" || equalsIgnoreCase(key, "all") ||
+         equalsIgnoreCase(key, "default");
+}
+
+template <typename Callback>
+void forEachSpecAssignment(std::string_view spec, Callback&& callback) {
+  while (!spec.empty()) {
+    const std::size_t comma = spec.find(',');
+    const std::string_view assignment = trim(spec.substr(0, comma));
+    if (!assignment.empty()) {
+      const std::size_t equals = assignment.find('=');
+      if (equals == std::string_view::npos) {
+        callback(std::string_view{}, assignment);
+      } else {
+        callback(
+            trim(assignment.substr(0, equals)),
+            trim(assignment.substr(equals + 1)));
+      }
+    }
+    if (comma == std::string_view::npos) {
+      break;
+    }
+    spec.remove_prefix(comma + 1);
+  }
+}
+
+std::string normalizedAssignmentKey(std::string_view key) {
+  std::string normalized;
+  normalized.reserve(key.size());
+  for (const char character : key) {
+    if (character != '-' && character != '_') {
+      normalized.push_back(
+          static_cast<char>(
+              std::tolower(static_cast<unsigned char>(character))));
+    }
+  }
+  return normalized;
+}
+
+std::optional<std::size_t> paramsBackendModuleIndex(std::string_view key) {
+  const std::string normalized = normalizedAssignmentKey(key);
+  if (normalized == "diffusion" || normalized == "model" ||
+      normalized == "unet" || normalized == "dit") {
+    return 0;
+  }
+  if (normalized == "te" || normalized == "clip" || normalized == "text" ||
+      normalized == "textencoder" || normalized == "textencoders" ||
+      normalized == "conditioner" || normalized == "cond" ||
+      normalized == "llm" || normalized == "t5" || normalized == "t5xxl") {
+    return 1;
+  }
+  if (normalized == "clipvision" || normalized == "vision") {
+    return 2;
+  }
+  if (normalized == "vae" || normalized == "firststage" ||
+      normalized == "autoencoder" || normalized == "tae") {
+    return 3;
+  }
+  if (normalized == "controlnet" || normalized == "control") {
+    return 4;
+  }
+  if (normalized == "photomaker" || normalized == "photomakerid" ||
+      normalized == "pmid" || normalized == "photo") {
+    return 5;
+  }
+  if (normalized == "upscaler" || normalized == "esrgan" ||
+      normalized == "hires") {
+    return 6;
+  }
+  if (normalized == "detector" || normalized == "adetailer" ||
+      normalized == "yolo") {
+    return 7;
+  }
+  return std::nullopt;
+}
+
+// True only for a value that parses cleanly to zero. Anything unparseable is
+// reported as non-zero so the engine gets to reject it with its own message
+// instead of this addon pre-empting it with an unrelated warning.
+bool budgetValueIsZero(std::string_view value) {
+  try {
+    std::size_t consumed = 0;
+    const float parsed = std::stof(std::string(value), &consumed);
+    return consumed == value.size() && parsed == 0.0F;
+  } catch (...) {
+    return false;
+  }
+}
+
+} // namespace
+
+bool paramsBackendSpecUsesDisk(const std::string& spec) {
+  std::optional<std::string_view> defaultBackend;
+  std::array<std::optional<std::string_view>, 8> moduleBackends;
+  forEachSpecAssignment(
+      spec, [&](std::string_view key, std::string_view value) {
+        if (isWholeSpecDefaultKey(key)) {
+          defaultBackend = value;
+        } else if (
+            const auto module = paramsBackendModuleIndex(key);
+            module.has_value()) {
+          moduleBackends[*module] = value;
+        }
+      });
+
+  if (defaultBackend.has_value() && equalsIgnoreCase(*defaultBackend, "disk")) {
+    return true;
+  }
+  for (const auto& backend : moduleBackends) {
+    if (backend.has_value() && equalsIgnoreCase(*backend, "disk")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool paramsBackendSpecOverridesCpuDefault(const std::string& spec) {
+  std::optional<std::string_view> defaultBackend;
+  forEachSpecAssignment(
+      spec, [&](std::string_view key, std::string_view value) {
+        if (isWholeSpecDefaultKey(key)) {
+          defaultBackend = value;
+        }
+      });
+  return defaultBackend.has_value() &&
+         !equalsIgnoreCase(*defaultBackend, "cpu");
+}
+
+bool maxVramSpecHasNonZeroBudget(const std::string& spec) {
+  std::unordered_map<std::string, std::string_view> effectiveBudgets;
+  forEachSpecAssignment(
+      spec, [&](std::string_view key, std::string_view value) {
+        const std::string normalizedKey = isWholeSpecDefaultKey(key)
+                                              ? std::string{}
+                                              : normalizedAssignmentKey(key);
+        effectiveBudgets[normalizedKey] = value;
+      });
+
+  for (const auto& budget : effectiveBudgets) {
+    if (!budget.second.empty() && !budgetValueIsZero(budget.second)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string
+effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu) {
+  if (!offloadToCpu) {
+    return explicitSpec;
+  }
+  if (explicitSpec.empty()) {
+    return "*=cpu";
+  }
+  return "*=cpu," + explicitSpec;
+}
 
 // -- Parse helpers
 // -------------------------------------------------------------
@@ -127,14 +314,6 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
        c.streamLayers = parseBool(v, "stream_layers");
      }},
     {"device", [](SdCtxConfig& c, const std::string& v) { c.device = v; }},
-    {"clip_on_cpu",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.keepClipOnCpu = parseBool(v, "clip_on_cpu");
-     }},
-    {"vae_on_cpu",
-     [](SdCtxConfig& c, const std::string& v) {
-       c.keepVaeOnCpu = parseBool(v, "vae_on_cpu");
-     }},
     {"vae_auto_cpu_fallback",
      [](SdCtxConfig& c, const std::string& v) {
        c.vaeAutoCpuFallback = parseBool(v, "vae_auto_cpu_fallback");
@@ -251,16 +430,13 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
          c.prediction = EDM_V_PRED;
        else if (v == "flow")
          c.prediction = FLOW_PRED;
-       else if (v == "flux_flow") {
-         c.prediction = FLUX_FLOW_PRED;
-       } else if (v == "flux2_flow") {
+       else if (v == "flux2_flow") {
          c.prediction = PREDICTION_COUNT; // auto: no FLUX.2 override exists
          c.flux2Requested = true;
        } else
          throw StatusError(
              general_error::InvalidArgument,
-             "prediction must be one of: eps, v, edm_v, flow, flux_flow, "
-             "flux2_flow");
+             "prediction must be one of: eps, v, edm_v, flow, flux2_flow");
      }},
 
     // -- LoRA apply mode
@@ -390,6 +566,29 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 void applySdCtxHandlers(
     SdCtxConfig& config,
     const std::unordered_map<std::string, std::string>& configMap) {
+  static const std::array<std::pair<const char*, const char*>, 3>
+      deprecatedBackendOptions{{
+          {"control_net_cpu",
+           "Use backend=controlnet=cpu to run the ControlNet graph on CPU."},
+          {"clip_on_cpu",
+           "Use params_backend=te=cpu to keep text encoder parameters in CPU "
+           "RAM, or backend=te=cpu to run its graph on CPU."},
+          {"vae_on_cpu",
+           "Use params_backend=vae=cpu to keep VAE parameters in CPU RAM, or "
+           "backend=vae=cpu to run its graph on CPU."},
+      }};
+  for (const auto& [key, guidance] : deprecatedBackendOptions) {
+    const auto option = configMap.find(key);
+    if (option == configMap.end()) {
+      continue;
+    }
+    std::string message = std::string(key) + " is no longer supported.";
+    message += option->second == "false" || option->second == "0"
+                   ? " Remove it; no replacement is needed when it is false."
+                   : " " + std::string(guidance);
+    throw StatusError(general_error::InvalidArgument, message);
+  }
+
   if (auto mainGpu = sd_backend_selection::mainGpuFromMap(configMap);
       mainGpu.has_value()) {
 #if defined(__ANDROID__) ||                                                    \

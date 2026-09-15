@@ -49,7 +49,35 @@ function assertCapabilities(resources: SystemResources) {
   }
 }
 
-function assertSample(resources: SystemResources) {
+type SampleMemory = NonNullable<SystemResources['sample']>['memory']
+
+function describeMetric(metric: ResourceMetric<number>) {
+  return metric.status === 'supported' ? String(metric.value) : metric.status
+}
+
+/** Grades the per-process memory pair. */
+function assertProcessMemory(memory: SampleMemory, platform: string | undefined) {
+  assertMetric(memory.processUsedBytes, 'sample.memory.processUsedBytes')
+  assertMetric(memory.processAvailableBytes, 'sample.memory.processAvailableBytes')
+
+  const allowance = memory.processAvailableBytes
+  if (platform === 'ios' && allowance.status !== 'supported') {
+    throw new Error(`sample.memory.processAvailableBytes is ${allowance.status} on iOS`)
+  }
+
+  if (allowance.status !== 'supported') return
+
+  if (allowance.value <= 0) {
+    throw new Error(`sample.memory.processAvailableBytes is not positive: ${allowance.value}`)
+  }
+  if (allowance.provenance.scope !== 'process') {
+    throw new Error(
+      `sample.memory.processAvailableBytes carries scope ${String(allowance.provenance.scope)}`
+    )
+  }
+}
+
+function assertSample(resources: SystemResources): SampleMemory {
   if (!resources.sample) throw new Error('Requested sample is missing')
 
   assertUtilization(resources.sample.cpu, 'sample.cpu')
@@ -73,10 +101,20 @@ function assertSample(resources: SystemResources) {
       assertUtilization(gpu.decode, `sample.gpus.${gpu.id}.decode`)
     }
   }
+
+  return resources.sample.memory
 }
 
 export class SystemResourcesExecutor extends BaseExecutor<typeof systemResourcesTests> {
   pattern = /^system-resources-/
+
+  /** Host platform, where the consumer knows it. */
+  readonly #platform: string | undefined
+
+  constructor(platform?: string) {
+    super()
+    this.#platform = platform
+  }
 
   protected handlers = {
     [systemResourcesCapabilities.testId]: this.capabilities.bind(this),
@@ -100,8 +138,13 @@ export class SystemResourcesExecutor extends BaseExecutor<typeof systemResources
   ): Promise<TestResult> {
     const resources = await getSystemResources(params)
     assertCapabilities(resources)
-    assertSample(resources)
-    return ValidationHelpers.validate('capabilities valid; sample valid', expectation)
+    const memory = assertSample(resources)
+    assertProcessMemory(memory, this.#platform)
+
+    return ValidationHelpers.validate(
+      `capabilities valid; sample valid; process used=${describeMetric(memory.processUsedBytes)} available=${describeMetric(memory.processAvailableBytes)}; system used=${describeMetric(memory.usedBytes)} total=${describeMetric(memory.totalBytes)}`,
+      expectation
+    )
   }
 
   async invalidInput(

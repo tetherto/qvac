@@ -1,5 +1,6 @@
 import { type QvacResponse } from "@qvac/infer-base";
 import * as errorModule from "./lib/error";
+import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import { type SentenceDelimiterPreset } from "./lib/textStreamAccumulator";
 declare const ENGINE_CHATTERBOX = "chatterbox";
 declare const ENGINE_SUPERTONIC = "supertonic";
@@ -778,5 +779,6 @@ declare namespace TTSGgml {
     type TTSRunInput = NamespaceRunInput;
     type InferenceState = NamespaceInferenceState;
     type CosyvoiceInstruct = NamespaceCosyvoiceInstruct;
+    const resolveBackendsDir: typeof resolveBackendsDirImpl;
 }
 export = TTSGgml;

@@ -50,10 +50,14 @@ struct ProgressCtx {
   // The pinned engine's progress emitters are: the sampler (one sequence per
   // image batch item / video expert, total = its step count) and sd_tiling
   // (VAE encode/decode tile passes, total = tile count, only when vae_tiling
-  // is enabled). Text encoders do NOT tick, and with eager_load = true (set
-  // at ctx creation) the model loader ticks during load(), not inside
-  // generate_*(). Ticks are attributed to the denoise window by their
-  // reported total:
+  // is enabled). Text encoders do NOT tick. With eager_load = true (set at ctx
+  // creation) the model loader ticks during load(), not inside generate_*().
+  // eager_load is false on mobile and for any disk-backed params_backend, and
+  // in those cases loader ticks DO land inside generate_*() -- for a
+  // disk-backed module on every job, not just the first, because the engine
+  // releases those weights at each phase boundary and re-reads them from the
+  // model file on the next use. Ticks are attributed to the denoise window by
+  // their reported total:
   //   - exact mode (denoiseTotals non-empty): a tick is denoise iff its total
   //     is one of the known sampler step counts (image: steps; video: the
   //     explicit high/low expert totals).
@@ -368,14 +372,10 @@ void SdModel::load() {
   params.flash_attn = config_.flashAttn;
   params.diffusion_flash_attn = config_.diffusionFlashAttn;
   // The engine defaults to lazy weight loading (eager_load = false), which
-  // moves per-module weight loads INSIDE generate_*(): the model loader then
-  // emits progress ticks (total = tensor count) that reach JS consumers
-  // indistinguishably from sampler ticks, and the first job's conditionerMs
-  // absorbs weight-load time. On desktop, load eagerly at new_sd_ctx()
-  // instead — the cost lands in modelLoadMs where this addon already
-  // accounts for it, and generate_*() emits only sampler and VAE-tiling
-  // sequences. (The engine auto-downgrades eager_load when graph-cut layer
-  // splitting is active; this addon does not enable that mode.)
+  // moves per-module weight loads inside generate_*(). On desktop, load
+  // eagerly so the cost lands in modelLoadMs and generation progress excludes
+  // loader ticks. Disk-backed parameters are the exception: eager loading
+  // defeats their on-demand residency and can exhaust the runtime backend.
   //
   // Mobile stays lazy: eager loading front-loads every module's full weight
   // prep into load(), which pushed the Device Farm API-behavior and
@@ -387,7 +387,8 @@ void SdModel::load() {
 #if defined(__ANDROID__) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)
   params.eager_load = false;
 #else
-  params.eager_load = true;
+  params.eager_load = !qvac_lib_inference_addon_sd::paramsBackendSpecUsesDisk(
+      config_.paramsBackendSpec);
 #endif
 
   // Load DL GPU backend modules before probing devices / creating the SD
@@ -403,25 +404,52 @@ void SdModel::load() {
 
   params.max_vram =
       config_.maxVramSpec.empty() ? nullptr : config_.maxVramSpec.c_str();
+  // Forward stream_layers exactly as configured. The engine consumes it twice:
+  // once for layer residency, which does require an active graph-cut budget,
+  // and once as a memory-pressure hint for the LoRA apply decision, which does
+  // not. Rewriting it to false here suppressed the second use as well, which on
+  // an all-CPU diffusion path flipped apply_lora_immediately from false to true
+  // and reintroduced the full-model LoRA merge buffers the engine avoids on
+  // constrained setups. The engine already disables streaming on its own when
+  // its prerequisites are unmet, so the addon reports and does not decide.
   params.stream_layers = config_.streamLayers;
-
-  // An explicit assignment takes priority; otherwise retain the supported
-  // compatibility mappings for the legacy CPU-placement flags.
-  std::string paramsBackend = config_.paramsBackendSpec;
-  if (paramsBackend.empty()) {
-    if (config_.offloadToCpu) {
-      paramsBackend = "cpu";
-    } else {
-      if (config_.keepClipOnCpu)
-        paramsBackend = "clip=cpu";
-      if (config_.keepVaeOnCpu)
-        paramsBackend += paramsBackend.empty() ? "vae=cpu" : ",vae=cpu";
-    }
-  } else if (
-      config_.offloadToCpu || config_.keepClipOnCpu || config_.keepVaeOnCpu) {
+  if (config_.streamLayers &&
+      !qvac_lib_inference_addon_sd::maxVramSpecHasNonZeroBudget(
+          config_.maxVramSpec)) {
+    // ERROR rather than WARNING purely for visibility: g_verbosityLevel starts
+    // at ERROR and callers rarely set "verbosity", so a WARNING here would be
+    // invisible on exactly the default configuration that triggers it. Do not
+    // "correct" this to WARNING without also raising the default verbosity.
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+        "stream_layers needs a non-zero max_vram to enable graph cutting; "
+        "layer streaming will not run for this configuration");
+  }
+  if (!config_.maxVramSpec.empty()) {
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        "params_backend overrides legacy CPU placement flags");
+        "Effective stable-diffusion max_vram '" + config_.maxVramSpec + "'");
+  }
+
+  std::string paramsBackend =
+      qvac_lib_inference_addon_sd::effectiveParamsBackendSpec(
+          config_.paramsBackendSpec, config_.offloadToCpu);
+  if (config_.offloadToCpu &&
+      qvac_lib_inference_addon_sd::paramsBackendSpecOverridesCpuDefault(
+          config_.paramsBackendSpec)) {
+    // The engine applies bare entries and *, all, or default assignments as the
+    // spec-wide default. Only report when the final default is not CPU, so an
+    // equivalent CPU default does not produce a false error.
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+        "params_backend '" + config_.paramsBackendSpec +
+            "' replaces the offload_to_cpu default; use a module-specific "
+            "assignment to keep CPU offload for the remaining modules");
+  }
+  if (!paramsBackend.empty()) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Effective stable-diffusion params backend '" + paramsBackend + "'");
   }
   params.params_backend =
       paramsBackend.empty() ? nullptr : paramsBackend.c_str();
@@ -444,6 +472,11 @@ void SdModel::load() {
   std::string mainGpuBackend;
   if (!config_.backendSpec.empty()) {
     params.backend = config_.backendSpec.c_str();
+    if (!config_.mainGpu.empty()) {
+      QLOG_IF(
+          qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+          "main-gpu ignored because an explicit backend assignment is set");
+    }
     QLOG_IF(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Explicit stable-diffusion backend assignment '" + config_.backendSpec +
@@ -510,11 +543,25 @@ void SdModel::load() {
     const std::string path = config_.diffusionModelPath.empty()
                                  ? config_.modelPath
                                  : config_.diffusionModelPath;
+    // Derived from what was actually handed to the engine, not from what the
+    // caller set. offload_to_cpu synthesizes a params_backend and an
+    // unsatisfiable main-gpu resolves a backend, and neither is visible in the
+    // corresponding config_ spec string -- so reading the config here sent
+    // those two cases to the model-path message even though a backend or
+    // residency spec is exactly what the engine rejected.
+    const bool hasExplicitMemoryOrBackendConfig =
+        params.backend != nullptr || params.params_backend != nullptr ||
+        params.max_vram != nullptr;
+    const std::string guidance =
+        hasExplicitMemoryOrBackendConfig
+            ? "Check backend, params_backend, max_vram, model path, and model "
+              "format: "
+            : "Check model path and format: ";
     throw StatusError(
         general_error::InternalError,
-        "SdModel::load() failed -- could not create stable-diffusion context. "
-        "Check model path and format: " +
-            path);
+        "SdModel::load() failed -- could not create stable-diffusion "
+        "context. " +
+            guidance + path);
   }
 
   sdCtx_.reset(raw);
@@ -680,7 +727,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
 
   // -- img2img --------------------------------------------------------------
   //
-  // Three code paths depending on model architecture and input shape:
+  // Two code paths depending on model architecture and input shape:
   //
   //   FLUX2 (prediction='flux2_flow', engine-side auto-detected) with N
   //   reference images (N>=1):
@@ -691,10 +738,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   //     (skin tone, structure, etc.) from every reference while generating
   //     a fully new image. N>=2 is "fusion" mode -- addressable in the prompt
   //     as @image1, @image2, ...
-  //
-  //   FLUX (FLUX_FLOW_PRED) with a single reference image:
-  //     Same ref_images path as FLUX2, just a single ref. Multi-image is
-  //     rejected here because only FLUX2 defines the @imageN placeholders.
   //
   //   All other models (SD1.x, SD2.x, SDXL, SD3):
   //     Uses init_image -- traditional SDEdit. The input image is noised to
@@ -727,8 +770,6 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       new std::vector<sd_image_t>(), refImgsDeleter);
 
   if (gen.mode == "img2img") {
-    const bool isFluxFamily =
-        config_.flux2Requested || config_.prediction == FLUX_FLOW_PRED;
     const bool isFlux2 = config_.flux2Requested;
     const size_t nMulti = job.initImagesBytes.size();
 
@@ -838,7 +879,7 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
       const int imgW = static_cast<int>(initImg.width);
       const int imgH = static_cast<int>(initImg.height);
 
-      if (isFluxFamily) {
+      if (isFlux2) {
         // FLUX in-context conditioning: ref_images handles its own resizing
         // via ref_image_args' resize_before_vae, so only override genParams
         // dimensions when they are still at the 512x512 default.
