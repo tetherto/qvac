@@ -70,7 +70,54 @@ test('fails when a consumer changes its cached paths and the seed does not', () 
   }
 })
 
-test('a suffix that is a prefix of another is still a distinct identity', () => {
+// Ian's audiogen bug, generalised: two consumers in one cache version where the
+// shorter suffix's restore-key reaches the longer one's entry.
+test('fails when two consumers have keys that prefix each other', () => {
+  const dir = sandbox()
+  try {
+    const f = join(dir, '.github/workflows/integration-test-diffusion-cpp.yml')
+    const before = readFileSync(f, 'utf8')
+    // make the ltx leg's suffix a prefix of a sibling's
+    const after = before.replace("cache-key-suffix: ideogram", "cache-key-suffix: base-extra")
+    assert.notEqual(after, before, 'fixture no longer contains the ideogram suffix')
+    writeFileSync(f, after)
+
+    const r = run(dir)
+    assert.equal(r.status, 1, 'validator should reject the collision')
+    assert.match(r.stderr, /restore-key prefix collision/)
+    assert.match(r.stderr, /suffix base reaches suffix base-extra/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// tts seeds one segment below its consumer on purpose, so the lane prefix-
+// matches it and still saves the complete set. That must stay allowed.
+test('allows a seed that deliberately sits one segment below its consumer', () => {
+  const r = run(root)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.match(r.stdout, /all consumed/)
+})
+
+test('fails when a prefix-seed suffix does not match the seed convention', () => {
+  const dir = sandbox()
+  try {
+    const f = join(dir, '.github/workflows/on-merge-model-cache-tts.yml')
+    const before = readFileSync(f, 'utf8')
+    const after = before.replace(/cache-key-suffix: seed/g, 'cache-key-suffix: prewarm')
+    assert.notEqual(after, before, 'fixture no longer contains the seed suffix')
+    writeFileSync(f, after)
+
+    const r = run(dir)
+    assert.equal(r.status, 1, 'an arbitrary suffix is not a recognised prefix-seed')
+    assert.match(r.stderr, /on-merge-model-cache-tts\.yml/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// The real audiogen regression: reverting the turbo-q4 suffix must be caught.
+test('rejects the exact audiogen collision the turbo-q4 suffix fixed', () => {
   const dir = sandbox()
   try {
     const f = join(dir, '.github/workflows/integration-test-audiogen-ggml.yml')
@@ -84,8 +131,10 @@ test('a suffix that is a prefix of another is still a distinct identity', () => 
     writeFileSync(f, after)
 
     const r = run(dir)
-    assert.equal(r.status, 1, 'seed writing turbo-q4 should no longer match any consumer')
-    assert.match(r.stderr, /on-merge-model-cache-audiogen\.yml/)
+    assert.equal(r.status, 1, 'an empty suffix reaches the all-dit-variants entry')
+    assert.match(r.stderr, /restore-key prefix collision/)
+    assert.match(r.stderr, /suffix \(empty\) reaches suffix all-dit-variants/)
+    assert.match(r.stderr, /integration-test-audiogen-ggml\.yml/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

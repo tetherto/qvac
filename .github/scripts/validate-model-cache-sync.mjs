@@ -10,11 +10,36 @@
  *
  * Usage: node .github/scripts/validate-model-cache-sync.mjs
  */
-import { KEY_INPUTS, collect, findOrphanedSeeds } from './lib/model-cache-sync.mjs'
+import {
+  KEY_INPUTS,
+  collect,
+  findOrphanedSeeds,
+  findPrefixCollisions,
+} from './lib/model-cache-sync.mjs'
 
 function main() {
   const orphans = findOrphanedSeeds()
   const { seeds, consumers } = collect()
+
+  const collisions = findPrefixCollisions()
+  if (collisions.length > 0) {
+    console.error(
+      `validate-model-cache-sync: ${collisions.length} restore-key prefix collision(s) between consumers:`,
+    )
+    for (const c of collisions) {
+      const short = c.shorter === '' ? '(empty)' : c.shorter
+      console.error(`\n  suffix ${short} reaches suffix ${c.longer} in the same cache version`)
+      console.error(`      ${c.a.file}:${c.a.line}  (suffix ${short})`)
+      console.error(`      ${c.b.file}:${c.b.line}  (suffix ${c.longer})`)
+      console.error(
+        '    the shorter leg can prefix-match the longer entry, find its files already',
+      )
+      console.error(
+        '    present, skip its download and save the superset under its own key',
+      )
+    }
+    process.exit(1)
+  }
 
   if (orphans.length > 0) {
     console.error(`validate-model-cache-sync: ${orphans.length} seed identity(ies) nothing consumes:`)

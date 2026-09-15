@@ -163,9 +163,73 @@ export function collect(files = listWorkflows()) {
   return { seeds, consumers }
 }
 
-/** Every seed identity must be asked for by at least one consumer call site. */
+const parse = (id) => Object.fromEntries(id.split('|').map((p) => p.split('=').map((x, i) => (i ? p.slice(p.indexOf('=') + 1) : x))))
+// everything that fixes the cache VERSION, i.e. which entries can match at all
+const versionOf = (f) => [f.package, f['cache-version'], f.paths, f['hash-files-glob'], f['enable-cross-os']].join('|')
+
+/**
+ * Every seed identity must be asked for by some consumer -- either exactly, or
+ * as a deliberate prefix-seed.
+ *
+ * A prefix-seed writes one segment BELOW its consumer (suffix `seed`, or
+ * `<consumer-suffix>-seed`) with everything else identical. The consumer then
+ * misses its exact key, prefix-matches the seed through its restore-key, and --
+ * because a prefix hit does not suppress the save -- writes the complete set
+ * back under its own key. tts needs this: its tests stage further models at
+ * runtime by computed variant/quant, so no seed can be proven complete, and an
+ * exact-key seed would freeze the entry at what it staged.
+ *
+ * Safe only in that direction. The seed's key is the longer one, so its own
+ * restore prefix cannot reach the consumer's entries and it can never absorb
+ * the complete set. The reverse -- two consumers whose keys prefix each other --
+ * is the audiogen bug, and findPrefixCollisions rejects it.
+ */
 export function findOrphanedSeeds(files) {
   const { seeds, consumers } = collect(files)
-  const wanted = new Set(consumers.map((c) => c.id))
-  return seeds.filter((s) => !wanted.has(s.id))
+  const exact = new Set(consumers.map((c) => c.id))
+  return seeds.filter((s) => {
+    if (exact.has(s.id)) return false
+    const sf = parse(s.id)
+    return !consumers.some((c) => {
+      const cf = parse(c.id)
+      if (versionOf(cf) !== versionOf(sf)) return false
+      const expected = cf['cache-key-suffix'] ? `${cf['cache-key-suffix']}-seed` : 'seed'
+      return sf['cache-key-suffix'] === expected
+    })
+  })
+}
+
+/**
+ * Two consumers sharing a cache version must not have one key be a prefix of
+ * the other. `cache-models` gives every call site the restore-key
+ * `models-<package>-<version>[-<suffix>]-`, so if suffix A prefixes suffix B
+ * the A leg can prefix-match B's entry, find B's larger file set already
+ * present, skip its own download and save the superset under A's key. That
+ * state is absorbing: A never restores just its own set again.
+ *
+ * An empty suffix prefixes everything in the same version, which is how the
+ * audiogen functional leg absorbed the all-dit-variants benchmark set.
+ */
+export function findPrefixCollisions(files) {
+  const { consumers } = collect(files)
+  const byVersion = new Map()
+  for (const c of consumers) {
+    const f = parse(c.id)
+    const v = versionOf(f)
+    if (!byVersion.has(v)) byVersion.set(v, new Map())
+    byVersion.get(v).set(f['cache-key-suffix'], c)
+  }
+  const out = []
+  for (const [, bySuffix] of byVersion) {
+    const suffixes = [...bySuffix.keys()]
+    for (const a of suffixes) {
+      for (const b of suffixes) {
+        if (a === b) continue
+        // restore prefix of A reaches the key of B?
+        const reaches = a === '' || b.startsWith(`${a}-`)
+        if (reaches) out.push({ shorter: a, longer: b, a: bySuffix.get(a), b: bySuffix.get(b) })
+      }
+    }
+  }
+  return out
 }
