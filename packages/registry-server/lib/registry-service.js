@@ -33,7 +33,7 @@ const { QVAC_MAIN_REGISTRY } = schema
 const { getFileMetadata } = require('../utils/file-metadata')
 const { parseCanonicalSource, resolveS3Bucket } = require('./source-helpers')
 const { isGGUFSource, isFirstShard, extractGGUFMetadata } = require('./gguf-helpers')
-const { writeFitBlob } = require('./fit-blob')
+const { writeFitBlob, supportsFitBlob } = require('./fit-blob')
 const { addModelRequestSchema } = require('./model-schema')
 const { ZodError } = require('zod')
 
@@ -658,6 +658,28 @@ class RegistryService extends ReadyResource {
         }
       } catch (err) {
         if (this.metrics) this.metrics.recordRpcError('add-model')
+        throw err
+      }
+    })
+
+    rpc.respond('fill-fit-blobs', async (options = {}) => {
+      if (this.metrics) this.metrics.recordRpcRequest('fill-fit-blobs')
+      try {
+        ensureWriterAccess()
+
+        if (!this.opened) await this.ready()
+        await this._ensureIndexer()
+
+        const report = await this.fillFitBlobs(options || {})
+
+        this.logger.info(
+          { selected: report.selected, filled: report.filled, replaced: report.replaced },
+          'RPC: fill-fit-blobs completed'
+        )
+
+        return { success: true, report }
+      } catch (err) {
+        if (this.metrics) this.metrics.recordRpcError('fill-fit-blobs')
         throw err
       }
     })
@@ -1408,6 +1430,113 @@ class RegistryService extends ReadyResource {
 
   get registryCoreKey() {
     return this.view ? this.view.publicKey : null
+  }
+
+  async _extractArtifactFromBlobs(model, localPath) {
+    const { blobs, core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+    const coreKey = core.key.toString('hex')
+    const recordKey = Buffer.isBuffer(model.blobBinding.coreKey)
+      ? model.blobBinding.coreKey.toString('hex')
+      : model.blobBinding.coreKey
+
+    if (recordKey !== coreKey) {
+      throw new Error(`artifact lives in blob core ${recordKey}, not ${coreKey}`)
+    }
+
+    await pipeline(blobs.createReadStream(model.blobBinding), createWriteStream(localPath))
+  }
+
+  /**
+   * Gives records a weightless description. A record that already carries a
+   * pointer is left alone unless `force`, which rebuilds the description and
+   * rewrites the pointer only when the bytes differ.
+   *
+   * Weights are read back out of the blob core and never re-uploaded. This does
+   * not repair a wrong artifact: re-ingest the model instead, which regenerates
+   * the weights and the description together.
+   */
+  async fillFitBlobs({ filter = null, limit = null, dryRun = false, force = false } = {}) {
+    const models = await this.listModels()
+    const candidates = models.filter((model) => {
+      if (model.fitBlobBinding && !force) return false
+      if (!supportsFitBlob(model.path)) return false
+      if (filter && !model.path.includes(filter)) return false
+      return true
+    })
+
+    const selected = limit ? candidates.slice(0, limit) : candidates
+    const report = {
+      considered: models.length,
+      selected: selected.length,
+      filled: 0,
+      replaced: 0,
+      unchanged: 0,
+      skipped: []
+    }
+
+    if (dryRun) {
+      report.paths = selected.map((model) => model.path)
+      return report
+    }
+
+    const tempBase = this.config.getTempStorage()
+
+    for (const model of selected) {
+      const pathHash = crypto.createHash('sha256').update(model.path).digest('hex').slice(0, 32)
+      const outputDir = path.join(tempBase, `fit-${pathHash}`)
+
+      try {
+        await fsPromises.mkdir(outputDir, { recursive: true })
+        const localPath = path.join(outputDir, path.basename(model.path))
+        await this._extractArtifactFromBlobs(model, localPath)
+
+        const fitBlob = await writeFitBlob(localPath, outputDir)
+        if (!fitBlob) {
+          report.skipped.push({ path: model.path, reason: 'no metadata region' })
+          continue
+        }
+
+        if (model.fitBlobBinding?.sha256 === fitBlob.sha256) {
+          report.unchanged++
+          continue
+        }
+
+        const { blobs } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+        const pointer = await this._uploadFileToHyperblobs(blobs, fitBlob.path)
+
+        await this._appendOperation(DISPATCH_PUT_MODEL, {
+          ...model,
+          fitBlobBinding: {
+            coreKey: model.blobBinding.coreKey,
+            blockOffset: pointer.blockOffset,
+            blockLength: pointer.blockLength,
+            byteOffset: pointer.byteOffset,
+            byteLength: pointer.byteLength,
+            sha256: fitBlob.sha256
+          }
+        })
+
+        if (model.fitBlobBinding) {
+          report.replaced++
+        } else {
+          report.filled++
+        }
+        this.logger.info({ path: model.path, size: fitBlob.size }, 'Filled fit blob')
+      } catch (err) {
+        report.skipped.push({ path: model.path, reason: err.message })
+        this.logger.warn({ path: model.path, error: err.message }, 'Fit blob fill failed')
+      } finally {
+        await fsPromises.rm(outputDir, { recursive: true, force: true }).catch(() => {})
+      }
+    }
+
+    if (report.filled > 0 || report.replaced > 0) {
+      const { core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+      await this._mirrorBlobCore(core)
+      this._scheduleTotalsRefresh()
+    }
+
+    return report
   }
 
   async listModels(query = {}) {
