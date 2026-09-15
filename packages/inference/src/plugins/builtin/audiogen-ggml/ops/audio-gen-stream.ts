@@ -24,6 +24,17 @@ export function audioGenStream(
         ...(request.augmentCaptionWithMetadata !== undefined && {
           augmentCaptionWithMetadata: request.augmentCaptionWithMetadata
         }),
+        ...(request.simpleMode !== undefined && { simpleMode: request.simpleMode }),
+        ...(request.rewriteQuery !== undefined && { rewriteQuery: request.rewriteQuery }),
+        ...(request.generateLrc !== undefined && { generateLrc: request.generateLrc }),
+        ...(request.computeQualityScore !== undefined && {
+          computeQualityScore: request.computeQualityScore
+        }),
+        ...(request.normalizeLoudness !== undefined && {
+          normalizeLoudness: request.normalizeLoudness
+        }),
+        ...(request.guidanceScale !== undefined && { guidanceScale: request.guidanceScale }),
+        ...(request.track !== undefined && { track: request.track }),
         ...(request.duration !== undefined && { duration: request.duration }),
         ...(request.maxFrames !== undefined && { maxFrames: request.maxFrames }),
         ...(request.inferenceSteps !== undefined && { inferenceSteps: request.inferenceSteps }),

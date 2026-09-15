@@ -1,6 +1,11 @@
 import { AudioGen, audiogenBackendName, audiogenGpuFallbackReason } from '@qvac/audiogen-ggml'
 import { z } from 'zod'
-import { audioGenStatsSchema, type AudioGenStreamResponse } from '@/schemas/audio-gen'
+import {
+  audioGenStatsSchema,
+  type AudioGenStreamResponse,
+  type AudioGenUnderstandResult,
+  type AudioUnderstandResponse
+} from '@/schemas/audio-gen'
 import {
   graphicsDriverSchema,
   type BackendFallback,
@@ -13,14 +18,25 @@ import { getRequestRegistry, withRequestContext, type RequestContext } from '@/r
 import { generateRequestId } from '@/runtime/request-id'
 import { ModelOperationNotSupportedError } from '@/errors/index'
 
-/** Wire types that stream an AudioGen run: generation and source-driven editing. */
-export type AudioGenRunType = 'audioGenStream' | 'audioEditStream'
+/**
+ * Wire types that stream an AudioGen run: generation, source-driven editing,
+ * and the reverse pipeline behind `audioUnderstand()`.
+ */
+export type AudioGenRunType = 'audioGenStream' | 'audioEditStream' | 'audioUnderstand'
 
-/** A stream frame for `TType`; generation and editing share every field but `type`. */
-export type AudioGenRunFrame<TType extends AudioGenRunType> = Omit<
-  AudioGenStreamResponse,
-  'type'
-> & { type: TType }
+/**
+ * A stream frame for `TType`. Generation and editing share every field but
+ * `type`; understanding carries a description instead of PCM.
+ *
+ * The frames below are built as object literals inside a generic function, so
+ * TypeScript cannot match them to the narrowed conditional type on its own —
+ * each `yield` asserts the frame it just built. The shapes are pinned at the
+ * boundary regardless: every frame is parsed against this handler's response
+ * schema before it reaches a caller.
+ */
+export type AudioGenRunFrame<TType extends AudioGenRunType> = TType extends 'audioUnderstand'
+  ? AudioUnderstandResponse
+  : Omit<AudioGenStreamResponse, 'type'> & { type: TType }
 
 export type AudioGenRunResponse = Awaited<ReturnType<AudioGen['run']>>
 
@@ -69,7 +85,7 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   // the model slot, so calling the model-scoped cancel here would interrupt
   // the earlier same-model generation that still owns it.
   if (ctx.signal.aborted) {
-    yield { type, done: true, stopReason: 'cancelled' }
+    yield { type, done: true, stopReason: 'cancelled' } as AudioGenRunFrame<TType>
     return
   }
 
@@ -98,12 +114,21 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
         if (ctx.signal.aborted) break
 
         if ('progress' in chunk) {
-          yield { type, progress: chunk.progress, done: false }
+          yield { type, progress: chunk.progress, done: false } as AudioGenRunFrame<TType>
           continue
         }
 
-        // The addon only streams PCM and progress items for generation and
-        // editing; an `understand` item cannot reach these handlers.
+        // `understand()` reports a description instead of audio; generation
+        // and editing never produce this item.
+        if ('understand' in chunk) {
+          yield {
+            type,
+            understand: toUnderstandResult(chunk.understand),
+            done: false
+          } as AudioGenRunFrame<TType>
+          continue
+        }
+
         if (!('outputArray' in chunk)) continue
 
         const pcm = new Uint8Array(
@@ -118,7 +143,7 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
           channels: chunk.channels,
           bitsPerSample: Int16Array.BYTES_PER_ELEMENT * 8,
           done: false
-        }
+        } as AudioGenRunFrame<TType>
       }
     }
   } catch (error) {
@@ -126,20 +151,24 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   }
 
   if (ctx.signal.aborted || response === undefined) {
-    yield { type, done: true, stopReason: 'cancelled' }
+    yield { type, done: true, stopReason: 'cancelled' } as AudioGenRunFrame<TType>
     return
   }
 
   const raw = await response.await()
-  const stats = audioGenStatsSchema.parse(raw)
+  // `understand.audioCodes` arrives as an Int32Array, which the wire schema —
+  // and anything downstream of JSON — needs as a plain array of integers.
+  const stats = audioGenStatsSchema.parse(
+    raw.understand ? { ...raw, understand: toUnderstandResult(raw.understand) } : raw
+  )
   const diagnostics = buildBackendDiagnostics(audiogenStats.parse(raw))
-  const terminal: AudioGenRunFrame<TType> = {
+  const terminal = {
     type,
     done: true,
     stopReason: 'completed',
     stats,
     ...(diagnostics && { diagnostics })
-  }
+  } as AudioGenRunFrame<TType>
   yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
 }
 
@@ -150,6 +179,22 @@ const audiogenStats = audioGenStatsSchema.extend({
 })
 
 type AudiogenStats = z.infer<typeof audiogenStats>
+
+/**
+ * Normalizes the addon's understand result for the wire: `audioCodes` arrives
+ * as an `Int32Array`, which neither the schema nor a JSON transport accepts.
+ */
+function toUnderstandResult(result: {
+  caption: string
+  bpm: number
+  duration: number
+  keyscale: string
+  timesignature: string
+  vocalLanguage: string
+  audioCodes: Int32Array | number[]
+}): AudioGenUnderstandResult {
+  return { ...result, audioCodes: Array.from(result.audioCodes) }
+}
 
 /** An unrecognized GPU id yields no diagnostics rather than a guessed backend name. */
 function buildBackendDiagnostics(stats: AudiogenStats): InferenceBackendDiagnostics | undefined {

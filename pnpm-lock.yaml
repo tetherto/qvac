@@ -958,8 +958,8 @@ importers:
         specifier: ^0.3.1
         version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/audiogen-ggml':
-        specifier: ^0.3.2
-        version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.4.0
+        version: link:../audiogen-ggml
       '@qvac/bci-whispercpp':
         specifier: ^0.9.1
         version: link:../bci-whispercpp
@@ -1609,8 +1609,8 @@ importers:
         specifier: ^0.3.1
         version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/audiogen-ggml':
-        specifier: ^0.3.2
-        version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.4.0
+        version: link:../audiogen-ggml
       '@qvac/bci-whispercpp':
         specifier: ^0.9.1
         version: link:../bci-whispercpp
@@ -4172,11 +4172,6 @@ packages:
   '@qvac/asr-ggml@0.3.3':
     resolution: {integrity: sha512-Ywgx3+y4DgxOz8wQe35/QMxt4eUND8cqdWKRhrD3ag5Nf5cBwV1eQSN9uXZlA75J4InJyi5sI7sAC4pXlnYmKQ==}
     engines: {bare: '>=1.20.0'}
-
-  '@qvac/audiogen-ggml@0.3.3':
-    resolution: {integrity: sha512-S3WIBFl++cl8d6++Evruhti0Ug6CWUnYLg8GJUyEPvjYcSVFJkLNufS1q1+jpS1nhiSNOU0i+Hu9HNAWVeYNwA==}
-    engines: {bare: '>=1.19.0'}
-    hasBin: true
 
   '@qvac/classification-ggml@0.23.0':
     resolution: {integrity: sha512-TxQmvpeYWK5ewmNB9uy8yMnpA+ylVpdTClXJeEHIqQ9Dv91+svgslnJgduEWbEVF+gXOpjxNCZiGE4YYRf/RwQ==}
@@ -13250,21 +13245,6 @@ snapshots:
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-url: 2.4.6
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
-  '@qvac/audiogen-ggml@0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-ffmpeg: 1.5.0
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-os: 3.9.3
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer

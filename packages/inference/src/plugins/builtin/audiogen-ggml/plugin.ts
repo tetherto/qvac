@@ -13,6 +13,8 @@ import {
   audioGenConfigSchema,
   audioGenStreamRequestSchema,
   audioGenStreamResponseSchema,
+  audioUnderstandRequestSchema,
+  audioUnderstandResponseSchema,
   defineHandler,
   definePlugin,
   type AudioGenRuntimeConfig,
@@ -23,6 +25,7 @@ import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { resolveAudioGenConfig } from '@/plugins/builtin/audiogen-ggml/config'
 import { audioEditStream } from '@/plugins/builtin/audiogen-ggml/ops/audio-edit-stream'
 import { audioGenStream } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-stream'
+import { audioUnderstand } from '@/plugins/builtin/audiogen-ggml/ops/audio-understand'
 import { ModelLoadFailedError } from '@/errors/index'
 
 export const audioGenPlugin = definePlugin({
@@ -68,6 +71,13 @@ export const audioGenPlugin = definePlugin({
       streaming: true,
       cancel: { scope: 'model', hard: true },
       handler: audioEditStream
+    }),
+    audioUnderstand: defineHandler({
+      requestSchema: audioUnderstandRequestSchema,
+      responseSchema: audioUnderstandResponseSchema,
+      streaming: true,
+      cancel: { scope: 'model', hard: true },
+      handler: audioUnderstand
     })
   }
 })

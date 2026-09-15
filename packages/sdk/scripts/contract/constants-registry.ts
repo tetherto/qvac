@@ -7,6 +7,7 @@ import {
   AUDIOGEN_TASK_TYPES,
   AUDIOGEN_EDIT_OPERATIONS,
   AUDIOGEN_REPAINT_MODES,
+  AUDIOGEN_TRACKS,
   TTS_ENGINES,
   TTS_PACES,
   TTS_PARLER_EMOTIONS,
@@ -107,5 +108,6 @@ export const constantsRegistry = {
   AudioGenEngine: enumFromVocabulary(AUDIOGEN_ENGINES),
   AudioGenTaskType: enumFromVocabulary(AUDIOGEN_TASK_TYPES),
   AudioGenEditOperation: enumFromVocabulary(AUDIOGEN_EDIT_OPERATIONS),
-  AudioGenRepaintMode: enumFromVocabulary(AUDIOGEN_REPAINT_MODES)
+  AudioGenRepaintMode: enumFromVocabulary(AUDIOGEN_REPAINT_MODES),
+  AudioGenTrack: enumFromVocabulary(AUDIOGEN_TRACKS)
 } as const

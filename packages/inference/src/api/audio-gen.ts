@@ -4,6 +4,8 @@ import {
   audioEditStreamResponseSchema,
   audioGenClientParamsSchema,
   audioGenStreamResponseSchema,
+  audioUnderstandClientParamsSchema,
+  audioUnderstandResponseSchema,
   type AudioEditClientParams,
   type AudioEditStreamRequest,
   type AudioEditStreamResponse,
@@ -14,6 +16,10 @@ import {
   type AudioGenStats,
   type AudioGenStreamRequest,
   type AudioGenStreamResponse,
+  type AudioGenUnderstandResult,
+  type AudioUnderstandClientParams,
+  type AudioUnderstandRequest,
+  type AudioUnderstandResult,
   type InferenceBackendDiagnostics
 } from '@/schemas/index'
 import { stream } from '@/dispatch'
@@ -93,6 +99,147 @@ export function audioEdit(params: AudioEditClientParams): AudioGenResult {
     requestId
   }
   return collectAudioRun(request, requestId, audioEditStreamResponseSchema)
+}
+
+/**
+ * Describes a recording with a loaded ACE-Step AudioGen model, running the
+ * engine's reverse pipeline: the PCM is encoded, its FSQ semantic codes are
+ * recovered, and the LM reports the clip's caption and metadata. The recovered
+ * `audioCodes` can be fed straight back into `audioGen()`.
+ *
+ * @param params - Loaded model ID, the source audio, and optional LM sampling controls.
+ * @returns `requestId`, `progressStream`, the `description`, `stats`, and `diagnostics`.
+ *
+ * @example
+ * ```typescript
+ * const run = audioUnderstand({ modelId, sourceAudio: "/path/to/song.wav" });
+ * const { caption, bpm, keyscale, audioCodes } = await run.description;
+ * ```
+ */
+export function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandResult {
+  const parsed = parseClientInput(audioUnderstandClientParamsSchema, params)
+  const requestId = generateRandomRequestId()
+  const request: AudioUnderstandRequest = {
+    ...parsed,
+    type: 'audioUnderstand',
+    requestId
+  }
+
+  const progressQueue: AudioGenProgress[] = []
+  let progressDone = false
+  let progressError: Error | undefined
+  let progressResolve: (() => void) | undefined
+  let seen: AudioGenUnderstandResult | undefined
+
+  let resolveDescription: (result: AudioGenUnderstandResult) => void = () => {}
+  let rejectDescription: (error: unknown) => void = () => {}
+  const description = new Promise<AudioGenUnderstandResult>((resolve, reject) => {
+    resolveDescription = resolve
+    rejectDescription = reject
+  })
+  description.catch(() => {})
+
+  let resolveStats: (stats: AudioGenStats | undefined) => void = () => {}
+  let rejectStats: (error: unknown) => void = () => {}
+  const stats = new Promise<AudioGenStats | undefined>((resolve, reject) => {
+    resolveStats = resolve
+    rejectStats = reject
+  })
+  stats.catch(() => {})
+
+  let resolveDiagnostics: (diagnostics: InferenceBackendDiagnostics | undefined) => void = () => {}
+  let rejectDiagnostics: (error: unknown) => void = () => {}
+  const diagnostics = new Promise<InferenceBackendDiagnostics | undefined>((resolve, reject) => {
+    resolveDiagnostics = resolve
+    rejectDiagnostics = reject
+  })
+  diagnostics.catch(() => {})
+
+  function notifyProgress() {
+    progressResolve?.()
+    progressResolve = undefined
+  }
+
+  async function processResponses() {
+    let receivedDone = false
+    try {
+      for await (const response of stream(request)) {
+        if (
+          !response ||
+          typeof response !== 'object' ||
+          !('type' in response) ||
+          response.type !== 'audioUnderstand'
+        ) {
+          continue
+        }
+        const chunk = audioUnderstandResponseSchema.parse(response)
+
+        if (chunk.progress) {
+          progressQueue.push(chunk.progress)
+          notifyProgress()
+        }
+
+        if (chunk.understand !== undefined) {
+          seen = chunk.understand
+        }
+
+        if (chunk.done) {
+          receivedDone = true
+          if (chunk.stopReason === 'cancelled') {
+            const error = new InferenceCancelledError(requestId)
+            rejectDescription(error)
+            rejectStats(error)
+            rejectDiagnostics(error)
+            break
+          }
+          // The engine repeats the description on the terminal stats, so the
+          // streamed item is only a fallback if that is ever absent.
+          const result = chunk.stats?.understand ?? seen
+          if (result === undefined) {
+            throw new InvalidResponseError('audioUnderstand description')
+          }
+          resolveDescription(result)
+          resolveStats(chunk.stats)
+          resolveDiagnostics(chunk.diagnostics)
+          break
+        }
+      }
+
+      if (!receivedDone) {
+        throw new InvalidResponseError('audioUnderstand terminal response')
+      }
+    } catch (error) {
+      progressError =
+        error instanceof Error ? error : new InvalidResponseError('audioUnderstand', error)
+      rejectDescription(progressError)
+      rejectStats(progressError)
+      rejectDiagnostics(progressError)
+    } finally {
+      progressDone = true
+      notifyProgress()
+    }
+  }
+
+  async function* progressStream(): AsyncGenerator<AudioGenProgress> {
+    while (true) {
+      const tick = progressQueue.shift()
+      if (tick) {
+        yield tick
+        continue
+      }
+      if (progressDone) {
+        if (progressError !== undefined) throw progressError
+        return
+      }
+      await new Promise<void>((resolve) => {
+        progressResolve = resolve
+      })
+    }
+  }
+
+  void processResponses()
+
+  return { requestId, progressStream: progressStream(), description, stats, diagnostics }
 }
 
 type AudioRunRequest = AudioGenStreamRequest | AudioEditStreamRequest

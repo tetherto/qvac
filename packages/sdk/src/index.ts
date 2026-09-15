@@ -63,6 +63,7 @@ export {
   VLA_DEFAULT_IMAGE_SIZE,
   audioGen,
   audioEdit,
+  audioUnderstand,
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'

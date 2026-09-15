@@ -506,6 +506,34 @@ class AudioEditStreamResponseStopReason(Enum):
     cancelled = "cancelled"
 
 
+class AudioCode(RootModel[int]):
+    root: Annotated[int, Field(ge=-2147483648, le=2147483647)]
+
+
+class AudioEditStreamResponseStatsUnderstand(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    caption: str
+    bpm: float
+    duration: Annotated[
+        float,
+        Field(
+            description="LM estimate in seconds. The recovered codes fix the true length."
+        ),
+    ]
+    keyscale: str
+    timesignature: str
+    vocal_language: Annotated[str, Field(alias="vocalLanguage")]
+    audio_codes: Annotated[
+        list[AudioCode],
+        Field(
+            alias="audioCodes",
+            description="FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input.",
+        ),
+    ]
+
+
 class AudioEditStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -515,6 +543,33 @@ class AudioEditStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    lyrics_score: Annotated[
+        float | None,
+        Field(
+            alias="lyricsScore",
+            description="Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+        ),
+    ] = None
+    lrc: Annotated[
+        str | None,
+        Field(
+            description="LRC-formatted lyric timestamps. Present only when the run set `generateLrc`."
+        ),
+    ] = None
+    quality_score: Annotated[
+        float | None,
+        Field(
+            alias="qualityScore",
+            description="Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+        ),
+    ] = None
+    understand: Annotated[
+        AudioEditStreamResponseStatsUnderstand | None,
+        Field(
+            description="The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+            title="AudioEditStreamResponseStatsUnderstand",
+        ),
+    ] = None
 
 
 class AudioEditStreamResponseDiagnosticsSelectedDevice(Enum):
@@ -657,13 +712,25 @@ class AudioEditStreamResponse(GeneratedBaseModel):
     ] = None
 
 
+class AudioGenStreamRequestTrack(Enum):
+    vocals = "vocals"
+    backing_vocals = "backing_vocals"
+    drums = "drums"
+    bass = "bass"
+    guitar = "guitar"
+    keyboard = "keyboard"
+    percussion = "percussion"
+    strings = "strings"
+    synth = "synth"
+    fx = "fx"
+    brass = "brass"
+    woodwinds = "woodwinds"
+
+
 class AudioGenStreamRequestTaskType(Enum):
     text2music = "text2music"
     cover_nofsq = "cover-nofsq"
-
-
-class AudioCode(RootModel[int]):
-    root: Annotated[int, Field(ge=-2147483648, le=2147483647)]
+    lego = "lego"
 
 
 class AudioGenStreamRequestReferenceAudioBase64(GeneratedBaseModel):
@@ -705,6 +772,56 @@ class AudioGenStreamRequest(GeneratedBaseModel):
         Field(
             alias="augmentCaptionWithMetadata",
             description="Append BPM/tempo, time signature, and key guidance to the internal conditioning caption while the result metadata keeps the original caption (default: false). ACE-Step only; rejected by MiniMax.",
+        ),
+    ] = None
+    simple_mode: Annotated[
+        bool | None,
+        Field(
+            alias="simpleMode",
+            description="Treat `caption` as a short natural-language query and let the LM compose the full request before synthesis: a detailed caption, lyrics, and any metadata left unset. Options you set are kept. Requires `taskType: 'text2music'` and no `audioCodes`; leave `lyrics` unset for LM-written vocals or pass '[Instrumental]' for an instrumental. Mutually exclusive with `rewriteQuery`. ACE-Step only.",
+        ),
+    ] = None
+    rewrite_query: Annotated[
+        bool | None,
+        Field(
+            alias="rewriteQuery",
+            description="Query Rewriting: the LM rewrites `caption` into a detailed musical description before synthesis, preserving the lyric content and filling metadata left unset. Takes caption AND lyrics as input, so real `lyrics` are required ('[Instrumental]' belongs to Simple Mode). Requires `taskType: 'text2music'`; mutually exclusive with `simpleMode`. Faithful rewriting needs the 1.7B LM. ACE-Step only.",
+        ),
+    ] = None
+    generate_lrc: Annotated[
+        bool | None,
+        Field(
+            alias="generateLrc",
+            description="Align the lyrics with the generated audio and return karaoke-style LRC text in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`. Needs lyrics to align — pass `lyrics` or let Simple Mode write them; instrumental requests are rejected. Requires `taskType: 'text2music'`. ACE-Step only.",
+        ),
+    ] = None
+    compute_quality_score: Annotated[
+        bool | None,
+        Field(
+            alias="computeQualityScore",
+            description="Teacher-force the generated audio codes back through the LM and report a weighted [0, 1] match against the request in `stats.qualityScore` (caption/lyrics PMI plus metadata recall). Costs extra LM forwards after code generation; made for ranking a batch of takes. Requires `taskType: 'text2music'`. ACE-Step only.",
+        ),
+    ] = None
+    normalize_loudness: Annotated[
+        bool | None,
+        Field(
+            alias="normalizeLoudness",
+            description="Percentile loudness normalization on the generated audio (default: true): the 99.999th-percentile sample scales to full scale and the tiny tail above it clips. Set false for the raw engine output. Audio edits are never normalized. ACE-Step only.",
+        ),
+    ] = None
+    guidance_scale: Annotated[
+        float | None,
+        Field(
+            alias="guidanceScale",
+            description="DiT classifier-free guidance scale. 0 (the default) resolves automatically: 1.0 on turbo variants, which disables CFG, and 7.0 on base/sft. Values above 1 run CFG via APG and double the DiT cost per step. ACE-Step only.",
+            ge=0.0,
+        ),
+    ] = None
+    track: Annotated[
+        AudioGenStreamRequestTrack | None,
+        Field(
+            description="Instrument layer the `lego` task regenerates. Required when `taskType` is 'lego' and rejected otherwise. ACE-Step only.",
+            title="AudioGenStreamRequestTrack",
         ),
     ] = None
     duration: Annotated[
@@ -883,6 +1000,30 @@ class AudioGenStreamResponseStopReason(Enum):
     cancelled = "cancelled"
 
 
+class AudioGenStreamResponseStatsUnderstand(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    caption: str
+    bpm: float
+    duration: Annotated[
+        float,
+        Field(
+            description="LM estimate in seconds. The recovered codes fix the true length."
+        ),
+    ]
+    keyscale: str
+    timesignature: str
+    vocal_language: Annotated[str, Field(alias="vocalLanguage")]
+    audio_codes: Annotated[
+        list[AudioCode],
+        Field(
+            alias="audioCodes",
+            description="FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input.",
+        ),
+    ]
+
+
 class AudioGenStreamResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -892,6 +1033,33 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    lyrics_score: Annotated[
+        float | None,
+        Field(
+            alias="lyricsScore",
+            description="Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+        ),
+    ] = None
+    lrc: Annotated[
+        str | None,
+        Field(
+            description="LRC-formatted lyric timestamps. Present only when the run set `generateLrc`."
+        ),
+    ] = None
+    quality_score: Annotated[
+        float | None,
+        Field(
+            alias="qualityScore",
+            description="Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+        ),
+    ] = None
+    understand: Annotated[
+        AudioGenStreamResponseStatsUnderstand | None,
+        Field(
+            description="The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+            title="AudioGenStreamResponseStatsUnderstand",
+        ),
+    ] = None
 
 
 class AudioGenStreamResponseDiagnosticsSelectedDevice(Enum):
@@ -1031,6 +1199,301 @@ class AudioGenStreamResponse(GeneratedBaseModel):
             description="Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
             title="AudioGenStreamResponseDiagnostics",
         ),
+    ] = None
+
+
+class AudioUnderstandRequestSourceAudioBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: str
+
+
+class AudioUnderstandRequestSourceAudioFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: str
+
+
+class AudioUnderstandRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_id: Annotated[str, Field(alias="modelId", min_length=1)]
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed for the LM decode; omit for a random seed.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    vocal_language: Annotated[
+        str | None,
+        Field(
+            alias="vocalLanguage",
+            description="Language hint (e.g. 'es') forced into the result instead of the LM's guess.",
+            min_length=1,
+        ),
+    ] = None
+    lm_temperature: Annotated[
+        float | None,
+        Field(
+            alias="lmTemperature",
+            description="LM sampling temperature (default 0.85).",
+            gt=0.0,
+        ),
+    ] = None
+    lm_top_p: Annotated[float | None, Field(alias="lmTopP", gt=0.0, le=1.0)] = None
+    lm_top_k: Annotated[
+        int | None, Field(alias="lmTopK", gt=0, le=9007199254740991)
+    ] = None
+    source_audio: Annotated[
+        AudioUnderstandRequestSourceAudioBase64
+        | AudioUnderstandRequestSourceAudioFilePath,
+        Field(
+            alias="sourceAudio",
+            description="Recording to analyse: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1].",
+        ),
+    ]
+    type: Literal["audioUnderstand"] = "audioUnderstand"
+    request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
+
+
+class AudioUnderstandResponseProgress(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    stage: str
+    step: Annotated[int, Field(ge=0, le=9007199254740991)]
+    total: Annotated[
+        int,
+        Field(
+            description="Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class AudioUnderstandResponseUnderstand(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    caption: str
+    bpm: float
+    duration: Annotated[
+        float,
+        Field(
+            description="LM estimate in seconds. The recovered codes fix the true length."
+        ),
+    ]
+    keyscale: str
+    timesignature: str
+    vocal_language: Annotated[str, Field(alias="vocalLanguage")]
+    audio_codes: Annotated[
+        list[AudioCode],
+        Field(
+            alias="audioCodes",
+            description="FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input.",
+        ),
+    ]
+
+
+class AudioUnderstandResponseStopReason(Enum):
+    completed = "completed"
+    cancelled = "cancelled"
+
+
+class AudioUnderstandResponseStatsUnderstand(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    caption: str
+    bpm: float
+    duration: Annotated[
+        float,
+        Field(
+            description="LM estimate in seconds. The recovered codes fix the true length."
+        ),
+    ]
+    keyscale: str
+    timesignature: str
+    vocal_language: Annotated[str, Field(alias="vocalLanguage")]
+    audio_codes: Annotated[
+        list[AudioCode],
+        Field(
+            alias="audioCodes",
+            description="FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input.",
+        ),
+    ]
+
+
+class AudioUnderstandResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    audio_duration_ms: Annotated[float | None, Field(alias="audioDurationMs")] = None
+    total_time_ms: Annotated[float | None, Field(alias="totalTimeMs")] = None
+    real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
+    backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
+    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    lyrics_score: Annotated[
+        float | None,
+        Field(
+            alias="lyricsScore",
+            description="Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+        ),
+    ] = None
+    lrc: Annotated[
+        str | None,
+        Field(
+            description="LRC-formatted lyric timestamps. Present only when the run set `generateLrc`."
+        ),
+    ] = None
+    quality_score: Annotated[
+        float | None,
+        Field(
+            alias="qualityScore",
+            description="Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+        ),
+    ] = None
+    understand: Annotated[
+        AudioUnderstandResponseStatsUnderstand | None,
+        Field(
+            description="The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+            title="AudioUnderstandResponseStatsUnderstand",
+        ),
+    ] = None
+
+
+class AudioUnderstandResponseDiagnosticsSelectedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class AudioUnderstandResponseDiagnosticsGraphicsApi(Enum):
+    vulkan = "vulkan"
+    opencl = "opencl"
+    opengl = "opengl"
+    webgpu = "webgpu"
+    metal = "metal"
+    direct3d11 = "direct3d11"
+    direct3d12 = "direct3d12"
+    cuda = "cuda"
+    level_zero = "levelZero"
+    rocm = "rocm"
+
+
+class AudioUnderstandResponseDiagnosticsDriver(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(min_length=1)]
+    version: Annotated[str | None, Field(min_length=1)] = None
+
+
+class AudioUnderstandResponseDiagnosticsFallbackRequestedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class AudioUnderstandResponseDiagnosticsFallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    requested_backend: Annotated[
+        str | None, Field(alias="requestedBackend", min_length=1)
+    ] = None
+    requested_device: Annotated[
+        AudioUnderstandResponseDiagnosticsFallbackRequestedDevice | None,
+        Field(
+            alias="requestedDevice",
+            title="AudioUnderstandResponseDiagnosticsFallbackRequestedDevice",
+        ),
+    ] = None
+    reason: Annotated[str, Field(min_length=1)]
+
+
+class AudioUnderstandResponseDiagnosticsProbeStatus(Enum):
+    compatible = "compatible"
+    incompatible = "incompatible"
+    unknown = "unknown"
+
+
+class AudioUnderstandResponseDiagnosticsProbe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        AudioUnderstandResponseDiagnosticsProbeStatus,
+        Field(title="AudioUnderstandResponseDiagnosticsProbeStatus"),
+    ]
+    backend: Annotated[str, Field(min_length=1)]
+    reason: str | None = None
+
+
+class AudioUnderstandResponseDiagnostics(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
+    selected_device: Annotated[
+        AudioUnderstandResponseDiagnosticsSelectedDevice,
+        Field(
+            alias="selectedDevice",
+            title="AudioUnderstandResponseDiagnosticsSelectedDevice",
+        ),
+    ]
+    graphics_api: Annotated[
+        AudioUnderstandResponseDiagnosticsGraphicsApi | None,
+        Field(
+            alias="graphicsApi", title="AudioUnderstandResponseDiagnosticsGraphicsApi"
+        ),
+    ] = None
+    driver: Annotated[
+        AudioUnderstandResponseDiagnosticsDriver | None,
+        Field(title="AudioUnderstandResponseDiagnosticsDriver"),
+    ] = None
+    gpu_id: Annotated[
+        str | None,
+        Field(
+            alias="gpuId",
+            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+            min_length=1,
+        ),
+    ] = None
+    fallback: Annotated[
+        AudioUnderstandResponseDiagnosticsFallback | None,
+        Field(title="AudioUnderstandResponseDiagnosticsFallback"),
+    ] = None
+    probe: Annotated[
+        AudioUnderstandResponseDiagnosticsProbe | None,
+        Field(title="AudioUnderstandResponseDiagnosticsProbe"),
+    ] = None
+
+
+class AudioUnderstandResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["audioUnderstand"] = "audioUnderstand"
+    progress: Annotated[
+        AudioUnderstandResponseProgress | None,
+        Field(title="AudioUnderstandResponseProgress"),
+    ] = None
+    understand: Annotated[
+        AudioUnderstandResponseUnderstand | None,
+        Field(title="AudioUnderstandResponseUnderstand"),
+    ] = None
+    done: bool
+    stop_reason: Annotated[
+        AudioUnderstandResponseStopReason | None,
+        Field(alias="stopReason", title="AudioUnderstandResponseStopReason"),
+    ] = None
+    stats: Annotated[
+        AudioUnderstandResponseStats | None, Field(title="AudioUnderstandResponseStats")
+    ] = None
+    diagnostics: Annotated[
+        AudioUnderstandResponseDiagnostics | None,
+        Field(title="AudioUnderstandResponseDiagnostics"),
     ] = None
 
 
@@ -2996,6 +3459,22 @@ class AudioGenRepaintMode(Enum):
 class AudioGenTaskType(Enum):
     text2_music = "text2music"
     cover_nofsq = "cover-nofsq"
+    lego = "lego"
+
+
+class AudioGenTrack(Enum):
+    vocals = "vocals"
+    backing_vocals = "backing_vocals"
+    drums = "drums"
+    bass = "bass"
+    guitar = "guitar"
+    keyboard = "keyboard"
+    percussion = "percussion"
+    strings = "strings"
+    synth = "synth"
+    fx = "fx"
+    brass = "brass"
+    woodwinds = "woodwinds"
 
 
 class ModelType(Enum):
@@ -19799,6 +20278,7 @@ class Response(
         AssessModelFitResponse
         | AudioEditStreamResponse
         | AudioGenStreamResponse
+        | AudioUnderstandResponse
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
@@ -19847,6 +20327,7 @@ class Response(
         AssessModelFitResponse
         | AudioEditStreamResponse
         | AudioGenStreamResponse
+        | AudioUnderstandResponse
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
@@ -19907,6 +20388,7 @@ class Request(
         AssessModelFitRequest
         | AudioEditStreamRequest
         | AudioGenStreamRequest
+        | AudioUnderstandRequest
         | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
@@ -19951,6 +20433,7 @@ class Request(
         AssessModelFitRequest
         | AudioEditStreamRequest
         | AudioGenStreamRequest
+        | AudioUnderstandRequest
         | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest

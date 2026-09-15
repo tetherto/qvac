@@ -106,12 +106,15 @@ import {
   audioEditStreamRequestSchema,
   audioEditStreamResponseSchema,
   audioGenStreamRequestSchema,
-  audioGenStreamResponseSchema
+  audioGenStreamResponseSchema,
+  audioUnderstandRequestSchema,
+  audioUnderstandResponseSchema
 } from '@/schemas/audio-gen'
 
 export const requestSchema = z.union([
   audioGenStreamRequestSchema,
   audioEditStreamRequestSchema,
+  audioUnderstandRequestSchema,
   heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
@@ -156,6 +159,7 @@ export const requestSchema = z.union([
 export const responseSchema = z.discriminatedUnion('type', [
   audioGenStreamResponseSchema,
   audioEditStreamResponseSchema,
+  audioUnderstandResponseSchema,
   heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,

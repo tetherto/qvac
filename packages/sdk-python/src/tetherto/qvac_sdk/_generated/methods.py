@@ -21,6 +21,8 @@ from . import (
     AudioEditStreamResponse,
     AudioGenStreamRequest,
     AudioGenStreamResponse,
+    AudioUnderstandRequest,
+    AudioUnderstandResponse,
     BatchCompletionStreamRequest,
     BatchCompletionStreamResponse,
     BciTranscribeRequest,
@@ -124,6 +126,14 @@ async def audio_gen_stream(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield AudioGenStreamResponse.model_validate(chunk)
+
+
+async def audio_understand(
+    transport: Transport, params: AudioUnderstandRequest
+) -> AsyncIterator[AudioUnderstandResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioUnderstandResponse.model_validate(chunk)
 
 
 async def batch_completion_stream(
@@ -469,6 +479,7 @@ __all__ = [
     "assess_model_fit",
     "audio_edit_stream",
     "audio_gen_stream",
+    "audio_understand",
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",
