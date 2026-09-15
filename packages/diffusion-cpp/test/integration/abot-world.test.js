@@ -377,6 +377,7 @@ test(
     }
     const addonLogging = require('@qvac/diffusion-cpp/addonLogging')
     let evidence = []
+    const reportedEvidence = new Set()
     addonLogging.setLogger((priority, message) => {
       const line = String(message)
       if (
@@ -385,10 +386,17 @@ test(
         )
       ) {
         evidence.push(line)
+        // Keep diagnostics visible even if a native step never completes.
+        if (!reportedEvidence.has(line)) {
+          reportedEvidence.add(line)
+          console.log('[ABot streaming]', line.trim())
+        }
       }
     })
     async function run(config) {
       evidence = []
+      reportedEvidence.clear()
+      console.log('[ABot streaming] starting walk', JSON.stringify(config))
       const world = new WorldStableDiffusion({
         files,
         config: { backend: 'gpu', seed: 42, verbosity: 3, ...config },
