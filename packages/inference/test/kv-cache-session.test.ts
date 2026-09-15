@@ -1765,6 +1765,103 @@ test('kv-cache-session: a sidecar describing a different-sized .bin is discarded
   }
 })
 
+// Two rules keep the in-memory boundary and its sidecar from ever having to be
+// reconciled, and each is pinned below:
+//
+//   - a failed sidecar write drops only the file. The in-memory boundary is
+//     what this process keeps slicing against; dropping it would make the very
+//     next turn replay the whole history into a `.bin` that already holds it.
+//   - a live in-memory boundary is never read against a sidecar. Both are
+//     written by the same commit, so the map is never the older copy, and the
+//     restore path leaves the file unread whenever the map has an entry.
+test('kv-cache-session: a failed sidecar write leaves this process warm', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+    let primeCallCount = 0
+    const primeIfMissing = async (p: string) => {
+      primeCallCount++
+      writeFakeCache(p)
+    }
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'sidecar-write-fails',
+      configHash,
+      primeIfMissing
+    })
+    // A directory where the sidecar belongs makes the write fail.
+    fs.mkdirSync(mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(first.cachePath))
+
+    await session.commitTurn(first, { kind: 'static', messageCount: 6, toolBlockCached: false })
+    t.is(
+      mod.__kvCacheSessionTestHooks.getSavedCount(first.cachePath),
+      6,
+      'the in-memory boundary survives a failed sidecar write'
+    )
+
+    const second = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'sidecar-write-fails',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCallCount, 1, 'the cache is reused, not re-primed')
+    t.is(second.savedCount, 6, 'the next turn in this process still slices from the boundary')
+    await session.releaseTurn(second)
+
+    // The boundary was never persisted, so the next process has to start cold.
+    mod.__kvCacheSessionTestHooks.resetForTest()
+    const restarted = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'sidecar-write-fails',
+      configHash,
+      primeIfMissing
+    })
+    t.is(primeCallCount, 1, 'the .bin is still reused after the restart')
+    t.is(restarted.savedCount, 0, 'but the restart starts from a cold boundary')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: a sidecar never overrides a live in-memory boundary', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys', [])
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'memory-wins')
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(cachePath)
+    writeFakeCache(cachePath)
+    // Valid on its own terms — it describes the `.bin` that is really there —
+    // and still must not be consulted, because the map has this path.
+    fs.writeFileSync(
+      sidecarPath,
+      JSON.stringify({ messages: 2, toolBlock: true, binSize: fs.statSync(cachePath).size })
+    )
+    // A committed auto-rename leaves its target in `cachedPrefixes` with no
+    // init flag, which is how a live entry reaches the restore path at all.
+    mod.__kvCacheSessionTestHooks.setSavedCountForTest(cachePath, 7)
+
+    let primeCallCount = 0
+    const turn = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'memory-wins',
+      configHash,
+      primeIfMissing: async (p: string) => {
+        primeCallCount++
+        writeFakeCache(p)
+      }
+    })
+
+    t.is(primeCallCount, 0, 'the .bin on disk is reused')
+    t.is(turn.savedCount, 7, 'the live boundary is used, not the sidecar')
+    t.absent(turn.toolBlockCached, 'and nothing from the sidecar reaches the handle')
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: rollback removes the boundary sidecar with the cache file', async (t) => {
   const { fs, path, mod, cleanup, writeFakeCache } = await loadSession()
   try {

@@ -33,14 +33,16 @@ import { z } from 'zod'
 const moduleLogger = getEngineLogger()
 
 /**
- * Coordinates five KV-cache state layers:
+ * Coordinates six KV-cache state layers:
  *
  * 1. `cachedPrefixes` — saved message boundaries, and whether a tool
  *    block was rendered into them.
  * 2. `initializedCaches` — caches primed in this process.
  * 3. On-disk `.bin` files written by the addon.
- * 4. `activeCachePaths` — per-path refs that block in-flight eviction.
- * 5. `.auto-cache-<key>` markers — engine-generated cache ownership.
+ * 4. `<bin>.meta.json` sidecars — layer 1 persisted, so a named cache's
+ *    boundary outlives the process; see `readPrefixSidecar`.
+ * 5. `activeCachePaths` — per-path refs that block in-flight eviction.
+ * 6. `.auto-cache-<key>` markers — engine-generated cache ownership.
  *
  * Every turn must finish through `commitTurn`, `rollback`, or the
  * non-destructive `releaseTurn` so all inference state stays aligned,
@@ -76,15 +78,17 @@ const persistedPrefixSchema = cachedPrefixSchema.extend({
 
 /**
  * What the kv-cache file on disk is known to cover, keyed by cache path.
- * Written by `commitTurn`, read by `getSavedCount`, deleted by `rollback` /
- * `delete` / `dropStaleSavedCount`. The same INVARIANT that existed in
+ * Written by `commitTurn`, deleted by `rollback`, `delete`,
+ * `dropStaleSavedCount` and the orphan clear in `beginTurn`. The same
+ * INVARIANT that existed in
  * `kv-cache-state.ts` still holds: an entry is present only when the
- * corresponding `.bin` file is considered trustworthy. Cancelled or
- * zero-token turns must remove the entry so the next-turn slice doesn't read
- * a stale boundary.
+ * corresponding `.bin` file is considered trustworthy, so any turn that
+ * leaves the file holding something the boundary does not describe has to
+ * remove it.
  *
- * Named (custom-key) caches also mirror their entry to a sidecar next to the
- * `.bin` so the boundary survives a process restart; see `readPrefixSidecar`.
+ * This map outranks the sidecar. Both are written by the same commit, so an
+ * entry here is never the older copy, and `restorePersistedCache` reads the
+ * file only to repopulate an empty map after a restart.
  */
 const cachedPrefixes = new Map<string, CachedPrefix>()
 
@@ -106,19 +110,22 @@ async function writePrefixSidecar(
       JSON.stringify({ ...prefix, binSize: size })
     )
   } catch (error) {
-    // A sidecar from the previous commit would describe a shorter file than
-    // the one now on disk, so it must go: a restart then starts cold.
-    await forgetPrefix(cachePath)
+    // Only the file goes: a sidecar left from the previous commit describes a
+    // shorter `.bin` than the one now on disk. The in-memory boundary is the
+    // one this process keeps slicing against and stays.
+    await removePrefixSidecar(cachePath)
     logger.warn(
-      `[kv-cache] Failed to persist saved-message boundary; a restart will start this cache from a cold boundary. path=${cachePath} error=${error instanceof Error ? error.message : String(error)}`
+      `[kv-cache] Failed to persist saved-message boundary; this process stays warm but a restart will start the cache cold. path=${cachePath} error=${error instanceof Error ? error.message : String(error)}`
     )
   }
 }
 
 // Anything unreadable, malformed, or describing a `.bin` of a different size
 // is discarded: the cache is then used from a cold boundary, which is the
-// pre-sidecar behaviour. Never throws: the caller holds the cache-path write
-// lock and a `.bin` can vanish under it (`deleteKvCacheState` takes no locks).
+// pre-sidecar behaviour. Only ever consulted for a path `cachedPrefixes` has
+// no entry for, so it can never contradict a live boundary. Never throws: the
+// caller holds the cache-path write lock and a `.bin` can vanish under it
+// (`deleteKvCacheState` takes no locks).
 async function readPrefixSidecar(cachePath: string): Promise<CachedPrefix | null> {
   let parsed: z.infer<typeof persistedPrefixSchema>
   let binSize: number
@@ -132,19 +139,28 @@ async function readPrefixSidecar(cachePath: string): Promise<CachedPrefix | null
     return null
   }
   if (binSize !== parsed.binSize) {
-    await forgetPrefix(cachePath)
+    // The `.bin` changed after this boundary was recorded, so the file is
+    // stale whatever wrote it. Only the file: the caller guarantees the map
+    // holds nothing for this path.
+    await removePrefixSidecar(cachePath)
     return null
   }
   return { messages: parsed.messages, toolBlock: parsed.toolBlock }
 }
 
-async function forgetPrefix(cachePath: string): Promise<void> {
-  cachedPrefixes.delete(cachePath)
+/** Drops the persisted boundary, leaving whatever is in memory alone. */
+async function removePrefixSidecar(cachePath: string): Promise<void> {
   try {
     await fsPromises.unlink(prefixSidecarPath(cachePath))
   } catch {
     // No sidecar for this path.
   }
+}
+
+/** Drops the boundary everywhere: the cache it describes is gone or untrusted. */
+async function forgetPrefix(cachePath: string): Promise<void> {
+  cachedPrefixes.delete(cachePath)
+  await removePrefixSidecar(cachePath)
 }
 
 /**
@@ -1072,6 +1088,11 @@ async function verifySaveAndRecord(cachePath: string, prefix: CachedPrefix): Pro
 /**
  * Adopt a `.bin` left by an earlier process run: mark it primed and pick up
  * the boundary committed alongside it. Returns whether the file exists.
+ *
+ * An auto-rename commits its target into `cachedPrefixes` without an init
+ * flag, so this can run for a path the map already knows. The map wins there
+ * and the sidecar is left unread, which keeps the two from ever having to be
+ * reconciled.
  */
 async function restorePersistedCache(cachePath: string): Promise<boolean> {
   try {
@@ -1080,6 +1101,7 @@ async function restorePersistedCache(cachePath: string): Promise<boolean> {
     return false
   }
   initializedCaches.add(cachePath)
+  if (cachedPrefixes.has(cachePath)) return true
   const prefix = await readPrefixSidecar(cachePath)
   if (prefix !== null) cachedPrefixes.set(cachePath, prefix)
   return true
