@@ -26,7 +26,14 @@
         "cwd": "packages/diffusion-cpp",
         "ci": {
           "artifactNamePrefix": "sd-cpp-",
-          "includeVulkanSdk": true
+          "includeVulkanSdk": true,
+          "includeCuda": true,
+          "includeCudaWin32": true,
+          "includeCudaArm64": true,
+          "includeCudaArm64Jetson": true,
+          "cudaArm64JetsonCmakeOption": "SD_CUDA_JETSON",
+          "cudaArm64JetsonPrimaryCmakeOption": "SD_CUDA",
+          "platformCmakeDefines": "linux: -D SD_CUDA=ON\nwin32-x64: -D SD_CUDA=ON"
         }
       },
       "inputs": [

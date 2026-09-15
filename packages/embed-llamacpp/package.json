@@ -77,6 +77,7 @@
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
+    "bare-subprocess": "^6.1.0",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
@@ -95,7 +96,7 @@
     "bare-url": "^2.1.6"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.13.0",
+    "@qvac/fabric": "^0.14.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",

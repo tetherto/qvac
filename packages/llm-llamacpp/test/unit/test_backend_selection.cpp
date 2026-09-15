@@ -27,7 +27,7 @@ struct MockDevice {
   /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
   /// SYCL does as of qvac-fabric v10069, so this defaults to false.
   bool hasSplitBuffers = false;
-  /// `ggml_backend_dev_props::device_id` — the PCI bus id, published by both
+  /// `ggml_backend_dev_props::device_id` is the PCI bus id published by both
   /// CUDA and Vulkan and unique per physical card. Empty means ggml reported
   /// null, which is the "cannot dedupe, keep it" case. Descriptions are NOT
   /// unique: Vulkan reports the raw device name, identical across identical

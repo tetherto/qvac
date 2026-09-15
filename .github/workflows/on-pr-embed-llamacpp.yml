@@ -205,8 +205,6 @@ jobs:
       sha: ${{ github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/embed-llamacpp
-      # QVAC-23763: cpp-lint configures on linux, where cuda-backend needs nvcc.
-      include-cuda-sdk: true
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   cpp-tests:
@@ -300,6 +298,7 @@ jobs:
           workflow-file: on-pr-embed-llamacpp.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-embed-llamacpp
 
   prebuild:
     permissions:

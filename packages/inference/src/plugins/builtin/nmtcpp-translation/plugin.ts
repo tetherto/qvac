@@ -1,4 +1,3 @@
-import nmtAddonLogging from '@qvac/translation-nmtcpp/addonLogging'
 import TranslationNmtcpp, {
   type TranslationNmtcppConfig,
   type TranslationNmtcppFiles
@@ -222,7 +221,7 @@ export const nmtPlugin = definePlugin({
   },
 
   logging: {
-    module: nmtAddonLogging,
+    module: () => import('@qvac/translation-nmtcpp/addonLogging'),
     namespace: ModelType.nmtcppTranslation
   }
 })
