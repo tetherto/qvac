@@ -970,7 +970,7 @@ importers:
         specifier: ^0.6.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.23.0
+        specifier: ^0.24.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: ^0.37.0
@@ -1621,7 +1621,7 @@ importers:
         specifier: ^0.6.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.23.0
+        specifier: ^0.24.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: ^0.37.0
