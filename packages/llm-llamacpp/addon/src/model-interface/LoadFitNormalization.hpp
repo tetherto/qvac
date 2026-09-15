@@ -74,37 +74,20 @@ struct SelectedBackend {
   std::string name = "none";
   std::optional<int> adrenoVersion;
   bool isMaliGpu = false;
-  /// How the choice was reached and what it beat. QVAC-23763: previously
-  /// dropped here, which is why nothing downstream could report it.
+  bool isOpenCl = false;
+  bool isMetal = false;
   backend_selection::SelectionTrace trace;
 };
 
-/// QVAC-23763: takes the whole request rather than a growing argument list. The
-/// KV-cache-type constraint was the sixth thing selection needed to know, and
-/// the positional form had already reached five.
 using BackendResolver =
     std::function<SelectedBackend(const backend_selection::BackendRequest&)>;
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
-  std::function<bool()> gpuBackendSupportsRowSplit;
-  /// Args: the chosen backend's device name and load constraints. Returns the
-  /// devices to pass as
-  /// `--device` in multi-GPU split mode, with each one's registry, or an empty
-  /// list to keep omitting `--device`. QVAC-23763. Unset is treated as empty,
-  /// so existing callers that build this struct without it keep the pre-CUDA
-  /// behaviour.
-  ///
-  /// Returns the registries rather than logging from inside because the
-  /// production `splitModeDeviceNames()` overload passes a null log callback.
-  std::function<backend_selection::SplitDeviceList(
+  /// Authoritative eligible device set for every multi-GPU split mode.
+  std::function<backend_selection::SplitDeviceSelection(
       const std::string&, const backend_selection::LoadConstraints&)>
-      splitModeDeviceNames;
-  /// Devices that meet the load constraints to pin LLAMA_SPLIT_MODE_TENSOR to.
-  /// Consulted only for tensor mode; see getTensorSplitDeviceNames.
-  std::function<std::vector<std::string>(
-      const std::string&, const backend_selection::LoadConstraints&)>
-      tensorSplitDeviceNames;
+      splitDevices;
 };
 
 struct NormalizedLoad {

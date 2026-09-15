@@ -4,8 +4,8 @@
 #
 # Usage: .agent/setup.sh [claude|cursor|all]
 #
-# Copies shared config from .agent/ into agent-specific directories.
-# Idempotent — safe to re-run anytime. No symlinks (Windows compat).
+# Copies the opt-in OCR agent framework from .agent/ into agent-specific
+# directories. Repository-wide skills are configured separately.
 #
 set -euo pipefail
 
@@ -32,6 +32,40 @@ copy_plain() {
   mkdir -p "$(dirname "$dst")"
   cp "$src" "$dst"
   echo "  copied: $dst"
+}
+
+copy_skills() {
+  local source_root="$1"
+  local target_root="$2"
+  local skill_name
+  local rel
+
+  for skill_dir in "$source_root"/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name="$(basename "$skill_dir")"
+    [ -f "$skill_dir/SKILL.md" ] || continue
+
+    copy_plain "$skill_dir/SKILL.md" "$target_root/$skill_name/SKILL.md"
+    find "$skill_dir" -type f ! -name "SKILL.md" | while read -r f; do
+      rel="${f#$skill_dir}"
+      copy_plain "$f" "$target_root/$skill_name/$rel"
+    done
+  done
+}
+
+verify_skill_names_do_not_overlap() {
+  local repository_root="$1"
+  local package_root="$2"
+  local skill_name
+
+  for skill_dir in "$package_root"/*/; do
+    [ -f "$skill_dir/SKILL.md" ] || continue
+    skill_name="$(basename "$skill_dir")"
+    if [ -f "$repository_root/$skill_name/SKILL.md" ]; then
+      echo "Error: skill '$skill_name' exists in both $repository_root and $package_root" >&2
+      return 1
+    fi
+  done
 }
 
 strip_yaml_frontmatter() {
@@ -126,20 +160,8 @@ setup_claude() {
     copy_with_header "$f" "$REPO_ROOT/.claude/knowledge/$(basename "$f")"
   done
 
-  # Skills (directory-based: each skill is a dir with SKILL.md + optional supporting files)
-  for skill_dir in "$SCRIPT_DIR"/skills/*/; do
-    [ -d "$skill_dir" ] || continue
-    skill_name="$(basename "$skill_dir")"
-    # Copy SKILL.md
-    if [ -f "$skill_dir/SKILL.md" ]; then
-      copy_plain "$skill_dir/SKILL.md" "$REPO_ROOT/.claude/skills/$skill_name/SKILL.md"
-    fi
-    # Copy supporting files (everything except SKILL.md)
-    find "$skill_dir" -type f ! -name "SKILL.md" | while read -r f; do
-      rel="${f#$skill_dir}"
-      copy_plain "$f" "$REPO_ROOT/.claude/skills/$skill_name/$rel"
-    done
-  done
+  # Package-specific OCR skills are copied as an additional layer.
+  copy_skills "$SCRIPT_DIR/skills" "$REPO_ROOT/.claude/skills"
 
   # Agents
   for f in "$SCRIPT_DIR"/agents/*.md; do
@@ -191,20 +213,9 @@ setup_cursor() {
   done
 
 
-  # Skills (directory-based: copy all skills to Cursor)
-  for skill_dir in "$SCRIPT_DIR"/skills/*/; do
-    [ -d "$skill_dir" ] || continue
-    skill_name="$(basename "$skill_dir")"
-    # Copy SKILL.md
-    if [ -f "$skill_dir/SKILL.md" ]; then
-      copy_plain "$skill_dir/SKILL.md" "$REPO_ROOT/.cursor/skills/$skill_name/SKILL.md"
-    fi
-    # Copy supporting files (everything except SKILL.md)
-    find "$skill_dir" -type f ! -name "SKILL.md" | while read -r f; do
-      rel="${f#$skill_dir}"
-      copy_plain "$f" "$REPO_ROOT/.cursor/skills/$skill_name/$rel"
-    done
-  done
+  # Cursor discovers repository skills directly from .agents/skills. Only the
+  # package-specific OCR skills need generated compatibility copies.
+  copy_skills "$SCRIPT_DIR/skills" "$REPO_ROOT/.cursor/skills"
 
   # MCP: generate .cursor/mcp.json from .agent/mcp.json
   # Cursor uses mcpServers at the top level (not nested under "servers")
@@ -223,6 +234,10 @@ setup_cursor() {
 # Main
 # ---------------------------------------------------------------------------
 target="${1:-all}"
+
+verify_skill_names_do_not_overlap \
+  "$REPO_ROOT/.agents/skills" \
+  "$SCRIPT_DIR/skills"
 
 echo "=== Agent Config Setup ==="
 echo "Source: .agent/"
@@ -246,4 +261,4 @@ case "$target" in
 esac
 
 echo ""
-echo "Done. Generated files are marked AUTO-GENERATED — edit sources in .agent/ instead."
+echo "Done. Edit repository skills in .agents/skills and OCR-specific sources in packages/ocr-ggml/.agent/."

@@ -42,12 +42,12 @@ const plan = fitParams({
 //   nCtx,         // fitted context size
 //   nBatch, nUbatch,
 //   splitMode,    // llama_split_mode — how the model splits across GPUs
-//   mainGpu,      // device holding the model when splitMode is NONE
+//   mainGpu,      // 0 for a GPU plan, -1 for any CPU-only plan
 //   typeK, typeV, // ggml_type of the K/V cache — changes KV memory
 //   flashAttnType,// llama_flash_attn_type — changes KV/compute memory
 //   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
 //   nDevices,     // devices actually registered; 0 => ERROR
-//   nGpuDevices,  // of those, GPU/iGPU; 0 => host-only projection
+//   nGpuDevices,  // raw GPU/iGPU count; may include unsupported families
 //   tensorSplit   // number[] offload proportion per device
 // }
 ```
@@ -138,9 +138,39 @@ type, with `nUbatch <= nBatch` and `nCtxMin <= nCtx`.
 `nGpuLayers` is the one **signed** field. `llama.h` defines it as "number of
 layers to store in VRAM, a negative value means all layers", so negatives are
 valid input — `-1` is the llama default and what upstream's `llama-fit-params`
-prints back. Read the same care into the *result*: a negative `nGpuLayers`
-means the fitter never rewrote the field, which is what happens on a host with
-no accelerator. Check `nGpuDevices` before treating it as an offload plan.
+prints back. In a successful result, `nGpuLayers: 0` means the plan uses no GPU
+offload. `nGpuDevices` is raw diagnostic inventory and may include unsupported
+backend families, so it must not be used to interpret the plan.
+
+`mainGpu` is a **raw ggml registry index** — the order `ggml_backend_dev_get`
+enumerates, not a position in llama's GPU list — or `-1` for the CPU sentinel,
+which requires `nGpuLayers: 0` and `splitMode: 0`. llama reads it only under
+split mode NONE; LAYER, TENSOR and an **omitted** `splitMode` all leave it
+inert — llama's default split mode is LAYER and the fitter never rewrites it,
+so omitting the mode is a LAYER projection, not a possible NONE. It is
+validated only when `splitMode` is pinned to `0` (NONE): an index at or past
+`nDevices` **throws** (the bound is only known once the backends are
+registered, so the native side reports it), and an in-range index that is not a
+supported GPU — the CPU entry, or a backend outside the allowlist — is
+**projected CPU-only** rather than rejected. With `splitMode` omitted the whole
+eligible device list is kept whatever `mainGpu` says. A pinned `splitMode` of
+NONE or TENSOR throws on a host with no supported GPU; under NONE only, the CPU
+sentinel and a `mainGpu` target projected CPU-only are exempt. TENSOR has no CPU
+form, so it throws on such a host either way.
+
+`splitMode` accepts `0` (NONE), `1` (LAYER) and `3` (TENSOR). `2` (ROW)
+**throws**: fabric deprecates row split, no supported backend provides the
+split buffers it needs, and the llm/embed addons reject it rather than degrade
+it to `layer`. The raw load path (`split-mode` in a v2 process request) reports
+the same for `row` as `ERROR` / `unsupported-config`; pass `layer` instead. That
+path also rejects `split-mode: tensor` as `unsupported-config` — it accepts only
+`none` and `layer` — while the `FitConfig` path accepts `splitMode: 3`.
+
+In the plan, `mainGpu` is `0` for a GPU plan (the ordinal of the one-device
+list under NONE; inert under LAYER and TENSOR) and `-1` for **any CPU-only
+plan** — one whose device list is empty or that offloads no layer. It never
+echoes the raw input index. A CPU-only plan also reports `nGpuLayers: 0` and
+`splitMode` NONE unless the caller pinned those fields.
 
 These checks are enforced **in the native binding as well as the JS wrapper**,
 because `./binding.js` is a public export and can be called without passing
@@ -154,11 +184,10 @@ every layer to the host, so with default arguments it answers almost anything
 with `SUCCESS` — an unsatisfiable multi-TiB margin still returns `SUCCESS` with
 `nGpuLayers: 0`.
 
-(On a **host-only** machine that fallback does not exist: the host is the only
-device, the margin applies to it, and there is nowhere to move anything, so the
-same call returns `FAILURE`. Do not read a host-only `FAILURE` as "this hardware
-is too small" without checking `nGpuDevices` — it may just be an unmeetable
-margin.)
+(When no supported GPU is available that fallback does not exist: the host is
+the only execution device, the margin applies to it, and there is nowhere to
+move anything, so the same call returns `FAILURE`. Do not read that as "this
+hardware is too small"; it may just be an unmeetable margin on the host.)
 
 **`fits` alone is therefore close to useless as an admission signal.** It means
 "this could run somehow", which wherever a CPU fallback exists is nearly always

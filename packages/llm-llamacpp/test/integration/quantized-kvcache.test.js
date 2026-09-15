@@ -201,7 +201,7 @@ async function runBenchmark(cfg, modelInfo) {
       demotedForKvType: specLogger.logs.some((l) => /cannot run KV-cache type/.test(l)),
       // chooseBackend's own verdict, from its structured line. Read from the
       // log because the addon exposes no API that reports the selected backend
-      // by name — `stats.backendFamily` is the coarse enum, not the device.
+      // by name. `stats.backendFamily` is the coarse enum, not the device.
       choseCuda: specLogger.logs.some((l) => /\[backend-selection\].*selected=cuda/.test(l))
     }
   } finally {

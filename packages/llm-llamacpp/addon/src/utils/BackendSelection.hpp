@@ -241,6 +241,40 @@ chooseBackend(const BackendRequest& request, const BackendInterface& bckI);
 BackendChoice chooseBackend(
     const BackendRequest& request, llamaLogCallbackF llamaLogcallback);
 
+struct SplitDevice {
+  std::string name;
+  std::string registry;
+  ggml_backend_dev_t handle = nullptr;
+  size_t sourceGpuIndex = 0;
+  bool isRpc = false;
+  std::optional<int> adrenoVersion;
+  bool isOpenCl = false;
+  bool isMetal = false;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDevice> devices;
+  size_t sourceGpuCount = 0;
+  std::vector<std::string> rejectedDevices;
+  bool heterogeneous = false;
+};
+
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+SplitDeviceSelection getSplitDeviceSelection();
+
+/// @brief The authoritative split set after applying load constraints and
+/// preferring the selected backend when one physical GPU has multiple backend
+/// registrations.
+SplitDeviceSelection getSplitDeviceSelection(
+    const BackendInterface& bckI, const std::string& selectedDeviceName,
+    const LoadConstraints& constraints);
+SplitDeviceSelection getSplitDeviceSelection(
+    const std::string& selectedDeviceName, const LoadConstraints& constraints);
+
+void applyAdrenoRestrictions(
+    SplitDeviceSelection& selection, const ModelMetaData& metadata,
+    bool isFinetuning);
+
 /// @brief Adapter for the positional form. Retained so existing callers and
 /// tests are unaffected by the request/choice split; prefer the overload above
 /// for new code.
@@ -308,8 +342,8 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 ///   - RPC devices are excluded. ggml reports them as
 ///     `GGML_BACKEND_DEVICE_TYPE_GPU` (`ggml-rpc.cpp`, with a TODO), and fabric
 ///     segregates them precisely so they do not count as discrete GPUs —
-///     otherwise the local iGPU is dropped on an iGPU + RPC host. This also
-///     matches `emplaceIfValidDevice`, which already skips RPC.
+///     otherwise the local iGPU is dropped on an iGPU + RPC host. The
+///     authoritative handle-based split selection adds RPC devices separately.
 ///   - Discrete GPUs when any are present, otherwise the integrated ones.
 ///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
 ///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets
@@ -329,6 +363,9 @@ std::vector<std::string> getTensorSplitDeviceNames(
 std::vector<std::string> getTensorSplitDeviceNames(
     const std::string& selectedDeviceName = {},
     const LoadConstraints& constraints = {});
+
+/// @brief Current-main compatibility name for the filtered tensor split list.
+std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 
 /// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
 /// True only when at least one GPU device is present AND every available

@@ -51,6 +51,31 @@ const BASE_CONFIG = {
   verbosity: '2'
 }
 
+// QVAC_HAS_MULTI_GPU promises two OR MORE GPUs, so the eligible count is
+// discovered with a layer-split probe: that mode needs no share list and logs
+// one `<Device> model buffer size` line per participant.
+async function discoverDeviceCount(modelPath) {
+  let addon = null
+  const specLogger = attachSpecLogger({ forwardToConsole: false })
+  try {
+    addon = new LlmLlamacpp({
+      files: { model: [modelPath] },
+      config: { ...BASE_CONFIG, 'split-mode': 'layer' },
+      logger: null,
+      opts: { stats: true }
+    })
+    await addon.load()
+    const count = extractBufferDevices(specLogger.logs).size
+    if (count < 1) {
+      throw new Error('device-count probe found no GPU model buffers in the spec logs')
+    }
+    return count
+  } finally {
+    specLogger.release()
+    if (addon) await addon.unload().catch(() => {})
+  }
+}
+
 async function runMultiGpuTest(t, extraConfig, assertDevices) {
   if (!hasMultiGpu) {
     t.comment('Skipping: QVAC_HAS_MULTI_GPU is not set')
@@ -58,7 +83,7 @@ async function runMultiGpuTest(t, extraConfig, assertDevices) {
   }
 
   let addon = null
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
+  let specLogger = null
   try {
     const [modelName, dirPath] = await ensureModel({
       modelName: MODEL.name,
@@ -66,9 +91,19 @@ async function runMultiGpuTest(t, extraConfig, assertDevices) {
     })
 
     const modelPath = path.join(dirPath, modelName)
+    // The probe load is only paid for when a config function needs the count.
+    let resolvedConfig = extraConfig
+    if (typeof extraConfig === 'function') {
+      const deviceCount = await discoverDeviceCount(modelPath)
+      t.comment(`discovered ${deviceCount} eligible device(s)`)
+      resolvedConfig = extraConfig(deviceCount)
+    }
+
+    // Attached after the probe so its logs cannot leak into the assertions.
+    specLogger = attachSpecLogger({ forwardToConsole: true })
     addon = new LlmLlamacpp({
       files: { model: [modelPath] },
-      config: { ...BASE_CONFIG, ...extraConfig },
+      config: { ...BASE_CONFIG, ...resolvedConfig },
       logger: null,
       opts: { stats: true }
     })
@@ -87,7 +122,7 @@ async function runMultiGpuTest(t, extraConfig, assertDevices) {
     console.error(error)
     t.fail('multi-gpu test failed: ' + error.message)
   } finally {
-    specLogger.release()
+    if (specLogger) specLogger.release()
     if (addon) await addon.unload().catch(() => {})
   }
 }
@@ -108,21 +143,6 @@ function assertSingleDevice(t, devices) {
   )
 }
 
-// Row-split needs split buffers from every GPU device the model is distributed
-// over. As of qvac-fabric v10069 only SYCL provides them, and qvac-fabric now
-// throws on load instead of silently behaving like layer-split, so the addon
-// degrades 'row' -> 'layer' and warns. Asserting the warning is what makes this
-// test row-specific: without it, it only re-checks the layer-split case above.
-function assertRowDegradedToLayer(t, devices, logs) {
-  const warned = logs.some(
-    (line) =>
-      line.includes("split-mode 'row' is not supported") &&
-      line.includes("falling back to split-mode 'layer'")
-  )
-  t.ok(warned, "should warn that split-mode 'row' degraded to 'layer'")
-  assertMultiDevice('layers')(t, devices)
-}
-
 safeTest(
   'multi-gpu: split-mode=layer distributes layers across GPUs',
   { timeout: 600_000, skip },
@@ -131,13 +151,38 @@ safeTest(
   }
 )
 
-safeTest(
-  'multi-gpu: split-mode=row degrades to layer and still distributes across GPUs',
-  { timeout: 600_000, skip },
-  async (t) => {
-    await runMultiGpuTest(t, { 'split-mode': 'row' }, assertRowDegradedToLayer)
+safeTest('multi-gpu: split-mode=row is rejected', { timeout: 600_000, skip }, async (t) => {
+  if (!hasMultiGpu) {
+    t.comment('Skipping: QVAC_HAS_MULTI_GPU is not set')
+    return
   }
-)
+
+  let addon = null
+  try {
+    const [modelName, dirPath] = await ensureModel({
+      modelName: MODEL.name,
+      downloadUrl: MODEL.url
+    })
+
+    addon = new LlmLlamacpp({
+      files: { model: [path.join(dirPath, modelName)] },
+      config: { ...BASE_CONFIG, 'split-mode': 'row' },
+      logger: null,
+      opts: { stats: true }
+    })
+
+    await addon.load()
+    t.fail("load should reject split-mode 'row'")
+  } catch (error) {
+    t.ok(
+      /split-mode 'row' is no longer accepted/.test(error.message) &&
+        /'layer' or 'tensor'/.test(error.message),
+      "error should reject 'row' and point at 'layer' or 'tensor', got: " + error.message
+    )
+  } finally {
+    if (addon) await addon.unload().catch(() => {})
+  }
+})
 
 safeTest(
   'multi-gpu: default (no split-mode) pins layers to a single device',
@@ -147,13 +192,18 @@ safeTest(
   }
 )
 
+// One equal share per eligible device; the extra probe load doubles the timeout.
 safeTest(
   'multi-gpu: split-mode=layer with tensor-split and main-gpu',
-  { timeout: 600_000, skip },
+  { timeout: 1_200_000, skip },
   async (t) => {
     await runMultiGpuTest(
       t,
-      { 'split-mode': 'layer', 'tensor-split': '1,1', 'main-gpu': '0' },
+      (deviceCount) => ({
+        'split-mode': 'layer',
+        'tensor-split': Array(deviceCount).fill('1').join(','),
+        'main-gpu': '0'
+      }),
       assertMultiDevice('layers')
     )
   }
@@ -194,7 +244,7 @@ function assertMetaDeviceEngaged(t, devices, logs) {
   // yields backend name + index (`Vulkan0`, `CUDA1`, `ROCm0`) and never
   // encodes the device type — so a /igpu/ test would be vacuous and pass on a
   // host where the iGPU had in fact been recruited. Whether the iGPU is
-  // excluded is pinned by the unit tests over getTensorSplitDeviceNames, which
+  // excluded is pinned by the unit tests over getSplitDeviceNames, which
   // can see the device type. A real end-to-end check would have to match the
   // known iGPU description against fabric's `using device ...` INFO lines,
   // which is CI-host-specific.

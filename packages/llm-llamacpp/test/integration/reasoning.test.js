@@ -757,7 +757,7 @@ safeTest(
 //
 // QVAC-23763: `backend-required` makes that pin binding. Without it a `backend`
 // matching no device falls through to the default cascade, so these rows would
-// silently run on CUDA and report the divergence above as a genuine failure —
+// silently run on CUDA and report the divergence above as a genuine failure.
 // the exact failure mode the pin exists to avoid.
 const QWEN35_REASONING_CONFIG = {
   ctx_size: '8192',
