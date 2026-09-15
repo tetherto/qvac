@@ -455,9 +455,15 @@ test(
       const d = Math.abs(streamed[i] - batchOut[i])
       if (d > maxDiff) maxDiff = d
     }
-    // CPU decode is bit-identical (0); on Metal a last-ULP float diff can flip an
-    // int16 LSB, so allow a tiny tolerance there (the engine test pins the bound).
-    const tol = useGPU ? 32 : 0
+    // Neither arm is bit-identical any more. On Metal a last-ULP float diff can
+    // flip an int16 LSB. On the CPU, ggml-speech 2026-09-09#1 turned on tinyBLAS
+    // for Linux x64 and Apple silicon, and its GEMM declines small-n shapes and
+    // falls back to the plain path, so a streaming DAC window the full decode
+    // never built can round differently (measured: max diff 1 LSB on Linux x64;
+    // 0 where tinyBLAS is off). Both budgets sit orders of magnitude below the
+    // hop-scale errors a window-arithmetic bug would produce, which is what this
+    // check exists to catch; the engine test pins the float-level bound.
+    const tol = useGPU ? 32 : 4
     t.ok(maxDiff <= tol, `streamed int16 matches batch within ${tol} (max diff ${maxDiff})`)
   }
 )
