@@ -77,6 +77,14 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 ---
 
+## Documentation website
+
+| Skill | Purpose | Use when |
+|-------|---------|----------|
+| [`qv-docs-solution-create`](../qv-docs-solution-create/SKILL.md) | Solutions pages: generalize a supported use case into a docs page and register it in the site navigation. | A real developer, company, or partner scenario should become reusable documentation. **Manual:** `/qv-docs-solution-create` |
+
+---
+
 ## Developer diary and standup
 
 | Skill | Purpose | Use when |
@@ -129,6 +137,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Sync CLI/provider/OpenCode/OpenClaw to SDK | `qv-agent-stack-sync` |
 | New SDK e2e tests | `qv-sdk-e2e-create` |
 | Registry Autobase/HyperDB help | `qv-registry-autobase-patterns` |
+| Publish a Solutions page from a use case | `qv-docs-solution-create` |
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
 | Check if a QIP is needed | `qv-qip-triage` |
