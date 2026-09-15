@@ -15,8 +15,8 @@ export interface GGMLConfig {
   embd_normalize?: NumericLike;
   flash_attn?: "on" | "off" | "auto";
   "main-gpu"?: NumericLike | "integrated" | "dedicated";
-  /** How to split the model across GPUs. 'row' (tensor parallelism) needs split buffers, which no shipped backend provides as of qvac-fabric v10069, so it is degraded to 'layer' at load with a warning. */
-  "split-mode"?: "none" | "layer" | "row";
+  /** How to split the model across GPUs: 'none' pins one device, 'layer' distributes layers. 'row' is rejected at load; use 'layer'. */
+  "split-mode"?: "none" | "layer";
   "tensor-split"?: string;
   verbosity?: NumericLike;
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
