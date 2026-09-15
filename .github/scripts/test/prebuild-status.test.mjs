@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 
 import {
   PREBUILD_KEYS,
+  NX_PRODUCER,
+  CARVED_OUT_PRODUCERS,
   resolvePublishState,
   expectedPrebuilds,
   flattenPages,
@@ -108,13 +110,61 @@ test('parseRunId extracts the numeric run id from a run URL', () => {
 
 test('isRunFresh requires the matching workflow and created_at >= threshold', () => {
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
-  const fresh = { path: '.github/workflows/on-pr-tts-ggml.yml', created_at: '2026-08-10T12:00:05Z' }
-  const stale = { path: '.github/workflows/on-pr-tts-ggml.yml', created_at: '2026-08-10T11:59:00Z' }
-  const wrongWorkflow = { path: '.github/workflows/on-pr-vla.yml', created_at: '2026-08-10T13:00:00Z' }
+  const fresh = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:00:05Z' }
+  const stale = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T11:59:00Z' }
+  // legacy per-package producer is no longer trusted — only on-pr-nx.yml
+  const wrongWorkflow = { path: '.github/workflows/on-pr-tts-ggml.yml', created_at: '2026-08-10T13:00:00Z' }
   assert.equal(isRunFresh(fresh, 'tts-ggml', threshold), true)
   assert.equal(isRunFresh(stale, 'tts-ggml', threshold), false)
   assert.equal(isRunFresh(wrongWorkflow, 'tts-ggml', threshold), false)
   assert.equal(isRunFresh(null, 'tts-ggml', threshold), false)
+})
+
+// Each carved-out package has exactly one legitimate producer. A flat allowlist
+// would let any carved-out workflow post for any other package.
+test('isRunFresh: each carved-out package trusts only its own orchestrator', () => {
+  const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
+  const at = '2026-08-10T12:00:05Z'
+
+  for (const [pkg, path] of Object.entries(CARVED_OUT_PRODUCERS)) {
+    assert.equal(
+      isRunFresh({ path, created_at: at }, pkg, threshold),
+      true,
+      `${pkg} rejected its own producer ${path}`,
+    )
+
+    // on-pr-nx must NOT be able to post for a carved-out package: it no longer
+    // builds them, so a status from it could not reflect a real build.
+    assert.equal(
+      isRunFresh({ path: NX_PRODUCER, created_at: at }, pkg, threshold),
+      false,
+      `${pkg} accepted on-pr-nx, which no longer builds it`,
+    )
+
+    // Cross-package forgery: another carved-out orchestrator must be rejected.
+    for (const [otherPkg, otherPath] of Object.entries(CARVED_OUT_PRODUCERS)) {
+      if (otherPkg === pkg) continue
+      assert.equal(
+        isRunFresh({ path: otherPath, created_at: at }, pkg, threshold),
+        false,
+        `${pkg} accepted a status produced by ${otherPath}`,
+      )
+    }
+
+    // Freshness still applies on the carved-out path.
+    assert.equal(
+      isRunFresh({ path, created_at: '2026-08-10T11:59:00Z' }, pkg, threshold),
+      false,
+      `${pkg} accepted a stale run from its own producer`,
+    )
+  }
+})
+
+test('isRunFresh: every carved-out key is a real PREBUILD_KEYS entry', () => {
+  // A typo ('vla-ggml' for 'vla') would silently fall back to the nx producer.
+  for (const pkg of Object.keys(CARVED_OUT_PRODUCERS)) {
+    assert.ok(PREBUILD_KEYS.includes(pkg), `${pkg} is not a PREBUILD_KEYS entry`)
+  }
 })
 
 test('classifyState maps commit-status states to gate outcomes', () => {
@@ -130,8 +180,8 @@ test('classifyState maps commit-status states to gate outcomes', () => {
 test('evaluatePackage: a superseded pre-label run cannot pass; the fresh labeled run decides', () => {
   const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000) // label event
   const runs = {
-    1: { path: '.github/workflows/on-pr-tts-ggml.yml', created_at: '2026-08-10T09:00:00Z' }, // pre-label
-    2: { path: '.github/workflows/on-pr-tts-ggml.yml', created_at: '2026-08-10T12:05:00Z' }, // labeled
+    1: { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T09:00:00Z' }, // pre-label
+    2: { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:05:00Z' }, // labeled
   }
   const lookup = (id) => runs[id] ?? null
 
@@ -192,7 +242,7 @@ function fakeClock(startMs = 0) {
 }
 
 const THRESHOLD = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
-const FRESH_RUN = { path: '.github/workflows/on-pr-tts-ggml.yml', created_at: '2026-08-10T12:00:00Z' }
+const FRESH_RUN = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:00:00Z' }
 
 test('pollPrebuilds retries a transient statuses fetch error, then passes', async () => {
   const clock = fakeClock()

@@ -29,10 +29,12 @@ const path = require('path')
 
 const WORKFLOWS_DIR = path.join(__dirname, '..', '..', '..', '.github', 'workflows')
 
+// Only the carve-out workflows still hand-maintain an rtf_expected_devices
+// format() string against a YAML matrix. tts-ggml and bci-whispercpp moved to
+// integration-test-nx, where the matrix comes from project.json and there is no
+// format() string to keep in lockstep, so the guard no longer applies to them.
 const GUARDED_WORKFLOWS = [
-  'integration-test-asr-ggml.yml',
-  'integration-test-tts-ggml.yml',
-  'integration-test-bci-whispercpp.yml'
+  'integration-test-asr-ggml.yml'
 ]
 
 const MATRIX_ROW_RE = /^ {10}- os: /gm
