@@ -760,6 +760,30 @@ NormalizedLoad normalizeLoadForFit(
   std::optional<std::string> loadMode;
   for (const std::string& key : {"load-mode", "load_mode"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      // fabric's deprecated mmap / direct-io flags assign params.load_mode too,
+      // and the generic loop runs after this block, so one of them would
+      // silently overwrite the mode validated here.
+      for (const std::string& alias :
+           {"mmap",
+            "no-mmap",
+            "no_mmap",
+            "direct-io",
+            "direct_io",
+            "no-direct-io",
+            "no_direct_io"}) {
+        if (configFilemap.contains(alias)) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InvalidArgument),
+              string_format(
+                  "%s: '%s' cannot be combined with '%s'; use one or the "
+                  "other.\n",
+                  K_LEGACY_PARSER_NAME.data(),
+                  key.c_str(),
+                  alias.c_str()));
+        }
+      }
       const std::string value = toLowerAscii(it->second);
       if (loadMode.has_value() && loadMode.value() != value) {
         throw qvac_errors::StatusError(
@@ -794,6 +818,60 @@ NormalizedLoad normalizeLoadForFit(
     params.load_mode = mode->second;
   }
 
+  // The deprecated mmap and direct-io flags are separate options that both
+  // assign params.load_mode, and llama_load_mode is a flat selector rather
+  // than a bitfield, so the generic loop would let whichever ran last erase
+  // the other. Flags agreeing on a mode are left to it.
+  struct DeprecatedLoadFlag {
+    const char* key;
+    bool isPositive;
+    llama_load_mode enabled;
+  };
+  static constexpr DeprecatedLoadFlag kDeprecatedLoadFlags[] = {
+      {"mmap", true, LLAMA_LOAD_MODE_MMAP},
+      {"no-mmap", false, LLAMA_LOAD_MODE_MMAP},
+      {"no_mmap", false, LLAMA_LOAD_MODE_MMAP},
+      {"direct-io", true, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"direct_io", true, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"no-direct-io", false, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"no_direct_io", false, LLAMA_LOAD_MODE_DIRECT_IO}};
+
+  std::optional<llama_load_mode> deprecatedMode;
+  const char* deprecatedKey = nullptr;
+  for (const auto& flag : kDeprecatedLoadFlags) {
+    const auto it = configFilemap.find(flag.key);
+    if (it == configFilemap.end()) {
+      continue;
+    }
+    bool requested = true;
+    if (!it->second.empty()) {
+      if (common_arg_utils::is_truthy(it->second)) {
+        requested = true;
+      } else if (common_arg_utils::is_falsey(it->second)) {
+        requested = false;
+      } else {
+        // The generic loop reports the unknown value against the key itself.
+        continue;
+      }
+    }
+    const llama_load_mode mode =
+        flag.isPositive == requested ? flag.enabled : LLAMA_LOAD_MODE_NONE;
+    if (deprecatedMode.has_value() && deprecatedMode.value() != mode) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "%s: '%s' and '%s' select different load modes; use 'load-mode' "
+              "instead.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              deprecatedKey,
+              flag.key));
+    }
+    deprecatedMode = mode;
+    deprecatedKey = flag.key;
+  }
+
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
   // fallback path used by llama.cpp does not execute the {%- set persona -%}
   // block that injects the model's persona system prompt, so the model loses
@@ -809,6 +887,9 @@ NormalizedLoad normalizeLoadForFit(
         "[LlamaModel] MedPsy basename detected; auto-enabling jinja so the "
         "embedded chat template is applied\n");
   }
+
+  // Skip the projector's audio encoder by default.
+  params.mmproj_no_audio = true;
 
   qvac_lib_inference_addon_llama::applyLoadConfigHandlers(
       params, configFilemap);
@@ -1234,10 +1315,13 @@ NormalizedLoad normalizeLoadForFit(
 
   int size = static_cast<int>(configVector.size());
 
-  std::unordered_map<std::string, common_arg*> argToOptions;
+  std::unordered_map<std::string, std::pair<common_arg*, bool>> argToOptions;
   for (auto& opt : ctxArg.options) {
     for (const auto& arg : opt.args) {
-      argToOptions[arg] = &opt;
+      argToOptions[arg] = {&opt, /* isPositive */ true};
+    }
+    for (const auto& arg : opt.args_neg) {
+      argToOptions[arg] = {&opt, /* isPositive */ false};
     }
   }
 
@@ -1251,6 +1335,10 @@ NormalizedLoad normalizeLoadForFit(
           "Expected value for argument");
     }
   };
+
+  // configFilemap is unordered, so two spellings of one boolean option would
+  // otherwise apply in an arbitrary order and the last one would win.
+  std::unordered_map<const common_arg*, bool> appliedBooleans;
 
   for (int argIndex = 0; argIndex < size; argIndex++) {
     const std::string argPrefix = "--";
@@ -1270,7 +1358,9 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument),
           errorMsg);
     }
-    auto opt = *argToOptions[arg];
+    auto& entry = argToOptions[arg];
+    auto opt = *entry.first;
+    const bool isPositive = entry.second;
     if (opt.has_value_from_env()) {
       QLOG_IF(
           Priority::DEBUG,
@@ -1284,6 +1374,49 @@ NormalizedLoad normalizeLoadForFit(
     try {
       if (opt.handler_void != nullptr) {
         opt.handler_void(params);
+        continue;
+      }
+
+      if (opt.handler_bool != nullptr) {
+        bool requested = true;
+        if (argIndex + 1 < size &&
+            !configVector[argIndex + 1].starts_with(argPrefix)) {
+          const std::string& boolVal = configVector[++argIndex];
+          if (common_arg_utils::is_truthy(boolVal)) {
+            requested = true;
+          } else if (common_arg_utils::is_falsey(boolVal)) {
+            requested = false;
+          } else {
+            throw qvac_errors::StatusError(
+                ADDON_ID,
+                qvac_errors::general_error::toString(
+                    qvac_errors::general_error::InvalidArgument),
+                string_format(
+                    "%s: unknown value for %s: '%s'. Accepted (lower-case): "
+                    "on, enabled, true, 1, off, disabled, false, 0.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    arg.c_str(),
+                    boolVal.c_str()));
+          }
+        }
+        const bool effective = isPositive == requested;
+        const auto [applied, first] =
+            appliedBooleans.emplace(entry.first, effective);
+        if (!first) {
+          if (applied->second != effective) {
+            throw qvac_errors::StatusError(
+                ADDON_ID,
+                qvac_errors::general_error::toString(
+                    qvac_errors::general_error::InvalidArgument),
+                string_format(
+                    "%s: '%s' was given contradictory values; supply one "
+                    "spelling.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    opt.args.back()));
+          }
+          continue;
+        }
+        opt.handler_bool(params, effective);
         continue;
       }
 

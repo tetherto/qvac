@@ -98,6 +98,29 @@ export interface FitBuftOverride {
     /** ggml buffer type the matching tensors were placed in. */
     bufferType: string;
 }
+/**
+ * Projected memory for one device — or the trailing `"host"` row — at the
+ * parameters the result reports, in bytes. `freeBytes`/`marginBytes` give the
+ * budget the verdict was judged against; the remaining fields are the
+ * projected demand.
+ */
+export interface FitProjectionRow {
+    /** Device name as the backend reports it, or `"host"` for the host row. */
+    name: string;
+    totalBytes: number;
+    /**
+     * Raw backend gauge, before the margin. On a device with its own memory the
+     * budget is `freeBytes - marginBytes` and headroom is that minus the demand.
+     * A device sharing the host pool (Apple silicon, Adreno/Mali) is clamped
+     * below that, so the figure is an upper bound there.
+     */
+    freeBytes: number;
+    /** The margin applied to this row, in bytes (`marginMiB` × 1 MiB). */
+    marginBytes: number;
+    modelBytes: number;
+    contextBytes: number;
+    computeBytes: number;
+}
 /** What the fitter measured against. Present on every outcome. */
 export interface FitDeviceInventory {
     /**
@@ -109,6 +132,18 @@ export interface FitDeviceInventory {
     nDevices: number;
     /** Raw GPU/iGPU count; may include families outside the execution allowlist. */
     nGpuDevices: number;
+    /**
+     * Projected memory per device the model was assigned to, in the order
+     * llama.cpp holds them (`llama_model_get_device`, the index `tensorSplit`
+     * uses), ending with the host row. The device rows are not `nDevices`: the
+     * CPU device is counted there but its demand lands in the host row. Match
+     * rows by `name`, not by position against `nDevices`.
+     *
+     * Populated on SUCCESS and FAILURE; empty on ERROR, and empty when the probe
+     * that produces it fails. Optional because results decoded from an older
+     * addon or process runner predate the field.
+     */
+    projection?: FitProjectionRow[];
 }
 /** The fitted load plan. Only meaningful on a SUCCESS. */
 export interface FitPlan {
