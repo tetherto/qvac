@@ -87,6 +87,18 @@ inputs:
       refresh an entry by hand before it ages out.
     required: false
     default: 'false'
+  restore-only:
+    description: |
+      Set to 'true' to force the restore-only branch regardless of event, and
+      never save. For a KEEP-ALIVE: an addon whose integration lane already
+      writes a complete entry (its post-job save captures whatever the suite
+      staged) does not need seeding -- it needs the entry kept from ageing out
+      between those runs. Only a real download moves the cache server's
+      lastDownloadedAt, so a full restore resets the prune clock; writing
+      nothing means the complete entry is never replaced by a partial one.
+      A miss is a legitimate no-op: the lane will recreate the entry.
+    required: false
+    default: 'false'
   assert-exists:
     description: |
       Set to 'true' ONLY by a seed workflow's verify job, which runs after the
@@ -200,7 +212,8 @@ runs:
     - name: Cache test models (restore + save, trusted contexts)
       id: cache
       if: >-
-        steps.probe.outputs.cache-hit != 'true' && (
+        steps.probe.outputs.cache-hit != 'true' &&
+        inputs.restore-only != 'true' && (
         github.event_name == 'push' ||
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'merge_group' ||
@@ -218,12 +231,13 @@ runs:
     - name: Cache test models (restore-only, untrusted contexts)
       id: cache-restore-only
       if: >-
-        steps.probe.outputs.cache-hit != 'true' &&
+        steps.probe.outputs.cache-hit != 'true' && (
+        inputs.restore-only == 'true' || (
         github.event_name != 'push' &&
         github.event_name != 'workflow_dispatch' &&
         github.event_name != 'merge_group' &&
         github.event_name != 'schedule' &&
-        github.event.pull_request.head.repo.full_name != github.repository
+        github.event.pull_request.head.repo.full_name != github.repository ))
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}

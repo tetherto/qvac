@@ -1,74 +1,51 @@
 name: On Merge Model Cache (TTS)
 
-# Seeds `models-tts-ggml-v1-*`. The integration workflow is only reachable from
-# a pull_request_target caller, where cache-models takes its restore-only
-# branch, so nothing writes the entry.
+# KEEP-ALIVE, not a seed. tts is the one addon here that must not be seeded.
 #
-# tts has no models.manifest.json, so cache-models' warm step cannot fill the
-# directory -- the models come from `npm run download-models:registry`. Hence
-# the step order: cache-models first, download second, so the post-job save
-# picks up what the download wrote.
+# on-merge-tts-ggml.yml calls integration-test-tts-ggml.yml on a push to main,
+# gated on a successful publish. That run is a `push`, so cache-models takes its
+# trusted-save branch, and the post-job save captures whatever the suite left in
+# packages/tts-ggml/models -- the registry GGUFs AND the set the tests stage at
+# runtime through test/utils/downloadModel.js (lavasr, cosyvoice and its clone
+# set, mecab-ipadic, the Cangjie TSV, whisper ggml-medium). The entry is
+# complete by construction. Same-repo PR lanes write it too, for the same
+# reason.
 #
-# SEEDS UNDER ITS OWN SUFFIX, unlike every other addon here, and that is the
-# whole design. packages/tts-ggml/models holds two populations: the registry
-# GGUFs this seed stages, and a set the tests stage at runtime through
-# test/utils/downloadModel.js (lavasr, cosyvoice and its clone set,
-# mecab-ipadic, the Cangjie TSV, whisper ggml-medium). Seeding the first under
-# the integration lane's exact key would hand every leg an exact primary-key
-# hit, actions/cache skips its save on an exact hit by design, and the second
-# population could never enter the entry -- re-fetched on every leg of every
-# run, permanently.
+# So the entry is not missing, it is perishable: publishes are infrequent and
+# the cache server prunes at CACHE_CLEANUP_OLDER_THAN_DAYS=5.
 #
-# Writing `models-tts-ggml-v1-seed-<hash>` instead means the lane misses its
-# exact key, falls to its `models-tts-ggml-v1-` restore-key, PREFIX-matches
-# this entry and gets the expensive GGUFs for free, then stages the rest and --
-# because a prefix hit does not suppress the save -- writes the complete set
-# under its own exact key. Completeness stops being a correctness requirement
-# and becomes an optimisation, which matters because the tests request models
-# by computed variant/quant/tier, so no guard can prove a staged set complete.
+# Seeding it would make things worse, which is why this does not. The seed
+# could only stage the registry GGUFs -- the tests request the rest by computed
+# variant/quant/tier, so no staging script can be proven complete. Writing that
+# subset under the lane's key gives every leg an exact primary-key hit,
+# actions/cache skips its save on an exact hit by design, and the complete entry
+# is replaced by a partial one that can never grow back.
 #
-# This is the same restore-key prefix mechanism behind the audiogen bug, used
-# deliberately, and it is safe here for a reason that does not hold there. The
-# seed's key is the LONGER one, so its own restore prefix
-# (`models-tts-ggml-v1-seed-`) cannot reach the lane's entries -- it can never
-# absorb the complete set. audiogen's collision ran the other way: the empty
-# suffix made the functional leg's prefix reach the benchmark entry. Two
-# consumers whose keys prefix each other is the bug; a seed deliberately
-# sitting one segment below its consumer is the recovery path restore-keys
-# exists for. validate-model-cache-sync.mjs enforces both halves.
+# A restore is all that is needed. Only a real download moves the cache
+# server's lastDownloadedAt, so restoring resets the prune clock; `restore-only`
+# means this job never writes, so the complete entry is never displaced. A miss
+# is a legitimate no-op -- the next publish or same-repo PR recreates it.
 
 on:
   push:
     branches:
       - main
-    # The cache key hashes this script, so it is the only file whose change can
-    # invalidate the entry.
     paths:
+      # The key's hash input, so a change here means the old entry is dead and
+      # there is a new one to start keeping alive.
       - "packages/tts-ggml/scripts/download-tts-ggml-models.js"
-      # `paths` is pinned at the call site, but cache-models still builds the key
-      # string and resolves the hash glob, so an edit there can still move this
-      # entry. A run that finds nothing moved costs seconds: the probe answers
-      # from a lookup.
       - ".github/actions/cache-models/**"
-      # And this file. A commit that fixes the seed itself -- a corrected
-      # cache-key-suffix, say -- would otherwise sit dormant until the cron.
       - ".github/workflows/on-merge-model-cache-tts.yml"
   # Every two days. The cache server prunes at CACHE_CLEANUP_OLDER_THAN_DAYS=5,
   # and Mon/Thu left a 4-day gap -- inside the window, but with no slack: ONE
   # failed run stretched it to 7 days and the entry was gone. `*/2` caps the gap
   # at 2 days, and at 4 after a missed run, so a single failure is survivable.
-  # The hour is offset per addon so the seeds do not contend for a runner.
+  # The hour is offset per addon so the lanes do not contend for a runner.
   schedule:
     - cron: "17 10 */2 * *"
-  # No workflow_call. Nothing calls this, and a `pull_request` caller would put
-  # the job on cache-models' trusted-save branch, letting PR-head code write an
-  # entry every addon lane afterwards restores. Dispatch covers on-demand runs.
+  # No workflow_call. Nothing calls this, and a `pull_request` caller would run
+  # repo-local composites from PR-head code. Dispatch covers on-demand runs.
   workflow_dispatch:
-    inputs:
-      force_refresh:
-        description: "Restore the archive even on a hit, exactly as the cron does. That download is what resets the cache server's prune clock; the probe alone does not."
-        type: boolean
-        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -83,79 +60,14 @@ jobs:
       contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
-  seed:
+  keep-alive:
     needs: runner_names
-    # enable-cross-os is 'true' at the call site, so this one entry serves every
-    # platform's integration leg.
+    # Self-hosted: only these runners reach the cache server holding the entry.
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     timeout-minutes: 120
-    name: seed-model-cache
-
-    steps:
-      - name: Manual Workspace Cleanup
-        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
-        shell: bash
-        working-directory: .
-        if: runner.environment != 'github-hosted'
-
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: lts/*
-
-      # download-tts-ggml-models.js requires @qvac/registry-client, so the
-      # package's dependencies have to be present before it runs. Same command
-      # and working directory as integration-test-tts-ggml.yml:153-156.
-      - name: Install NPM dependencies
-        working-directory: ${{ github.workspace }}/packages/tts-ggml
-        run: npm install
-
-      # Must match integration-test-tts-ggml.yml's "Cache TTS GGML GGUF models"
-      # step exactly. Named, not line-numbered: line numbers rot.
-      - name: Cache TTS GGML GGUF models
-        id: model-cache
-        uses: ./.github/actions/cache-models
-        with:
-          package: tts-ggml
-          # Deliberately one segment below the lane's key; see the header.
-          cache-key-suffix: seed
-          paths: packages/tts-ggml/models
-          hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
-          enable-cross-os: 'true'
-          seed-probe: 'true'
-          force-refresh: ${{ inputs.force_refresh || false }}
-
-      - name: Download GGUF models from registry
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        shell: bash
-        working-directory: ${{ github.workspace }}/packages/tts-ggml
-        run: npm run download-models:registry
-
-  # actions/cache only WARNS when the cache server rejects a reservation, so the
-  # seed job above reports success whether or not an entry was written. This
-  # turns that into a red run. It has to be a separate job: the save runs in the
-  # seed job's post-steps, after every step there has finished.
-  verify:
-    needs: [runner_names, seed]
-    # Not the default `success()`. The seed matrices are fail-fast: false, so one
-    # leg failing for an unrelated reason would skip this job outright -- and the
-    # silent write failure it exists to catch would go unreported on every other
-    # leg. Each leg asserts its own entry, so a genuinely failed seed leg just
-    # fails here too. runner_names is still required: without its outputs there
-    # is no runs-on.
-    if: ${{ !cancelled() && needs.runner_names.result == 'success' }}
-    # No id-token: nothing here talks to AWS; the lookup needs the
-    # repository and nothing else.
+    name: keep-alive-model-cache
     permissions:
       contents: read
-    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
-    timeout-minutes: 15
-    name: verify-model-cache
 
     steps:
       - name: Manual Workspace Cleanup
@@ -169,20 +81,39 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      # cache-models shells out to `node` in its path-resolution step even when
+      # there is no manifest to warm.
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: lts/*
 
-      # Inputs must stay identical to the seed step's: `path` feeds the cache
-      # version, so a different one silently probes a different entry.
-      - name: Assert the seeded entry exists
+      # Inputs must stay identical to integration-test-tts-ggml.yml's "Cache TTS
+      # GGML GGUF models" step, so this addresses the same entry. `warm: false`
+      # because tts has no models.manifest.json and there is nothing to fill:
+      # the point is the transfer, not the contents.
+      - name: Keep the integration model cache alive
+        id: keep-alive
         uses: ./.github/actions/cache-models
         with:
           package: tts-ggml
-          # Deliberately one segment below the lane's key; see the header.
-          cache-key-suffix: seed
           paths: packages/tts-ggml/models
           hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
           enable-cross-os: 'true'
-          assert-exists: 'true'
+          warm: 'false'
+          restore-only: 'true'
+
+      - name: Report
+        shell: bash
+        env:
+          HIT: ${{ steps.keep-alive.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          if [ "$HIT" = 'true' ]; then
+            echo "Restored the integration entry; its prune clock is reset."
+          else
+            echo "No entry to keep alive yet."
+            echo "Expected when the key has just moved, or nothing has published"
+            echo "since the last prune. The next publish or same-repo PR lane"
+            echo "writes a complete entry and this job starts refreshing it."
+          fi

@@ -13,7 +13,7 @@
  * its verify job asserts that same stale key, so it stays green too. The only
  * previous guard was a hand-written comment naming the consumer step.
  */
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -33,6 +33,7 @@ export const KEY_INPUTS = [
   'hash-files-glob',
   'enable-cross-os',
 ]
+export const UNRESOLVED = '<unresolved>'
 const DEFAULTS = { 'cache-version': 'v1', 'cache-key-suffix': '', group: '', 'enable-cross-os': 'true' }
 
 export const listWorkflows = () =>
@@ -45,7 +46,7 @@ function expand(value, matrixRow) {
   const ternary = value.match(/^\$\{\{\s*inputs\.\w+\s*&&\s*'([^']*)'\s*\|\|\s*'([^']*)'\s*\}\}$/)
   if (ternary) return [ternary[1], ternary[2]]
   const mref = value.match(/^\$\{\{\s*matrix\.(\w+)\s*\}\}$/)
-  if (mref) return matrixRow && mref[1] in matrixRow ? [matrixRow[mref[1]]] : ['<unresolved>']
+  if (mref) return matrixRow && mref[1] in matrixRow ? [matrixRow[mref[1]]] : [UNRESOLVED]
   return [value]
 }
 
@@ -146,10 +147,63 @@ const identity = (inputs, row) => {
   return combos.map((c) => KEY_INPUTS.map((k) => `${k}=${c[k]}`).join('|'))
 }
 
+/**
+ * integration-test-nx.yml drives cache-models from `matrix.modelCache`, which
+ * comes from each package's project.json. Those are real consumer identities:
+ * without them the lint is blind to the surface #3903 is migrating CI onto,
+ * and to any collision between an nx lane and its per-addon equivalent.
+ */
+export function nxConsumers() {
+  const pkgRoot = join(ROOT, 'packages')
+  const out = []
+  if (!existsSync(pkgRoot)) return out
+  for (const pkg of readdirSync(pkgRoot).sort()) {
+    const file = join(pkgRoot, pkg, 'project.json')
+    if (!existsSync(file)) continue
+    let doc
+    try {
+      doc = JSON.parse(readFileSync(file, 'utf8'))
+    } catch {
+      continue
+    }
+    const blocks = []
+    const walk = (o) => {
+      if (Array.isArray(o)) return o.forEach(walk)
+      if (o && typeof o === 'object') {
+        for (const [k, v] of Object.entries(o)) {
+          if (k === 'modelCache' && Array.isArray(v)) blocks.push(...v.filter((e) => e && typeof e === 'object'))
+          else walk(v)
+        }
+      }
+    }
+    walk(doc)
+    for (const b of blocks) {
+      out.push({
+        file: `packages/${pkg}/project.json`,
+        line: 0,
+        inputs: {
+          package: pkg,
+          'cache-version': String(b.cacheVersion ?? 'v1'),
+          'cache-key-suffix': String(b.cacheKeySuffix ?? ''),
+          group: String(b.group ?? ''),
+          paths: String(b.paths ?? ''),
+          'hash-files-glob': String(b.hashFilesGlob ?? ''),
+          'enable-cross-os': String(b.enableCrossOs ?? 'true'),
+        },
+        matrix: [null],
+      })
+    }
+  }
+  return out
+}
+
 export function collect(files = listWorkflows()) {
   const seeds = [], consumers = []
-  for (const f of files) {
-    for (const site of parseCallSites(f)) {
+  const sites = files.map((f) => [f, parseCallSites(f)])
+  // nx's per-package blocks are consumers even though they are not workflow YAML
+  sites.push(['integration-test-nx.yml(project.json)', nxConsumers()])
+  for (const [f, found] of sites) {
+    for (const site of found) {
       // a verify job addresses the same entry it asserts; it is not a consumer
       const isVerify = site.inputs['assert-exists'] === 'true'
       for (const row of site.matrix) {
@@ -164,39 +218,57 @@ export function collect(files = listWorkflows()) {
 }
 
 const parse = (id) => Object.fromEntries(id.split('|').map((p) => p.split('=').map((x, i) => (i ? p.slice(p.indexOf('=') + 1) : x))))
-// everything that fixes the cache VERSION, i.e. which entries can match at all
-const versionOf = (f) => [f.package, f['cache-version'], f.paths, f['hash-files-glob'], f['enable-cross-os']].join('|')
+// What fixes the cache VERSION -- i.e. which entries can match each other at
+// all. @actions/cache's getCacheVersion hashes the resolved PATH LIST and the
+// compression method; `enable-cross-os` contributes only on Windows. It does
+// NOT hash `hash-files-glob`: that feeds hashFiles() inside the key string.
+// Including the glob here was wrong, and it narrowed findPrefixCollisions to
+// comparing call sites that differ only by suffix -- i.e. almost nothing.
+//
+// `group` IS included: with no explicit `paths`, warm-models.mjs resolves a
+// per-group path list, so two groups are genuinely different versions.
+const versionOf = (f) => [f.package, f['cache-version'], f.group, f.paths].join('|')
 
+/** Every seed identity must be asked for by at least one consumer call site. */
 /**
- * Every seed identity must be asked for by some consumer -- either exactly, or
- * as a deliberate prefix-seed.
- *
- * A prefix-seed writes one segment BELOW its consumer (suffix `seed`, or
- * `<consumer-suffix>-seed`) with everything else identical. The consumer then
- * misses its exact key, prefix-matches the seed through its restore-key, and --
- * because a prefix hit does not suppress the save -- writes the complete set
- * back under its own key. tts needs this: its tests stage further models at
- * runtime by computed variant/quant, so no seed can be proven complete, and an
- * exact-key seed would freeze the entry at what it staged.
- *
- * Safe only in that direction. The seed's key is the longer one, so its own
- * restore prefix cannot reach the consumer's entries and it can never absorb
- * the complete set. The reverse -- two consumers whose keys prefix each other --
- * is the audiogen bug, and findPrefixCollisions rejects it.
+ * A parser that silently stops finding call sites would make every other check
+ * pass vacuously -- a trailing comment on a `uses:` line was enough. So: any
+ * workflow that mentions the action must yield at least one parsed site, and
+ * the totals must not fall below what the repo is known to have.
  */
+export const FLOOR = { seeds: 12, consumers: 100, nxConsumers: 10 }
+
+export function findParserGaps(files = listWorkflows()) {
+  const gaps = []
+  for (const f of files) {
+    const text = readFileSync(join(WORKFLOWS, f), 'utf8')
+    // Only a `uses:` invocation, not a paths filter or a `node --test` path.
+    // This is exactly the shape a trailing comment on the line would hide.
+    if (!/uses:\s*\.\/\.github\/actions\/cache-models/.test(text)) continue
+    if (parseCallSites(f).length === 0) {
+      gaps.push(`${f} references cache-models but no call site parsed`)
+    }
+  }
+  const { seeds, consumers } = collect(files)
+  if (seeds.length < FLOOR.seeds) {
+    gaps.push(`only ${seeds.length} seed identities parsed, expected at least ${FLOOR.seeds}`)
+  }
+  if (consumers.length < FLOOR.consumers) {
+    gaps.push(`only ${consumers.length} consumer identities parsed, expected at least ${FLOOR.consumers}`)
+  }
+  // nx's identities come from packages/*/project.json, a separate parse that
+  // can break independently of the workflow one.
+  const nx = nxConsumers().length
+  if (nx < FLOOR.nxConsumers) {
+    gaps.push(`only ${nx} nx modelCache blocks parsed from packages/*/project.json, expected at least ${FLOOR.nxConsumers}`)
+  }
+  return gaps
+}
+
 export function findOrphanedSeeds(files) {
   const { seeds, consumers } = collect(files)
-  const exact = new Set(consumers.map((c) => c.id))
-  return seeds.filter((s) => {
-    if (exact.has(s.id)) return false
-    const sf = parse(s.id)
-    return !consumers.some((c) => {
-      const cf = parse(c.id)
-      if (versionOf(cf) !== versionOf(sf)) return false
-      const expected = cf['cache-key-suffix'] ? `${cf['cache-key-suffix']}-seed` : 'seed'
-      return sf['cache-key-suffix'] === expected
-    })
-  })
+  const wanted = new Set(consumers.map((c) => c.id))
+  return seeds.filter((s) => !wanted.has(s.id))
 }
 
 /**
@@ -210,26 +282,85 @@ export function findOrphanedSeeds(files) {
  * An empty suffix prefixes everything in the same version, which is how the
  * audiogen functional leg absorbed the all-dit-variants benchmark set.
  */
-export function findPrefixCollisions(files) {
+/**
+ * Prefix collisions that already exist on main. Each is a real hazard: the
+ * shorter leg can prefix-match the other's entry, find its files present, skip
+ * its own download and save the union under its own key. None is introduced by
+ * the model-cache seeding work, and fixing them changes what other lanes
+ * resolve, so they are recorded here rather than silently tolerated.
+ *
+ * Anything NOT on this list fails the build. Remove entries as they are fixed;
+ * do not add without a ticket.
+ */
+export const KNOWN_COLLISIONS = [
+  {
+    a: 'integration-test-asr-ggml.yml',
+    b: 'cpp-test-coverage-asr-ggml.yml',
+    why: "asr's C++ coverage lane caches packages/asr-ggml/models under suffix cpp-tests; the integration lane's empty suffix reaches it",
+  },
+  {
+    a: 'integration-test-asr-ggml.yml',
+    b: 'integration-test-asr-ggml.yml',
+    why: "pin-model-manifest and the integration job share a path list and suffix but hash different globs, so one prefix covers both keys",
+  },
+  {
+    a: 'integration-test-translation-nmtcpp.yml',
+    b: 'packages/translation-nmtcpp/project.json',
+    why: 'the nx lane and the per-addon lane cache the same directory under different globs; resolving it needs one download definition (see #3903)',
+  },
+  {
+    a: 'integration-test-vla.yml',
+    b: 'packages/vla-ggml/project.json',
+    why: 'same as translation: nx and the per-addon lane share a path list',
+  },
+]
+
+const isKnown = (c) =>
+  KNOWN_COLLISIONS.some(
+    (k) =>
+      (k.a === c.a.file && k.b === c.b.file) || (k.a === c.b.file && k.b === c.a.file),
+  )
+
+export function findAllPrefixCollisions(files) {
   const { consumers } = collect(files)
   const byVersion = new Map()
   for (const c of consumers) {
     const f = parse(c.id)
+    if (f.package === UNRESOLVED) continue
     const v = versionOf(f)
     if (!byVersion.has(v)) byVersion.set(v, new Map())
-    byVersion.get(v).set(f['cache-key-suffix'], c)
+    // key by the FULL identity, not the suffix: two sites with the same suffix
+    // but different hash-files-glob produce different keys under one prefix,
+    // which is the same hazard and was previously collapsed away.
+    byVersion.get(v).set(c.id, { ...c, fields: f })
   }
   const out = []
-  for (const [, bySuffix] of byVersion) {
-    const suffixes = [...bySuffix.keys()]
-    for (const a of suffixes) {
-      for (const b of suffixes) {
-        if (a === b) continue
-        // restore prefix of A reaches the key of B?
-        const reaches = a === '' || b.startsWith(`${a}-`)
-        if (reaches) out.push({ shorter: a, longer: b, a: bySuffix.get(a), b: bySuffix.get(b) })
+  for (const [, byIdentity] of byVersion) {
+    const sites = [...byIdentity.values()]
+    for (const a of sites) {
+      for (const b of sites) {
+        if (a.id === b.id) continue
+        const sa = a.fields['cache-key-suffix']
+        const sb = b.fields['cache-key-suffix']
+        // a's restore prefix is `models-<pkg>-<ver>[-<sa>]-`; b's key is
+        // `models-<pkg>-<ver>[-<sb>]-<hash>`. a reaches b when sa is empty, when
+        // the suffixes are equal (different glob => different hash, same
+        // prefix), or when sb sits under sa.
+        const reaches = sa === '' || sa === sb || sb.startsWith(`${sa}-`)
+        if (!reaches) continue
+        // report each unordered pair once unless the reach is one-directional
+        const mutual = sb === '' || sa === sb || sa.startsWith(`${sb}-`)
+        if (mutual && a.id > b.id) continue
+        out.push({ shorter: sa, longer: sb, a, b })
       }
     }
   }
   return out
 }
+
+/** New collisions -- anything not already recorded on main. Build fails on these. */
+export const findPrefixCollisions = (files) =>
+  findAllPrefixCollisions(files).filter((c) => !isKnown(c))
+
+/** Collisions that exist on main and are recorded in KNOWN_COLLISIONS. */
+export const findKnownCollisions = (files) => findAllPrefixCollisions(files).filter(isKnown)

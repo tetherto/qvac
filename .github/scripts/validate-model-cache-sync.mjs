@@ -13,11 +13,22 @@
 import {
   KEY_INPUTS,
   collect,
+  findKnownCollisions,
   findOrphanedSeeds,
+  findParserGaps,
   findPrefixCollisions,
 } from './lib/model-cache-sync.mjs'
 
 function main() {
+  // Before trusting anything below, check the parser still sees the repo.
+  const gaps = findParserGaps()
+  if (gaps.length > 0) {
+    console.error('validate-model-cache-sync: the parser has gone blind, so every')
+    console.error('other check below would pass vacuously:')
+    for (const g of gaps) console.error(`  ${g}`)
+    process.exit(1)
+  }
+
   const orphans = findOrphanedSeeds()
   const { seeds, consumers } = collect()
 
@@ -60,10 +71,18 @@ function main() {
     process.exit(1)
   }
 
+  const known = findKnownCollisions()
   console.log(
     `validate-model-cache-sync: ok (${seeds.length} seed identities, all consumed; ` +
-      `${consumers.length} consumer identities)`,
+      `${consumers.length} consumer identities; no NEW restore-key prefix collisions)`,
   )
+  if (known.length > 0) {
+    console.log(`  ${known.length} collision(s) recorded as pre-existing on main:`)
+    for (const c of known) {
+      const short = c.shorter === '' ? '(empty)' : c.shorter
+      console.log(`    ${c.a.file}:${c.a.line} (${short}) reaches ${c.b.file}:${c.b.line}`)
+    }
+  }
 }
 
 main()
