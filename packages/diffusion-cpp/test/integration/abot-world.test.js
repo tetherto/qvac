@@ -163,7 +163,7 @@ test(
       config: {
         device: 'gpu',
         offload_to_cpu: true,
-        vae_on_cpu: true
+        params_backend: 'vae=cpu'
       },
       logger: console
     })

@@ -11,6 +11,8 @@ import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './uti
 
 // Chatterbox multilingual TTS (GGML): Japanese synthesis with MeCab/IPAdic.
 // Uses registry model constants — downloads automatically from QVAC Registry.
+// Only a fallback: the engine reports the rate it actually produced, and
+// `outputSampleRate` (plus the LavaSR enhancer) can move it off this default.
 const CHATTERBOX_SAMPLE_RATE = 24000
 const OUTPUT_FILE = 'chatterbox-multilingual-output.wav'
 
@@ -44,18 +46,16 @@ try {
   })
 
   const audioBuffer = await result.buffer
+  const sampleRate = (await result.sampleRate) ?? CHATTERBOX_SAMPLE_RATE
   console.log(`▸ TTS complete. Total samples: ${audioBuffer.length}`)
 
   console.log('▸ Saving audio to file...')
-  createWav(audioBuffer, CHATTERBOX_SAMPLE_RATE, OUTPUT_FILE)
+  createWav(audioBuffer, sampleRate, OUTPUT_FILE)
   console.log(`▸ Audio saved to ${OUTPUT_FILE}`)
 
   console.log('▸ Playing audio...')
   const audioData = int16ArrayToBuffer(audioBuffer)
-  const wavBuffer = Buffer.concat([
-    createWavHeader(audioData.length, CHATTERBOX_SAMPLE_RATE),
-    audioData
-  ])
+  const wavBuffer = Buffer.concat([createWavHeader(audioData.length, sampleRate), audioData])
   playAudio(wavBuffer)
   console.log('▸ Audio playback complete')
 

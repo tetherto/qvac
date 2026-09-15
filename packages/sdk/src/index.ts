@@ -107,10 +107,27 @@ export {
   type TextToSpeechStreamResponse,
   type TextToSpeechStreamClientParams,
   type TtsClientParamsInput,
+  type TextToSpeechStreamResult,
+  type TtsSentenceChunkUpdate,
+  type TtsResponse,
+  type TtsStats,
+  TTS_ENGINES,
+  type TtsEngine,
+  TTS_PARLER_EMOTIONS,
   type TtsParlerEmotion,
   type TtsParlerLoadConfig,
   type TtsParlerRuntimeConfig,
   TTS_PACES,
+  TTS_SENTENCE_DELIMITER_PRESETS,
+  type TtsSentenceDelimiterPreset,
+  TTS_CHATTERBOX_LANGUAGES,
+  type TtsChatterboxLanguage,
+  type TtsChatterboxLoadConfig,
+  type TtsChatterboxRuntimeConfig,
+  TTS_SUPERTONIC_LANGUAGES,
+  type TtsSupertonicLanguage,
+  type TtsSupertonicLoadConfig,
+  type TtsSupertonicRuntimeConfig,
   TTS_COSYVOICE3_EMOTIONS,
   TTS_COSYVOICE3_INSTRUCT_DIALECTS,
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
@@ -309,13 +326,18 @@ export {
 // `StreamEndedError` is raised by the streaming result helpers (upscale, world)
 // when the RPC stream closes without a terminal `done` frame. Exported for the
 // same reason as the rest of this block: matching on it requires the class.
+// `TextToSpeechStreamFailedError` is what `textToSpeech()` throws for an
+// invalid stream/sentenceStream combination, and what the duplex TTS session
+// throws on a write after end — its own JSDoc named it long before it was
+// exported.
 export {
   BareRuntimeBinaryNotFoundError,
   WorkerCrashedError,
   WorkerShutdownError,
   WorkerStartupError,
   RequestValidationFailedError,
-  StreamEndedError
+  StreamEndedError,
+  TextToSpeechStreamFailedError
 } from './utils/errors-client'
 
 // Logging exports

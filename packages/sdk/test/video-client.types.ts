@@ -3,6 +3,16 @@ import type { VideoClientParams } from '@qvac/inference/surface'
 function acceptVideoParams(_params: VideoClientParams) {}
 
 acceptVideoParams({
+  modelId: 'h3',
+  mode: 'txt2vid',
+  prompt: 'Steam rises from coffee.',
+  video_frames: 124,
+  fps: 24,
+  cfg_scale: 1,
+  scheduler: 'discrete'
+})
+
+acceptVideoParams({
   modelId: 'model-1',
   mode: 'txt2vid',
   prompt: 'an explorer',
