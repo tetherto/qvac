@@ -119,6 +119,23 @@ jobs:
           node scripts/stage-integration-models.mjs
           ls -lh models/
 
+      # packages/asr-ggml/models is ONE entry covering BOTH engines: parakeet
+      # from S3 above, and the whisper + VAD models the tests pull from
+      # HuggingFace at runtime (integration-test-asr-ggml.yml says as much on
+      # its own cache step). Staging parakeet alone would hand every PR leg an
+      # exact primary-key hit, which makes actions/cache skip its save by
+      # design -- so the entry could never grow to hold them and all seven legs
+      # would re-fetch ~78 MB from HuggingFace on every run, permanently.
+      # Node built-ins only, so this runs on the win32 leg too.
+      - name: Stage whisper + VAD models from HuggingFace (manifest-driven)
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: packages/asr-ggml
+        run: |
+          set -euo pipefail
+          node scripts/stage-whisper-models.mjs
+          ls -lh models/
+
   # actions/cache only WARNS when the cache server rejects a reservation, so the
   # seed job above reports success whether or not an entry was written. This
   # turns that into a red run. It has to be a separate job: the save runs in the
