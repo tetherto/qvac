@@ -37,6 +37,10 @@ existing message naming the exact `@qvac/tts-ggml-<host>` package to install,
 and a platform package that resolves to something other than the binding
 raises an error saying so instead of silently degrading.
 
+## Pull Requests
+
+- [#4485](https://github.com/tetherto/qvac/pull/4485) - fix: reject a non-binding from require.addon() and fall back to the platform package
+
 
 ## [0.9.0] - 2026-09-11
 
