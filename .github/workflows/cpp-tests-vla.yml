@@ -291,7 +291,7 @@ jobs:
           umask 000
 
           sync_dir() {
-            find "$1" -type f -name '*.zip' 2>/dev/null | while read -r f; do
+            find "$1" -type f 2>/dev/null | while read -r f; do
               out="$2/${f#$1/}"
               [ -f "$out" ] && continue
               mkdir -p "$(dirname "$out")" 2>/dev/null
@@ -303,7 +303,7 @@ jobs:
           sync_dir "${host_dir}" "${ws_dir}"
           sync_dir "${ws_dir}" "${host_dir}"
 
-          echo "sync: host=$(find "${host_dir}" -name '*.zip' 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -name '*.zip' 2>/dev/null | wc -l)"
+          echo "sync: host=$(find "${host_dir}" -type f 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -type f 2>/dev/null | wc -l)"
           exit 0
 
       # Only trusted events may write the shared cache (see .github/AGENTS.md),
