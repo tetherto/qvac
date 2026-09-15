@@ -43,6 +43,9 @@ TEST_F(WorldSessionModelTest, ConfigDefaultsMatchDocumentedContract) {
   EXPECT_EQ(config.localAttnSize, 0);    // 0 = engine default (8)
   EXPECT_EQ(config.frameJpegQuality, 0); // 0 = PNG frames
   EXPECT_FALSE(config.offloadParamsToCpu);
+  EXPECT_TRUE(config.paramsBackend.empty());
+  EXPECT_TRUE(config.maxVram.empty());
+  EXPECT_FALSE(config.streamLayers);
   EXPECT_FALSE(config.kvCache);
   EXPECT_FALSE(config.profile);
 }
@@ -120,6 +123,31 @@ TEST_F(WorldSessionModelTest, DestroyUnloadedModelIsNoop) {
 // `v == "true"` comparison, and silently kept the false default.
 
 class WorldSessionHandlersTest : public ::testing::Test {};
+
+TEST_F(WorldSessionHandlersTest, LayerStreamingUsesEngineAssignmentSyntax) {
+  WorldSessionConfig config{};
+  for (const auto& budget : {"6", "-1", "0", "cuda0=6,vulkan0=-1"}) {
+    applyWorldSessionHandlers(config, {{"maxVram", budget}});
+    EXPECT_EQ(config.maxVram, budget);
+  }
+  applyWorldSessionHandlers(
+      config,
+      {{"paramsBackend", "diffusion=disk,vae=cpu"},
+       {"offloadParamsToCpu", "true"},
+       {"streamLayers", "1"}});
+  EXPECT_EQ(config.paramsBackend, "diffusion=disk,vae=cpu");
+  EXPECT_TRUE(config.offloadParamsToCpu);
+  EXPECT_TRUE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "0"}});
+  EXPECT_FALSE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "true"}});
+  EXPECT_TRUE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "false"}});
+  EXPECT_FALSE(config.streamLayers);
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"streamLayers", "yes"}}),
+      StatusError);
+}
 
 TEST_F(WorldSessionHandlersTest, NumericBooleansParse) {
   WorldSessionConfig config{};

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.25.0] - 2026-09-15
+
+### Added
+
+- ABot-World sessions expose `paramsBackend`, `maxVram`, and `streamLayers`,
+  using the same parameter manager and graph-cut executor as MiniMax-H3.
+  CPU-backed streaming and explicit disk residency work with the walk's KV cache.
+- World `verbosity` exposes native placement and segment-residency logs.
+
 ## [0.24.0] - 2026-09-15
 
 This release adds explicit model-placement and layer-streaming controls, with
