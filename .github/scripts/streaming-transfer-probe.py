@@ -92,6 +92,46 @@ def tensor(buft, size):
 
 
 try:
+    # Small buffers may fit in the device's mapped BAR aperture while the
+    # larger probes below cannot. Record aperture usage around allocation.
+    for source_mode, source_type in [("CPU", cpu_buft()),
+                                     ("Vulkan_Host", host_buft(backend_device(gpu)))]:
+        size = 8 * 1024 * 1024
+        source = tensor(source_type, size)
+        print("SMALL_BUFFER_BEFORE", source_mode, flush=True)
+        subprocess.run(["nvidia-smi", "-q", "-d", "MEMORY"], timeout=30, check=False)
+        target = tensor(default_buft(gpu), size)
+        print("SMALL_BUFFER_ALLOCATED", source_mode, flush=True)
+        subprocess.run(["nvidia-smi", "-q", "-d", "MEMORY"], timeout=30, check=False)
+        try:
+            fill(source[1], 42, 0, size)
+            address = data_pointer(source[1])
+            assert address
+            for chunk_mib in [8, 0.25, 0.0625]:
+                chunk = int(chunk_mib * 1024 * 1024)
+                for mode in ["synchronous", "queued"]:
+                    fill(target[1], 7, 0, size)
+                    sync(gpu)
+                    start = time.perf_counter()
+                    for offset in range(0, size, chunk):
+                        if mode == "queued":
+                            set_tensor_async(gpu, target[1], address + offset, offset, chunk)
+                        else:
+                            set_tensor(target[1], address + offset, offset, chunk)
+                    sync(gpu)
+                    elapsed = round(1000 * (time.perf_counter() - start), 3)
+                    for offset in [0, size - 32]:
+                        output = c.create_string_buffer(32)
+                        read(target[1], output, offset, 32)
+                        assert output.raw == bytes([42]) * 32, "small-buffer copy differs"
+                    print(json.dumps({"pattern": "small_buffer", "source": source_mode,
+                                      "mode": mode, "MiB": 8, "chunk_MiB": chunk_mib,
+                                      "milliseconds": elapsed, "bytes_verified": True}), flush=True)
+        finally:
+            free_buf(target[2])
+            free_ctx(target[0])
+            free_buf(source[2])
+            free_ctx(source[0])
     for mode, source_type in [("CPU", cpu_buft()),
                               ("Vulkan_Host", host_buft(backend_device(gpu)))]:
         assert source_type, mode
