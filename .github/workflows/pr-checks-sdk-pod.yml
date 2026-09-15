@@ -410,6 +410,12 @@ jobs:
                 run "sdk-source $src" npm run --if-present "sdk-source:$SRC"
               fi
 
+              # VERIFY ONLY (do not merge): swap the hardened binding.js from
+              # fix/tts-ggml-binding-non-addon-guard into every installed copy of
+              # the addon, to prove it clears the tts e2e before 0.9.1 publishes.
+              find "$WS" -path '*/node_modules/@qvac/tts-ggml/binding.js' \
+                -exec cp "$WS/packages/tts-ggml/binding.js" {} \; -print
+
               # Peer-resolution drift against this source's resolved @qvac/inference.
               if [ "$PKG" = "sdk" ]; then
                 run "npm install (peer resolution) $src" sdk_npm_install_check
