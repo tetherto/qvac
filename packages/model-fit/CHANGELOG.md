@@ -4,16 +4,16 @@
 
 ### Added
 
-- A metadata-only GGUF — header, KV block and tensor infos, no data section, as
-  `gguf_write_to_file(..., only_meta = true)` writes it — is documented and
-  covered as an accepted `modelPath`, single-file and 2-way split. The fit loads
-  with `no_alloc` and no mmap and never reads tensor bytes, so a header-only
-  file projects the same plan as the full artefact and does not need padding out
-  to the artefact length. The `projection` probe — a second no_alloc load, which
-  reports a failure as an absent projection rather than an error — is covered on
-  the same files. The loader's file-bounds check became conditional in
-  `qvac-fabric` 10549.0.0, which arrived with the `@qvac/fabric` bump in 0.10.0;
-  no API change here.
+- A fit stub is documented and covered as an accepted `modelPath`, single-file
+  and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
+  tokenizer tables and no data section, which the registry serves in place of
+  the artefact. It projects the same plan as the full file, and needs no padding
+  out to the artefact length. Two fabric behaviours make that work and both are
+  covered — 10549.0.0 skips the file-bounds check under no_alloc, and the vocab
+  load it does *not* skip is satisfied by `tokenizer.ggml.model = none` plus a
+  surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
+  that reports failure as an absent projection rather than an error, is asserted
+  on the same files. No API change.
 
 ### Fixed
 

@@ -1,13 +1,19 @@
 'use strict'
 
-// Builds the metadata-only and split GGUF fixtures the fit tests compare
-// against, from whatever real model the suite already downloaded.
+// Builds the fit-stub fixtures the tests compare against, from whatever real
+// model the suite already downloaded.
 //
-// A metadata-only GGUF is the header, the KV pairs and the tensor infos, padded
-// to the data alignment, with no data section. gguf_write_to_file writes that
-// padding before it returns for only_meta, so the file it produces is
-// byte-identical to the first `dataOffset` bytes of the full artefact — hence
-// `writeMetaOnly` truncates rather than re-serialising.
+// A fit stub is the short GGUF the registry serves for a fit: the header, the
+// hyperparameters and the tensor infos, with the tokenizer tables dropped and
+// nothing after the header — tens of KB in place of the artefact. The tensor
+// offsets describe the artefact's layout, so they run far past the stub's EOF.
+//
+// Two things make it loadable. qvac-fabric 10549.0.0 skips the file-bounds
+// check under no_alloc, which is what lets the data section be absent rather
+// than padded out. It does not skip the vocab load, so the tokenizer keys
+// cannot all go: `tokenizer.ggml.model = none` is what takes that load to its
+// early return, and the vocabulary size has to survive as `{arch}.vocab_size`.
+// BERT-family models need `tokenizer.ggml.token_type_count` on top.
 
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -47,6 +53,9 @@ const SCALAR_SIZE = {
   [TYPE.INT64]: 8,
   [TYPE.FLOAT64]: 8
 }
+
+const TOKENIZER_MODEL = 'tokenizer.ggml.model'
+const TOKEN_TYPE_COUNT = 'tokenizer.ggml.token_type_count'
 
 // llama_split_path: the loader derives every sibling shard from the first one,
 // so the names have to match this exactly.
@@ -95,6 +104,8 @@ function createCursor(buf) {
   }
 }
 
+// Walks past a value without decoding it. Values the fixtures read back are
+// decoded from the recorded offset instead; the rest are copied as raw bytes.
 function skipValue(cur, type) {
   if (type === TYPE.STRING) {
     cur.str()
@@ -127,18 +138,21 @@ function parseMetadata(buf) {
   const nTensors = cur.u64()
   const nKv = cur.u64()
 
-  const kvStart = cur.offset
+  const kvs = []
   let alignment = DEFAULT_ALIGNMENT
   for (let i = 0; i < nKv; i++) {
+    const start = cur.offset
     const key = cur.str()
     const type = cur.u32()
-    if (key === 'general.alignment') {
-      if (type !== TYPE.UINT32) throw new Error('general.alignment is not a uint32')
-      alignment = buf.readUInt32LE(cur.offset)
-    }
+    const valueAt = cur.offset
     skipValue(cur, type)
+    const entry = { key, type, start, end: cur.offset }
+    if (type === TYPE.UINT32) entry.value = buf.readUInt32LE(valueAt)
+    else if (type === TYPE.INT32) entry.value = buf.readInt32LE(valueAt)
+    else if (type === TYPE.STRING) entry.value = buf.toString('utf8', valueAt + 8, cur.offset)
+    kvs.push(entry)
+    if (key === 'general.alignment' && type === TYPE.UINT32) alignment = entry.value
   }
-  const kvBytes = buf.subarray(kvStart, cur.offset)
 
   const tensors = []
   for (let i = 0; i < nTensors; i++) {
@@ -151,7 +165,7 @@ function parseMetadata(buf) {
     tensors.push({ name, dims, type, offset })
   }
 
-  return { version, nKv, kvBytes, tensors, alignment, dataOffset: pad(cur.offset, alignment) }
+  return { version, kvs, tensors, alignment, dataOffset: pad(cur.offset, alignment) }
 }
 
 // Reads just enough of the file to parse the metadata. Tokenizer arrays make
@@ -164,8 +178,7 @@ function readGguf(filePath) {
       const buf = Buffer.alloc(size)
       fs.readSync(fd, buf, 0, size, 0)
       try {
-        const meta = parseMetadata(buf)
-        return { ...meta, fileSize }
+        return { ...parseMetadata(buf), buf, fileSize }
       } catch (err) {
         if (!(err instanceof RangeError) || size === fileSize) throw err
       }
@@ -173,6 +186,11 @@ function readGguf(filePath) {
   } finally {
     fs.closeSync(fd)
   }
+}
+
+function kvValue(meta, key) {
+  const entry = meta.kvs.find((kv) => kv.key === key)
+  return entry === undefined ? undefined : entry.value
 }
 
 // Tensor data is laid out contiguously and every tensor starts on an alignment
@@ -199,8 +217,13 @@ function writeKv(chunks, key, type, value) {
   const head = Buffer.alloc(4)
   head.writeUInt32LE(type)
   chunks.push(head)
+  if (type === TYPE.STRING) {
+    writeString(chunks, value)
+    return
+  }
   const body = Buffer.alloc(SCALAR_SIZE[type])
   if (type === TYPE.UINT16) body.writeUInt16LE(value)
+  else if (type === TYPE.UINT32) body.writeUInt32LE(value)
   else if (type === TYPE.INT32) body.writeInt32LE(value)
   else throw new Error(`writeKv does not serialise type ${type}`)
   chunks.push(body)
@@ -222,31 +245,62 @@ function writeTensorInfo(chunks, tensor, offset) {
   chunks.push(head)
 }
 
-function writeShard({
-  destPath,
-  srcPath,
-  meta,
-  tensors,
-  nKv,
-  kvBytes,
-  splitNo,
-  splitCount,
-  metaOnly
-}) {
+// llama reads the vocabulary size from `{arch}.vocab_size` and otherwise falls
+// back to the token list a stub drops, so an absent key has to be synthesised —
+// token_embd.weight is [n_embd, n_vocab]. Architectures with no token embedding
+// (vision towers, codecs, ASR) have no vocabulary to declare, and the registry
+// omits the key there too.
+function vocabSize(meta) {
+  const embd = meta.tensors.find((t) => t.name === 'token_embd.weight')
+  return embd === undefined || embd.dims.length < 2 ? undefined : embd.dims[1]
+}
+
+// The KV block of a stub: everything the source declares except the tokenizer
+// tables, with the keys the vocab load still needs forced to the values that
+// take it to its early return. A shard past the first declares no tokenizer of
+// its own, so it gains nothing here either.
+function stubKvs(meta) {
+  const kept = []
+  let sawTokenizer = false
+  for (const kv of meta.kvs) {
+    if (!kv.key.startsWith('tokenizer.')) kept.push({ raw: kv })
+    else if (kv.key === TOKEN_TYPE_COUNT) kept.push({ raw: kv })
+    if (kv.key.startsWith('tokenizer.')) sawTokenizer = true
+  }
+  if (!sawTokenizer) return kept
+
+  // No architecture means no `{arch}.vocab_size` to restate — a shard past the
+  // first, or a model llama identifies some other way.
+  const arch = kvValue(meta, 'general.architecture')
+  if (typeof arch === 'string' && kvValue(meta, `${arch}.vocab_size`) === undefined) {
+    const vocab = vocabSize(meta)
+    if (vocab !== undefined) {
+      kept.push({ key: `${arch}.vocab_size`, type: TYPE.UINT32, value: vocab })
+    }
+  }
+  kept.push({ key: TOKENIZER_MODEL, type: TYPE.STRING, value: 'none' })
+  return kept
+}
+
+function writeGguf({ destPath, srcPath, meta, kvs, tensors, writeData }) {
   const chunks = []
 
   const header = Buffer.alloc(4 + 4 + 8 + 8)
   header.write(MAGIC, 0, 'ascii')
   header.writeUInt32LE(meta.version, 4)
   header.writeBigUInt64LE(BigInt(tensors.length), 8)
-  header.writeBigUInt64LE(BigInt(nKv + 3), 16)
+  header.writeBigUInt64LE(BigInt(kvs.length), 16)
   chunks.push(header)
 
-  if (kvBytes) chunks.push(kvBytes)
-  writeKv(chunks, 'split.no', TYPE.UINT16, splitNo)
-  writeKv(chunks, 'split.count', TYPE.UINT16, splitCount)
-  writeKv(chunks, 'split.tensors.count', TYPE.INT32, meta.tensors.length)
+  for (const kv of kvs) {
+    if (kv.raw) chunks.push(meta.buf.subarray(kv.raw.start, kv.raw.end))
+    else writeKv(chunks, kv.key, kv.type, kv.value)
+  }
 
+  // gguf_init rejects a tensor whose offset is not exactly where the previous
+  // one ended, so every file numbers its own data section from 0 — including a
+  // stub, whose offsets then run far past its EOF. For a whole-model stub this
+  // reproduces the source offsets, the extents being the source layout.
   const placed = []
   let dataSize = 0
   for (const tensor of tensors) {
@@ -262,7 +316,7 @@ function writeShard({
   const fd = fs.openSync(destPath, 'w')
   try {
     for (const chunk of chunks) fs.writeSync(fd, chunk, 0, chunk.length)
-    if (metaOnly) return dataOffset
+    if (!writeData) return destPath
 
     const src = fs.openSync(srcPath, 'r')
     const body = Buffer.alloc(COPY_CHUNK)
@@ -281,57 +335,67 @@ function writeShard({
     fs.closeSync(fd)
   }
 
-  return dataOffset
+  return destPath
+}
+
+function shardTensors(meta, splitCount) {
+  const extents = tensorExtents(meta)
+  if (extents.length < splitCount) throw new Error('not enough tensors to split')
+  const perShard = Math.ceil(extents.length / splitCount)
+  return Array.from({ length: splitCount }, (_, i) =>
+    extents.slice(i * perShard, (i + 1) * perShard)
+  )
+}
+
+function splitKvs(meta, { splitNo, splitCount }) {
+  return [
+    { key: 'split.no', type: TYPE.UINT16, value: splitNo },
+    { key: 'split.count', type: TYPE.UINT16, value: splitCount },
+    { key: 'split.tensors.count', type: TYPE.INT32, value: meta.tensors.length }
+  ]
 }
 
 /**
- * Truncates a GGUF to its metadata, producing what
- * `gguf_write_to_file(..., only_meta = true)` writes for the same model.
+ * Writes the fit stub for a GGUF: the shape the registry serves — no tokenizer
+ * tables, `tokenizer.ggml.model = none`, no data section.
  * @returns {string} destPath
  */
-function writeMetaOnly(srcPath, destPath) {
-  const { dataOffset } = readGguf(srcPath)
-  const buf = Buffer.alloc(dataOffset)
-  const fd = fs.openSync(srcPath, 'r')
-  try {
-    fs.readSync(fd, buf, 0, dataOffset, 0)
-  } finally {
-    fs.closeSync(fd)
-  }
-  fs.writeFileSync(destPath, buf)
-  return destPath
+function writeFitStub(srcPath, destPath) {
+  const meta = readGguf(srcPath)
+  return writeGguf({
+    destPath,
+    meta,
+    kvs: stubKvs(meta),
+    tensors: tensorExtents(meta),
+    writeData: false
+  })
 }
 
 /**
  * Splits a GGUF into `splitCount` shards named the way llama_split_path names
  * them, mirroring gguf-split: the first shard carries the source metadata, the
- * rest carry only the split keys. `metaOnly` drops every data section, which is
- * the sharded form of what only_meta writes.
+ * rest carry only the split keys. `stub` writes each shard as a fit stub.
  * @returns {string[]} shard paths, first shard first
  */
-function writeSplit(srcPath, prefix, { splitCount = 2, metaOnly = false } = {}) {
+function writeSplit(srcPath, prefix, { splitCount = 2, stub = false } = {}) {
   const meta = readGguf(srcPath)
-  const extents = tensorExtents(meta)
-  if (extents.length < splitCount) throw new Error('not enough tensors to split')
+  const shards = shardTensors(meta, splitCount)
 
-  const perShard = Math.ceil(extents.length / splitCount)
-  const paths = []
-  for (let i = 0; i < splitCount; i++) {
-    const destPath = splitPath(prefix, i, splitCount)
-    writeShard({
-      destPath,
+  return shards.map((tensors, i) => {
+    const source = i === 0 ? (stub ? stubKvs(meta) : allKvs(meta)) : []
+    return writeGguf({
+      destPath: splitPath(prefix, i, splitCount),
       srcPath,
       meta,
-      tensors: extents.slice(i * perShard, (i + 1) * perShard),
-      nKv: i === 0 ? meta.nKv : 0,
-      kvBytes: i === 0 ? meta.kvBytes : null,
-      splitNo: i,
-      splitCount,
-      metaOnly
+      kvs: [...source, ...splitKvs(meta, { splitNo: i, splitCount })],
+      tensors,
+      writeData: !stub
     })
-    paths.push(destPath)
-  }
-  return paths
+  })
+}
+
+function allKvs(meta) {
+  return meta.kvs.map((raw) => ({ raw }))
 }
 
 /** Absolute path of a fixture beside the downloaded test model. */
@@ -341,8 +405,9 @@ function fixturePath(name) {
 
 module.exports = {
   fixturePath,
+  kvValue,
   readGguf,
   splitPath,
-  writeMetaOnly,
+  writeFitStub,
   writeSplit
 }
