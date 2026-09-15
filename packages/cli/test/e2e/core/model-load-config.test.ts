@@ -2,6 +2,14 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from '../helpers/server.js'
 import { assertStatusAndError, JSON_HEADERS } from '../helpers/http.js'
+import { WorkerStartupError } from '@qvac/sdk'
+
+function rpcTimeout(cause?: unknown): Error {
+  return new Error(
+    'RPC initialization timed out after 30000ms — the worker process may have failed to start',
+    { cause }
+  )
+}
 
 const CHAT_BODY = { model: '', messages: [{ role: 'user', content: 'hi' }] }
 
@@ -10,6 +18,50 @@ function chat(model: string) {
 }
 
 describe('serve: load config', () => {
+  for (const route of [
+    {
+      url: '/v1/chat/completions',
+      type: 'llamacpp-completion',
+      body: { messages: [{ role: 'user', content: 'hi' }] }
+    },
+    { url: '/v1/responses', type: 'llamacpp-completion', body: { input: 'hi' } },
+    { url: '/qvac/v1/translate', type: 'nmtcpp-translation', body: { text: 'hola' } }
+  ]) {
+    it(`${route.url}: a worker exit returns a safe startup hint in the 503 body`, async (t) => {
+      const stderr =
+        '/private/addon.bare: libatomic.so.1: cannot open shared object file: No such file or directory\nprivate diagnostic marker'
+      const cause = new WorkerStartupError(
+        'worker exited',
+        { code: null, signal: 'SIGABRT' },
+        stderr
+      )
+      const error = rpcTimeout(cause)
+      const app = await createServer(t, {
+        config: {
+          serve: {
+            models: {
+              failed: { type: route.type, src: 'hyper://example.invalid/model', preload: false }
+            }
+          }
+        },
+        loadModelOverride: () => Promise.reject(error)
+      })
+
+      const res = await app.inject({
+        method: 'POST',
+        url: route.url,
+        payload: { model: 'failed', ...route.body }
+      })
+
+      assertStatusAndError(res, 503, 'model_load_failed')
+      assert.match(res.body, /Worker process exited.*before IPC connection was established/)
+      assert.match(res.body, /install libatomic1 in the environment running the worker/)
+      assert.doesNotMatch(res.body, /timed out|30000|\/private\/|diagnostic marker/)
+      assert.equal(error.cause, cause)
+      assert.equal(cause.stderrTail, stderr)
+    })
+  }
+
   it('lazy loading disabled → 503 model_not_loaded (no load attempted)', async (t) => {
     const app = await createServer(t, {
       config: {
