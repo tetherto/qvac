@@ -2114,10 +2114,9 @@ test('release policy: no workflow cuts a GitHub Release outside the SDK surface'
 })
 
 // A cpp-tests workflow runs PR-head code and is reachable from a fork PR once
-// fork-ci is approved, so a cache WRITE (actions/cache, as opposed to
-// actions/cache/restore) must be gated on trusted events only. The split is easy
-// to undo by accident -- the two steps are near-identical and differ by four
-// lines -- so pin it here. See .github/AGENTS.md.
+// fork-ci is approved, so a cache WRITE (actions/cache/save) must be gated on
+// trusted events only. Easy to undo by accident, so pin it here.
+// See .github/AGENTS.md.
 const TRUSTED_CACHE_EVENTS = ['push', 'workflow_dispatch', 'merge_group', 'schedule']
 
 // Known-ungated, tracked on QVAC-24711. Both write a ccache/models cache with no
@@ -2156,7 +2155,7 @@ function eachCppTestsCacheStep (opts = {}) {
 
 test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
   const offenders = []
-  for (const { path, step } of eachCppTestsCacheStep({ match: /uses: actions\/cache@/ })) {
+  for (const { path, step } of eachCppTestsCacheStep({ match: /uses: actions\/cache\/save@/ })) {
     const missing = TRUSTED_CACHE_EVENTS.filter((e) => !step.includes(`github.event_name == '${e}'`))
     if (missing.length) {
       offenders.push(`${path}: a cache write step does not gate on ${missing.join(', ')}`)
@@ -2179,8 +2178,10 @@ test('cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint',
   const offenders = []
   // Only the vcpkg cache; the model caches are keyed on manifests and are
   // toolchain-independent by construction.
+  // Only the restore step spells the key out; the save reuses it via
+  // steps.vcpkg-cache.outputs.cache-primary-key, so it cannot drift.
   const vcpkgCacheSteps = eachCppTestsCacheStep({
-    match: /uses: actions\/cache(\/restore)?@[\s\S]*vcpkg\/cache/,
+    match: /uses: actions\/cache\/restore@[\s\S]*vcpkg\/cache/,
     includeExempt: true,
   })
 
