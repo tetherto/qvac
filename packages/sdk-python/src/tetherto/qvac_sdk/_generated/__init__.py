@@ -92,6 +92,7 @@ from .models import (
     UnloadModelResponse,
     UpscaleStreamRequest,
     UpscaleStreamResponse,
+    VectorIndexStorage,
     Verbosity,
     VideoStreamRequest,
     VideoStreamResponse,
@@ -107,6 +108,8 @@ from .models.loadModel import Request as LoadModelRequest
 from .models.rag import Request as RagRequest
 from .models.rag import Response as RagResponse
 from .models.translate import Request as TranslateRequest
+from .models.vectorIndex import Request as VectorIndexRequest
+from .models.vectorIndex import Response as VectorIndexResponse
 
 __all__ = [
     "AssessModelFitRequest",
@@ -201,6 +204,9 @@ __all__ = [
     "UnloadModelResponse",
     "UpscaleStreamRequest",
     "UpscaleStreamResponse",
+    "VectorIndexRequest",
+    "VectorIndexResponse",
+    "VectorIndexStorage",
     "Verbosity",
     "VideoStreamRequest",
     "VideoStreamResponse",
