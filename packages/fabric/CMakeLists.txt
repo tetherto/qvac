@@ -312,8 +312,7 @@ install(FILES
 
 # --- Platform-specific -------------------------------------------------------
 if(ANDROID)
-  find_package(Vulkan REQUIRED)
-  target_link_libraries(${qvac-fabric} PRIVATE ${Vulkan_LIBRARY} log)
+  target_link_libraries(${qvac-fabric} PRIVATE log)
 endif()
 
 if(WIN32)
