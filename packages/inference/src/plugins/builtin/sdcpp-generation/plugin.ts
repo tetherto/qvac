@@ -181,6 +181,7 @@ export const diffusionPlugin = definePlugin({
       const worldEquivalent: Record<string, string> = {
         device: 'world.backend',
         'main-gpu': 'world.backend',
+        backend: 'world.backend',
         threads: 'world.threads',
         offload_to_cpu: 'world.offloadParamsToCpu'
       }
@@ -372,6 +373,22 @@ export const diffusionPlugin = definePlugin({
           `[${ModelType.sdcppGeneration}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
         )
       }
+    }
+
+    if (
+      config.stream_layers &&
+      (config.mode === undefined || config.mode === 'diffusion' || config.mode === 'video') &&
+      config.max_vram !== undefined &&
+      config.max_vram !== 0 &&
+      config.max_vram !== '0' &&
+      !config.offload_to_cpu &&
+      !/(^|,)(?:\\*|all|default|diffusion)\\s*=\\s*cpu(?:,|$)/i.test(
+        config.params_backend ?? ''
+      )
+    ) {
+      getEngineLogger().warn(
+        `[${ModelType.sdcppGeneration}:${modelId}] stream_layers requires CPU-backed diffusion parameters; set params_backend to 'diffusion=cpu' (or enable offload_to_cpu) or layer streaming may be inactive`
+      )
     }
 
     // In diffusion mode the ESRGAN file (when post-generation upscale is

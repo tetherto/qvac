@@ -14791,6 +14791,11 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
 
 class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     __forbidden_fields__ = frozenset({"clip_on_cpu", "control_net_cpu", "vae_on_cpu"})
+    __forbidden_field_guidance__ = {
+        "clip_on_cpu": "Removed. Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
+        "control_net_cpu": "Removed. Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
+        "vae_on_cpu": "Removed. Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
+    }
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(

@@ -1,3 +1,5 @@
+from collections import UserDict
+
 import pytest
 from pydantic import ValidationError
 
@@ -28,6 +30,13 @@ def test_removed_diffusion_options_are_rejected(key: str, value: bool | None) ->
     assert key not in LoadModelSrcRequestSdcppGenerationModelConfig.model_fields
     with pytest.raises(ValidationError):
         LoadModelSrcRequestSdcppGenerationModelConfig.model_validate({key: value})
+
+
+def test_removed_diffusion_options_reject_mapping_inputs_with_guidance() -> None:
+    with pytest.raises(ValidationError, match="params_backend"):
+        LoadModelSrcRequestSdcppGenerationModelConfig.model_validate(
+            UserDict({"clip_on_cpu": True})
+        )
 
 
 def test_unknown_diffusion_options_are_ignored() -> None:

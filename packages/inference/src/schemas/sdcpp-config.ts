@@ -56,7 +56,7 @@ function removedBackendOption(key: string, guidance: string) {
         // Keep unions from replacing the migration error with a fallback error.
         abort: false,
         error: (issue) =>
-          `${key} was removed. ` +
+          `${key} is no longer supported. ` +
           (issue.input === false ||
           issue.input === 0 ||
           issue.input === 'false' ||
@@ -65,7 +65,7 @@ function removedBackendOption(key: string, guidance: string) {
             : guidance)
       })
       .optional()
-      .describe(guidance)
+      .describe(`Removed. ${guidance}`)
       // JSON Schema cannot infer the custom check's rejection of every value.
       .meta({ not: {}, deprecated: true })
   )

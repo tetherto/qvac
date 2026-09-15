@@ -13539,17 +13539,17 @@
                       "type": "boolean"
                     },
                     "control_net_cpu": {
-                      "description": "Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
+                      "description": "Removed. Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
                       "not": {},
                       "deprecated": true
                     },
                     "clip_on_cpu": {
-                      "description": "Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
+                      "description": "Removed. Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
                       "not": {},
                       "deprecated": true
                     },
                     "vae_on_cpu": {
-                      "description": "Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
+                      "description": "Removed. Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
                       "not": {},
                       "deprecated": true
                     },

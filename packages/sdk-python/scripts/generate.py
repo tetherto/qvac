@@ -312,19 +312,24 @@ def preserve_forbidden_fields(output_dir: Path) -> None:
     The generator currently turns `not: {}` into Any. Record those names for
     the base validator instead, without changing how other unknown keys work.
     """
-    forbidden_by_title: dict[str, set[str]] = {}
+    forbidden_by_title: dict[str, dict[str, str]] = {}
 
     def visit(node: Any) -> None:
         if isinstance(node, dict):
             forbidden = {
-                key
+                key: prop.get("description", "This field is no longer supported.")
                 for key, prop in node.get("properties", {}).items()
                 if isinstance(prop, dict)
                 and prop.get("not") == {}
                 and prop.get("deprecated") is True
             }
-            if forbidden and isinstance(node.get("title"), str):
-                forbidden_by_title[node["title"]] = forbidden
+            if forbidden:
+                title = node.get("title")
+                if not isinstance(title, str):
+                    raise RuntimeError(
+                        "Forbidden schema properties must belong to a titled object"
+                    )
+                forbidden_by_title[title] = forbidden
             for child in node.values():
                 visit(child)
         elif isinstance(node, list):
@@ -351,13 +356,25 @@ def preserve_forbidden_fields(output_dir: Path) -> None:
                     edits.append(
                         (field.lineno - 1, field.end_lineno or field.lineno, [])
                     )
-            names = ", ".join(repr(key) for key in sorted(forbidden | field_names))
+            names = ", ".join(repr(key) for key in sorted(set(forbidden) | field_names))
+            guidance = ", ".join(
+                f"{snake_case(key)!r}: {value!r}" for key, value in sorted(forbidden.items())
+            )
             first_body_line = node.body[0].lineno - 1
+            if (
+                isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)
+                and isinstance(node.body[0].value.value, str)
+            ):
+                first_body_line = node.body[0].end_lineno or node.body[0].lineno
             edits.append(
                 (
                     first_body_line,
                     first_body_line,
-                    [f"    __forbidden_fields__ = frozenset({{{names}}})\n"],
+                    [
+                        f"    __forbidden_fields__ = frozenset({{{names}}})\n",
+                        f"    __forbidden_field_guidance__ = {{{guidance}}}\n",
+                    ],
                 )
             )
         if edits:
