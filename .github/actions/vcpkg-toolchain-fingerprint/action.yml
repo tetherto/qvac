@@ -37,19 +37,27 @@ runs:
           probe="$("${CC:-clang}" --version)"
         fi
 
-        # `vcpkg version` rather than the tree's git rev: VCPKG_ROOT is a git
-        # checkout on some hosts and an unpacked image directory on others, so
-        # rev-parse yields a sha here and nothing there -- which would split one
-        # toolchain across two cache keys and halve the hit rate. The tool's own
-        # version string is available wherever vcpkg is, which is everywhere
-        # this runs.
-        vcpkg_ver="$(vcpkg version 2> /dev/null | head -n 1 || true)"
-        if [ -z "${vcpkg_ver}" ]; then
-          echo "::error::could not read vcpkg version; cache key would be unstable"
+        # The vcpkg tool feeds every ABI hash, so it belongs in the key. Hash the
+        # BINARY rather than running it or reading the tree's git rev: VCPKG_ROOT
+        # is a git checkout on some hosts and an unpacked image dir on others, so
+        # rev-parse split one toolchain across two keys; and `vcpkg version` is
+        # not on PATH at this point on linux. The file is always there and
+        # hashing it has no exit code or stderr to mishandle.
+        vcpkg_bin="${VCPKG_ROOT:-}/vcpkg"
+        if [ ! -x "${vcpkg_bin}" ]; then
+          vcpkg_bin="$(command -v vcpkg 2> /dev/null || true)"
+        fi
+        if [ -z "${vcpkg_bin}" ] || [ ! -x "${vcpkg_bin}" ]; then
+          echo "::error::vcpkg binary not found (VCPKG_ROOT=${VCPKG_ROOT:-unset}); cache key would be unstable"
           exit 1
         fi
+        if command -v sha256sum > /dev/null 2>&1; then
+          vcpkg_hash="$(sha256sum "${vcpkg_bin}")"
+        else
+          vcpkg_hash="$(shasum -a 256 "${vcpkg_bin}")"
+        fi
         probe="${probe}
-        ${vcpkg_ver}"
+        vcpkg=${vcpkg_hash:0:16}"
 
         echo "--- toolchain ---"
         echo "${probe}"
@@ -91,33 +99,20 @@ runs:
           exit 1
         }
 
-        # `vcpkg version`, not the tree's git rev -- see the bash branch. Native
-        # stderr is a TERMINATING error under ErrorActionPreference=Stop, so
-        # drop to Continue for the call and merge stderr into the output stream.
-        $vcpkgVer = ''
-        $prevEAP = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-          $verOut = (& vcpkg version 2>&1)
-          if ($LASTEXITCODE -eq 0 -and $verOut) {
-            $vcpkgVer = ($verOut | Select-Object -First 1).ToString().Trim()
-          }
-        } catch {
-          $vcpkgVer = ''
-        } finally {
-          $ErrorActionPreference = $prevEAP
-          # The runner's PowerShell wrapper ends with `exit $LASTEXITCODE`, so a
-          # non-zero left behind by a native call fails the step even though we
-          # handled it and finished normally. Clear it.
-          $global:LASTEXITCODE = 0
+        # Hash the vcpkg binary -- see the bash branch for why not the git rev
+        # and not `vcpkg version`. No native call, so nothing to mishandle.
+        $vcpkgBin = Join-Path $env:VCPKG_ROOT 'vcpkg.exe'
+        if (-not (Test-Path $vcpkgBin)) {
+          $onPath = Get-Command vcpkg -ErrorAction SilentlyContinue
+          if ($onPath) { $vcpkgBin = $onPath.Source }
         }
-
-        if ([string]::IsNullOrWhiteSpace($vcpkgVer)) {
-          Write-Output "::error::could not read vcpkg version; cache key would be unstable"
+        if (-not (Test-Path $vcpkgBin)) {
+          Write-Output "::error::vcpkg binary not found (VCPKG_ROOT=$env:VCPKG_ROOT); cache key would be unstable"
           exit 1
         }
+        $vcpkgHash = (Get-FileHash -Path $vcpkgBin -Algorithm SHA256).Hash.ToLower().Substring(0, 16)
 
-        $probe = "vctools=$toolsVersion sdk=$sdkVersion $vcpkgVer"
+        $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$vcpkgHash"
         Write-Output "--- toolchain ---"
         Write-Output $probe
 
