@@ -49,11 +49,24 @@ async function ensureFixtures() {
   return fixtures
 }
 
+// `freeBytes` is the backend's live free-memory gauge, read afresh on every
+// fit, so two fits of the same model disagree by whatever else the machine did
+// in between. It is the one field on a result that does not describe the model,
+// and comparing it makes these cases a memory-quiescence test. Everything else,
+// the rest of the projection included, stays in the comparison.
+function planOf(res) {
+  if (!Array.isArray(res.projection)) return res
+  return {
+    ...res,
+    projection: res.projection.map(({ freeBytes, ...row }) => row)
+  }
+}
+
 function fitOk(t, modelPath, config) {
   const { name, ...request } = config
   const res = fitParams({ modelPath, ...request })
   t.not(res.status, FIT_STATUS.ERROR, `${name}: the fitter read the model`)
-  return res
+  return planOf(res)
 }
 
 test('the stub is the shape the registry serves', async function (t) {
