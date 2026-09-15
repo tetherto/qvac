@@ -9,3 +9,7 @@ require('./integration-runtime.cjs')
 async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/fit.test.js', options)
 }
+
+async function runMetaOnlyTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/meta-only.test.js', options)
+}

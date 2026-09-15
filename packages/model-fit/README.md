@@ -170,6 +170,14 @@ different file, or no file, from one launch to the next. It is not required to
 exist: a missing model is the documented `ERROR` / `model-unreadable` outcome
 rather than a thrown error.
 
+It may be **metadata-only** — the GGUF header, KV block and tensor infos with
+no data section, what `gguf_write_to_file(..., only_meta = true)` writes. The
+fit loads with `no_alloc` and no mmap and never reads tensor bytes, so a
+header-only file projects the same plan as the full artefact, single-file or
+split. Pass it at its real length: padding it out to the artefact size is not
+needed, and a sparse file is fully allocated on NTFS. Needs qvac-fabric
+10549.0.0 or newer, which `@qvac/fabric` 0.13.0 is the first release to carry.
+
 Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
 and out-of-range values wrap — `marginMiB: -1` would otherwise become a margin
 nothing can satisfy. All must be safe integers within the range of their target
