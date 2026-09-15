@@ -17,6 +17,11 @@ on:
     # invalidate the entry.
     paths:
       - "packages/tts-ggml/scripts/download-tts-ggml-models.js"
+      # `paths` is pinned at the call site, but cache-models still builds the key
+      # string and resolves the hash glob, so an edit there can still move this
+      # entry. A run that finds nothing moved costs seconds: the probe answers
+      # from a lookup.
+      - ".github/actions/cache-models/**"
   # Longest gap must stay under the cache server's five-day prune window.
   schedule:
     - cron: "17 10 * * 1,4"
