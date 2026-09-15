@@ -50,6 +50,14 @@
       metadata_handle_deleter*;
     };
 
+    # When this module embeds libc++ it is also the process' one C++ runtime and
+    # exports the Itanium C++ ABI. That export set lives in
+    # symbols-linux-cxx-runtime.map and is spliced in at the marker below by the
+    # version-script block in CMakeLists.txt, which applies it to that build only
+    # — Android and the ASan build link a shared libc++ and must not get it.
+    # Keep the marker: the splice fails the build without it.
+    # QVAC_FABRIC_LINUX_CXX_RUNTIME
+
   local:
     *;
 };
