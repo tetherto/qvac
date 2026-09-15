@@ -45,6 +45,33 @@ npx --package "@qvac/cli" qvac doctor
 
 See [CLI → Usage](/cli#usage) for the full setup, including installing `@qvac/sdk` in your project.
 
+## Startup failure: missing libatomic.so.1
+
+### Situation
+
+On a minimal Linux image, worker startup fails and the error cause includes:
+
+```text
+libatomic.so.1: cannot open shared object file: No such file or directory
+```
+
+The top-level SDK error may report an RPC initialization timeout. Check `error.cause` for the underlying loader error.
+
+### Cause
+
+The Linux `rocksdb-native` prebuilds used by the SDK's storage dependencies require `libatomic.so.1`. Minimal images such as `node:22-slim` may omit this library. The dependency is needed even for CPU-only inference, before a model is loaded.
+
+### Solution
+
+Install `libatomic1` in the Debian or Ubuntu environment that runs the worker:
+
+```bash
+sudo apt update
+sudo apt install -y libatomic1
+```
+
+Omit `sudo` when running as root inside a container. Restart the application after installing the library. If the next error names `libssl.so.3`, the worker also needs the OpenSSL 3 runtime; on Debian 12, install `libssl3`. See [system requirements](/system-requirements#linux) for the remaining host dependencies and [issue #4290](https://github.com/tetherto/qvac/issues/4290) for the reported failure.
+
 ## Startup crash: requested module does not provide a default export
 
 ### Situation

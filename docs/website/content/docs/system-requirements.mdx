@@ -36,6 +36,21 @@ Requirements:
 
 - Ubuntu 22 requires [g++](https://github.com/gcc-mirror/gcc) `>= 13`.
 - Vulkan runtime `>= 1.4`: Vulkan loader + a GPU driver with Vulkan support.
+- `libatomic.so.1`: required by the Linux `rocksdb-native` prebuilds used by the SDK's storage dependencies, including for CPU-only inference. Minimal container images may not include it.
+- OpenSSL 3 runtime libraries (`libssl.so.3` and `libcrypto.so.3`): required by the `llm-llamacpp` Linux prebuilds used by SDK 0.19.0. A Node.js installation alone does not guarantee these shared libraries are present.
+
+On Debian or Ubuntu, install the atomic runtime with:
+
+```bash
+sudo apt update
+sudo apt install -y libatomic1
+```
+
+In a container build running as root, omit `sudo`. A missing library can prevent the worker from starting before any model loads; see [missing libatomic at startup](/troubleshooting#startup-failure-missing-libatomicso1).
+
+On Debian 12 images such as `node:22-bookworm-slim`, install the OpenSSL runtime with `apt install -y libssl3` as well. Installing `libatomic1` alone can expose a subsequent `libssl.so.3` loader error. Package names for OpenSSL vary between distributions.
+
+With SDK 0.19.0, the standard worker also loads an ASR prebuild that requires `libvulkan.so.1` on Linux x64, even before a CPU-only model is loaded. On Debian 12, install `libvulkan1` to satisfy that loader dependency; GPU inference still requires a suitable GPU driver.
 
 On desktop Linux distributions (e.g., Ubuntu Desktop), these requirements are typically satisfied out of the box.
 
