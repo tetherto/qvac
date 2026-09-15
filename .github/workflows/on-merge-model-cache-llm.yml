@@ -18,8 +18,10 @@ on:
   # Longest gap must stay under the cache server's five-day prune window.
   schedule:
     - cron: "17 4 * * 1,4"
+  # No workflow_call. Nothing calls this, and a `pull_request` caller would put
+  # the job on cache-models' trusted-save branch, letting PR-head code write an
+  # entry every addon lane afterwards restores. Dispatch covers on-demand runs.
   workflow_dispatch:
-  workflow_call:
 
 # A cancelled job cannot save the ~19 GB archive it did not finish uploading.
 concurrency:

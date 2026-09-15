@@ -15,8 +15,10 @@ on:
   # Offset from the other seeds so they do not contend for the same runner.
   schedule:
     - cron: "17 6 * * 1,4"
+  # No workflow_call. Nothing calls this, and a `pull_request` caller would put
+  # the job on cache-models' trusted-save branch, letting PR-head code write an
+  # entry every addon lane afterwards restores. Dispatch covers on-demand runs.
   workflow_dispatch:
-  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
