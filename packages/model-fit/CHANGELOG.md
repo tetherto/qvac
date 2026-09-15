@@ -9,7 +9,9 @@
   covered as an accepted `modelPath`, single-file and 2-way split. The fit loads
   with `no_alloc` and no mmap and never reads tensor bytes, so a header-only
   file projects the same plan as the full artefact and does not need padding out
-  to the artefact length. The loader's file-bounds check became conditional in
+  to the artefact length. The `projection` probe — a second no_alloc load, which
+  reports a failure as an absent projection rather than an error — is covered on
+  the same files. The loader's file-bounds check became conditional in
   `qvac-fabric` 10549.0.0, which arrived with the `@qvac/fabric` bump in 0.10.0;
   no API change here.
 

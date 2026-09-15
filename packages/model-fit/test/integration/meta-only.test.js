@@ -98,6 +98,31 @@ test('a metadata-only split projects the same plan as the full split', async fun
   }
 })
 
+test('the per-device projection probe runs on a metadata-only file', async function (t) {
+  const { metaOnlyPath, metaOnlySplit } = await ensureFixtures()
+
+  // The projection comes from a second no_alloc load, and a probe that fails is
+  // reported as an absent projection rather than as an error — which the plan
+  // comparisons above would accept, since both sides would be empty. Assert the
+  // rows exist.
+  const [config] = CONFIGS
+  for (const [shape, modelPath] of [
+    ['single file', metaOnlyPath],
+    ['2-way split', metaOnlySplit[0]]
+  ]) {
+    const res = fitOk(t, modelPath, config)
+    const projection = Array.isArray(res.projection) ? res.projection : []
+    t.ok(projection.length >= 1, `${shape}: the probe produced rows`)
+    if (projection.length === 0) continue
+
+    t.is(projection[projection.length - 1].name, 'host', `${shape}: the trailing row is the host`)
+    t.ok(
+      projection.reduce((sum, row) => sum + row.modelBytes, 0) > 0,
+      `${shape}: the weights were sized without a data section`
+    )
+  }
+})
+
 test('splitting a model does not change its plan', async function (t) {
   const { fullPath, fullSplit } = await ensureFixtures()
 
