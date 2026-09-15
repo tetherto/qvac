@@ -69,9 +69,10 @@ inputs:
     description: |
       Set to 'true' ONLY by the on-merge-model-cache-* seed workflows. Adds a
       `lookup-only` probe before the real cache step: on an exact key hit the
-      restore, warm and post-job save are all skipped, so a warm refresh costs
-      seconds instead of a full download of an archive it is about to discard.
-      A seed run has no use for the files -- it only needs the entry to exist.
+      restore, warm and post-job save are all skipped, so the run costs seconds
+      instead of a full download of an archive it is about to discard. A seed
+      run has no use for the files -- it only needs the entry to exist.
+      Ignored on `schedule`; see the probe step for why.
       Callers that consume the models must leave this off, or they get a
       cache-hit with an empty directory.
     required: false
@@ -133,9 +134,19 @@ runs:
     # hit means the key has moved and the seed must still write the new one, and
     # restore-keys would report that as cache-hit 'false' anyway. Needs the same
     # enableCrossOsArchive as the real step so it computes the same version.
+    #
+    # NOT on `schedule`, and that is the point of the carve-out. The cache
+    # server prunes an entry only when BOTH its `updatedAt` and its storage
+    # location's `lastDownloadedAt` are older than CACHE_CLEANUP_OLDER_THAN_DAYS
+    # (=5). `updatedAt` moves only when an upload commits; `lastDownloadedAt`
+    # moves only inside the server's `download()` handler. The lookup endpoint
+    # writes neither. So a probe-and-exit cron run refreshes nothing and the
+    # entry ages out anyway -- exactly what the Mon/Thu cron exists to prevent.
+    # Letting the scheduled run pull the archive costs one download and resets
+    # the clock; on push, dispatch and re-runs the probe still short-circuits.
     - name: Probe for an existing entry (seed mode)
       id: probe
-      if: inputs.seed-probe == 'true'
+      if: inputs.seed-probe == 'true' && github.event_name != 'schedule'
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
