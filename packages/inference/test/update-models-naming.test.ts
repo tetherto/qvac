@@ -1741,6 +1741,32 @@ test('parakeet: Unified RNN-T GGUF keeps PARAKEET_UNIFIED_<params>_<quant>', (t)
   t.is(exportName, 'PARAKEET_UNIFIED_0_6B_Q8_0')
 })
 
+test('parakeet: Nemotron GGUF includes NEMOTRON in the name', (t) => {
+  const coreKey = Buffer.from('dd'.repeat(32), 'hex')
+
+  const { exportName } = processAndName({
+    path: 'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf',
+    source: 's3',
+    engine: 'parakeet-transcription',
+    license: 'nvidia-open-model-license',
+    name: '',
+    sizeBytes: 405212736,
+    sha256: 'dd'.repeat(32),
+    quantization: 'q4_0',
+    params: '0.6B',
+    tags: ['transcription', 'parakeet', 'nemotron', 'streaming'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 1,
+      blockLength: 1,
+      byteOffset: 1,
+      byteLength: 405212736
+    }
+  })
+
+  t.is(exportName, 'PARAKEET_NEMOTRON_0_6B_Q4_0')
+})
+
 // ---------------------------------------------------------------------------
 // loadCurrentModels: quote styles
 // ---------------------------------------------------------------------------

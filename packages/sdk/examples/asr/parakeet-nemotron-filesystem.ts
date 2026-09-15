@@ -3,13 +3,19 @@
  *
  * Usage:
  *   bun run examples/asr/parakeet-nemotron-filesystem.ts \
- *     <audio-file> <nemotron-gguf> [locale] [--streaming]
+ *     <audio-file> [locale] [--streaming]
  *
  * `locale` defaults to `auto`; examples include `en-US` and `hi-IN`.
  * Streaming deliberately leaves the engine cadence unset so Nemotron uses its
  * model-specific 320 ms default. FFmpeg is required for streaming input.
  */
-import { loadModel, transcribe, transcribeStream, unloadModel } from '@qvac/sdk'
+import {
+  loadModel,
+  PARAKEET_NEMOTRON_0_6B_Q4_0,
+  transcribe,
+  transcribeStream,
+  unloadModel
+} from '@qvac/sdk'
 import { spawn } from 'child_process'
 
 const SAMPLE_RATE = 16000
@@ -19,18 +25,17 @@ const INPUT_CHUNK_MS = 160
 const args = process.argv.slice(2)
 const streaming = args.includes('--streaming')
 const positional = args.filter((argument) => !argument.startsWith('--'))
-const [audioFilePath, nemotronModelSrc, locale = 'auto'] = positional
+const [audioFilePath, locale = 'auto'] = positional
 
-if (!audioFilePath || !nemotronModelSrc) {
+if (!audioFilePath) {
   console.error(
     'Usage: bun run examples/asr/parakeet-nemotron-filesystem.ts ' +
-      '<audio-file> <nemotron-gguf> [locale] [--streaming]'
+      '<audio-file> [locale] [--streaming]'
   )
   process.exit(1)
 }
 
 const inputPath = audioFilePath
-const modelSrc = nemotronModelSrc
 
 function decodeToS16le(path: string): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
@@ -94,7 +99,7 @@ let modelId: string | null = null
 try {
   console.log(`▸ Loading Nemotron with locale ${locale}...`)
   modelId = await loadModel({
-    modelSrc,
+    modelSrc: PARAKEET_NEMOTRON_0_6B_Q4_0,
     modelType: 'parakeet-transcription',
     modelConfig: {
       language: locale,
