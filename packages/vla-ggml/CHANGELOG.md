@@ -23,6 +23,14 @@
   device is missing from that list at all. Rejected with `backend: 'auto'` or
   `'cpu'`, where there is no preference to make binding.
 
+## [0.27.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own. No API change for this package.
+- The MoE fixes are the ones that matter here: the out-of-bounds write reproduced with the persistent expert cache at large context, which a mixture-of-experts VLA checkpoint can reach.
+- Also ships the iOS test-harness work from [#4399](https://github.com/tetherto/qvac/pull/4399), which landed after `0.26.0` with no version bump of its own. It hardlinks pre-staged models and captures iOS crash reports; it touches only `test/`, so no shipped code changes with it.
+
 ## [0.26.0] - 2026-09-10
 
 ### Changed

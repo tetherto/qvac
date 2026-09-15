@@ -32,17 +32,26 @@
   but it gives the two implementations the same shape and provides the seam
   needed for future capability filters.
 
-## [0.41.0] - 2026-09-10
+## [0.41.0] - 2026-09-15
 
 This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. llama.cpp, ggml and the vector-index API are now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer.
 
 ### Changed
 
-- The llama/ggml runtime, its compute backends and the `ggml_vec_index_*` vector-index API are now provided by the `@qvac/fabric` npm dependency (`^0.13.0`) rather than the static `qvac-fabric` vcpkg port. The addon no longer bundles them; on desktop it resolves the single `@qvac/fabric` install and loads the backend modules from `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to this addon's own `prebuilds/` on mobile (where the package tree isn't resolvable from the packed worklet bundle). `@qvac/fabric` carries the prebuilt runtime inside its own tarball, so run `npm install` before `bare-make generate`/`build` and do not prune the dependency at runtime.
-- `^0.13.0` is a hard floor, not a courtesy bump: `0.12.0` first shipped the `vector-index` feature, and `0.13.0` is the first build that actually exports the `ggml_vec_index_*` symbols on Darwin and iOS (the visibility fix against `CXX_VISIBILITY_PRESET hidden`). Against `0.12.0` a Darwin consumer links cleanly and then SIGSEGVs on the first call.
+- The llama/ggml runtime, its compute backends and the `ggml_vec_index_*` vector-index API are now provided by the `@qvac/fabric` npm dependency (`^0.14.0`) rather than the static `qvac-fabric` vcpkg port. The addon no longer bundles them; on desktop it resolves the single `@qvac/fabric` install and loads the backend modules from `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to this addon's own `prebuilds/` on mobile (where the package tree isn't resolvable from the packed worklet bundle). `@qvac/fabric` carries the prebuilt runtime inside its own tarball, so run `npm install` before `bare-make generate`/`build` and do not prune the dependency at runtime.
+- The range is a hard floor, not a courtesy bump: `0.12.0` first shipped the `vector-index` feature, and `0.13.0` is the first build that actually exports the `ggml_vec_index_*` symbols on Darwin and iOS (the visibility fix against `CXX_VISIBILITY_PRESET hidden`). Against `0.12.0` a Darwin consumer links cleanly and then SIGSEGVs on the first call. `^0.14.0` raises the floor further to pick up `qvac-fabric` `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). A caret on a `0.x` version locks the minor, so a `^0.13.0` range would not have resolved `0.14.0` on its own. BERT embedding touches none of `10549.1.0`'s MoE, multimodal-projector or speculative-decoding paths, so that part of the bump keeps this package on the current shared runtime rather than a superseded one.
 - `CMakeLists.txt` now builds on the shared `cmake/qvac-addon` template, replacing the hand-rolled preamble (vcpkg triplet overlay, libc++ flags, lint-cpp config sync, C++20 block, Windows lean-header defines, `--exclude-libs,ALL`, `JS_LOGGER`/`BACKENDS_SUBDIR`). This also picks up the Android 16 KB page-size link flags and the Apple compiler-rt `force_load` that the template applies to every addon.
 - `BACKENDS_SUBDIR` moved from `<host>/embed-llamacpp` to `<host>/qvac__fabric`, matching where the shared runtime stages its backends.
 - The `vk-profiling` build feature is gone. Vulkan profiling is now a property of the shared runtime, selected when building `@qvac/fabric`.
+
+### Breaking
+
+- `split-mode` no longer accepts `'row'` ([#4328](https://github.com/tetherto/qvac/pull/4328)). Previously `'row'` was degraded to `'layer'` at load with a warning, because no shipped backend provides the required split buffers; it is now rejected outright, and the declared type is `'none' | 'layer'`. GPU backend selection is also an explicit allowlist of Vulkan, Metal, OpenCL and CUDA rather than "any non-CPU ggml device". Callers passing `'row'` must pass `'layer'`.
+
+### Fixed
+
+- `IdMapIndex` module-isolation assertions are made from a fresh process instead of by evicting `require.cache` entries ([#4464](https://github.com/tetherto/qvac/pull/4464)), which stopped working from `bare@1.31.1`. Test-only; no shipped code changes.
+- iOS test-harness work from [#4399](https://github.com/tetherto/qvac/pull/4399) — hardlinked pre-staged models and iOS crash-report capture. `test/` only.
 
 ### Removed
 

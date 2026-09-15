@@ -1,4 +1,3 @@
-import asrAddonLogging from '@qvac/asr-ggml/addonLogging'
 import ASRGgml from '@qvac/asr-ggml'
 import {
   definePlugin,
@@ -242,7 +241,7 @@ export const whisperPlugin = definePlugin({
   },
 
   logging: {
-    module: asrAddonLogging,
+    module: () => import('@qvac/asr-ggml/addonLogging'),
     namespace: ADDON_ASR
   }
 })
