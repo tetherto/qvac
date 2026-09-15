@@ -242,8 +242,14 @@ runs:
       with:
         path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
-        restore-keys: |
-          models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-
+        # Empty in keep-alive mode. restore-keys would let this latch onto ANY
+        # entry under the prefix -- an obsolete one, or another suffix's -- and
+        # refresh THAT entry's prune clock instead, keeping a stale entry alive
+        # forever while the one the lane actually wants ages out. Observed: a
+        # keep-alive run restored `models-tts-ggml-v1-seed-...` left over from an
+        # earlier experiment. On the fork-PR path the prefix is still wanted, so
+        # it is suppressed only when restore-only was asked for explicitly.
+        restore-keys: ${{ inputs.restore-only == 'true' && '' || format('models-{0}-{1}{2}-', inputs.package, inputs.cache-version, inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '') }}
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Download any models NOT provided by the restore, as an ordinary step with
