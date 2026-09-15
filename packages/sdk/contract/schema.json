@@ -1148,7 +1148,20 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "type": ["string", "number", "boolean", "null"]
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               }
                             },
@@ -2111,7 +2124,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -2709,7 +2735,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -13539,14 +13578,17 @@
                       "type": "boolean"
                     },
                     "control_net_cpu": {
+                      "description": "Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
                       "not": {},
                       "deprecated": true
                     },
                     "clip_on_cpu": {
+                      "description": "Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
                       "not": {},
                       "deprecated": true
                     },
                     "vae_on_cpu": {
+                      "description": "Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
                       "not": {},
                       "deprecated": true
                     },
@@ -13560,26 +13602,17 @@
                     },
                     "max_vram": {
                       "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-                      "type": ["number", "string"]
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     },
                     "stream_layers": {
                       "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
-                      "type": "boolean"
-                    },
-                    "backend": {
-                      "description": "Native compute backend assignment; overrides main-gpu.",
-                      "type": "string"
-                    },
-                    "params_backend": {
-                      "description": "Native parameter placement; overrides legacy CPU-offload flags.",
-                      "type": "string"
-                    },
-                    "max_vram": {
-                      "description": "Native VRAM limit or per-backend limits, for example cuda0=6,vulkan0=2.",
-                      "type": ["number", "string"]
-                    },
-                    "stream_layers": {
-                      "description": "Stream model layers during native inference.",
                       "type": "boolean"
                     },
                     "flash_attn": {
@@ -16949,10 +16982,7 @@
                   {
                     "type": "number"
                   }
-                ],
-                "items": false,
-                "minItems": 4,
-                "maxItems": 4
+                ]
               },
               "confidence": {
                 "type": "number"

@@ -14870,22 +14870,27 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     ] = None
     backend: Annotated[
         str | None,
-        Field(description="Native compute backend assignment; overrides main-gpu."),
+        Field(
+            description="Runtime backend for diffusion and video graphs, globally or per module, for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'."
+        ),
     ] = None
     params_backend: Annotated[
         str | None,
         Field(
-            description="Native parameter placement; overrides legacy CPU-offload flags."
+            description="Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offload_to_cpu enabled, explicit assignments override CPU residency only for the specified modules."
         ),
     ] = None
     max_vram: Annotated[
         float | str | None,
         Field(
-            description="Native VRAM limit or per-backend limits, for example cuda0=6,vulkan0=2."
+            description="VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
         ),
     ] = None
     stream_layers: Annotated[
-        bool | None, Field(description="Stream model layers during native inference.")
+        bool | None,
+        Field(
+            description="Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
+        ),
     ] = None
     flash_attn: Annotated[
         bool | None, Field(description="Enable flash attention to reduce memory usage")
@@ -17179,7 +17184,7 @@ class OcrStreamResponseBlocksItem(GeneratedBaseModel):
         extra="forbid",
     )
     text: str
-    bbox: tuple[float, float, float, float] | None = None
+    bbox: list[Any] | None = None
     confidence: float | None = None
 
 
