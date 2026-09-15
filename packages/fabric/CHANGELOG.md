@@ -1,5 +1,44 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- On Linux the module now exports the Itanium C++ ABI and the libc++ surface
+  built into it — `__cxa_*`, `__dynamic_cast`, `_Unwind_*`,
+  `__gxx_personality_v0`, the typeinfo / vtable objects (`_ZT*`), `operator new`
+  / `operator delete`, and the standard library's out-of-line members and
+  template instantiations (`_ZNSt*`, `_ZSt*` and friends) — so it is the one C++
+  runtime for every in-process consumer that `DT_NEEDED`s
+  `qvac__fabric@0.bare`. It still embeds libc++ statically, so the prebuild
+  stays self-contained: no host `libc++.so.1`, no new `DT_NEEDED`.
+
+  libc++ is now whole-archived instead of arriving via `-static-libstdc++`.
+  That is required rather than tidy, and for the same reason ggml is
+  whole-archived: `-static-libstdc++` pulls in only the archive members llama,
+  ggml and common happen to reference, and a version script filters symbols
+  that are already present rather than pulling members in. Exporting an
+  incomplete runtime would leave consumers unable to resolve the rest of it.
+
+  Consumers previously statically linked a second libc++ of their own. Two
+  copies in one process means two copies of every `std::` typeinfo, and RTTI
+  matches typeinfo by *address*, so an exception thrown by libcommon in here
+  matched no `catch (const std::exception&)` in the addon. Argument-validation
+  errors unwound past the addon's handler and surfaced to JS as
+  `INTERNAL_ERROR` / `"Unknown error"` instead of llama's message — on Linux
+  only, since macOS and Windows already share one runtime with their consumers.
+
+  Only the Linux module is affected. Android keeps `ANDROID_STL=c++_shared`, so
+  it already shares one runtime with its consumers through `libc++_shared.so`
+  and exports exactly what it did before; Darwin, iOS and Windows are untouched.
+
+  This is a **minor** for the same reason 0.9.0 and 0.12.0 were: it widens the
+  exported surface. It also makes the Linux runtime and its consumers a
+  lockstep pair — an addon linked with `-nostdlib++`
+  (`qvac_addon_import_fabric_cxx_runtime`) requires a fabric from this release
+  or later, and must not be mixed with an older one. Rationale and the
+  alternatives considered: `arch/qips/linux-fabric-libcxx-ownership.md`.
+
 ## [0.14.0] - 2026-09-15
 
 ### Changed
