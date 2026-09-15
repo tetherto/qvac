@@ -26,6 +26,25 @@ const SCENE_OK = {
   output: path.join(ABS, 'out.safetensors')
 }
 
+test('world load forwards layer streaming controls to the addon', async function (t) {
+  const config = {
+    paramsBackend: 'diffusion=cpu,vae=disk',
+    maxVram: 'cuda0=-1',
+    streamLayers: true,
+    kvCache: true,
+    verbosity: 3
+  }
+  const world = new WorldStableDiffusion({ files: FILES, config })
+  let captured
+  world._createAddon = (params) => {
+    captured = params
+    return { activate() {}, cancel() {}, unload() {} }
+  }
+  await world.load()
+  t.alike(captured.config, config, 'same config crosses the world wrapper')
+  await world.unload()
+})
+
 test('toActionMask: full key matrix, input forms, and rejection', async function (t) {
   // every key maps to its documented bit, case-insensitively, in both forms
   for (let bit = 0; bit < KEY_ORDER.length; bit++) {

@@ -1,4 +1,5 @@
 import test from 'brittle'
+import path from 'bare-path'
 
 const resolveCtx = {
   resolveModelPath: async (src: unknown) => `/cache/${String(src)}`,
@@ -12,6 +13,31 @@ const WORLD_BASE = {
   t5XxlModelSrc: 'registry://hf/umt5-xxl-enc-q8_0.gguf',
   vaeModelSrc: 'registry://hf/wan2.2_vae_f16.gguf'
 }
+
+test('sdcpp world: memory controls reach the addon unchanged', async (t) => {
+  const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
+  const world = {
+    paramsBackend: 'diffusion=cpu,vae=disk',
+    maxVram: 'cuda0=-1',
+    streamLayers: true,
+    kvCache: true,
+    verbosity: 3 as const
+  }
+  const resolved = await diffusionPlugin.resolveConfig!({ ...WORLD_BASE, world }, resolveCtx)
+  t.alike(resolved.config.world, world)
+  for (const [key, value, target] of [
+    ['params_backend', 'diffusion=cpu', 'paramsBackend'],
+    ['max_vram', 2, 'maxVram'],
+    ['stream_layers', true, 'streamLayers'],
+    ['verbosity', 3, 'verbosity']
+  ] as const) {
+    await t.exception(
+      diffusionPlugin.resolveConfig!({ ...WORLD_BASE, [key]: value }, resolveCtx),
+      new RegExp(`world\\.${target}`),
+      'flat option names its world equivalent'
+    )
+  }
+})
 
 test('sdcpp plugin resolveConfig: world resolves taehv + scene and strips *Src', async (t) => {
   const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
@@ -152,7 +178,7 @@ test('sdcpp plugin resolveConfig: world rejects every unsupported top-level fiel
   await t.exception(
     diffusionPlugin.resolveConfig!({ ...WORLD_BASE, verbosity: 2 }, resolveCtx),
     /verbosity does not reach the ABot-World session/,
-    'verbosity only reaches the ESRGAN path, so world must not appear to honour it'
+    'flat verbosity is rejected; world verbosity must be nested'
   )
 
   // The allow-list is what makes this hold for fields nobody has added yet, so
@@ -256,7 +282,7 @@ test('sdcpp plugin createModel: world scene path is derived from a hash, not the
   // returns everything before the hyphen in "world-scenes" — the shared cache
   // directory — so the previous form asserted only that two paths live in the
   // same folder, which is true of any two calls and of two different models.
-  const modelHash = (p: string) => p.slice(p.lastIndexOf('/') + 1).split('-')[0]!
+  const modelHash = (p: string) => path.basename(p).split('-')[0]!
   t.is(
     modelHash(worldScenePath('stable-id')),
     modelHash(worldScenePath('stable-id')),
@@ -289,8 +315,8 @@ test('world session: a failed generation leaves the previous world in place', as
 
   // Staging must sit beside the pack: rename is only atomic within a filesystem.
   t.is(
-    session.stagingScenePath.slice(0, session.scenePath.lastIndexOf('/')),
-    session.scenePath.slice(0, session.scenePath.lastIndexOf('/')),
+    path.dirname(session.stagingScenePath),
+    path.dirname(session.scenePath),
     'staging file is a sibling of the pack it replaces'
   )
   t.not(session.stagingScenePath, session.scenePath, 'generation never writes over the live pack')

@@ -5,6 +5,8 @@
 
 #include <inference-addon-cpp/Errors.hpp>
 
+#include "utils/LoggingMacros.hpp"
+
 namespace qvac_lib_inference_addon_sd {
 
 using namespace qvac_errors;
@@ -98,44 +100,55 @@ static int64_t parseInt64(const std::string& v, const std::string& key) {
 const WorldSessionHandlersMap WORLD_SESSION_HANDLERS = {
 
     {"backendsDir",
-     [](WorldSessionConfig& c, const std::string& v) { c.backendsDir = v; }},
+     [](WorldSessionConfig &c, const std::string &v) { c.backendsDir = v; }},
     {"backend",
-     [](WorldSessionConfig& c, const std::string& v) { c.backend = v; }},
+     [](WorldSessionConfig &c, const std::string &v) { c.backend = v; }},
+    {"paramsBackend",
+     [](WorldSessionConfig &c, const std::string &v) { c.paramsBackend = v; }},
+    {"maxVram",
+     [](WorldSessionConfig &c, const std::string &v) { c.maxVram = v; }},
+    {"streamLayers",
+     [](WorldSessionConfig &c, const std::string &v) {
+       c.streamLayers = parseBool(v, "streamLayers");
+     }},
+    {"verbosity",
+     [](WorldSessionConfig & /*c*/, const std::string &v) {
+       std::unordered_map<std::string, std::string> m{{"verbosity", v}};
+       logging::setVerbosityLevel(m);
+     }},
 
     {"threads",
-     [](WorldSessionConfig& c, const std::string& v) {
+     [](WorldSessionConfig &c, const std::string &v) {
        c.nThreads = parseAutoOrPositiveInt(v, "threads");
      }},
-    {"seed",
-     [](WorldSessionConfig& c, const std::string& v) {
-       c.seed = parseInt64(v, "seed");
-     }},
+    {"seed", [](WorldSessionConfig &c,
+                const std::string &v) { c.seed = parseInt64(v, "seed"); }},
 
     // 0 = model/engine default for both block-shape knobs.
     {"numFramePerBlock",
-     [](WorldSessionConfig& c, const std::string& v) {
+     [](WorldSessionConfig &c, const std::string &v) {
        c.numFramePerBlock = parseIntInRange(v, "numFramePerBlock", 0, 1 << 10);
      }},
     {"localAttnSize",
-     [](WorldSessionConfig& c, const std::string& v) {
+     [](WorldSessionConfig &c, const std::string &v) {
        c.localAttnSize = parseIntInRange(v, "localAttnSize", 0, 1 << 10);
      }},
 
     {"offloadParamsToCpu",
-     [](WorldSessionConfig& c, const std::string& v) {
+     [](WorldSessionConfig &c, const std::string &v) {
        c.offloadParamsToCpu = parseBool(v, "offloadParamsToCpu");
      }},
     // 0 = lossless PNG frames; 1..100 = JPEG quality.
     {"frameJpegQuality",
-     [](WorldSessionConfig& c, const std::string& v) {
+     [](WorldSessionConfig &c, const std::string &v) {
        c.frameJpegQuality = parseIntInRange(v, "frameJpegQuality", 0, 100);
      }},
     {"kvCache",
-     [](WorldSessionConfig& c, const std::string& v) {
+     [](WorldSessionConfig &c, const std::string &v) {
        c.kvCache = parseBool(v, "kvCache");
      }},
     {"profile",
-     [](WorldSessionConfig& c, const std::string& v) {
+     [](WorldSessionConfig &c, const std::string &v) {
        c.profile = parseBool(v, "profile");
      }},
 };
