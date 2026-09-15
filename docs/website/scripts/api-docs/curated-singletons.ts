@@ -27,6 +27,14 @@ export interface CuratedSingleton {
   packageDir: string;
   /** TypeDoc entry point that declares the singleton, relative to `packageDir`. */
   entryPoint: string;
+  /**
+   * Import specifier rewrite applied to this singleton's examples.
+   *
+   * The JSDoc lives in the owning package and imports from it, which is correct
+   * there. This page is the `@qvac/sdk` API summary, so the example must show
+   * the specifier its readers use.
+   */
+  exampleImport?: { from: string; to: string };
 }
 
 export const CURATED_SINGLETONS: CuratedSingleton[] = [
@@ -35,8 +43,12 @@ export const CURATED_SINGLETONS: CuratedSingleton[] = [
     name: "profiler",
     packageDir: "../inference",
     entryPoint: "src/profiling/index.ts",
+    exampleImport: { from: "@qvac/inference", to: "@qvac/sdk" },
   },
 ];
+
+export const CURATED_SINGLETONS_BY_NAME: ReadonlyMap<string, CuratedSingleton> =
+  new Map(CURATED_SINGLETONS.map((s) => [s.name, s]));
 
 export const CURATED_SINGLETON_NAMES: ReadonlySet<string> = new Set(
   CURATED_SINGLETONS.map((s) => s.name),

@@ -16,6 +16,7 @@ import { auditTsDoc } from "./audit-tsdoc.js";
 import {
   CURATED_SINGLETONS,
   CURATED_SINGLETON_NAMES,
+  CURATED_SINGLETONS_BY_NAME,
   convertCuratedSingletons,
   resolveCuratedEntryPoint,
 } from "./curated-singletons.js";
@@ -981,8 +982,15 @@ function extractApiObjects(
         const extracted = blockTags
           .filter((tag: any) => tag.tag === "@example")
           .map((tag: any) => extractComment(tag.content));
-        if (extracted.length > 0) return extracted;
-        return readModuleJsDoc(sourcePath)?.examples ?? [];
+        const examples =
+          extracted.length > 0
+            ? extracted
+            : readModuleJsDoc(sourcePath)?.examples ?? [];
+        const rewrite = CURATED_SINGLETONS_BY_NAME.get(decl.name)?.exampleImport;
+        if (!rewrite) return examples;
+        return examples.map((ex) =>
+          ex.replaceAll(`"${rewrite.from}"`, `"${rewrite.to}"`),
+        );
       })(),
     });
   }
@@ -1055,10 +1063,13 @@ function validateApiFunction(fn: ApiFunction): void {
     );
   }
   if (!fn.signature?.trim()) errors.push("Missing signature");
+  // Prose legitimately mentions `undefined` inside inline code (e.g. "resolves
+  // with `undefined` when the run produced none"). Strip code spans first so
+  // the check still catches a stringified value leaking into the description.
+  const prose = fn.description?.replace(/`[^`]*`/g, "") ?? "";
   if (
-    fn.description &&
-    (fn.description.includes("undefined") ||
-      fn.description.includes("[object Object]"))
+    prose.includes("undefined") ||
+    prose.includes("[object Object]")
   ) {
     errors.push(
       `Description contains invalid placeholder: "${fn.description}"`,
