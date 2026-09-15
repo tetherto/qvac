@@ -238,6 +238,7 @@ If no format rule applies, skip this step. Title/body violations go in the **cha
 Apply the review philosophy. Classify every finding as **High**, **Medium**, or **Low**. Skip any dimension with no findings.
 
 - **Gitflow**: wrong merge direction, missing version bump/changelog on release PRs (almost always High)
+- **Lockfile drift**: any touched `package.json` whose dependency specifiers changed, with no `pnpm-lock.yaml` in the same PR. CI installs frozen, so the stale lockfile aborts the install before the project matrix is built and blocks every open PR, not only this one. Check the `package.json` hunks for changed specifiers rather than assuming a manifest edit implies one; a `scripts` or `files` change needs no lockfile update (High)
 - **CI**: non-green checks (ignore `*Approval*`/`approval-worker`). Name the failing job + actual error. For failing jobs only: `gh run view --repo tetherto/qvac --log-failed --job <job_id> > /tmp/pr-<num>-<job_id>.log` (High)
 - **Bugs / correctness**: logic errors, wrong types, off-by-one, missing error handling, race conditions, unhandled edge cases (High or Medium)
 - **Breaks to existing functionality**: changes that look additive but alter callers' behavior — signature changes, default flips, removed branches, semantically different return values (High)

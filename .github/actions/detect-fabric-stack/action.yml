@@ -121,7 +121,7 @@ runs:
               packages/fabric/*CMakeLists.txt) STACK=true; break ;;
               packages/fabric/cmake/*) STACK=true; break ;;
               packages/fabric/vcpkg.json|packages/fabric/vcpkg-configuration.json) STACK=true; break ;;
-              packages/fabric/binding.js|packages/fabric/exports.txt|packages/fabric/symbols.map) STACK=true; break ;;
+              packages/fabric/binding.js|packages/fabric/exports.txt|packages/fabric/symbols*.map) STACK=true; break ;;
             esac
           done <<< "$DIFF_FILES"
         fi
