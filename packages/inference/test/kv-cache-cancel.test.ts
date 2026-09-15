@@ -7,28 +7,13 @@ import {
 
 // -----------------------------------------------------------------------------
 // Unit-level regression coverage for `decideCachedHistorySlice` — the pure
-// piece of the kv-cache cancel/zero-token fix (QVAC-17780).
+// piece of the kv-cache cancel/zero-token fix (QVAC-17780). It guards the
+// "stale savedCount → empty payload" failure mode.
 //
-// The cancel-counter side channel that used to live in
-// this module (`modelCancelCounters`, `noteCancelRequested`,
-// `snapshotCancelCount`, `shouldRecordSavedCount`) was retired. Cancel
-// detection now flows through the per-request `AbortSignal` from
-// `RequestRegistry` (see `test/request-registry.test.ts`)
-// and `completion-stream.ts` reads `signal.aborted` directly.
-//
-// The `cachedMessageCounts` map and its `clearCachedMessageCounts`
-// helper that this file used to seed via `import { cachedMessageCounts }
-// from "kv-cache-state"` were moved into `kv-cache-session.ts` as the
-// single owner of all three KV-cache bookkeeping layers. The pure
-// slice-decision helper still lives in `kv-cache-state.ts` and takes
-// `savedCount` as a plain parameter; these tests now drive it without
-// seeding any module state. The session's own commit/rollback
-// semantics are covered by `runtime/kv-cache-session.test.ts`.
-//
-// The slice-decision regression coverage below remains relevant — it
-// guards the "stale savedCount → empty payload" failure mode that's
-// independent of how cancel is plumbed or who owns the saved-count
-// state.
+// Cancel detection flows through the per-request `AbortSignal` from
+// `RequestRegistry` (see `test/request-registry.test.ts`); the saved counts
+// live in `kv-cache-session.ts`, whose commit/rollback semantics are covered
+// by `test/kv-cache-session.test.ts`.
 // -----------------------------------------------------------------------------
 
 test('decideCachedHistorySlice: baseline slice when savedCount is valid', (t) => {
@@ -38,7 +23,7 @@ test('decideCachedHistorySlice: baseline slice when savedCount is valid', (t) =>
     { role: 'assistant', content: 'hello' },
     { role: 'user', content: 'again' }
   ]
-  const { messages, clearStaleCount } = decideCachedHistorySlice(2, true, history)
+  const { messages, clearStaleCount } = decideCachedHistorySlice(2, history)
   t.alike(messages, [
     { role: 'assistant', content: 'hello' },
     { role: 'user', content: 'again' }
@@ -52,11 +37,8 @@ test('decideCachedHistorySlice: stale count (slice would be empty) falls back an
     { role: 'user', content: 'u1' },
     { role: 'user', content: 'u2' }
   ]
-  const { messages, clearStaleCount } = decideCachedHistorySlice(3, true, history)
-  t.alike(messages, [
-    { role: 'user', content: 'u1' },
-    { role: 'user', content: 'u2' }
-  ])
+  const { messages, clearStaleCount } = decideCachedHistorySlice(3, history)
+  t.alike(messages, history, 'the whole history goes, system message included')
   t.is(clearStaleCount, true, 'caller must be told to clear the stale savedCount')
 })
 
@@ -65,33 +47,23 @@ test('decideCachedHistorySlice: savedCount > history.length falls back and flags
     { role: 'system', content: 'sys' },
     { role: 'user', content: 'u1' }
   ]
-  const { messages, clearStaleCount } = decideCachedHistorySlice(10, true, history)
-  t.alike(messages, [{ role: 'user', content: 'u1' }])
+  const { messages, clearStaleCount } = decideCachedHistorySlice(10, history)
+  t.alike(messages, history, 'the whole history goes, system message included')
   t.is(clearStaleCount, true)
 })
 
-test('decideCachedHistorySlice: savedCount = 0, cache exists → strip system, no clear', (t) => {
+test('decideCachedHistorySlice: savedCount = 0 sends the whole history, no clear', (t) => {
   const history: HistoryMessage[] = [
     { role: 'system', content: 'sys' },
     { role: 'user', content: 'u1' }
   ]
-  const { messages, clearStaleCount } = decideCachedHistorySlice(0, true, history)
-  t.alike(messages, [{ role: 'user', content: 'u1' }])
+  const { messages, clearStaleCount } = decideCachedHistorySlice(0, history)
+  t.alike(messages, history, 'nothing is cached to leave out')
   t.is(clearStaleCount, false)
 })
 
-test('decideCachedHistorySlice: cache does not exist → strip system regardless of savedCount', (t) => {
-  const history: HistoryMessage[] = [
-    { role: 'system', content: 'sys' },
-    { role: 'user', content: 'u1' }
-  ]
-  const { messages, clearStaleCount } = decideCachedHistorySlice(2, false, history)
-  t.alike(messages, [{ role: 'user', content: 'u1' }])
-  t.is(clearStaleCount, false, 'no-cache path does not touch cachedMessageCounts')
-})
-
 test('decideCachedHistorySlice: empty history returns empty, no clear', (t) => {
-  const { messages, clearStaleCount } = decideCachedHistorySlice(2, true, [])
+  const { messages, clearStaleCount } = decideCachedHistorySlice(2, [])
   t.alike(messages, [])
   t.is(clearStaleCount, false)
 })
@@ -106,11 +78,8 @@ test('decideCachedHistorySlice: savedCount = history.length slices to [] and fla
     { role: 'user', content: 'u1' },
     { role: 'user', content: 'u2' }
   ]
-  const { messages, clearStaleCount } = decideCachedHistorySlice(history.length, true, history)
-  t.alike(messages, [
-    { role: 'user', content: 'u1' },
-    { role: 'user', content: 'u2' }
-  ])
+  const { messages, clearStaleCount } = decideCachedHistorySlice(history.length, history)
+  t.alike(messages, history, 'the whole history goes, system message included')
   t.is(clearStaleCount, true)
 })
 
@@ -129,12 +98,9 @@ test('regression: an externally-seeded stale savedCount still triggers the fallb
     { role: 'user', content: 'u1' },
     { role: 'user', content: 'u2' }
   ]
-  const { messages, clearStaleCount } = decideCachedHistorySlice(savedCount, true, history)
+  const { messages, clearStaleCount } = decideCachedHistorySlice(savedCount, history)
 
-  t.alike(messages, [
-    { role: 'user', content: 'u1' },
-    { role: 'user', content: 'u2' }
-  ])
+  t.alike(messages, history, 'the whole history goes, system message included')
   t.is(clearStaleCount, true, 'must prompt caller to clean up the stale count')
 })
 
