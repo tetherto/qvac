@@ -23,6 +23,8 @@ export async function checkPrebuilds(
   const issues: MissingPrebuildIssue[] = []
 
   for (const host of hosts) {
+    if (addon.linkedHosts !== undefined && !addon.linkedHosts.includes(host)) continue
+
     const hostDir = path.join(addon.packageRoot, 'prebuilds', host)
     const present = (await listBarePrebuildFiles(hostDir)).length > 0
     if (!present) {
