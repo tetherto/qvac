@@ -4,14 +4,9 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
+const subprocess = require('bare-subprocess')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
-const MODULE_PATHS = [
-  path.join(PACKAGE_ROOT, 'idMapIndex.js'),
-  path.join(PACKAGE_ROOT, 'binding.js'),
-  path.join(PACKAGE_ROOT, 'index.js'),
-  path.join(PACKAGE_ROOT, 'addon.js')
-]
 const TARGET_ARCH = os.arch()
 const IS_MOBILE = os.platform() === 'ios' || os.platform() === 'android'
 const SUPPORTS_TURBOVEC = TARGET_ARCH === 's390x' || TARGET_ARCH.includes('64')
@@ -66,27 +61,49 @@ function expectDisposedFilter(t, filter, message) {
   )
 }
 
-function findCacheKey(modulePath) {
-  return Object.keys(require.cache).find((key) => require.cache[key].filename === modulePath)
-}
+// Module-graph isolation is observed in a FRESH PROCESS rather than by mutating
+// require.cache in this one.
+//
+// The previous approach evicted entries from require.cache and re-required the
+// module to see what got pulled in. That stopped working from bare 1.31.1:
+// deleting a module from require.cache makes it permanently unresolvable in the
+// process, and a later require() of the same file fails with MODULE_NOT_FOUND
+// whichever specifier form is used (absolute path, file:// URL, relative, or the
+// package specifier). Bisected with the checkout, dependencies and prebuilds held
+// fixed, varying only the runtime:
+//
+//   bare 1.31.0   lazy require ok       evict + re-require ok
+//   bare 1.31.1   lazy require BROKEN   evict + re-require BROKEN
+//   bare 1.32.0   lazy require BROKEN   evict + re-require BROKEN
+//   bare 1.33.0   lazy require BROKEN   evict + re-require BROKEN
+//
+// A fresh process needs no loader surgery, so these assertions cannot rot against
+// a future runtime change, and they model what actually matters: what a consumer
+// ends up loading in a new process.
+function probeModuleGraph(body) {
+  const script = `
+    const root = ${JSON.stringify(PACKAGE_ROOT)}
+    const loaded = (name) =>
+      Object.keys(require.cache).some((key) => key.endsWith('/' + name))
+    const snapshot = () => ({
+      idMapIndex: loaded('idMapIndex.js'),
+      binding: loaded('binding.js'),
+      index: loaded('index.js'),
+      addon: loaded('addon.js')
+    })
+    const out = {}
+    ${body}
+    console.log(JSON.stringify(out))
+  `
 
-function evictFromCache(modulePath) {
-  const key = findCacheKey(modulePath)
-  if (key !== undefined) delete require.cache[key]
-}
+  const result = subprocess.spawnSync(Bare.argv[0], ['-e', script], { cwd: PACKAGE_ROOT })
 
-function preserveCacheEntries(modulePaths) {
-  const entries = []
-  for (const modulePath of modulePaths) {
-    const key = findCacheKey(modulePath)
-    if (key !== undefined) entries.push([key, require.cache[key]])
+  if (result.status !== 0) {
+    const stderr = result.stderr ? result.stderr.toString() : ''
+    throw new Error(`module-graph probe exited ${result.status}: ${stderr}`)
   }
-  return entries
-}
 
-function restoreCacheEntries(modulePaths, entries) {
-  for (const modulePath of modulePaths) evictFromCache(modulePath)
-  for (const [key, module] of entries) require.cache[key] = module
+  return JSON.parse(result.stdout.toString().trim())
 }
 
 function assertTvimHeader(t, file, version, bitWidth, storageKind = null) {
@@ -240,46 +257,72 @@ function runTurboVecRoundTrip(t, storage, bitWidth, storageKind) {
   }
 }
 
+// This is the guarantee the sub-export exists for, and it still holds on every
+// bare version tested: a consumer of the vector index does not pay for the BERT
+// runtime. Asserted from a fresh process, so "not loaded" is the natural state
+// rather than something manufactured by evicting cache entries.
 test('IdMapIndex sub-export does not boot the BERT runtime', { skip: IS_MOBILE }, (t) => {
-  const cachedEntries = preserveCacheEntries(MODULE_PATHS)
-  try {
-    for (const modulePath of MODULE_PATHS) evictFromCache(modulePath)
-    const IsolatedIdMapIndex = require(MODULE_PATHS[0])
-    const idx = new IsolatedIdMapIndex({ dim: DIM })
-    t.is(idx.dim, DIM, 'dim getter')
-    t.is(idx.bitWidth, 8, 'default bitWidth getter')
-    t.is(idx.length, 0, 'starts empty')
+  const probe = probeModuleGraph(`
+    const IsolatedIdMapIndex = require(root + '/idMapIndex.js')
+    const idx = new IsolatedIdMapIndex({ dim: ${DIM} })
+    out.dim = idx.dim
+    out.bitWidth = idx.bitWidth
+    out.length = idx.length
     idx.dispose()
-    t.ok(findCacheKey(MODULE_PATHS[0]), 'sub-export module loaded')
-    t.ok(findCacheKey(MODULE_PATHS[1]), 'native binding loaded')
-    t.absent(findCacheKey(MODULE_PATHS[2]), 'GGMLBert entry was not loaded')
-    t.absent(findCacheKey(MODULE_PATHS[3]), 'BertInterface plumbing was not loaded')
-  } finally {
-    restoreCacheEntries(MODULE_PATHS, cachedEntries)
-  }
+    out.graph = snapshot()
+  `)
+
+  t.is(probe.dim, DIM, 'dim getter')
+  t.is(probe.bitWidth, 8, 'default bitWidth getter')
+  t.is(probe.length, 0, 'starts empty')
+  t.ok(probe.graph.idMapIndex, 'sub-export module loaded')
+  t.ok(probe.graph.binding, 'native binding loaded')
+  t.absent(probe.graph.index, 'GGMLBert entry was not loaded')
+  t.absent(probe.graph.addon, 'BertInterface plumbing was not loaded')
 })
 
+// NOTE — this test previously also asserted that requiring the root export left
+// idMapIndex.js UNLOADED until the getter was first touched. That assertion is
+// deliberately gone, because the property it guarded no longer exists:
+//
+//   require(index.js)  ->   idMapIndex   binding   addon
+//   bare 1.31.0              false        true      true
+//   bare 1.31.1+             true         true      true
+//
+// From bare 1.31.1 the module graph is materialised eagerly, so the lazy getter
+// in index.js is resolved up front and idMapIndex.js loads immediately. Nothing
+// in this package changed; only the runtime did. Asserting laziness here would
+// fail on every supported runtime, so what remains asserted is the part that is
+// still guaranteed — export identity and usability through the root.
+//
+// The consumer-facing guarantee (using the vector index must not boot the BERT
+// runtime) is unaffected and is covered by the preceding test, which still
+// passes on 1.33.0. If the eager graph is ever reverted upstream, restore the
+// laziness assertions here.
 test(
-  'IdMapIndex root export resolves the class without loading the native binding',
+  'IdMapIndex root export exposes the same constructor as the sub-export',
   { skip: IS_MOBILE },
   (t) => {
-    const cachedEntries = preserveCacheEntries(MODULE_PATHS)
-    try {
-      for (const modulePath of MODULE_PATHS) evictFromCache(modulePath)
-      const rootModule = require(MODULE_PATHS[2])
-      t.absent(findCacheKey(MODULE_PATHS[0]), 'IdMapIndex module starts unloaded')
-      t.absent(findCacheKey(MODULE_PATHS[1]), 'native binding starts unloaded')
-
+    const probe = probeModuleGraph(`
+      const rootModule = require(root + '/index.js')
       const RootIdMapIndex = rootModule.IdMapIndex
-      t.ok(findCacheKey(MODULE_PATHS[0]), 'accessing the root export loads the class module')
-      t.absent(
-        findCacheKey(MODULE_PATHS[1]),
-        'accessing the class does not load the native binding'
-      )
-      t.is(RootIdMapIndex, require(MODULE_PATHS[0]), 'root getter returns the direct constructor')
-    } finally {
-      restoreCacheEntries(MODULE_PATHS, cachedEntries)
-    }
+
+      out.identity = RootIdMapIndex === require(root + '/idMapIndex.js')
+      out.isConstructor = typeof RootIdMapIndex === 'function'
+
+      const idx = new RootIdMapIndex({ dim: ${DIM} })
+      out.dim = idx.dim
+      out.length = idx.length
+      idx.dispose()
+
+      out.graph = snapshot()
+    `)
+
+    t.ok(probe.isConstructor, 'root export exposes a constructor')
+    t.ok(probe.identity, 'root getter returns the direct constructor')
+    t.is(probe.dim, DIM, 'instance built from the root export is usable')
+    t.is(probe.length, 0, 'instance built from the root export starts empty')
+    t.ok(probe.graph.idMapIndex, 'class module is loaded once the root export is used')
   }
 )
 

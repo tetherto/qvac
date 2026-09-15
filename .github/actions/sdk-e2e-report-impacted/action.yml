@@ -1,0 +1,169 @@
+name: SDK E2E Report Impacted
+description: >
+  Posts the coverage summary for an impact-extended smoke run: which tests the
+  PR touched, which of them the smoke suite already covered, and which this run
+  added.
+
+  The report is produced by a job that executes PR-authored code, so every field
+  is validated here before it reaches a comment this job is privileged to post.
+
+inputs:
+  impacted-json:
+    description: "Impacted-tests report as compact JSON; empty when the mapper did not produce one"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Post impact summary
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
+      env:
+        IMPACTED_JSON: ${{ inputs.impacted-json }}
+      with:
+        script: |
+          const pr = context.payload.pull_request?.number;
+          if (!pr) {
+            core.info('No pull_request context; skipping impact summary.');
+            return;
+          }
+
+          const MARKER = '<!-- sdk-e2e-impacted -->';
+          const E2E_PREFIX = 'packages/sdk/e2e/';
+          const SAFE_PATH = /^[A-Za-z0-9._/-]+$/;
+          const SAFE_TEST_ID = /^[A-Za-z0-9._-]+$/;
+          const KNOWN_VIA = new Set([
+            'definitions (whole file)',
+            'definitions (changed lines)',
+            'executor pattern',
+            'import graph',
+            'inference engine',
+            'sdk handler',
+            'sdk api',
+          ]);
+
+          const count = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+          const paths = (value) =>
+            (Array.isArray(value) ? value : [])
+              .filter((entry) => typeof entry === 'string' && SAFE_PATH.test(entry))
+              .map((entry) => (entry.startsWith(E2E_PREFIX) ? entry.slice(E2E_PREFIX.length) : entry));
+          const ids = (value) =>
+            (Array.isArray(value) ? value : []).filter(
+              (entry) => typeof entry === 'string' && SAFE_TEST_ID.test(entry)
+            );
+
+          async function upsert(body) {
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              per_page: 100,
+            });
+            const existing = comments.filter((c) => (c.body || '').includes(MARKER)).pop();
+            const args = { owner: context.repo.owner, repo: context.repo.repo, body: `${MARKER}\n${body}` };
+            if (existing) {
+              await github.rest.issues.updateComment({ ...args, comment_id: existing.id });
+            } else {
+              await github.rest.issues.createComment({ ...args, issue_number: pr });
+            }
+            core.summary.addRaw(`${body}\n`);
+            await core.summary.write();
+          }
+
+          // The mapper is fail-open so it can never block e2e, which means a
+          // failure must be said out loud — otherwise a plain smoke run looks
+          // like it covered the PR's tests.
+          let report = null;
+          try {
+            const raw = (process.env.IMPACTED_JSON || '').trim();
+            if (raw) report = JSON.parse(raw);
+          } catch (error) {
+            core.warning(`Impact report could not be parsed: ${error.message}`);
+          }
+          if (!report || typeof report !== 'object') {
+            return upsert(
+              '### QVAC E2E — impact analysis unavailable\n\n' +
+              '⚠️ The impact mapper did not produce a report, so this is a plain smoke run: ' +
+              'tests this PR added or changed may not have run. Check the `resolve-impacted` job, ' +
+              'or apply `test-e2e-full`.'
+            );
+          }
+
+          if (count(report.changedFilesInScope) === 0) {
+            core.info('PR changes no e2e test files; nothing to report.');
+            return;
+          }
+
+          const affected = count(report.affected?.length);
+          const covered = count(report.coveredBySmoke?.length);
+          const includeTests = ids(report.includeTests);
+          const unmapped = paths(report.unmapped);
+          const rejected = count(report.rejectedIds?.length);
+
+          const lines = ['### QVAC E2E — tests changed by this PR', ''];
+
+          if (includeTests.length > 0) {
+            lines.push(
+              `This smoke run additionally covers **${includeTests.length}** test(s) that are not ` +
+              `tagged \`smoke\`, adding roughly **${count(report.addedMinutes)} min**.`
+            );
+          } else if (affected > 0) {
+            lines.push('Every test this PR touched is already covered by the smoke suite.');
+          } else {
+            lines.push('No test could be attributed to the changed files listed below.');
+          }
+
+          lines.push(
+            '',
+            `**Catalog:** ${count(report.catalog)} tests · **smoke:** ${count(report.smoke)} · ` +
+            `**touched by this PR:** ${affected} (${covered} already in smoke)`,
+            ''
+          );
+
+          const attribution = (Array.isArray(report.attribution) ? report.attribution : []).filter(
+            (entry) =>
+              entry && typeof entry.file === 'string' && SAFE_PATH.test(entry.file) && KNOWN_VIA.has(entry.via)
+          );
+          if (attribution.length > 0) {
+            lines.push('| Changed file | Matched via | Tests |', '| --- | --- | --- |');
+            for (const entry of attribution) {
+              const file = entry.file.startsWith(E2E_PREFIX) ? entry.file.slice(E2E_PREFIX.length) : entry.file;
+              lines.push(`| \`${file}\` | ${entry.via} | ${count(entry.tests)} |`);
+            }
+            lines.push('');
+          }
+
+          if (includeTests.length > 0) {
+            const SHOWN = 50;
+            const rest = includeTests.length - Math.min(includeTests.length, SHOWN);
+            lines.push(
+              `<details><summary>${includeTests.length} added test id(s)</summary>`,
+              '',
+              '```',
+              ...includeTests.slice(0, SHOWN),
+              ...(rest > 0 ? [`… and ${rest} more`] : []),
+              '```',
+              '',
+              '</details>',
+              ''
+            );
+          }
+
+          if (unmapped.length > 0) {
+            lines.push(
+              'These changed files map to no test, so nothing was added for them — review by hand ' +
+              'if they affect behaviour:',
+              ...unmapped.map((file) => `- \`${file}\``),
+              ''
+            );
+          }
+
+          if (rejected > 0) {
+            lines.push(
+              `⚠️ ${rejected} affected test id(s) were rejected as unsafe to pass on a command ` +
+              'line and were not added.',
+              ''
+            );
+          }
+
+          await upsert(lines.join('\n'));
