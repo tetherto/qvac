@@ -1,7 +1,7 @@
 {
   "name": "@qvac/model-fit",
   "version": "0.10.0",
-  "description": "Memory-fit preflight addon for QVAC — wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
+  "description": "Memory-fit preflight addon for QVAC \u2014 wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
   "addon": true,
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
@@ -60,6 +60,7 @@
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/model-fit#readme",
   "devDependencies": {
     "@types/node": "^24.2.1",
+    "bare-crypto": "^1.15.3",
     "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
     "brittle": "^3.16.5",
