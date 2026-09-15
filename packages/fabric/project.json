@@ -56,7 +56,8 @@
           "buildStep": "none",
           "nameTransform": "none",
           "repoName": "fabric",
-          "testGateMode": "none"
+          "testGateMode": "none",
+          "prebuildExtraDirs": ["include", "share"]
         }
       }
     }

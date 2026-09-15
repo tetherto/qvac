@@ -40,7 +40,11 @@ export const E2E = {
 export const MODEL_CONFIG = {
   serve: {
     models: {
-      'test-llm': { model: 'QWEN3_600M_INST_Q4', preload: true, config: { ctx_size: 2048 } },
+      'test-llm': {
+        model: 'QWEN3_600M_INST_Q4',
+        preload: true,
+        config: { ctx_size: 2048, tools: true }
+      },
       // default:true so the vector-stores default-embedding pick stays
       // unambiguous now that a second embedding alias exists.
       'test-embed': { model: 'EMBEDDINGGEMMA_300M_Q4_0', preload: true, default: true },
