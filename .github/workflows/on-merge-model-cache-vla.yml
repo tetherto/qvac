@@ -25,9 +25,13 @@ on:
       # And this file. A commit that fixes the seed itself -- a corrected
       # cache-key-suffix, say -- would otherwise sit dormant until the cron.
       - ".github/workflows/on-merge-model-cache-vla.yml"
-  # Longest gap must stay under the cache server's five-day prune window.
+  # Every two days. The cache server prunes at CACHE_CLEANUP_OLDER_THAN_DAYS=5,
+  # and Mon/Thu left a 4-day gap -- inside the window, but with no slack: ONE
+  # failed run stretched it to 7 days and the entry was gone. `*/2` caps the gap
+  # at 2 days, and at 4 after a missed run, so a single failure is survivable.
+  # The hour is offset per addon so the seeds do not contend for a runner.
   schedule:
-    - cron: "17 18 * * 1,4"
+    - cron: "17 18 */2 * *"
   # No workflow_call. This job assumes the AWS OIDC role and runs repo-local
   # composites from `github.sha`, which under a `pull_request` caller resolves
   # to the merge commit -- PR-head code next to live credentials. Dispatch
