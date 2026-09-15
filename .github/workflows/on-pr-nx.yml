@@ -533,7 +533,18 @@ jobs:
   # once per affected package. PREBUILD_RESULT is the aggregate result: fail-closed.
   publish-prebuild-status:
     needs: [prebuild, ci-router, matrix, verify-prebuild-linking]
-    if: always() && !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.matrix.outputs.prebuilds != '[]'
+    # always() is needed to publish a fail-closed status when prebuild fails, but
+    # it also survives a skipped matrix. A skipped job's outputs are '', not '[]',
+    # so `!= '[]'` passes and the strategy expands to an empty include list, which
+    # is a workflow-level error rather than a skip. Gate on the matrix result too:
+    # every sibling already gates on authorize.allowed, which is what keeps them
+    # out of this. Reproduced on a draft PR, where authorize returns allowed=false.
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+      needs.matrix.result == 'success' &&
+      needs.matrix.outputs.prebuilds != '' &&
+      needs.matrix.outputs.prebuilds != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
