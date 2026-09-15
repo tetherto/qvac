@@ -110,6 +110,24 @@ test('the platform package error wins, carrying the addon error as its cause', (
   )
 })
 
+test('a rejected require.addon() still leaves a cause on the platform error', () => {
+  assert.throws(
+    () =>
+      loadBinding({
+        addon: packageEntry,
+        hostAddon: () => {
+          throw new Error('platform package is not installed')
+        }
+      }),
+    (err) => {
+      assert.match(err.message, /platform package is not installed/)
+      assert.notEqual(err.cause, undefined, 'every failure must explain the first source')
+      assert.match(err.cause.message, /require\.addon\(\) answered with a module/)
+      return true
+    }
+  )
+})
+
 test('a non-binding from the platform package is reported, never exported', () => {
   assert.throws(
     () => loadBinding({ addon: packageEntry, hostAddon: packageEntry }),
