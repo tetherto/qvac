@@ -130,6 +130,10 @@ private:
   int backendId_ = 0;
   std::string backendName_ = "CPU";
   bool gpuUnsupported_ = false;
+  // Whether the codec's synthesis stack runs on the Apple Core ML sidecar
+  // (a compiled audio8-codec-decoder.mlmodelc next to the decoder GGUF on a
+  // coreml-enabled Apple build); the LM stays on backendName_ either way.
+  bool codecOnCoreml_ = false;
 };
 
 } // namespace qvac::ttsggml::audio8

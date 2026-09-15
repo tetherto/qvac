@@ -127,6 +127,8 @@ void expectVulkanBackend(const Audio8Model& model) {
   EXPECT_EQ(
       runtimeInt(model, "backendId"), backendIdFromName(VULKAN_BACKEND_NAME));
   EXPECT_EQ(runtimeInt(model, "gpuUnsupported"), 0);
+  // The Core ML sidecar is Apple-only; a Vulkan arm never reports it.
+  EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 0);
 }
 
 void readVoiceRepeatedly(const Audio8Model& model, int iterations) {

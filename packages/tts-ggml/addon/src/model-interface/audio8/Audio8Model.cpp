@@ -265,6 +265,7 @@ void Audio8Model::loadLocked() {
   backendName_ = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_ = backendIdFromName(backendName_);
+  codecOnCoreml_ = engine_->codec_on_coreml();
   const bool wantsGpu = cfg_.nGpuLayers.has_value()
                             ? (*cfg_.nGpuLayers != 0)
                             : cfg_.useGpu.value_or(false);
@@ -396,6 +397,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats Audio8Model::runtimeStats() const {
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back("codecOnCoreml", static_cast<int64_t>(codecOnCoreml_));
   return stats;
 }
 
