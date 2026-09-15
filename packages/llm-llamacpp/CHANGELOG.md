@@ -67,9 +67,20 @@
     constrains decoding, and the caller receives a well-formed call against the
     wrong schema with nothing in the response to indicate it. This was a
     warning in earlier pre-release builds of this feature.
+- A `mmproj-no-audio` load config option (`mmproj_no_audio` also accepted),
+  taking `0`/`off`/`false` or `1`/`on`/`true`; anything else is rejected with
+  `InvalidArgument`. It drops the projector's audio encoder while keeping its
+  vision encoder, and is forwarded to the vision context as `skip_audio`. It is
+  independent of `mmproj_use_gpu`, which selects the backend rather than the
+  modality.
 
 ### Changed
 
+- **Multimodal projectors now skip their audio encoder by default.** The addon
+  sets `mmproj-no-audio` to `true` during load normalization, so an
+  audio-capable mmproj loads vision-only unless the new option is passed
+  explicitly as `0`/`off`/`false`. Vision behaviour is unchanged; a caller
+  relying on audio input from a combined projector must now opt back in.
 - `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0` (upstream movement on the b10549 line: uninitialized ggml views after oversized MoE cache banks, plus KV-cache, hybrid-index memory, mtmd/clip and RPC backend changes; no API change for this package).
 
 ### Fixed
