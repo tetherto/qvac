@@ -318,6 +318,23 @@ jobs:
       # Only trusted events may write the shared cache (see
       # .github/AGENTS.md), and only when this run actually produced
       # archives: hashFiles is empty for an empty directory.
+      # vcpkg only writes archives for packages it COMPILES, so when the
+      # workspace layer serves the restore the host layer never fills and stays
+      # cold forever. Copy across explicitly; -n so we never clobber another
+      # user's archive, and the whole thing is best-effort.
+      - name: Warm the host vcpkg cache
+        if: env.VCPKG_CACHE_PERSISTENT == 'true'
+        shell: bash
+        run: |
+          set +e
+          [ -d "${VCPKG_CACHE_DIR}" ] || exit 0
+          host_dir=$(echo "${VCPKG_BINARY_SOURCES}" | tr ';' '\n' | grep '^files,' | head -n 1 | cut -d, -f2)
+          [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || exit 0
+          [ "${host_dir}" = "${VCPKG_CACHE_DIR}" ] && exit 0
+          cp -rn "${VCPKG_CACHE_DIR}"/. "${host_dir}"/ 2>/dev/null
+          echo "warmed ${host_dir} from ${VCPKG_CACHE_DIR}"
+          exit 0
+
       - name: Save vcpkg cache (trusted contexts)
         if: >-
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') &&
