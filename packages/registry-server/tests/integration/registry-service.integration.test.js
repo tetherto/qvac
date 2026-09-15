@@ -6,11 +6,14 @@ const Hyperswarm = require('hyperswarm')
 const createTestnet = require('hyperdht/testnet')
 const fs = require('fs').promises
 const path = require('path')
+const crypto = require('crypto')
 
 const RegistryService = require('../../lib/registry-service')
 const RegistryConfig = require('../../lib/config')
 const { AUTOBASE_NAMESPACE, QVAC_MAIN_REGISTRY } = require('../../shared/constants')
 const { createTempStorage, waitFor } = require('../helpers/test-utils')
+const { buildGguf, buildSafetensors } = require('../helpers/gguf-fixture')
+const { fitBlobContent } = require('../../lib/fit-blob')
 
 const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
 const DISPATCH_PUT_MODEL = `@${QVAC_MAIN_REGISTRY}/put-model`
@@ -629,6 +632,172 @@ test('addModel extracts GGUF metadata for .gguf files', async (t) => {
       source: ggufModel.source
     })
     t.alike(retrieved.ggufMetadata, ggufModel.ggufMetadata, 'metadata persisted')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+async function addLocalArtifact(ctx, { filename, buffer, engine = '@test/engine' }) {
+  const tempDir = await createTempStorage(ctx.t)
+  const artifactPath = path.join(tempDir, filename)
+  await fs.writeFile(artifactPath, buffer)
+
+  ctx.service._downloadArtifact = async (sourceInfo, localPath) => {
+    await fs.copyFile(artifactPath, localPath)
+  }
+
+  const model = await ctx.service.addModel({
+    source: `s3://test-bucket/${filename}`,
+    engine,
+    licenseId: 'MIT'
+  })
+  await flushAutobases(ctx.service.base)
+
+  return model
+}
+
+async function fitBlobFor(t, filename, buffer) {
+  const dir = await createTempStorage(t)
+  const filePath = path.join(dir, filename)
+  await fs.writeFile(filePath, buffer)
+  return fitBlobContent(filePath)
+}
+
+async function readBlob(service, binding) {
+  const { blobs } = await service._getOrCreateBlobsCore('models')
+  const chunks = []
+  for await (const chunk of blobs.createReadStream(binding)) {
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks)
+}
+
+test('addModel stores a weightless description and points the record at it', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildGguf({ tensorCount: 4, dataBytes: 4096 })
+    const model = await addLocalArtifact(ctx, {
+      filename: 'model.gguf',
+      buffer: fixture.buffer
+    })
+
+    const expected = await fitBlobFor(t, 'model.gguf', fixture.buffer)
+
+    t.ok(model.fitBlobBinding, 'record carries a fit blob pointer')
+    t.is(model.fitBlobBinding.byteLength, expected.length, 'pointer covers the description only')
+    t.ok(
+      model.fitBlobBinding.byteLength < model.blobBinding.byteLength,
+      'the description is smaller than the artifact'
+    )
+    t.not(
+      model.fitBlobBinding.sha256,
+      model.blobBinding.sha256,
+      'the description has its own checksum'
+    )
+
+    const stored = await readBlob(ctx.service, model.fitBlobBinding)
+    t.alike(stored, expected, 'stored bytes are the weightless description')
+    t.is(
+      crypto.createHash('sha256').update(stored).digest('hex'),
+      model.fitBlobBinding.sha256,
+      'the recorded checksum matches what was stored'
+    )
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    t.alike(retrieved.fitBlobBinding, model.fitBlobBinding, 'pointer persisted')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('every shard of a split model gets its own description', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const first = buildGguf({ tensorCount: 2, dataBytes: 512 })
+    const second = buildGguf({ tensorCount: 9, dataBytes: 512 })
+
+    const shard1 = await addLocalArtifact(ctx, {
+      filename: 'model-00001-of-00002.gguf',
+      buffer: first.buffer
+    })
+    const shard2 = await addLocalArtifact(ctx, {
+      filename: 'model-00002-of-00002.gguf',
+      buffer: second.buffer
+    })
+
+    const expectedFirst = await fitBlobFor(t, 'model-00001-of-00002.gguf', first.buffer)
+    const expectedSecond = await fitBlobFor(t, 'model-00002-of-00002.gguf', second.buffer)
+
+    t.ok(shard1.fitBlobBinding, 'first shard has a pointer')
+    t.ok(shard2.fitBlobBinding, 'later shard has a pointer')
+    t.is(shard1.fitBlobBinding.byteLength, expectedFirst.length)
+    t.is(shard2.fitBlobBinding.byteLength, expectedSecond.length)
+    t.not(
+      shard1.fitBlobBinding.sha256,
+      shard2.fitBlobBinding.sha256,
+      'each shard is described separately'
+    )
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('a safetensors artifact stores its JSON header', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildSafetensors()
+    const model = await addLocalArtifact(ctx, {
+      filename: 'vae.safetensors',
+      buffer: fixture.buffer
+    })
+
+    t.ok(model.fitBlobBinding, 'record carries a fit blob pointer')
+    t.is(model.fitBlobBinding.byteLength, fixture.metadataLength)
+
+    const stored = await readBlob(ctx.service, model.fitBlobBinding)
+    t.alike(stored, fixture.buffer.subarray(0, fixture.metadataLength))
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('a format with no separable metadata region is added without a pointer', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const model = await addLocalArtifact(ctx, {
+      filename: 'ggml-tiny.bin',
+      buffer: Buffer.alloc(256, 3)
+    })
+
+    t.absent(model.fitBlobBinding, 'no pointer for an unsupported format')
+    t.ok(model.blobBinding, 'the artifact itself is still stored')
   } finally {
     await cleanupService(ctx)
   }
