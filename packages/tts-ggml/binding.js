@@ -13,6 +13,10 @@ function loadAddon() {
   try {
     const addon = require.addon()
     if (isNativeBinding(addon)) return addon
+    cause = new Error(
+      '@qvac/tts-ggml: require.addon() answered with a module that is not the native binding ' +
+        '(no createInstance function), so the prebuild in this package was treated as absent.'
+    )
   } catch (err) {
     cause = err
   }
@@ -26,7 +30,7 @@ function loadPlatformPackageAddon(cause) {
   try {
     addon = require('#host-addon')
   } catch (err) {
-    if (err.cause === undefined && cause !== null) err.cause = cause
+    if (err.cause === undefined) err.cause = cause
     throw err
   }
 
@@ -36,7 +40,7 @@ function loadPlatformPackageAddon(cause) {
         'it has no createInstance function. Check that the platform package for this host ' +
         'is installed and is not shadowed by another module of the same name.'
     )
-    if (cause !== null) err.cause = cause
+    err.cause = cause
     throw err
   }
 
