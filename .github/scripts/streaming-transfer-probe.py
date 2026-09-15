@@ -13,11 +13,11 @@ class InitParams(c.Structure):
 
 
 root = Path(sys.argv[1]).resolve()
-addons = list(root.rglob("qvac__diffusion-cpp.bare"))
-assert len(addons) == 1, addons
-# GGML symbols are exported by the addon for its Vulkan plugin. Lazy binding
-# leaves the unused JavaScript entry points unresolved in this model-free probe.
-lib = c.CDLL(str(addons[0]), mode=os.RTLD_LAZY | os.RTLD_GLOBAL)
+plugins = list(root.rglob("libqvac-diffusion-ggml-vulkan.so"))
+assert len(plugins) == 1, plugins
+# The Vulkan module includes the GGML buffer APIs. Loading it directly avoids
+# the addon's JavaScript ABI and uses the same compiled transfer implementation.
+lib = c.CDLL(str(plugins[0]), mode=os.RTLD_GLOBAL)
 
 
 def api(name, result, *args):
@@ -28,8 +28,12 @@ def api(name, result, *args):
 
 
 ptr = c.c_void_p
-load_backend = api("ggml_backend_load", ptr, c.c_char_p)
-init_backend = api("ggml_backend_init_by_type", ptr, c.c_int, c.c_char_p)
+plugin_init = api("ggml_backend_init", ptr)
+device_count = api("ggml_backend_reg_dev_count", c.c_size_t, ptr)
+device_get = api("ggml_backend_reg_dev_get", ptr, ptr, c.c_size_t)
+device_type = api("ggml_backend_dev_type", c.c_int, ptr)
+init_device = api("ggml_backend_dev_init", ptr, ptr, c.c_char_p)
+cpu_buft = api("ggml_backend_cpu_buffer_type", ptr)
 backend_name = api("ggml_backend_name", c.c_char_p, ptr)
 backend_device = api("ggml_backend_get_device", ptr, ptr)
 default_buft = api("ggml_backend_get_default_buffer_type", ptr, ptr)
@@ -48,13 +52,14 @@ free_buf = api("ggml_backend_buffer_free", None, ptr)
 free_ctx = api("ggml_free", None, ptr)
 free_backend = api("ggml_backend_free", None, ptr)
 
-plugins = list(root.rglob("libqvac-diffusion-ggml-vulkan.so"))
-assert len(plugins) == 1, plugins
-assert load_backend(os.fsencode(plugins[0])), "Vulkan plugin did not load"
-cpu = init_backend(0, None)
-gpu = init_backend(1, None)
-assert cpu and gpu, "CPU and discrete GPU backends are required"
-print("BACKENDS", backend_name(cpu).decode(), backend_name(gpu).decode(), flush=True)
+registry = plugin_init()
+assert registry and device_count(registry), "Vulkan plugin has no devices"
+devices = [device_get(registry, i) for i in range(device_count(registry))]
+device = next((item for item in devices if device_type(item) == 1), None)
+assert device, "A discrete GPU is required"
+gpu = init_device(device, None)
+assert gpu, "GPU initialization failed"
+print("BACKEND", backend_name(gpu).decode(), flush=True)
 
 
 def tensor(buft, size):
@@ -68,7 +73,7 @@ def tensor(buft, size):
 
 
 try:
-    for mode, source_type in [("CPU", default_buft(cpu)),
+    for mode, source_type in [("CPU", cpu_buft()),
                               ("Vulkan_Host", host_buft(backend_device(gpu)))]:
         assert source_type, mode
         for mib in [64, 192, 512]:
@@ -99,4 +104,3 @@ try:
                 free_ctx(source[0])
 finally:
     free_backend(gpu)
-    free_backend(cpu)
