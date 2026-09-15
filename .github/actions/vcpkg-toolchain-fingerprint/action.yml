@@ -37,12 +37,19 @@ runs:
           probe="$("${CC:-clang}" --version)"
         fi
 
-        # setup-vcpkg leaves VCPKG_ROOT pointing at a git checkout on every
-        # platform, but tolerate a tree that is not one rather than failing the
-        # whole C++ job over a cache key.
-        vcpkg_rev="$(git -C "${VCPKG_ROOT:-}" rev-parse HEAD 2> /dev/null || echo "unknown")"
+        # `vcpkg version` rather than the tree's git rev: VCPKG_ROOT is a git
+        # checkout on some hosts and an unpacked image directory on others, so
+        # rev-parse yields a sha here and nothing there -- which would split one
+        # toolchain across two cache keys and halve the hit rate. The tool's own
+        # version string is available wherever vcpkg is, which is everywhere
+        # this runs.
+        vcpkg_ver="$(vcpkg version 2> /dev/null | head -n 1 || true)"
+        if [ -z "${vcpkg_ver}" ]; then
+          echo "::error::could not read vcpkg version; cache key would be unstable"
+          exit 1
+        fi
         probe="${probe}
-        vcpkg=${vcpkg_rev}"
+        ${vcpkg_ver}"
 
         echo "--- toolchain ---"
         echo "${probe}"
@@ -84,30 +91,33 @@ runs:
           exit 1
         }
 
-        # Native stderr is a TERMINATING error under ErrorActionPreference=Stop,
-        # so a $VCPKG_ROOT that is not a git checkout would fail the whole step
-        # rather than fall back. Drop to Continue for the call and merge stderr
-        # into the output stream so it arrives as records, not as an exception.
-        $vcpkgRev = 'unknown'
+        # `vcpkg version`, not the tree's git rev -- see the bash branch. Native
+        # stderr is a TERMINATING error under ErrorActionPreference=Stop, so
+        # drop to Continue for the call and merge stderr into the output stream.
+        $vcpkgVer = ''
         $prevEAP = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
-          $revOut = (& git -C "$env:VCPKG_ROOT" rev-parse HEAD 2>&1)
-          if ($LASTEXITCODE -eq 0 -and $revOut) {
-            $candidate = ($revOut | Select-Object -First 1).ToString().Trim()
-            if ($candidate -match '\A[0-9a-f]{40}\z') { $vcpkgRev = $candidate }
+          $verOut = (& vcpkg version 2>&1)
+          if ($LASTEXITCODE -eq 0 -and $verOut) {
+            $vcpkgVer = ($verOut | Select-Object -First 1).ToString().Trim()
           }
         } catch {
-          $vcpkgRev = 'unknown'
+          $vcpkgVer = ''
         } finally {
           $ErrorActionPreference = $prevEAP
           # The runner's PowerShell wrapper ends with `exit $LASTEXITCODE`, so a
-          # non-zero left behind by git fails the step even though we handled it
-          # and finished normally. Clear it.
+          # non-zero left behind by a native call fails the step even though we
+          # handled it and finished normally. Clear it.
           $global:LASTEXITCODE = 0
         }
 
-        $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$vcpkgRev"
+        if ([string]::IsNullOrWhiteSpace($vcpkgVer)) {
+          Write-Output "::error::could not read vcpkg version; cache key would be unstable"
+          exit 1
+        }
+
+        $probe = "vctools=$toolsVersion sdk=$sdkVersion $vcpkgVer"
         Write-Output "--- toolchain ---"
         Write-Output $probe
 
