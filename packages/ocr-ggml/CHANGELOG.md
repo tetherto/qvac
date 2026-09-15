@@ -4,6 +4,14 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own. No API change for this package.
+- OCR inference touches none of 10549.1.0's MoE, multimodal-projector or speculative-decoding paths, so the bump keeps this package on the current shared runtime rather than a superseded one.
+- Also ships two changes that landed after `0.23.0` with no version bump of their own, neither of which alters shipped code: the iOS test-harness work in [#4399](https://github.com/tetherto/qvac/pull/4399) (hardlinked pre-staged models, iOS crash-report capture — `test/` only) and the agent-configuration unification in [#4353](https://github.com/tetherto/qvac/pull/4353) (`.agent/` only).
+
 ## [0.23.0] - 2026-09-10
 
 ### Changed

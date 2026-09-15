@@ -34,6 +34,7 @@ on:
   workflow_call:
 
 permissions:
+  checks: read
   contents: read
   pull-requests: read
   packages: read
@@ -207,35 +208,40 @@ jobs:
         continue-on-error: true
 
   cpp-lint:
-    needs: [authorize, ci-router, fork-approval]
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
+    needs: [authorize, ci-router, fork-approval, detect-fabric-stack, resolve-fabric-prebuilds]
+    # resolve-fabric-prebuilds is skipped on every non-fabric-stack PR, and an
+    # if: without a status-check function carries an implicit success() over all
+    # of needs — which would skip this job there. always() suppresses it; the
+    # gates it also suppresses are restored explicitly below.
+    #
+    # detect-fabric-stack is required to have SUCCEEDED, with no workflow_dispatch
+    # escape: authorize-pr returns allowed=true for any non-PR event, so the detect
+    # job runs on dispatch like anywhere else. Letting dispatch past a detect
+    # FAILURE would lint against the released fabric on exactly the runs most
+    # likely to be re-verifying a fabric bump. The pre-existing dispatch clause on
+    # authorize below is left as it was.
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.ci-router.outputs.run_verified_checks == 'true' &&
+      (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch') &&
+      needs.detect-fabric-stack.result == 'success' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/ocr-ggml
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
-  ts-checks:
+  await-ts-checks:
+    name: Await PR-head TypeScript checks
+    if: github.event_name == 'pull_request_target' && needs.authorize.outputs.allowed == 'true'
     needs: [fork-approval, authorize]
-    if: needs.authorize.outputs.allowed == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        working-directory: packages/ocr-ggml
-        run: npm install
-
-      - name: Type declaration check
-        working-directory: packages/ocr-ggml
-        run: npm run test:dts
+    uses: ./.github/workflows/reusable-await-ts-checks.yml
+    with:
+      check_name: 'ocr-ggml-pr-head-ts-checks / ts-checks'
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && (needs.authorize.outputs.allowed == 'true' || github.event_name == 'workflow_dispatch')
@@ -295,6 +301,7 @@ jobs:
           workflow-file: on-pr-ocr-ggml.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-ocr-ggml
 
   prebuild:
     permissions:
@@ -460,7 +467,7 @@ jobs:
 
   merge-guard:
     # run-mobile-integration-tests removed — mobile is on-demand only now.
-    needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, detect-fabric-stack, resolve-fabric-prebuilds, run-integration-tests]
+    needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, detect-fabric-stack, resolve-fabric-prebuilds, run-integration-tests, await-ts-checks]
     # Always run so the PR still gets a status check even if fork-approval is
     # skipped or fails; matches on-pr-tts-ggml.yml's pattern. !cancelled()
     # ensures this doesn't hold the concurrency group open after a
@@ -473,7 +480,7 @@ jobs:
       # it is trustworthy. If detection failed, or the prebuild hand-off failed
       # on a stack PR, the skips are consequences of that failure and must not
       # read as passes.
-      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' }}
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' || needs.await-ts-checks.result == 'skipped') }}
       build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}
       # run-mobile-integration-tests removed — mobile is on-demand only now.
       integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}
