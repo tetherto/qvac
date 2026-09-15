@@ -77,6 +77,7 @@
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
+    "bare-subprocess": "^6.1.0",
     "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
