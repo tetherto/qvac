@@ -24,6 +24,9 @@ import {
 } from '@qvac/sdk'
 import { createWav, playPcmInt16Chunk } from './utils'
 
+// Only a fallback, for the case where no frame ever reports a rate: each
+// audio frame carries the rate the engine actually produced, and
+// `outputSampleRate` can move it off this default.
 const SUPERTONIC_SAMPLE_RATE = 44100
 
 /**
@@ -126,9 +129,17 @@ try {
   let phraseIndex = 0
   const filterChunk = createAngleBracketAndStarFilter()
 
+  // Playback and the WAV header both follow what the engine reports rather
+  // than the engine's documented default, so a configured `outputSampleRate`
+  // cannot leave the audio playing back at the wrong speed.
+  let sampleRate = SUPERTONIC_SAMPLE_RATE
+
   const drainPcm = (async () => {
     for await (const m of ttsSession) {
       if (m.buffer.length > 0) {
+        if (m.sampleRate !== undefined) {
+          sampleRate = m.sampleRate
+        }
         appendPcmSamples(combinedPcm, m.buffer)
         phraseIndex += 1
         const preview =
@@ -138,7 +149,7 @@ try {
         console.log(
           `\n▸ [TTS phrase ${phraseIndex}] ${m.buffer.length} samples${preview ? ` — "${preview}${preview.length >= 72 ? '...' : ''}"` : ''}`
         )
-        await playPcmInt16Chunk(m.buffer, SUPERTONIC_SAMPLE_RATE)
+        await playPcmInt16Chunk(m.buffer, sampleRate)
       }
     }
   })()
@@ -162,7 +173,7 @@ try {
   console.log(
     `\n▸ Writing ${combinedPcm.length} samples to ${outWav} (full utterance; phrases were already played above).`
   )
-  createWav(combinedPcm, SUPERTONIC_SAMPLE_RATE, outWav)
+  createWav(combinedPcm, sampleRate, outWav)
 
   await unloadModel({ modelId: llmModelId, clearStorage: false })
   await unloadModel({ modelId: ttsModelId, clearStorage: false })
