@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Native Pocket TTS with converted FlowLM/Mimi bundles, prepared voices or
+  reference-WAV conditioning, and native audio streaming through the addon
+  run, runStream and runStreaming APIs. Supports explicit flow-sampling steps;
+  four steps are recommended for the observed one-step speech artifact.
+
+### Changed
+
+- Expose optional firstAudioMs stats and chunkIndex/isLast output metadata;
+  preserve first-audio latency during streaming aggregation.
+- Require speech-cpp and ggml-speech 2026-09-15, including the Pocket EOS-tail
+  and CPU planner fixes.
+- Resolve Pocket CPU memory planning through the dynamically loaded backend,
+  fixing unresolved `ggml_graph_plan` imports in Linux and Android prebuilds.
+
 ## [0.9.0] - 2026-09-11
 
 ### Added
