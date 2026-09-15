@@ -2210,3 +2210,116 @@ test('release policy: no workflow cuts a GitHub Release outside the SDK surface'
   }
   assert.deepEqual(offenders, [])
 })
+
+// A cpp-tests workflow runs PR-head code and is reachable from a fork PR once
+// fork-ci is approved, so a cache WRITE (actions/cache/save) must be gated on
+// trusted events only. Easy to undo by accident, so pin it here.
+// See .github/AGENTS.md.
+const TRUSTED_CACHE_EVENTS = ['push', 'workflow_dispatch', 'merge_group', 'schedule']
+
+// Known-ungated, tracked on QVAC-24711. Both write a ccache/models cache with no
+// event gate at all; neither has a vcpkg cache step yet, so they were out of
+// scope for QVAC-24711's first pass. Remove each entry as it is fixed -- this
+// list should only ever shrink.
+const TRUSTED_CACHE_EXEMPT = new Set([
+  '.github/workflows/cpp-test-coverage-asr-ggml.yml',
+  '.github/workflows/cpp-test-coverage-tts-ggml.yml',
+  // Three ungated actions/cache@ writes, reachable from on-pr-nx.yml
+  // (pull_request_target). Needs its own ticket.
+  '.github/workflows/cpp-tests-nx.yml',
+])
+
+// Events that must never appear in a cache WRITE gate. `pull_request_target` is
+// the whole point -- a gate that merely lists the four trusted events still
+// passes a presence check while carrying `|| github.event_name ==
+// 'pull_request_target'` alongside them, which is exactly the hole this test
+// exists to close. So assert the untrusted ones are absent too.
+const UNTRUSTED_CACHE_EVENTS = ['pull_request', 'pull_request_target', 'issue_comment']
+
+// Every `uses: actions/cache@` (write) step in the cpp-tests family, as
+// {path, code, steps, index}. Steps are split on the six-space step indent
+// these workflows use; `index` is the step's position, for ordering checks.
+function eachCppTestsCacheStep (opts = {}) {
+  const found = []
+  for (const path of workflowPaths()) {
+    if (!/\/cpp-tests?-/.test(path)) continue
+    if (!opts.includeExempt && TRUSTED_CACHE_EXEMPT.has(path)) continue
+    const code = withoutComments(read(path))
+    const steps = code.split(/\n      - /)
+    steps.forEach((step, index) => {
+      if (!opts.match.test(step)) return
+      found.push({ path, code, steps, step, index })
+    })
+  }
+  return found
+}
+
+test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
+  const offenders = []
+  for (const { path, step } of eachCppTestsCacheStep({ match: /uses: actions\/cache(@|\/save@)/ })) {
+    const missing = TRUSTED_CACHE_EVENTS.filter((e) => !step.includes(`github.event_name == '${e}'`))
+    if (missing.length) {
+      offenders.push(`${path}: a cache write step does not gate on ${missing.join(', ')}`)
+    }
+    const forbidden = UNTRUSTED_CACHE_EVENTS.filter((e) => step.includes(`github.event_name == '${e}'`))
+    if (forbidden.length) {
+      offenders.push(`${path}: a cache write step admits untrusted ${forbidden.join(', ')}`)
+    }
+  }
+  assert.deepEqual(offenders, [])
+})
+
+// vcpkg names every cached package by an ABI hash that includes the toolchain,
+// so a vcpkg cache key that does not move with the compiler restores an entry
+// whose archives all miss -- and an exact primary-key hit suppresses the save,
+// so the dead entry is never replaced. Observed on both Windows pools and on a
+// single macOS runner four days apart. Both cache steps in a workflow must
+// carry the fingerprint, and the step that produces it must come first.
+// The host cache directory outlives the job and is shared with every later job
+// on the box, so the step that copies archives into it must carry the same trust
+// gate as the cache write. It was gated only on VCPKG_CACHE_PERSISTENT at first,
+// which is true on any self-hosted runner including a pull_request_target run.
+test('cache policy: the host-cache sync step is gated on trusted events', () => {
+  const offenders = []
+  for (const { path, step } of eachCppTestsCacheStep({
+    match: /name: Sync the host and workspace vcpkg caches/, includeExempt: true,
+  })) {
+    const missing = TRUSTED_CACHE_EVENTS.filter((e) => !step.includes(`github.event_name == '${e}'`))
+    if (missing.length) {
+      offenders.push(`${path}: the host-cache sync step does not gate on ${missing.join(', ')}`)
+    }
+  }
+  // Every cpp-tests workflow with a persistent host layer must have the step.
+  assert.ok(eachCppTestsCacheStep({ match: /name: Sync the host and workspace vcpkg caches/, includeExempt: true }).length >= 5)
+  assert.deepEqual(offenders, [])
+})
+
+test('cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint', () => {
+  const offenders = []
+  // Only the vcpkg cache; the model caches are keyed on manifests and are
+  // toolchain-independent by construction.
+  // Only the restore step spells the key out; the save reuses it via
+  // steps.vcpkg-cache.outputs.cache-primary-key, so it cannot drift.
+  const vcpkgCacheSteps = eachCppTestsCacheStep({
+    match: /uses: actions\/cache\/restore@[\s\S]*vcpkg\/cache/,
+    includeExempt: true,
+  })
+
+  for (const { path, steps, step, index } of vcpkgCacheSteps) {
+    if (!step.includes('env.TOOLCHAIN_FINGERPRINT')) {
+      offenders.push(`${path}: a vcpkg cache step's key omits env.TOOLCHAIN_FINGERPRINT`)
+      continue
+    }
+    // Compare step positions, not string offsets: two textually identical steps
+    // resolve to the same offset, and the restore/save pair very nearly is one.
+    const producer = steps.findIndex((s) => s.includes('actions/vcpkg-toolchain-fingerprint'))
+    if (producer === -1) {
+      offenders.push(`${path}: uses env.TOOLCHAIN_FINGERPRINT but never runs the action that sets it`)
+      continue
+    }
+    if (index < producer) {
+      offenders.push(`${path}: a vcpkg cache step runs before the fingerprint action that sets its key`)
+    }
+  }
+  assert.deepEqual(offenders, [])
+})

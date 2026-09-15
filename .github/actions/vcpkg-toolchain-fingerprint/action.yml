@@ -1,0 +1,109 @@
+name: "vcpkg toolchain fingerprint"
+description: >-
+  Hash the toolchain that will build this job's vcpkg packages and export it as
+  TOOLCHAIN_FINGERPRINT, for folding into the vcpkg binary cache key.
+
+# vcpkg keys every cached package by an ABI hash over the compiler and the
+# vcpkg tree, and neither is pinned. A cache key that does not move with them
+# restores an entry whose archives all miss, then rebuilds -- and an exact
+# primary-key hit suppresses the save, so the dead entry never heals.
+#
+# Evidence is on the QVAC-24711 PR, which stays linkable after logs expire.
+
+runs:
+  using: composite
+  steps:
+    - if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ "${RUNNER_OS}" = "macOS" ]; then
+          # xcrun, not PATH: the homebrew llvm here is moved aside later.
+          probe="$(xcrun clang --version)
+        sdk=$(xcrun --show-sdk-build-version)"
+        else
+          probe="$("${CC:-clang}" --version)"
+        fi
+
+        # Hash the binary, not `vcpkg version` (not on PATH here on linux) and
+        # not the tree's git rev (VCPKG_ROOT is a checkout on only some hosts,
+        # which split one toolchain across two keys).
+        vcpkg_bin="${VCPKG_ROOT:-}/vcpkg"
+        if [ ! -x "${vcpkg_bin}" ]; then
+          vcpkg_bin="$(command -v vcpkg 2> /dev/null || true)"
+        fi
+        if [ -z "${vcpkg_bin}" ] || [ ! -x "${vcpkg_bin}" ]; then
+          echo "::error::vcpkg binary not found (VCPKG_ROOT=${VCPKG_ROOT:-unset}); cache key would be unstable"
+          exit 1
+        fi
+        if command -v sha256sum > /dev/null 2>&1; then
+          vcpkg_hash="$(sha256sum "${vcpkg_bin}")"
+        else
+          vcpkg_hash="$(shasum -a 256 "${vcpkg_bin}")"
+        fi
+        probe="${probe}
+        vcpkg=${vcpkg_hash:0:16}"
+
+        echo "--- toolchain ---"
+        echo "${probe}"
+
+        if command -v sha256sum > /dev/null 2>&1; then
+          digest="$(printf '%s' "${probe}" | sha256sum)"
+        else
+          digest="$(printf '%s' "${probe}" | shasum -a 256)"
+        fi
+
+        echo "TOOLCHAIN_FINGERPRINT=${digest:0:16}" >> "${GITHUB_ENV}"
+        echo "toolchain fingerprint: ${digest:0:16}"
+
+    - if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        if (-not (Test-Path $vswhere)) {
+          Write-Output "::error::vswhere not found at $vswhere"
+          exit 1
+        }
+
+        $vsPath = & $vswhere -latest -products * -property installationPath
+        $toolsFile = Join-Path $vsPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+        $toolsVersion = (Get-Content $toolsFile -Raw).Trim()
+
+        # Version-aware: 10.0.9.0 must not sort above 10.0.26100.0.
+        $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Include'
+        $sdkVersion = (Get-ChildItem $sdkRoot -Directory |
+          Where-Object { $_.Name -as [version] } |
+          Sort-Object { [version]$_.Name } |
+          Select-Object -Last 1).Name
+
+        if ([string]::IsNullOrWhiteSpace($toolsVersion) -or [string]::IsNullOrWhiteSpace($sdkVersion)) {
+          Write-Output "::error::could not fingerprint the toolchain"
+          exit 1
+        }
+
+        # Hash the binary -- see the bash branch.
+        $vcpkgBin = Join-Path $env:VCPKG_ROOT 'vcpkg.exe'
+        if (-not (Test-Path $vcpkgBin)) {
+          $onPath = Get-Command vcpkg -ErrorAction SilentlyContinue
+          if ($onPath) { $vcpkgBin = $onPath.Source }
+        }
+        if (-not (Test-Path $vcpkgBin)) {
+          Write-Output "::error::vcpkg binary not found (VCPKG_ROOT=$env:VCPKG_ROOT); cache key would be unstable"
+          exit 1
+        }
+        $vcpkgHash = (Get-FileHash -Path $vcpkgBin -Algorithm SHA256).Hash.ToLower().Substring(0, 16)
+
+        $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$vcpkgHash"
+        Write-Output "--- toolchain ---"
+        Write-Output $probe
+
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($probe)
+        $digest = -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') })
+        $fingerprint = $digest.Substring(0, 16)
+
+        echo "TOOLCHAIN_FINGERPRINT=$fingerprint" >> $env:GITHUB_ENV
+        Write-Output "toolchain fingerprint: $fingerprint"
