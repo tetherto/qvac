@@ -22,8 +22,8 @@
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 #include "model-interface/parler/ParlerModel.hpp"
-#include "model-interface/supertonic/SupertonicModel.hpp"
 #include "model-interface/pocket/PocketModel.hpp"
+#include "model-interface/supertonic/SupertonicModel.hpp"
 
 namespace qvac::ttsggml::addon_js {
 
@@ -33,8 +33,8 @@ using audio8::Audio8Model;
 using chatterbox::ChatterboxModel;
 using cosyvoice::CosyvoiceModel;
 using parler::ParlerModel;
-using supertonic::SupertonicModel;
 using pocket::PocketModel;
+using supertonic::SupertonicModel;
 
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
@@ -107,8 +107,10 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   //   2. 48000 when the LavaSR enhancer is active (it always emits 48 kHz);
   //   3. the engine's native rate.
   if (engineType == EngineType::Pocket) {
-    auto pm = make_unique<PocketModel>(adapter.buildPocketConfig(configurationParams, env));
-    sampleRate = pm->sampleRate(); model = std::move(pm);
+    auto pm = make_unique<PocketModel>(
+        adapter.buildPocketConfig(configurationParams, env));
+    sampleRate = pm->sampleRate();
+    model = std::move(pm);
   } else if (engineType == EngineType::Supertonic) {
     auto cfg = adapter.buildSupertonicConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
@@ -182,9 +184,11 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     PocketModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
     auto queue = instance.addonCpp->outputQueue;
-    modelInput.chunkCallback = [queue](std::vector<int16_t>&& pcm, int index, bool last) {
-      queue->queueResult(std::any(StreamingPcmChunk{std::move(pcm), index, last}));
-    };
+    modelInput.chunkCallback =
+        [queue](std::vector<int16_t>&& pcm, int index, bool last) {
+          queue->queueResult(
+              std::any(StreamingPcmChunk{std::move(pcm), index, last}));
+        };
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
@@ -295,9 +299,10 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
 
   if (dynamic_cast<PocketModel*>(&instance.addonCpp->model.get())) {
     auto config = adapter.buildPocketConfig(configurationParams, env);
-    return js::JsAsyncTask::run(env,
-        [addon = instance.addonCpp, config = std::move(config)]() mutable {
-          dynamic_cast<PocketModel&>(addon->model.get()).reload(std::move(config));
+    return js::JsAsyncTask::run(
+        env, [addon = instance.addonCpp, config = std::move(config)]() mutable {
+          dynamic_cast<PocketModel&>(addon->model.get())
+              .reload(std::move(config));
         });
   }
 

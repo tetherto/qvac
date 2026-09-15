@@ -11,8 +11,8 @@
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 #include "model-interface/parler/ParlerConfig.hpp"
-#include "model-interface/supertonic/SupertonicConfig.hpp"
 #include "model-interface/pocket/PocketConfig.hpp"
+#include "model-interface/supertonic/SupertonicConfig.hpp"
 
 namespace qvac::ttsggml {
 
@@ -29,7 +29,8 @@ class JSAdapter {
 public:
   JSAdapter() = default;
   pocket::PocketConfig buildPocketConfig(
-      qvac_lib_inference_addon_cpp::js::Object configurationParams, js_env_t* env);
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
 
   EngineType readEngineType(
       qvac_lib_inference_addon_cpp::js::Object configurationParams,

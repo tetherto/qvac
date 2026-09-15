@@ -5,4 +5,4 @@ namespace qvac::ttsggml::pocket {
 struct PocketConfig {
   tts_cpp::pocket::EngineOptions options;
 };
-}
+} // namespace qvac::ttsggml::pocket
