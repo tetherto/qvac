@@ -98,34 +98,15 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      # Must come after setup-vcpkg, which writes this same variable to
-      # $GITHUB_ENV and would otherwise win. `clear;` drops its S3 source, which
-      # this job has no credentials for.
-      - name: Point vcpkg at the cached binary directory
-        if: ${{ matrix.os != 'windows-2025' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # $WORKDIR reaches $GITHUB_ENV unescaped, so a newline in it would
-          # inject further variables. setup-vcpkg guards its own inputs the same way.
-          if [[ ! "$WORKDIR" =~ ^packages/[A-Za-z0-9._-]+$ ]]; then
-            echo "::error::unexpected workdir: $WORKDIR"
-            exit 1
-          fi
-          echo "VCPKG_BINARY_SOURCES=clear;files,$GITHUB_WORKSPACE/$WORKDIR/vcpkg/cache,readwrite" >> "$GITHUB_ENV"
-
-      # Native path required: a mixed-separator path resolves elsewhere and
-      # vcpkg silently finds nothing.
-      - name: Point vcpkg at the cached binary directory (Windows)
-        if: ${{ matrix.os == 'windows-2025' }}
-        shell: powershell
-        run: |
-          if ($env:WORKDIR -notmatch '^packages/[A-Za-z0-9._-]+$') {
-            Write-Output "::error::unexpected workdir: $env:WORKDIR"
-            exit 1
-          }
-          $cacheDir = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:WORKDIR 'vcpkg/cache')))
-          echo "VCPKG_BINARY_SOURCES=clear;files,$cacheDir,readwrite" >> $env:GITHUB_ENV
+      # Resolves to a host-wide directory on self-hosted runners (shared by every
+      # runner instance on the box, survives the workspace wipe) and to the
+      # workspace on GitHub-hosted ones, where actions/cache below carries it.
+      # Must come after setup-vcpkg, which writes VCPKG_BINARY_SOURCES itself.
+      - name: Point vcpkg at its binary cache
+        uses: ./.github/actions/vcpkg-binary-cache-dir
+        with:
+          workdir: ${{ env.WORKDIR }}
+          trusted: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule' }}
 
       - name: Cleanup vcpkg
         shell: bash
@@ -141,13 +122,11 @@ jobs:
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - name: Create vcpkg cache location (package-local)
-        shell: bash
-        run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
-
       # Exports TOOLCHAIN_FINGERPRINT for the cache key below. Must run before
-      # both cache steps. See the action for why the key cannot omit it.
+      # both cache steps. See the action for why the key cannot omit it. Skipped
+      # where the cache directory persists, since no key is computed there.
       - name: Fingerprint the toolchain
+        if: env.VCPKG_CACHE_PERSISTENT != 'true'
         uses: ./.github/actions/vcpkg-toolchain-fingerprint
 
       # This job runs PR-head code, so only trusted events may write the shared
@@ -159,10 +138,11 @@ jobs:
       # yields nothing usable and can never re-save.
       - name: Get vcpkg cache (restore + save, trusted contexts)
         if: >-
+          env.VCPKG_CACHE_PERSISTENT != 'true' && (
           github.event_name == 'push' ||
           github.event_name == 'workflow_dispatch' ||
           github.event_name == 'merge_group' ||
-          github.event_name == 'schedule'
+          github.event_name == 'schedule')
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: >-
@@ -178,10 +158,11 @@ jobs:
 
       - name: Get vcpkg cache (restore-only, untrusted contexts)
         if: >-
+          env.VCPKG_CACHE_PERSISTENT != 'true' && (
           github.event_name != 'push' &&
           github.event_name != 'workflow_dispatch' &&
           github.event_name != 'merge_group' &&
-          github.event_name != 'schedule'
+          github.event_name != 'schedule')
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           key: >-
