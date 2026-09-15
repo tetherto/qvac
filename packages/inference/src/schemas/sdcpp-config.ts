@@ -259,6 +259,28 @@ export const sdcppConfigSchema = z.object({
   world: z
     .object({
       seed: z.number().int().optional().describe('Walk RNG seed.'),
+      paramsBackend: z
+        .string()
+        .optional()
+        .describe(
+          'Walk weight residency: diffusion=cpu or diffusion=disk,vae=cpu. Explicit assignments override offloadParamsToCpu.'
+        ),
+      maxVram: z
+        .union([z.number(), z.string()])
+        .optional()
+        .describe(
+          'DiT graph budget in GiB or per-device assignments. Negative values reserve free-memory headroom; 0 disables cuts. Excludes attention history and the decoder.'
+        ),
+      streamLayers: z
+        .boolean()
+        .optional()
+        .describe(
+          'Retain leading DiT segments within maxVram and transfer the remainder from CPU parameters.'
+        ),
+      verbosity: z
+        .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)])
+        .optional()
+        .describe('Shared native diffusion log level: 0=error, 1=warn, 2=info, 3=debug.'),
       // Mirrors parseAutoOrPositiveInt in the addon's WorldSessionHandlers.cpp:
       // -1 or > 0. Zero and other negatives throw natively at load, after the
       // multi-gigabyte artifacts have already been resolved.

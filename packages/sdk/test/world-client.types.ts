@@ -1,6 +1,25 @@
 import type { WorldSceneClientParams } from '@qvac/inference/surface'
 import type { WorldSceneResult, WorldSceneResultWithPack } from '@/client/api/world-result'
 import { worldCreateScene } from '@/client/api/world'
+import type { LoadModelOptions } from '@/index'
+
+const streamedWorld: LoadModelOptions = {
+  modelType: 'sdcpp-generation',
+  modelSrc: '/models/abot.gguf',
+  modelConfig: {
+    mode: 'world',
+    taehvModelSrc: '/models/taehv.gguf',
+    sceneSrc: '/models/scene.safetensors',
+    world: {
+      paramsBackend: 'diffusion=cpu',
+      maxVram: 'cuda0=-1',
+      streamLayers: true,
+      kvCache: true,
+      verbosity: 3
+    }
+  }
+}
+void streamedWorld
 
 const base = {
   modelId: 'model-1',
