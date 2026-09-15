@@ -382,9 +382,7 @@ export const diffusionPlugin = definePlugin({
       config.max_vram !== 0 &&
       config.max_vram !== '0' &&
       !config.offload_to_cpu &&
-      !/(^|,)(?:\\*|all|default|diffusion)\\s*=\\s*cpu(?:,|$)/i.test(
-        config.params_backend ?? ''
-      )
+      !/(^|,)(?:\\*|all|default|diffusion)\\s*=\\s*cpu(?:,|$)/i.test(config.params_backend ?? '')
     ) {
       getEngineLogger().warn(
         `[${ModelType.sdcppGeneration}:${modelId}] stream_layers requires CPU-backed diffusion parameters; set params_backend to 'diffusion=cpu' (or enable offload_to_cpu) or layer streaming may be inactive`
