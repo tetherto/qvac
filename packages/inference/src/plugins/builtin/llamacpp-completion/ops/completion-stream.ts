@@ -34,6 +34,7 @@ import type { DisposableScope } from '@/runtime/disposable-scope'
 import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integration'
 import { parseToolCalls } from '@/utils/tools/index'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
+import { toolChoiceDemandsCall } from '@/schemas/completion-stream'
 import { buildAutoCacheSaveHistory, type CacheMessage } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
@@ -203,25 +204,50 @@ function withToolBlock(messages: ChatHistory[], toolBlock: ChatHistory[]): ChatH
 
 interface CachePayload {
   messages: ChatHistory[]
+  /** Whether this payload carries the tool block. */
+  toolBlockSent: boolean
   /**
-   * Whether the prefix will hold a rendered tool block once this turn
-   * commits — either it already did, or this payload carries one the template
-   * will render.
+   * Whether the block this payload carries is the complete tool set. A named
+   * `tool_choice` makes the template render only that tool, so the copy it
+   * writes into the cache must not be trusted as the full block.
+   */
+  toolBlockFull: boolean
+  /** Whether the prefix already held a rendered block before this turn. */
+  prefixHoldsBlock: boolean
+  /**
+   * Estimate of whether the prefix will hold a rendered tool block once this
+   * turn commits. `resolveToolBlockCached` replaces it with the addon's own
+   * report on the render when that report is available.
    */
   toolBlockCached: boolean
 }
 
 /**
- * Whether a payload carrying this tool block actually gets it in front of the
- * model. Qwen-family templates anchor their tool section on the last user
- * query and raise without one, and the addon answers that by re-rendering the
- * turn with tools stripped — a usable prompt with no tools in it. Recording
- * such a turn as "the block is cached now" would suppress the block for the
- * rest of the session, so require a user message before believing it landed.
+ * Fallback guess for whether a payload carrying this tool block gets it in
+ * front of the model, used only when the addon does not report
+ * `toolDefinitionsDropped`. Qwen-family templates anchor their tool section on
+ * the last user query and raise without one, and the addon answers that by
+ * re-rendering with tools stripped, so require a user message before believing
+ * the block landed.
  */
 function rendersToolBlock(messages: HistoryMsg[], toolBlock: ChatHistory[]): boolean {
   if (toolBlock.length === 0) return false
   return messages.some((msg) => msg.role === 'user')
+}
+
+/**
+ * Settle whether the committed prefix holds the full tool block. The addon's
+ * `toolDefinitionsDropped` is the template's own word on whether the block it
+ * was handed reached the model; without it (a payload with no block, or a
+ * stand-in model) the payload's estimate stands.
+ */
+function resolveToolBlockCached(
+  payload: CachePayload,
+  stats: CompletionStats | undefined
+): boolean {
+  const dropped = stats?.toolDefinitionsDropped
+  if (!payload.toolBlockSent || dropped === undefined) return payload.toolBlockCached
+  return payload.prefixHoldsBlock || (payload.toolBlockFull && dropped === 0)
 }
 
 /**
@@ -236,7 +262,8 @@ function prepareMessagesForCache(
   session: KvCacheSession,
   turn: TurnHandle,
   history: HistoryMsg[],
-  tools?: Tool[]
+  tools?: Tool[],
+  toolChoice?: string
 ): CachePayload {
   const toolBlock = tools?.length ? transformMessages(tools) : []
 
@@ -261,12 +288,22 @@ function prepareMessagesForCache(
   // one: `toolBlockCached` records that a previous turn actually got it into
   // the cache, which a committed message count does not prove. A stale
   // boundary means we are resending the whole conversation anyway.
-  const skipToolBlock = turn.toolBlockCached && !clearStaleCount
+  const prefixHoldsBlock = turn.toolBlockCached && !clearStaleCount
+  // The addon arms the tool-call grammar only for a payload that carries
+  // tools, and `required` / a named tool cannot be honoured without it. Such a
+  // turn resends the block even into a prefix that holds one; the second copy
+  // in the cache is the price of the guarantee.
+  const demandsCall = toolChoiceDemandsCall(toolChoice) && toolBlock.length > 0
+  const skipToolBlock = prefixHoldsBlock && !demandsCall
   const blockToSend = skipToolBlock ? [] : toolBlock
+  const toolBlockFull = blockToSend.length > 0 && (!demandsCall || toolChoice === 'required')
 
   return {
     messages: withToolBlock(transformMessages(messages), blockToSend),
-    toolBlockCached: skipToolBlock || rendersToolBlock(messages, blockToSend)
+    toolBlockSent: blockToSend.length > 0,
+    toolBlockFull,
+    prefixHoldsBlock,
+    toolBlockCached: prefixHoldsBlock || (toolBlockFull && rendersToolBlock(messages, blockToSend))
   }
 }
 
@@ -490,7 +527,13 @@ export async function* completion(
 
   let payload: ReturnType<typeof prepareMessagesForCache>
   try {
-    payload = prepareMessagesForCache(session, turn, history, toolsActive ? tools : undefined)
+    payload = prepareMessagesForCache(
+      session,
+      turn,
+      history,
+      toolsActive ? tools : undefined,
+      mergedGenerationParams?.tool_choice
+    )
   } catch (error) {
     // A missing attachment is caller input rejected before the addon runs,
     // so the committed cache is untouched and must survive.
@@ -531,7 +574,7 @@ export async function* completion(
       await session.commitTurn(turn, {
         kind: 'static',
         messageCount: history.length + 1,
-        toolBlockCached: payload.toolBlockCached
+        toolBlockCached: resolveToolBlockCached(payload, result.stats)
       })
     }
     return result
@@ -572,7 +615,7 @@ export async function* completion(
     kind: 'autoRename',
     targetCachePath: postResponseCacheInfo.cachePath,
     messageCount: savedHistory.length,
-    toolBlockCached: payload.toolBlockCached
+    toolBlockCached: resolveToolBlockCached(payload, result.stats)
   })
 
   return result
