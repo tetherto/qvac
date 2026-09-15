@@ -17,6 +17,19 @@
 
 ### Fixed
 
+- On Linux, a llama load setting that only fabric can reject — an unknown
+  `cache-type-k`, say — now surfaces as an invalid argument naming the setting
+  and carrying fabric's message. It previously escaped the fitter's handler
+  entirely: the addon and `qvac__fabric@0.bare` each statically linked their own
+  libc++, so each had its own `std::exception` typeinfo, and RTTI matches
+  typeinfo by address, so `parseGenericConfig`'s `catch (const std::exception&)`
+  never matched a throw that came from inside fabric. Fabric now owns the one
+  C++ runtime in the process and this addon imports it
+  (`qvac_addon_import_fabric_cxx_runtime`), which requires `@qvac/fabric` from
+  the release that exports it. The unit suite covers the boundary directly, and
+  distinguishes a `catch` that matched by type from one that only caught `...`.
+  See `arch/qips/linux-fabric-libcxx-ownership.md`.
+
 - `flash-attn` is now recognised as enabled on every spelling qvac-fabric
   accepts — `on`, `enabled`, `true` and `1` — matching `@qvac/llm-llamacpp`.
   This supersedes the 0.6.0 entry below pinning it to `on` only: that pinning
