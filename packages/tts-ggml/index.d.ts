@@ -462,6 +462,13 @@ interface RuntimeStats {
      * unit its `tokensPerSecond` counts, in batch and in streaming alike.
      */
     generatedFrames?: number;
+    /**
+     * Audio8 only: 1 when the codec's synthesis stack ran on the Apple Core ML
+     * (Neural Engine) sidecar -- a compiled `audio8-codec-decoder.mlmodelc`
+     * next to the decoder GGUF on macOS / iOS -- 0 when it ran on the ggml
+     * backend `backendId` reports (which the language model always uses).
+     */
+    codecOnCoreml?: number;
 }
 interface SentenceStreamChunkMeta {
     chunkIndex?: number;

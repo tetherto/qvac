@@ -190,6 +190,10 @@ cosyvoice3/
 audio8-lm-q8_0.gguf              (~0.6 GB; also -f16 / -q4_0 / -f32)
 audio8-codec-decoder-q8_0.gguf   (~110 MB; also -f16 / -f32)
 audio8-codec-encoder-q8_0.gguf   (~120 MB; also -f16 / -f32; cloning only)
+audio8-codec-decoder.mlmodelc/   (optional, macOS / iOS: Apple Core ML sidecar for
+                                  the codec synthesis stack, picked up when it sits
+                                  next to the decoder GGUF; one export serves every
+                                  quant tier)
 ```
 
 Download the registry-published Chatterbox, Supertonic, and Parler models into
@@ -629,6 +633,18 @@ registration and the addon falls back to Vulkan or CPU.
 > `openclCacheDir` to persist the compiled kernels. A GPU request on a
 > platform or in a build without one of those backends falls back to CPU
 > and sets `response.stats.gpuUnsupported`.
+>
+> On macOS / iOS the Audio8 codec's synthesis stack (upsampling + DAC
+> decoder, the largest stage of a CPU synthesis) can additionally run on
+> Apple Core ML: the prebuilds are built with `speech-cpp[coreml]`, and the
+> engine picks up a compiled `audio8-codec-decoder.mlmodelc` sitting next to
+> the decoder GGUF (any quant tier) at `load()`, falling back to the ggml
+> backend when it is absent. `response.stats.codecOnCoreml` reports which
+> path ran; the language model always stays on `backendId`. Export the
+> sidecar from the decoder GGUF with `qvac-fabric-speech.cpp`'s
+> `engines/tts/scripts/export-audio8-codec-coreml.py` (see its
+> [Audio8 guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar)
+> for the measured numbers and the `AUDIO8_COREML_*` environment knobs).
 
 ### Android: dynamic backend loading
 

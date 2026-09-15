@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Audio8 Core ML codec sidecar (macOS / iOS).** The Apple prebuilds now
+  enable `speech-cpp[coreml]`, so a compiled `audio8-codec-decoder.mlmodelc`
+  placed next to the Audio8 decoder GGUF (any quant tier) moves the codec's
+  synthesis stack -- the largest stage of a CPU synthesis -- onto Apple Core
+  ML at `load()`, with a ggml fallback when the sidecar is absent.
+  `RuntimeStats` gains `codecOnCoreml` (0/1). Export the sidecar with
+  `qvac-fabric-speech.cpp`'s `export-audio8-codec-coreml.py`; the language
+  model keeps running on the selected ggml backend. `speech-cpp` floor moves
+  from `2026-09-10` to `2026-09-15`.
+
 ## [0.9.0] - 2026-09-11
 
 ### Added
