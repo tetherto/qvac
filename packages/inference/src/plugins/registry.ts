@@ -363,25 +363,41 @@ export function clearPlugins(): void {
 }
 
 /**
- * DEBUG (temporary): describe the addon's raw binding, as text for the thrown
- * error. The engine logger does not survive the worker boundary in CI, so the
- * error message is the only channel that reaches the test output.
+ * DEBUG (temporary): report which files the addon's specifiers actually
+ * resolve to, and what each module contains. Carried in the thrown error
+ * because the engine logger does not cross the worker boundary in CI.
  */
 async function describeBindingForDebug(addonPackage: string): Promise<string> {
   const parts: string[] = []
-  for (const specifier of [`${addonPackage}/binding.js`, addonPackage]) {
+  const meta = import.meta as unknown as { resolve?: (s: string) => string; url?: string }
+  parts.push(`registry-url=${meta.url ?? 'unknown'}`)
+  parts.push(
+    `require.addon=${typeof (globalThis as { require?: { addon?: unknown } }).require?.addon}`
+  )
+
+  for (const sub of ['', '/binding.js', '/addonLogging', '/package']) {
+    const specifier = `${addonPackage}${sub}`
+    let resolvedUrl = 'n/a'
+    try {
+      resolvedUrl = meta.resolve ? meta.resolve(specifier) : 'no import.meta.resolve'
+    } catch (error) {
+      resolvedUrl = `resolve threw: ${error instanceof Error ? error.message : String(error)}`
+    }
     try {
       const mod = (await import(specifier)) as Record<string, unknown>
-      parts.push(`${specifier} -> ${describeLoggingModule(mod)}`)
       const inner = mod['default']
-      if (inner) parts.push(`${specifier}.default -> ${describeLoggingModule(inner)}`)
+      parts.push(
+        `${specifier} @ ${resolvedUrl} -> ${describeLoggingModule(mod)}` +
+          (inner ? ` ; default -> ${describeLoggingModule(inner)}` : '')
+      )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const cause = (error as { cause?: unknown }).cause
-      const causeText =
-        cause instanceof Error ? ` (cause: ${cause.message})` : cause ? ` (cause: ${cause})` : ''
-      parts.push(`${specifier} THREW: ${message}${causeText}`)
+      parts.push(
+        `${specifier} @ ${resolvedUrl} THREW: ${message}` +
+          (cause ? ` (cause: ${cause instanceof Error ? cause.message : String(cause)})` : '')
+      )
     }
   }
-  return parts.join(' | ')
+  return parts.join(' || ')
 }
