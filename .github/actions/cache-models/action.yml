@@ -77,6 +77,18 @@ inputs:
       cache-hit with an empty directory.
     required: false
     default: 'false'
+  assert-exists:
+    description: |
+      Set to 'true' ONLY by a seed workflow's verify job, which runs after the
+      seed job's post-step save. Runs the `lookup-only` probe with
+      `fail-on-cache-miss`, so a missing entry turns the job red, and skips the
+      restore, warm and save entirely. actions/cache only WARNS when the cache
+      server rejects a reservation, so without this a seed that wrote nothing
+      still reports success. Inputs must match the seed step's exactly --
+      `path` feeds the cache version, so a different one probes a different
+      entry.
+    required: false
+    default: 'false'
 
 outputs:
   cache-hit:
@@ -146,12 +158,16 @@ runs:
     # the clock; on push, dispatch and re-runs the probe still short-circuits.
     - name: Probe for an existing entry (seed mode)
       id: probe
-      if: inputs.seed-probe == 'true' && github.event_name != 'schedule'
+      if: >-
+        (inputs.seed-probe == 'true' && github.event_name != 'schedule') ||
+        inputs.assert-exists == 'true'
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
         lookup-only: true
+        # Verify mode only: a miss here means the seed job wrote nothing.
+        fail-on-cache-miss: ${{ inputs.assert-exists == 'true' }}
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Restore + automatic post-job save on trusted contexts (same-repo head,

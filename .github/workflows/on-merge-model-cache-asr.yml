@@ -115,3 +115,57 @@ jobs:
           set -euo pipefail
           node scripts/stage-integration-models.mjs
           ls -lh models/
+
+  # actions/cache only WARNS when the cache server rejects a reservation, so the
+  # seed job above reports success whether or not an entry was written. This
+  # turns that into a red run. It has to be a separate job: the save runs in the
+  # seed job's post-steps, after every step there has finished.
+  #
+  # Matrixed like the seed: `enable-cross-os: 'false'` gives win32 its own cache
+  # version, so each leg has to be checked on the platform that wrote it.
+  verify:
+    needs: [runner_names, seed]
+    # No id-token: nothing here talks to AWS; the lookup needs the
+    # repository and nothing else.
+    permissions:
+      contents: read
+    runs-on: ${{ needs.runner_names.outputs[matrix.runner_key] }}
+    timeout-minutes: 15
+    name: verify-model-cache-${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner_key: linux_ubuntu2404_x64
+          - platform: win32
+            runner_key: win_2025_x64
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # Inputs must stay identical to the seed step's: `path` feeds the cache
+      # version, so a different one silently probes a different entry.
+      - name: Assert the seeded entry exists
+        uses: ./.github/actions/cache-models
+        with:
+          package: asr-ggml
+          paths: packages/asr-ggml/models
+          hash-files-glob: packages/asr-ggml/test/integration/*.manifest.json
+          warm: 'false'
+          enable-cross-os: 'false'
+          assert-exists: 'true'
