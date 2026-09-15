@@ -15,6 +15,19 @@
 
 - GPU devices are filtered to the supported backends and `split-mode: 'row'` is dropped ([#4330](https://github.com/tetherto/qvac/pull/4330)). A caller passing `'row'` no longer receives a degraded-to-`'layer'` projection; the value is rejected. This matches `@qvac/llm-llamacpp` and `@qvac/embed-llamacpp`, which made the same change, so the fitter and the loaders agree on what is accepted. Landed after `0.10.0` with no version bump of its own.
 
+### Added
+
+- A fit stub is documented and covered as an accepted `modelPath`, single-file
+  and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
+  tokenizer tables and no data section, which the registry serves in place of
+  the artefact. It projects the same plan as the full file, and needs no padding
+  out to the artefact length. Two fabric behaviours make that work and both are
+  covered — 10549.0.0 skips the file-bounds check under no_alloc, and the vocab
+  load it does *not* skip is satisfied by `tokenizer.ggml.model = none` plus a
+  surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
+  that reports failure as an absent projection rather than an error, is asserted
+  on the same files. No API change.
+
 ### Fixed
 
 - `flash-attn` is now recognised as enabled on every spelling qvac-fabric

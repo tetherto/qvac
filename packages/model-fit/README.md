@@ -170,6 +170,22 @@ different file, or no file, from one launch to the next. It is not required to
 exist: a missing model is the documented `ERROR` / `model-unreadable` outcome
 rather than a thrown error.
 
+It may be a **fit stub** instead of the artefact: a short GGUF carrying the
+hyperparameters and the tensor infos, with the tokenizer tables dropped and no
+data section — tens of KB against gigabytes, with tensor offsets that run past
+its own EOF. It projects the same plan as the full file, single-file or split.
+
+The fit loads with `no_alloc` and no mmap and never reads tensor bytes, so the
+data section can be absent rather than padded out to the artefact length — and
+it should be: a sparse file is fully allocated on NTFS. That needs qvac-fabric
+10549.0.0 or newer, which `@qvac/fabric` 0.13.0 is the first release to carry.
+
+The vocab load still runs, so a stub cannot drop every `tokenizer.*` key. It
+must declare `tokenizer.ggml.model = none`, which takes that load to its early
+return, and keep `{arch}.vocab_size` (derivable from `token_embd.weight`, which
+is `[n_embd, n_vocab]`). BERT-family models also need
+`tokenizer.ggml.token_type_count`.
+
 Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
 and out-of-range values wrap — `marginMiB: -1` would otherwise become a margin
 nothing can satisfy. All must be safe integers within the range of their target
