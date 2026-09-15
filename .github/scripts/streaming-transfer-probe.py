@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 import time
 
 
@@ -13,6 +14,21 @@ class InitParams(c.Structure):
 
 
 root = Path(sys.argv[1]).resolve()
+print("RESOURCE logical_cpus", os.cpu_count(), flush=True)
+for filename in ["/proc/meminfo", "/proc/swaps", "/proc/pressure/memory",
+                 "/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current",
+                 "/sys/fs/cgroup/cpu.max"]:
+    source = Path(filename)
+    print("RESOURCE", filename, flush=True)
+    print(source.read_text() if source.exists() else "unavailable", flush=True)
+for key in ["GGML_VK_PREFER_HOST_MEMORY", "GGML_VK_DISABLE_ASYNC",
+            "GGML_VK_SUBALLOCATION_BLOCK_SIZE", "GGML_VK_FORCE_MAX_BUFFER_SIZE",
+            "GGML_VK_FORCE_MAX_ALLOCATION_SIZE", "OMP_NUM_THREADS"]:
+    print("SETTING", key, repr(os.environ.get(key)), flush=True)
+for command in [["lscpu"], ["nvidia-smi"], ["nvidia-smi", "-q"]]:
+    print("DIAGNOSTIC", command, flush=True)
+    result = subprocess.run(command, timeout=30, check=False)
+    print("EXIT", result.returncode, flush=True)
 plugins = list(root.rglob("libqvac-diffusion-ggml-vulkan.so"))
 assert len(plugins) == 1, plugins
 # The Vulkan module includes the GGML buffer APIs. Loading it directly avoids

@@ -381,7 +381,7 @@ test(
     addonLogging.setLogger((priority, message) => {
       const line = String(message)
       if (
-        /ABot-World DiT:|budget merge took|streaming budget =|residency=STREAMED|releasing params backend buffer/.test(
+        /ABot-World DiT:|budget merge took|streaming budget =|residency=STREAMED|releasing params backend buffer|staged compute params|compute buffer size|cache backend buffer size|\[prof\]/.test(
           line
         )
       ) {
