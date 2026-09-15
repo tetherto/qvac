@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.12.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own.
+
+### Fixed
+
+- On Linux, a llama load setting that only fabric can reject — an unknown
+  `cache-type-k`, say — now surfaces as an invalid argument naming the setting
+  and carrying fabric's message. It previously escaped the fitter's handler
+  entirely: the addon and `qvac__fabric@0.bare` each statically linked their own
+  libc++, so each had its own `std::exception` typeinfo, and RTTI matches
+  typeinfo by address, so `parseGenericConfig`'s `catch (const std::exception&)`
+  never matched a throw that came from inside fabric. Fabric now owns the one
+  C++ runtime in the process and this addon imports it
+  (`qvac_addon_import_fabric_cxx_runtime`). The unit suite covers the boundary
+  directly, and distinguishes a `catch` that matched by type from one that only
+  caught `...`. See `arch/qips/linux-fabric-libcxx-ownership.md`
+  ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
 ## [0.11.0] - 2026-09-15
 
 ### Changed
