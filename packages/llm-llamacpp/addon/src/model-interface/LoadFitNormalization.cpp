@@ -985,6 +985,9 @@ NormalizedLoad normalizeLoadForFit(
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
 
+    const bool backendRequired =
+        tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
+
     LoadConstraints constraints;
     for (const char* key :
          {"cache-type-k", "cache_type_k", "cache-type-v", "cache_type_v"}) {
@@ -999,13 +1002,16 @@ NormalizedLoad normalizeLoadForFit(
         constraints.kvCacheTypes.push_back(kvType);
       }
     }
-
+    if (backendRequired) {
+      constraints.requiredBackendFamilies = backendOverride;
+    }
     BackendRequest request;
     request.preferred = preferredBackend;
     request.metadata = &metadata;
     request.mainGpu = mainGpu;
     request.isFinetuning = finetuneOverrides.active;
     request.backendOverride = backendOverride;
+    request.backendRequired = backendRequired;
     request.constraints = constraints;
     if (splitMode != LLAMA_SPLIT_MODE_NONE) {
       request.mainGpu.reset();

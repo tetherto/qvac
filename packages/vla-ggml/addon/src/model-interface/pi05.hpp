@@ -345,8 +345,7 @@ struct ggml_tensor* pi05BuildExpertBlockGraph(
     struct ggml_context* ctx, struct ggml_tensor* xExp,
     struct ggml_tensor* actPositions, struct ggml_tensor* kBuf,
     struct ggml_tensor* vBuf, struct ggml_tensor* modPreAttn,
-    struct ggml_tensor* modPreFfw,
-    std::vector<struct ggml_tensor*>& kvWrites,
+    struct ggml_tensor* modPreFfw, std::vector<struct ggml_tensor*>& kvWrites,
     const Pi05ExpertBlockWeights& w, int expertHidden, int nHeads, int nKvHeads,
     int headDim, int prefixLen, int nAct, float rmsNormEps, float ropeFreqBase);
 
@@ -394,7 +393,7 @@ struct ggml_tensor* pi05BuildEulerStepGraph(
 
 Pi05ExpertODEStepOutputs pi05BuildExpertOdeStepGraph(
     struct ggml_context* ctx,
-    struct ggml_tensor* xExp,                        // (expert_hidden, n_act)
+    struct ggml_tensor* xExp,                      // (expert_hidden, n_act)
     struct ggml_tensor* actPositions,              // I32 (n_act,)
     const std::vector<struct ggml_tensor*>& kBufs, // per-layer unified F16 KV
     const std::vector<struct ggml_tensor*>& vBufs, // [head_dim, prefix+act, kv]
@@ -449,10 +448,12 @@ public:
   // ggml backend plugin shared libs (.so/.dylib/.dll).
   // `backendOverride` lists GPU backend families in priority order, e.g.
   // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
+  // `backendRequired` makes that list binding rather than advisory.
   Pi05Model(
       const std::string& ggufPath, bool forceCpu,
       const std::string& backendsDir,
-      const std::vector<std::string>& backendOverride = {});
+      const std::vector<std::string>& backendOverride = {},
+      bool backendRequired = false);
 
   // Out-of-line because `Pi05ModelInternal` is forward-declared above;
   // unique_ptr's destructor needs the complete type, which lives in

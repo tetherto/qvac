@@ -572,11 +572,13 @@ public:
   // num_cameras is unknown/invalid and no override was supplied.
   // `backendOverride` lists GPU backend families in priority order, e.g.
   // {"cuda", "vulkan"}; empty means the default order. QVAC-23763.
+  // `backendRequired` makes that list binding rather than advisory.
   GrootModel(
       const std::string& ggufPath, bool forceCpu,
       const std::string& backendsDir,
       const VlaEmbodimentRequest& embodiment = {},
-      const std::vector<std::string>& backendOverride = {});
+      const std::vector<std::string>& backendOverride = {},
+      bool backendRequired = false);
 
   ~GrootModel() override;
 

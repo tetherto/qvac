@@ -116,6 +116,18 @@ std::vector<std::string> parseBackendOverride(const std::string& backendStr) {
   return families;
 }
 
+bool parseBackendRequired(const std::string_view value) {
+  if (value.empty() || value == "false") {
+    return false;
+  }
+  if (value == "true") {
+    return true;
+  }
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "backendRequired must be true or false.");
+}
+
 void loadBackendsOnce(const std::string& backendsDir) {
   static std::once_flag sFlag;
   std::call_once(sFlag, [&backendsDir]() {
@@ -156,14 +168,16 @@ int parseAdrenoModel(const std::string& description) {
   return 0;
 }
 
-ggml_backend_dev_t
-pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
+ggml_backend_dev_t pickBestGpuDevice(
+    const std::vector<std::string>& backendOverride,
+    const bool backendRequired) {
   using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
 
   const size_t n = ggml_backend_dev_count();
   ggml_backend_dev_t fallbackGpu = nullptr;
   ggml_backend_dev_t hipDev = nullptr;
   ggml_backend_dev_t cudaDev = nullptr;
+  ggml_backend_dev_t adrenoOpenClDev = nullptr;
   // QVAC-23763: every device that passed the Adreno gate, paired with its
   // lowercased backend name, so an override can only ever choose among devices
   // the gate already accepted.
@@ -209,23 +223,11 @@ pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
             Priority::INFO,
             "vla_backend_selection: Adreno " + std::to_string(adreno) +
                 " OpenCL accepted (preferred Adreno path)");
-        // Prefer OpenCL-on-Adreno-800+ over any other candidate iterated
-        // later (in particular Vulkan-on-Adreno, which would otherwise be
-        // skipped but only after we'd already accepted nothing).
-        //
-        // QVAC-23763: still an early return, and deliberately so. An Adreno
-        // host has no CUDA device, so there is nothing for a backend override
-        // to choose between here. It can still be asked for something else,
-        // 'vulkan' on an Adreno 830, so say the override was dropped rather
-        // than returning a device it did not ask for in silence.
-        if (!backendOverride.empty()) {
-          QLOG_IF(
-              Priority::WARNING,
-              "vla_backend_selection: backend override ignored on Adreno " +
-                  std::to_string(adreno) +
-                  "; OpenCL is the only accepted backend there");
-        }
-        return dev;
+        // Keep it in the accepted list so a binding override is checked before
+        // the default Adreno preference is applied.
+        adrenoOpenClDev = dev;
+        accepted.emplace_back(backendLower, dev);
+        continue;
       }
       QLOG_IF(
           Priority::WARNING,
@@ -287,10 +289,46 @@ pickBestGpuDevice(const std::vector<std::string>& backendOverride) {
         }
       }
     }
+    // QVAC-23763: name what WAS accepted. Without it, diagnosing a pin that
+    // missed needs a second run - and on this picker the Adreno gate can be the
+    // reason a device is not in the list at all, which is worth seeing.
+    std::string acceptedNames;
+    for (const auto& [backendLower, dev] : accepted) {
+      (void)dev;
+      if (!acceptedNames.empty()) {
+        acceptedNames += ", ";
+      }
+      acceptedNames += backendLower;
+    }
+    if (acceptedNames.empty()) {
+      acceptedNames = "none";
+    }
+
+    std::string requested;
+    for (const std::string& family : backendOverride) {
+      if (!requested.empty()) {
+        requested += ",";
+      }
+      requested += family;
+    }
+
+    if (backendRequired) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "vla_backend_selection: backend '" + requested +
+              "' is required but matched no accepted device. Accepted: " +
+              acceptedNames + ".\n");
+    }
     QLOG_IF(
         Priority::WARNING,
-        "vla_backend_selection: backend override matched no accepted device; "
-        "falling back to the default backend order");
+        "vla_backend_selection: backend override '" + requested +
+            "' matched no accepted device; falling back to the default backend "
+            "order. Accepted: " +
+            acceptedNames);
+  }
+
+  if (adrenoOpenClDev != nullptr) {
+    return adrenoOpenClDev;
   }
 
   // CUDA ahead of HIP: see the header. A CUDA device only ever appears on a

@@ -468,6 +468,37 @@ TEST_F(
   EXPECT_EQ(splitTypes, resolverTypes);
 }
 
+TEST_F(LoadFitNormalizationTest, StrictBackendConstrainsSplitDevices) {
+  bool backendRequired = false;
+  std::vector<std::string> requiredFamilies;
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+  dependencies.resolveBackend =
+      [&backendRequired](const backend_selection::BackendRequest& request) {
+        backendRequired = request.backendRequired;
+        return lfn::SelectedBackend{
+            .type = backend_selection::GPU, .name = "cuda0"};
+      };
+  const auto selection = splitSelection({"cuda0"});
+  dependencies.splitDevices =
+      [selection, &requiredFamilies](
+          const std::string&,
+          const backend_selection::LoadConstraints& constraints) {
+        requiredFamilies = constraints.requiredBackendFamilies;
+        return selection;
+      };
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+
+  EXPECT_TRUE(backendRequired);
+  EXPECT_EQ(requiredFamilies, (std::vector<std::string>{"cuda"}));
+}
+
 TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
   auto config = baseConfig();
   config["split-mode"] = "layer";

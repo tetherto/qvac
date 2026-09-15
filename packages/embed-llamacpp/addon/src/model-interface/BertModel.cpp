@@ -535,35 +535,51 @@ BertModelSetup setupParams(
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
-    std::pair<BackendType, std::string> chosenBackend{BackendType::CPU, "none"};
+    const bool backendRequired =
+        tryBackendRequiredFromMap(configFilemap, !backendOverride.empty());
+
+    BackendRequest backendRequest;
+    backendRequest.preferred = preferredBackend;
+    backendRequest.mainGpu = mainGpu;
+    backendRequest.backendOverride = backendOverride;
+    backendRequest.backendRequired = backendRequired;
+    if (backendRequired) {
+      backendRequest.constraints.requiredBackendFamilies = backendOverride;
+    }
+    if (splitMode != LLAMA_SPLIT_MODE_NONE) {
+      backendRequest.mainGpu.reset();
+    }
+
+    const BackendChoice choice =
+        chooseBackend(backendRequest, llamaLogCallback);
+    std::pair<BackendType, std::string> chosenBackend{choice.type, choice.name};
     SplitDeviceSelection splitSelection;
-    bool isOpenCl = false;
-    if (preferredBackend == BackendType::GPU &&
+    bool isOpenCl = chosenBackend.first == BackendType::GPU &&
+                    chosenBackend.second.find("opencl") != std::string::npos;
+    if (chosenBackend.first == BackendType::GPU &&
         splitMode != LLAMA_SPLIT_MODE_NONE) {
-      splitSelection = getSplitDeviceSelection();
+      splitSelection = getSplitDeviceSelection(
+          chosenBackend.second, backendRequest.constraints);
       if (!splitSelection.devices.empty()) {
         const SplitBackendTraits traits = splitBackendTraits(splitSelection);
         chosenBackend = {BackendType::GPU, traits.backendName};
         isOpenCl = traits.isOpenCl;
-      } else if (!splitSelection.rejectedDevices.empty()) {
-        std::string message =
-            "[BertModel] no eligible GPU backend found; rejected ";
-        for (size_t index = 0; index < splitSelection.rejectedDevices.size();
-             ++index) {
-          if (index > 0) {
-            message += ", ";
+      } else {
+        if (!splitSelection.rejectedDevices.empty()) {
+          std::string message =
+              "[BertModel] no eligible GPU backend found; rejected ";
+          for (size_t index = 0; index < splitSelection.rejectedDevices.size();
+               ++index) {
+            if (index > 0) {
+              message += ", ";
+            }
+            message += splitSelection.rejectedDevices[index];
           }
-          message += splitSelection.rejectedDevices[index];
+          message += "; falling back to CPU\n";
+          llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
         }
-        message += "; falling back to CPU\n";
-        llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
+        chosenBackend = {BackendType::CPU, "none"};
       }
-    } else {
-      chosenBackend = chooseBackend(
-          preferredBackend, llamaLogCallback, mainGpu, backendOverride);
-      // Name-based: chooseBackend returns only a name, no registry handle.
-      isOpenCl = chosenBackend.first == BackendType::GPU &&
-                 chosenBackend.second.find("opencl") != std::string::npos;
     }
     const bool useGpu = chosenBackend.first == BackendType::GPU;
 

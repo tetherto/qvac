@@ -105,13 +105,15 @@ Selects which GPU to use. The behavior depends on the split mode:
 
 | Value | Behavior in `'none'` mode |
 |-------|----------|
-| integer (e.g. `'0'`, `'1'`) | Selects a GPU by its index in the raw ggml device registry, matching qvac-fabric's own indexing. If that device is not in the backend allowlist, the load falls back to CPU rather than silently sliding onto a different GPU. |
+| integer (e.g. `'0'`, `'1'`) | Selects a GPU by its index in the raw ggml device registry, matching qvac-fabric's own indexing. The whole value must be an integer, so `'1abc'` is rejected. If that device is not in the backend allowlist, the load falls back to CPU rather than silently sliding onto a different GPU. |
+| `'cuda:0'`, `'vulkan:1'`, etc. | Selects the nth device of a backend family. Resolution scans devices, so it is independent of backend load order. Family names are the same set `backend` accepts, and `hip` is canonicalised to `rocm`. |
+| `'0000:65:00.0'` | Selects by PCI bus id, as ggml reports it in `props.device_id`. The domain is optional, so `'65:00.0'` also works. Only meaningful on backends that publish a bus id. |
 | `'integrated'` | Filters to integrated GPUs only during backend selection. Falls back to CPU if none is eligible. |
 | `'dedicated'`  | Filters to dedicated GPUs only during backend selection. Falls back to CPU if none is eligible. |
 
 Accepts both `main-gpu` (hyphen) and `main_gpu` (underscore). Providing both throws an error. The string values are case-insensitive.
 
-Note the index is against the **raw** registry, not the filtered list. This is deliberate: it is the same index space qvac-fabric and the other addons use, so a given integer means the same device everywhere regardless of which backends the allowlist happens to admit on that host.
+A bare integer is not stable across backend changes. It indexes the raw registry, and adding a backend such as CUDA can move every index. Prefer a backend-qualified index or PCI bus id. These forms are resolved by scanning rather than indexing. If one matches no device, the addon warns and falls back to the default order.
 
 ## How the parameters interact
 

@@ -9,6 +9,7 @@
 using vla_backend_selection::backendNameMatchesFamily;
 using vla_backend_selection::parseAdrenoModel;
 using vla_backend_selection::parseBackendOverride;
+using vla_backend_selection::parseBackendRequired;
 
 TEST(VlaBackendSelection, ParsesAdrenoTrademarkForm) {
   EXPECT_EQ(parseAdrenoModel("Adreno (TM) 830"), 830);
@@ -149,4 +150,11 @@ TEST(VlaBackendSelection, ParseBackendOverrideTrimsCarriageReturns) {
 TEST(VlaBackendSelection, ParseBackendOverrideStillRejectsSeparatorsOnly) {
   EXPECT_THROW(parseBackendOverride(","), qvac_errors::StatusError);
   EXPECT_THROW(parseBackendOverride(" , "), qvac_errors::StatusError);
+}
+
+TEST(VlaBackendSelection, ParseBackendRequiredRejectsMalformedNativeInput) {
+  EXPECT_TRUE(parseBackendRequired("true"));
+  EXPECT_FALSE(parseBackendRequired("false"));
+  EXPECT_FALSE(parseBackendRequired(""));
+  EXPECT_THROW(parseBackendRequired("tru"), qvac_errors::StatusError);
 }
