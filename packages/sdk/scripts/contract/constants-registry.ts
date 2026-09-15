@@ -5,7 +5,12 @@ import {
   SUPPORTED_AUDIO_FORMATS,
   AUDIOGEN_ENGINES,
   AUDIOGEN_TASK_TYPES,
+  TTS_ENGINES,
   TTS_PACES,
+  TTS_PARLER_EMOTIONS,
+  TTS_SENTENCE_DELIMITER_PRESETS,
+  TTS_CHATTERBOX_LANGUAGES,
+  TTS_SUPERTONIC_LANGUAGES,
   TTS_COSYVOICE3_EMOTIONS,
   TTS_COSYVOICE3_INSTRUCT_DIALECTS,
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
@@ -81,7 +86,18 @@ export const constantsRegistry = {
   SupportedAudioFormat: z.enum(
     Object.fromEntries(SUPPORTED_AUDIO_FORMATS.map((ext) => [ext.slice(1).toUpperCase(), ext]))
   ),
+  TtsEngine: enumFromVocabulary(TTS_ENGINES),
   TtsPace: enumFromVocabulary(TTS_PACES),
+  // 'proper noun' carries a space; enumFromVocabulary only rewrites '-', so
+  // map it explicitly to keep the varname identifier-safe.
+  TtsParlerEmotion: z.enum(
+    Object.fromEntries(
+      TTS_PARLER_EMOTIONS.map((value) => [value.toUpperCase().replace(/[\s-]/g, '_'), value])
+    )
+  ),
+  TtsSentenceDelimiterPreset: enumFromVocabulary(TTS_SENTENCE_DELIMITER_PRESETS),
+  TtsChatterboxLanguage: enumFromVocabulary(TTS_CHATTERBOX_LANGUAGES),
+  TtsSupertonicLanguage: enumFromVocabulary(TTS_SUPERTONIC_LANGUAGES),
   TtsCosyvoice3Emotion: enumFromVocabulary(TTS_COSYVOICE3_EMOTIONS),
   TtsCosyvoice3InstructDialect: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_DIALECTS),
   TtsCosyvoice3InstructVolume: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_VOLUMES),
