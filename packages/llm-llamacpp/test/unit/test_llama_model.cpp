@@ -15,6 +15,7 @@
 #include "model-interface/LlamaModel.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
+#include "utils/LoggingMacros.hpp"
 
 namespace fs = std::filesystem;
 
@@ -731,6 +732,41 @@ TEST_F(LlamaModelTest, OrdinaryLoadRetainsCanonicalNormalizationSnapshot) {
       snapshot->nUbatch,
       static_cast<uint32_t>(model.getCommonParams().n_ubatch));
   EXPECT_EQ(snapshot->nGpuLayers, model.getCommonParams().n_gpu_layers);
+}
+
+// QVAC-25039: qvac-fabric's automatic placement has to actually be invoked on a
+// single-file load from disk. It used to abort at its first precondition
+// because `tensor_buft_overrides` reached it as a null pointer, and because
+// `common_init_from_params` discards the status there was nothing in the log to
+// say the placement had been skipped — which is the whole complaint in the bug
+// report. This drives a real load and asserts the fitter was reached.
+//
+// The fixture pins `gpu_layers`, so fabric declines to move it and the fit
+// reports "does not fit" on every platform. That is the deterministic outcome
+// worth asserting: reaching the verdict at all is what was broken.
+TEST_F(LlamaModelTest, OrdinaryLoadReachesTheAutomaticPlacement) {
+  auto config = config_files;
+  config["verbosity"] = "2"; // INFO
+  const auto priorVerbosity =
+      qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
+
+  testing::internal::CaptureStdout();
+  LlamaModel model = createModelWithConfig(std::move(config));
+  model.waitForLoadInitialization();
+  const std::string logged = testing::internal::GetCapturedStdout();
+  qvac_lib_inference_addon_llama::logging::g_verbosityLevel = priorVerbosity;
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_NE(logged.find("automatic placement"), std::string::npos)
+      << "the fitter was never reached; captured log:\n"
+      << logged;
+
+  // The fit ran against scratch, so the parameters the model reports are still
+  // the ones that were asked for.
+  EXPECT_EQ(
+      std::to_string(model.getCommonParams().n_gpu_layers),
+      std::string(test_common::getTestGpuLayers()));
+  EXPECT_TRUE(model.getCommonParams().fit_params);
 }
 
 TEST_F(LlamaModelTest, OmittedContextSnapshotMatchesAllocatedContext) {

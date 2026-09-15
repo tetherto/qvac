@@ -1484,6 +1484,13 @@ NormalizedLoad normalizeLoadForFit(
     params.kv_overrides.back().key[0] = 0;
   }
 
+  // Terminate, but deliberately do not pad out to
+  // `llama_max_tensor_buft_overrides()`. The fitter needs a writable buffer of
+  // that size, but it gets one of its own: `fitParamsToFreeDeviceMemory`
+  // (FitToFreeDeviceMemory.hpp) runs the fit against scratch and adopts the
+  // result only on success, so `params` never has to carry the ~64 KiB pad —
+  // which matters because `params` is copied by value into every per-slot
+  // context and kept for the model's lifetime (QVAC-25039).
   if (!params.tensor_buft_overrides.empty()) {
     params.tensor_buft_overrides.push_back({nullptr, nullptr});
   }
