@@ -113,7 +113,7 @@ test('loadModel: removed diffusion placement options name their replacements', f
         modelType: 'sdcpp-generation',
         modelConfig: { [key]: value }
       })
-      t.ok(message?.includes(`${key} was removed`))
+      t.ok(message?.includes(`${key} is no longer supported`))
       t.ok(
         message?.includes(
           value ? replacement : 'Remove it; no replacement is needed when it is false.'
