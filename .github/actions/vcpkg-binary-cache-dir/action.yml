@@ -62,9 +62,17 @@ runs:
 
         if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
           # First writable candidate wins. VCPKG_HOST_CACHE_DIR lets the host
-          # owner override without a code change; /opt/qvac is the provisioned
-          # location, preferred once DevOps creates it; the shared-tmp one needs
-          # no provisioning; $HOME is the always-works backstop.
+          # owner override without a code change; /opt/qvac is preferred once it
+          # exists, but needs root to create; /var/tmp is already mode 1777 on
+          # every Linux image, so the first runner to arrive can create the
+          # directory itself and every other runner user can then write it --
+          # no provisioning, no ticket. /var/tmp rather than /tmp because /tmp
+          # is tmpfs on some images (a multi-GB cache in RAM) and is cleared on
+          # reboot. $HOME is the always-works backstop.
+          #
+          # These are deliberately NOT nested under an existing `qvac` dir: one
+          # was created by an earlier run before this action set 1777, and
+          # /var/tmp's sticky bit then locks every other user out of it.
           #
           # Runner instances on one host do not all run as the same user, so a
           # shared directory created by one is not writable by the next unless it
@@ -78,9 +86,9 @@ runs:
           if [ -n "${VCPKG_HOST_CACHE_DIR:-}" ]; then
             candidates="${VCPKG_HOST_CACHE_DIR}"
           elif [ "${RUNNER_OS}" = "macOS" ]; then
-            candidates="/opt/qvac/vcpkg-cache /Users/Shared/qvac/vcpkg-cache ${HOME}/.cache/qvac/vcpkg-cache"
+            candidates="/opt/qvac/vcpkg-cache /Users/Shared/qvac-vcpkg-cache ${HOME}/.cache/qvac/vcpkg-cache"
           else
-            candidates="/opt/qvac/vcpkg-cache /var/tmp/qvac/vcpkg-cache ${HOME}/.cache/qvac/vcpkg-cache"
+            candidates="/opt/qvac/vcpkg-cache /var/tmp/qvac-vcpkg-cache ${HOME}/.cache/qvac/vcpkg-cache"
           fi
 
           for candidate in ${candidates}; do
