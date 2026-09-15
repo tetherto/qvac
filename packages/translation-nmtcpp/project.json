@@ -54,7 +54,7 @@
           "modelCache": [
             {
               "paths": "packages/translation-nmtcpp/model",
-              "hashFilesGlob": ".github/actions/download-translation-models/action.yml",
+              "hashFilesGlob": ".github/workflows/integration-test-nx.yml",
               "warm": "false"
             }
           ],

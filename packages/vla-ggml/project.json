@@ -58,7 +58,7 @@
           "modelCache": [
             {
               "paths": "packages/vla-ggml/model/vla",
-              "hashFilesGlob": ".github/actions/download-vla-models/action.yml",
+              "hashFilesGlob": ".github/workflows/integration-test-nx.yml",
               "warm": "false"
             }
           ],
