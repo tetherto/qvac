@@ -223,6 +223,13 @@ export async function ensureAddonLoggerReady(plugin: QvacPlugin): Promise<void> 
     // the whole cleanup.
     if (!isNamespaceClaimed(namespace)) return
 
+    // DEBUG (temporary): when the logging module comes back unusable, look at
+    // the addon's binding directly. addonLogging reads setLogger off it, so
+    // this separates "the binding has no setLogger" from "the JS wrapper lost
+    // it". Removed before this lands.
+    if (!resolved || typeof (resolved as Record<string, unknown>)['setLogger'] !== 'function') {
+      await describeBindingForDebug(plugin.addonPackage)
+    }
     const loggingModule = assertLoggingModuleShape(
       plugin.modelType,
       resolved,
@@ -351,5 +358,28 @@ export function clearPlugins(): void {
   // namespace, which is not a model type — several plugins can share one.
   for (const [namespace, loggingModule] of lazyModules) {
     releaseLoggerSafely(loggingModule, `namespace ${namespace}`, 'clearPlugins')
+  }
+}
+
+/** DEBUG (temporary): report the addon's raw binding next to the wrapper. */
+async function describeBindingForDebug(addonPackage: string): Promise<void> {
+  const log = getEngineLogger()
+  for (const specifier of [`${addonPackage}/binding.js`, addonPackage]) {
+    try {
+      const mod = (await import(specifier)) as Record<string, unknown>
+      log.warn(`[addon-debug] ${specifier} -> ${describeLoggingModule(mod)}`)
+      const inner = mod['default']
+      if (inner) log.warn(`[addon-debug] ${specifier} .default -> ${describeLoggingModule(inner)}`)
+    } catch (error) {
+      log.warn(
+        `[addon-debug] ${specifier} THREW: ${error instanceof Error ? error.message : String(error)}`
+      )
+      const cause = (error as { cause?: unknown }).cause
+      if (cause) {
+        log.warn(
+          `[addon-debug] ${specifier} cause: ${cause instanceof Error ? cause.message : String(cause)}`
+        )
+      }
+    }
   }
 }
