@@ -59,28 +59,42 @@ runs:
         if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
           # First writable candidate wins. VCPKG_HOST_CACHE_DIR lets the host
           # owner override without a code change; /opt/qvac is the provisioned
-          # location, preferred once it exists and is owned by the runner user;
-          # the last one needs no provisioning at all, so a fresh host is warm
-          # from its second run rather than waiting on infra.
+          # location, preferred once DevOps creates it; the shared-tmp one needs
+          # no provisioning; $HOME is the always-works backstop.
+          #
+          # Runner instances on one host do not all run as the same user, so a
+          # shared directory created by one is not writable by the next unless it
+          # is mode 1777 -- observed on both /var/tmp/qvac and /Users/Shared/qvac
+          # in run 34952627622. We therefore create with 1777 (sticky, so nobody
+          # can delete another user's archives) and move on if an existing
+          # directory refuses us. $HOME always succeeds, and while it is per-user
+          # rather than per-host it still survives the workspace wipe, so a leg
+          # that lands there is warm on its next run instead of cold forever.
           candidates=""
           if [ -n "${VCPKG_HOST_CACHE_DIR:-}" ]; then
             candidates="${VCPKG_HOST_CACHE_DIR}"
           elif [ "${RUNNER_OS}" = "macOS" ]; then
-            candidates="/opt/qvac/vcpkg-cache /Users/Shared/qvac/vcpkg-cache"
+            candidates="/opt/qvac/vcpkg-cache /Users/Shared/qvac/vcpkg-cache ${HOME}/.cache/qvac/vcpkg-cache"
           else
-            candidates="/opt/qvac/vcpkg-cache /var/tmp/qvac/vcpkg-cache"
+            candidates="/opt/qvac/vcpkg-cache /var/tmp/qvac/vcpkg-cache ${HOME}/.cache/qvac/vcpkg-cache"
           fi
 
           for candidate in ${candidates}; do
-            if mkdir -p "${candidate}" 2> /dev/null && [ -w "${candidate}" ]; then
+            if [ ! -d "${candidate}" ]; then
+              mkdir -p "${candidate}" 2> /dev/null || continue
+              # Only when we created it: make it usable by the other runner
+              # users on this host. Failure is not fatal, it just means the next
+              # user falls through to their own candidate.
+              chmod 1777 "${candidate}" 2> /dev/null || true
+            fi
+            if [ -w "${candidate}" ]; then
               cache_dir="${candidate}"
               persistent="true"
               break
             fi
           done
 
-          # Fall back to the workspace rather than failing the job: a host with
-          # no writable candidate still builds, just cold.
+          # Fall back to the workspace rather than failing the job.
           if [ "${persistent}" != "true" ]; then
             echo "::warning::no writable host cache dir (${candidates}); falling back to the workspace"
           fi
@@ -115,16 +129,32 @@ runs:
         $cacheDir = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:INPUT_WORKDIR 'vcpkg/cache')))
 
         if ($env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
-          $hostDir = if ($env:VCPKG_HOST_CACHE_DIR) { $env:VCPKG_HOST_CACHE_DIR } else { 'C:\qvac\vcpkg-cache' }
-          try {
-            New-Item -ItemType Directory -Force -Path $hostDir -ErrorAction Stop | Out-Null
-            $probe = Join-Path $hostDir ".write-probe-$env:GITHUB_RUN_ID"
-            Set-Content -Path $probe -Value 'ok' -ErrorAction Stop
-            Remove-Item $probe -Force
-            $cacheDir = [IO.Path]::GetFullPath($hostDir)
-            $persistent = 'true'
-          } catch {
-            Write-Output "::warning::$hostDir is not writable; falling back to the workspace cache"
+          # Same reasoning as the bash branch: runner instances on one host may
+          # run as different users, so try the shared location first and fall
+          # through to a per-user one rather than going cold. Writability is
+          # probed by actually writing, since ACLs make Test-Path insufficient.
+          $candidates = if ($env:VCPKG_HOST_CACHE_DIR) {
+            @($env:VCPKG_HOST_CACHE_DIR)
+          } else {
+            @('C:\qvac\vcpkg-cache', (Join-Path $env:LOCALAPPDATA 'qvac\vcpkg-cache'))
+          }
+
+          foreach ($candidate in $candidates) {
+            try {
+              New-Item -ItemType Directory -Force -Path $candidate -ErrorAction Stop | Out-Null
+              $probe = Join-Path $candidate ".write-probe-$env:GITHUB_RUN_ID"
+              Set-Content -Path $probe -Value 'ok' -ErrorAction Stop
+              Remove-Item $probe -Force
+              $cacheDir = [IO.Path]::GetFullPath($candidate)
+              $persistent = 'true'
+              break
+            } catch {
+              continue
+            }
+          }
+
+          if ($persistent -ne 'true') {
+            Write-Output "::warning::no writable host cache dir ($($candidates -join ', ')); falling back to the workspace"
           }
         }
 
