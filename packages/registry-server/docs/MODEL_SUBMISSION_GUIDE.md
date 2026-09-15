@@ -71,6 +71,21 @@ How sync works:
 - The sync process compares the full `models.prod.json` against the current database state and applies **all** differences — not just changes from the current PR. If a previous PR was merged without triggering a sync, its changes will be included in the next sync run.
 - A `workflow_dispatch` trigger is available for manual sync when needed.
 
+### Weightless Descriptions
+
+Ingest stores a weightless description of GGUF and safetensors artifacts holding
+their tensor list, and points the record at it through `fitBlobBinding`. Clients
+fetch it to project memory use before downloading a model. Nothing is required of
+a submission for this to happen.
+
+Formats that interleave tensor data with their descriptions get none, so a
+whisper `.bin` submission will have no `fitBlobBinding`. That is expected and
+does not affect anything else about the record.
+
+Replacing a corrupt artifact regenerates the description along with the weights:
+a new source path is ingested by the next sync, and the same path with new bytes
+needs `delete-model` then `add-model`.
+
 ## Deprecating a Model
 
 Add deprecation fields to existing entry:
