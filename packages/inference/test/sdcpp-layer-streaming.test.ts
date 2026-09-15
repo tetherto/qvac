@@ -46,6 +46,23 @@ test('diffusion memory controls reject incorrect types', (t) => {
   }
 })
 
+test('diffusion memory controls preserve addon-owned string parsing', (t) => {
+  for (const [key, value] of [
+    ['backend', ''],
+    ['params_backend', 'diffusion=cpu,'],
+    ['params_backend', ' '],
+    ['params_backend', 'a=b=c'],
+    ['max_vram', '1e3'],
+    ['max_vram', 'six']
+  ] as const) {
+    t.is(
+      sdcppConfigSchema.safeParse({ [key]: value }).success,
+      true,
+      `${key} accepts native syntax`
+    )
+  }
+})
+
 test('removed diffusion CPU options fail with migration guidance', (t) => {
   for (const [key, replacement] of Object.entries({
     control_net_cpu: "modelConfig.backend: 'controlnet=cpu'",

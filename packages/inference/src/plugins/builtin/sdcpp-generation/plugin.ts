@@ -375,20 +375,6 @@ export const diffusionPlugin = definePlugin({
       }
     }
 
-    if (
-      config.stream_layers &&
-      (config.mode === undefined || config.mode === 'diffusion' || config.mode === 'video') &&
-      config.max_vram !== undefined &&
-      config.max_vram !== 0 &&
-      config.max_vram !== '0' &&
-      !config.offload_to_cpu &&
-      !/(^|,)(?:\\*|all|default|diffusion)\\s*=\\s*cpu(?:,|$)/i.test(config.params_backend ?? '')
-    ) {
-      getEngineLogger().warn(
-        `[${ModelType.sdcppGeneration}:${modelId}] stream_layers requires CPU-backed diffusion parameters; set params_backend to 'diffusion=cpu' (or enable offload_to_cpu) or layer streaming may be inactive`
-      )
-    }
-
     // In diffusion mode the ESRGAN file (when post-generation upscale is
     // wanted) must come from upscaler.model_src — the primary modelPath is
     // the main diffusion checkpoint. Reject early with a clear error
