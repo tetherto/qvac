@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.53.0] - 2026-09-15
 
 ### Added
 
@@ -68,6 +68,10 @@
     wrong schema with nothing in the response to indicate it. This was a
     warning in earlier pre-release builds of this feature.
 
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0` (upstream movement on the b10549 line: uninitialized ggml views after oversized MoE cache banks, plus KV-cache, hybrid-index memory, mtmd/clip and RPC backend changes; no API change for this package).
+
 ### Fixed
 
 - `RuntimeStats.avgConcurrentSeq` is now a token-weighted mean rather than a
@@ -129,12 +133,6 @@
   could previously forge log lines or, for a large template, write one very
   large record per failing request.
 - A sequence in the generation phase no longer throttles concurrently prefilling sequences to one prompt token per decode step. `MultiRequestBatcher` fed every active slot a single shared chunk size, computed as the minimum `remainingToFeed()` across them; a generating slot reports `1`, so as soon as any one request started generating, every request still feeding its prompt was cut to one token per step and needed roughly as many decode steps to reach its first token as its prompt had tokens. Slots are now budgeted individually and water-filled against the batch capacity, so a generating slot takes its one token while a concurrent prefill keeps its full micro-batch. On a `parallel: 4` model answering six concurrent requests, time to first token for the stalled group drops from ~1710 ms to ~308 ms, aggregate throughput rises ~25% and wall clock falls ~21%. Peak batch size is unchanged — the sum of the per-slot budgets is bounded by the same `batch.capacity()` the shared chunk was. Note that a step taken while a large prefill is co-resident now carries more tokens, so an already-generating sequence sees a correspondingly larger spread in per-token latency.
-
-## [0.53.0] - 2026-09-15
-
-### Changed
-
-- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0` (upstream movement on the b10549 line: uninitialized ggml views after oversized MoE cache banks, plus KV-cache, hybrid-index memory, mtmd/clip and RPC backend changes; no API change for this package).
 
 ## [0.52.1] - 2026-09-14
 
