@@ -264,17 +264,21 @@ jobs:
         name: Pin ggml Vulkan to the NVIDIA GPU on Windows
         run: echo "GGML_VK_VISIBLE_DEVICES=1" >> $Env:GITHUB_ENV
 
-      # NOT seeded by an on-merge workflow, deliberately. packages/tts-ggml/models
-      # is one directory but two populations: the registry GGUFs that
-      # download-tts-ggml-models.js stages, and six further sets the tests stage
-      # at runtime through test/utils/downloadModel.js (lavasr, cosyvoice and its
-      # clone set, mecab-ipadic, the Cangjie TSV, whisper ggml-medium). A seed
-      # covering only the first would hand every leg an exact primary-key hit,
-      # actions/cache would skip its save, and the second population could never
-      # enter the entry -- re-fetched on every leg of every run, where today a
-      # same-repo PR's save grows the directory. Seeding tts needs the runtime
-      # set staged too, and its registry dates live in downloadModel.js, which is
-      # not part of this key. Tracked separately.
+      # Seeded by on-merge-model-cache-tts.yml, but one segment BELOW this key:
+      # it writes `models-tts-ggml-v1-seed-<hash>`, this step asks for
+      # `models-tts-ggml-v1-<hash>`. So this step misses its exact key, falls to
+      # its `models-tts-ggml-v1-` restore-key, prefix-matches the seed and gets
+      # the registry GGUFs for free -- then stages the rest and, because a
+      # prefix hit does not suppress the save, writes the COMPLETE set under
+      # this key.
+      #
+      # That indirection is deliberate. packages/tts-ggml/models also holds what
+      # test/utils/downloadModel.js stages at runtime (lavasr, cosyvoice and its
+      # clone set, mecab-ipadic, the Cangjie TSV, whisper ggml-medium), and the
+      # tests request those by computed variant/quant/tier, so no seed can be
+      # proven complete. An exact-key seed would give every leg an exact hit,
+      # actions/cache would skip the save, and whatever the seed missed could
+      # never enter the entry. See the header of on-merge-model-cache-tts.yml.
       - name: Cache TTS GGML GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'
