@@ -10,7 +10,11 @@
 
 const test = require('brittle')
 const zlib = require('bare-zlib')
-const { pngLuminanceStddev, readScenePackPromptRows } = require('../integration/abot-guards.js')
+const {
+  pngLuminanceStddev,
+  pngMeanAbsoluteError,
+  readScenePackPromptRows
+} = require('../integration/abot-guards.js')
 
 function crc32(buf) {
   let c = ~0
@@ -124,6 +128,26 @@ function makeScenePack(rows, emb, fillRow) {
   len.writeBigUInt64LE(BigInt(header.length))
   return Buffer.concat([len, header, data])
 }
+
+test('pngMeanAbsoluteError: compares decoded pixels across PNG filters', function (t) {
+  const pixel = (x, y) => [x, y, x + y]
+  const original = makePng(32, 32, pixel)
+  t.is(
+    pngMeanAbsoluteError(
+      original,
+      makePngFiltered(32, 32, pixel, (y) => y % 5)
+    ),
+    0
+  )
+  t.is(
+    pngMeanAbsoluteError(
+      original,
+      makePng(32, 32, (x, y) => [x + 3, y + 3, x + y + 3])
+    ),
+    3
+  )
+  t.is(pngMeanAbsoluteError(original, Buffer.alloc(64)), Infinity)
+})
 
 test('pngLuminanceStddev: separates collapsed frames from real ones', function (t) {
   // A conditioning collapse renders as near-uniform low-contrast mush. Real

@@ -8,6 +8,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <picojson/picojson.h>
 
+#include "handlers/SdCtxHandlers.hpp"
 #include "utils/BackendLoader.hpp"
 #include "utils/EsrganUpscaler.hpp" // sdLogCallback
 #include "utils/ImageCodec.hpp"
@@ -61,13 +62,33 @@ void WorldSessionModel::load() {
   params.offload_params_to_cpu = config_.offloadParamsToCpu;
   params.kv_cache = config_.kvCache;
   params.profile = config_.profile;
+  params.params_backend =
+      config_.paramsBackend.empty() ? nullptr : config_.paramsBackend.c_str();
+  params.max_vram = config_.maxVram.empty() ? nullptr : config_.maxVram.c_str();
+  params.stream_layers = config_.streamLayers;
+  if (config_.streamLayers &&
+      !qvac_lib_inference_addon_sd::maxVramSpecHasNonZeroBudget(
+          config_.maxVram)) {
+    QLOG_IF(logger::Priority::ERROR,
+            "streamLayers needs a non-zero maxVram to enable graph cutting; "
+            "layer streaming will not run for this configuration");
+  }
+  if (config_.offloadParamsToCpu &&
+      qvac_lib_inference_addon_sd::paramsBackendSpecOverridesCpuDefault(
+          config_.paramsBackend)) {
+    QLOG_IF(logger::Priority::ERROR,
+            "paramsBackend replaces the offloadParamsToCpu default; use a "
+            "module-specific assignment to keep CPU offload for the remaining "
+            "modules");
+  }
 
   session_ = sd_abot_session_new(&params);
   if (session_ == nullptr) {
     throw StatusError(
         general_error::InternalError,
         "failed to create ABot-World walk session (check model/scene paths, "
-        "the kvCache/localAttnSize combination, and native logs)");
+        "backend/paramsBackend/maxVram, the kvCache/localAttnSize combination, "
+        "and native logs)");
   }
 
   stats_.modelLoadMs = std::chrono::duration_cast<std::chrono::milliseconds>(
