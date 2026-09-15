@@ -1,5 +1,4 @@
 import LlmLlamacpp from '@qvac/llm-llamacpp'
-import llmAddonLogging from '@qvac/llm-llamacpp/addonLogging'
 import {
   definePlugin,
   defineHandler,
@@ -558,7 +557,7 @@ export const llmPlugin = definePlugin({
   },
 
   logging: {
-    module: llmAddonLogging,
+    module: () => import('@qvac/llm-llamacpp/addonLogging'),
     namespace: ModelType.llamacppCompletion
   }
 })
