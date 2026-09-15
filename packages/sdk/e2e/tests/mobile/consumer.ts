@@ -10,6 +10,7 @@ import {
   WHISPER_TINY,
   VAD_SILERO_5_1_2,
   QWEN3_1_7B_INST_Q4,
+  QWEN3_600M_INST_Q4,
   OCR_CRAFT,
   OCR_LATIN,
   BERGAMOT_EN_FR,
@@ -73,6 +74,7 @@ import { SystemResourcesExecutor } from '../shared/executors/system-resources-ex
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
+import { FitStubExecutor } from '../shared/executors/fit-stub-executor.js'
 
 const resources = new ResourceManager({
   downloadTarget: 'mobile',
@@ -179,6 +181,20 @@ resources.define('echo', {
   type: 'echo',
   modelSrc: '',
   skipPreDownload: true
+})
+
+// Small catalogue GGUF loaded through the fit-stub fixture: the SDK downloads
+// it and hands the cache path to the plugin, which never loads it into an engine.
+// The catalogue entry declares `engine: 'llamacpp-completion'` and loadModel now
+// rejects an explicit modelType that disagrees, so the engine hints are dropped;
+// pre-download only reads `src`.
+const fitStubSrc: Record<string, unknown> = { ...QWEN3_600M_INST_Q4 }
+delete fitStubSrc['engine']
+delete fitStubSrc['addon']
+
+resources.define('fit-stub', {
+  constant: fitStubSrc as unknown as typeof QWEN3_600M_INST_Q4,
+  type: 'fit-stub-check'
 })
 
 resources.define('sharded-embeddings', {
@@ -699,6 +715,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(Platform.OS),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),
+    new FitStubExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

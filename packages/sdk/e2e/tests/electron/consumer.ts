@@ -551,6 +551,10 @@ export const executor = createExecutor({
       'Electron skips diffusion tests because image generation takes too long for the stable Electron pass'
     ),
     new SkipExecutor(
+      /^fit-stub-/,
+      'custom-fit-stub-plugin is not bundled in the Electron config; the check targets desktop and mobile'
+    ),
+    new SkipExecutor(
       /^world-/,
       'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
     ),
