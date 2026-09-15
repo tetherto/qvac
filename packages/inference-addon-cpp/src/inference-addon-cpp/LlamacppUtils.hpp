@@ -8,6 +8,7 @@
 #include <ranges>
 #include <streambuf>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include <llama-cpp.h>
@@ -97,9 +98,9 @@ inline void padTensorBuftOverridesForFit(common_params& params) {
 /// fails or errors leaves the load to proceed with exactly the configuration
 /// the caller asked for. This is the one place the fit should run: every loader
 /// in this header routes through it, and `initFromConfig` clears
-/// `params.fit_params` afterwards so `common_init_from_params` does not fit a
-/// second time in place, against @p params' own buffers and discarding the
-/// status.
+/// `params.fit_params` across its `common_init_from_params` call — restoring it
+/// afterwards — so fabric does not fit a second time in place, against @p
+/// params' own buffers and discarding the status.
 /// @note All six fields the fitter can move — `n_gpu_layers`, `n_ctx`,
 /// `prefetch_weights`, `moe_cache_size`, `tensor_split` and
 /// `tensor_buft_overrides` — carry its decision afterwards, on every path.
@@ -415,9 +416,14 @@ inline common_init_result_ptr initFromConfig(
       fitParamsToFreeDeviceMemory(params, modelPath);
       // The fit has run, under conditions where its result is checked; fabric
       // must not now repeat it in place. `common_init_from_params` gates its
-      // own fit on this flag.
-      params.fit_params = false;
+      // own fit on this flag, so clear it across the call — and put it back
+      // afterwards, because the flag records what the caller asked for rather
+      // than what has already happened, and that is what a reload comparison
+      // reads it for. Nothing reads it between the restore and the caller
+      // regaining control.
+      const bool fitRequested = std::exchange(params.fit_params, false);
       llamaInit = std::move(common_init_from_params(params));
+      params.fit_params = fitRequested;
     } else {
       LOG_INF(
           "%s: load the model shards from disk file and apply lora adapter, if "
