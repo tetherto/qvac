@@ -142,7 +142,7 @@ jobs:
         uses: ./.github/actions/setup-cuda
 
       # This job runs PR-head code, so only trusted events may write the shared
-      # cache (.cursor/rules/devops/github-actions.mdc:82). No restore-keys: a
+      # cache (see .github/AGENTS.md). No restore-keys: a
       # prefix match would re-save the previous entry's archives and grow without
       # bound. The key covers the manifests and the shared vcpkg overlays, but
       # not the runner image's compiler: a toolchain bump there gives an exact

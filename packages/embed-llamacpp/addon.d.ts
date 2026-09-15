@@ -11,8 +11,8 @@ export interface GGMLConfig {
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
     /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, hip, rocm, sycl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
     backend?: string;
-    /** How to split the model across GPUs. 'row' (tensor parallelism) needs split buffers, which no shipped backend provides as of qvac-fabric v10069, so it is degraded to 'layer' at load with a warning. */
-    "split-mode"?: "none" | "layer" | "row";
+    /** How to split the model across GPUs: 'none' pins one device, 'layer' distributes layers. 'row' is rejected at load; use 'layer'. */
+    "split-mode"?: "none" | "layer";
     "tensor-split"?: string;
     verbosity?: NumericLike;
     /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
@@ -22,6 +22,12 @@ export interface GGMLConfig {
 export interface AddonConfigurationParams {
     path: string;
     config: GGMLConfig;
+    /**
+     * Root the native side searches for ggml compute backends, with
+     * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the
+     * `@qvac/fabric` package's `prebuilds/` on desktop, falling back to this
+     * addon's own `prebuilds/` on mobile.
+     */
     backendsDir?: string;
 }
 export interface BertJobInput {

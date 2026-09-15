@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.24.0] - 2026-09-15
+
+This release adds explicit model-placement and layer-streaming controls, with
+hardware validation on NVIDIA RTX 5090, AMD Strix Halo, and NVIDIA DGX Spark.
+It also removes deprecated CPU-placement options and the explicit FLUX.1
+compatibility route.
+
+### Added
+
+- `backend`, `params_backend`, `max_vram`, and `stream_layers` configure graph
+  execution, parameter residency, VRAM-budgeted graph cutting, and diffusion
+  layer streaming from CPU RAM.
+- Disk-backed parameter residency remains available through
+  `params_backend`, with effective assignments logged for validation.
+
+### Changed
+
+- `offload_to_cpu` now composes with explicit `params_backend` assignments as
+  a `*=cpu` default, so later per-module assignments override it.
+- The package has pnpm/Nx project configuration and direct build dependencies
+  needed by the monorepo workspace.
+
+### Removed
+
+- Deprecated `control_net_cpu`, `clip_on_cpu`, and `vae_on_cpu` configuration
+  options. Use `backend` for graph execution or `params_backend` to preserve
+  the previous parameter-residency behaviour.
+- The public `flux_flow` prediction route for FLUX.1. FLUX.2 continues to use
+  `flux2_flow`.
+
+### Pull Requests
+
+- [#4372](https://github.com/tetherto/qvac/pull/4372) - QVAC-23754
+  feat[bc]: complete diffusion layer streaming support
+- [#4325](https://github.com/tetherto/qvac/pull/4325) - QVAC-22798 fix[bc]:
+  remove FLUX.1 compatibility
+- [#3543](https://github.com/tetherto/qvac/pull/3543) - QVAC-19792: pnpm+nx
+  monorepo foundation + first nx-affected CI consolidations
+- [#4345](https://github.com/tetherto/qvac/pull/4345) - QVAC-24727 chore:
+  remove co-load smoke workflows, actions and code
+
 ## [0.23.0] - 2026-09-07
 
 ### Changed

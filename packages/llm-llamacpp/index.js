@@ -95,6 +95,7 @@ const GENERATION_PARAM_KEYS = new Set([
     "repeat_penalty",
     "grammar",
     "json_schema",
+    "tool_choice",
     "reasoning_budget",
     "remove_thinking_from_context",
 ]);
@@ -139,12 +140,28 @@ function normalizeGenerationParams(generationParams) {
         typeof sanitized.remove_thinking_from_context !== "boolean") {
         throw new TypeError("generationParams.remove_thinking_from_context must be a boolean when provided");
     }
+    if (sanitized.tool_choice !== undefined &&
+        (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)) {
+        throw new TypeError('generationParams.tool_choice must be "auto", "none", "required" or a declared function name');
+    }
     const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
     const hasJsonSchema = sanitized.json_schema !== undefined &&
         sanitized.json_schema !== null &&
         !(typeof sanitized.json_schema === "string" && sanitized.json_schema.length === 0);
     if (hasGrammar && hasJsonSchema) {
         throw new TypeError("generationParams.grammar and generationParams.json_schema are mutually exclusive");
+    }
+    // A caller grammar takes precedence over the template's tool-call grammar, so
+    // demanding a tool call while also constraining the output to something else
+    // can never be satisfied. The addon does reject it, but only from inside the
+    // prefill, where the failure also discards the active KV cache session — so
+    // reject it here, alongside the analogous grammar/json_schema pair.
+    const demandsToolCall = typeof sanitized.tool_choice === "string" &&
+        sanitized.tool_choice !== "auto" &&
+        sanitized.tool_choice !== "none";
+    if (demandsToolCall && (hasGrammar || hasJsonSchema)) {
+        throw new TypeError('generationParams.tool_choice "required" or a function name cannot be combined with ' +
+            "generationParams.grammar or generationParams.json_schema");
     }
     if (!hasJsonSchema)
         return sanitized;
