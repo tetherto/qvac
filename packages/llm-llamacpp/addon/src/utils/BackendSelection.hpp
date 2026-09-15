@@ -309,7 +309,7 @@ size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 /// pinned list matches what fabric would have picked for `layer`/`row`:
 ///   - RPC devices are excluded. ggml reports them as
 ///     `GGML_BACKEND_DEVICE_TYPE_GPU` (`ggml-rpc.cpp`, with a TODO), and fabric
-///     segregates them precisely so they do not count as discrete GPUs —
+///     segregates them precisely so they do not count as discrete GPUs;
 ///     otherwise the local iGPU is dropped on an iGPU + RPC host. The
 ///     authoritative handle-based split selection adds RPC devices separately.
 ///   - Discrete GPUs when any are present, otherwise the integrated ones.
