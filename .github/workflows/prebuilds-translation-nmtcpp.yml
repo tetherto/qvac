@@ -48,6 +48,5 @@ jobs:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
       include-vulkan-sdk: true
-      artifact-name-prefix: nmtcpp-
       fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
     secrets: inherit

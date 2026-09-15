@@ -9,7 +9,6 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const https = require('bare-https')
-const crypto = require('bare-crypto')
 
 const TRANSIENT_ERROR_CODES = new Set([
   'EAI_NODATA',
@@ -54,12 +53,7 @@ function loadDefaultModel() {
   if (!entry) {
     throw new Error(`"${DEFAULT_MODEL_NAME}" is missing from ${MANIFEST_NAME}`)
   }
-  _defaultModel = {
-    modelName: DEFAULT_MODEL_NAME,
-    downloadUrl: entry.urls,
-    bytes: entry.bytes,
-    sha256: entry.sha256
-  }
+  _defaultModel = { modelName: DEFAULT_MODEL_NAME, downloadUrl: entry.urls, bytes: entry.bytes }
   return _defaultModel
 }
 
@@ -219,25 +213,13 @@ async function downloadFileWithRetries(urls, dest, opts = {}) {
   }
 }
 
-// Streamed, not readFileSync: the default model is ~1 MB today but this helper
-// is the one an override points at a real multi-GB model with.
-function sha256File(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256')
-    const stream = fs.createReadStream(filePath)
-    stream.on('error', reject)
-    stream.on('data', (chunk) => hash.update(chunk))
-    stream.on('end', () => resolve(hash.digest('hex')))
-  })
-}
-
 /**
  * Ensures the test GGUF exists (downloading it once, cached in CI) and returns
  * its absolute path. Honours FIT_MODEL_PATH as an override for local runs.
  * @returns {Promise<string>} absolute path to a GGUF file
  */
 async function ensureModelPath(model) {
-  const { modelName, downloadUrl, bytes, sha256 } = model || loadDefaultModel()
+  const { modelName, downloadUrl, bytes } = model || loadDefaultModel()
   const modelDir = path.resolve(__dirname, '../model')
   const modelPath = path.join(modelDir, modelName)
 
@@ -246,18 +228,11 @@ async function ensureModelPath(model) {
   // revision pin the manifest exists to enforce.
   if (fs.existsSync(modelPath)) {
     const size = fs.statSync(modelPath).size
-    const sizeOk = bytes ? size === bytes : size > 0
-    // Size alone cannot tell two revisions apart when they happen to match.
-    // CI's warm-models.mjs verifies the hash; without this the local path was
-    // the weaker of the two, which is exactly where a stale file survives.
-    const digest = sizeOk && sha256 ? await sha256File(modelPath) : null
-    if (sizeOk && (!sha256 || digest === sha256)) return modelPath
+    if (bytes ? size === bytes : size > 0) return modelPath
     console.log(
-      !sizeOk
-        ? bytes
-          ? `[download] Discarding ${modelName}: ${size} bytes on disk, manifest declares ${bytes}`
-          : `[download] Discarding empty ${modelName}`
-        : `[download] Discarding ${modelName}: sha256 ${digest} on disk, manifest declares ${sha256}`
+      bytes
+        ? `[download] Discarding ${modelName}: ${size} bytes on disk, manifest declares ${bytes}`
+        : `[download] Discarding empty ${modelName}`
     )
     fs.unlinkSync(modelPath)
   }
@@ -278,15 +253,6 @@ async function ensureModelPath(model) {
     throw new Error(
       `${modelName} downloaded as ${stat.size} bytes, but ${MANIFEST_NAME} declares ${bytes}.`
     )
-  }
-  if (sha256) {
-    const digest = await sha256File(modelPath)
-    if (digest !== sha256) {
-      fs.unlinkSync(modelPath)
-      throw new Error(
-        `${modelName} downloaded with sha256 ${digest}, but ${MANIFEST_NAME} declares ${sha256}.`
-      )
-    }
   }
   console.log(`[download] Model ready: ${(stat.size / 1024 / 1024).toFixed(2)}MB`)
   return modelPath

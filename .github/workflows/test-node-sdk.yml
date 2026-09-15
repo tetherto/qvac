@@ -48,6 +48,11 @@ on:
         required: false
         type: string
         default: ""
+      include:
+        description: "Exact testIds to run on top of the suite/filter selection (comma-separated)"
+        required: false
+        type: string
+        default: ""
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
@@ -627,6 +632,7 @@ jobs:
         shell: node {0}
         env:
           TEST_FILTER: ${{ steps.leg-filter.outputs.filter }}
+          INCLUDE_TESTS: ${{ inputs.include }}
         run: |
           (async () => {
             const { spawn, spawnSync } = require('child_process');
@@ -635,6 +641,14 @@ jobs:
             // Read via env: a rerun filter is a long comma-separated test-id list.
             const filter = process.env.TEST_FILTER || '';
             const filterArgs = filter ? ['--filter=' + filter] : [];
+            const includeTests = process.env.INCLUDE_TESTS || '';
+            // The producer below is spawned with shell: true, so anything but an
+            // exact testId would be a command rather than an argument.
+            if (includeTests && !/^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$/.test(includeTests)) {
+              console.log('::error title=Invalid include value::Expected comma-separated testIds matching [A-Za-z0-9._-]');
+              process.exit(1);
+            }
+            const includeArgs = includeTests ? ['--include=' + includeTests] : [];
             const suite = '${{ inputs.suite }}';
             const suiteArgs = suite ? ['--suite=' + suite] : [];
             const excludeSuite = '${{ inputs.exclude-suite }}';
@@ -698,7 +712,8 @@ jobs:
               '--report-dir=./reports',
               ...filterArgs,
               ...suiteArgs,
-              ...excludeSuiteArgs
+              ...excludeSuiteArgs,
+              ...includeArgs
             ];
             console.log('Producer command: npx ' + producerArgs.join(' '));
 
