@@ -9,6 +9,7 @@ Usage:
 
 from __future__ import annotations
 
+import ast
 import importlib
 import json
 import re
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_DIR = PACKAGE_ROOT.parent / "sdk" / "contract"
@@ -301,6 +303,69 @@ def run_datamodel_codegen(output_dir: Path) -> None:
         ],
         check=True,
     )
+    preserve_forbidden_fields(output_dir)
+
+
+def preserve_forbidden_fields(output_dir: Path) -> None:
+    """Keep removed properties out of generated constructors.
+
+    The generator currently turns `not: {}` into Any. Record those names for
+    the base validator instead, without changing how other unknown keys work.
+    """
+    forbidden_by_title: dict[str, set[str]] = {}
+
+    def visit(node: Any) -> None:
+        if isinstance(node, dict):
+            forbidden = {
+                key
+                for key, prop in node.get("properties", {}).items()
+                if isinstance(prop, dict)
+                and prop.get("not") == {}
+                and prop.get("deprecated") is True
+            }
+            if forbidden and isinstance(node.get("title"), str):
+                forbidden_by_title[node["title"]] = forbidden
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
+    for path in output_dir.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        edits: list[tuple[int, int, list[str]]] = []
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            forbidden = forbidden_by_title.get(node.name)
+            if not forbidden:
+                continue
+            field_names = {snake_case(key) for key in forbidden}
+            for field in node.body:
+                if (
+                    isinstance(field, ast.AnnAssign)
+                    and isinstance(field.target, ast.Name)
+                    and field.target.id in field_names
+                ):
+                    edits.append(
+                        (field.lineno - 1, field.end_lineno or field.lineno, [])
+                    )
+            names = ", ".join(repr(key) for key in sorted(forbidden | field_names))
+            first_body_line = node.body[0].lineno - 1
+            edits.append(
+                (
+                    first_body_line,
+                    first_body_line,
+                    [f"    __forbidden_fields__ = frozenset({{{names}}})\n"],
+                )
+            )
+        if edits:
+            lines = source.splitlines(keepends=True)
+            for start, end, replacement in sorted(edits, reverse=True):
+                lines[start:end] = replacement
+            path.write_text("".join(lines), encoding="utf-8")
+    format_with_black([output_dir])
 
 
 def resolve_titles(

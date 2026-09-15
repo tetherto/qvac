@@ -1,6 +1,46 @@
 import test from 'brittle'
 import { createErrorResponse } from '@qvac/inference/surface'
 import { contractValidate } from './utils/contract-validator'
+import { readFileSync } from 'node:fs'
+import Ajv2020 from 'ajv/dist/2020'
+
+function findSchemaTitle(node: unknown, title: string): Record<string, unknown> | undefined {
+  if (!node || typeof node !== 'object') return undefined
+  const object = node as Record<string, unknown>
+  if (object['title'] === title) return object
+  for (const child of Object.values(object)) {
+    const found = findSchemaTitle(child, title)
+    if (found) return found
+  }
+  return undefined
+}
+
+test('contract diffusion load config: memory controls and removed options', (t) => {
+  const document: unknown = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  )
+  // Validate the built-in branch directly. The outer union also allows custom
+  // plugins; its modelType refinement is enforced only by the worker.
+  const schema = findSchemaTitle(document, 'LoadModelSrcRequestSdcppGenerationModelConfig')
+  t.ok(schema)
+  if (!schema) return
+  const validate = new Ajv2020({ strict: false }).compile(schema)
+  for (const max_vram of [0, -1, 2.5, '6', 'cuda0=6,vulkan0=4']) {
+    t.ok(
+      validate({
+        backend: 'cuda0',
+        params_backend: 'diffusion=disk',
+        max_vram,
+        stream_layers: false
+      })
+    )
+  }
+  for (const key of ['clip_on_cpu', 'vae_on_cpu', 'control_net_cpu']) {
+    t.is(validate({ [key]: false }), false)
+  }
+  t.ok(validate({ unknown_option: true }), 'unrelated unknown fields remain accepted')
+  t.is(validate({ stream_layers: 'true' }), false)
+})
 
 // Contract-artifact checks: validate representative payloads against the
 // committed contract/schema.json (what generated clients consume). The Zod
