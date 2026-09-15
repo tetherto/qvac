@@ -101,6 +101,10 @@ runs:
           $vcpkgRev = 'unknown'
         } finally {
           $ErrorActionPreference = $prevEAP
+          # The runner's PowerShell wrapper ends with `exit $LASTEXITCODE`, so a
+          # non-zero left behind by git fails the step even though we handled it
+          # and finished normally. Clear it.
+          $global:LASTEXITCODE = 0
         }
 
         $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$vcpkgRev"
