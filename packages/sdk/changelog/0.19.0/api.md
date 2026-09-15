@@ -1,38 +1,5 @@
 # 🔌 API Changes v0.19.0
 
-## Add ABot-World interactive world sessions to the SDK
-
-PR: [#3812](https://github.com/tetherto/qvac/pull/3812)
-
-```typescript
-const modelId = await loadModel({
-  modelSrc: ABOT_WORLD_0_5B_Q8_0,
-  modelType: 'sdcpp-generation',
-  modelConfig: {
-    mode: 'world',
-    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE, // taew2_2 streaming decoder, used by every step
-    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16, // full Wan2.2 VAE, encodes the first frame
-    world: { kvCache: true, frameJpegQuality: 85 }
-  }
-})
-
-// Once per world. `stats` is the completion signal; the world is live on the
-// session and no pack crosses the wire.
-const { stats } = worldCreateScene({ modelId, prompt, image })
-await stats
-
-// Pass returnPack to keep the bytes, e.g. to walk the same world after a reload.
-const { scene } = worldCreateScene({ modelId, prompt, image, returnPack: true })
-fs.writeFileSync('world.safetensors', await scene)
-
-// Walk: one generated block per call, frames stream as they decode.
-const { frameStream } = worldStep({ modelId, keys: ['W', 'L'] })
-for await (const frame of frameStream) render(frame)
-```
-
----
-
 ## Generate model resource profiles for the catalog
 
 PR: [#4045](https://github.com/tetherto/qvac/pull/4045)
