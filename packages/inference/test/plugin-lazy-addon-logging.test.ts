@@ -78,20 +78,20 @@ test('an addon that cannot load fails its own load, not registration', async (t)
     throw new Error('@qvac/tts-ggml found no native prebuild for this host')
   }
 
-  registerPlugin(makePlugin('lazy-logging-missing-addon', missingAddon))
+  const missing = makePlugin('lazy-logging-missing-addon', missingAddon)
+  registerPlugin(missing)
   t.pass('a plugin whose addon is unavailable still registers')
 
-  // A sibling plugin over a different addon is unaffected — the point of the
-  // change, since the worker registers every builtin plugin at startup.
+  // One unavailable addon must not stop another from wiring: the worker
+  // registers every builtin plugin at startup, so they all share this path.
   const { module, state } = makeLoggingModule()
-  registerPlugin(makePlugin('lazy-logging-sibling', () => module, 'sibling-namespace'))
-  await ensureAddonLoggerReady(
-    makePlugin('lazy-logging-sibling', () => module, 'sibling-namespace')
-  )
+  const sibling = makePlugin('lazy-logging-sibling', () => module, 'sibling-namespace')
+  registerPlugin(sibling)
+  await ensureAddonLoggerReady(sibling)
   t.is(state.setCalls, 1, 'an unrelated addon still wires its logger')
 
   await t.exception(
-    () => ensureAddonLoggerReady(makePlugin('lazy-logging-missing-addon', missingAddon)),
+    () => ensureAddonLoggerReady(missing),
     /no native prebuild/,
     'the failure surfaces when that addon is actually needed'
   )
@@ -177,4 +177,34 @@ test('a CommonJS addon resolved through import() is unwrapped', async (t) => {
 
   await ensureAddonLoggerReady(plugin)
   t.is(state.setCalls, 1, 'the default export is used')
+})
+
+test('a resolution still in flight when the registry is cleared wires nothing', async (t) => {
+  // `runCleanup` in src/runtime/lifecycle.ts calls clearRegistries()
+  // synchronously and only then awaits unloadAllModels(), so a load parked on
+  // `await resolver()` resumes after the sweep has already passed. Wiring the
+  // logger at that point hands the addon a callback into a dying isolate that
+  // nothing will ever release.
+  const { module, state } = makeLoggingModule()
+  let releaseResolver: (() => void) | undefined
+  const gate = new Promise<void>((resolve) => {
+    releaseResolver = resolve
+  })
+  const plugin = makePlugin('lazy-logging-shutdown-race', async () => {
+    await gate
+    return module
+  })
+  registerPlugin(plugin)
+
+  const wiring = ensureAddonLoggerReady(plugin)
+  // The sweep runs while the resolver is parked, exactly as cleanup does.
+  clearPlugins()
+  releaseResolver?.()
+  await wiring
+
+  t.is(state.setCalls, 0, 'the logger is never wired into a torn-down registry')
+  t.is(state.releaseCalls, 0, 'and there is nothing to release')
+
+  clearPlugins()
+  t.is(state.releaseCalls, 0, 'a later sweep finds no orphaned logger either')
 })

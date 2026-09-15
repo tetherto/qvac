@@ -43,10 +43,11 @@ function getLoggingResolver(plugin: QvacPlugin): PluginLoggingResolver | undefin
 }
 
 /**
- * The eagerly-supplied module, if the plugin gave one. Resolver-based plugins
- * report nothing here, so registration-time validation, the shared-module
- * dedupe, and the release sweeps all continue to see exactly what they saw
- * before for plugins that pass a module directly.
+ * The module a plugin supplied directly, or `undefined` when it supplied a
+ * resolver. Resolver-based plugins are therefore invisible to
+ * registration-time shape validation, to the shared-module dedupe, and to the
+ * eager release sweeps; `ensureAddonLoggerReady` and `lazyAddonLoggers` cover
+ * them instead, keyed by namespace rather than held on the plugin.
  */
 function getLoggingModule(plugin: QvacPlugin) {
   if (getLoggingResolver(plugin)) return undefined
@@ -159,7 +160,9 @@ export function registerPlugins(pluginList: readonly QvacPlugin[]): void {
  * A no-op for plugins that passed their module directly — those are already
  * wired by `registerPlugin` — and for a namespace that is already wired,
  * which is how two plugins over one addon (whisper and Parakeet over ASR)
- * share a single `setLogger` call.
+ * share a single `setLogger` call. Also a no-op when the registry was cleared
+ * while the addon was loading, so a shutdown that races a load leaves no
+ * logger behind.
  */
 export async function ensureAddonLoggerReady(plugin: QvacPlugin): Promise<void> {
   const resolver = getLoggingResolver(plugin)
@@ -171,10 +174,19 @@ export async function ensureAddonLoggerReady(plugin: QvacPlugin): Promise<void> 
   if (pending) return pending
 
   const wiring = (async () => {
-    const loggingModule = assertLoggingModuleShape(
-      plugin.modelType,
-      unwrapLoggingModule(await resolver())
-    )
+    const resolved = unwrapLoggingModule(await resolver())
+
+    // Loading the addon takes real time, and the registry can be torn down
+    // while this is parked: `runCleanup` calls `clearRegistries()`
+    // synchronously and only then awaits `unloadAllModels()`, so a sweep can
+    // pass between the call above and this line. Wiring now would hand the
+    // addon a callback nothing will release — on Expo, a `js_ref_t` leaked
+    // into a dying isolate, which the next worklet's first `setLogger` trips
+    // over. Nothing has been wired yet, so dropping the resolved module is
+    // the whole cleanup.
+    if (!isNamespaceClaimed(namespace)) return
+
+    const loggingModule = assertLoggingModuleShape(plugin.modelType, resolved)
 
     for (const [wiredNamespace, wiredModule] of lazyAddonLoggers) {
       if (wiredModule === loggingModule && wiredNamespace !== namespace) {
@@ -197,30 +209,44 @@ export async function ensureAddonLoggerReady(plugin: QvacPlugin): Promise<void> 
   }
 }
 
+/** Whether a registered resolver-based plugin still claims this namespace. */
+function isNamespaceClaimed(namespace: string): boolean {
+  return Array.from(plugins.values()).some(
+    (candidate) => getLoggingResolver(candidate) && candidate.logging?.namespace === namespace
+  )
+}
+
 /** Releases a lazily-wired addon logger once no registered plugin claims it. */
 function releaseLazyAddonLogger(namespace: string | undefined, modelType: string): void {
   if (namespace === undefined) return
   const loggingModule = lazyAddonLoggers.get(namespace)
   if (!loggingModule) return
-
-  const stillClaimed = Array.from(plugins.values()).some(
-    (candidate) => getLoggingResolver(candidate) && candidate.logging?.namespace === namespace
-  )
-  if (stillClaimed) return
+  if (isNamespaceClaimed(namespace)) return
 
   lazyAddonLoggers.delete(namespace)
   releaseLoggerSafely(loggingModule, modelType)
 }
 
-function releaseLoggerSafely(loggingModule: PluginLoggingModule, modelType: string): void {
+/**
+ * Runs an addon's `releaseLogger`. A failure must not abort a sweep or leave
+ * the registry half-cleared for the next caller, but it is reported rather
+ * than swallowed: a leaked reference or a live async handle must not pass for
+ * a clean teardown. `subject` names what is being released — a model type, or
+ * a namespace for a logger that is only keyed by one — and `during` names the
+ * sweep, when the release is part of one.
+ */
+function releaseLoggerSafely(
+  loggingModule: PluginLoggingModule,
+  subject: string,
+  during?: string
+): void {
   try {
     loggingModule.releaseLogger?.()
   } catch (error) {
-    // Teardown must not abort the sweep or leave the registry half-cleared for
-    // the next caller — but surface it, so a leaked reference or async handle
-    // is not masked as a clean teardown.
     getEngineLogger().warn(
-      `[${modelType}] releaseLogger failed: ${error instanceof Error ? error.message : String(error)}`
+      `[${subject}] releaseLogger failed${during ? ` during ${during}` : ''}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     )
   }
 }
@@ -277,22 +303,12 @@ export function clearPlugins(): void {
   plugins.clear()
   lazyAddonLoggers.clear()
   for (const [loggingModule, modelType] of loggingModules) {
-    try {
-      loggingModule.releaseLogger?.()
-    } catch (error) {
-      // A plugin's logger teardown must not abort the sweep or leave the
-      // registry half-cleared for the next caller — but surface it, so a leaked
-      // reference or async handle is not masked as a clean teardown.
-      getEngineLogger().warn(
-        `[${modelType}] releaseLogger failed during clearPlugins: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      )
-    }
+    releaseLoggerSafely(loggingModule, modelType, 'clearPlugins')
   }
   // Loggers wired through a resolver are keyed by namespace rather than held
-  // on the plugin, so they need the same sweep.
+  // on the plugin, so they need the same sweep. They are named by that
+  // namespace, which is not a model type — several plugins can share one.
   for (const [namespace, loggingModule] of lazyModules) {
-    releaseLoggerSafely(loggingModule, namespace)
+    releaseLoggerSafely(loggingModule, `namespace ${namespace}`, 'clearPlugins')
   }
 }
