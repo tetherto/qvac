@@ -12,6 +12,59 @@ const LLM_BASE = {
   modelSrc: 'model.gguf'
 }
 
+const MTP_CONFIG = {
+  'spec-type': 'draft-mtp',
+  'spec-draft-n-max': 3,
+  'spec-draft-n-min': 0,
+  'spec-draft-p-min': 0.5,
+  'spec-draft-backend-sampling': false,
+  'spec-draft-device': 'CPU',
+  'spec-draft-ngl': 0
+} as const
+
+test('MTP config survives load options, wire validation, and device defaults', (t) => {
+  const request = loadModelOptionsToRequestSchema.parse({
+    ...LLM_BASE,
+    modelConfig: MTP_CONFIG
+  })
+  t.alike(request.modelConfig, MTP_CONFIG)
+  t.alike(loadModelSrcRequestSchema.parse(request).modelConfig, MTP_CONFIG)
+  t.alike(deviceConfigDefaultsSchema.parse({ llm: MTP_CONFIG }).llm, MTP_CONFIG)
+})
+
+test('MTP config remains opt-in and preserves the requested parallel slots', (t) => {
+  const defaults = llmConfigSchema.parse({})
+  for (const key of Object.keys(MTP_CONFIG)) t.absent(key in defaults)
+  const config = llmConfigBaseSchema.parse({ ...MTP_CONFIG, parallel: 4 })
+  t.is(config.parallel, 4)
+  t.is(config['spec-type'], 'draft-mtp')
+})
+
+test('MTP config rejects unsupported decoders and invalid tuning values', (t) => {
+  const invalid = [
+    { 'spec-type': 'draft' },
+    { 'spec-type': 'ngram,draft-mtp' },
+    { 'spec-draft-n-max': 0 },
+    { 'spec-draft-n-max': -1 },
+    { 'spec-draft-n-max': 1.5 },
+    { 'spec-draft-n-max': 2147483648 },
+    { 'spec-draft-n-min': -1 },
+    { 'spec-draft-n-min': 0.5 },
+    { 'spec-draft-p-min': -0.1 },
+    { 'spec-draft-p-min': 1.1 },
+    { 'spec-draft-backend-sampling': 'false' },
+    { 'spec-draft-ngl': -2 },
+    { 'spec-draft-ngl': 1.5 },
+    { 'spec-draft-model': 'draft.gguf' }
+  ]
+  for (const modelConfig of invalid) {
+    t.absent(
+      loadModelOptionsToRequestSchema.safeParse({ ...LLM_BASE, modelConfig }).success,
+      JSON.stringify(modelConfig)
+    )
+  }
+})
+
 test('llmConfigBaseSchema: accepts valid split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'none' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'layer' }).success, true)

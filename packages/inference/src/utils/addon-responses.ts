@@ -9,6 +9,8 @@ export interface LlmStats {
   promptTokens?: number
   generatedTokens?: number
   avgConcurrentSeq?: number
+  draftAccepted?: number
+  draftTotal?: number
   backendDevice?: 'cpu' | 'gpu'
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'

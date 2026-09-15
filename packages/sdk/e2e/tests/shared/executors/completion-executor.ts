@@ -1,4 +1,11 @@
-import { completion, ContextOverflowError, deleteCache } from '@qvac/sdk'
+import {
+  completion,
+  ContextOverflowError,
+  deleteCache,
+  loadModel,
+  unloadModel,
+  type CompletionStats
+} from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { completionTests } from '../../completion-tests.js'
@@ -61,6 +68,9 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       }
       if (test.testId === 'completion-stats') {
         return [test.testId, this.statsVerification.bind(this)]
+      }
+      if (test.testId === 'completion-mtp') {
+        return [test.testId, this.mtpVerification.bind(this)]
       }
       if (test.testId === 'completion-concurrent-requests') {
         return [test.testId, this.concurrentRequests.bind(this)]
@@ -310,6 +320,72 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       return { passed: false, output: `completion stats failed: ${errorMsg}` }
+    }
+  }
+
+  async mtpVerification(
+    params: CompletionTestParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    // This pinned GGUF bundles the MTP head used by the addon PR's integration test.
+    const modelId = await loadModel({
+      modelSrc:
+        'https://huggingface.co/prithivMLmods/Qwen3.5-0.8B-MTP-GGUF/resolve/e84039e503be9c81c5bfe3f0b0d00a7636894d9d/Qwen3.5-0.8B.Q8_0.gguf',
+      modelType: 'llm',
+      modelConfig: {
+        ctx_size: 1024,
+        parallel: 1,
+        'spec-type': 'draft-mtp',
+        'spec-draft-n-max': 3,
+        reasoning_budget: 0
+      }
+    })
+
+    try {
+      const run = completion({ modelId, ...params } as CompletionFnParams)
+      let eventStats: CompletionStats | undefined
+      let streamedText = ''
+      for await (const event of run.events) {
+        if (event.type === 'contentDelta') streamedText += event.text
+        if (event.type === 'completionStats') eventStats = event.stats
+      }
+      const final = await run.final
+      const stats = await run.stats
+      const textValidation = ValidationHelpers.validate(final.contentText, expectation)
+      if (!textValidation.passed) return textValidation
+      if (streamedText !== final.contentText) {
+        return { passed: false, output: 'MTP content events do not match the final reply' }
+      }
+
+      const accepted = final.stats?.draftAccepted
+      const total = final.stats?.draftTotal
+      if (
+        typeof accepted !== 'number' ||
+        typeof total !== 'number' ||
+        !Number.isInteger(accepted) ||
+        !Number.isInteger(total) ||
+        accepted <= 0 ||
+        total <= 0 ||
+        accepted > total
+      ) {
+        return {
+          passed: false,
+          output:
+            `Expected active MTP with 0 < draftAccepted <= draftTotal, got ${JSON.stringify(final.stats)}. ` +
+            'Use an addon build containing PR #4390 and the pinned model with its bundled MTP head.'
+        }
+      }
+      if (
+        eventStats?.draftAccepted !== accepted ||
+        eventStats?.draftTotal !== total ||
+        stats?.draftAccepted !== accepted ||
+        stats?.draftTotal !== total
+      ) {
+        return { passed: false, output: 'MTP counters differ between events, final, and stats' }
+      }
+      return { passed: true, output: `MTP accepted ${accepted} of ${total} proposed tokens` }
+    } finally {
+      await unloadModel({ modelId })
     }
   }
 
