@@ -223,7 +223,9 @@ jobs:
       # cold forever. Copy across explicitly; -n so we never clobber another
       # user's archive, and the whole thing is best-effort.
       - name: Warm the host vcpkg cache
-        if: env.VCPKG_CACHE_PERSISTENT == 'true'
+        if: >-
+          env.VCPKG_CACHE_PERSISTENT == 'true' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule')
         shell: bash
         run: |
           set +e
