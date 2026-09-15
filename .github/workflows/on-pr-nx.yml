@@ -345,7 +345,15 @@ jobs:
   cpp-lint:
     name: cpp-lint (${{ matrix.package }})
     needs: [fork-approval, authorize, ci-router, matrix, detect-fabric-stack, resolve-fabric-prebuilds]
-    if: needs.authorize.outputs.allowed == 'true' && needs.ci-router.outputs.run_verified_checks == 'true' && needs.matrix.outputs.cpplint != '[]'
+    # always(): resolve-fabric-prebuilds is skipped on a non-fabric PR, and a
+    # plain if: would skip this job with it. Same shape as cpp-tests.
+    if: |
+      always() && !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.ci-router.outputs.run_verified_checks == 'true' &&
+      needs.matrix.outputs.cpplint != '[]' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     strategy:
       fail-fast: false
       matrix:
