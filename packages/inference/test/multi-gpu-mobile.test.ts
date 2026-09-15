@@ -26,6 +26,21 @@ test('stripMultiGpuKeys: returns empty array and mutates nothing when no multi-G
   t.ok('gpu_layers' in config)
 })
 
+test('stripMultiGpuKeys: preserves diffusion backend and VRAM controls', (t) => {
+  const config: Record<string, unknown> = {
+    backend: 'cuda0',
+    params_backend: 'diffusion=cpu',
+    max_vram: 'cuda0=6'
+  }
+  const stripped = stripMultiGpuKeys(config)
+  t.alike([...stripped], [])
+  t.alike(config, {
+    backend: 'cuda0',
+    params_backend: 'diffusion=cpu',
+    max_vram: 'cuda0=6'
+  })
+})
+
 test('stripMultiGpuKeys: strips only the keys that are present', (t) => {
   const config: Record<string, unknown> = { 'tensor-split': '1,1', device: 'gpu' }
   const stripped = stripMultiGpuKeys(config)
