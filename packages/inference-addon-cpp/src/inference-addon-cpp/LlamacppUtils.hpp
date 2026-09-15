@@ -18,43 +18,6 @@
 #include "common/fit.h"
 #include "common/log.h"
 
-/// @brief Pads `params.tensor_buft_overrides` up to the buffer size
-/// `common_fit_params` writes its placement into.
-/// @note This mirrors the padding qvac-fabric's own `common_params_parse` does
-/// (common/arg.cpp). Without it the vector stays empty for a caller that set no
-/// override of its own, `common_model_params_to_llama` maps an empty vector to
-/// a null `tensor_buft_overrides` pointer, and the fitter aborts with "did not
-/// provide buffer to set tensor_buft_overrides" — leaving the model to load
-/// with every layer on the GPU. Every padding entry is a null one, so the first
-/// of them still terminates whatever overrides the caller did set, and
-/// re-running the padding is a no-op.
-/// @note Pair this with `trimTensorBuftOverridesAfterFit` once the fit has run.
-/// The padded vector is ~64 KiB, and `params` is copied by value into every
-/// per-slot context, so leaving it padded multiplies that by the slot count.
-inline void padTensorBuftOverridesForFit(common_params& params) {
-  const size_t maxOverrides = llama_max_tensor_buft_overrides();
-  if (params.tensor_buft_overrides.size() >= maxOverrides &&
-      params.tensor_buft_overrides.back().pattern != nullptr) {
-    // Unreachable from either in-repo consumer, and handled rather than ignored
-    // because the alternative is a process abort: padding cannot add the
-    // terminator `common_model_params_to_llama`'s GGML_ASSERT requires, so the
-    // load would SIGABRT. Terminating in place costs the caller their last
-    // override and leaves them a diagnosable warning instead.
-    LOG_WRN(
-        "%s: %zu tensor buffer overrides is at or past the %zu the loader "
-        "accepts; dropping the last one to terminate the list\n",
-        __func__,
-        params.tensor_buft_overrides.size(),
-        maxOverrides);
-    params.tensor_buft_overrides.resize(maxOverrides);
-    params.tensor_buft_overrides.back() = {nullptr, nullptr};
-    return;
-  }
-  while (params.tensor_buft_overrides.size() < maxOverrides) {
-    params.tensor_buft_overrides.push_back({nullptr, nullptr});
-  }
-}
-
 /// @brief Drops the unused tail of `params.tensor_buft_overrides`, keeping the
 /// overrides in force and the null entry that terminates them.
 /// @note The fitter needs `llama_max_tensor_buft_overrides()` writable entries
@@ -66,14 +29,61 @@ inline void padTensorBuftOverridesForFit(common_params& params) {
 inline void trimTensorBuftOverridesAfterFit(common_params& params) {
   const auto terminator = std::ranges::find_if(
       params.tensor_buft_overrides,
-      [](const llama_model_tensor_buft_override& override) {
-        return override.pattern == nullptr;
+      [](const llama_model_tensor_buft_override& candidate) {
+        return candidate.pattern == nullptr;
       });
   if (terminator == params.tensor_buft_overrides.end()) {
     return;
   }
   params.tensor_buft_overrides.erase(
       terminator + 1, params.tensor_buft_overrides.end());
+}
+
+/// @brief Pads `params.tensor_buft_overrides` up to the buffer size
+/// `common_fit_params` writes its placement into.
+/// @note This mirrors the padding qvac-fabric's own `common_params_parse` does
+/// (common/arg.cpp). Without it the vector stays empty for a caller that set no
+/// override of its own, `common_model_params_to_llama` maps an empty vector to
+/// a null `tensor_buft_overrides` pointer, and the fitter aborts with "did not
+/// provide buffer to set tensor_buft_overrides" — leaving the model to load
+/// with every layer on the GPU. Every padding entry is a null one, so the first
+/// of them still terminates whatever overrides the caller did set, and
+/// re-running the padding is a no-op.
+/// @note For consumers that call `common_init_from_params` directly and so have
+/// to satisfy the fitter's buffer requirement themselves; the loaders in this
+/// header go through `fitParamsToFreeDeviceMemory` instead, which fits against
+/// scratch buffers and needs no padding. Pair it with
+/// `trimTensorBuftOverridesAfterFit` once the fit has run: the padded vector is
+/// ~64 KiB, and `params` is copied by value into every per-slot context, so
+/// leaving it padded multiplies that by the slot count.
+inline void padTensorBuftOverridesForFit(common_params& params) {
+  const size_t maxOverrides = llama_max_tensor_buft_overrides();
+  // Anything past the caller's own terminator is unreachable for the loader and
+  // only eats into the space the fitter needs, so drop it first. Doing this up
+  // front is also what keeps padding idempotent: a second call trims the pad
+  // back to its lone terminator and then rebuilds it identically.
+  trimTensorBuftOverridesAfterFit(params);
+  if (params.tensor_buft_overrides.size() >= maxOverrides) {
+    // Only reachable with at least `maxOverrides` overrides and no terminator
+    // among them — not from either in-repo consumer. Handled rather than
+    // ignored because the alternative is a process abort: the list has to end
+    // in a null entry for `common_model_params_to_llama`'s GGML_ASSERT, and
+    // there is no room left to add one without giving up an override.
+    LOG_WRN(
+        "%s: %zu tensor buffer overrides is at or past the %zu the loader "
+        "accepts, and none of them terminates the list; dropping the last %zu "
+        "to make room for a terminator\n",
+        __func__,
+        params.tensor_buft_overrides.size(),
+        maxOverrides,
+        params.tensor_buft_overrides.size() - (maxOverrides - 1));
+    params.tensor_buft_overrides.resize(maxOverrides);
+    params.tensor_buft_overrides.back() = {nullptr, nullptr};
+    return;
+  }
+  while (params.tensor_buft_overrides.size() < maxOverrides) {
+    params.tensor_buft_overrides.push_back({nullptr, nullptr});
+  }
 }
 
 /// @brief Runs qvac-fabric's automatic GPU/CPU placement (`--fit`) for a model
@@ -83,22 +93,24 @@ inline void trimTensorBuftOverridesAfterFit(common_params& params) {
 /// @param fitModelPath GGUF the fitter reads the model shape from. For a
 /// sharded model this is the first shard — llama's loader walks the rest of the
 /// split set from its metadata.
-/// @note `common_init_from_params` runs the fit itself, so only the loaders
-/// that bypass it (the shard loaders) need this. Nothing is written to @p
-/// params unless the fit succeeds, so a fit that fails or errors leaves the
-/// load to proceed with exactly the configuration the caller asked for.
-/// @note Deliberately asymmetric with the single-file path, and the difference
-/// is worth knowing before reading @p params after a load. There,
-/// `common_init_from_params` keeps the fitted `n_gpu_layers`, `n_ctx`,
-/// `prefetch_weights` and `moe_cache_size` in its own locals, so @p params
-/// keeps the caller's requested values — while the fitter still writes
-/// `tensor_split` and `tensor_buft_overrides` through the caller's buffers,
-/// because that is what fabric passes it. Here all six carry the fit's
-/// decision. The write-back is not optional on this path: the shard loaders
-/// hand @p params — not the fitted locals — to
-/// `common_init_from_model_and_params`, which rebuilds the context parameters
-/// from scratch, so without it the weights would land where the fit put them
-/// while the context was created at the size it had just rejected.
+/// @note Nothing is written to @p params unless the fit succeeds, so a fit that
+/// fails or errors leaves the load to proceed with exactly the configuration
+/// the caller asked for. This is the one place the fit should run: every loader
+/// in this header routes through it, and `initFromConfig` clears
+/// `params.fit_params` afterwards so `common_init_from_params` does not fit a
+/// second time in place, against @p params' own buffers and discarding the
+/// status.
+/// @note All six fields the fitter can move — `n_gpu_layers`, `n_ctx`,
+/// `prefetch_weights`, `moe_cache_size`, `tensor_split` and
+/// `tensor_buft_overrides` — carry its decision afterwards, on every path.
+/// The write-back is not optional for the shard loaders: they hand @p params —
+/// not the fitted locals — to `common_init_from_model_and_params`, which
+/// rebuilds the context parameters from scratch, so without it the weights
+/// would land where the fit put them while the context was created at the size
+/// it had just rejected.
+/// @note @p params.tensor_buft_overrides must be null-terminated if non-empty,
+/// the same precondition `common_model_params_to_llama` asserts; an
+/// unterminated list is terminated here rather than left to abort the process.
 inline void fitParamsToFreeDeviceMemory(
     common_params& params, const std::string& fitModelPath) {
   if (!params.fit_params) {
@@ -129,6 +141,15 @@ inline void fitParamsToFreeDeviceMemory(
   static std::mutex fitMutex;
   const std::lock_guard<std::mutex> fitLock(fitMutex);
 
+  // `common_model_params_to_llama` asserts a non-empty override list ends in a
+  // null entry and aborts the process otherwise. Normalise rather than let a
+  // caller's unterminated list take the process down — this used to happen as a
+  // side effect of padding here, which the scratch buffers replaced.
+  if (!params.tensor_buft_overrides.empty() &&
+      params.tensor_buft_overrides.back().pattern != nullptr) {
+    params.tensor_buft_overrides.push_back({nullptr, nullptr});
+  }
+
   llama_model_params mparams = common_model_params_to_llama(params);
   llama_context_params cparams = common_context_params_to_llama(params);
 
@@ -150,6 +171,18 @@ inline void fitParamsToFreeDeviceMemory(
       std::min(params.tensor_buft_overrides.size(), buftOverrides.size()),
       buftOverrides.begin());
 
+  // The fitter installs a pointer to one of its own stack frames as the
+  // process-global ggml log user_data and restores it on the way out — but the
+  // restore is not exception-safe: `fit.cpp` throws from inside that window (a
+  // missing CPU backend at :102, among others), and the handler in
+  // `common_fit_params` maps those to a status rather than putting the logger
+  // back. Reinstating what we captured makes that unconditional, so the load
+  // below can never log through a freed frame. A no-op when the fitter did
+  // restore it.
+  ggml_log_callback priorLogCallback = nullptr;
+  void* priorLogUserData = nullptr;
+  llama_log_get(&priorLogCallback, &priorLogUserData);
+
   const common_params_fit_status status = common_fit_params(
       fitModelPath.c_str(),
       &mparams,
@@ -162,13 +195,13 @@ inline void fitParamsToFreeDeviceMemory(
       params.verbosity >= LOG_LEVEL_DEBUG ? GGML_LOG_LEVEL_DEBUG
                                           : GGML_LOG_LEVEL_ERROR);
 
+  llama_log_set(priorLogCallback, priorLogUserData);
+
   if (status != COMMON_PARAMS_FIT_STATUS_SUCCESS) {
     // FAILURE means "no placement fits", which the caller's own configuration
     // is the right thing to fall back to, and the fitter has already logged it.
-    // ERROR is an internal fault — nothing it produced is trustworthy, and it
-    // can be raised from a window where fabric's process-global log callback
-    // still points at one of the fitter's stack frames — so say so rather than
-    // let it pass as quietly as a routine "does not fit".
+    // ERROR is an internal fault — nothing it produced is trustworthy — so say
+    // so rather than let it pass as quietly as a routine "does not fit".
     if (status == COMMON_PARAMS_FIT_STATUS_ERROR) {
       LOG_ERR(
           "%s: automatic placement hit an internal error; loading '%s' as "
@@ -191,12 +224,18 @@ inline void fitParamsToFreeDeviceMemory(
   params.moe_cache_size = cparams.moe_cache_size;
 
   // Adopted only here, so a placement the fitter probed and rejected never
-  // reaches the load.
+  // reaches the load. Copying only as far as the terminator keeps the unused
+  // tail of the scratch out of `params`, which is copied by value into every
+  // per-slot context and kept for the model's lifetime.
   std::copy(
       tensorSplit.begin(), tensorSplit.end(), std::begin(params.tensor_split));
+  const auto terminator = std::ranges::find_if(
+      buftOverrides, [](const llama_model_tensor_buft_override& candidate) {
+        return candidate.pattern == nullptr;
+      });
   params.tensor_buft_overrides.assign(
-      buftOverrides.begin(), buftOverrides.end());
-  trimTensorBuftOverridesAfterFit(params);
+      buftOverrides.begin(),
+      terminator == buftOverrides.end() ? terminator : terminator + 1);
 }
 
 /// @note async version
@@ -358,20 +397,27 @@ inline common_init_result_ptr initFromConfig(
             string_format(
                 "%s: model file not found: %s\n", __func__, modelPath.c_str()));
       }
-      // `common_init_from_params` runs the fit itself, but it hands the fitter
-      // `params.tensor_buft_overrides.data()` — null for a caller that set no
-      // override of its own — and then ignores the status, so the fit aborts at
-      // its first precondition and the model loads unfitted with no indication
-      // that it did. fabric pads this vector in `common_params_parse_ex`
-      // (common/arg.cpp), so a consumer that reaches fabric through
-      // `common_params_parse` is already covered; one that builds
-      // `common_params` by hand — as llm-llamacpp does via
-      // `common_params_parser_init` plus its own handler dispatch — is not.
-      // Padding here makes the guarantee this function offers independent of
-      // how the caller assembled `params`.
-      padTensorBuftOverridesForFit(params);
+      // Fit here rather than leave it to `common_init_from_params`, which runs
+      // the same fitter in place against `params`' own buffers and then
+      // discards the status. Two things follow from that. It never noticed that
+      // a caller who set no override of its own handed the fitter a null
+      // `tensor_buft_overrides` — fabric pads that vector in
+      // `common_params_parse_ex` (common/arg.cpp), so a consumer reaching
+      // fabric through `common_params_parse` was covered, but one assembling
+      // `common_params` by hand, as llm-llamacpp does via
+      // `common_params_parser_init` plus its own handler dispatch, was not, and
+      // its models loaded unfitted with nothing in the log to say so. And when
+      // the fitter throws mid-descent it restores the two parameter structs but
+      // not the buffers they point at, so the load inherited a placement the
+      // fitter had just rejected. Routing through the helper puts this path on
+      // the same scratch buffers, the same observed status and the same lock as
+      // the sharded one.
+      fitParamsToFreeDeviceMemory(params, modelPath);
+      // The fit has run, under conditions where its result is checked; fabric
+      // must not now repeat it in place. `common_init_from_params` gates its
+      // own fit on this flag.
+      params.fit_params = false;
       llamaInit = std::move(common_init_from_params(params));
-      trimTensorBuftOverridesAfterFit(params);
     } else {
       LOG_INF(
           "%s: load the model shards from disk file and apply lora adapter, if "
