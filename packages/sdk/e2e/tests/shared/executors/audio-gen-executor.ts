@@ -1,12 +1,14 @@
 import {
   audioEdit,
   audioGen,
+  audioUnderstand,
   AUDIOGEN_INPUT_CHANNELS,
   AUDIOGEN_INPUT_SAMPLE_RATE,
   type AudioEditClientParams,
   type AudioGenClientParams,
   type AudioGenProgress,
-  type AudioGenResult
+  type AudioGenResult,
+  type AudioUnderstandClientParams
 } from '@qvac/sdk'
 import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
@@ -20,9 +22,12 @@ import {
   audioGenEmptyCaptionError,
   audioGenFrozenCodes,
   audioGenHappy,
+  audioGenLegoMissingTrackError,
   audioGenReferenceAudio,
   audioGenShortDuration,
-  audioGenTests
+  audioGenSimpleModeConflictError,
+  audioGenTests,
+  audioUnderstandClip
 } from '../../audio-gen-tests.js'
 
 type AudioGenParams = Omit<AudioGenClientParams, 'modelId'>
@@ -30,6 +35,9 @@ type ReferenceAudioParams = AudioGenParams & { referenceAudioFileName: string }
 type SourceTone = { seconds: number; frequency: number }
 type CoverToneParams = AudioGenParams & { sourceTone: SourceTone }
 type EditToneParams = Omit<AudioEditClientParams, 'modelId' | 'sourceAudio'> & {
+  sourceTone: SourceTone
+}
+type UnderstandToneParams = Omit<AudioUnderstandClientParams, 'modelId' | 'sourceAudio'> & {
   sourceTone: SourceTone
 }
 const VALIDATION_MUST_PRECEDE_RPC_MODEL_ID = 'must-not-reach-audiogen-model-lookup'
@@ -48,7 +56,7 @@ export interface AudioGenExecutorOptions {
 }
 
 export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests> {
-  pattern = /^audio-(gen|edit)-/
+  pattern = /^audio-(gen|edit|understand)-/
 
   protected handlers = {
     [audioGenHappy.testId]: this.runGeneration.bind(this),
@@ -58,8 +66,11 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
     [audioGenReferenceAudio.testId]: this.runReferenceGeneration.bind(this),
     [audioGenCoverNofsq.testId]: this.runCoverGeneration.bind(this),
     [audioEditPipeline.testId]: this.runEdit.bind(this),
+    [audioUnderstandClip.testId]: this.runUnderstand.bind(this),
     [audioGenEmptyCaptionError.testId]: this.runValidationError.bind(this),
     [audioGenCoverMissingSourceError.testId]: this.runValidationError.bind(this),
+    [audioGenLegoMissingTrackError.testId]: this.runValidationError.bind(this),
+    [audioGenSimpleModeConflictError.testId]: this.runValidationError.bind(this),
     [audioEditEmptyPipelineError.testId]: this.runEditValidationError.bind(this)
   } as never
 
@@ -91,6 +102,61 @@ export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests
       'edited',
       expectation
     )
+  }
+
+  /**
+   * Drains one `audioUnderstand()` run. The reverse pipeline yields a
+   * description instead of PCM, so it validates the LM's metadata and the
+   * recovered code count rather than a sample count.
+   */
+  private async runUnderstand(
+    params: UnderstandToneParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const { sourceTone, ...understandParams } = params
+    const modelId = await this.resources.ensureLoaded('audiogen-turbo')
+    try {
+      const run = audioUnderstand({
+        modelId,
+        ...understandParams,
+        sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+      })
+      const progressPromise = collectStageTimings(run.progressStream)
+      const [description, stats, progressReport] = await Promise.all([
+        run.description,
+        run.stats,
+        progressPromise
+      ])
+      const progress = progressReport.ticks
+      const valid =
+        description.caption.length > 0 &&
+        description.audioCodes.length > 0 &&
+        progress.length > 0 &&
+        stats !== undefined
+
+      if (!valid) {
+        return {
+          passed: false,
+          output:
+            `Invalid understand output: caption=${description.caption.length}, ` +
+            `codes=${description.audioCodes.length}, progress=${progress.length}, ` +
+            `stats=${String(stats !== undefined)}`
+        }
+      }
+
+      const backend = `backend=${stats?.backendId ?? '?'}/${stats?.backendDevice ?? '?'}`
+      return ValidationHelpers.validate(
+        `described "${description.caption}" as ${description.bpm} BPM ${description.keyscale} ` +
+          `with ${description.audioCodes.length} codes, ${progress.length} progress ticks and ` +
+          `stats [${backend} stages: ${progressReport.summary}]`,
+        expectation
+      )
+    } catch (error) {
+      return {
+        passed: false,
+        output: `audioUnderstand failed: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
   }
 
   /**

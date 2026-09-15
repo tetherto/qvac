@@ -6,7 +6,10 @@ import type {
   AudioGenConfig,
   AudioGenEngine,
   AudioGenRepaintMode,
-  AudioGenRuntimeConfig
+  AudioGenRuntimeConfig,
+  AudioGenTrack,
+  AudioGenUnderstandResult,
+  AudioUnderstandClientParams
 } from '@/index'
 
 const frozenCodes: AudioGenClientParams = {
@@ -124,3 +127,65 @@ void missingSynthesisModel
 // @ts-expect-error unknown AudioGen engines are rejected
 const invalidEngine: AudioGenEngine = 'other'
 void invalidEngine
+
+const generationControls: AudioGenClientParams = {
+  modelId: 'acestep-model',
+  caption: 'a rainy-day lo-fi loop',
+  lyrics: 'a real verse',
+  rewriteQuery: true,
+  generateLrc: true,
+  computeQualityScore: true,
+  normalizeLoudness: false,
+  guidanceScale: 7
+}
+void generationControls
+
+const legoRequest: AudioGenClientParams = {
+  modelId: 'acestep-model',
+  caption: 'the same song with a busier kit',
+  taskType: 'lego',
+  track: 'drums',
+  sourceAudio: '/path/to/song.wav'
+}
+void legoRequest
+
+const track: AudioGenTrack = 'backing_vocals'
+void track
+
+// @ts-expect-error track is limited to the published instrument vocabulary
+const unknownTrack: AudioGenTrack = 'kazoo'
+void unknownTrack
+
+const understandFromPath: AudioUnderstandClientParams = {
+  modelId: 'acestep-model',
+  sourceAudio: '/path/to/song.wav',
+  seed: 11,
+  vocalLanguage: 'es',
+  lmTemperature: 0.7,
+  lmTopP: 0.85,
+  lmTopK: 40
+}
+void understandFromPath
+
+const understandFromBytes: AudioUnderstandClientParams = {
+  modelId: 'acestep-model',
+  sourceAudio: new Uint8Array(8)
+}
+void understandFromBytes
+
+const understandWithCaption: AudioUnderstandClientParams = {
+  modelId: 'acestep-model',
+  sourceAudio: '/path/to/song.wav',
+  // @ts-expect-error understanding takes no caption: the LM writes one
+  caption: 'not a generation'
+}
+void understandWithCaption
+
+// The codes a description recovers feed straight back into a generation.
+declare const recovered: AudioGenUnderstandResult
+const reuseRecoveredCodes: AudioGenClientParams = {
+  modelId: 'acestep-model',
+  caption: recovered.caption,
+  audioCodes: recovered.audioCodes
+}
+void reuseRecoveredCodes

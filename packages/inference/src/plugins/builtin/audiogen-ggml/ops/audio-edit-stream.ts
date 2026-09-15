@@ -7,10 +7,7 @@ import {
   type AudioEditStreamResponse,
   type AudioGenRepaintMode
 } from '@/schemas/audio-gen'
-import {
-  assertNormalizedPcm,
-  resolveAudioGenPcm
-} from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
+import { resolveAudioGenPcm } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
 import { streamAudioGenRun } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-run'
 
 // The wire vocabulary is the addon's own enum values; the map keeps the
@@ -29,11 +26,10 @@ export function audioEditStream(
     request,
     async start(model, ctx) {
       // The source is decoded before the run is admitted so the model slot is
-      // never held by a request that fails on input decoding. The addon also
-      // requires edit sources in [-1, 1], which the decoder path guarantees
-      // but raw PCM input does not.
+      // never held by a request that fails on input decoding. The resolver
+      // also settles the addon's `[-1, 1]` requirement for raw PCM, which the
+      // decoder path already guarantees.
       const pcm = await resolveAudioGenPcm(request.sourceAudio, 'sourceAudio')
-      assertNormalizedPcm(pcm, 'sourceAudio')
       if (ctx.signal.aborted) return undefined
 
       // The addon validates each operation as it is chained (Flow-Edit on a

@@ -183,6 +183,65 @@ export const audioEditPipeline: TestDefinition = {
   }
 }
 
+/**
+ * The reverse pipeline over in-memory source PCM (a short synthesized stereo
+ * tone): encode, recover the FSQ codes, and have the LM describe the clip.
+ * Covers `audioUnderstand()` end to end, including the description promise.
+ */
+export const audioUnderstandClip: TestDefinition = {
+  testId: 'audio-understand-clip',
+  params: {
+    seed: 11,
+    sourceTone: { seconds: 2, frequency: 220 }
+  },
+  expectation: {
+    validation: 'contains-all',
+    contains: ['described', 'codes', 'progress', 'stats']
+  },
+  metadata: {
+    category: 'audiogen',
+    dependency: 'audiogen-turbo',
+    estimatedDurationMs: 300000
+  }
+}
+
+/** Client-side validation: a lego task without a track never reaches RPC. */
+export const audioGenLegoMissingTrackError: TestDefinition = {
+  testId: 'audio-gen-lego-missing-track-error',
+  params: {
+    caption: 'the same song with a busier kit',
+    taskType: 'lego'
+  },
+  expectation: {
+    validation: 'throws-error',
+    errorContains: 'track'
+  },
+  metadata: {
+    category: 'audiogen',
+    dependency: 'none',
+    estimatedDurationMs: 1000
+  }
+}
+
+/** Client-side validation: Simple Mode and Query Rewriting are exclusive. */
+export const audioGenSimpleModeConflictError: TestDefinition = {
+  testId: 'audio-gen-simple-mode-conflict-error',
+  params: {
+    caption: 'a hopeful indie track',
+    simpleMode: true,
+    rewriteQuery: true
+  },
+  expectation: {
+    validation: 'throws-error',
+    errorContains: 'rewriteQuery'
+  },
+  metadata: {
+    category: 'audiogen',
+    dependency: 'none',
+    estimatedDurationMs: 1000
+  }
+}
+
 export const audioGenEmptyCaptionError: TestDefinition = {
   testId: 'audio-gen-empty-caption-error',
   params: {
@@ -243,7 +302,10 @@ export const audioGenTests = [
   audioGenAugmentedCaption,
   audioGenFrozenCodes,
   audioEditPipeline,
+  audioUnderstandClip,
   audioGenEmptyCaptionError,
   audioGenCoverMissingSourceError,
+  audioGenLegoMissingTrackError,
+  audioGenSimpleModeConflictError,
   audioEditEmptyPipelineError
 ] as const

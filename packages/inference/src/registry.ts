@@ -114,6 +114,7 @@ export const registry: Record<string, HandlerEntry> = {
   diffusionStream: { type: 'stream', pluginOp: true, handler: pluginStream('diffusionStream') },
   audioGenStream: { type: 'stream', pluginOp: true, handler: pluginStream('audioGenStream') },
   audioEditStream: { type: 'stream', pluginOp: true, handler: pluginStream('audioEditStream') },
+  audioUnderstand: { type: 'stream', pluginOp: true, handler: pluginStream('audioUnderstand') },
   videoStream: { type: 'stream', pluginOp: true, handler: pluginStream('videoStream') },
   upscaleStream: { type: 'stream', pluginOp: true, handler: pluginStream('upscaleStream') },
   worldStepStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldStepStream') },

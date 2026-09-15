@@ -10,6 +10,8 @@ import {
   AUDIOGEN_ENGINES,
   AUDIOGEN_MAX_AUDIO_CODES,
   AUDIOGEN_REPAINT_MODES,
+  AUDIOGEN_TASK_TYPES,
+  AUDIOGEN_TRACKS,
   audioEditClientParamsSchema,
   audioEditStreamRequestSchema,
   audioEditStreamResponseSchema,
@@ -18,7 +20,11 @@ import {
   audioGenProgressSchema,
   audioGenRuntimeConfigSchema,
   audioGenStreamRequestSchema,
-  audioGenStreamResponseSchema
+  audioGenStreamResponseSchema,
+  audioGenUnderstandResultSchema,
+  audioUnderstandClientParamsSchema,
+  audioUnderstandRequestSchema,
+  audioUnderstandResponseSchema
 } from '@/schemas/audio-gen'
 import { loadModelOptionsToRequestSchema } from '@/schemas/load-model'
 import { ModelType, normalizeModelType } from '@/schemas/model-types'
@@ -675,5 +681,201 @@ test('audioGenStreamResponseSchema carries backend diagnostics on the terminal f
       diagnostics: { selectedBackend: 'vulkan', selectedDevice: 'tpu' }
     }).success,
     'selectedDevice is limited to the backend device enum'
+  )
+})
+
+// ---------------------------------------------------------------------------
+// 0.4.0 generation controls and their cross-field rules
+// ---------------------------------------------------------------------------
+
+const generationBase = { modelId: 'audiogen', caption: 'dark synthwave' }
+
+function parseGeneration(overrides: Record<string, unknown>) {
+  return audioGenClientParamsSchema.safeParse({ ...generationBase, ...overrides })
+}
+
+/** The first issue path, which is what a caller sees pointed at. */
+function issuePaths(result: ReturnType<typeof parseGeneration>) {
+  return result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'))
+}
+
+test('audioGen accepts the 0.4.0 generation controls', (t) => {
+  const parsed = audioGenClientParamsSchema.parse({
+    ...generationBase,
+    lyrics: 'a real verse',
+    simpleMode: false,
+    rewriteQuery: true,
+    generateLrc: true,
+    computeQualityScore: true,
+    normalizeLoudness: false,
+    guidanceScale: 7
+  })
+  t.is(parsed.rewriteQuery, true)
+  t.is(parsed.generateLrc, true)
+  t.is(parsed.computeQualityScore, true)
+  t.is(parsed.normalizeLoudness, false)
+  t.is(parsed.guidanceScale, 7)
+  t.absent(parseGeneration({ guidanceScale: -1 }).success, 'guidanceScale is a non-negative scale')
+})
+
+test('audioGen rejects Simple Mode combined with Query Rewriting', (t) => {
+  t.ok(parseGeneration({ simpleMode: true }).success)
+  t.ok(parseGeneration({ rewriteQuery: true }).success)
+  const both = parseGeneration({ simpleMode: true, rewriteQuery: true })
+  t.absent(both.success, 'the LM cannot both write and rewrite the lyrics')
+  t.alike(issuePaths(both), ['rewriteQuery'])
+  t.ok(
+    parseGeneration({ simpleMode: true, rewriteQuery: false }).success,
+    'an explicit false is not a conflict'
+  )
+})
+
+test('audioGen restricts the LM controls to the text2music task', (t) => {
+  for (const control of ['simpleMode', 'rewriteQuery', 'generateLrc', 'computeQualityScore']) {
+    t.ok(parseGeneration({ [control]: true }).success, `${control} on the default task`)
+    t.ok(
+      parseGeneration({ [control]: true, taskType: 'text2music' }).success,
+      `${control} on an explicit text2music`
+    )
+    const onLego = parseGeneration({ [control]: true, taskType: 'lego', track: 'drums' })
+    t.absent(onLego.success, `${control} is rejected on lego`)
+    t.alike(issuePaths(onLego), [control])
+  }
+  t.ok(
+    parseGeneration({ generateLrc: false, taskType: 'lego', track: 'drums' }).success,
+    'an unset control never blocks another task'
+  )
+})
+
+test('audioGen binds track to the lego task', (t) => {
+  t.ok(AUDIOGEN_TASK_TYPES.includes('lego'), 'lego is a published task type')
+  t.ok(parseGeneration({ taskType: 'lego', track: AUDIOGEN_TRACKS[0] }).success)
+
+  const missingTrack = parseGeneration({ taskType: 'lego' })
+  t.absent(missingTrack.success, 'lego has nothing to rebuild without a track')
+  t.alike(issuePaths(missingTrack), ['track'])
+
+  const strayTrack = parseGeneration({ track: AUDIOGEN_TRACKS[0] })
+  t.absent(strayTrack.success, 'a track outside lego is silently ignored by the engine')
+  t.alike(issuePaths(strayTrack), ['track'])
+
+  t.absent(
+    parseGeneration({ taskType: 'lego', track: 'kazoo' }).success,
+    'track is limited to the published vocabulary'
+  )
+})
+
+// ---------------------------------------------------------------------------
+// audioUnderstand
+// ---------------------------------------------------------------------------
+
+const understandResult = {
+  caption: 'downtempo synthwave',
+  bpm: 96,
+  duration: 12.5,
+  keyscale: 'F minor',
+  timesignature: '4/4',
+  vocalLanguage: 'en',
+  audioCodes: [7, -3, 2048]
+}
+
+test('audioUnderstandClientParamsSchema normalizes the source audio and LM knobs', (t) => {
+  const parsed = audioUnderstandClientParamsSchema.parse({
+    modelId: 'audiogen',
+    sourceAudio: '/tmp/song.wav',
+    seed: 11,
+    vocalLanguage: 'es',
+    lmTemperature: 0.7,
+    lmTopP: 0.85,
+    lmTopK: 40
+  })
+  t.alike(parsed.sourceAudio, { type: 'filePath', value: '/tmp/song.wav' })
+  t.is(parsed.seed, 11)
+  t.absent(
+    audioUnderstandClientParamsSchema.safeParse({ modelId: 'audiogen' }).success,
+    'sourceAudio is required'
+  )
+  t.absent(
+    audioUnderstandClientParamsSchema.safeParse({
+      modelId: 'audiogen',
+      sourceAudio: '/tmp/song.wav',
+      caption: 'not a generation'
+    }).success,
+    'generation-only options are rejected'
+  )
+})
+
+test('audioUnderstandRequestSchema is a distinct wire type', (t) => {
+  const parsed = audioUnderstandRequestSchema.parse({
+    type: 'audioUnderstand',
+    requestId: 'req-1',
+    modelId: 'audiogen',
+    sourceAudio: { type: 'filePath', value: '/tmp/song.wav' }
+  })
+  t.is(parsed.type, 'audioUnderstand')
+  t.absent(
+    audioUnderstandRequestSchema.safeParse({
+      type: 'audioGenStream',
+      modelId: 'audiogen',
+      sourceAudio: { type: 'filePath', value: '/tmp/song.wav' }
+    }).success
+  )
+})
+
+test('audioGenUnderstandResultSchema takes plain integer codes within the input bound', (t) => {
+  t.alike(audioGenUnderstandResultSchema.parse(understandResult), understandResult)
+  t.absent(
+    audioGenUnderstandResultSchema.safeParse({
+      ...understandResult,
+      audioCodes: new Int32Array([1, 2])
+    }).success,
+    'the addon Int32Array must be normalized before it reaches the wire'
+  )
+  t.absent(
+    audioGenUnderstandResultSchema.safeParse({
+      ...understandResult,
+      audioCodes: [1.5]
+    }).success,
+    'codes are integers'
+  )
+  t.absent(
+    audioGenUnderstandResultSchema.safeParse({
+      ...understandResult,
+      audioCodes: new Array(AUDIOGEN_MAX_AUDIO_CODES + 1).fill(0)
+    }).success,
+    'recovered codes are bounded like an audioCodes input'
+  )
+})
+
+test('audioUnderstandResponseSchema streams the description and repeats it on stats', (t) => {
+  const streamed = audioUnderstandResponseSchema.parse({
+    type: 'audioUnderstand',
+    understand: understandResult
+  })
+  t.is(streamed.done, false, 'done defaults to false')
+  t.alike(streamed.understand, understandResult)
+
+  const terminal = audioUnderstandResponseSchema.parse({
+    type: 'audioUnderstand',
+    done: true,
+    stopReason: 'completed',
+    stats: { audioDurationMs: 12_500, understand: understandResult },
+    diagnostics: { selectedBackend: 'cpu', selectedDevice: 'cpu' }
+  })
+  t.alike(terminal.stats?.understand, understandResult)
+  t.ok(
+    audioUnderstandResponseSchema.safeParse({
+      type: 'audioUnderstand',
+      done: true,
+      stopReason: 'cancelled'
+    }).success
+  )
+  t.absent(
+    audioUnderstandResponseSchema.safeParse({
+      type: 'audioUnderstand',
+      done: true,
+      data: 'AAECAw=='
+    }).success,
+    'the reverse pipeline never carries PCM'
   )
 })

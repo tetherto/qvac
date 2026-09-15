@@ -7,7 +7,8 @@ import {
   AUDIOGEN_INPUT_SAMPLE_RATE,
   AUDIOGEN_MAX_AUDIO_CODES,
   AUDIOGEN_REPAINT_MODES,
-  AUDIOGEN_TASK_TYPES
+  AUDIOGEN_TASK_TYPES,
+  AUDIOGEN_TRACKS
 } from '@/index'
 import * as audioGenSchemas from '@qvac/inference/surface'
 import { constantsRegistry } from '../scripts/contract/constants-registry'
@@ -18,6 +19,7 @@ import { constantsRegistry } from '../scripts/contract/constants-registry'
 test('AudioGen constants are exported from the package root', (t) => {
   t.is(AUDIOGEN_ENGINES, audioGenSchemas.AUDIOGEN_ENGINES)
   t.is(AUDIOGEN_TASK_TYPES, audioGenSchemas.AUDIOGEN_TASK_TYPES)
+  t.is(AUDIOGEN_TRACKS, audioGenSchemas.AUDIOGEN_TRACKS)
   t.is(AUDIOGEN_EDIT_OPERATIONS, audioGenSchemas.AUDIOGEN_EDIT_OPERATIONS)
   t.is(AUDIOGEN_REPAINT_MODES, audioGenSchemas.AUDIOGEN_REPAINT_MODES)
   t.is(AUDIOGEN_INPUT_SAMPLE_RATE, audioGenSchemas.AUDIOGEN_INPUT_SAMPLE_RATE)
@@ -25,7 +27,24 @@ test('AudioGen constants are exported from the package root', (t) => {
   t.is(AUDIOGEN_INPUT_MAX_SECONDS, audioGenSchemas.AUDIOGEN_INPUT_MAX_SECONDS)
   t.is(AUDIOGEN_MAX_AUDIO_CODES, audioGenSchemas.AUDIOGEN_MAX_AUDIO_CODES)
 
-  t.alike([...AUDIOGEN_TASK_TYPES], ['text2music', 'cover-nofsq'])
+  t.alike([...AUDIOGEN_TASK_TYPES], ['text2music', 'cover-nofsq', 'lego'])
+  t.alike(
+    [...AUDIOGEN_TRACKS],
+    [
+      'vocals',
+      'backing_vocals',
+      'drums',
+      'bass',
+      'guitar',
+      'keyboard',
+      'percussion',
+      'strings',
+      'synth',
+      'fx',
+      'brass',
+      'woodwinds'
+    ]
+  )
   t.alike([...AUDIOGEN_EDIT_OPERATIONS], ['flow-edit', 'repaint'])
   t.alike([...AUDIOGEN_REPAINT_MODES], ['conservative', 'balanced', 'aggressive'])
   t.is(AUDIOGEN_INPUT_SAMPLE_RATE, 48000)
@@ -41,7 +60,11 @@ test('AudioGen task types are registered for cross-language codegen', (t) => {
   t.alike(Object.values(constantsRegistry.AudioGenEngine.enum), [...AUDIOGEN_ENGINES])
   t.alike(Object.keys(constantsRegistry.AudioGenEngine.enum), ['ACESTEP', 'MINIMAX'])
   t.alike(Object.values(constantsRegistry.AudioGenTaskType.enum), [...AUDIOGEN_TASK_TYPES])
-  t.alike(Object.keys(constantsRegistry.AudioGenTaskType.enum), ['TEXT2MUSIC', 'COVER_NOFSQ'])
+  t.alike(Object.keys(constantsRegistry.AudioGenTaskType.enum), [
+    'TEXT2MUSIC',
+    'COVER_NOFSQ',
+    'LEGO'
+  ])
   t.alike(Object.values(constantsRegistry.AudioGenEditOperation.enum), [
     ...AUDIOGEN_EDIT_OPERATIONS
   ])
@@ -51,5 +74,20 @@ test('AudioGen task types are registered for cross-language codegen', (t) => {
     'CONSERVATIVE',
     'BALANCED',
     'AGGRESSIVE'
+  ])
+  t.alike(Object.values(constantsRegistry.AudioGenTrack.enum), [...AUDIOGEN_TRACKS])
+  t.alike(Object.keys(constantsRegistry.AudioGenTrack.enum), [
+    'VOCALS',
+    'BACKING_VOCALS',
+    'DRUMS',
+    'BASS',
+    'GUITAR',
+    'KEYBOARD',
+    'PERCUSSION',
+    'STRINGS',
+    'SYNTH',
+    'FX',
+    'BRASS',
+    'WOODWINDS'
   ])
 })

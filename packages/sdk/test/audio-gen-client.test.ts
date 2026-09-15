@@ -1,9 +1,15 @@
 import test from 'brittle'
-import type { AudioEditStreamRequest, AudioGenStreamRequest } from '@qvac/inference/surface'
+import type {
+  AudioEditStreamRequest,
+  AudioGenStreamRequest,
+  AudioUnderstandRequest
+} from '@qvac/inference/surface'
 import {
   createAudioEditResult,
   createAudioGenResult,
-  type AudioGenStreamFactory
+  createAudioUnderstandResult,
+  type AudioGenStreamFactory,
+  type AudioUnderstandStreamFactory
 } from '@/client/api/audio-gen-result'
 import { InvalidResponseError, RequestValidationFailedError } from '@/utils/errors-client'
 import { InferenceCancelledError } from '@/utils/errors-server'
@@ -343,4 +349,144 @@ test('audioGen client rejects a stream without a terminal frame', async (t) => {
       t.ok(outcome.reason instanceof InvalidResponseError)
     }
   }
+})
+
+// ---------------------------------------------------------------------------
+// audioUnderstand: the reverse pipeline returns a description, not PCM
+// ---------------------------------------------------------------------------
+
+const description = {
+  caption: 'downtempo synthwave',
+  bpm: 96,
+  duration: 12.5,
+  keyscale: 'F minor',
+  timesignature: '4/4',
+  vocalLanguage: 'en',
+  audioCodes: [7, -3, 2048]
+}
+
+function createUnderstandRun(
+  responses: unknown[],
+  capture?: (request: AudioUnderstandRequest) => void
+) {
+  const streamFactory: AudioUnderstandStreamFactory = function (request) {
+    capture?.(request)
+    return mockResponses(responses)
+  }
+  return createAudioUnderstandResult(
+    { modelId: 'audio-model', sourceAudio: '/tmp/song.wav', seed: 11 },
+    streamFactory
+  )
+}
+
+test('audioUnderstand client collects progress, the description, stats and requestId', async (t) => {
+  let capturedRequest: AudioUnderstandRequest | undefined
+  const run = createUnderstandRun(
+    [
+      { type: 'audioUnderstand', progress: { stage: 'lm', step: 1, total: 2 } },
+      { type: 'audioGenStream', data: 'AAE=', sampleRate: 44100, channels: 2 },
+      { type: 'audioUnderstand', understand: description },
+      {
+        type: 'audioUnderstand',
+        done: true,
+        stopReason: 'completed',
+        stats: { audioDurationMs: 12_500, understand: description },
+        diagnostics: { selectedBackend: 'cpu', selectedDevice: 'cpu' }
+      }
+    ],
+    function capture(request) {
+      capturedRequest = request
+    }
+  )
+
+  t.ok(run.requestId.length > 0, 'requestId is available synchronously')
+  const progress = await collect(run.progressStream)
+  const resolved = await run.description
+  const stats = await run.stats
+  const diagnostics = await run.diagnostics
+
+  t.is(capturedRequest?.type, 'audioUnderstand')
+  t.is(capturedRequest?.requestId, run.requestId)
+  t.alike(capturedRequest?.sourceAudio, { type: 'filePath', value: '/tmp/song.wav' })
+  t.is(capturedRequest?.seed, 11)
+
+  t.alike(progress, [{ stage: 'lm', step: 1, total: 2 }])
+  t.alike(resolved, description)
+  t.alike(stats?.understand, description)
+  t.alike(diagnostics, { selectedBackend: 'cpu', selectedDevice: 'cpu' })
+})
+
+test('audioUnderstand client falls back to the streamed description', async (t) => {
+  const run = createUnderstandRun([
+    { type: 'audioUnderstand', understand: description },
+    { type: 'audioUnderstand', done: true, stopReason: 'completed', stats: { totalTimeMs: 40 } }
+  ])
+
+  t.alike(
+    await run.description,
+    description,
+    'a terminal frame without stats.understand still settles'
+  )
+  t.is((await run.stats)?.totalTimeMs, 40)
+  t.absent(await run.diagnostics)
+})
+
+test('audioUnderstand client rejects a terminal frame carrying no description', async (t) => {
+  const run = createUnderstandRun([
+    { type: 'audioUnderstand', done: true, stopReason: 'completed', stats: { totalTimeMs: 40 } }
+  ])
+
+  const settled = await Promise.allSettled([run.description, run.stats, run.diagnostics])
+  for (const outcome of settled) {
+    t.is(outcome.status, 'rejected')
+    if (outcome.status === 'rejected') t.ok(outcome.reason instanceof InvalidResponseError)
+  }
+})
+
+test('audioUnderstand client rejects aggregates with a typed cancellation error', async (t) => {
+  const run = createUnderstandRun([
+    { type: 'audioUnderstand', progress: { stage: 'lm', step: 1, total: 2 } },
+    { type: 'audioUnderstand', done: true, stopReason: 'cancelled' }
+  ])
+
+  const progress = await collect(run.progressStream)
+  const settled = await Promise.allSettled([run.description, run.stats, run.diagnostics])
+
+  t.is(progress.length, 1)
+  for (const outcome of settled) {
+    t.is(outcome.status, 'rejected')
+    if (outcome.status === 'rejected') {
+      t.ok(outcome.reason instanceof InferenceCancelledError)
+      t.is(outcome.reason.requestId, run.requestId)
+    }
+  }
+})
+
+test('audioUnderstand client rejects a stream without a terminal frame', async (t) => {
+  const run = createUnderstandRun([{ type: 'audioUnderstand', understand: description }])
+
+  const settled = await Promise.allSettled([
+    run.description,
+    run.stats,
+    run.diagnostics,
+    collect(run.progressStream)
+  ])
+
+  for (const outcome of settled) {
+    t.is(outcome.status, 'rejected')
+    if (outcome.status === 'rejected') t.ok(outcome.reason instanceof InvalidResponseError)
+  }
+})
+
+test('audioUnderstand client rejects invalid params before opening a stream', async (t) => {
+  let opened = 0
+  const streamFactory: AudioUnderstandStreamFactory = function () {
+    opened++
+    return mockResponses([])
+  }
+  t.exception(
+    () => createAudioUnderstandResult({ modelId: '', sourceAudio: '/tmp/song.wav' }, streamFactory),
+    RequestValidationFailedError
+  )
+  t.is(opened, 0, 'no RPC stream is opened for a rejected request')
 })

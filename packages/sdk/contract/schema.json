@@ -847,6 +847,7 @@
                   "type": "string"
                 },
                 "audioCodes": {
+                  "maxItems": 3000,
                   "type": "array",
                   "items": {
                     "type": "integer",
@@ -1121,7 +1122,7 @@
           "minimum": 0
         },
         "taskType": {
-          "description": "Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+          "description": "Generation task: text2music (default), cover-nofsq (requires sourceAudio), or lego (requires track).",
           "type": "string",
           "enum": ["text2music", "cover-nofsq", "lego"],
           "title": "AudioGenStreamRequestTaskType"
@@ -1339,6 +1340,7 @@
                   "type": "string"
                 },
                 "audioCodes": {
+                  "maxItems": 3000,
                   "type": "array",
                   "items": {
                     "type": "integer",
@@ -1596,6 +1598,7 @@
               "type": "string"
             },
             "audioCodes": {
+              "maxItems": 3000,
               "type": "array",
               "items": {
                 "type": "integer",
@@ -1680,6 +1683,7 @@
                   "type": "string"
                 },
                 "audioCodes": {
+                  "maxItems": 3000,
                   "type": "array",
                   "items": {
                     "type": "integer",

@@ -374,7 +374,9 @@ const audioGenGenerationShape = {
     .describe('DCW high-frequency correction strength (official default: 0.02).'),
   taskType: audioGenTaskTypeSchema
     .optional()
-    .describe('Generation task: text2music (default) or cover-nofsq (requires sourceAudio).'),
+    .describe(
+      'Generation task: text2music (default), cover-nofsq (requires sourceAudio), or lego (requires track).'
+    ),
   audioCoverStrength: unitIntervalSchema
     .optional()
     .describe(
@@ -428,6 +430,72 @@ function validateCoverTask(
   }
 }
 
+/**
+ * `track` names the layer the `lego` task regenerates, so the two are bound
+ * together: `lego` without a layer has nothing to rebuild, and a layer without
+ * `lego` is silently ignored by the engine.
+ */
+function validateLegoTask(
+  value: { taskType?: string | undefined; track?: string | undefined },
+  ctx: z.RefinementCtx
+) {
+  if (value.taskType === 'lego' && value.track === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['track'],
+      message: "taskType 'lego' requires track"
+    })
+  }
+  if (value.track !== undefined && value.taskType !== 'lego') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['track'],
+      message: "track is only valid with taskType 'lego'"
+    })
+  }
+}
+
+/**
+ * The four LM-driven controls only run on the `text2music` path. An unset
+ * `taskType` is that path, so only an explicit other task rejects them.
+ */
+const TEXT_TO_MUSIC_ONLY_CONTROLS = [
+  'simpleMode',
+  'rewriteQuery',
+  'generateLrc',
+  'computeQualityScore'
+] as const
+
+function validateTextToMusicControls(
+  value: {
+    taskType?: string | undefined
+    simpleMode?: boolean | undefined
+    rewriteQuery?: boolean | undefined
+    generateLrc?: boolean | undefined
+    computeQualityScore?: boolean | undefined
+  },
+  ctx: z.RefinementCtx
+) {
+  if (value.simpleMode === true && value.rewriteQuery === true) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['rewriteQuery'],
+      message:
+        'simpleMode and rewriteQuery cannot be combined: Simple Mode writes the lyrics, Query Rewriting rewrites around existing ones'
+    })
+  }
+  if (value.taskType === undefined || value.taskType === 'text2music') return
+  for (const control of TEXT_TO_MUSIC_ONLY_CONTROLS) {
+    if (value[control] === true) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [control],
+        message: `${control} requires taskType 'text2music'`
+      })
+    }
+  }
+}
+
 function validateAudioGenRequest(
   value: {
     duration?: number | undefined
@@ -435,10 +503,17 @@ function validateAudioGenRequest(
     taskType?: string | undefined
     sourceAudio?: unknown
     audioCoverStrength?: number | undefined
+    track?: string | undefined
+    simpleMode?: boolean | undefined
+    rewriteQuery?: boolean | undefined
+    generateLrc?: boolean | undefined
+    computeQualityScore?: boolean | undefined
   },
   ctx: z.RefinementCtx
 ) {
   validateCoverTask(value, ctx)
+  validateLegoTask(value, ctx)
+  validateTextToMusicControls(value, ctx)
   if (value.duration !== undefined && value.maxFrames !== undefined) {
     ctx.addIssue({
       code: 'custom',
@@ -630,6 +705,7 @@ export const audioGenUnderstandResultSchema = z.object({
   vocalLanguage: z.string(),
   audioCodes: z
     .array(z.number().int().min(INT32_MIN).max(INT32_MAX))
+    .max(AUDIOGEN_MAX_AUDIO_CODES)
     .describe(
       "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
     )

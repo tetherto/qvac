@@ -120,21 +120,6 @@ async function decodeMonoFloat32(filePath: string, name: AudioGenAudioInputName)
   return asFloat32(chunks.length === 1 ? chunks[0]! : Buffer.concat(chunks as Buffer[], total))
 }
 
-/**
- * The addon's editing API requires every source sample in `[-1, 1]` (the
- * FFmpeg decode path guarantees it; raw PCM input does not). Checked here so
- * an out-of-range source fails as `InvalidAudioInputError` before the model
- * slot is taken, instead of as the addon's own rejection after admission.
- */
-export function assertNormalizedPcm(pcm: Float32Array, name: AudioGenAudioInputName): void {
-  for (let index = 0; index < pcm.length; index++) {
-    const sample = pcm[index]!
-    if (sample < -1 || sample > 1) {
-      throw new InvalidAudioInputError(`${name} must contain samples in [-1, 1] (got ${sample})`)
-    }
-  }
-}
-
 function monoToStereo(mono: Float32Array, name: AudioGenAudioInputName) {
   if (mono.length === 0) {
     throw new InvalidAudioInputError(`${name} decoded to no usable audio`)
@@ -158,8 +143,15 @@ function toStereoFloat32(bytes: Uint8Array, name: AudioGenAudioInputName) {
   }
   assertWithinLimit(bytes.byteLength, MAX_STEREO_BYTES, STEREO_FRAME_BYTES, name)
   const pcm = asFloat32(bytes)
+  // Raw PCM is the one input the FFmpeg decode path does not vet, so its two
+  // sample-level invariants are settled in this single pass: finite, and
+  // within the `[-1, 1]` range the addon requires. Doing it here means every
+  // raw entry point is covered without a second walk over the samples, which
+  // at the documented 600 s cap would be tens of millions of comparisons.
   for (let index = 0; index < pcm.length; index++) {
-    if (!Number.isFinite(pcm[index]!)) throw nonFiniteError(name)
+    const sample = pcm[index]!
+    if (!Number.isFinite(sample)) throw nonFiniteError(name)
+    if (sample < -1 || sample > 1) throw outOfRangeError(name, sample)
   }
   return pcm
 }
@@ -193,4 +185,8 @@ function assertWithinLimit(
 
 function nonFiniteError(name: AudioGenAudioInputName) {
   return new InvalidAudioInputError(`${name} must contain only finite samples`)
+}
+
+function outOfRangeError(name: AudioGenAudioInputName, sample: number) {
+  return new InvalidAudioInputError(`${name} must contain samples in [-1, 1] (got ${sample})`)
 }

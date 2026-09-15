@@ -107,6 +107,7 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   })
 
   let response: AudioGenRunResponse | undefined
+  let streamedUnderstand: AudioGenUnderstandResult | undefined
   try {
     response = await options.start(model, ctx, logger)
     if (response !== undefined) {
@@ -121,9 +122,12 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
         // `understand()` reports a description instead of audio; generation
         // and editing never produce this item.
         if ('understand' in chunk) {
+          // The engine repeats this result on the terminal stats, so the
+          // converted form is kept rather than rebuilt from the raw codes.
+          streamedUnderstand = toUnderstandResult(chunk.understand)
           yield {
             type,
-            understand: toUnderstandResult(chunk.understand),
+            understand: streamedUnderstand,
             done: false
           } as AudioGenRunFrame<TType>
           continue
@@ -158,10 +162,13 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   const raw = await response.await()
   // `understand.audioCodes` arrives as an Int32Array, which the wire schema —
   // and anything downstream of JSON — needs as a plain array of integers.
-  const stats = audioGenStatsSchema.parse(
-    raw.understand ? { ...raw, understand: toUnderstandResult(raw.understand) } : raw
-  )
-  const diagnostics = buildBackendDiagnostics(audiogenStats.parse(raw))
+  // Both parses below read the normalized object: handing the raw one to
+  // either schema fails its `z.array` check on the typed array.
+  const normalized = raw.understand
+    ? { ...raw, understand: streamedUnderstand ?? toUnderstandResult(raw.understand) }
+    : raw
+  const stats = audioGenStatsSchema.parse(normalized)
+  const diagnostics = buildBackendDiagnostics(audiogenStats.parse(normalized))
   const terminal = {
     type,
     done: true,

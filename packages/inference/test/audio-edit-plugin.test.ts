@@ -10,7 +10,6 @@ import type {
   RepaintOptions
 } from '@qvac/audiogen-ggml'
 import { audioEditStream } from '@/plugins/builtin/audiogen-ggml/ops/audio-edit-stream'
-import { assertNormalizedPcm } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/index'
 import { ModelType } from '@/schemas/index'
@@ -382,13 +381,4 @@ test('audioEdit plugin operation hard-cancels and frees its registry entry', asy
   t.is(cancelCalls, 1)
   t.ok((await stream.next()).done)
   t.is(getRequestRegistry().get(requestId), null)
-})
-
-test('assertNormalizedPcm accepts the closed [-1, 1] range and rejects anything outside', (t) => {
-  t.execution(() => assertNormalizedPcm(new Float32Array([-1, 1, 0, 0.5]), 'sourceAudio'))
-  t.exception(
-    () => assertNormalizedPcm(new Float32Array([0, 1.0001]), 'sourceAudio'),
-    /sourceAudio must contain samples in \[-1, 1\]/
-  )
-  t.exception(() => assertNormalizedPcm(new Float32Array([-1.5, 0]), 'sourceAudio'), /\[-1, 1\]/)
 })

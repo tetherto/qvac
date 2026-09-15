@@ -530,6 +530,7 @@ class AudioEditStreamResponseStatsUnderstand(GeneratedBaseModel):
         Field(
             alias="audioCodes",
             description="FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input.",
+            max_length=3000,
         ),
     ]
 
@@ -926,7 +927,7 @@ class AudioGenStreamRequest(GeneratedBaseModel):
         AudioGenStreamRequestTaskType | None,
         Field(
             alias="taskType",
-            description="Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+            description="Generation task: text2music (default), cover-nofsq (requires sourceAudio), or lego (requires track).",
             title="AudioGenStreamRequestTaskType",
         ),
     ] = None
@@ -1020,6 +1021,7 @@ class AudioGenStreamResponseStatsUnderstand(GeneratedBaseModel):
         Field(
             alias="audioCodes",
             description="FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input.",
+            max_length=3000,
         ),
     ]
 
@@ -1293,6 +1295,7 @@ class AudioUnderstandResponseUnderstand(GeneratedBaseModel):
         Field(
             alias="audioCodes",
             description="FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input.",
+            max_length=3000,
         ),
     ]
 
@@ -1322,6 +1325,7 @@ class AudioUnderstandResponseStatsUnderstand(GeneratedBaseModel):
         Field(
             alias="audioCodes",
             description="FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input.",
+            max_length=3000,
         ),
     ]
 

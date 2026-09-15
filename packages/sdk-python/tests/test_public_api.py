@@ -69,6 +69,7 @@ def test_js_client_api_capabilities_have_python_equivalents():
     js_to_python = {
         "audioGen": "audio_gen_stream",
         "audioEdit": "audio_edit_stream",
+        "audioUnderstand": "audio_understand",
         "batchCompletion": "batch_completion_stream",
         "completion": "completion",
         "deleteCache": "delete_cache",
