@@ -107,7 +107,8 @@
           "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "asr-ggml",
-          "testGateMode": "post-publish-integration"
+          "testGateMode": "post-publish-integration",
+          "slicePlatformPackages": true
         }
       }
     }

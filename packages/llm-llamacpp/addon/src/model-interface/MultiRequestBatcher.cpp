@@ -177,6 +177,10 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
   if (seqId >= slots_.size() || slots_[seqId].has_value()) {
     return AddStatus::ErrNoFreeSlot;
   }
+  // Belt and braces: every release path already zeroes this, so a fresh
+  // occupant can never inherit one. Zeroing on admission too means the
+  // invariant holds even if a future release path forgets.
+  releaseBudget(seqId);
   slots_[seqId].emplace(
       seqId, std::move(plan), maxTokensPerSequence_, initialPos);
   return AddStatus::Ok;
@@ -192,8 +196,12 @@ std::optional<uint32_t> MultiRequestBatcher::firstFreeSeqId() const {
 }
 
 MultiRequestBatcher::FillResult
-MultiRequestBatcher::getChunkSizeForActiveSeqs(const LlamaBatch& batch) const {
-  unsigned chunkSize = maxChunkSize_;
+MultiRequestBatcher::planChunksForActiveSeqs(const LlamaBatch& batch) {
+  std::ranges::fill(chunkSizes_, 0u);
+
+  // Reused across steps (capacity reserved once in the ctor) so the planner
+  // does not allocate on the per-decode-step hot path.
+  unbudgeted_.clear();
   unsigned numActive = 0;
   unsigned numPrefilling = 0;
   for (const auto& slot :
@@ -202,26 +210,89 @@ MultiRequestBatcher::getChunkSizeForActiveSeqs(const LlamaBatch& batch) const {
     if (slot->isPrefillPending()) {
       numPrefilling++;
     }
-    // Global min: a generating slot (remainingToFeed()==1) throttles
-    // concurrent prefills to 1 token/step. Deliberate tradeoff: keeps the
-    // chunk global and fillBatch/advance simple, while all active slots
-    // still advance in parallel every step (continuous batching).
-    chunkSize = std::min(chunkSize, slot->remainingToFeed());
+    unbudgeted_.push_back(slot->seqId);
   }
   if (numActive == 0) {
-    return {.chunkSize = 0, .numActiveSequences = 0};
+    return {};
   }
 
-  // LlamaBatch has a total capacity (for all sequences),
-  // make sure we do not exceed it and cause a crash.
-  const unsigned perSeqCap =
-      static_cast<unsigned>(batch.capacity()) / numActive;
-  chunkSize = std::min(chunkSize, perSeqCap);
+  // LlamaBatch has a total capacity (for all sequences), make sure we do not
+  // exceed it and cause a crash. Every active slot must get at least one
+  // token or none does: a partial step would starve an arbitrary subset.
+  const auto capacity = static_cast<unsigned>(batch.capacity());
+  if (capacity < numActive) {
+    return {
+        .numActiveSequences = numActive,
+        .numPrefillingSequences = numPrefilling};
+  }
 
-  return {
-      .chunkSize = chunkSize,
-      .numActiveSequences = numActive,
-      .numPrefillingSequences = numPrefilling};
+  // Per-slot budgets, water-filled. Each slot wants
+  // min(maxChunkSize_, remainingToFeed()) — exactly 1 for a generating slot,
+  // up to a full micro-batch for one still feeding its prompt. Slots whose
+  // want fits the current equal share are granted it outright and their
+  // surplus is redistributed; once every survivor wants more than the share,
+  // the rest is split evenly. Budgeting per slot rather than taking a global
+  // min is what keeps a generating slot (want == 1) from throttling a
+  // concurrent prefill to one token per decode step.
+  //
+  // The tradeoff this replaces the old global-min clamp with: a step's token
+  // count is no longer bounded by (smallest remaining x numActive) but by
+  // batch capacity, so a step taken while a large prefill is co-resident can
+  // carry far more tokens than one taken between generating slots alone. A
+  // generating slot is served first in the *budget* (want == 1 always fits),
+  // but its token still rides the same llama_decode() call as that prefill,
+  // so its inter-token latency rises with the step. That is the intended
+  // exchange - much lower TTFT and higher aggregate throughput for a larger
+  // spread in per-token latency while prefill and generation overlap - but
+  // it is a real behaviour change, not a free win.
+  unsigned remaining = capacity;
+  while (!unbudgeted_.empty()) {
+    // `remaining >= unbudgeted_.size()` is an invariant of this loop, so the
+    // share is always at least one token and every slot makes progress.
+    const unsigned share =
+        remaining / static_cast<unsigned>(unbudgeted_.size());
+    bool grantedAny = false;
+    // Order within `unbudgeted_` is irrelevant, so a granted slot is removed
+    // by swapping the back element into its place - O(1) instead of the O(n)
+    // shift a vector::erase() from the middle would cost. Every element is
+    // still examined exactly once per round: the swapped-in element lands at
+    // the current index, which is not advanced.
+    for (size_t i = 0; i < unbudgeted_.size();) {
+      const uint32_t seqId = unbudgeted_[i];
+      const unsigned want =
+          std::min(maxChunkSize_, slots_[seqId]->remainingToFeed());
+      if (want > share) {
+        i++;
+        continue;
+      }
+      chunkSizes_[seqId] = want;
+      remaining -= want;
+      unbudgeted_[i] = unbudgeted_.back();
+      unbudgeted_.pop_back();
+      grantedAny = true;
+    }
+    if (!grantedAny) {
+      for (const uint32_t seqId : unbudgeted_) {
+        chunkSizes_[seqId] = share;
+        remaining -= share;
+      }
+      unbudgeted_.clear();
+    }
+  }
+
+  FillResult result{
+      .numActiveSequences = numActive, .numPrefillingSequences = numPrefilling};
+  for (const auto& slot :
+       slots_ | views::filter(Request::isOptHasTokensToFeed)) {
+    const unsigned granted = chunkSizes_[slot->seqId];
+    result.totalTokens += granted;
+    if (slot->isPrefillPending()) {
+      result.prefillTokens += granted;
+    } else {
+      result.decodeTokens += granted;
+    }
+  }
+  return result;
 }
 
 MultiRequestBatcher::FillResult
@@ -231,17 +302,21 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
 
   std::ranges::fill(lastLogitIndices_, -1);
 
-  const FillResult bState = getChunkSizeForActiveSeqs(batch);
-  if (bState.chunkSize == 0) {
+  const FillResult bState = planChunksForActiveSeqs(batch);
+  // planChunksForActiveSeqs() zeroed every budget, so a fill that grants
+  // nothing also clears any budget an earlier step left outstanding.
+  budgetsPending_ = bState.totalTokens > 0;
+  if (bState.totalTokens == 0) {
     return bState;
   }
 
   unsigned batchIdx = 0;
-  const llama_pos chunk = static_cast<llama_pos>(bState.chunkSize);
 
   for (auto& slot : slots_ | views::filter(Request::isOptHasTokensToFeed)) {
     Request& req = *slot;
-    const bool wantLogitsOnLast = req.chunkConsumesAllUnfed(bState.chunkSize);
+    const unsigned granted = chunkSizes_[req.seqId];
+    const auto chunk = static_cast<llama_pos>(granted);
+    const bool wantLogitsOnLast = req.chunkConsumesAllUnfed(granted);
 
     for (llama_pos i = 0; i < chunk; i++) {
       const int idx = static_cast<int>(batchIdx);
@@ -290,11 +365,24 @@ void advanceReqPrefill(
 }
 } // namespace
 
-void MultiRequestBatcher::advance(
-    unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete) {
-  const llama_pos chunk = static_cast<llama_pos>(chunkSize);
+void MultiRequestBatcher::advance(const PrefillCompleteFn& onPrefillComplete) {
+  // Committing is one-shot. Without this, a second advance() with no
+  // fillBatch() between would re-apply the same budgets with nothing
+  // decoded, running currentPos ahead of the KV cache — a desync that
+  // reaches syncPosition() and any persisted session cache, silently.
+  if (!budgetsPending_) {
+    return;
+  }
+  budgetsPending_ = false;
+
   for (auto& slot : slots_ | views::filter(Request::isOptHasTokensToFeed)) {
     Request& req = *slot;
+    // Exactly what the last fillBatch() fed this slot. A slot that was
+    // granted nothing (batch too small for the active set) is skipped.
+    const auto chunk = static_cast<llama_pos>(chunkSizes_[req.seqId]);
+    if (chunk == 0) {
+      continue;
+    }
     req.currentPos += chunk;
     if (req.exceededLimit() && req.stopReason == StopReason::None) {
       req.stopReason = StopReason::ContextOverflow;
@@ -391,6 +479,10 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
   }
 }
 
+unsigned MultiRequestBatcher::chunkSizeFor(uint32_t seqId) const noexcept {
+  return seqId < chunkSizes_.size() ? chunkSizes_[seqId] : 0u;
+}
+
 bool MultiRequestBatcher::isValid(uint32_t seqId) const noexcept {
   return seqId < slots_.size() && slots_[seqId].has_value();
 }
@@ -416,9 +508,16 @@ void MultiRequestBatcher::markAllFinished(StopReason reason) {
   }
 }
 
+void MultiRequestBatcher::releaseBudget(uint32_t seqId) noexcept {
+  if (seqId < chunkSizes_.size()) {
+    chunkSizes_[seqId] = 0u;
+  }
+}
+
 std::vector<Request> MultiRequestBatcher::extractFinished() {
   std::vector<Request> finished;
   for (auto& slot : slots_ | views::filter(Request::isOptFinished)) {
+    releaseBudget(slot->seqId);
     finished.push_back(std::move(*slot));
     slot.reset();
   }
@@ -431,6 +530,7 @@ bool MultiRequestBatcher::cancel(uint32_t seqId, const KvClearFn& kvClear) {
     if (kvClear) {
       kvClear(seqId);
     }
+    releaseBudget(seqId);
     slots_[seqId].reset();
   }
   return valid;
@@ -442,6 +542,7 @@ void MultiRequestBatcher::clear(const KvClearFn& kvClear) {
       if (kvClear) {
         kvClear(static_cast<uint32_t>(i));
       }
+      releaseBudget(static_cast<uint32_t>(i));
       slots_[i].reset();
     }
   }
