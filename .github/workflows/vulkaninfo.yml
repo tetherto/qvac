@@ -13,7 +13,9 @@ jobs:
     needs: runner_names
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 5
-    permissions: {}
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -47,3 +49,26 @@ jobs:
               else:
                   print("unavailable", flush=True)
           '
+
+      - name: Checkout transfer probe only
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          sparse-checkout: .github/scripts/streaming-transfer-probe.py
+          sparse-checkout-cone-mode: false
+          path: qvac25129-probe
+          persist-credentials: false
+
+      - name: Download validated Linux prebuild
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuild-diffusion-cpp-linux-x64
+          run-id: 35019957779
+          repository: tetherto/qvac
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/qvac25129-transfer-${{ github.run_id }}
+
+      - name: Measure synthetic parameter transfers
+        shell: bash
+        env:
+          PROBE_PREBUILD: ${{ runner.temp }}/qvac25129-transfer-${{ github.run_id }}
+        run: timeout 180s python3 qvac25129-probe/.github/scripts/streaming-transfer-probe.py "$PROBE_PREBUILD"
