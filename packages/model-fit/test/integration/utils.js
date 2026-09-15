@@ -37,22 +37,25 @@ const TRANSIENT_ERROR_CODES = new Set([
 // at build time. Same reason embed-llamacpp/test/integration/utils.js does it
 // this way.
 const MANIFEST_NAME = 'test/integration/models.manifest.json'
+const DEFAULT_MODEL_NAME = 'stories260K.gguf'
+let _defaultModel
 
+// Resolved by name, and only when something actually asks for the default.
+// Both test files require this module at their top, so doing the lookup at
+// module load would let a manifest problem fail the whole suite at import --
+// including the runs that set FIT_MODEL_PATH and never download anything. By
+// name rather than "the only entry", so adding a second model to the manifest
+// stays a no-op here.
 function loadDefaultModel() {
+  if (_defaultModel !== undefined) return _defaultModel
   const manifest = require('./models.manifest.json')
-  const names = Object.keys((manifest && manifest.models) || {})
-  if (names.length !== 1) {
-    throw new Error(
-      `Expected exactly one model in ${MANIFEST_NAME}, found ${names.length}. ` +
-        'Pass an explicit model to ensureModelPath() if the set has grown.'
-    )
+  const entry = ((manifest && manifest.models) || {})[DEFAULT_MODEL_NAME]
+  if (!entry) {
+    throw new Error(`"${DEFAULT_MODEL_NAME}" is missing from ${MANIFEST_NAME}`)
   }
-  const [modelName] = names
-  const { urls, bytes } = manifest.models[modelName]
-  return { modelName, downloadUrl: urls, bytes }
+  _defaultModel = { modelName: DEFAULT_MODEL_NAME, downloadUrl: entry.urls, bytes: entry.bytes }
+  return _defaultModel
 }
-
-const DEFAULT_MODEL = loadDefaultModel()
 
 function isTransientError(err) {
   if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
@@ -215,7 +218,8 @@ async function downloadFileWithRetries(urls, dest, opts = {}) {
  * its absolute path. Honours FIT_MODEL_PATH as an override for local runs.
  * @returns {Promise<string>} absolute path to a GGUF file
  */
-async function ensureModelPath({ modelName, downloadUrl, bytes } = DEFAULT_MODEL) {
+async function ensureModelPath(model) {
+  const { modelName, downloadUrl, bytes } = model || loadDefaultModel()
   const modelDir = path.resolve(__dirname, '../model')
   const modelPath = path.join(modelDir, modelName)
 
@@ -226,7 +230,9 @@ async function ensureModelPath({ modelName, downloadUrl, bytes } = DEFAULT_MODEL
     const size = fs.statSync(modelPath).size
     if (bytes ? size === bytes : size > 0) return modelPath
     console.log(
-      `[download] Discarding ${modelName}: ${size} bytes on disk, manifest declares ${bytes}`
+      bytes
+        ? `[download] Discarding ${modelName}: ${size} bytes on disk, manifest declares ${bytes}`
+        : `[download] Discarding empty ${modelName}`
     )
     fs.unlinkSync(modelPath)
   }
@@ -234,13 +240,27 @@ async function ensureModelPath({ modelName, downloadUrl, bytes } = DEFAULT_MODEL
   fs.mkdirSync(modelDir, { recursive: true })
   console.log(`[download] Downloading test model: ${modelName}...`)
   await downloadFileWithRetries(downloadUrl, modelPath, bytes ? { minBytes: bytes } : {})
+
+  // minBytes only rejects a SHORT read, and it retries, because that is what a
+  // truncated transfer deserves. An over-long body is a different animal -- a
+  // moved revision, an interstitial page -- and retrying cannot fix it. Without
+  // this it would be renamed into place, returned, then rejected by the size
+  // gate above on the next call, so the suite would quietly re-download it once
+  // per test instead of failing once.
   const stat = fs.statSync(modelPath)
+  if (bytes && stat.size !== bytes) {
+    fs.unlinkSync(modelPath)
+    throw new Error(
+      `${modelName} downloaded as ${stat.size} bytes, but ${MANIFEST_NAME} declares ${bytes}.`
+    )
+  }
   console.log(`[download] Model ready: ${(stat.size / 1024 / 1024).toFixed(2)}MB`)
   return modelPath
 }
 
 module.exports = {
-  DEFAULT_MODEL,
+  DEFAULT_MODEL_NAME,
+  loadDefaultModel,
   downloadFile: downloadFileWithRetries,
   ensureModelPath
 }

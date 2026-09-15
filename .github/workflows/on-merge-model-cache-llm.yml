@@ -20,6 +20,9 @@ on:
       # entry unrestorable without the manifest changing at all. A run that
       # finds nothing moved costs seconds: the probe answers from a lookup.
       - ".github/actions/cache-models/**"
+      # And this file. A commit that fixes the seed itself -- a corrected
+      # cache-key-suffix, say -- would otherwise sit dormant until the cron.
+      - ".github/workflows/on-merge-model-cache-llm.yml"
   # Longest gap must stay under the cache server's five-day prune window.
   schedule:
     - cron: "17 4 * * 1,4"
@@ -83,6 +86,13 @@ jobs:
   # seed job's post-steps, after every step there has finished.
   verify:
     needs: [runner_names, seed]
+    # Not the default `success()`. The seed matrices are fail-fast: false, so one
+    # leg failing for an unrelated reason would skip this job outright -- and the
+    # silent write failure it exists to catch would go unreported on every other
+    # leg. Each leg asserts its own entry, so a genuinely failed seed leg just
+    # fails here too. runner_names is still required: without its outputs there
+    # is no runs-on.
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' }}
     # No id-token: nothing here talks to AWS; the lookup needs the
     # repository and nothing else.
     permissions:
