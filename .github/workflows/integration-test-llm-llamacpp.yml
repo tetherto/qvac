@@ -180,35 +180,18 @@ jobs:
       - name: Install bare tooling
         run: npm install -g --force bare bare-make bare-runtime bare-https brittle
 
-      - name: Download prebuilds (from artifacts)
+      # Shared placement action: handles the Windows path hazard where Git Bash
+      # mangles runner.temp ("C:\a\_temp") and the copy silently no-ops.
+      - name: Materialize prebuilds
         if: ${{ !inputs.prebuild_package }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: ./.github/actions/prebuild-artifact-materialize
         with:
-          path: ${{ runner.temp }}/prebuilds-staging
-          merge-multiple: true
-
-      - name: Move prebuilds from staging to workspace (Unix)
-        if: ${{ !inputs.prebuild_package && matrix.platform != 'win32' }}
-        shell: bash
-        run: |
-          mkdir -p ${{ env.WORKDIR }}/prebuilds
-          cp -r ${{ runner.temp }}/prebuilds-staging/* ${{ env.WORKDIR }}/prebuilds/
-          echo "Prebuilds moved from staging area"
-          ls -la ${{ env.WORKDIR }}/prebuilds/
-
-      # Windows path: bash cp -r mangles `${{ runner.temp }}` (= "C:\a\_temp")
-      # because Git Bash interprets `\a`/`\_` as escape sequences, so the
-      # source path becomes invalid and the copy silently no-ops. Use
-      # PowerShell Copy-Item with native Windows paths.
-      - name: Move prebuilds from staging to workspace (Windows)
-        if: ${{ !inputs.prebuild_package && matrix.platform == 'win32' }}
-        shell: powershell
-        run: |
-          $dst = "${{ env.WORKDIR }}/prebuilds"
-          New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          Copy-Item -Recurse -Force "${{ runner.temp }}\prebuilds-staging\*" $dst
-          Write-Host "Prebuilds moved from staging area"
-          Get-ChildItem -Recurse $dst | Select-Object FullName | Format-Table -AutoSize
+          workdir: ${{ env.WORKDIR }}
+          package: llm-llamacpp
+          # Stage only this platform's dir (like the generic leaf); avoids the
+          # action rejecting any non-<platform>-<arch> dir in the full bundle.
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
 
       - name: Download prebuilds from package (Linux/macOS)
         if: ${{ inputs.prebuild_package && matrix.platform != 'win32' }}
@@ -349,6 +332,22 @@ jobs:
           QASE_API_TOKEN: ${{ secrets.QASE_API_TOKEN }}
           QVAC_PERF_RUNS: ${{ inputs.qvac_perf_runs }}
           QVAC_PERF_WARMUP_RUNS: ${{ inputs.qvac_perf_warmup_runs }}
+
+      # Stamp the device grouping label so the two ubuntu 22/24 GPU legs collapse
+      # into one <platform>-<arch> column; done at source so combine needs no llm fold.
+      - name: Stamp device grouping label
+        if: ${{ always() && !cancelled() }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        # node, not jq: Windows Git Bash has no jq ("command not found"), which
+        # failed the win32 leg. node is present on every runner.
+        env:
+          DEVICE_NAME: ${{ matrix.platform }}-${{ matrix.arch }}
+        run: |
+          f=test/results/performance-report.json
+          if [ -f "$f" ]; then
+            node -e 'const fs=require("fs");const p="test/results/performance-report.json";const j=JSON.parse(fs.readFileSync(p,"utf8"));j.device=j.device||{};j.device.name=process.env.DEVICE_NAME;fs.writeFileSync(p,JSON.stringify(j,null,2))'
+          fi
 
       - name: Generate HTML performance report
         if: ${{ always() && !cancelled() }}
