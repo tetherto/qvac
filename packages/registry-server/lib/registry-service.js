@@ -33,6 +33,7 @@ const { QVAC_MAIN_REGISTRY } = schema
 const { getFileMetadata } = require('../utils/file-metadata')
 const { parseCanonicalSource, resolveS3Bucket } = require('./source-helpers')
 const { isGGUFSource, isFirstShard, extractGGUFMetadata } = require('./gguf-helpers')
+const { writeFitBlob } = require('./fit-blob')
 const { addModelRequestSchema } = require('./model-schema')
 const { ZodError } = require('zod')
 
@@ -888,6 +889,7 @@ class RegistryService extends ReadyResource {
 
       const { blobs, core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
       const pointer = await this._uploadFileToHyperblobs(blobs, localPath)
+      const fitBlob = await this._uploadFitBlob(blobs, localPath, outputDir)
 
       await this._mirrorBlobCore(core)
 
@@ -897,7 +899,8 @@ class RegistryService extends ReadyResource {
         metadata,
         pointer,
         core.key,
-        ggufMetadata
+        ggufMetadata,
+        fitBlob
       )
 
       await this._appendOperation(DISPATCH_PUT_MODEL, modelData)
@@ -1315,7 +1318,33 @@ class RegistryService extends ReadyResource {
     return writeStream.id
   }
 
-  _buildModelEntry(request, sourceInfo, metadata, pointer, blobsCoreKey, ggufMetadata = null) {
+  async _uploadFitBlob(blobs, localPath, outputDir) {
+    const fitBlob = await writeFitBlob(localPath, outputDir)
+    if (!fitBlob) {
+      return null
+    }
+
+    try {
+      const pointer = await this._uploadFileToHyperblobs(blobs, fitBlob.path)
+      return { pointer, size: fitBlob.size, sha256: fitBlob.sha256 }
+    } catch (err) {
+      this.logger.warn(
+        { path: localPath, error: err.message },
+        'Failed to upload fit blob; model is added without one'
+      )
+      return null
+    }
+  }
+
+  _buildModelEntry(
+    request,
+    sourceInfo,
+    metadata,
+    pointer,
+    blobsCoreKey,
+    ggufMetadata = null,
+    fitBlob = null
+  ) {
     const tags = Array.isArray(request.tags) ? request.tags.filter(Boolean) : []
 
     const entry = {
@@ -1340,6 +1369,17 @@ class RegistryService extends ReadyResource {
 
     if (ggufMetadata) {
       entry.ggufMetadata = JSON.stringify(ggufMetadata)
+    }
+
+    if (fitBlob) {
+      entry.fitBlobBinding = {
+        coreKey: blobsCoreKey,
+        blockOffset: fitBlob.pointer.blockOffset,
+        blockLength: fitBlob.pointer.blockLength,
+        byteOffset: fitBlob.pointer.byteOffset,
+        byteLength: fitBlob.pointer.byteLength,
+        sha256: fitBlob.sha256
+      }
     }
 
     if (request.deprecated !== undefined) {
