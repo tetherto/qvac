@@ -316,12 +316,21 @@ test('a decided verdict carries its per-device memory projection', async functio
   const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
 
   t.not(res.status, FIT_STATUS.ERROR, 'fixture yields a decided verdict')
-  t.ok(Array.isArray(res.projection), 'projection is present on a decided verdict')
-  t.ok(res.projection.length >= 1, 'projection has at least the host row')
 
-  const host = res.projection[res.projection.length - 1]
+  const projection = Array.isArray(res.projection) ? res.projection : []
+  t.ok(Array.isArray(res.projection), 'projection is present on a decided verdict')
+  t.ok(projection.length >= 1, 'projection has at least the host row')
+
+  // Absent or empty is a documented outcome (a failed probe, an older runner),
+  // so stop before dereferencing rows: that reports one failed assertion
+  // instead of a TypeError that takes the rest of the file down with it.
+  if (projection.length === 0) {
+    return
+  }
+
+  const host = projection[projection.length - 1]
   t.is(host.name, 'host', 'the trailing row is the host')
-  for (const row of res.projection) {
+  for (const row of projection) {
     t.ok(typeof row.name === 'string' && row.name.length > 0, 'row is named')
     for (const key of [
       'totalBytes',
@@ -342,7 +351,7 @@ test('a decided verdict carries its per-device memory projection', async functio
   }
 
   // Describes this load, not a machine snapshot: the weight bytes must land somewhere.
-  const projectedModelBytes = res.projection.reduce((sum, row) => sum + row.modelBytes, 0)
+  const projectedModelBytes = projection.reduce((sum, row) => sum + row.modelBytes, 0)
   t.ok(projectedModelBytes > 0, 'the model bytes were projected onto some row')
 })
 
