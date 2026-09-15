@@ -93,6 +93,14 @@ jobs:
           .github/scripts/test/publish-gpr-skip-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
           .github/scripts/test/await-ts-checks.test.mjs
+          .github/scripts/test/model-cache-sync.test.mjs
+
+      # Guards the model-cache seeding scheme: a seed writing a key no consumer
+      # asks for is silent otherwise -- the seed saves, and its verify job
+      # asserts that same stale key, so nothing goes red while every PR leg
+      # misses.
+      - name: Validate model cache seed/consumer sync
+        run: node .github/scripts/validate-model-cache-sync.mjs
 
       # Pins which registry the mobile prebuild fallback resolves. The
       # @tetherto/<addon>-mono path is how an unmerged NATIVE change reaches a

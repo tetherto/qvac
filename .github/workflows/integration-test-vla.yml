@@ -370,77 +370,21 @@ jobs:
         with:
           package: vla-ggml
           paths: packages/vla-ggml/model/vla
-          hash-files-glob: .github/workflows/integration-test-vla.yml
+          # Keyed on the composite that defines the model set, not on this
+          # workflow file, so unrelated edits here stop churning the key.
+          hash-files-glob: .github/actions/download-vla-models/action.yml
 
-      - name: Download SmolVLA model from S3
-        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && steps.model-cache.outputs.cache-hit != 'true' }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          echo "Downloading SmolVLA LIBERO model from S3..."
-          mkdir -p model/vla
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/smolvla-libero/2026-04-30/smolvla-libero-vision-q8.gguf" model/vla/smolvla-libero-vision-q8.gguf
-          echo "SmolVLA model files:"
-          ls -la model/vla/
-
-      # π₀.₅ test artefacts (gguf + parity-oracle fixture + activations).
-      # Same Apple-Paravirtual exclusion as smolvla — pi05_base.gguf is
-      # 6.3 GB at F16/Q8 mix and the model needs ~12 GB RAM to run in
-      # float32; the macOS-13 intel runners can't host either.
-      #
-      # No `|| true`. If any of the three artefacts is missing the
-      # download step fails loudly and the integration-tests job goes
-      # red. A skipped pi05 e2e test under a green CI is a false-
-      # positive pass — we'd rather see the workflow fail when the
-      # assets are out of sync.
-      - name: Download π₀.₅ test artefacts from S3
+      # Shared with on-merge-model-cache-vla.yml so the seeded cache and the set
+      # the tests need cannot drift. SmolVLA is skipped on a cache hit; pi05 and
+      # GR00T are always fetched, because the cache covers model/vla but not the
+      # oracle directories under test/.
+      - name: Download VLA models from S3
         if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Downloading π₀.₅ test artefacts from S3..."
-          mkdir -p model/vla/pi05 test/pi05-oracle
-          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/pi05-base/2026-05-21"
-          # Default shipping quant is `q_aggressive` (Q5_0 vision + Q8_0 VLM
-          # + Q8_0 expert + F32 norms/ada; ~3.9 GB; cos=0.9996 vs PT in the
-          # 2026-05-21 sweep, both plan §5 bars clear). See
-          # README-pi05-converter.md for the full quant table + sweep.
-          aws s3 cp "$S3_BASE/pi05-base-q-aggressive.gguf"  model/vla/pi05/pi05-base-q-aggressive.gguf
-          aws s3 cp "$S3_BASE/fixture.safetensors"           test/pi05-oracle/fixture.safetensors
-          aws s3 cp "$S3_BASE/activations.safetensors"       test/pi05-oracle/activations.safetensors
-          echo "π₀.₅ asset state after download:"
-          ls -la model/vla/pi05/ test/pi05-oracle/
-
-      # GR00T N1.7-3B test artefacts (quantized gguf + parity-oracle activations).
-      # Same Apple-Paravirtual exclusion as smolvla/pi05 — the shipped
-      # groot-q8_vf16.gguf is ~3.76 GB (Q8_0 text/DiT/vlfusion/head, vision tower
-      # kept F16; see the quantization note in the converter README) and the
-      # model needs well over the macOS-13 intel runner's ~1 GB Paravirtual GPU
-      # budget to run.
-      #
-      # NOTE: the JS integration test is a PLUMBING gate (finite/shape/timing),
-      # not a PyTorch-parity test — the JS path dumps no reference actions, so it
-      # reads only the patchified images + state + noise + visual-pos-masks from
-      # activations_v4. (v4 is a superset of the old v3: it adds a backbone_input
-      # hook with input_ids/attention_mask that the C++ infer-parity gtest uses;
-      # one oracle file now serves both.)
-      #
-      # No `|| true`: a missing artefact fails the step loudly (a silently
-      # skipped groot e2e under a green CI would be a false-positive pass).
-      - name: Download GR00T test artefacts from S3
-        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Downloading GR00T test artefacts from S3..."
-          mkdir -p model/vla/groot test/groot-oracle
-          S3_ROOT="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla"
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf"           model/vla/groot/groot-q8_vf16.gguf
-          aws s3 cp "$S3_ROOT/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors"  test/groot-oracle/activations_v4.safetensors
-          echo "GR00T asset state after download:"
-          ls -la model/vla/groot/ test/groot-oracle/
+        uses: ./.github/actions/download-vla-models
+        with:
+          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          workdir: ${{ env.WORKDIR }}
+          download-smolvla: ${{ steps.model-cache.outputs.cache-hit != 'true' }}
 
       # The prebuilt Windows addon links against ggml-vulkan.dll, which itself
       # depends on the Vulkan loader (vulkan-1.dll). The qvac-win25-x64-gpu

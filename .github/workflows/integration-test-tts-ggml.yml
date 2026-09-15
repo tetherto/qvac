@@ -264,6 +264,17 @@ jobs:
         name: Pin ggml Vulkan to the NVIDIA GPU on Windows
         run: echo "GGML_VK_VISIBLE_DEVICES=1" >> $Env:GITHUB_ENV
 
+      # NOT seeded by an on-merge workflow, deliberately. packages/tts-ggml/models
+      # is one directory but two populations: the registry GGUFs that
+      # download-tts-ggml-models.js stages, and six further sets the tests stage
+      # at runtime through test/utils/downloadModel.js (lavasr, cosyvoice and its
+      # clone set, mecab-ipadic, the Cangjie TSV, whisper ggml-medium). A seed
+      # covering only the first would hand every leg an exact primary-key hit,
+      # actions/cache would skip its save, and the second population could never
+      # enter the entry -- re-fetched on every leg of every run, where today a
+      # same-repo PR's save grows the directory. Seeding tts needs the runtime
+      # set staged too, and its registry dates live in downloadModel.js, which is
+      # not part of this key. Tracked separately.
       - name: Cache TTS GGML GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'
