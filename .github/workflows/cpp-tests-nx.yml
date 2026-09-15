@@ -161,6 +161,10 @@ jobs:
             rm -rf "$VCPKG_ROOT/downloads/git-tmp"
           fi
 
+      - name: Setup CUDA toolkit for the ggml CUDA backend
+        if: matrix.mode == 'standard' && matrix.includeCudaSdk && (matrix.platform == 'linux' || matrix.platform == 'win32')
+        uses: ./.github/actions/setup-cuda
+
       - name: Setup ccache
         if: matrix.hasCcache
         run: |

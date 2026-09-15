@@ -287,6 +287,12 @@ jobs:
         if: inputs.addon_version == ''
         uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
 
+      # QVAC-23763: cuda-backend hard-errors without nvcc, so linux needs the
+      # toolkit. Compile-only, no NVIDIA GPU required.
+      - name: Setup CUDA toolkit for the ggml CUDA backend
+        if: inputs.addon_version == ''
+        uses: ./.github/actions/setup-cuda
+
       - name: Build addon from source
         if: inputs.addon_version == ''
         working-directory: ${{ inputs.workdir }}

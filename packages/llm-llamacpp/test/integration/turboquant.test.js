@@ -35,6 +35,12 @@ const isVulkanHappyPath =
 const isMetalRejectPath = platform === 'darwin' || platform === 'ios'
 const isAndroid = platform === 'android'
 
+// isVulkanHappyPath is a platform test, and on linux x64 the platform no longer
+// decides the backend: CUDA enumerates ahead of Vulkan and has no TurboQuant or
+// PolarQuant kernels, so the addon refuses these cache types there. Name the
+// backend the sweep is actually about instead of relying on enumeration order.
+const pinToVulkan = platform === 'linux' && arch === 'x64'
+
 const skipReason =
   isVulkanHappyPath || isMetalRejectPath
     ? false
@@ -83,6 +89,7 @@ function makeConfig(kv) {
     'cache-type-k': kv.k,
     'cache-type-v': kv.v,
     'flash-attn': 'on',
+    ...(pinToVulkan ? { backend: 'vulkan' } : {}),
     verbosity: '2'
   }
 }
@@ -173,6 +180,19 @@ for (const kv of KV_COMBOS) {
     const response = await llm.run(PROMPT)
     const output = await collectResponse(response)
     const generatedTokens = Number(response.stats?.generatedTokens ?? 0)
+
+    // chooseBackend() logs this only on the override path; a `backend` that
+    // matches no device falls through to the default cascade with a warning.
+    // Without this the pin is advisory, and a silent fallback to CUDA would
+    // read as a pass here. Checked after the first run, never straight after
+    // load(): backend selection is lazy, so the log lands a tick later and an
+    // immediate check reads an empty buffer and fails on a pin that did bind.
+    if (pinToVulkan) {
+      t.ok(
+        specLogger.logs.some((l) => /backend override/.test(l)),
+        'vulkan backend pin took effect'
+      )
+    }
 
     t.comment(`output: ${JSON.stringify(output.slice(0, 200))}`)
     t.ok(output.length > 0, `output non-empty (${output.length} chars)`)

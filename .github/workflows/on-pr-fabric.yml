@@ -193,6 +193,8 @@ jobs:
       # qvac-fabric[hip-backend]. pull_request_target loads this YAML from
       # main, so cpp-lint would otherwise fail at find_dependency(hip).
       include-rocm-sdk: true
+      # QVAC-23763: cpp-lint configures on linux, where cuda-backend needs nvcc.
+      include-cuda-sdk: true
 
   detect-fabric-stack:
     if: needs.authorize.outputs.allowed == 'true'

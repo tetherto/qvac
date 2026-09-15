@@ -444,7 +444,10 @@ safeTest(
   'continuous batching answers 16 prompts correctly and improves Linux GPU TPS',
   { timeout: 900_000, skip: skipHeavyPlatform },
   async (t) => {
-    const singleModel = await setupModel(t)
+    // This performance contract predates CUDA and was established on Vulkan.
+    // Keep it pinned so enabling a new default backend cannot change what it
+    // measures; CUDA remains covered by the rest of the suite.
+    const singleModel = await setupModel(t, { backend: 'vulkan' })
     const singleNativeTpsValues = []
     const singleWallTpsValues = []
     for (const item of CASES) {
@@ -472,7 +475,7 @@ safeTest(
     t.comment(`average single native TPS: ${avgSingleNativeTps}`)
     t.comment(`average single wall TPS: ${avgSingleWallTps}`)
 
-    const batchModel = await setupModel(t, { parallel: '4' })
+    const batchModel = await setupModel(t, { parallel: '4', backend: 'vulkan' })
     const batchInput = CASES.map((item) => ({
       id: item.id,
       prompt: buildPrompt(item),

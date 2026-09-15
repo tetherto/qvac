@@ -1,6 +1,7 @@
 #include "BackendSelection.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <optional>
 #include <stdexcept>
@@ -19,6 +20,13 @@ namespace {
 
 constexpr std::string_view K_ADRENO_TOKEN = "adreno";
 constexpr int K_ADRENO_GPU_MIN_MODEL = 600;
+constexpr std::array<std::string_view, 7> K_GPU_BACKEND_FAMILIES = {
+    "cuda", "vulkan", "metal", "opencl", "hip", "rocm", "sycl"};
+constexpr std::array<std::string_view, 6> K_DEFAULT_BACKEND_PRIORITY = {
+    "cuda", "vulkan", "metal", "opencl", "rocm", "sycl"};
+constexpr std::array<std::string_view, 6> K_ADRENO_BACKEND_PRIORITY = {
+    "opencl", "cuda", "vulkan", "metal", "rocm", "sycl"};
+constexpr std::string_view K_BACKEND_TRIM = " \t\r\n\v\f";
 
 unsigned char toLowerAscii(unsigned char character) {
   return static_cast<unsigned char>(std::tolower(character));
@@ -52,6 +60,15 @@ std::string toLowerCopy(std::string str) {
 
 bool containsOpenClToken(const std::string& value) {
   return toLowerCopy(value).find("opencl") != std::string::npos;
+}
+
+bool backendNameMatchesFamily(
+    const std::string& backendName, std::string_view family) {
+  const std::string lower = toLowerCopy(backendName);
+  if (lower.find(family) != std::string::npos) {
+    return true;
+  }
+  return family == "metal" && lower.rfind("mtl", 0) == 0;
 }
 
 bool isOpenClAdrenoDevice(
@@ -242,6 +259,136 @@ std::optional<std::string> selectMainGpuName(
   }
 
   return best == nullptr ? std::nullopt : nonEmpty(best->name);
+}
+
+std::vector<std::string> parseBackendOverride(const std::string& backend) {
+  std::vector<std::string> families;
+  std::string current;
+  bool namedAnyBackend = false;
+
+  auto flush = [&]() {
+    const auto begin = current.find_first_not_of(K_BACKEND_TRIM);
+    if (begin == std::string::npos) {
+      return;
+    }
+    const auto end = current.find_last_not_of(K_BACKEND_TRIM);
+    std::string family = toLowerCopy(current.substr(begin, end - begin + 1));
+    namedAnyBackend = true;
+    if (family == "auto") {
+      return;
+    }
+    if (std::find(
+            K_GPU_BACKEND_FAMILIES.begin(),
+            K_GPU_BACKEND_FAMILIES.end(),
+            family) == K_GPU_BACKEND_FAMILIES.end()) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "backend: unknown backend '" + family +
+              "'. Expected cuda, vulkan, metal, opencl, hip, rocm, sycl, or "
+              "auto.");
+    }
+    if (family == "hip") {
+      family = "rocm";
+    }
+    if (std::find(families.begin(), families.end(), family) == families.end()) {
+      families.push_back(std::move(family));
+    }
+  };
+
+  for (const char character : backend) {
+    if (character == ',') {
+      flush();
+      current.clear();
+    } else {
+      current.push_back(character);
+    }
+  }
+  flush();
+
+  if (families.empty() && !namedAnyBackend &&
+      backend.find_first_not_of(K_BACKEND_TRIM) != std::string::npos) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "backend names no GPU backend. Use a comma-separated list or auto.");
+  }
+  return families;
+}
+
+std::optional<std::string> selectGpuBackendName(
+    const std::vector<GpuCandidate>& devices,
+    const std::vector<std::string>& backendPriority,
+    const std::optional<MainGpuSpec>& mainGpu) {
+  if (mainGpu.has_value() && mainGpu->kind == MainGpuKind::Index) {
+    return selectMainGpuName(devices, *mainGpu);
+  }
+
+  auto selectFromFamilies = [&](const auto& families) {
+    for (const auto& family : families) {
+      std::vector<GpuCandidate> matching;
+      for (const auto& device : devices) {
+        if (backendNameMatchesFamily(device.name, family)) {
+          matching.push_back(device);
+        }
+      }
+      if (matching.empty()) {
+        continue;
+      }
+      if (mainGpu.has_value()) {
+        if (auto selected = selectMainGpuName(matching, *mainGpu);
+            selected.has_value()) {
+          return selected;
+        }
+        continue;
+      }
+      return std::optional<std::string>(matching.front().name);
+    }
+    return std::optional<std::string>();
+  };
+
+  if (auto selected = selectFromFamilies(backendPriority);
+      selected.has_value()) {
+    return selected;
+  }
+
+  const bool preferOpenCl = std::any_of(
+      devices.begin(), devices.end(), [](const GpuCandidate& device) {
+        return isOpenClAdrenoDevice(device.name, device.description);
+      });
+  const auto& defaults =
+      preferOpenCl ? K_ADRENO_BACKEND_PRIORITY : K_DEFAULT_BACKEND_PRIORITY;
+  return selectFromFamilies(defaults);
+}
+
+std::optional<std::string> resolveGpuBackendName(
+    const std::vector<std::string>& backendPriority,
+    const std::optional<MainGpuSpec>& mainGpu) {
+  const size_t nDevices = ggml_backend_dev_count();
+  const bool compareVram =
+      mainGpu.has_value() && mainGpu->kind != MainGpuKind::Index;
+  std::vector<GpuCandidate> devices;
+  devices.reserve(nDevices);
+  for (size_t i = 0; i < nDevices; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    const auto type = ggml_backend_dev_type(dev);
+    if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    size_t freeBytes = 0;
+    size_t totalBytes = 0;
+    if (compareVram) {
+      ggml_backend_dev_memory(dev, &freeBytes, &totalBytes);
+    }
+    const char* name = ggml_backend_dev_name(dev);
+    const char* description = ggml_backend_dev_description(dev);
+    devices.push_back(
+        {name == nullptr ? std::string() : std::string(name),
+         type == GGML_BACKEND_DEVICE_TYPE_IGPU ? GpuClass::Integrated
+                                               : GpuClass::Dedicated,
+         totalBytes,
+         description == nullptr ? std::string() : std::string(description)});
+  }
+  return selectGpuBackendName(devices, backendPriority, mainGpu);
 }
 
 std::optional<std::string> resolveMainGpuBackendName(const MainGpuSpec& spec) {

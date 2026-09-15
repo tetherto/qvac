@@ -104,6 +104,11 @@ jobs:
       include-vulkan-sdk: ${{ matrix.includeVulkanSdk == true }}
       include-rocm: ${{ matrix.includeRocm == true }}
       include-cuda: ${{ matrix.includeCuda == true }}
+      include-cuda-win32: ${{ matrix.includeCudaWin32 == true }}
+      include-cuda-arm64: ${{ matrix.includeCudaArm64 == true }}
+      include-cuda-arm64-jetson: ${{ matrix.includeCudaArm64Jetson == true }}
+      cuda-arm64-jetson-cmake-option: ${{ matrix.cudaArm64JetsonCmakeOption || 'QVAC_CUDA_JETSON' }}
+      cuda-arm64-jetson-primary-cmake-option: ${{ matrix.cudaArm64JetsonPrimaryCmakeOption || '' }}
       extra-cmake-defines: ${{ matrix.extraCmakeDefines }}
       platform-cmake-defines: ${{ matrix.platformCmakeDefines }}
       # Consumers only: overlaying fabric's own build into itself is meaningless.

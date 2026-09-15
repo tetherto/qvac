@@ -51,7 +51,7 @@ The second column is the backend allowlist: whether this package will run on a d
 | Vulkan  | Yes | Meta device, generic all-reduce |
 | Metal / MTL | Yes | Meta device, generic all-reduce |
 | OpenCL  | Yes, the Adreno path | Meta device, generic all-reduce |
-| CUDA    | Yes, but qvac-fabric does not build it yet | Backend-specific all-reduce, the tuned path upstream vouches for |
+| CUDA    | Yes | Backend-specific all-reduce, the tuned path upstream vouches for |
 | RPC     | Yes, but qvac-fabric does not build it yet | Meta device, generic all-reduce |
 | HIP / ROCm | **No**, rejected by the allowlist | n/a |
 | SYCL    | **No**, rejected by the allowlist | n/a |
@@ -60,7 +60,7 @@ The second column is the backend allowlist: whether this package will run on a d
 
 "Generic all-reduce" means the meta backend reduces with ordinary ggml graph ops rather than a backend-native collective. Every backend currently reachable here takes that path.
 
-CUDA and RPC are admitted ahead of the qvac-fabric builds that will ship them, so that arrival needs no change in this package. Until then they simply never appear in the registry. HIP/ROCm is rejected deliberately: `vla-ggml` prefers ROCm on purpose for its own reasons, but this package has never been validated on it, and qvac-fabric can now ship it.
+CUDA is built by qvac-fabric on supported Linux and Windows targets. RPC is admitted ahead of a qvac-fabric build that ships it, so it simply does not appear in the registry today. HIP/ROCm is rejected deliberately: `vla-ggml` prefers ROCm on purpose for its own reasons, but this package has never been validated on it, and qvac-fabric can now ship it.
 
 ### `tensor-split`
 
