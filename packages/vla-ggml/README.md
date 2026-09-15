@@ -218,7 +218,7 @@ environment is an equivalent way to force Vulkan without touching the config.
 By default that list is **advisory**: if it matches no accepted device, the
 addon logs a warning and continues down the normal order, so a load that was
 meant to run on one backend can quietly run on another. Pass
-`backendRequired: true` alongside it to make it binding — the load then fails
+`backendRequired: true` alongside it to make it binding. The load then fails
 instead, and the error names every device that *was* accepted, which matters
 here because the Adreno rules above can be the reason a device is missing from
 that list at all.
