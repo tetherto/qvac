@@ -32,6 +32,7 @@ constexpr double UINT32_LIMIT = 4294967295.0;
 constexpr double INT32_LIMIT = 2147483647.0;
 constexpr double INT32_MIN_LIMIT = -2147483648.0;
 constexpr int32_t SPLIT_MODE_NONE = 0;
+constexpr int32_t SPLIT_MODE_ROW = 2;
 
 void requireAllowedProperties(
     js_env_t* env, jsu::Object object,
@@ -185,6 +186,41 @@ js_value_t* fitResultObject(js_env_t* env, const FitResult& result) {
     overrides.set(env, index, entry);
   }
   out.setProperty(env, "buftOverrides", overrides);
+
+  // Byte counts as doubles: every value here is a memory size, far below
+  // Number.MAX_SAFE_INTEGER.
+  auto projection = jsu::Array::create(env);
+  for (size_t index = 0; index < result.projection.size(); ++index) {
+    const FitProjectionRow& row = result.projection[index];
+    auto entry = jsu::Object::create(env);
+    entry.setProperty(env, "name", jsu::String::create(env, row.name.c_str()));
+    entry.setProperty(
+        env,
+        "totalBytes",
+        jsu::Number::create(env, static_cast<double>(row.totalBytes)));
+    entry.setProperty(
+        env,
+        "freeBytes",
+        jsu::Number::create(env, static_cast<double>(row.freeBytes)));
+    entry.setProperty(
+        env,
+        "marginBytes",
+        jsu::Number::create(env, static_cast<double>(row.marginBytes)));
+    entry.setProperty(
+        env,
+        "modelBytes",
+        jsu::Number::create(env, static_cast<double>(row.modelBytes)));
+    entry.setProperty(
+        env,
+        "contextBytes",
+        jsu::Number::create(env, static_cast<double>(row.contextBytes)));
+    entry.setProperty(
+        env,
+        "computeBytes",
+        jsu::Number::create(env, static_cast<double>(row.computeBytes)));
+    projection.set(env, index, entry);
+  }
+  out.setProperty(env, "projection", projection);
   return out;
 }
 
@@ -246,6 +282,14 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "splitMode")) {
     req.splitMode = static_cast<int32_t>(
         requireBoundedSignedInteger(v->as<double>(env), 0.0, 3.0, "splitMode"));
+    // In the enum domain but not accepted — see `applyFitRequest`. Rejected
+    // here so it never pays for backend registration.
+    if (req.splitMode == SPLIT_MODE_ROW) {
+      throw StatusError(
+          InvalidArgument,
+          "model-fit: 'splitMode' 2 (ROW) is not accepted; use 1 (LAYER) or 3 "
+          "(TENSOR)");
+    }
     req.hasSplitMode = true;
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "mainGpu")) {

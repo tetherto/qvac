@@ -20,7 +20,7 @@ import {
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError
 } from '@/errors/index'
-import { getPlugin } from '@/plugins/index'
+import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
 import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
@@ -108,6 +108,11 @@ export async function loadModel(
     artifacts,
     isShardedModel
   })
+
+  // Load the addon's logger before the addon itself runs. Plugins that defer
+  // their logging module do so to keep registration free of native loads, so
+  // this is the first point their addon is genuinely required.
+  await ensureAddonLoggerReady(plugin)
 
   logger.info(`${modelType}: Loading model ${modelId}...`)
   startLogBuffering(modelId)

@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.14.0] - 2026-09-15
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0`. No API change for this package; the runtime it carries changes as follows since `v10549.0.0`:
+  - Fixed an out-of-bounds tensor write in the MoE copy path. The used-expert scan ran unbounded, so a ubatch whose `ids` tensor had zero rows read past its own bitset and aborted on `GGML_ASSERT(offset <= nbytes ...)`. Reached with the persistent MoE expert cache — on by default under `--fit` — at `-c 65536` and above ([#260](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/260)).
+  - Fixed uninitialized ggml views after oversized MoE cache banks and context tensors ([#263](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/263)).
+  - `mtmd` callers can now skip the projector's audio encoder, loading a combined projector vision-only ([#261](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/261)).
+  - Native MTP shares compute buffers and synchronizes draft catch-up before the target runs, now also on Vulkan and Metal and preserved across scheduler rebuilds ([#253](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/253)).
+  - qwen4exp correctness backports: `seq_cp`, block position keying, mtmd input, a CUDA abort, KV-unified NaN collapse, and indexer-cache `ext.x`/`ext.y` restore on state reload. Tensor parallelism is enabled and `-sm tensor` is now declared unsupported for the arch rather than skipped from the test ([#255](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/255)).
+
+## [0.13.1] - 2026-09-14
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0` -> `10549.0.0#1` (`LLAMA_OPENSSL=OFF`, so native prebuilds do not link OpenSSL; no API change for this package).
+- Android builds no longer link `libvulkan.so` into `qvac__fabric.bare`. The port is built with `GGML_BACKEND_DL`, so the Vulkan backend is a separate dlopen'd module and the carrier module references no Vulkan symbol; the direct link only added a `DT_NEEDED` the loader had to satisfy before the module could load, and made the Vulkan SDK a hard configure-time requirement for Android builds. Vulkan acceleration is unaffected — it still arrives via the staged backend module.
+
+## [0.13.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). Includes a fix that annotates the `ggml_vec_index_*` C API with default visibility, so those symbols stay exportable from this runtime under the library's hidden visibility preset; no API change for this package.
+
 ## [0.12.0] - 2026-09-08
 
 ### Added
