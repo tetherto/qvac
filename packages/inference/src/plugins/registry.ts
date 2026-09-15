@@ -382,6 +382,24 @@ async function describeBindingForDebug(addonPackage: string): Promise<string> {
     const root = real.replace(/package\.json$/, '')
     const pkg = JSON.parse(String(fs.readFileSync(real)))
     parts.push(`pkg version=${pkg.version} symlinked=${real !== String(pkgPath)} root=${root}`)
+    // Is the os/cpu filtered platform package actually on disk next to it?
+    const scopeDir = root.replace(/[^/]+\/$/, '')
+    try {
+      parts.push(`scope=${fs.readdirSync(scopeDir).join(',')}`)
+    } catch (error) {
+      parts.push(`scope read failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    const hostPkg = `${addonPackage}-linux-x64`
+    try {
+      parts.push(`resolve(${hostPkg})=${meta.resolve ? meta.resolve(hostPkg) : 'n/a'}`)
+    } catch (error) {
+      parts.push(
+        `resolve(${hostPkg}) threw: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+    parts.push(
+      `require.addon=${typeof (globalThis as { require?: { addon?: unknown } }).require?.addon}`
+    )
     for (const sub of ['prebuilds', 'binding.js', 'index.js', 'addonLogging.js']) {
       let info = 'missing'
       try {
