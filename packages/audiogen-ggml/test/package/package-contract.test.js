@@ -93,6 +93,7 @@ function isExternalModule(specifier) {
   return (
     !specifier.startsWith('.') &&
     !specifier.startsWith('/') &&
+    !specifier.startsWith('#') &&
     !BUILTIN_MODULES.has(specifier) &&
     packageNameFromSpecifier(specifier) !== PACKAGE_NAME
   )

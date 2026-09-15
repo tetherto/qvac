@@ -18,6 +18,31 @@ static SdCtxConfig applyOne(const std::string& key, const std::string& value) {
   return cfg;
 }
 
+static void expectRemovedBackendOption(
+    const std::string& key, const std::string& guidance) {
+  for (const auto* value : {"true", "1", "maybe"}) {
+    try {
+      applyOne(key, value);
+      FAIL() << key << " should be rejected when set to " << value;
+    } catch (const StatusError& error) {
+      EXPECT_EQ(
+          std::string(error.what()),
+          key + " is no longer supported. " + guidance);
+    }
+  }
+  for (const auto* value : {"false", "0"}) {
+    try {
+      applyOne(key, value);
+      FAIL() << key << " should be rejected when set to " << value;
+    } catch (const StatusError& error) {
+      EXPECT_EQ(
+          std::string(error.what()),
+          key + " is no longer supported. Remove it; no replacement is needed "
+                "when it is false.");
+    }
+  }
+}
+
 } // namespace
 
 TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
@@ -32,6 +57,7 @@ TEST(SdCtxHandlers_Prediction, SupportedValuesMapAndUnknownThrows) {
   EXPECT_EQ(applyOne("prediction", "flux2_flow").prediction, PREDICTION_COUNT);
   EXPECT_TRUE(applyOne("prediction", "flux2_flow").flux2Requested);
   EXPECT_FALSE(applyOne("prediction", "auto").flux2Requested);
+  EXPECT_THROW(applyOne("prediction", "flux_flow"), StatusError);
 
   SdCtxConfig cfg;
   EXPECT_THROW(
@@ -149,8 +175,20 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
   EXPECT_TRUE(applyOne("stream_layers", "true").streamLayers);
   EXPECT_FALSE(SdCtxConfig{}.streamLayers);
   EXPECT_THROW(applyOne("stream_layers", "maybe"), StatusError);
-  EXPECT_FALSE(applyOne("clip_on_cpu", "false").keepClipOnCpu);
-  EXPECT_TRUE(applyOne("vae_on_cpu", "true").keepVaeOnCpu);
+  EXPECT_EQ(SD_CTX_HANDLERS.count("control_net_cpu"), 0U);
+  EXPECT_EQ(SD_CTX_HANDLERS.count("clip_on_cpu"), 0U);
+  EXPECT_EQ(SD_CTX_HANDLERS.count("vae_on_cpu"), 0U);
+  expectRemovedBackendOption(
+      "control_net_cpu",
+      "Use backend=controlnet=cpu to run the ControlNet graph on CPU.");
+  expectRemovedBackendOption(
+      "clip_on_cpu",
+      "Use params_backend=te=cpu to keep text encoder parameters in CPU RAM, "
+      "or backend=te=cpu to run its graph on CPU.");
+  expectRemovedBackendOption(
+      "vae_on_cpu",
+      "Use params_backend=vae=cpu to keep VAE parameters in CPU RAM, or "
+      "backend=vae=cpu to run its graph on CPU.");
   EXPECT_TRUE(applyOne("vae_auto_cpu_fallback", "true").vaeAutoCpuFallback);
   EXPECT_FLOAT_EQ(
       applyOne("vae_auto_cpu_fallback_memory_ratio", "0.75")
@@ -173,6 +211,101 @@ TEST(SdCtxHandlers_MemoryFlags, BoolKeysMapAndInvalidThrow) {
           std::unordered_map<std::string, std::string>{
               {"vae_decode_only", "maybe"}}),
       StatusError);
+}
+
+TEST(SdCtxHandlers_MemoryFlags, DetectsDiskParameterAssignments) {
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("diffusion=disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("te=cpu, diffusion = DISK"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("vae=cpu, default=disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("cpu,disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("diffusion=cpu,diffusion=disk"));
+  EXPECT_TRUE(paramsBackendSpecUsesDisk("te=cpu,clip=disk"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk(""));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("cpu"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("disk,cpu"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("diffusion=disk,diffusion=cpu"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("clip=disk,te=cpu"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("diffusion=cpu,vae=vulkan0"));
+  EXPECT_FALSE(paramsBackendSpecUsesDisk("diffusion=diskette"));
+}
+
+TEST(SdCtxHandlers_MemoryFlags, ComposesOffloadDefaultWithExplicitAssignments) {
+  EXPECT_EQ(effectiveParamsBackendSpec("", false), "");
+  EXPECT_EQ(
+      effectiveParamsBackendSpec("diffusion=disk", false), "diffusion=disk");
+  EXPECT_EQ(effectiveParamsBackendSpec("", true), "*=cpu");
+  EXPECT_EQ(effectiveParamsBackendSpec("te=disk", true), "*=cpu,te=disk");
+  // Pins the precedence this package relies on: the engine lets an explicit
+  // module entry beat a wildcard regardless of order, so prepending is safe.
+  // Without this a change from prepend to append would pass every other
+  // assertion here while inverting the semantics the feature rests on.
+  EXPECT_EQ(effectiveParamsBackendSpec("*=cuda0", true), "*=cpu,*=cuda0");
+  EXPECT_EQ(effectiveParamsBackendSpec("cuda0", true), "*=cpu,cuda0");
+}
+
+TEST(SdCtxHandlers_MemoryFlags, DetectsCpuDefaultOverrides) {
+  // The engine treats bare names and these three assignment aliases as the
+  // same whole-spec default. The last default replaces offload_to_cpu's
+  // wildcard instead of composing with it per module.
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("cuda0"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("disk"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("te=cpu,cuda0"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault(" te=cpu , cuda0 "));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("*=cuda0"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("ALL=cuda0"));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault(" Default = cuda0 "));
+  EXPECT_TRUE(paramsBackendSpecOverridesCpuDefault("cpu,disk"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("disk,cpu"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("cpu"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("*=cpu"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("all=cpu,te=disk"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("default=CPU"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault(""));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("te=cpu"));
+  EXPECT_FALSE(paramsBackendSpecOverridesCpuDefault("te=cpu,,vae=cpu"));
+}
+
+TEST(SdCtxHandlers_MemoryFlags, DetectsSyntacticNonzeroMaxVramBudget) {
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("6"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("-1"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("cuda0=6,vulkan0=4"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("0,6"));
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("cuda0=0,cuda0=6"));
+  // This helper deliberately does not claim that the active backend resolves
+  // to a budget. Only the engine can resolve this mixed assignment.
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("cuda0=0,vulkan0=4"));
+  // Unparseable values belong to the engine, which rejects them with a
+  // specific error; reading them as "no budget" here would pre-empt that with
+  // an unrelated warning.
+  EXPECT_TRUE(maxVramSpecHasNonZeroBudget("nonsense"));
+  // Every spelling of "no budget". The guard this replaced tested the spec for
+  // emptiness, so it missed all but the first of these -- including "0", which
+  // the README documents as the default value of max_vram.
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget(""));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("0.0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("  "));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("vulkan0=0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("cuda0=0,vulkan0=0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("6,0"));
+  EXPECT_FALSE(maxVramSpecHasNonZeroBudget("cuda0=6,cuda0=0"));
+}
+
+TEST(SdCtxHandlers_MemoryFlags, ReportsRemovedOptionsInStableOrder) {
+  SdCtxConfig cfg;
+  try {
+    applySdCtxHandlers(
+        cfg,
+        std::unordered_map<std::string, std::string>{
+            {"vae_on_cpu", "true"}, {"control_net_cpu", "true"}});
+    FAIL() << "removed options should be rejected";
+  } catch (const StatusError& error) {
+    EXPECT_EQ(
+        std::string(error.what()),
+        "control_net_cpu is no longer supported. Use "
+        "backend=controlnet=cpu to run the ControlNet graph on CPU.");
+  }
 }
 
 TEST(SdCtxHandlers_Upscaler, DefaultsAndConfigValuesMapCorrectly) {

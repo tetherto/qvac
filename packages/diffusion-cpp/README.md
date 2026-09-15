@@ -201,7 +201,7 @@ All file paths must be absolute.
 | `files.model`                   |      yes | Main model. All-in-one checkpoint for SD, diffusion model for split layouts |
 | `files.clipL`                   |       no | CLIP-L text encoder for SD3 / split layouts                                 |
 | `files.clipG`                   |       no | CLIP-G text encoder for SDXL / SD3                                          |
-| `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3 / FLUX.1                                        |
+| `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3                                                 |
 | `files.llm`                     |       no | Qwen3 LLM text encoder for FLUX.2 [klein]                                   |
 | `files.vae`                     |       no | Separate VAE                                                                |
 | `files.esrgan`                  |       no | ESRGAN model for post-generation upscale                                    |
@@ -224,14 +224,16 @@ argument.
 | `type`                  | weight type                               | auto              | Override weight quantization                                              |
 | `rng`                   | `'cpu'                                    | 'cuda'            | 'std_default'`                                                            | `'cuda'`                         | Context RNG; `cuda` means Philox and is not GPU-specific |
 | `sampler_rng`           | RNG type                                  | auto              | Sampler RNG override                                                      |
-| `clip_on_cpu`           | boolean                                   | `false`           | Force CLIP/text encoder to CPU                                            |
-| `vae_on_cpu`            | boolean                                   | `false`           | Force VAE to CPU                                                          |
 | `vae_decode_only`       | boolean                                   | `false`           | Load only VAE decoder weights; leave false for img2img/fusion/hires paths |
 | `vae_tiling`            | boolean                                   | `false`           | Tile VAE decode to reduce peak VRAM                                       |
 | `flash_attn`            | boolean                                   | `false`           | Enable flash attention globally                                           |
 | `diffusion_fa`          | boolean                                   | `true`            | Enable diffusion-model flash attention; important for FLUX/LTX memory use |
 | `mmap`                  | boolean                                   | backend default   | Memory-map weights when supported                                         |
 | `offload_to_cpu`        | boolean                                   | backend default   | Keep weights on CPU/offload as supported by backend                       |
+| `backend`               | string                                    | auto              | Runtime backend for all modules or per-module assignments                 |
+| `params_backend`        | string                                    | runtime backend   | Parameter residency on a backend, CPU RAM, or disk                        |
+| `max_vram`              | number \| string                          | `0`               | VRAM budget in GiB for graph-cut segmented execution                      |
+| `stream_layers`         | boolean                                   | `false`           | Stream diffusion layers from CPU RAM when graph cutting is active         |
 | `prediction`            | prediction type                           | auto              | Required for FLUX img2img/fusion routing; use `'flux2_flow'` for FLUX.2   |
 | `flow_shift`            | number                                    | model default     | Flow-matching noise schedule shift                                        |
 | `diffusion_conv_direct` | boolean                                   | `true`            | Use direct convolution in diffusion model                                 |
@@ -245,7 +247,70 @@ pinned through `sd_ctx_params_t.backend`. If an explicit request cannot be
 satisfied (`'integrated'` with no integrated GPU, `'dedicated'` with no discrete
 GPU, or an out-of-range index), the addon falls back to CPU instead of silently
 choosing another GPU. Mobile targets reject `main-gpu` because they are
-single-GPU devices.
+single-GPU devices. An explicit `backend` assignment takes precedence over
+`main-gpu`.
+
+`backend` controls where graphs execute. `params_backend` controls where model
+weights remain between uses. For example, `backend: 'diffusion=cuda0,te=cpu'`
+runs the diffusion model on CUDA and the text encoder on CPU.
+
+`params_backend: 'diffusion=cpu'` keeps diffusion weights in CPU RAM and stages
+them to the runtime backend. `params_backend: 'diffusion=disk'` reloads those
+weights from the model file on demand and releases them after use — on every
+job, not only the first — so a disk-backed module also disables eager weight
+loading for the whole context. Disk is not selected automatically.
+
+`offload_to_cpu: true` supplies a `*=cpu` default. An explicit `params_backend`
+entry written in `module=backend` form overrides that default **for that module
+only**: `params_backend: 'te=disk'` with `offload_to_cpu: true` keeps TE weights
+on disk while other parameters remain in CPU RAM.
+
+A bare entry or an assignment to `*`, `all`, or `default` sets the whole-spec
+default rather than a per-module override, and the last default wins. For
+example, `params_backend: 'cuda0'` with `offload_to_cpu: true` puts every module
+on `cuda0` and offloads nothing. The addon logs when the final whole-spec default
+differs from CPU. Equivalent defaults such as `all=cpu` do not produce an error.
+Write `params_backend: 'diffusion=cuda0'` to move one module and leave the rest
+offloaded.
+
+A nonzero `max_vram` enables graph-cut segmentation even without
+`stream_layers`. Positive values cap the VRAM budget in GiB. Negative values
+use detected free VRAM while reserving the absolute value as headroom, and `0`
+disables graph cutting. Backend assignments such as
+`max_vram: 'cuda0=6,vulkan0=4'` apply one budget per device.
+
+`stream_layers` adds diffusion-layer prefetch and eviction only when graph
+cutting is active and the diffusion parameter backend is CPU, for example:
+
+```js
+config: {
+  backend: 'cuda0',
+  params_backend: 'diffusion=cpu',
+  max_vram: -1,
+  stream_layers: true
+}
+```
+
+It does not stream from disk. Use `params_backend: 'diffusion=disk'` for
+on-demand reads from the model file.
+
+`stream_layers` is forwarded to the engine as configured; the engine itself
+skips streaming when its prerequisites are unmet. The addon reports the cases
+it can prove before engine initialization: `max_vram` is unset, `0`, or an
+all-zero assignment such as `'cuda0=0'`. Per-backend and automatic negative
+budgets are resolved by the engine using the selected runtime backend and its
+free memory. That message, and the `main-gpu` and `params_backend` notices above,
+are the only diagnostics emitted at the default `verbosity: 0`; set
+`verbosity: 2` to also see the effective `backend`, `params_backend` and
+`max_vram` assignments the addon passes to the engine.
+
+The 16-case Linux hardware matrix is available in
+`scripts/validate-layer-streaming.sh`. It expects the MiniMax-H3 files under
+`/home/shared/models/minimax-h3-q2` by default. Override that location with
+`H3_MODELS_DIR`. The runtime backend defaults to `vulkan0`; override it with
+`BACKEND`, for example `BACKEND=cuda0`. Then run the script from the package
+directory. Each case requires a non-empty AVI and checks the engine log for the
+expected graph-cut, streaming, CPU RAM, or disk behavior.
 
 ### Image Generation Parameters
 
@@ -439,6 +504,9 @@ FL2VA denoiser, Qwen3-VL text encoder, video VAE, and audio VAE:
 ./scripts/download-model-minimax-h3.sh --q4
 ```
 
+Set `H3_MODELS_DIR` when running `npm run generate:h3-coffee` with model files
+stored outside the package.
+
 The initial integration intentionally rejects init images, control frames, and
 reference images. Use a 32-pixel spatial grid and a `17*k + 5` frame count.
 H3 is distilled: `cfg_scale` must be `1.0`, and the output stream is always
@@ -615,8 +683,12 @@ All three wrappers return a `QvacResponse`.
   video expert, `total` = its step count) and, when `vae_tiling` is enabled,
   VAE tile passes (`total` = tile count). Each sequence restarts at
   `step: 0`, so a bar renderer should key on `total` changes rather than
-  assume a single monotonic sequence. Model weights load eagerly at
-  `load()`, not inside generation.
+  assume a single monotonic sequence. Model weights normally load eagerly at
+  `load()`, so generation emits no loader ticks. Two configurations load
+  lazily instead and do emit loader ticks inside generation: mobile targets,
+  and any `params_backend` naming `disk` for one or more modules — the latter
+  on every job, since disk-backed weights are released after each phase. In
+  those cases the first job's `conditionerMs` also absorbs weight-load time.
 - Image generation and ESRGAN emit PNG `Uint8Array` values.
 - Video generation emits one MJPG AVI `Uint8Array`.
 - If `opts.stats` is enabled, a `stats` event is emitted before completion.

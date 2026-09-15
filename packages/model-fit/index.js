@@ -42,6 +42,9 @@ exports.FIT_STATUS = Object.freeze({
 const UINT32_MAX = 4294967295;
 const INT32_MAX = 2147483647;
 const INT32_MIN = -2147483648;
+// LLAMA_SPLIT_MODE_ROW. Inside the enum domain but not accepted: fabric
+// deprecates it and no supported backend provides the split buffers it needs.
+const SPLIT_MODE_ROW = 2;
 // Every numeric field crosses into C++ as a uint32_t or int32_t. Fractions
 // truncate there and out-of-range values wrap, so `marginMiB: -1` would silently
 // become a ~4 PiB margin that nothing can ever satisfy. Reject at the boundary.
@@ -76,6 +79,9 @@ function validateNumber(config, key, min, max) {
     }
     if (value < min || value > max) {
         throw new RangeError(`model-fit: config.${key} must be between ${min} and ${max}`);
+    }
+    if (key === 'splitMode' && value === SPLIT_MODE_ROW) {
+        throw new RangeError('model-fit: config.splitMode 2 (ROW) is not accepted; use 1 (LAYER) or 3 (TENSOR)');
     }
 }
 // Relationships the native side would otherwise accept and the fitter would

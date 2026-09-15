@@ -9,6 +9,8 @@ import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './uti
 
 // Supertonic 3 TTS (GGML): fast multilingual synthesis with baked-in voices.
 // Uses registry model constants — downloads automatically from QVAC Registry.
+// Only a fallback: the engine reports the rate it actually produced, and
+// `outputSampleRate` (plus the LavaSR enhancer) can move it off this default.
 const SUPERTONIC_SAMPLE_RATE = 44100
 
 try {
@@ -40,18 +42,16 @@ try {
   })
 
   const audioBuffer = await result.buffer
+  const sampleRate = (await result.sampleRate) ?? SUPERTONIC_SAMPLE_RATE
   console.log(`▸ TTS complete. Total samples: ${audioBuffer.length}`)
 
   console.log('▸ Saving audio to file...')
-  createWav(audioBuffer, SUPERTONIC_SAMPLE_RATE, 'supertonic-output.wav')
+  createWav(audioBuffer, sampleRate, 'supertonic-output.wav')
   console.log('▸ Audio saved to supertonic-output.wav')
 
   console.log('▸ Playing audio...')
   const audioData = int16ArrayToBuffer(audioBuffer)
-  const wavBuffer = Buffer.concat([
-    createWavHeader(audioData.length, SUPERTONIC_SAMPLE_RATE),
-    audioData
-  ])
+  const wavBuffer = Buffer.concat([createWavHeader(audioData.length, sampleRate), audioData])
   playAudio(wavBuffer)
   console.log('▸ Audio playback complete')
 
