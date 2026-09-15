@@ -2224,11 +2224,8 @@ const TRUSTED_CACHE_EVENTS = ['push', 'workflow_dispatch', 'merge_group', 'sched
 const TRUSTED_CACHE_EXEMPT = new Set([
   '.github/workflows/cpp-test-coverage-asr-ggml.yml',
   '.github/workflows/cpp-test-coverage-tts-ggml.yml',
-  // Landed on main while this PR was in review, with three ungated
-  // actions/cache@ writes (ccache, Parakeet GGUF, TTS venv) reachable from
-  // on-pr-nx.yml, which is pull_request_target. Same exposure as the two above.
-  // Exempted rather than fixed here to keep this PR off a brand-new file; needs
-  // its own ticket.
+  // Three ungated actions/cache@ writes, reachable from on-pr-nx.yml
+  // (pull_request_target). Needs its own ticket.
   '.github/workflows/cpp-tests-nx.yml',
 ])
 

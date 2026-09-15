@@ -261,14 +261,10 @@ jobs:
       # every milestone (the older v1/v2/v3 fixtures were the pre-migration DROID
       # dims). Developers can run the same tests against the unquantized
       # groot.gguf locally for tighter f32 parity.
-      # The two layers must feed each other or whichever is warm starves the
-      # other: a warm host means vcpkg compiles nothing, so the workspace stays
-      # empty, so the save below is skipped and an evicted actions/cache entry
-      # can never come back. Trusted events only -- the host dir outlives the
-      # job. Copy via a temp name and mv, because other runner instances on this
-      # box read the directory concurrently and a half-written zip extracts
-      # dirty; umask 000 because chmod 1777 on the root is not inherited by the
-      # bucket dirs vcpkg shards into.
+      # Both ways: vcpkg only writes archives it compiles, so whichever layer
+      # serves a restore leaves the other empty. Temp-then-mv because other
+      # instances read this dir concurrently; umask 000 because 1777 on the root
+      # is not inherited by vcpkg's bucket dirs.
       - name: Sync the host and workspace vcpkg caches
         if: >-
           env.VCPKG_CACHE_PERSISTENT == 'true' &&
