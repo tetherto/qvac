@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own.
+- One C++ runtime per process means one copy of every `std::` typeinfo, and RTTI matches typeinfo by address rather than by name. An exception raised inside the shared runtime is therefore matched by type on the way out: this addon's own `catch (const std::exception&)` handlers, and `JSCATCH`'s equivalent arm at the JS boundary, now match a throw that came from fabric, where before it fell through to the catch-all and reached JS as `INTERNAL_ERROR` / `"Unknown error"`. Linux only; macOS, Windows, Android and iOS already shared one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
 ## [0.16.0] - 2026-09-15
 
 ### Changed
