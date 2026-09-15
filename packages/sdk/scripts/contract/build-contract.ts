@@ -462,7 +462,20 @@ export function toWireJsonSchema(
   const json = schema.toJSONSchema({
     target: 'draft-2020-12',
     io,
-    unrepresentable: 'any'
+    unrepresentable: 'any',
+    override({ zodSchema, jsonSchema }) {
+      // Preserve closed, fixed-length tuples when the Zod exporter emits only
+      // prefixItems. Otherwise regeneration widens e.g. OCR boxes to any list.
+      if (
+        zodSchema instanceof z.ZodTuple &&
+        !zodSchema.def.rest &&
+        zodSchema.def.items.every((item) => item instanceof z.ZodType && !item.isOptional())
+      ) {
+        jsonSchema.items = false
+        jsonSchema.minItems = zodSchema.def.items.length
+        jsonSchema.maxItems = zodSchema.def.items.length
+      }
+    }
   }) as JsonSchema
   delete json['$schema']
   const flattened = flattenAllOfWithUnion(json, defName)

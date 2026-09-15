@@ -181,7 +181,12 @@ export const diffusionPlugin = definePlugin({
         device: 'world.backend',
         'main-gpu': 'world.backend',
         threads: 'world.threads',
-        offload_to_cpu: 'world.offloadParamsToCpu'
+        offload_to_cpu: 'world.offloadParamsToCpu',
+        backend: 'world.backend',
+        params_backend: 'world.paramsBackend',
+        max_vram: 'world.maxVram',
+        stream_layers: 'world.streamLayers',
+        verbosity: 'world.verbosity'
       }
       const unsupported = Object.keys(cfg).filter(
         (key) => !worldSupported.has(key) && cfg[key as keyof typeof cfg] !== undefined

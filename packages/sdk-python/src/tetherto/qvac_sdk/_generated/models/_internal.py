@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field, RootModel
@@ -14552,6 +14552,13 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc(GeneratedBaseModel):
     ] = None
 
 
+class Verbosity1(IntEnum):
+    integer_0 = 0
+    integer_1 = 1
+    integer_2 = 2
+    integer_3 = 3
+
+
 class Threads(RootModel[int]):
     root: Annotated[
         int,
@@ -14570,6 +14577,33 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
     seed: Annotated[
         int | None,
         Field(description="Walk RNG seed.", ge=-9007199254740991, le=9007199254740991),
+    ] = None
+    params_backend: Annotated[
+        str | None,
+        Field(
+            alias="paramsBackend",
+            description="Walk weight residency: diffusion=cpu or diffusion=disk,vae=cpu. Explicit assignments override offloadParamsToCpu.",
+        ),
+    ] = None
+    max_vram: Annotated[
+        float | str | None,
+        Field(
+            alias="maxVram",
+            description="DiT graph budget in GiB or per-device assignments. Negative values reserve free-memory headroom; 0 disables cuts. Excludes attention history and the decoder.",
+        ),
+    ] = None
+    stream_layers: Annotated[
+        bool | None,
+        Field(
+            alias="streamLayers",
+            description="Retain leading DiT segments within maxVram and transfer the remainder from CPU parameters.",
+        ),
+    ] = None
+    verbosity: Annotated[
+        Verbosity1 | None,
+        Field(
+            description="Shared native diffusion log level: 0=error, 1=warn, 2=info, 3=debug."
+        ),
     ] = None
     threads: Annotated[
         Literal[-1] | Threads | None,
