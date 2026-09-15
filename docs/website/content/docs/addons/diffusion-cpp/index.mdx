@@ -235,8 +235,10 @@ Config values are coerced to strings internally. Generation parameters (prompt, 
 | `threads` | number | auto | Number of CPU threads for model loading and CPU ops |
 | `type` | `'f32'` \| `'f16'` \| `'q4_0'` \| `'q8_0'` \| … | auto | Override weight quantisation type |
 | `rng` | `'cpu'` \| `'cuda'` \| `'std_default'` | `'cuda'` | RNG backend (`'cuda'` = philox RNG — not GPU-specific despite the name; recommended) |
-| `clip_on_cpu` | `true` \| `false` | `false` | Force CLIP encoder to run on CPU |
-| `vae_on_cpu` | `true` \| `false` | `false` | Force VAE to run on CPU |
+| `backend` | string | auto | Graph execution backend, globally or per module (for example `cuda0` or `diffusion=vulkan0,te=cpu`) |
+| `params_backend` | string | auto | Parameter residency, including `diffusion=cpu` or `diffusion=disk` |
+| `max_vram` | number \| string | `0` | VRAM budget in GiB for graph-cut execution; supports per-device values such as `cuda0=6,vulkan0=4` |
+| `stream_layers` | `true` \| `false` | `false` | Stream diffusion layers from CPU RAM when graph cutting is active and diffusion parameters are CPU-backed |
 | `flash_attn` | `true` \| `false` | `false` | Enable flash attention (reduces memory) |
 | `upscaler_tile_size` | number | `128` | ESRGAN upscaler tile size |
 
