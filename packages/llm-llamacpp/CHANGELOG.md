@@ -81,7 +81,12 @@
   audio-capable mmproj loads vision-only unless the new option is passed
   explicitly as `0`/`off`/`false`. Vision behaviour is unchanged; a caller
   relying on audio input from a combined projector must now opt back in.
-- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0` (upstream movement on the b10549 line: uninitialized ggml views after oversized MoE cache banks, plus KV-cache, hybrid-index memory, mtmd/clip and RPC backend changes; no API change for this package).
+- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0`. No API change for this package; the runtime changes as follows since `v10549.0.0`:
+  - Fixed an out-of-bounds tensor write in the MoE copy path. The used-expert scan ran unbounded, so a ubatch whose `ids` tensor had zero rows read past its own bitset and aborted on `GGML_ASSERT(offset <= nbytes ...)`. Reached with the persistent MoE expert cache — on by default under `--fit` — at `-c 65536` and above ([#260](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/260)).
+  - Fixed uninitialized ggml views after oversized MoE cache banks and context tensors ([#263](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/263)).
+  - `mtmd` gained the audio-encoder skip this release's `mmproj-no-audio` option drives ([#261](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/261)).
+  - Native MTP shares compute buffers and synchronizes draft catch-up before the target runs, now also on Vulkan and Metal and preserved across scheduler rebuilds ([#253](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/253)).
+  - qwen4exp correctness backports: `seq_cp`, block position keying, mtmd input, a CUDA abort, KV-unified NaN collapse, and indexer-cache `ext.x`/`ext.y` restore on state reload. Tensor parallelism is enabled and `-sm tensor` is now declared unsupported for the arch ([#255](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/255)).
 
 ### Fixed
 
