@@ -16,6 +16,10 @@ on:
     paths:
       - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
+      # The download this lane runs, and the file its model cache key hashes.
+      # Without it a PR that only edits the composite moves the cache key
+      # without running a single nmtcpp test.
+      - ".github/actions/download-translation-models/**"
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:
