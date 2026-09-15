@@ -371,9 +371,30 @@ async function describeBindingForDebug(addonPackage: string): Promise<string> {
   const parts: string[] = []
   const meta = import.meta as unknown as { resolve?: (s: string) => string; url?: string }
   parts.push(`registry-url=${meta.url ?? 'unknown'}`)
-  parts.push(
-    `require.addon=${typeof (globalThis as { require?: { addon?: unknown } }).require?.addon}`
-  )
+  // Which copy of the addon is on disk here: a registry install, or a link to
+  // the in-repo package (which ships no prebuilds and no platform deps).
+  try {
+    const fs = await import('bare-fs')
+    const urlMod = await import('bare-url')
+    const pkgUrl = meta.resolve ? meta.resolve(`${addonPackage}/package`) : ''
+    const pkgPath = pkgUrl ? urlMod.fileURLToPath(pkgUrl) : ''
+    const real = pkgPath ? String(fs.realpathSync(pkgPath)) : 'n/a'
+    const root = real.replace(/package\.json$/, '')
+    const pkg = JSON.parse(String(fs.readFileSync(real)))
+    parts.push(`pkg version=${pkg.version} symlinked=${real !== String(pkgPath)} root=${root}`)
+    for (const sub of ['prebuilds', 'binding.js', 'index.js', 'addonLogging.js']) {
+      let info = 'missing'
+      try {
+        const st = fs.statSync(root + sub)
+        info = st.isDirectory() ? `dir(${fs.readdirSync(root + sub).join(',')})` : `${st.size}b`
+      } catch {
+        info = 'missing'
+      }
+      parts.push(`${sub}=${info}`)
+    }
+  } catch (error) {
+    parts.push(`tree-probe failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
 
   for (const sub of ['', '/binding.js', '/addonLogging', '/package']) {
     const specifier = `${addonPackage}${sub}`
