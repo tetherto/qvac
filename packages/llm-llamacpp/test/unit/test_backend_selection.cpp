@@ -2886,7 +2886,7 @@ TEST_F(BackendSelectionTest, TensorDevicesPreferCapableSelectedBackend) {
 
 // Two identical cards: Vulkan reports the SAME description for both and
 // distinguishes them only by device_id (PCI bus id). Deduping on description
-// would silently collapse this to one device — which is the canonical
+// would silently collapse this to one device, which is the canonical
 // tensor-parallel setup, so it must not happen.
 TEST_F(BackendSelectionTest, SplitDevices_KeepsTwoIdenticalCards) {
   mockBackend.addDevice(withDeviceId(
@@ -2899,7 +2899,7 @@ TEST_F(BackendSelectionTest, SplitDevices_KeepsTwoIdenticalCards) {
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// A null device_id cannot be deduped against, so the device is kept —
+// A null device_id cannot be deduped against, so the device is kept.
 // dropping a real GPU is worse than tolerating a duplicate. Mirrors fabric,
 // whose find_if only matches when both ids are non-null.
 TEST_F(BackendSelectionTest, SplitDevices_KeepsDevicesWithoutDeviceId) {

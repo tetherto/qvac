@@ -1072,12 +1072,12 @@ namespace LlmLlamacpp {
      * Which GPU to use. Four forms:
      *
      * - a device index, e.g. `0`. **Indexes ggml's full device list, whose
-     *   order depends on which backends loaded** — adding CUDA moves it. The
+     *   order depends on which backends loaded**. Adding CUDA moves it. The
      *   whole value must be an integer; `'1abc'` is rejected.
      * - `'integrated'` / `'dedicated'`
-     * - a backend-qualified index, e.g. `'cuda:0'` — the nth device of that
+     * - a backend-qualified index, e.g. `'cuda:0'`, the nth device of that
      *   family, independent of backend order
-     * - a PCI bus id, e.g. `'0000:65:00.0'` — stable against backend order,
+     * - a PCI bus id, e.g. `'0000:65:00.0'`, stable against backend order,
      *   driver order and adding a card
      *
      * Prefer one of the last two. A value that matches no device warns and

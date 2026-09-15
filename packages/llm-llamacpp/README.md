@@ -50,16 +50,13 @@ Vulkan when an NVIDIA device is present. On Windows, CUDA 13 runtime DLLs must b
   the requested type and passes over the ones that cannot, so on a machine that also has Vulkan
   these types simply run on Vulkan. Standard quantized types (`q4_0`, `q8_0`, …) work normally on
   CUDA and are unaffected. The load still fails, naming the devices it passed over, when *no*
-  available GPU can run the type — a CUDA-only machine, say — because quietly falling back to CPU
+  available GPU can run the type, such as a CUDA-only machine, because quietly falling back to CPU
   would be far slower than the `device: "gpu"` you asked for. Use `device: "cpu"` if that is what
   you want.
-- The shipped CUDA module covers **compute capability 8.0 and above**: native code for 8.6 and
-  12.0a, and PTX for 8.0 that the driver JIT-compiles forward onto anything newer. **A card below
-  8.0 — Turing, Volta, Pascal and older — currently still enumerates, is selected over Vulkan, and
-  then fails at the first kernel launch instead of falling back.** Set `backend: "vulkan"` or
-  `CUDA_VISIBLE_DEVICES=-1` on those machines. From `qvac-fabric` v10297.2.0 such a card is refused
-  at registration and the load falls through to Vulkan, then CPU, with no configuration needed; see
-  [qvac#4171](https://github.com/tetherto/qvac/issues/4171).
+- The shipped x64 CUDA module covers **compute capability 7.5 and above**, with PTX for 7.5 and
+  native code for selected Ampere, Ada and Blackwell targets. Linux arm64 ships separate CUDA 13
+  and CUDA 12 modules for DGX Spark and Jetson Orin. A device that cannot load either module is
+  refused during registration, so selection falls through to Vulkan, then CPU.
 - The driver caches the PTX JIT result under `$HOME/.nv/ComputeCache`. If `$HOME` is absent or
   read-only, as in many containers, that cache is disabled and the JIT cost is paid on every
   process start rather than once. Set `CUDA_CACHE_PATH` to a writable directory to avoid that.
