@@ -110,31 +110,49 @@ std::pair<BackendType, std::string> chooseBackend(
     bool* outIsMaliGpu = nullptr,
     const std::vector<std::string>& backendOverride = {});
 
-/// @brief Count GPU devices available for multi-GPU split mode.
-/// Returns the number of discrete GPUs when any are present; otherwise
-/// falls back to the iGPU count. This mirrors backends like Vulkan which
-/// exclude iGPUs by default when discrete GPUs exist.
+/// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
 
-/// @brief The ordered device names to hand to `--device` for
-/// LLAMA_SPLIT_MODE_TENSOR.
+struct SplitDevice {
+  std::string name;
+  ggml_backend_dev_t handle = nullptr;
+  size_t sourceGpuIndex = 0;
+  bool isRpc = false;
+  std::optional<int> adrenoVersion;
+  bool isOpenCl = false;
+  bool isMetal = false;
+};
+
+struct SplitDeviceSelection {
+  std::vector<SplitDevice> devices;
+  size_t sourceGpuCount = 0;
+  std::vector<std::string> rejectedDevices;
+};
+
+/// @brief The authoritative allowlisted device set for multi-GPU modes.
+SplitDeviceSelection getSplitDeviceSelection(const BackendInterface& bckI);
+
+/// @brief `getSplitDeviceSelection()` against the real ggml registry.
+SplitDeviceSelection getSplitDeviceSelection();
+
+/// @brief Apply the Adreno workload restrictions to a split device set.
 ///
-/// QVAC-24253. Tensor mode is the one split mode qvac-fabric selects devices
-/// for with no type filter and no deduplication: its branch in `src/llama.cpp`
-/// keeps everything whose buffer type is not the CPU buffer type, so
-/// integrated GPUs are included unconditionally and a physical GPU registered
-/// by two backends (e.g. Vulkan and HIP under GGML_BACKEND_DL) is added twice
-/// and receives two shards. `layer` and `row` route through fabric's filtered
-/// branch and are unaffected, so only tensor mode needs an explicit list.
+/// For one-bit (TQ1_0/TQ2_0) BitNet and for finetuning, using the max tier
+/// across the set's local devices:
+///   - Adreno <800: CPU only  -> clears @p selection.devices
+///   - Adreno 800+: prefer Vulkan over OpenCL -> drops the OpenCL devices
+void applyAdrenoRestrictions(
+    SplitDeviceSelection& selection, const ModelMetaData& metadata,
+    bool isFinetuning);
+
+/// @brief The names of `getSplitDeviceSelection()`'s devices, in order.
 ///
-/// Selection mirrors qvac-fabric's own filtered branch (`src/llama.cpp`) so the
-/// pinned list matches what fabric would have picked for `layer`/`row`:
-///   - RPC devices are excluded. ggml reports them as
-///     `GGML_BACKEND_DEVICE_TYPE_GPU` (`ggml-rpc.cpp`, with a TODO), and fabric
-///     segregates them precisely so they do not count as discrete GPUs —
-///     otherwise the local iGPU is dropped on an iGPU + RPC host. This also
-///     matches `emplaceIfValidDevice`, which already skips RPC.
-///   - Discrete GPUs when any are present, otherwise the integrated ones.
+/// Selection mirrors qvac-fabric's device ordering while applying this addon's
+/// supported-backend allowlist:
+///   - CUDA, RPC, Vulkan, Metal and Adreno OpenCL devices are eligible.
+///   - RPC devices are prepended and do not suppress a local integrated GPU.
+///   - Local discrete GPUs when any are present, otherwise the first
+///     integrated GPU plus any later one sharing its backend registry handle.
 ///   - Duplicates are dropped by `ggml_backend_dev_props::device_id`, the same
 ///     key fabric uses. Deduping by *description* would be wrong: Vulkan sets
 ///     the description to the raw device name, which is identical for two
@@ -212,4 +230,7 @@ bool shouldWarnAboutJitCache(const JitCacheEnv& env);
 /// @brief `shouldWarnAboutJitCache()` against the real environment. Always
 /// false off linux, where this module is not built as a loadable CUDA backend.
 bool shouldWarnAboutJitCache();
+
+/// Returns an empty vector when callers must fall back to CPU.
+std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 } // namespace backend_selection
