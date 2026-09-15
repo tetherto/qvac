@@ -4,18 +4,46 @@ on:
 permissions: {}
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-vulkaninfo:
-    runs-on: ai-run-windows11-gpu
+    needs: runner_names
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 5
+    permissions: {}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+          - os: ubuntu-24.04
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
     steps:
-      - name: GPU detection via nvidia-smi and vulkaninfo
-        continue-on-error: true
-        shell: powershell
+      - name: Read CPU memory and GPU diagnostics
+        shell: bash
         run: |
-          Write-Host "=== GPU Device List ==="
-          nvidia-smi -L
-          Write-Host ""
-          Write-Host "=== Running nvidia-smi ==="
-          nvidia-smi
-          Write-Host ""
-          Write-Host "=== Running Vulkaninfo ==="
-          vulkaninfo.exe --summary
+          python3 -c '
+          import os, pathlib, shutil, subprocess
+          print("Logical CPUs:", os.cpu_count(), flush=True)
+          for filename in ["/proc/meminfo", "/proc/swaps", "/proc/pressure/memory",
+                           "/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current",
+                           "/sys/fs/cgroup/cpu.max"]:
+              source = pathlib.Path(filename)
+              print("RESOURCE", filename, flush=True)
+              print(source.read_text() if source.exists() else "unavailable", flush=True)
+          for key in ["GGML_VK_PREFER_HOST_MEMORY", "GGML_VK_DISABLE_ASYNC",
+                      "GGML_VK_SUBALLOCATION_BLOCK_SIZE", "GGML_VK_FORCE_MAX_BUFFER_SIZE",
+                      "GGML_VK_FORCE_MAX_ALLOCATION_SIZE", "OMP_NUM_THREADS"]:
+              print("SETTING", key, repr(os.environ.get(key)), flush=True)
+          for command in [["lscpu"], ["nvidia-smi"], ["nvidia-smi", "-q"], ["vulkaninfo"]]:
+              print("DIAGNOSTIC", command, flush=True)
+              if shutil.which(command[0]):
+                  result = subprocess.run(command, timeout=90, check=False)
+                  print("EXIT", result.returncode, flush=True)
+              else:
+                  print("unavailable", flush=True)
+          '
