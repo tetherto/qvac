@@ -283,7 +283,11 @@ export function findOrphanedSeeds(files) {
  * audiogen functional leg absorbed the all-dit-variants benchmark set.
  */
 /**
- * Prefix collisions that already exist on main. Each is a real hazard: the
+ * Prefix collisions that already exist on main.
+ *
+ * The nx-vs-per-addon pairs for vla and translation were here until those two
+ * moved onto project.json as their single model definition -- all three
+ * consumers now share one key, so there is nothing left to collide. Each is a real hazard: the
  * shorter leg can prefix-match the other's entry, find its files present, skip
  * its own download and save the union under its own key. None is introduced by
  * the model-cache seeding work, and fixing them changes what other lanes
@@ -319,24 +323,6 @@ export const KNOWN_COLLISIONS = [
     bSuffix: '',
     bGlob: '',
     why: "pin-model-manifest and the integration job share a path list and suffix but hash different globs, so one prefix covers both keys",
-  },
-  {
-    a: 'integration-test-translation-nmtcpp.yml',
-    aSuffix: '',
-    aGlob: '.github/actions/download-translation-models/action.yml',
-    b: 'packages/translation-nmtcpp/project.json',
-    bSuffix: '',
-    bGlob: 'packages/translation-nmtcpp/project.json',
-    why: "the nx lane and the per-addon lane cache the same directory under different globs; resolving it needs one download definition (see #3903)",
-  },
-  {
-    a: 'integration-test-vla.yml',
-    aSuffix: '',
-    aGlob: '.github/actions/download-vla-models/action.yml',
-    b: 'packages/vla-ggml/project.json',
-    bSuffix: '',
-    bGlob: 'packages/vla-ggml/project.json',
-    why: "same as translation: nx and the per-addon lane share a path list",
   },
 ]
 

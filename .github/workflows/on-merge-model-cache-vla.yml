@@ -15,7 +15,7 @@ on:
       - main
     # Both entries' cache keys hash these composites.
     paths:
-      - ".github/actions/download-vla-models/action.yml"
+      - "packages/vla-ggml/project.json"
       - ".github/actions/download-vla-groot-parity/action.yml"
       # `paths` is pinned at the call site, but cache-models still builds the key
       # string and resolves the hash glob, so an edit there can still move this
@@ -100,7 +100,7 @@ jobs:
         with:
           package: vla-ggml
           paths: packages/vla-ggml/model/vla
-          hash-files-glob: .github/actions/download-vla-models/action.yml
+          hash-files-glob: packages/vla-ggml/project.json
           seed-probe: 'true'
           force-refresh: ${{ inputs.force_refresh || false }}
 
@@ -109,13 +109,25 @@ jobs:
       # under test/, which the cache does not cover. Here those dirs are thrown
       # away at job end and actions/cache skips the save on an exact hit, so an
       # ungated pull would drag ~8 GB from S3 for nothing on every warm cron.
+      - name: Resolve the S3 model set
+        id: model-s3
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/project-model-s3
+        with:
+          package: vla-ggml
+
+      # Whole step still gated, not just smolvla: on a hit the oracle dirs this
+      # would also pull are thrown away at job end, so an ungated run would drag
+      # ~8 GB from S3 for nothing on every warm cron. cache-hit is left empty so
+      # that on a miss every entry downloads, skipOnCacheHit or not.
       - name: Download VLA models from S3
         if: steps.model-cache.outputs.cache-hit != 'true'
-        uses: ./.github/actions/download-vla-models
+        uses: ./.github/actions/stage-integration-models
         with:
-          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
           workdir: packages/vla-ggml
-          download-smolvla: 'true'
+          s3-manifest: ${{ steps.model-s3.outputs.manifest }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
 
   seed-cpp-groot:
     needs: runner_names
@@ -218,7 +230,7 @@ jobs:
         with:
           package: vla-ggml
           paths: packages/vla-ggml/model/vla
-          hash-files-glob: .github/actions/download-vla-models/action.yml
+          hash-files-glob: packages/vla-ggml/project.json
           assert-exists: 'true'
 
   # actions/cache only WARNS when the cache server rejects a reservation, so the

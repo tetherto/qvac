@@ -4,9 +4,10 @@ name: On Merge Model Cache (Translation)
 # reachable from a pull_request_target caller, where cache-models takes its
 # restore-only branch, so nothing writes the entry.
 #
-# The download lives in .github/actions/download-translation-models, shared with
-# the integration lane, so the seeded set and the set the tests need cannot
-# drift.
+# The model set is defined once, in packages/translation-nmtcpp/project.json,
+# and resolved through stage-integration-models by this seed, the per-addon
+# lane and the nx lane alike. One definition, one cache key input, so the
+# seeded set and the set the tests need cannot drift.
 
 on:
   push:
@@ -15,7 +16,7 @@ on:
     # Also the cache key's hash input, so this is the only file whose change can
     # invalidate the entry.
     paths:
-      - ".github/actions/download-translation-models/action.yml"
+      - "packages/translation-nmtcpp/project.json"
       # `paths` is pinned at the call site, but cache-models still builds the key
       # string and resolves the hash glob, so an edit there can still move this
       # entry. A run that finds nothing moved costs seconds: the probe answers
@@ -100,15 +101,24 @@ jobs:
         with:
           package: translation-nmtcpp
           paths: packages/translation-nmtcpp/model
-          hash-files-glob: .github/actions/download-translation-models/action.yml
+          hash-files-glob: packages/translation-nmtcpp/project.json
           seed-probe: 'true'
           force-refresh: ${{ inputs.force_refresh || false }}
 
-      - name: Download NMT models from S3
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        uses: ./.github/actions/download-translation-models
+      - name: Resolve the S3 model set
+        id: model-s3
+        uses: ./.github/actions/project-model-s3
         with:
-          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          package: translation-nmtcpp
+
+      - name: Download NMT models from S3
+        uses: ./.github/actions/stage-integration-models
+        with:
+          workdir: packages/translation-nmtcpp
+          s3-manifest: ${{ steps.model-s3.outputs.manifest }}
+          cache-hit: ${{ steps.model-cache.outputs.cache-hit }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
 
   # actions/cache only WARNS when the cache server rejects a reservation, so the
   # seed job above reports success whether or not an entry was written. This
@@ -155,5 +165,5 @@ jobs:
         with:
           package: translation-nmtcpp
           paths: packages/translation-nmtcpp/model
-          hash-files-glob: .github/actions/download-translation-models/action.yml
+          hash-files-glob: packages/translation-nmtcpp/project.json
           assert-exists: 'true'

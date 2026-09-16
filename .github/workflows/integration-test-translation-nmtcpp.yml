@@ -226,18 +226,28 @@ jobs:
         with:
           package: translation-nmtcpp
           paths: packages/translation-nmtcpp/model
-          # Keyed on the composite that defines the model set, not on this
-          # workflow file. The old glob rehashed on every unrelated edit here,
-          # churning the key and throwing away a good cache.
-          hash-files-glob: .github/actions/download-translation-models/action.yml
+          # Keyed on the file that DEFINES the model set and that the download
+          # below resolves from, so a dated S3 bump moves the key. Same input the
+          # nx lane and the seed use.
+          hash-files-glob: packages/translation-nmtcpp/project.json
 
-      # Shared with on-merge-model-cache-translation.yml so the seeded cache and
-      # the set the tests need cannot drift.
-      - name: Download NMT models from S3
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        uses: ./.github/actions/download-translation-models
+      # Resolved from packages/translation-nmtcpp/project.json, the same
+      # definition integration-test-nx.yml uses. One model set, one cache key
+      # input, three consumers: this lane, the nx lane and the seed.
+      - name: Resolve the S3 model set
+        id: model-s3
+        uses: ./.github/actions/project-model-s3
         with:
-          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          package: translation-nmtcpp
+
+      - name: Download NMT models from S3
+        uses: ./.github/actions/stage-integration-models
+        with:
+          workdir: packages/translation-nmtcpp
+          s3-manifest: ${{ steps.model-s3.outputs.manifest }}
+          cache-hit: ${{ steps.model-cache.outputs.cache-hit }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}

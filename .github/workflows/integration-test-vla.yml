@@ -370,21 +370,34 @@ jobs:
         with:
           package: vla-ggml
           paths: packages/vla-ggml/model/vla
-          # Keyed on the composite that defines the model set, not on this
-          # workflow file, so unrelated edits here stop churning the key.
-          hash-files-glob: .github/actions/download-vla-models/action.yml
+          # Keyed on the file that DEFINES the model set and that the download
+          # below resolves from. Same input the nx lane and the seed use.
+          hash-files-glob: packages/vla-ggml/project.json
 
       # Shared with on-merge-model-cache-vla.yml so the seeded cache and the set
       # the tests need cannot drift. SmolVLA is skipped on a cache hit; pi05 and
       # GR00T are always fetched, because the cache covers model/vla but not the
       # oracle directories under test/.
+      - name: Resolve the S3 model set
+        id: model-s3
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        uses: ./.github/actions/project-model-s3
+        with:
+          package: vla-ggml
+
+      # smolvla carries skipOnCacheHit in project.json, so passing cache-hit
+      # reproduces the old download-smolvla gate; pi05 and GR00T have no flag
+      # and still download unconditionally, because the cache covers model/vla
+      # but not the oracle dirs under test/.
       - name: Download VLA models from S3
         if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
-        uses: ./.github/actions/download-vla-models
+        uses: ./.github/actions/stage-integration-models
         with:
-          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
           workdir: ${{ env.WORKDIR }}
-          download-smolvla: ${{ steps.model-cache.outputs.cache-hit != 'true' }}
+          s3-manifest: ${{ steps.model-s3.outputs.manifest }}
+          cache-hit: ${{ steps.model-cache.outputs.cache-hit }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
 
       # The prebuilt Windows addon links against ggml-vulkan.dll, which itself
       # depends on the Vulkan loader (vulkan-1.dll). The qvac-win25-x64-gpu
