@@ -54,6 +54,10 @@ const SCALAR_SIZE = {
   [TYPE.FLOAT64]: 8
 }
 
+// Where the vocabulary size is read from when `{arch}.vocab_size` is absent,
+// in the registry's order. Both are [n_embd, n_vocab].
+const VOCAB_TENSORS = ['token_embd.weight', 'output.weight']
+
 const TOKENIZER_MODEL = 'tokenizer.ggml.model'
 const TOKEN_TYPE_COUNT = 'tokenizer.ggml.token_type_count'
 
@@ -251,33 +255,39 @@ function writeTensorInfo(chunks, tensor, offset) {
 // (vision towers, codecs, ASR) have no vocabulary to declare, and the registry
 // omits the key there too.
 function vocabSize(meta) {
-  const embd = meta.tensors.find((t) => t.name === 'token_embd.weight')
-  return embd === undefined || embd.dims.length < 2 ? undefined : embd.dims[1]
+  for (const name of VOCAB_TENSORS) {
+    const tensor = meta.tensors.find((t) => t.name === name)
+    if (tensor !== undefined && tensor.dims.length >= 2) return tensor.dims[1]
+  }
+  return undefined
 }
 
 // The KV block of a stub: everything the source declares except the tokenizer
 // tables, with the keys the vocab load still needs forced to the values that
 // take it to its early return. A shard past the first declares no tokenizer of
 // its own, so it gains nothing here either.
-function stubKvs(meta) {
+function stubKvs(meta, { includeSource = true } = {}) {
   const kept = []
-  let sawTokenizer = false
-  for (const kv of meta.kvs) {
-    if (!kv.key.startsWith('tokenizer.')) kept.push({ raw: kv })
-    else if (kv.key === TOKEN_TYPE_COUNT) kept.push({ raw: kv })
-    if (kv.key.startsWith('tokenizer.')) sawTokenizer = true
-  }
-  if (!sawTokenizer) return kept
 
-  // No architecture means no `{arch}.vocab_size` to restate — a shard past the
-  // first, or a model llama identifies some other way.
-  const arch = kvValue(meta, 'general.architecture')
-  if (typeof arch === 'string' && kvValue(meta, `${arch}.vocab_size`) === undefined) {
-    const vocab = vocabSize(meta)
-    if (vocab !== undefined) {
-      kept.push({ key: `${arch}.vocab_size`, type: TYPE.UINT32, value: vocab })
+  if (includeSource) {
+    for (const kv of meta.kvs) {
+      if (!kv.key.startsWith('tokenizer.')) kept.push({ raw: kv })
+      else if (kv.key === TOKEN_TYPE_COUNT) kept.push({ raw: kv })
+    }
+
+    // No architecture means no `{arch}.vocab_size` to restate.
+    const arch = kvValue(meta, 'general.architecture')
+    if (typeof arch === 'string' && kvValue(meta, `${arch}.vocab_size`) === undefined) {
+      const vocab = vocabSize(meta)
+      if (vocab !== undefined) {
+        kept.push({ key: `${arch}.vocab_size`, type: TYPE.UINT32, value: vocab })
+      }
     }
   }
+
+  // Unconditional, on every shard and on a source that never had a tokenizer at
+  // all (an mmproj, say): absent the key the loader has no vocabulary
+  // implementation to pick and refuses the file. Ingest writes it the same way.
   kept.push({ key: TOKENIZER_MODEL, type: TYPE.STRING, value: 'none' })
   return kept
 }
@@ -382,7 +392,7 @@ function writeSplit(srcPath, prefix, { splitCount = 2, stub = false } = {}) {
   const shards = shardTensors(meta, splitCount)
 
   return shards.map((tensors, i) => {
-    const source = i === 0 ? (stub ? stubKvs(meta) : allKvs(meta)) : []
+    const source = stub ? stubKvs(meta, { includeSource: i === 0 }) : i === 0 ? allKvs(meta) : []
     return writeGguf({
       destPath: splitPath(prefix, i, splitCount),
       srcPath,

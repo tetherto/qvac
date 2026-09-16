@@ -117,6 +117,12 @@ test('a split of fit stubs projects the same plan as the full split', async func
     'the first shard alone is not the model'
   )
 
+  // Ingest writes the key into every shard it stubs, not just the one carrying
+  // the metadata, so the fixture has to as well.
+  for (const [i, shard] of stubSplit.entries()) {
+    t.is(kvValue(readGguf(shard), 'tokenizer.ggml.model'), 'none', `shard ${i + 1} declares it`)
+  }
+
   // The loader derives the sibling shards from the first one, so passing the
   // first path is what fits the whole model.
   for (const config of CONFIGS) {
