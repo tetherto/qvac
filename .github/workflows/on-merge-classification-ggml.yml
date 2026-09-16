@@ -3,10 +3,7 @@ name: On Merge Trigger (Classification-ggml)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/classification-ggml/**"
       - ".github/workflows/*classification-ggml*.yml"

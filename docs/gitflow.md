@@ -79,9 +79,12 @@ This repo assumes a **fork-first** workflow:
    If you need commits from `main` in a release line, you **cherry-pick locally in your fork** and PR into the release branch.
 
 3) **Publishing happens on merge to upstream**  
-   - Merge to `main` can publish **dev** builds (GitHub Packages) when package paths changed.
    - Merge to `release-*` can publish to **NPM** for that package/version.
+   - Merge to `main` can publish **dev** builds (GitHub Packages) when package paths changed.
    - Merge to `feature-*` / `tmp-*` can publish **feature/temp** builds (GitHub Packages).
+   - **Native addons are the exception.** Their `on-merge-<addon>.yml` pipelines
+     push-trigger on `release-*` only. A `main`, `feature-*` or `tmp-*` addon build is
+     produced by dispatching that workflow on the branch, never by pushing to it.
 
 ### One-time fork setup (recommended)
 
@@ -123,6 +126,12 @@ git push -u origin feature-<package>-<short-desc>
 | Release | `release-<package>-<x.y.z>` | Maintainers | Versioned release line | **NPM** | Stable releases only |
 | Feature | `feature-<package>-*` | Optional (maintainers) | Share a dev build for a large/isolated effort | GitHub Packages (**feature**) | Never publish to NPM |
 | Temp | `tmp-<package>-*` | Optional (maintainers) | Experiments / QA previews | GitHub Packages (**temp**) | Never publish to NPM |
+
+The **Publishes to** column describes what a branch is *for*. How a build is
+started differs by package family: libraries and the SDK publish on push, while
+native addon pipelines push-trigger on `release-*` only and take every other
+branch by `workflow_dispatch` on that branch. See
+[MOBILE-ON-DEMAND.md](ci/MOBILE-ON-DEMAND.md#testing-unmerged--unpublished-native-code).
 
 **Publishing semantics**
 

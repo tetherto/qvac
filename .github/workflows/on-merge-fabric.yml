@@ -3,10 +3,7 @@ name: On Merge Trigger (Fabric)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/fabric/**"
       - ".github/workflows/*fabric*.yml"

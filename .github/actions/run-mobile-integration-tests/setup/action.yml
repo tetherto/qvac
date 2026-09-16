@@ -351,6 +351,9 @@ runs:
               echo "Check the package and version exist at https://github.com/orgs/tetherto/packages?tab=packages&q=$SPEC_NAME"
               echo "Dev builds are named @tetherto/<addon>-mono@<version>-tmp.runid-<run id>;"
               echo "the version is produced by the On Merge Trigger run for your branch."
+              echo "That run is no longer started by pushing: publish pipelines"
+              echo "push-trigger on release-* only. Dispatch it on your branch first:"
+              echo "  gh workflow run on-merge-<addon>.yml --repo tetherto/qvac --ref <branch>"
               ;;
             *)
               echo "Please check that it exists at https://www.npmjs.com/package/$SPEC_NAME"

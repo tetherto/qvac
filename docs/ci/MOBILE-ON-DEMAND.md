@@ -181,14 +181,28 @@ its compiled `.bare`. If your change touches `addon/src/**`, you must pin a GPR
 dev build, or the run exercises your new tests against the **published** engine
 and passes for the wrong reason.
 
-**Step 1 — publish a dev build of your branch.** Push it as `tmp-<TICKET>`; the
-addon's *On Merge Trigger* workflow builds the prebuilds and publishes
+**Step 1 — publish a dev build of your branch.** Push it as `tmp-<TICKET>`, then
+dispatch the addon's *On Merge Trigger* workflow against that branch. It builds
+the prebuilds and publishes
 `@tetherto/<addon>-mono@<pkg-version>-tmp.runid-<run id>` to GitHub Packages.
 
 ```bash
 BRANCH=tmp-QVAC-1234
+WF=llm-llamacpp
 git push origin HEAD:refs/heads/$BRANCH
+gh workflow run on-merge-$WF.yml --repo tetherto/qvac --ref $BRANCH
 ```
+
+The push alone builds nothing. Publish pipelines are push-triggered on
+`release-*` only, so a branch build is always a deliberate dispatch — pushing to
+an open PR's branch no longer starts a 9-platform matrix behind your back.
+
+Branch naming still matters: `npm-publish-logic` reads the dist-tag off the
+branch name, so dispatch from a `tmp-*` or `feature-*` branch. Any other name
+publishes nothing. The version string is unaffected — it is built from the run
+id, so it is the same whether the run came from a push or a dispatch. Only the
+GPR dist-tag differs (`dev` rather than `temp`, on the addons whose dispatch
+`tag` input defaults to `dev`), and Step 2 pins the exact version anyway.
 
 Wait for that run to finish — the mobile dispatch needs the package to exist.
 
@@ -274,14 +288,6 @@ the pin did not arrive and you are testing the published release.
 the same run from `ref`, and `decoder-audio` has no native prebuild of its own
 (it rides on `bare-ffmpeg`'s, so its `package` input does not change what is
 tested) — for both, plain `--ref <branch>` is enough.
-
-> **Two addons cannot do this today.** `ocr-ggml` and `translation-nmtcpp` never
-> publish a GPR dev build — their `publish-gpr` job is skipped on every push
-> because it depends transitively on the `release-merge-guard` job, which is
-> skipped on any non-`release-*` branch, and unlike `build` it does not opt out
-> with `!cancelled()`. `@tetherto/ocr-ggml-mono` has therefore never existed, and
-> `@tetherto/translation-nmtcpp-mono` is frozen at 2026-06-30. Until that is
-> fixed there is no way to put unmerged native code for those two on a device.
 
 > The **`ref`** input defaults to **blank**, so the run checks out the branch you
 > dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass

@@ -3,10 +3,7 @@ name: On Merge Trigger (LLM)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llamacpp-llm*.yml"
