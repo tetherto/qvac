@@ -23,10 +23,15 @@ struct MockDevice {
   std::string backend_name;
   std::string regName;
   enum ggml_backend_dev_type type;
-  /// `ggml_backend_dev_props::device_id` — the PCI bus id for Vulkan, unique
-  /// per physical card. Empty means ggml reported null, which is the "cannot
-  /// dedupe, keep it" case. Descriptions are NOT unique: Vulkan reports the
-  /// raw device name, identical across identical cards.
+  /// Whether this device's backend registry exposes
+  /// `ggml_backend_split_buffer_type`, i.e. whether it can do row-split. Only
+  /// SYCL does as of qvac-fabric v10069, so this defaults to false.
+  bool hasSplitBuffers = false;
+  /// `ggml_backend_dev_props::device_id` is the PCI bus id published by both
+  /// CUDA and Vulkan and unique per physical card. Empty means ggml reported
+  /// null, which is the "cannot dedupe, keep it" case. Descriptions are NOT
+  /// unique: Vulkan reports the raw device name, identical across identical
+  /// cards.
   std::string deviceId;
   /// Index of the device whose `ggml_backend_reg_t` this device reports; unset
   /// means its own. The iGPU retention rule compares registry identity, not
@@ -75,7 +80,7 @@ public:
   mutable std::deque<std::string> string_storage;
 
   // Static pointer for function pointer callbacks (thread-safe for tests)
-  static thread_local MockBackendInterface* currentInstance;
+  static thread_local MockBackendInterface* g_currentInstance;
 
   void addDevice(const MockDevice& device) { devices.push_back(device); }
 
@@ -91,114 +96,137 @@ public:
     const_cast<MockBackendInterface*>(this)->setCurrentInstance();
 
     return BackendInterface{
-        &MockBackendInterface::static_dev_count,
-        &MockBackendInterface::static_dev_backend_reg,
-        &MockBackendInterface::static_dev_get,
-        &MockBackendInterface::static_reg_name,
-        &MockBackendInterface::static_dev_description,
-        &MockBackendInterface::static_dev_name,
-        &MockBackendInterface::static_dev_type,
-        &MockBackendInterface::static_dev_get_props,
-        &MockBackendInterface::static_llamaLogCallback};
+        &MockBackendInterface::staticDevCount,
+        &MockBackendInterface::staticDevBackendReg,
+        &MockBackendInterface::staticDevGet,
+        &MockBackendInterface::staticRegName,
+        &MockBackendInterface::staticDevDescription,
+        &MockBackendInterface::staticDevName,
+        &MockBackendInterface::staticDevType,
+        &MockBackendInterface::staticRegGetProcAddress,
+        &MockBackendInterface::staticDevGetProps,
+        &MockBackendInterface::staticLlamaLogCallback};
   }
 
 private:
-  void setCurrentInstance() { currentInstance = this; }
+  void setCurrentInstance() { g_currentInstance = this; }
 
   // Static callback functions
-  static size_t static_dev_count() {
-    if (currentInstance != nullptr) {
-      return currentInstance->devices.size();
+  static size_t staticDevCount() {
+    if (g_currentInstance != nullptr) {
+      return g_currentInstance->devices.size();
     }
     return 0;
   }
 
-  static ggml_backend_reg_t static_dev_backend_reg(ggml_backend_dev_t dev) {
+  static ggml_backend_reg_t staticDevBackendReg(ggml_backend_dev_t dev) {
     // One registry per device unless the device aliases another's, resolved
     // through the live vector so a reallocation cannot leave a stale pointer.
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (currentInstance != nullptr && mock_dev != nullptr &&
-        mock_dev->regAliasIndex.has_value() &&
-        mock_dev->regAliasIndex.value() < currentInstance->devices.size()) {
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    if (g_currentInstance != nullptr && mockDev != nullptr &&
+        mockDev->regAliasIndex.has_value() &&
+        mockDev->regAliasIndex.value() < g_currentInstance->devices.size()) {
       return reinterpret_cast<ggml_backend_reg_t>(
-          &currentInstance->devices[mock_dev->regAliasIndex.value()]);
+          &g_currentInstance->devices[mockDev->regAliasIndex.value()]);
     }
     return reinterpret_cast<ggml_backend_reg_t>(dev);
   }
 
-  static ggml_backend_dev_t static_dev_get(size_t index) {
-    if (currentInstance && index < currentInstance->devices.size()) {
+  static ggml_backend_dev_t staticDevGet(size_t index) {
+    if (g_currentInstance && index < g_currentInstance->devices.size()) {
       return reinterpret_cast<ggml_backend_dev_t>(
-          const_cast<MockDevice*>(&currentInstance->devices[index]));
+          const_cast<MockDevice*>(&g_currentInstance->devices[index]));
     }
     return nullptr;
   }
 
-  static const char* static_reg_name(ggml_backend_reg_t reg) {
-    if (!currentInstance)
+  static const char* staticRegName(ggml_backend_reg_t reg) {
+    if (!g_currentInstance)
       return "";
     MockDevice* dev = reinterpret_cast<MockDevice*>(reg);
     if (dev) {
-      currentInstance->string_storage.push_back(dev->regName);
-      return currentInstance->string_storage.back().c_str();
+      g_currentInstance->string_storage.push_back(dev->regName);
+      return g_currentInstance->string_storage.back().c_str();
     }
     return "";
   }
 
-  static const char* static_dev_description(ggml_backend_dev_t dev) {
-    if (!currentInstance)
+  static const char* staticDevDescription(ggml_backend_dev_t dev) {
+    if (!g_currentInstance)
       return "";
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev) {
-      currentInstance->string_storage.push_back(mock_dev->description);
-      return currentInstance->string_storage.back().c_str();
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    if (mockDev) {
+      g_currentInstance->string_storage.push_back(mockDev->description);
+      return g_currentInstance->string_storage.back().c_str();
     }
     return "";
   }
 
-  static const char* static_dev_name(ggml_backend_dev_t dev) {
-    if (!currentInstance)
+  static const char* staticDevName(ggml_backend_dev_t dev) {
+    if (!g_currentInstance)
       return "";
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev) {
-      currentInstance->string_storage.push_back(mock_dev->backend_name);
-      return currentInstance->string_storage.back().c_str();
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    if (mockDev) {
+      g_currentInstance->string_storage.push_back(mockDev->backend_name);
+      return g_currentInstance->string_storage.back().c_str();
     }
     return "";
   }
 
-  static void static_dev_get_props(
-      ggml_backend_dev_t dev, struct ggml_backend_dev_props* props) {
-    *props = {};
-    if (!currentInstance)
-      return;
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev && !mock_dev->deviceId.empty()) {
-      currentInstance->string_storage.push_back(mock_dev->deviceId);
-      props->device_id = currentInstance->string_storage.back().c_str();
-    }
-  }
-
-  static enum ggml_backend_dev_type static_dev_type(ggml_backend_dev_t dev) {
-    if (!currentInstance)
+  static enum ggml_backend_dev_type staticDevType(ggml_backend_dev_t dev) {
+    if (!g_currentInstance)
       return GGML_BACKEND_DEVICE_TYPE_CPU;
-    MockDevice* mock_dev = reinterpret_cast<MockDevice*>(dev);
-    if (mock_dev) {
-      return mock_dev->type;
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    if (mockDev) {
+      return mockDev->type;
     }
     return GGML_BACKEND_DEVICE_TYPE_CPU;
   }
 
-  static void static_llamaLogCallback(
+  // `static_dev_backend_reg` hands back the device pointer as the registry
+  // handle, so recover the MockDevice from it to answer per-device.
+  static void*
+  staticRegGetProcAddress(ggml_backend_reg_t reg, const char* name) {
+    if (g_currentInstance == nullptr || reg == nullptr || name == nullptr) {
+      return nullptr;
+    }
+    MockDevice* dev = reinterpret_cast<MockDevice*>(reg);
+    if (dev->hasSplitBuffers &&
+        std::string(name) == "ggml_backend_split_buffer_type") {
+      // Callers only test the address for presence, so any non-null will do.
+      return reinterpret_cast<void*>(dev);
+    }
+    return nullptr;
+  }
+
+  // Only `device_id` is read by the code under test; a device with no id
+  // leaves it null, which is how a backend without VK_EXT_pci_bus_info reports.
+  static void
+  staticDevGetProps(ggml_backend_dev_t dev, ggml_backend_dev_props* props) {
+    if (props == nullptr) {
+      return;
+    }
+    *props = {};
+    if (g_currentInstance == nullptr || dev == nullptr) {
+      return;
+    }
+    MockDevice* mockDev = reinterpret_cast<MockDevice*>(dev);
+    props->type = mockDev->type;
+    if (!mockDev->deviceId.empty()) {
+      g_currentInstance->string_storage.push_back(mockDev->deviceId);
+      props->device_id = g_currentInstance->string_storage.back().c_str();
+    }
+  }
+  static void staticLlamaLogCallback(
       ggml_log_level level, const char* text, void* userData) {
-    if (currentInstance != nullptr) {
-      currentInstance->logs.emplace_back(level, text != nullptr ? text : "");
+    if (g_currentInstance != nullptr) {
+      g_currentInstance->logs.emplace_back(level, text != nullptr ? text : "");
     }
   }
 };
 
 // Thread-local storage for the current instance
-thread_local MockBackendInterface* MockBackendInterface::currentInstance =
+thread_local MockBackendInterface* MockBackendInterface::g_currentInstance =
     nullptr;
 
 class BackendSelectionTest : public ::testing::Test {
@@ -207,11 +235,11 @@ protected:
 
   void SetUp() override {
     mockBackend.clearDevices();
-    MockBackendInterface::currentInstance = nullptr;
+    MockBackendInterface::g_currentInstance = nullptr;
   }
 
   void TearDown() override {
-    MockBackendInterface::currentInstance = nullptr;
+    MockBackendInterface::g_currentInstance = nullptr;
     mockBackend.clearDevices();
   }
 };
@@ -1317,6 +1345,556 @@ TEST_F(BackendSelectionTest, OutIsMaliGpuFalseWhenPreferredCpu) {
   EXPECT_FALSE(isMaliGpu);
 }
 
+// ---- QVAC-23763: CUDA prioritisation and the `backend` override ----
+
+// GPU backend names as ggml reports them. ggml-cuda uses "CUDA%d"; ggml-hip
+// uses "ROCm%d", which is why CUDA detection cannot pick up an AMD device.
+constexpr const char* CUDA0_BACK = "CUDA0";
+constexpr const char* CUDA1_BACK = "CUDA1";
+constexpr const char* ROCM0_BACK = "ROCm0";
+constexpr const char* NVIDIA_DESC = "NVIDIA GeForce RTX 3090";
+constexpr const char* TESLA_DESC = "Tesla T4";
+
+std::pair<BackendType, std::string> chooseWithOverride(
+    MockBackendInterface& mockBackend,
+    const std::vector<std::string>& backendOverride,
+    BackendType preferred = BackendType::GPU) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  return chooseBackend(
+      preferred,
+      bckI,
+      nullptr,
+      std::nullopt,
+      nullptr,
+      false,
+      nullptr,
+      backendOverride);
+}
+
+// The headline behaviour: on a host where the same physical GPU registers
+// under both backends, CUDA wins.
+TEST_F(BackendSelectionTest, CudaPreferredOverVulkan) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
+// Registration order must not decide the outcome. This is the whole reason the
+// preference is stated rather than inherited from ggml's load order.
+TEST_F(BackendSelectionTest, CudaPreferredOverVulkanRegardlessOfDeviceOrder) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
+// No CUDA module or no NVIDIA driver: the device never registers, so the
+// cascade lands on Vulkan with no special handling.
+TEST_F(BackendSelectionTest, VulkanChosenWhenNoCudaDevice) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, CudaAloneIsChosen) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
+// A discrete CUDA GPU must still beat an integrated GPU.
+TEST_F(BackendSelectionTest, CudaPreferredOverIntegratedGpu) {
+  mockBackend.addDevice(createIGPUDevice("Intel Arc", VULKAN0_BACK));
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "cuda0");
+}
+
+// Adreno OpenCL must keep winning: mobile behaviour is unchanged by CUDA.
+TEST_F(BackendSelectionTest, AdrenoOpenClStillBeatsCuda) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, CUDA0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "gpuopencl");
+}
+
+// "ROCm0" must not be mistaken for a CUDA device.
+TEST_F(BackendSelectionTest, RocmIsNotTreatedAsCuda) {
+  mockBackend.addDevice(createGPUDevice("AMD Radeon 8060S", ROCM0_BACK));
+  mockBackend.addDevice(createGPUDevice("AMD Radeon 8060S", VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+}
+
+// device 'cpu' must not enumerate a CUDA device.
+TEST_F(BackendSelectionTest, CudaIgnoredWhenPreferredCpu) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(BackendType::CPU, bckI);
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+TEST_F(BackendSelectionTest, OverrideForcesVulkanOnACudaHost) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  auto result = chooseWithOverride(mockBackend, {"vulkan"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, OverrideHonoursPriorityOrder) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
+  auto vulkanFirst = chooseWithOverride(mockBackend, {"vulkan", "cuda"});
+  expectChosen(vulkanFirst, BackendType::GPU, "vulkan0");
+  auto cudaFirst = chooseWithOverride(mockBackend, {"cuda", "vulkan"});
+  expectChosen(cudaFirst, BackendType::GPU, "cuda0");
+}
+
+// First entry absent, second present: skip to the second rather than failing.
+TEST_F(BackendSelectionTest, OverrideSkipsAbsentBackend) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
+  auto result = chooseWithOverride(mockBackend, {"cuda", "vulkan"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+}
+
+// Correctly spelled but nothing matches: fall through to the normal cascade
+// instead of failing the load, because an absent device is not a config error.
+TEST_F(BackendSelectionTest, OverrideFallsBackWhenNothingMatches) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, VULKAN0_BACK));
+  auto result = chooseWithOverride(mockBackend, {"cuda"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, OverrideFallsBackToCpuWhenNoGpuAtAll) {
+  auto result = chooseWithOverride(mockBackend, {"cuda", "vulkan"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// The override selects a family, not a device index: with two CUDA devices the
+// first one still wins.
+TEST_F(BackendSelectionTest, OverridePicksFirstDeviceOfFamily) {
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA1_BACK));
+  auto result = chooseWithOverride(mockBackend, {"cuda"});
+  expectChosen(result, BackendType::GPU, "cuda0");
+}
+
+// A non-Adreno OpenCL device is kept out of the default cascade, which is
+// Adreno-tuned, so the default pick is unchanged.
+TEST_F(BackendSelectionTest, NonAdrenoOpenClNotChosenByDefault) {
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", OPENCL_BACK));
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(BackendType::GPU, bckI);
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// But an explicit request must still reach it, otherwise 'opencl' is an
+// accepted family that matches nothing on an Intel or AMD host.
+TEST_F(BackendSelectionTest, OverrideReachesNonAdrenoOpenCl) {
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice("Intel Arc A770", VULKAN0_BACK));
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0");
+  auto result = chooseWithOverride(mockBackend, {"opencl"});
+  expectChosen(result, BackendType::GPU, "gpuopencl");
+}
+
+// An override must not resurrect a device a guard just cleared. BitNet TQ on
+// Adreno 800+ prefers Vulkan by clearing the OpenCL bucket.
+TEST_F(
+    BackendSelectionTest, OverrideCannotResurrectOpenClClearedByBitNetGuard) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_830_DESC, VULKAN0_BACK));
+  MockModelMetaData bitnetMeta(true, "bitnet");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &bitnetMeta,
+      std::nullopt,
+      nullptr,
+      false,
+      nullptr,
+      {"opencl"});
+  expectChosen(result, BackendType::GPU, "vulkan0");
+}
+
+// Finetuning on Adreno <800 is CPU only, so no override may reach a GPU.
+TEST_F(BackendSelectionTest, OverrideCannotResurrectGpuClearedByFinetuneGuard) {
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+  MockModelMetaData meta(false, "qwen3");
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(
+      BackendType::GPU,
+      bckI,
+      &meta,
+      std::nullopt,
+      nullptr,
+      true,
+      nullptr,
+      {"vulkan", "opencl"});
+  EXPECT_EQ(result.first, BackendType::CPU);
+}
+
+// ---- parseBackendOverride ----
+
+TEST_F(BackendSelectionTest, ParseBackendOverrideBasic) {
+  EXPECT_EQ(
+      parseBackendOverride("CUDA,Vulkan"),
+      (std::vector<std::string>{"cuda", "vulkan"}));
+}
+
+TEST_F(BackendSelectionTest, ParseBackendOverrideTrimsAndLowercases) {
+  EXPECT_EQ(
+      parseBackendOverride("  CuDa ,  VULKAN  "),
+      (std::vector<std::string>{"cuda", "vulkan"}));
+}
+
+TEST_F(BackendSelectionTest, ParseBackendOverrideDropsDuplicates) {
+  EXPECT_EQ(
+      parseBackendOverride("cuda,cuda,vulkan"),
+      (std::vector<std::string>{"cuda", "vulkan"}));
+}
+
+TEST_F(BackendSelectionTest, ParseBackendOverrideIgnoresEmptyEntries) {
+  EXPECT_EQ(
+      parseBackendOverride("cuda,,vulkan,"),
+      (std::vector<std::string>{"cuda", "vulkan"}));
+}
+
+TEST_F(BackendSelectionTest, ParseBackendOverrideEmptyStringIsEmptyList) {
+  EXPECT_TRUE(parseBackendOverride("").empty());
+}
+
+// A misspelled name is a config mistake and must be loud, not silently ignored.
+TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsUnknownName) {
+  EXPECT_THROW(parseBackendOverride("cudaa"), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride("vulcan"), qvac_errors::StatusError);
+  EXPECT_THROW(
+      parseBackendOverride("cuda,notabackend"), qvac_errors::StatusError);
+}
+
+// 'cpu' is spelled via `device`, not `backend`; accepting both would make
+// device:'gpu' + backend:'cpu' ambiguous.
+TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsCpu) {
+  EXPECT_THROW(parseBackendOverride("cpu"), qvac_errors::StatusError);
+}
+
+// ggml's HIP build reports its devices as "ROCm%d", so 'hip' has to arrive at
+// the matcher as "rocm" or it pins nothing.
+TEST_F(BackendSelectionTest, ParseBackendOverrideCanonicalisesHipToRocm) {
+  EXPECT_EQ(parseBackendOverride("hip"), (std::vector<std::string>{"rocm"}));
+  EXPECT_EQ(
+      parseBackendOverride("hip,rocm"), (std::vector<std::string>{"rocm"}));
+  EXPECT_EQ(
+      parseBackendOverride("cuda,HIP"),
+      (std::vector<std::string>{"cuda", "rocm"}));
+}
+
+// A blank value means the key was not configured, but a value made only of
+// separators is a mistake and must be as loud as a misspelled name.
+TEST_F(BackendSelectionTest, ParseBackendOverrideRejectsAValueNamingNothing) {
+  EXPECT_THROW(parseBackendOverride(","), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride(",,"), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride(" , "), qvac_errors::StatusError);
+  EXPECT_TRUE(parseBackendOverride("   ").empty());
+}
+
+// ---- tryBackendOverrideFromMap ----
+
+// 'auto' is vla-ggml's spelling for "no preference" on this same key, so one
+// selector string stays valid across all three addons.
+TEST_F(BackendSelectionTest, ParseBackendOverrideAcceptsAutoAsNoPreference) {
+  EXPECT_TRUE(parseBackendOverride("auto").empty());
+  EXPECT_TRUE(parseBackendOverride(" AUTO ").empty());
+}
+
+TEST_F(BackendSelectionTest, ParseBackendOverrideDropsAutoFromAList) {
+  EXPECT_EQ(
+      parseBackendOverride("auto,cuda"), (std::vector<std::string>{"cuda"}));
+}
+
+// A CRLF config file would otherwise throw on a value that reads as correct,
+// because the offending byte does not render in the error message.
+TEST_F(BackendSelectionTest, ParseBackendOverrideTrimsCarriageReturns) {
+  EXPECT_EQ(
+      parseBackendOverride("cuda\r\n,\tvulkan\r"),
+      (std::vector<std::string>{"cuda", "vulkan"}));
+}
+
+// Accepting 'auto' must not weaken this: a value naming nothing at all is
+// still a config mistake.
+TEST_F(BackendSelectionTest, ParseBackendOverrideStillRejectsSeparatorsOnly) {
+  EXPECT_THROW(parseBackendOverride(","), qvac_errors::StatusError);
+  EXPECT_THROW(parseBackendOverride(" , "), qvac_errors::StatusError);
+}
+
+// Blank stays "key not configured", not an error.
+TEST_F(BackendSelectionTest, ParseBackendOverrideBlankIsEmptyList) {
+  EXPECT_TRUE(parseBackendOverride("\r\n").empty());
+}
+
+TEST_F(BackendSelectionTest, TryBackendOverrideFromMapErasesKey) {
+  std::unordered_map<std::string, std::string> config{
+      {"backend", "cuda,vulkan"}, {"device", "gpu"}};
+  auto families = tryBackendOverrideFromMap(config);
+  EXPECT_EQ(families, (std::vector<std::string>{"cuda", "vulkan"}));
+  // Must be erased, otherwise it reaches llama.cpp's argument parser.
+  EXPECT_EQ(config.count("backend"), 0u);
+  EXPECT_EQ(config.count("device"), 1u);
+}
+
+TEST_F(BackendSelectionTest, TryBackendOverrideFromMapAbsentIsEmpty) {
+  std::unordered_map<std::string, std::string> config{{"device", "gpu"}};
+  EXPECT_TRUE(tryBackendOverrideFromMap(config).empty());
+}
+
+TEST_F(BackendSelectionTest, TryBackendOverrideFromMapPropagatesThrow) {
+  std::unordered_map<std::string, std::string> config{{"backend", "nope"}};
+  EXPECT_THROW(tryBackendOverrideFromMap(config), qvac_errors::StatusError);
+}
+
+// device 'cpu' with a backend override must land on CPU quietly: no devices are
+// enumerated, so the override has nothing to match and must not be treated as
+// an error.
+TEST_F(BackendSelectionTest, OverrideIgnoredWhenPreferredCpu) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  auto result = chooseWithOverride(mockBackend, {"cuda"}, BackendType::CPU);
+  EXPECT_EQ(result.first, BackendType::CPU);
+  EXPECT_EQ(result.second, "none");
+}
+
+// ---- QVAC-23763: split-mode device scoping ----
+//
+// Grouping is by backend REGISTRY name, not by device name, so these fixtures
+// set it explicitly. createGPUDevice() leaves it at the mock default, which
+// puts every device in one registry.
+
+constexpr const char* CUDA_REG = "CUDA";
+constexpr const char* VULKAN_REG = "Vulkan";
+
+static MockDevice createGPUDeviceInRegistry(
+    std::string&& desc, std::string&& backend, std::string&& registry) {
+  return {
+      std::move(desc),
+      std::move(backend),
+      GGML_BACKEND_DEVICE_TYPE_GPU,
+      std::move(registry)};
+}
+
+static std::vector<std::string> splitDevicesFor(
+    MockBackendInterface& mockBackend, const std::string& selected) {
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  return splitModeDeviceNames(bckI, selected);
+}
+
+// Every pre-CUDA host: one registry, so --device keeps being omitted and
+// qvac-fabric enumerates the GPUs itself exactly as before.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyOnSingleRegistry) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
+  EXPECT_TRUE(splitDevicesFor(mockBackend, "vulkan0").empty());
+}
+
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWithNoGpuAtAll) {
+  mockBackend.addDevice(createCPUDevice("host", "CPU"));
+  EXPECT_TRUE(splitDevicesFor(mockBackend, "cuda0").empty());
+}
+
+// The case this exists for: two NVIDIA cards, each registered twice. Without
+// scoping, split mode would hand qvac-fabric four devices for two GPUs.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesScopesToSelectedRegistry) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA1_BACK, CUDA_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0", "cuda1"}));
+}
+
+// An explicit backend override lands on Vulkan; the split must follow it rather
+// than the default CUDA preference.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesFollowsTheChosenBackend) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+// An iGPU must NOT join a split that already has a discrete GPU.
+// llama_prepare_model_devices() drops iGPUs whenever it found any discrete GPU,
+// but only on the path where --device is absent; with --device set it takes
+// every name verbatim. Keeping the iGPU here would put layers on an Intel UHD
+// beside a 3090, which qvac-fabric would never have done on its own.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesDropsIgpuBesideDiscreteGpu) {
+  MockDevice igpu(
+      "intel arc", "Vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan");
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(std::move(igpu));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0"}));
+}
+
+// qvac-fabric keeps at most one iGPU and only when no discrete GPU exists, so
+// two iGPUs of the same registry must not both land in the list.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesKeepsAtMostOneIgpu) {
+  MockDevice igpu0(
+      "intel arc", "Vulkan0", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan");
+  MockDevice igpu1(
+      "intel arc", "Vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan");
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG));
+  mockBackend.addDevice(std::move(igpu0));
+  mockBackend.addDevice(std::move(igpu1));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0"}));
+}
+
+// `main-gpu: 'integrated'` deliberately selects the iGPU. Scope the split to it
+// rather than pulling back in the discrete cards the caller just excluded.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesScopesToADeliberateIgpu) {
+  MockDevice igpu(
+      "intel arc", "Vulkan1", GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan");
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(std::move(igpu));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan1"),
+      (std::vector<std::string>{"vulkan1"}));
+}
+
+// A name that matches nothing degrades to the old omit-everything behaviour
+// rather than to an empty device list, which would strand the load on no GPU.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWhenSelectionUnmatched) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  EXPECT_TRUE(splitDevicesFor(mockBackend, "metal0").empty());
+}
+
+constexpr const char* AMD_DESC = "AMD Radeon RX 7900 XTX";
+constexpr const char* BUS_A = "0000:01:00.0";
+constexpr const char* BUS_B = "0000:02:00.0";
+constexpr const char* BUS_C = "0000:03:00.0";
+
+// One physical card publishing the same bus id under both backends is named
+// once, which is the whole reason --device is passed in split mode.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupesOneCardAcrossRegistry) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG), BUS_A));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0"}));
+}
+
+// The regression scoping by registry introduced: a discrete second card from
+// another vendor is not registered under CUDA, so filtering to the selected
+// registry dropped it and left a two-entry tensor-split on one device.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesKeepsAnotherVendorsCard) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(AMD_DESC, VULKAN1_BACK, VULKAN_REG), BUS_B));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0", "vulkan1"}));
+}
+
+// Two NVIDIA cards plus a discrete AMD: each NVIDIA collapses to its CUDA
+// entry, the AMD survives on Vulkan, and ggml's enumeration order is kept.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupesAcrossMixedVendorHost) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA1_BACK, CUDA_REG), BUS_B));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN1_BACK, VULKAN_REG), BUS_B));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(AMD_DESC, "Vulkan2", VULKAN_REG), BUS_C));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0", "cuda1", "vulkan2"}));
+}
+
+// A `backend` override selecting Vulkan must keep the Vulkan entry for the
+// shared card, not the CUDA one. Omitting --device could not express this:
+// qvac-fabric's own dedupe keeps whichever backend registered first, and CUDA
+// loads before Vulkan.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesDedupeFollowsChosenBackend) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG), BUS_A));
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(AMD_DESC, VULKAN1_BACK, VULKAN_REG), BUS_B));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
+// A backend that publishes no bus id cannot be matched against its own
+// duplicate, so those devices fall back to the old registry scoping rather than
+// risk naming one physical card twice.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesFallsBackWithoutADeviceId) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "cuda0"),
+      (std::vector<std::string>{"cuda0"}));
+}
+
+// The same host with the selection on the other side, which is the direction
+// that used to break: `backend: 'vulkan'` on a driver without
+// VK_EXT_pci_bus_info leaves the selected registry publishing no id at all, so
+// a partial key list disabled the cross-registry skip and named the one card
+// twice as cuda0,vulkan0.
+TEST_F(BackendSelectionTest, SplitModeDeviceNamesFallsBackWhenSelectedHasNoId) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0"}));
+}
+
+// A second real card must still survive the wholesale fallback, scoped to the
+// selected registry, rather than the list collapsing to the one selected name.
+TEST_F(
+    BackendSelectionTest, SplitModeDeviceNamesFallbackKeepsSelectedRegistry) {
+  mockBackend.addDevice(withDeviceId(
+      createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG), BUS_A));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(AMD_DESC, VULKAN1_BACK, VULKAN_REG));
+  EXPECT_EQ(
+      splitDevicesFor(mockBackend, "vulkan0"),
+      (std::vector<std::string>{"vulkan0", "vulkan1"}));
+}
+
 // ---- getSplitDeviceNames ----
 //
 // QVAC-24253: the device list pinned in every split mode, which also enforces
@@ -1455,7 +2033,7 @@ TEST_F(BackendSelectionTest, SplitDevices_DedupesDualRegisteredGpu) {
 
 // Two identical cards: Vulkan reports the SAME description for both and
 // distinguishes them only by device_id (PCI bus id). Deduping on description
-// would silently collapse this to one device — which is the canonical
+// would silently collapse this to one device, which is the canonical
 // tensor-parallel setup, so it must not happen.
 TEST_F(BackendSelectionTest, SplitDevices_KeepsTwoIdenticalCards) {
   mockBackend.addDevice(withDeviceId(
@@ -1468,7 +2046,7 @@ TEST_F(BackendSelectionTest, SplitDevices_KeepsTwoIdenticalCards) {
       (std::vector<std::string>{"vulkan0", "vulkan1"}));
 }
 
-// A null device_id cannot be deduped against, so the device is kept —
+// A null device_id cannot be deduped against, so the device is kept.
 // dropping a real GPU is worse than tolerating a duplicate. Mirrors fabric,
 // whose find_if only matches when both ids are non-null.
 TEST_F(BackendSelectionTest, SplitDevices_KeepsDevicesWithoutDeviceId) {
@@ -1554,4 +2132,44 @@ TEST_F(BackendSelectionTest, SplitDevices_TracksRawGpuIndices) {
   EXPECT_EQ(selection.sourceGpuCount, 3U);
   EXPECT_EQ(selection.devices[0].sourceGpuIndex, 0U);
   EXPECT_EQ(selection.devices[1].sourceGpuIndex, 2U);
+}
+
+// ---- CUDA PTX JIT cache warning (QVAC-24470) ----
+//
+// Only the policy is pinned here. The environment-reading overload is
+// deliberately not under test: it exists to touch getenv and the filesystem,
+// which is exactly what these tests must not do.
+
+TEST_F(BackendSelectionTest, JitCache_WritableCacheDir_NoWarning) {
+  backend_selection::JitCacheEnv env;
+  env.haveCacheDir = true;
+  env.cacheDirWritable = true;
+  EXPECT_FALSE(backend_selection::shouldWarnAboutJitCache(env));
+}
+
+TEST_F(BackendSelectionTest, JitCache_NoCacheDir_Warns) {
+  // No HOME and no CUDA_CACHE_PATH, so the driver has nowhere to persist the
+  // JIT result and re-compiles on every start.
+  backend_selection::JitCacheEnv env;
+  env.haveCacheDir = false;
+  env.cacheDirWritable = false;
+  EXPECT_TRUE(backend_selection::shouldWarnAboutJitCache(env));
+}
+
+TEST_F(BackendSelectionTest, JitCache_ReadOnlyCacheDir_Warns) {
+  // The container case: HOME resolves but nothing under it can be written.
+  backend_selection::JitCacheEnv env;
+  env.haveCacheDir = true;
+  env.cacheDirWritable = false;
+  EXPECT_TRUE(backend_selection::shouldWarnAboutJitCache(env));
+}
+
+// CUDA_CACHE_DISABLE outranks a perfectly good directory, so the disable flag
+// has to be checked before writability rather than after.
+TEST_F(BackendSelectionTest, JitCache_DisabledBeatsWritableDir_Warns) {
+  backend_selection::JitCacheEnv env;
+  env.cacheDisabled = true;
+  env.haveCacheDir = true;
+  env.cacheDirWritable = true;
+  EXPECT_TRUE(backend_selection::shouldWarnAboutJitCache(env));
 }

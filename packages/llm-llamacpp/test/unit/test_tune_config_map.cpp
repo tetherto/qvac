@@ -1080,6 +1080,100 @@ TEST_F(TuneConfigMapTest, AutoDefault_AdrenoOpenCl_StaysF16) {
   EXPECT_EQ(configFilemap_.count("cache-type-v"), 0);
 }
 
+// ---- QVAC-23763: TurboQuant / PolarQuant rejected on CUDA ----
+//
+// ggml-cuda ships no TBQ/PQ kernels, so these types abort natively. Standard
+// quantized types are fine there, so this mirrors the Metal guard rather than
+// the stricter OpenCL one. CPU stays allowed: ggml-tbq-quants is CPU-side.
+
+TEST_F(TuneConfigMapTest, Cuda_RejectsTurboQuantKCacheType) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "tbq4_0";
+
+  EXPECT_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true,
+          /*isCuda=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(TuneConfigMapTest, Cuda_RejectsPolarQuantVCacheType) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-v"] = "pq3_0";
+
+  EXPECT_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true,
+          /*isCuda=*/true),
+      qvac_errors::StatusError);
+}
+
+TEST_F(TuneConfigMapTest, Cuda_AllowsStandardQuantizedCacheTypes) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "q8_0";
+  configFilemap_["cache-type-v"] = "q4_0";
+
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true,
+          /*isCuda=*/true));
+}
+
+TEST_F(TuneConfigMapTest, Cuda_AllowsF16CacheTypes) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "f16";
+  configFilemap_["cache-type-v"] = "f16";
+
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/true,
+          /*isCuda=*/true));
+}
+
+// Guard against over-reach. CPU has TBQ kernels and the existing OpenCL/Metal
+// errors tell users to switch to it, so a non-CUDA non-GPU call must keep
+// accepting TBQ.
+TEST_F(TuneConfigMapTest, Cpu_StillAllowsTurboQuantCacheTypes) {
+  MockModelMetaData meta(false, "llama");
+  configFilemap_["cache-type-k"] = "tbq4_0";
+  configFilemap_["cache-type-v"] = "pq4_0";
+
+  EXPECT_NO_THROW(
+      load_fit_normalization::tuneLoadConfigMap(
+          configFilemap_,
+          meta,
+          std::nullopt,
+          FtOverrides{},
+          /*isOpenCl=*/false,
+          /*isMetal=*/false,
+          /*isGpu=*/false,
+          /*isCuda=*/false));
+}
+
 // ---- flash-attn value vocabulary ----
 //
 // fabric accepts four spellings of "on" and four of "off"; "auto" is a third

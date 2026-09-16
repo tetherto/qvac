@@ -55,6 +55,24 @@ struct GpuCandidate {
 std::optional<std::string> selectMainGpuName(
     const std::vector<GpuCandidate>& devices, const MainGpuSpec& spec);
 
+/** Parse a comma-separated GPU backend priority list. */
+std::vector<std::string> parseBackendOverride(const std::string& backend);
+
+/** Pure backend selection over a normalized device list. */
+std::optional<std::string> selectGpuBackendName(
+    const std::vector<GpuCandidate>& devices,
+    const std::vector<std::string>& backendPriority,
+    const std::optional<MainGpuSpec>& mainGpu = std::nullopt);
+
+/**
+ * Select an exact ggml device name using backend priority, optionally limited
+ * by main-gpu. When the explicit list has no available device, the normal
+ * CUDA, Vulkan, Metal, OpenCL, ROCm, and SYCL cascade is used.
+ */
+std::optional<std::string> resolveGpuBackendName(
+    const std::vector<std::string>& backendPriority,
+    const std::optional<MainGpuSpec>& mainGpu = std::nullopt);
+
 /**
  * Resolve a `main-gpu` spec to a concrete ggml device backend name (e.g.
  * "Vulkan1") suitable for `sd_ctx_params_t.backend`. Enumerates ggml devices

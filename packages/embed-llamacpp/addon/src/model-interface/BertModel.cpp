@@ -533,6 +533,8 @@ BertModelSetup setupParams(
     const BackendType preferredBackend =
         preferredBackendTypeFromString(deviceIt->second);
     const std::optional<MainGpu> mainGpu = tryMainGpuFromMap(configFilemap);
+    const std::vector<std::string> backendOverride =
+        tryBackendOverrideFromMap(configFilemap);
     std::pair<BackendType, std::string> chosenBackend{BackendType::CPU, "none"};
     SplitDeviceSelection splitSelection;
     bool isOpenCl = false;
@@ -557,8 +559,8 @@ BertModelSetup setupParams(
         llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
       }
     } else {
-      chosenBackend =
-          chooseBackend(preferredBackend, llamaLogCallback, mainGpu);
+      chosenBackend = chooseBackend(
+          preferredBackend, llamaLogCallback, mainGpu, backendOverride);
       // Name-based: chooseBackend returns only a name, no registry handle.
       isOpenCl = chosenBackend.first == BackendType::GPU &&
                  chosenBackend.second.find("opencl") != std::string::npos;
@@ -618,7 +620,9 @@ BertModelSetup setupParams(
       configVector.emplace_back("--device");
       configVector.emplace_back(chosenBackend.second);
     }
-    configFilemap.erase(deviceIt);
+    // Erase by key, not by deviceIt: the configFilemap["main-gpu"] insert above
+    // can rehash the map, which invalidates every iterator.
+    configFilemap.erase("device");
 
     // Disable flash attention by default when the chosen GPU backend is
     // OpenCL: it is not reliably supported there. Users who pass an

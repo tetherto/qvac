@@ -346,11 +346,13 @@ protected:
       std::vector<std::string> splitDevices = {"mock-device"}) {
     const auto devices = splitSelection(splitDevices);
     return {
-        .resolveBackend = [selected](
-                              backend_selection::BackendType,
-                              const std::optional<backend_selection::MainGpu>&,
-                              const ModelMetaData&,
-                              bool) { return selected; },
+        .resolveBackend =
+            [selected](
+                backend_selection::BackendType,
+                const std::optional<backend_selection::MainGpu>&,
+                const ModelMetaData&,
+                bool,
+                const std::vector<std::string>&) { return selected; },
         .splitDevices = [devices]() { return devices; }};
   }
 
@@ -1021,7 +1023,7 @@ TEST_F(
   auto config = baseConfig();
   config["split-mode"] = "none";
   auto dependencies = backend(
-      {.type = backend_selection::GPU, .name = "vulkan0", .adrenoVersion = 740},
+      {.type = backend_selection::GPU, .name = "none", .adrenoVersion = 740},
       {});
   auto selection = splitSelection({"vulkan0"});
   selection.devices[0].adrenoVersion = 740;
@@ -1032,7 +1034,7 @@ TEST_F(
 
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.runtimeBackendDevice, 1);
-  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.params.mmproj_backend, "none");
   EXPECT_EQ(result.adrenoVersion, 740);
 }
 

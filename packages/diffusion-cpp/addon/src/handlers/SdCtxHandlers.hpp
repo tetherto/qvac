@@ -89,6 +89,9 @@ struct SdCtxConfig {
   std::string maxVramSpec;    // graph-cut VRAM budget in GiB or assignments
   bool streamLayers = false;  // layer residency/prefetch on top of maxVramSpec
   std::string device = "gpu"; // "cpu" or "gpu" -- selects compute backend
+  // Optional comma-separated GPU backend priority list. Empty uses the default
+  // CUDA, Vulkan, Metal, OpenCL, ROCm, and SYCL cascade.
+  std::string backend;
   // Optional GPU pick when device == "gpu": a device index, "integrated", or
   // "dedicated" (the discrete GPU with the most VRAM). Empty = let the backend
   // choose. Resolved to a concrete ggml device backend name in SdModel::load().

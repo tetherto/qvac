@@ -1,11 +1,10 @@
 name: "Setup CUDA toolkit for nvcc compile"
 description: >-
   Assembles a pinned CUDA toolkit from NVIDIA's redistributable component
-  archives on a linux (x64 or arm64) or windows x64 runner and exports
-  CUDA_PATH/CUDACXX/PATH(bin)/VCPKG_KEEP_ENV_VARS (plus LD_LIBRARY_PATH on
-  Linux) so a consumer's speech-cpp cuda feature can compile the ggml CUDA
-  backend.
-  Component tarballs are used instead of the runfile installer because the
+  archives on Linux x64 or arm64 and Windows x64 runners. It exports
+  CUDA_PATH/CUDACXX/PATH(bin)/VCPKG_KEEP_ENV_VARS, plus LD_LIBRARY_PATH on
+  Linux, so a consumer's CUDA feature can compile the ggml CUDA backend.
+  Component archives are used instead of the runfile installer because the
   installer hardcodes /tmp/cuda-installer.log and segfaults for every runner
   user on a shared host after the first user's install ("Log file not open.").
   No NVIDIA GPU is required on the runner (compile-only). The CUDA backend
@@ -15,12 +14,27 @@ description: >-
 inputs:
   cuda-version:
     description: >-
-      CUDA release the pinned component list below belongs to. Informational
-      and part of the cache key; changing the components means updating the
-      COMPONENTS list in this action, from
+      CUDA release the pinned component list below belongs to. The value is
+      validated against cuda-target and is part of the cache key. Changing the
+      components means updating the COMPONENTS list in this action, from
       https://developer.download.nvidia.com/compute/cuda/redist/redistrib_<version>.json.
+
+      QVAC-24470: this is deliberately NOT the newest release. Read the PTX note
+      on the COMPONENTS block before bumping it.
     required: false
-    default: "13.2.0"
+    default: "13.0.3"
+  cuda-target:
+    description: >-
+      CUDA distribution to assemble. `server` uses CUDA 13 for Linux x64,
+      Linux SBSA arm64, and Windows x64. `jetson` uses the CUDA 12
+      linux-aarch64 distribution and is valid only on arm64 runners.
+    required: false
+    default: "server"
+
+outputs:
+  msvc-version:
+    description: "Selected Windows MSVC toolset version, empty on non-Windows runners"
+    value: ${{ steps.select-msvc.outputs.version }}
 
 runs:
   using: composite
@@ -37,122 +51,214 @@ runs:
     # `pull_request_target` runs with GITHUB_REF on the base branch, so a
     # combined `actions/cache` let any authorized PR populate the entry that
     # main's privileged runs then restore, and cpp-lint reaches here with no
-    # label at all. r1 -> r2 because splitting only stops new writes; rotating
-    # makes whatever the old lane already wrote unreachable.
-    # runner.os is part of the key too: a windows-x64 and a linux-x64 job
-    # share runner.arch == 'X64' and would otherwise restore each other's
-    # toolkit.
+    # label at all. Keep the established Linux r4 keys warm. Windows uses a
+    # separate key so its x64 server toolkit cannot collide with Linux x64.
+    - name: Select CUDA cache key
+      id: cache-key
+      shell: bash
+      env:
+        CUDA_TARGET: ${{ inputs.cuda-target }}
+        CUDA_VERSION: ${{ inputs.cuda-version }}
+      run: |
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          key="cuda-redist-$CUDA_VERSION-$CUDA_TARGET-Windows-$RUNNER_ARCH-r1"
+        else
+          key="cuda-redist-$CUDA_VERSION-$CUDA_TARGET-$RUNNER_ARCH-r4"
+        fi
+        echo "key=$key" >> "$GITHUB_OUTPUT"
+
+    - name: Select CUDA-compatible MSVC
+      id: select-msvc
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+        if (-not (Test-Path $vswhere)) {
+          throw "setup-cuda: vswhere.exe is required to select a CUDA-compatible MSVC toolset"
+        }
+
+        $candidates = @()
+        $installations = & $vswhere -all -products * -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        foreach ($installation in $installations) {
+          $toolsetRoot = Join-Path $installation "VC\Tools\MSVC"
+          if (-not (Test-Path $toolsetRoot)) {
+            continue
+          }
+          foreach ($directory in (Get-ChildItem -Path $toolsetRoot -Directory)) {
+            $version = $null
+            if ([version]::TryParse($directory.Name, [ref]$version) -and $version.Major -eq 14 -and $version.Minor -lt 50) {
+              $candidates += [PSCustomObject]@{
+                Installation = $installation
+                Version = $version
+              }
+            }
+          }
+        }
+
+        $selected = $candidates | Sort-Object Version -Descending | Select-Object -First 1
+        if ($null -eq $selected) {
+          throw "setup-cuda: CUDA 13.0 requires an MSVC toolset older than 14.50, but none is installed"
+        }
+
+        $hostCompiler = Join-Path $selected.Installation "VC\Tools\MSVC\$($selected.Version)\bin\Hostx64\x64\cl.exe"
+        if (-not (Test-Path $hostCompiler)) {
+          throw "setup-cuda: selected MSVC host compiler does not exist at $hostCompiler"
+        }
+
+        "installation=$($selected.Installation)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "version=$($selected.Version)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        Write-Host "Selected MSVC $($selected.Version) for CUDA 13.0"
+
     - name: Restore CUDA toolkit
       id: cache-cuda
       uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
-        path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.os }}-${{ runner.arch }}-r2
+        path: ${{ runner.temp }}/cuda/${{ inputs.cuda-target }}
+        key: ${{ steps.cache-key.outputs.key }}
 
     - name: Download + verify + assemble CUDA toolkit
       if: steps.cache-cuda.outputs.cache-hit != 'true'
       shell: bash
+      env:
+        CUDA_TARGET: ${{ inputs.cuda-target }}
+        CUDA_VERSION: ${{ inputs.cuda-version }}
       run: |
-        # Pinned against redistrib_13.2.0.json (supply-chain pin: a silent
+        # Pinned against redistrib_13.0.3.json (supply-chain pin: a silent
         # re-upload fails the sha256 check). nvcc + libnvvm (cicc lives
         # there in the 13.x split) + crt + cudart + cccl + culibos + cublas
         # is the minimal set that compiles and links the ggml CUDA backend;
-        # the runtime-loaded module resolves cudart and cuBLAS from the
-        # host at run time.
+        # the runtime-loaded module resolves CUDA libraries at run time.
         #
-        # QVAC-24442: NVIDIA calls the arm64 build "sbsa". It is a native
-        # toolkit, not a cross-compiler, so it only runs on an arm64 runner.
-        # QVAC-24314: on Windows uname reports the MSYS environment, so the
-        # runner facts decide first.
-        if [ "$RUNNER_OS" = "Windows" ]; then
-          REDIST_ARCH=windows-x86_64
-        else
-          case "$(uname -m)" in
-            x86_64)  REDIST_ARCH=linux-x86_64 ;;
-            aarch64) REDIST_ARCH=linux-sbsa ;;
-            *) echo "::error::setup-cuda: no CUDA redist for $(uname -m)"; exit 1 ;;
-          esac
+        # NVIDIA publishes separate server ARM and Jetson distributions. CUDA
+        # 13 is available for SBSA, while Orin is tied to CUDA 12 and needs the
+        # linux-aarch64 distribution from JetPack.
+        case "$RUNNER_OS:$CUDA_TARGET:$(uname -m)" in
+          Linux:server:x86_64)   REDIST_ARCH=linux-x86_64; EXPECTED_VERSION=13.0.3 ;;
+          Linux:server:aarch64)  REDIST_ARCH=linux-sbsa; EXPECTED_VERSION=13.0.3 ;;
+          Linux:jetson:aarch64)  REDIST_ARCH=linux-aarch64; EXPECTED_VERSION=12.6.3 ;;
+          Windows:server:x86_64) REDIST_ARCH=windows-x86_64; EXPECTED_VERSION=13.0.3 ;;
+          *) echo "::error::setup-cuda: target $CUDA_TARGET is not supported on $RUNNER_OS $(uname -m)"; exit 1 ;;
+        esac
+        if [ "$CUDA_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "::error::setup-cuda: target $CUDA_TARGET requires CUDA $EXPECTED_VERSION, got $CUDA_VERSION"
+          exit 1
         fi
         echo "Assembling the $REDIST_ARCH toolkit"
 
+        # QVAC-24470: PINNED TO 13.0.3 ON PURPOSE. DO NOT BUMP TO THE NEWEST.
+        #
+        # A card with no -real entry in CMAKE_CUDA_ARCHITECTURES runs from the
+        # -virtual PTX, and the DRIVER, not the runtime, JITs that PTX. A driver
+        # only accepts PTX from its own release or older, so the nvcc used here
+        # sets the minimum driver version every such card needs.
+        #
+        # Measured 2026-09-03 on both DGX Spark boxes, GB10 sm_121, driver
+        # 580.173.02, with a 13.2.51 build:
+        #
+        #   CUDA error: the provided PTX was compiled with an unsupported toolchain
+        #     in ggml_cuda_kernel_can_use_pdl, cudaFuncGetAttributes
+        #   [exit 134]
+        #
+        # sm_121 is above every entry in the arm64 tier, so it had to JIT, and
+        # the driver refused PTX newer than itself. That box has CUDA 13.3
+        # installed and it made no difference: a runtime library and the driver's
+        # PTX JIT are separate things.
+        #
+        # 13.0.3 ships cuda_cudart 13.0.96, which is exactly what those boxes
+        # carry, so its PTX is what their driver was built to take. Going older
+        # is not free either: sm_120a needs CUDA 13, so 12.x would drop the 5090.
+        #
+        # Bumping this is a COMPATIBILITY decision, not a chore. It raises the
+        # minimum driver for every JIT-served card, and nothing in CI catches it
+        # because the runners' drivers are new. Re-run the arch sweep on the
+        # Spark boxes before changing it.
         COMPONENTS_linux_x86_64="\
-        cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-13.2.51-archive.tar.xz 706b996fefc59dc8d64d317fdf48d0aa84c4ae004eff43009dd918f40c5cc66a
-        libnvvm/linux-x86_64/libnvvm-linux-x86_64-13.2.51-archive.tar.xz e013fce38130d2337ea695aadc5ddd5dcfb78f9107903d72492b9819539749bb
-        cuda_crt/linux-x86_64/cuda_crt-linux-x86_64-13.2.51-archive.tar.xz fbc31fed55b7255591f3a19f575ca078827f5e6757d317d009f7ec1e69fcde4b
-        cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-13.2.51-archive.tar.xz 539edc1056e44d319f2112e9971c6415d78d4dde04b3f6ffbd20ec808e718526
-        cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-13.2.27-archive.tar.xz 56e1bafb29faa87375b0484814870046530b88c0a421909096892f027ec1927b
-        cuda_culibos/linux-x86_64/cuda_culibos-linux-x86_64-13.2.51-archive.tar.xz dece3cdb7954d276e07eb23bee882a24627f431654cdeeef2bcee2d22669d93c
-        libcublas/linux-x86_64/libcublas-linux-x86_64-13.3.0.5-archive.tar.xz 9f3c23d55b098d9159c435db59f228df79493152a778d4d367e7d60470d8c64b"
+        cuda_nvcc/linux-x86_64/cuda_nvcc-linux-x86_64-13.0.88-archive.tar.xz 48e35be3cfbf4b4fbc16828eaec8a7048ee789403049dc409f7b643d6259cf7a
+        libnvvm/linux-x86_64/libnvvm-linux-x86_64-13.0.88-archive.tar.xz 17ef1665b63670887eeba7d908da5669fa8c66bb73b5b4c1367f49929c086353
+        cuda_crt/linux-x86_64/cuda_crt-linux-x86_64-13.0.88-archive.tar.xz 5a3279a049ffc1cdb951c44cb95206acfdde9e9ae5e87825fc18d7e4a6878bb0
+        cuda_cudart/linux-x86_64/cuda_cudart-linux-x86_64-13.0.96-archive.tar.xz 25b8071951baba827be1580b841d363464f6ee6c39f48d33a81646f90cc95ed1
+        cuda_cccl/linux-x86_64/cuda_cccl-linux-x86_64-13.0.85-archive.tar.xz ed845eae8c1767706b6ee91e40c608a03f6f633551a849b63f7346d32d73ee60
+        cuda_culibos/linux-x86_64/cuda_culibos-linux-x86_64-13.0.85-archive.tar.xz 98fca11f9ab89be61385a67eee686c1ebf76fad9c7269d0cf9090edfcdb8a8ac
+        libcublas/linux-x86_64/libcublas-linux-x86_64-13.1.1.3-archive.tar.xz 980cbd746a63566602d1699e2ade005c49408bd95618a57d0888f475e5c721a4"
 
         COMPONENTS_linux_sbsa="\
-        cuda_nvcc/linux-sbsa/cuda_nvcc-linux-sbsa-13.2.51-archive.tar.xz 28d201ffc46627abd919d623d85e721f33c92cf02749e023cd66d6fa0f1206a7
-        libnvvm/linux-sbsa/libnvvm-linux-sbsa-13.2.51-archive.tar.xz 366da4383992b8d13df63ffecd3a8315815955f50da0c0288ca5123212f67e02
-        cuda_crt/linux-sbsa/cuda_crt-linux-sbsa-13.2.51-archive.tar.xz 04f8fd03bc5a99507f5d531cc65452881c8949311bc5cc87bc1fe05a7607fd9e
-        cuda_cudart/linux-sbsa/cuda_cudart-linux-sbsa-13.2.51-archive.tar.xz 379363621c59c8d6faeea2f7a527eae91fc7db8cb2121cb42fe7972a48462f67
-        cuda_cccl/linux-sbsa/cuda_cccl-linux-sbsa-13.2.27-archive.tar.xz 1587f83b92aef54414cd118723ec1e4c118e14c70ac7779e13caa941f8030faf
-        cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.2.51-archive.tar.xz 35244c4d90e5b1aa48fb98d655f6dfa3f9e4f7d0ac220266ebf85c0928a7524b
-        libcublas/linux-sbsa/libcublas-linux-sbsa-13.3.0.5-archive.tar.xz edadce2ec8d997ffb08f5a1c4ee6b1d14a2c883f2aa11e1d3208b4f077d9225f"
+        cuda_nvcc/linux-sbsa/cuda_nvcc-linux-sbsa-13.0.88-archive.tar.xz 01b01e10aa2662ad1b3aeab3317151d7d6d4a650eeade55ded504f6b7fced18e
+        libnvvm/linux-sbsa/libnvvm-linux-sbsa-13.0.88-archive.tar.xz f94feb1a0da0c55ceb5c7f039c1f0ffad5d162e0fedfb565efb87771187ddcfd
+        cuda_crt/linux-sbsa/cuda_crt-linux-sbsa-13.0.88-archive.tar.xz c03b92941ba7bf58a4992231ceb572477784ef450ce678f6545bed02392cae50
+        cuda_cudart/linux-sbsa/cuda_cudart-linux-sbsa-13.0.96-archive.tar.xz e2c78564330a09d890f98a066a2082a32c78256ffcc6bccca1696bd2abbaf445
+        cuda_cccl/linux-sbsa/cuda_cccl-linux-sbsa-13.0.85-archive.tar.xz eca22ded176804a78afcba3fe1909e7d473366ee1cb9f3784080df23bc8e74d5
+        cuda_culibos/linux-sbsa/cuda_culibos-linux-sbsa-13.0.85-archive.tar.xz ab5ecee37c8adc7efbc2a88ab091de9d978924c4d7f66c3e0c42f23983a1beb3
+        libcublas/linux-sbsa/libcublas-linux-sbsa-13.1.1.3-archive.tar.xz 88b4d3d94d536d9a122eb149af01dc524699336ba3c0b33d019e175d177235fb"
 
-        # QVAC-24314: Windows ships the same release as zip archives; culibos
-        # does not exist as a Windows component (it is a Linux static lib) and
-        # is not needed there.
+        # CUDA 12.6.3 for Jetson. The 12.x linux-aarch64 split has four
+        # components because libnvvm, cuda_crt and cuda_culibos are included in
+        # cuda_nvcc. These pins come from redistrib_12.6.3.json.
+        COMPONENTS_linux_aarch64="\
+        cuda_nvcc/linux-aarch64/cuda_nvcc-linux-aarch64-12.6.85-archive.tar.xz ef9dfb2c7327e196f8601ed216908de56911578f26e6ab9ac13c3e7dfff784f9
+        cuda_cudart/linux-aarch64/cuda_cudart-linux-aarch64-12.6.77-archive.tar.xz d5b8f6f5a2ab34066c267daf5f73f25d2f24ea25d8fa3dce427c196ff07504e7
+        cuda_cccl/linux-aarch64/cuda_cccl-linux-aarch64-12.6.77-archive.tar.xz ab8bd5c346ca69c96ac9afb9d317e8cbc0ec8fc32629ca17b38c14b3dede2fb7
+        libcublas/linux-aarch64/libcublas-linux-aarch64-12.6.4.1-archive.tar.xz 3324e0a995794704874c71397964c4739667c279d3e3cb183e482476df9b57ed"
+
         COMPONENTS_windows_x86_64="\
-        cuda_nvcc/windows-x86_64/cuda_nvcc-windows-x86_64-13.2.51-archive.zip a6bacac79adb923e310eb39f2b86d4d9e756c896d035dfead50c69403eca4661
-        libnvvm/windows-x86_64/libnvvm-windows-x86_64-13.2.51-archive.zip ef2a24cf40f9394e2f13df5a8a7315c65325103006a53692cd12b8c48431e372
-        cuda_crt/windows-x86_64/cuda_crt-windows-x86_64-13.2.51-archive.zip 02892bd6bc7ec832c5fc6fc794491803166ee8455bd87d52976c4b195b76c8e7
-        cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-13.2.51-archive.zip 906b430b53e6396f7cbaa6874fbe7f9307a184e830b119a4ad3f58dc6e0165c6
-        cuda_cccl/windows-x86_64/cuda_cccl-windows-x86_64-13.2.27-archive.zip fb61bbca384ea9e5722f3b77cfdd635c916f33593d187562510ce14831aa629a
-        libcublas/windows-x86_64/libcublas-windows-x86_64-13.3.0.5-archive.zip 438a88f07af3721eda15ed1f4d2b957ea810e29061b2a6292837f35520dbd212"
+        cuda_nvcc/windows-x86_64/cuda_nvcc-windows-x86_64-13.0.88-archive.zip 61760e24a44937c6c29a20ddea69067b4d3860ccd6a9a0564573f840d96e6c5f
+        libnvvm/windows-x86_64/libnvvm-windows-x86_64-13.0.88-archive.zip 6dda4a82d22a2c173a65c66b4b4c933e3424a56ce845e2864bdca9cc66e6c524
+        cuda_crt/windows-x86_64/cuda_crt-windows-x86_64-13.0.88-archive.zip ff413c89dbd96ed3b3dcfac923437de78acea32fb90309277197c8a127588112
+        cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-13.0.96-archive.zip a2ed875f9997aa24904fb70cc9db3acd9308433cde99bc8e63ec1271c9da31b4
+        cuda_cccl/windows-x86_64/cuda_cccl-windows-x86_64-13.0.85-archive.zip f4f5187f7976d8057d76e1e04e72c8b7d0a2a22793107a671ad709b1d8d3408d
+        libcublas/windows-x86_64/libcublas-windows-x86_64-13.1.1.3-archive.zip d6dfb0f7ad09730bafa1fd948bc65472e28c8a6dc30b4a2b32191f2380f9282b"
 
-        # Same components and release either way, only the path and hash
-        # differ. An explicit case rather than an indirect expansion: it fails
-        # closed if a new arch is added above without a matching list here,
-        # instead of silently expanding to an empty COMPONENTS and assembling
-        # nothing.
+        # An explicit case rather than an indirect expansion fails closed if a
+        # new distribution is added without a matching component list.
         case "$REDIST_ARCH" in
-          linux-x86_64)    COMPONENTS="$COMPONENTS_linux_x86_64" ;;
-          linux-sbsa)      COMPONENTS="$COMPONENTS_linux_sbsa" ;;
-          windows-x86_64)  COMPONENTS="$COMPONENTS_windows_x86_64" ;;
+          linux-x86_64)  COMPONENTS="$COMPONENTS_linux_x86_64" ;;
+          linux-sbsa)    COMPONENTS="$COMPONENTS_linux_sbsa" ;;
+          linux-aarch64) COMPONENTS="$COMPONENTS_linux_aarch64" ;;
+          windows-x86_64) COMPONENTS="$COMPONENTS_windows_x86_64" ;;
           *) echo "::error::setup-cuda: no COMPONENTS list for $REDIST_ARCH"; exit 1 ;;
         esac
 
-        prefix="$RUNNER_TEMP/cuda/toolkit"
-        # QVAC-24314: git-bash tools want POSIX paths — GNU tar parses the
-        # drive colon in C:\... as a remote-host spec ("Cannot connect to C").
-        # The exported CUDA_PATH/CUDACXX keep the Windows form CMake needs.
-        if command -v cygpath >/dev/null 2>&1; then
-          prefix="$(cygpath -u "$prefix")"
-          dl_dir="$(cygpath -u "$RUNNER_TEMP")"
-        else
-          dl_dir="$RUNNER_TEMP"
-        fi
+        prefix="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit"
         mkdir -p "$prefix"
-        # The Windows components are .zip, which GNU tar cannot read, and
-        # which of the two tars a Windows runner's bash resolves varies by
-        # machine. Use the system bsdtar explicitly there (zip-capable,
-        # native Windows paths); plain tar handles the Linux .tar.xz
-        # archives.
-        extract_archive() {
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            /c/Windows/System32/tar.exe -xf "$(cygpath -w "$1")" \
-              --strip-components=1 -C "$(cygpath -w "$prefix")"
-          else
-            tar -xJf "$1" --strip-components=1 -C "$prefix"
-          fi
-        }
         echo "$COMPONENTS" | while read -r rel sha; do
           [ -z "$rel" ] && continue
           url="https://developer.download.nvidia.com/compute/cuda/redist/$rel"
-          out="$dl_dir/$(basename "$rel")"
+          out="$RUNNER_TEMP/$(basename "$rel")"
           echo "Downloading $url"
           curl -fsSL --retry 3 "$url" -o "$out"
           echo "$sha  $out" | sha256sum -c -
-          extract_archive "$out"
+          case "$out" in
+            *.zip)
+              if [ "$RUNNER_OS" = "Windows" ]; then
+                extract_dir="$RUNNER_TEMP/cuda-extract-$CUDA_TARGET"
+                rm -rf "$extract_dir"
+                mkdir -p "$extract_dir"
+                archive_windows=$(cygpath -w "$out")
+                extract_windows=$(cygpath -w "$extract_dir")
+                powershell.exe -NoProfile -NonInteractive -Command \
+                  "Expand-Archive -LiteralPath '$archive_windows' -DestinationPath '$extract_windows' -Force"
+                archive_root=""
+                for candidate in "$extract_dir"/*; do
+                  if [ -d "$candidate" ]; then
+                    archive_root="$candidate"
+                    break
+                  fi
+                done
+                if [ -z "$archive_root" ]; then
+                  echo "::error::setup-cuda: no root directory in $out"
+                  exit 1
+                fi
+                cp -a "$archive_root/." "$prefix/"
+                rm -rf "$extract_dir"
+              else
+                tar -xf "$out" --strip-components=1 -C "$prefix"
+              fi
+              ;;
+            *) tar -xJf "$out" --strip-components=1 -C "$prefix" ;;
+          esac
           rm -f "$out"
         done
-        # Redist archives ship lib/, not lib64/; some Linux consumers look
-        # for lib64, so provide it as an alias. Windows keeps NVIDIA's
-        # lib/x64 import-library layout, which FindCUDAToolkit knows.
+        # Redist archives ship lib/, not lib64/; some consumers look for
+        # lib64, so provide it as an alias.
         if [ "$RUNNER_OS" != "Windows" ] && [ -d "$prefix/lib" ] && [ ! -e "$prefix/lib64" ]; then
           ln -s lib "$prefix/lib64"
         fi
@@ -166,18 +272,65 @@ runs:
          github.event_name == 'merge_group')
       uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
-        path: ${{ runner.temp }}/cuda
-        key: cuda-redist-${{ inputs.cuda-version }}-${{ runner.os }}-${{ runner.arch }}-r2
+        path: ${{ runner.temp }}/cuda/${{ inputs.cuda-target }}
+        key: ${{ steps.cache-key.outputs.key }}
+
+    - name: Activate CUDA-compatible MSVC
+      if: runner.os == 'Windows'
+      shell: powershell
+      env:
+        MSVC_INSTALLATION: ${{ steps.select-msvc.outputs.installation }}
+        MSVC_VERSION: ${{ steps.select-msvc.outputs.version }}
+      run: |
+        $selectedVersion = [version]$env:MSVC_VERSION
+        $vcvars = Join-Path $env:MSVC_INSTALLATION "VC\Auxiliary\Build\vcvars64.bat"
+        $toolsetFamily = "$($selectedVersion.Major).$($selectedVersion.Minor)"
+        $environment = & cmd.exe /s /c "`"$vcvars`" -vcvars_ver=$toolsetFamily >nul && set"
+        if ($LASTEXITCODE -ne 0) {
+          throw "setup-cuda: failed to activate MSVC $toolsetFamily"
+        }
+
+        $hostCompiler = Join-Path $env:MSVC_INSTALLATION "VC\Tools\MSVC\$env:MSVC_VERSION\bin\Hostx64\x64\cl.exe"
+
+        $names = @(
+          "INCLUDE",
+          "LIB",
+          "LIBPATH",
+          "PATH",
+          "UCRTVersion",
+          "UniversalCRTSdkDir",
+          "VCINSTALLDIR",
+          "VCToolsInstallDir",
+          "VCToolsVersion",
+          "VSINSTALLDIR",
+          "VisualStudioVersion",
+          "WindowsSdkDir",
+          "WindowsSDKVersion"
+        )
+        foreach ($name in $names) {
+          $prefix = "$name="
+          $line = $environment | Where-Object { $_.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) } | Select-Object -First 1
+          if ($line) {
+            $line | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+        }
+        "CUDAHOSTCXX=$hostCompiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "QVAC_MSVC_INSTALLATION=$env:MSVC_INSTALLATION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "QVAC_MSVC_VERSION=$env:MSVC_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        Write-Host "Activated MSVC $env:MSVC_VERSION for CUDA 13.0"
 
     - name: Export CUDA environment
       shell: bash
+      env:
+        CUDA_TARGET: ${{ inputs.cuda-target }}
       run: |
-        cuda_prefix="$RUNNER_TEMP/cuda/toolkit"
-        nvcc="$cuda_prefix/bin/nvcc"
         if [ "$RUNNER_OS" = "Windows" ]; then
-          nvcc="$nvcc.exe"
+          nvcc="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit/bin/nvcc.exe"
+        else
+          nvcc="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit/bin/nvcc"
         fi
         if [ ! -x "$nvcc" ]; then echo "::error::nvcc not found after assembly"; exit 1; fi
+        cuda_prefix="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit"
         echo "CUDA prefix: $cuda_prefix"
         echo "CUDA_PATH=$cuda_prefix" >> "$GITHUB_ENV"
         echo "CUDACXX=$nvcc" >> "$GITHUB_ENV"
@@ -185,7 +338,11 @@ runs:
         # vcpkg scrubs the environment, so the port's enable_language(CUDA)
         # only sees the toolkit through an explicit keep-list. Append rather
         # than assign so a sibling setup action's keep-list survives.
-        echo "VCPKG_KEEP_ENV_VARS=${VCPKG_KEEP_ENV_VARS:+$VCPKG_KEEP_ENV_VARS;}CUDA_PATH;CUDACXX" >> "$GITHUB_ENV"
+        cuda_keep_vars="CUDA_PATH;CUDACXX"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          cuda_keep_vars="$cuda_keep_vars;CUDAHOSTCXX;INCLUDE;LIB;LIBPATH;PATH;QVAC_MSVC_INSTALLATION;QVAC_MSVC_VERSION;UCRTVersion;UniversalCRTSdkDir;VCINSTALLDIR;VCToolsInstallDir;VCToolsVersion;VSINSTALLDIR;VisualStudioVersion;WindowsSdkDir;WindowsSDKVersion"
+        fi
+        echo "VCPKG_KEEP_ENV_VARS=${VCPKG_KEEP_ENV_VARS:+$VCPKG_KEEP_ENV_VARS;}$cuda_keep_vars" >> "$GITHUB_ENV"
         if [ "$RUNNER_OS" != "Windows" ]; then
           echo "LD_LIBRARY_PATH=$cuda_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
         fi

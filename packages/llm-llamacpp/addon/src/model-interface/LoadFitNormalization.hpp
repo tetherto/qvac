@@ -78,10 +78,13 @@ struct SelectedBackend {
   bool isMetal = false;
 };
 
+/// Args: preferred type, main-gpu override, model metadata, isFinetuning,
+/// and the parsed `backend` priority list (empty when the caller did not set
+/// one). QVAC-23763.
 using BackendResolver = std::function<SelectedBackend(
     backend_selection::BackendType,
     const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
-    bool)>;
+    bool, const std::vector<std::string>&)>;
 
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
@@ -107,7 +110,7 @@ void tuneLoadConfigMap(
     const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
-    bool isTensorSplit = false);
+    bool isCuda = false, bool isTensorSplit = false);
 
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,

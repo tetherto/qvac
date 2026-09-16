@@ -32,6 +32,20 @@ std::optional<MainGpu> parseMainGpu(const std::string& mainGpuStr);
 std::optional<MainGpu>
 tryMainGpuFromMap(std::unordered_map<std::string, std::string>& configFilemap);
 
+/// @brief Parse a `backend` override into a lowercased priority list, e.g.
+/// "CUDA,Vulkan" -> {"cuda", "vulkan"}.
+///
+/// An unknown name is a config mistake and throws StatusError(InvalidArgument).
+/// A known name with no device attached is legitimate, asking for cuda on a
+/// Vulkan-only host say, and falls through to the next entry. "auto" is
+/// accepted and dropped, so it parses to no preference.
+std::vector<std::string> parseBackendOverride(const std::string& backendStr);
+
+/// @brief Extract and erase the `backend` key from a config map.
+/// Returns an empty vector when the key is absent.
+std::vector<std::string> tryBackendOverrideFromMap(
+    std::unordered_map<std::string, std::string>& configFilemap);
+
 using llamaLogCallbackF =
     void (*)(ggml_log_level level, const char* text, void* userData);
 
@@ -44,6 +58,11 @@ struct BackendInterface {
   const char* (*ggml_backend_dev_name)(ggml_backend_dev_t device);
   enum ggml_backend_dev_type (*ggml_backend_dev_type)(
       ggml_backend_dev_t device);
+  void* (*ggml_backend_reg_get_proc_address)(
+      ggml_backend_reg_t reg, const char* name);
+  // QVAC-23763: splitModeDeviceNames() needs props.device_id to tell one
+  // physical card registered under two backends from two distinct cards. May
+  // be null; that path then falls back to scoping by registry.
   void (*ggml_backend_dev_get_props)(
       ggml_backend_dev_t device, struct ggml_backend_dev_props* props);
   llamaLogCallbackF llamaLogCallback;
@@ -54,11 +73,22 @@ std::pair<BackendType, std::string> chooseBackend(
     const ModelMetaData* metadata = nullptr,
     const std::optional<MainGpu>& mainGpu = std::nullopt,
     std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
-    bool* outIsMaliGpu = nullptr);
+    bool* outIsMaliGpu = nullptr,
+    const std::vector<std::string>& backendOverride = {});
 
 /// @brief Choose the backend to use for the model based on GPU device and
-/// available backends. Prefer OpenCL backend for Adreno GPUs, otherwise
-/// Vulkan backend. Uses CPU if no GPU backends are available.
+/// available backends. Prefer OpenCL backend for Adreno GPUs, then CUDA on
+/// NVIDIA, otherwise Vulkan. Uses CPU if no GPU backends are available.
+///
+/// The CUDA preference is stated here rather than inherited: qvac-fabric loads
+/// cuda before vulkan and registration is an unsorted push_back, so CUDA
+/// already happens to enumerate first. Relying on that would make backend
+/// choice a silent function of ggml's load order. QVAC-23763.
+///
+/// @p backendOverride, when non-empty, restricts the choice to those backend
+/// families in priority order (e.g. {"cuda", "vulkan"}). Entries with no device
+/// present are skipped; if none match, selection falls through to the normal
+/// cascade rather than failing, because an absent device is not a config error.
 ///
 /// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno GPUs:
 ///   - Adreno 800+: prefer Vulkan over OpenCL
@@ -77,7 +107,8 @@ std::pair<BackendType, std::string> chooseBackend(
     BackendType preferredBackendType, llamaLogCallbackF llamaLogcallback,
     const std::optional<MainGpu>& mainGpu, const ModelMetaData* metadata,
     std::optional<int>* outAdrenoVersion = nullptr, bool isFinetuning = false,
-    bool* outIsMaliGpu = nullptr);
+    bool* outIsMaliGpu = nullptr,
+    const std::vector<std::string>& backendOverride = {});
 
 /// @brief Count devices in the final Fabric-compatible split set.
 size_t getEffectiveGpuDeviceCount(const BackendInterface& bckI);
@@ -128,6 +159,78 @@ void applyAdrenoRestrictions(
 ///     identical cards, so a 2x RTX 4090 host would silently collapse to one.
 ///     A device whose `device_id` is null is kept rather than dropped.
 ///
+/// Returns an empty vector when no GPU device is present; callers must then
+/// leave `--device` alone rather than emitting an empty list.
+std::vector<std::string>
+getTensorSplitDeviceNames(const BackendInterface& bckI);
+
+/// @brief `getTensorSplitDeviceNames()` against the real ggml backend registry.
+std::vector<std::string> getTensorSplitDeviceNames();
+
+/// @brief Whether row-split (LLAMA_SPLIT_MODE_ROW) can be used at all.
+/// True only when at least one GPU device is present AND every available
+/// GPU/iGPU device's backend provides split buffers, because qvac-fabric
+/// requires split buffers from each device it distributes over and throws on
+/// the first one that lacks them. Callers should degrade row -> layer when this
+/// returns false. As of qvac-fabric v10069 only SYCL provides split buffers, so
+/// this is false in every shipped configuration.
+bool gpuBackendSupportsRowSplit(const BackendInterface& bckI);
+
+/// @brief `gpuBackendSupportsRowSplit()` against the real ggml backend
+/// registry.
+bool gpuBackendSupportsRowSplit();
+
+/// @brief The device names to pass as `--device` in multi-GPU split mode: every
+/// discrete GPU, deduplicated by `props.device_id` so a card registered under
+/// two backends is named once, preferring @p selectedDeviceName's registry.
+///
+/// QVAC-23763: with CUDA loaded next to Vulkan, one physical NVIDIA card
+/// registers twice, as CUDA0 and Vulkan0, so the old unconditional omission of
+/// `--device` would spread a single card across two backends. Deduping rather
+/// than scoping to one registry keeps a second physical card on a mixed-vendor
+/// host, and preferring the selected registry keeps a `backend` override
+/// binding, which omitting `--device` would not.
+///
+/// A device whose backend publishes no bus id falls back to registry scoping,
+/// since it cannot be matched against its own duplicate.
+///
+/// Empty when every GPU/iGPU device comes from one registry, which is every
+/// pre-CUDA configuration, and when @p selectedDeviceName matches nothing. The
+/// caller then keeps omitting `--device`.
+std::vector<std::string> splitModeDeviceNames(
+    const BackendInterface& bckI, const std::string& selectedDeviceName);
+
+/// @brief `splitModeDeviceNames()` against the real ggml backend registry.
+std::vector<std::string>
+splitModeDeviceNames(const std::string& selectedDeviceName);
+
+/// @brief Inputs to the CUDA PTX JIT cache check, gathered from the
+/// environment so the policy below stays testable.
+struct JitCacheEnv {
+  bool cacheDisabled = false; ///< CUDA_CACHE_DISABLE is set to something truthy
+  bool haveCacheDir = false;  ///< a cache directory could be resolved at all
+  bool cacheDirWritable = false; ///< that directory, or its nearest existing
+                                 ///< ancestor, passes a write check
+};
+
+/// @brief Whether to warn that CUDA will re-JIT its kernels on every start.
+///
+/// QVAC-24470: a device with no `-real` cubin in the build reaches the kernels
+/// by JITting the `-virtual` PTX, and the driver caches the result under
+/// `$HOME/.nv/ComputeCache`. Measured on a DGX Spark at sm_121: 27.3 s to first
+/// token cold against 143.9 ms warm. Where that cache cannot persist, a
+/// container with no writable `$HOME` being the usual case, the full cost is
+/// paid on every process start.
+///
+/// It is not a crash, so no backend guard catches it, and to a user it is
+/// indistinguishable from a hang. Warning is all this can do; removing the cost
+/// means shipping a `-real` cubin for the architecture.
+bool shouldWarnAboutJitCache(const JitCacheEnv& env);
+
+/// @brief `shouldWarnAboutJitCache()` against the real environment. Always
+/// false off linux, where this module is not built as a loadable CUDA backend.
+bool shouldWarnAboutJitCache();
+
 /// Returns an empty vector when callers must fall back to CPU.
 std::vector<std::string> getSplitDeviceNames(const BackendInterface& bckI);
 } // namespace backend_selection

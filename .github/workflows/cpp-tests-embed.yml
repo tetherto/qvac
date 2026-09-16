@@ -283,4 +283,3 @@ jobs:
             cat "${{ env.WORKDIR }}/build/test/unit/coverage-summary.txt" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
-
