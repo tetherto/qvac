@@ -3700,6 +3700,14 @@ class TtsSupertonicLanguage(Enum):
     vi = "vi"
 
 
+class VectorIndexStorage(Enum):
+    f32 = "f32"
+    q8 = "q8"
+    q4 = "q4"
+    turbovec_q4 = "turbovec-q4"
+    turbovec_q2 = "turbovec-q2"
+
+
 class Verbosity(Enum):
     error = 0
     warn = 1
@@ -19470,6 +19478,226 @@ class UpscaleStreamResponse(GeneratedBaseModel):
     ] = None
 
 
+class VectorIndexRequestCreateStorage(Enum):
+    f32 = "f32"
+    q8 = "q8"
+    q4 = "q4"
+    turbovec_q4 = "turbovec-q4"
+    turbovec_q2 = "turbovec-q2"
+
+
+class VectorIndexRequestCreate(GeneratedBaseModel):
+    dim: Annotated[int, Field(gt=0, le=9007199254740991)]
+    storage: Annotated[
+        VectorIndexRequestCreateStorage | None,
+        Field(title="VectorIndexRequestCreateStorage"),
+    ] = "turbovec-q4"
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["create"] = "create"
+
+
+class VectorIndexRequestLoad(GeneratedBaseModel):
+    path: Annotated[str, Field(min_length=1)]
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["load"] = "load"
+
+
+class VectorId1(RootModel[str]):
+    root: Annotated[str, Field(pattern="^(0|[1-9][0-9]{0,19})$", title="VectorId")]
+
+
+class VectorId2(RootModel[int]):
+    root: Annotated[int, Field(ge=0, le=9007199254740991, title="VectorId")]
+
+
+class VectorId(RootModel[VectorId1 | VectorId2]):
+    root: Annotated[VectorId1 | VectorId2, Field(title="VectorId")]
+
+
+class Vector(RootModel[list[float]]):
+    root: Annotated[list[float], Field(min_length=1)]
+
+
+class VectorIndexRequestAdd(GeneratedBaseModel):
+    ids: Annotated[list[VectorId], Field(min_length=1)]
+    vectors: Annotated[list[Vector], Field(min_length=1)]
+    type: Literal["vectorIndex"] = "vectorIndex"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    operation: Literal["add"] = "add"
+
+
+class Query(RootModel[list[float]]):
+    root: Annotated[list[float], Field(min_length=1)]
+
+
+class VectorIndexRequestSearch(GeneratedBaseModel):
+    queries: Annotated[list[Query], Field(min_length=1)]
+    k: Annotated[int, Field(gt=0, le=9007199254740991)]
+    type: Literal["vectorIndex"] = "vectorIndex"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    operation: Literal["search"] = "search"
+
+
+class VectorId4(RootModel[str]):
+    root: Annotated[str, Field(pattern="^(0|[1-9][0-9]{0,19})$", title="VectorId")]
+
+
+class VectorId5(RootModel[int]):
+    root: Annotated[int, Field(ge=0, le=9007199254740991, title="VectorId")]
+
+
+class VectorId3(RootModel[VectorId4 | VectorId5]):
+    root: Annotated[VectorId4 | VectorId5, Field(title="VectorId")]
+
+
+class VectorIndexRequestRemove(GeneratedBaseModel):
+    ids: Annotated[list[VectorId3], Field(min_length=1)]
+    type: Literal["vectorIndex"] = "vectorIndex"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    operation: Literal["remove"] = "remove"
+
+
+class VectorId7(RootModel[str]):
+    root: Annotated[str, Field(pattern="^(0|[1-9][0-9]{0,19})$", title="VectorId")]
+
+
+class VectorId8(RootModel[int]):
+    root: Annotated[int, Field(ge=0, le=9007199254740991, title="VectorId")]
+
+
+class VectorId6(RootModel[VectorId7 | VectorId8]):
+    root: Annotated[VectorId7 | VectorId8, Field(title="VectorId")]
+
+
+class VectorIndexRequestContains(GeneratedBaseModel):
+    ids: Annotated[list[VectorId6], Field(min_length=1)]
+    type: Literal["vectorIndex"] = "vectorIndex"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    operation: Literal["contains"] = "contains"
+
+
+class VectorIndexRequestWrite(GeneratedBaseModel):
+    path: Annotated[str, Field(min_length=1)]
+    type: Literal["vectorIndex"] = "vectorIndex"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    operation: Literal["write"] = "write"
+
+
+class VectorIndexRequestDispose(GeneratedBaseModel):
+    type: Literal["vectorIndex"] = "vectorIndex"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    operation: Literal["dispose"] = "dispose"
+
+
+class VectorIndexResponseCreateStorage(Enum):
+    f32 = "f32"
+    q8 = "q8"
+    q4 = "q4"
+    turbovec_q4 = "turbovec-q4"
+    turbovec_q2 = "turbovec-q2"
+
+
+class VectorIndexResponseCreate(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["create"] = "create"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    dim: Annotated[int, Field(gt=0, le=9007199254740991)]
+    storage: Annotated[
+        VectorIndexResponseCreateStorage,
+        Field(title="VectorIndexResponseCreateStorage"),
+    ]
+    length: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class VectorIndexResponseLoadStorage(Enum):
+    f32 = "f32"
+    q8 = "q8"
+    q4 = "q4"
+    turbovec_q4 = "turbovec-q4"
+    turbovec_q2 = "turbovec-q2"
+
+
+class VectorIndexResponseLoad(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["load"] = "load"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    dim: Annotated[int, Field(gt=0, le=9007199254740991)]
+    storage: Annotated[
+        VectorIndexResponseLoadStorage | None,
+        Field(title="VectorIndexResponseLoadStorage"),
+    ] = None
+    length: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class VectorIndexResponseAdd(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["add"] = "add"
+    length: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class VectorIndexResponseSearchResultsItemItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: str
+    score: float
+
+
+class VectorIndexResponseSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["search"] = "search"
+    results: list[list[VectorIndexResponseSearchResultsItemItem]]
+
+
+class VectorIndexResponseRemove(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["remove"] = "remove"
+    removed: list[bool]
+    length: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
+class VectorIndexResponseContains(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["contains"] = "contains"
+    present: list[bool]
+
+
+class VectorIndexResponseWrite(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["write"] = "write"
+    path: str
+
+
+class VectorIndexResponseDispose(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["dispose"] = "dispose"
+    disposed: bool
+
+
 class VideoStreamRequestSamplingMethod(Enum):
     euler = "euler"
     euler_a = "euler_a"
@@ -20348,6 +20576,160 @@ class Response_1(
     ]
 
 
+class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
+    root: Annotated[
+        TranslateNmtRequest | TranslateLlmRequest, Field(title="TranslateRequest")
+    ]
+
+
+class Request_7(
+    RootModel[
+        VectorIndexRequestCreate
+        | VectorIndexRequestLoad
+        | VectorIndexRequestAdd
+        | VectorIndexRequestSearch
+        | VectorIndexRequestRemove
+        | VectorIndexRequestContains
+        | VectorIndexRequestWrite
+        | VectorIndexRequestDispose
+    ]
+):
+    root: Annotated[
+        VectorIndexRequestCreate
+        | VectorIndexRequestLoad
+        | VectorIndexRequestAdd
+        | VectorIndexRequestSearch
+        | VectorIndexRequestRemove
+        | VectorIndexRequestContains
+        | VectorIndexRequestWrite
+        | VectorIndexRequestDispose,
+        Field(title="VectorIndexRequest"),
+    ]
+
+
+class Request(
+    RootModel[
+        AssessModelFitRequest
+        | AudioEditStreamRequest
+        | AudioGenStreamRequest
+        | AudioUnderstandRequest
+        | BatchCompletionStreamRequest
+        | BciTranscribeRequest
+        | BciTranscribeStreamRequest
+        | Request_1
+        | ClassifyRequest
+        | CompletionOrchestrateRequest
+        | CompletionStreamRequest
+        | Request_2
+        | DiffusionStreamRequest
+        | DownloadAssetRequest
+        | EmbedRequest
+        | Request_3
+        | GetLoadedModelInfoRequest
+        | GetModelInfoRequest
+        | GetSystemResourcesRequest
+        | HeartbeatRequest
+        | Request_4
+        | LoggingStreamRequest
+        | ModelRegistryGetModelRequest
+        | ModelRegistryListRequest
+        | ModelRegistrySearchRequest
+        | OcrStreamRequest
+        | PluginInvokeRequest
+        | PluginInvokeStreamRequest
+        | Request_5
+        | ResumeRequest
+        | StateRequest
+        | SuspendRequest
+        | TextToSpeechRequest
+        | TextToSpeechStreamRequest
+        | TranscribeRequest
+        | TranscribeStreamRequest
+        | Request_6
+        | UnloadModelRequest
+        | UpscaleStreamRequest
+        | Request_7
+        | VideoStreamRequest
+        | WorldSceneStreamRequest
+        | WorldStepStreamRequest
+    ]
+):
+    root: Annotated[
+        AssessModelFitRequest
+        | AudioEditStreamRequest
+        | AudioGenStreamRequest
+        | AudioUnderstandRequest
+        | BatchCompletionStreamRequest
+        | BciTranscribeRequest
+        | BciTranscribeStreamRequest
+        | Request_1
+        | ClassifyRequest
+        | CompletionOrchestrateRequest
+        | CompletionStreamRequest
+        | Request_2
+        | DiffusionStreamRequest
+        | DownloadAssetRequest
+        | EmbedRequest
+        | Request_3
+        | GetLoadedModelInfoRequest
+        | GetModelInfoRequest
+        | GetSystemResourcesRequest
+        | HeartbeatRequest
+        | Request_4
+        | LoggingStreamRequest
+        | ModelRegistryGetModelRequest
+        | ModelRegistryListRequest
+        | ModelRegistrySearchRequest
+        | OcrStreamRequest
+        | PluginInvokeRequest
+        | PluginInvokeStreamRequest
+        | Request_5
+        | ResumeRequest
+        | StateRequest
+        | SuspendRequest
+        | TextToSpeechRequest
+        | TextToSpeechStreamRequest
+        | TranscribeRequest
+        | TranscribeStreamRequest
+        | Request_6
+        | UnloadModelRequest
+        | UpscaleStreamRequest
+        | Request_7
+        | VideoStreamRequest
+        | WorldSceneStreamRequest
+        | WorldStepStreamRequest,
+        Field(
+            description="Any request accepted by the server, in wire (pre-parse) shape.",
+            title="AnyRequest",
+        ),
+    ]
+
+
+class Response_2(
+    RootModel[
+        VectorIndexResponseCreate
+        | VectorIndexResponseLoad
+        | VectorIndexResponseAdd
+        | VectorIndexResponseSearch
+        | VectorIndexResponseRemove
+        | VectorIndexResponseContains
+        | VectorIndexResponseWrite
+        | VectorIndexResponseDispose
+    ]
+):
+    root: Annotated[
+        VectorIndexResponseCreate
+        | VectorIndexResponseLoad
+        | VectorIndexResponseAdd
+        | VectorIndexResponseSearch
+        | VectorIndexResponseRemove
+        | VectorIndexResponseContains
+        | VectorIndexResponseWrite
+        | VectorIndexResponseDispose,
+        Field(title="VectorIndexResponse"),
+    ]
+
+
 class Response(
     RootModel[
         AssessModelFitResponse
@@ -20393,6 +20775,7 @@ class Response(
         | TranslateResponse
         | UnloadModelResponse
         | UpscaleStreamResponse
+        | Response_2
         | VideoStreamResponse
         | WorldSceneStreamResponse
         | WorldStepStreamResponse
@@ -20442,113 +20825,12 @@ class Response(
         | TranslateResponse
         | UnloadModelResponse
         | UpscaleStreamResponse
+        | Response_2
         | VideoStreamResponse
         | WorldSceneStreamResponse
         | WorldStepStreamResponse,
         Field(
             description="Any response emitted by the server, including progress updates and error envelopes.",
             title="AnyResponse",
-        ),
-    ]
-
-
-class Request_6(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
-    root: Annotated[
-        TranslateNmtRequest | TranslateLlmRequest, Field(title="TranslateRequest")
-    ]
-
-
-class Request(
-    RootModel[
-        AssessModelFitRequest
-        | AudioEditStreamRequest
-        | AudioGenStreamRequest
-        | AudioUnderstandRequest
-        | BatchCompletionStreamRequest
-        | BciTranscribeRequest
-        | BciTranscribeStreamRequest
-        | Request_1
-        | ClassifyRequest
-        | CompletionOrchestrateRequest
-        | CompletionStreamRequest
-        | Request_2
-        | DiffusionStreamRequest
-        | DownloadAssetRequest
-        | EmbedRequest
-        | Request_3
-        | GetLoadedModelInfoRequest
-        | GetModelInfoRequest
-        | GetSystemResourcesRequest
-        | HeartbeatRequest
-        | Request_4
-        | LoggingStreamRequest
-        | ModelRegistryGetModelRequest
-        | ModelRegistryListRequest
-        | ModelRegistrySearchRequest
-        | OcrStreamRequest
-        | PluginInvokeRequest
-        | PluginInvokeStreamRequest
-        | Request_5
-        | ResumeRequest
-        | StateRequest
-        | SuspendRequest
-        | TextToSpeechRequest
-        | TextToSpeechStreamRequest
-        | TranscribeRequest
-        | TranscribeStreamRequest
-        | Request_6
-        | UnloadModelRequest
-        | UpscaleStreamRequest
-        | VideoStreamRequest
-        | WorldSceneStreamRequest
-        | WorldStepStreamRequest
-    ]
-):
-    root: Annotated[
-        AssessModelFitRequest
-        | AudioEditStreamRequest
-        | AudioGenStreamRequest
-        | AudioUnderstandRequest
-        | BatchCompletionStreamRequest
-        | BciTranscribeRequest
-        | BciTranscribeStreamRequest
-        | Request_1
-        | ClassifyRequest
-        | CompletionOrchestrateRequest
-        | CompletionStreamRequest
-        | Request_2
-        | DiffusionStreamRequest
-        | DownloadAssetRequest
-        | EmbedRequest
-        | Request_3
-        | GetLoadedModelInfoRequest
-        | GetModelInfoRequest
-        | GetSystemResourcesRequest
-        | HeartbeatRequest
-        | Request_4
-        | LoggingStreamRequest
-        | ModelRegistryGetModelRequest
-        | ModelRegistryListRequest
-        | ModelRegistrySearchRequest
-        | OcrStreamRequest
-        | PluginInvokeRequest
-        | PluginInvokeStreamRequest
-        | Request_5
-        | ResumeRequest
-        | StateRequest
-        | SuspendRequest
-        | TextToSpeechRequest
-        | TextToSpeechStreamRequest
-        | TranscribeRequest
-        | TranscribeStreamRequest
-        | Request_6
-        | UnloadModelRequest
-        | UpscaleStreamRequest
-        | VideoStreamRequest
-        | WorldSceneStreamRequest
-        | WorldStepStreamRequest,
-        Field(
-            description="Any request accepted by the server, in wire (pre-parse) shape.",
-            title="AnyRequest",
         ),
     ]
