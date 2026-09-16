@@ -10,7 +10,7 @@ on:
         default: main
       prebuild_package:
         description: "NPM package containing prebuilds (e.g. @qvac/tts-ggml@1.0.0)"
-        required: true
+        required: false
         type: string
       run_integration_tests:
         description: "Run the regular integration suite"
@@ -91,7 +91,7 @@ jobs:
   run-integration-tests:
     needs: runner_names
     timeout-minutes: 120
-    continue-on-error: true
+    continue-on-error: false
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.no_gpu != 'true' && '-gpu' || '' }}-integration-tests
@@ -104,43 +104,11 @@ jobs:
     permissions:
       contents: read
       packages: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Both linux GPU runners carry an NVIDIA card and a prebuild that
-          # bundles the CUDA and Vulkan backends; pin one runner per backend so
-          # each keeps dedicated coverage instead of both resolving to the
-          # engine's CUDA-first preference.
-          - os: ubuntu-22.04
-            platform: linux
-            arch: x64
-            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
-            gpu_backend: cuda
-          - os: ubuntu-24.04
-            platform: linux
-            arch: x64
-            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
-            gpu_backend: vulkan
-          - os: ubuntu-26.04
-            runner: ${{ needs.runner_names.outputs.ubuntu_2604 }}
-            platform: linux
-            arch: x64
-            no_gpu: 'true'
-          - os: ubuntu-24.04-arm
-            runner: ${{ needs.runner_names.outputs.ubuntu_2404_arm }}
-            platform: linux
-            arch: arm64
-            no_gpu: 'true'
-          - os: macos-26
-            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
-            platform: darwin
-            arch: arm64
-          - os: macos-15-large
-            runner: ${{ needs.runner_names.outputs.macos_15_large }}
-            platform: darwin
-            arch: x64
-            no_gpu: 'true'
           - os: windows-2025
             platform: win32
             arch: x64
@@ -166,8 +134,14 @@ jobs:
 
       - name: Install NPM dependencies
         working-directory: ${{ github.workspace }}/packages/tts-ggml
+        shell: pwsh
         run: |
-          npm install
+          Get-Command node,npm,npm.cmd | Select-Object Name,Source,CommandType
+          node --version
+          npm.cmd --version
+          npm.cmd config get loglevel
+          npm.cmd install --loglevel=verbose --foreground-scripts --timing
+          exit $LASTEXITCODE
   
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
@@ -183,7 +157,9 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           path: ${{ runner.temp }}/tts-ggml
-          merge-multiple: true
+          name: prebuild-tts-ggml-win32-x64
+          run-id: 35091070742
+          github-token: ${{ github.token }}
 
       - if: ${{ !inputs.prebuild_package }}
         shell: bash
