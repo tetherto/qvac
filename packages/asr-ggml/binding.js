@@ -1,7 +1,7 @@
 module.exports = loadAddon()
 
 // The split meta package has no local prebuild. Some runtimes return this
-// package's Javascript entry from require.addon() instead of throwing, so 
+// package's Javascript entry from require.addon() instead of throwing, so
 // validate the result before accepting it as the native binding.
 
 function loadAddon() {
@@ -14,7 +14,7 @@ function loadAddon() {
       '@qvac/asr-ggml: require.addon() answered with a module that is not the native binding ' +
         '(no createInstance function), so the prebuild in this package was treated as absent.'
     )
-  } catch(err) {
+  } catch (err) {
     cause = err
   }
 
@@ -26,7 +26,7 @@ function loadPlatformPackageAddon(cause) {
 
   try {
     addon = require('#host-addon')
-  } catch(err) {
+  } catch (err) {
     if (err.cause === undefined) err.cause = cause
     throw err
   }
@@ -45,6 +45,5 @@ function loadPlatformPackageAddon(cause) {
 }
 
 function isNativeBinding(addon) {
-  return addon !== null && typeof addon === 'object' && 
-    typeof addon.createInstance === 'function' 
+  return addon !== null && typeof addon === 'object' && typeof addon.createInstance === 'function'
 }
