@@ -4,8 +4,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 44cc9d1f75d3dff5f3fc849427554463040af52b
-    SHA512 2cb6cfada0bd81b820427b614935130a3f3822e735142357fa4e9ca6a8f4de628be2bbe04599417af5facc73e3c1565122164ea09e1eb518facdc3e064b94aeb
+    REF be2c4e3eb4ca685f7e3b06dc83c60b57d9a35a32
+    SHA512 e2d7b9d10da3361dd4a87c68546f15d2d5d1771f04d5ad64f416d531867dceeb34553c5685027b05a10175e2d5d87e0fbca9524f2ce98d741ade75856bfecdd4
 )
 
 # Even under SD_USE_SYSTEM_GGML the sources reach into one ggml *internal*
