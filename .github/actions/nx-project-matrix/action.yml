@@ -77,24 +77,34 @@ runs:
       uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
     # nx-set-shas derives both SHAs from the working tree, which on
     # pull_request_target is the base branch, so it would diff main against
-    # itself and nothing is ever affected. Take them from the event payload,
-    # and fetch the head commit without checking it out: the diff needs the
-    # object present, not the PR's files in the tree. base.sha is what GitHub
-    # itself diffs the PR against, so this matches the Files changed tab.
+    # itself and nothing is ever affected. Ask the API for the changed paths
+    # instead and hand them to nx --files: path names are PR metadata, so the
+    # PR's commits never need to reach this privileged checkout at all.
     - if: github.event_name == 'pull_request_target'
       shell: bash
       env:
-        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
       run: |
         set -euo pipefail
-        # Unauthenticated: the checkout above sets persist-credentials: false and
-        # qvac is public. A fork's head is reachable here via refs/pull/N/head.
-        git fetch --no-tags origin "+${PR_HEAD_SHA}:refs/nx/head"
-        {
-          echo "NX_BASE=${PR_BASE_SHA}"
-          echo "NX_HEAD=${PR_HEAD_SHA}"
-        } >> "$GITHUB_ENV"
+        gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
+          --jq '.[].filename' > pr-changed-files.txt
+        # nx --files is comma or space delimited, so a path containing either is
+        # ambiguous. Fail rather than hand nx a list that silently parses short:
+        # under-selecting is how this job skipped CI for 10 PRs before.
+        if grep -qE '[ ,]' pr-changed-files.txt; then
+          echo "::error::a changed path contains a space or comma, which nx --files cannot delimit"
+          exit 1
+        fi
+        if [ ! -s pr-changed-files.txt ]; then
+          echo "::error::the API reported no changed files for PR ${PR_NUMBER}"
+          exit 1
+        fi
+        echo "Changed paths: $(wc -l < pr-changed-files.txt)"
+        NX_FILES_VALUE="$(paste -sd, pr-changed-files.txt)"
+        echo "NX_FILES=${NX_FILES_VALUE}" >> "$GITHUB_ENV"
+        rm -f pr-changed-files.txt
     - id: compute
       shell: bash
       env:
@@ -122,9 +132,17 @@ runs:
           AFFECTED=$(echo "$INPUT_PACKAGES" | jq -c 'map(sub("^@qvac/"; ""))')
           echo "Explicit packages ($TARGET, no affected computation): $AFFECTED"
         else
-          AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
-            | tail -n1 \
-            | jq -c 'map(sub("^@qvac/"; ""))')
+          # NX_FILES is set on pull_request_target, where --base/--head would
+          # both resolve to the base branch. Same transitive expansion either way.
+          if [ -n "${NX_FILES:-}" ]; then
+            AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --files="$NX_FILES" --json \
+              | tail -n1 \
+              | jq -c 'map(sub("^@qvac/"; ""))')
+          else
+            AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
+              | tail -n1 \
+              | jq -c 'map(sub("^@qvac/"; ""))')
+          fi
           echo "Affected ($TARGET, transitive): $AFFECTED"
         fi
 
