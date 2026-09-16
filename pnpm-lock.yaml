@@ -982,8 +982,8 @@ importers:
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.49.1
-        version: 0.49.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.53.0
+        version: link:../llm-llamacpp
       '@qvac/ocr-ggml':
         specifier: ^0.21.0
         version: 0.21.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -1639,8 +1639,8 @@ importers:
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.49.1
-        version: 0.49.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.53.0
+        version: link:../llm-llamacpp
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1

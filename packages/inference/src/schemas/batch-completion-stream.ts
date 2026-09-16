@@ -9,6 +9,7 @@ import {
 import {
   completionParamsSchema,
   generationParamsSchema,
+  refineToolChoiceMatchesTools,
   responseFormatSchema,
   toolDialectSchema
 } from '@/schemas/completion-stream'
@@ -64,6 +65,7 @@ export const batchPromptSchema = batchPromptBaseSchema
   })
   .strict()
   .superRefine(refineNoToolsWithStructuredOutput)
+  .superRefine(refineToolChoiceMatchesTools)
 
 const batchPromptStreamSchema = batchPromptBaseSchema
   .extend({
@@ -71,6 +73,7 @@ const batchPromptStreamSchema = batchPromptBaseSchema
   })
   .strict()
   .superRefine(refineNoToolsWithStructuredOutput)
+  .superRefine(refineToolChoiceMatchesTools)
 
 const batchCompletionClientParamsBaseSchema = z
   .object({
