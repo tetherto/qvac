@@ -331,8 +331,7 @@ fi
 # was read as a file-write instruction, naming tools ("do not call any tools")
 # primed tool syntax, and asking for a sentence made a compliant answer
 # indistinguishable from a mention. So ask for the word, and say nothing about
-# tools. Must match what the verifier asserts, and stay in step with the
-# OpenCode sibling smoke.
+# tools. Must match what the verifier asserts.
 AGENT_PROMPT="${AGENT_PROMPT:-Reply with only the word qvac-ok.}"
 
 # Each attempt gets a fresh session id. Retrying into the same session would
