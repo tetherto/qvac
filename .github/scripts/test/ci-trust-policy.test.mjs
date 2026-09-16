@@ -2240,15 +2240,23 @@ const UNTRUSTED_CACHE_EVENTS = ['pull_request', 'pull_request_target', 'issue_co
 // Every `uses: actions/cache@` (write) step in the cpp-tests family, as
 // {path, code, steps, index}. Steps are split on the six-space step indent
 // these workflows use; `index` is the step's position, for ordering checks.
+//
+// `match` is one regex or an array of them, ALL of which must match the step.
+// An array is how a caller spells "this step mentions both X and Y" without
+// tying itself to the order the YAML keys happen to be written in: a single
+// /X[\s\S]*Y/ silently stops matching when someone moves `with:` above `uses:`,
+// which is legal YAML with identical runtime behaviour and would let a cache
+// write slip past the gate below.
 function eachCppTestsCacheStep (opts = {}) {
   const found = []
+  const patterns = [opts.match].flat()
   for (const path of workflowPaths()) {
     if (!/\/cpp-tests?-/.test(path)) continue
     if (!opts.includeExempt && TRUSTED_CACHE_EXEMPT.has(path)) continue
     const code = withoutComments(read(path))
     const steps = code.split(/\n      - /)
     steps.forEach((step, index) => {
-      if (!opts.match.test(step)) return
+      if (!patterns.every((p) => p.test(step))) return
       found.push({ path, code, steps, step, index })
     })
   }
@@ -2275,7 +2283,7 @@ test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
   // An exempt file is exempt only for the ungated model/ccache caches it already
   // had; a vcpkg cache write carries the full gate wherever it appears.
   for (const { path, step, index } of eachCppTestsCacheStep({
-    match: /uses: actions\/cache\/save@[\s\S]*vcpkg\/cache/, includeExempt: true,
+    match: [/uses: actions\/cache\/save@/, /vcpkg\/cache/], includeExempt: true,
   })) {
     if (seen.has(`${path}#${index}`)) continue
     check(path, step)
@@ -2315,7 +2323,7 @@ test('cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint',
   // Only the restore step spells the key out; the save reuses it via
   // steps.vcpkg-cache.outputs.cache-primary-key, so it cannot drift.
   const vcpkgCacheSteps = eachCppTestsCacheStep({
-    match: /uses: actions\/cache\/restore@[\s\S]*vcpkg\/cache/,
+    match: [/uses: actions\/cache\/restore@/, /vcpkg\/cache/],
     includeExempt: true,
   })
 

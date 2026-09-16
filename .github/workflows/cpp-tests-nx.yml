@@ -53,14 +53,25 @@ on:
 permissions:
   contents: read
 
-# Spelled out rather than using github.workflow, which in a called workflow
-# resolves to the CALLER's name -- that would collide with on-pr-nx's own group.
-# Not keyed on github.ref alone either: under pull_request_target that is the base
-# branch, so every in-flight PR would share one group. PR number keeps them
-# independent; github.ref serialises the dispatches that write the vcpkg cache.
-concurrency:
-  group: cpp-tests-nx-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+# Deliberately NO concurrency block, unlike the legacy per-package cpp-tests
+# workflows this leaf replaces. In nx the orchestrators own concurrency
+# (on-pr-nx, benchmark-performance-nx) and the leaves -- prebuilds-nx,
+# integration-test-nx, this one -- do not.
+#
+# The legacy files can each carry one because each covers a single package, so
+# its group only ever holds runs that target the same actions/cache key. This
+# leaf covers every package in one run, so any workflow-level group collapses to
+# one per ref: two standalone dispatches for disjoint package sets would then
+# serialise, and a third would silently cancel the second pending one. Standalone
+# dispatch is how these leaves are validated (docs/ci/nx-ci-consolidation.md), so
+# that is the common case, not an edge one.
+#
+# This trades away the A9 convention that every workflow declares a group. The
+# thing A9 protects here is already covered: the vcpkg cache write is gated to
+# trusted events, its key is package-scoped, and actions/cache/save is a no-op
+# against a key that already exists -- so two concurrent runs cannot corrupt an
+# entry, and there is no state left for a group to serialise. Per-PR
+# cancellation still comes from on-pr-nx's own group.
 
 jobs:
   matrix:
