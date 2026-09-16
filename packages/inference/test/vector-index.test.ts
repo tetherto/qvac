@@ -27,19 +27,29 @@ import { observableIndexProvider, registerProviderPlugin } from './fixtures/turb
 // Keep the storage-root lock out of the real home, as dispatch.test.ts does.
 env['HOME'] = path.join(os.tmpdir(), `qvac-inference-test-${os.pid()}`)
 
-type ProviderCalls = ReturnType<typeof observableIndexProvider>['calls']
+type Provider = ReturnType<typeof observableIndexProvider>
+type ProviderCalls = Provider['calls']
+type ProviderFailures = Provider['failures']
+type ProviderFailRemoveId = Provider['failRemoveId']
 
 function tempSnapshotPath(suffix: string) {
   return path.join(os.tmpdir(), `qvac-vector-index-${os.pid()}-${suffix}.qvi`)
 }
 
-async function withProvider(run: (calls: ProviderCalls) => Promise<void>) {
+async function withProvider(
+  run: (
+    calls: ProviderCalls,
+    failures: ProviderFailures,
+    failRemoveId: ProviderFailRemoveId
+  ) => Promise<void>
+) {
   clearPlugins()
-  const { provider, calls } = observableIndexProvider()
+  const { provider, calls, failures, failRemoveId } = observableIndexProvider()
   registerProviderPlugin('test-vector-index-provider', provider)
   try {
-    await run(calls)
+    await run(calls, failures, failRemoveId)
   } finally {
+    failures.dispose = false
     disposeAllVectorIndexes()
     await close()
     clearPlugins()
@@ -284,6 +294,167 @@ test('vector index: worker cleanup disposes every open index', async (t) => {
     t.is(calls.dispose, 2)
     disposeAllVectorIndexes()
     t.is(calls.dispose, 2, 'a second cleanup is a no-op')
+  })
+})
+
+test('vector index: a failed dispose leaves the index registered and retryable', async (t) => {
+  await withProvider(async (calls, failures) => {
+    const index = await createVectorIndex({ dim: 2 })
+    t.is(getOpenVectorIndexCount(), 1)
+
+    failures.dispose = true
+    await expectRejects(
+      t,
+      () => index.dispose(),
+      VectorIndexFailedError,
+      'a failing native dispose surfaces as a coded error'
+    )
+    t.is(calls.dispose, 1, 'the backend was asked to dispose')
+    t.is(
+      getOpenVectorIndexCount(),
+      1,
+      'the index stays registered, so it is not leaked for the worker lifetime'
+    )
+
+    failures.dispose = false
+    await index.dispose()
+    t.is(calls.dispose, 2, 'the retry reaches the backend again')
+    t.is(getOpenVectorIndexCount(), 0)
+  })
+})
+
+test('vector index: an index whose dispose failed is still released at shutdown', async (t) => {
+  await withProvider(async (calls, failures) => {
+    const index = await createVectorIndex({ dim: 2 })
+    failures.dispose = true
+    await expectRejects(
+      t,
+      () => index.dispose(),
+      VectorIndexFailedError,
+      'the native dispose fails'
+    )
+
+    failures.dispose = false
+    disposeAllVectorIndexes()
+    t.is(calls.dispose, 2, 'shutdown disposes the index the failed call left behind')
+    t.is(getOpenVectorIndexCount(), 0)
+  })
+})
+
+test('vector index: a failed create or load registers nothing', async (t) => {
+  await withProvider(async (calls, failures) => {
+    failures.create = true
+    await expectRejects(
+      t,
+      () => createVectorIndex({ dim: 2 }),
+      VectorIndexFailedError,
+      'a failing create surfaces as a coded error'
+    )
+    t.is(calls.create, 1, 'the backend was asked to create')
+    t.is(getOpenVectorIndexCount(), 0, 'a failed create leaves nothing registered')
+
+    failures.load = true
+    await expectRejects(
+      t,
+      () => loadVectorIndex({ path: 'never-written.qvi' }),
+      VectorIndexFailedError,
+      'a failing load surfaces as a coded error'
+    )
+    t.is(getOpenVectorIndexCount(), 0, 'a failed load leaves nothing registered')
+  })
+})
+
+test('vector index: a failed add, query or write leaves the index open', async (t) => {
+  await withProvider(async (calls, failures) => {
+    const index = await createVectorIndex({ dim: 2 })
+    await index.add({ ids: ['1'], vectors: [[1, 0]] })
+
+    for (const call of ['addWithIds', 'search', 'contains', 'write'] as const) {
+      failures[call] = true
+      const action = {
+        addWithIds: () => index.add({ ids: ['2'], vectors: [[0, 1]] }),
+        search: () => index.search({ query: [1, 0], k: 1 }),
+        contains: () => index.contains({ ids: ['1'] }),
+        write: () => index.write({ path: `vector-index-fail-${os.pid()}.qvi` })
+      }[call]
+      await expectRejects(t, action, VectorIndexFailedError, `a failing ${call} is reported`)
+      t.is(getOpenVectorIndexCount(), 1, `the index survives a failing ${call}`)
+      failures[call] = false
+    }
+
+    // The failed add must not have counted, so the index still holds one id.
+    t.alike(await index.contains({ ids: ['1', '2'] }), [true, false])
+  })
+})
+
+test('vector index: a failed prepare is retried on the next search', async (t) => {
+  await withProvider(async (calls, failures) => {
+    const index = await createVectorIndex({ dim: 2 })
+    await index.add({ ids: ['1'], vectors: [[1, 0]] })
+
+    failures.prepare = true
+    await expectRejects(
+      t,
+      () => index.search({ query: [1, 0], k: 1 }),
+      VectorIndexFailedError,
+      'a failing prepare is reported'
+    )
+    t.is(calls.prepare, 1)
+    t.is(calls.search, 0, 'the search never ran')
+
+    failures.prepare = false
+    await index.search({ query: [1, 0], k: 1 })
+    t.is(calls.prepare, 2, 'the warm-up is retried because it never succeeded')
+    t.is(calls.search, 1)
+
+    await index.search({ query: [1, 0], k: 1 })
+    t.is(calls.prepare, 2, 'a successful warm-up is not repeated')
+  })
+})
+
+test('vector index: a failed remove reports how many ids it applied', async (t) => {
+  await withProvider(async (calls, failures, failRemoveId) => {
+    const index = await createVectorIndex({ dim: 2 })
+    await index.add({
+      ids: ['1', '2', '3'],
+      vectors: [
+        [1, 0],
+        [0, 1],
+        [1, 1]
+      ]
+    })
+
+    failRemoveId.id = 2n
+    try {
+      await index.remove({ ids: ['1', '2', '3'] })
+      t.fail('the batch should fail on the second id')
+    } catch (error) {
+      t.ok(error instanceof VectorIndexFailedError)
+      t.ok(
+        String((error as Error).message).includes('applied 1 of 3 ids'),
+        'the error names the ids already removed'
+      )
+    }
+
+    failRemoveId.id = null
+    t.alike(
+      await index.contains({ ids: ['1', '2', '3'] }),
+      [false, true, true],
+      'the id before the failure is gone and the rest are untouched'
+    )
+    t.is(getOpenVectorIndexCount(), 1, 'the index survives a partial remove')
+  })
+})
+
+test('vector index: shutdown clears the registry even when dispose throws', async (t) => {
+  await withProvider(async (calls, failures) => {
+    await createVectorIndex({ dim: 2 })
+    await createVectorIndex({ dim: 2 })
+    failures.dispose = true
+
+    disposeAllVectorIndexes()
+    t.is(calls.dispose, 2, 'every index is attempted')
+    t.is(getOpenVectorIndexCount(), 0, 'shutdown clears the registry regardless')
   })
 })
 

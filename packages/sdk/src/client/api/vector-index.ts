@@ -73,7 +73,11 @@ export interface VectorIndex {
     options?: RPCOptions
   ): Promise<VectorIndexHit[][]>
 
-  /** Removes ids; each boolean tells whether that id was present. */
+  /**
+   * Removes ids; each boolean tells whether that id was present. Ids are
+   * applied in order, so a rejection leaves the ids before the failure
+   * removed and `length` reporting the last successful call.
+   */
   remove(params: VectorIndexIdsParams, options?: RPCOptions): Promise<boolean[]>
 
   /** Reports, per id, whether the index holds it. */

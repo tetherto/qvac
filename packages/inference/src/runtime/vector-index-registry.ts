@@ -116,9 +116,29 @@ export function searchVectors(params: { indexId: string; queries: number[][]; k:
   return { results }
 }
 
+/**
+ * Removes ids one at a time, which is the only shape the backend offers. A
+ * backend throw here means the handle itself is unusable, so the batch stops
+ * rather than trying the rest — but ids before it are already gone, so the
+ * error names how many were applied. `length` is only reported on success,
+ * which is why the handle documents its own `length` as of the last call that
+ * reported one.
+ */
 export function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) {
   const index = getIndex(params.indexId)
-  const removed = params.ids.map((id) => runBackend(() => index.remove(BigInt(id))))
+  const removed: boolean[] = []
+  for (const id of params.ids) {
+    try {
+      removed.push(index.remove(BigInt(id)))
+    } catch (error) {
+      if (error instanceof QvacErrorBase) throw error
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new VectorIndexFailedError(
+        `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`,
+        error
+      )
+    }
+  }
   return { removed, length: index.length }
 }
 
@@ -148,8 +168,11 @@ export async function writeVectorIndex(params: { indexId: string; path: string }
 export function disposeVectorIndex(params: { indexId: string }) {
   const index = indexes.get(params.indexId)
   if (!index) return { disposed: false }
-  indexes.delete(params.indexId)
+  // Drop the entry only once the backend confirms. Deleting first would strand
+  // a failed dispose: the retry would find nothing and report success, and
+  // `disposeAllVectorIndexes` could not reach it at shutdown either.
   runBackend(() => index.dispose())
+  indexes.delete(params.indexId)
   return { disposed: true }
 }
 
