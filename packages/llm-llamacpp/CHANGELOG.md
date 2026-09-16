@@ -2,9 +2,11 @@
 
 ## [Unreleased]
 
-Sharded and streamed loads are deliberately untouched: neither ran the fit
-before and neither runs it now. Sharded placement is fixed in
-`inference-addon-cpp`, which owns the split loader.
+Both on-disk load paths now run the fit — single-file and sharded. Streamed
+loads are deliberately untouched: the addon receives chunks rather than a path,
+and every entry point in qvac-fabric's `common/fit.h` takes a
+`const char * path_model`, so reaching them needs a fabric-side change rather
+than a local one.
 
 ### Fixed
 
@@ -24,6 +26,15 @@ before and neither runs it now. Sharded placement is fixed in
   overrides, MoE cache and weight prefetch — is folded into the load parameters.
   A `gpu_layers`, `ctx_size` or `override-tensor` the caller pinned still wins,
   and still stops the fit, which is unchanged (QVAC-25039).
+- The same placement now also runs when a **sharded** model is loaded from disk.
+  That path never reached the fitter at all: `initFromShards` builds the model
+  with `llama_model_load_from_splits` and so bypasses `common_init_from_params`,
+  the only place fabric runs the fit. The fit is handed the first shard, which
+  is what llama requires as a split-set entry point — it reads `split.count`
+  from that file and regenerates the sibling names itself — so naming a later
+  shard still fits against shard 1. `fit_params` is left as the caller set it on
+  this path, because nothing downstream of `initFromShards` re-fits, which also
+  keeps `moe_cache_auto` at the caller's value there.
 - A fit that does not succeed no longer leaves behind the placement it rejected.
   `common_fit_params` writes a candidate placement into the caller's
   `tensor_split` and `tensor_buft_overrides` on every probe of its descent

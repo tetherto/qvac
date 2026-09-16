@@ -204,22 +204,40 @@ void LlamaModel::init(bool acquireLock) {
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
   common_params params = std::move(normalized.params);
 
-  // QVAC-25039: run qvac-fabric's automatic GPU/CPU placement here, for the one
-  // load path that would otherwise have fabric run it implicitly inside
-  // `common_init_from_params` — against `params`' own buffers, with the
-  // returned status discarded. `fitParamsToFreeDeviceMemory` fits against
-  // scratch and adopts the result only on success; see its header for why that
-  // distinction is not cosmetic.
+  // QVAC-25039: run qvac-fabric's automatic GPU/CPU placement here, for the two
+  // load paths that would otherwise never see it. `fitParamsToFreeDeviceMemory`
+  // fits against scratch and adopts the result only on success; see its header
+  // for why that distinction is not cosmetic.
   //
-  // The two conditions are the exact expressions `initFromConfig` branches on,
-  // and together they select its `common_init_from_params` arm. The streamed
-  // arms have no on-disk GGUF for the fitter to read, and the sharded arm will
-  // be fitted inside inference-addon-cpp once #4446 lands as port 1.5.0 — at
-  // this revision it runs no fit at all — so neither is touched here.
-  const bool singleFileFromDisk = !snap->asyncWeightsLoader_.isStreaming() &&
-                                  snap->shards_.gguf_files.empty();
-  if (singleFileFromDisk) {
-    fit_to_free_device_memory::fitParamsToFreeDeviceMemory(params, modelPath);
+  // `isStreaming()` is the first expression `initFromConfig` branches on, so
+  // !isStreaming() selects both of its on-disk arms: `common_init_from_params`
+  // when there are no shards, which runs the fit in place against `params`' own
+  // buffers and discards the status, and `initFromShards` when there are, which
+  // bypasses the fit entirely.
+  //
+  // The streamed arms are deliberately not fitted. The addon receives chunks
+  // rather than a path, and every entry point in fabric's `common/fit.h` takes
+  // a `const char * path_model` — there is no buffer or already-loaded-model
+  // overload — so reaching them needs a fabric-side change rather than a local
+  // one. Note the bytes usually *are* on disk in that case (index.js streams
+  // them with `fs.createReadStream`), so this is a limit of the addon's API
+  // surface, not of the deployment.
+  const bool fromDisk = !snap->asyncWeightsLoader_.isStreaming();
+  const bool shardedFromDisk = fromDisk && !snap->shards_.gguf_files.empty();
+  const bool singleFileFromDisk = fromDisk && snap->shards_.gguf_files.empty();
+
+  if (fromDisk) {
+    // The fitter opens one path and walks the rest of a split set itself: it
+    // reads `split.count` from the named file and regenerates the sibling names
+    // (src/llama-model-loader.cpp). That named file has to be split 0 — llama
+    // throws "model must be loaded with the first split" otherwise — which is
+    // why the sharded arm passes `gguf_files.front()` rather than `modelPath`.
+    // `expandGGUFIntoShards` always regenerates the list from shard 1, so the
+    // front entry is split 0 even when the caller named a later shard, and
+    // `resolveShardPaths` has already made it absolute.
+    fit_to_free_device_memory::fitParamsToFreeDeviceMemory(
+        params,
+        shardedFromDisk ? snap->shards_.gguf_files.front() : modelPath);
   }
 
   // Taken after the fit, so the snapshot keeps describing the configuration the
@@ -244,6 +262,13 @@ void LlamaModel::init(bool acquireLock) {
   // caller asked for rather than what has already happened. `params` is passed
   // by reference and `common_init_from_params` writes model-derived sampler
   // settings back into it, so this cannot be done on a copy.
+  //
+  // Only the single-file arm needs this. `initFromShards` builds the model with
+  // `llama_model_load_from_splits` and then calls
+  // `common_init_from_model_and_params`, neither of which consults
+  // `fit_params` as a gate — so there is no second fit to suppress there, and
+  // the sharded arm is left with the flag exactly as the caller set it. That
+  // also spares it the divergence below.
   //
   // KNOWN DIVERGENCE: `fit_params` is not only the fit gate. fabric also reads
   // it in `common_context_params_to_llama` as
