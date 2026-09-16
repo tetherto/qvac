@@ -446,6 +446,9 @@ JSCATCH
 inline js_value_t* paramsFitAsync(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
   FitRequest req = parseFitRequest(env, args.getJsObject(0, "config"));
+  // Registration stays on the JS thread, as on the synchronous path; only the
+  // fit itself moves to the worker.
+  registerBackends(req.backendsDir);
   return PromiseTask<FitResult>::run(
       env, [req = std::move(req)]() { return runFit(req); }, fitResultObject);
 }
@@ -464,6 +467,9 @@ llamaConfigFitAsync(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
   LlamaLoadFitRequest request =
       parseLlamaLoadFitRequest(env, args, args.getJsObject(0, "config"));
+  if (!preBackendUnsupportedLlamaLoad(request.params).has_value()) {
+    registerBackends(request.backendsDir);
+  }
   return PromiseTask<FitResult>::run(
       env,
       [request = std::move(request)]() { return runLlamaFit(request); },

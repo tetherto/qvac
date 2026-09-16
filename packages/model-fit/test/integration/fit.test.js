@@ -796,6 +796,14 @@ test('fitParamsAsync rejects invalid config before any native work', async funct
     fitParamsAsync({ modelPath: UNREACHABLE_MODEL, nCtx: 'big' }),
     /nCtx must be a safe integer/
   )
+  await t.exception.all(
+    fitParamsAsync({ modelPath: UNREACHABLE_MODEL, backendsDir: 'relative/backends' }),
+    /backendsDir must be an absolute path/
+  )
+  await t.exception.all(
+    fitParamsAsync({ modelPath: UNREACHABLE_MODEL, backendsDir: UNREACHABLE_BACKENDS_DIR }),
+    /backendsDir is not an existing directory/
+  )
 })
 
 test('fitParamsAsync resolves the verdict fitParams returns', async function (t) {
