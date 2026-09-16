@@ -24,6 +24,7 @@ export {
   ragCloseWorkspace,
   ragDeleteWorkspace
 } from '@/api/rag'
+export { createVectorIndex, loadVectorIndex, type VectorIndex } from '@/api/vector-index'
 export { textToSpeech, textToSpeechStream } from '@/api/text-to-speech'
 export { getModelInfo } from '@/api/get-model-info'
 export { getLoadedModelInfo } from '@/api/get-loaded-model-info'
