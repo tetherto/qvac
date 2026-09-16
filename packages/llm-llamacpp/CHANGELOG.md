@@ -51,14 +51,18 @@ than a local one.
   carrying the caller's own unset values. It now says it completed with no
   changes needed. That ambiguity, in the other direction, is the report this
   ticket started from.
-- A single-file load no longer adopts the fitted MoE cache budget. Clearing
-  `fit_params` so qvac-fabric does not re-fit in place also clears
-  `moe_cache_auto`, which is what turns "the budget cannot hold one routed
-  layer's working set" from a throw into a logged `cache inactive` — so a fitted
-  budget with that valve shut could fail a load that previously succeeded. The
-  caller's own budget is used instead, which is the position this path was in
-  before. The sharded path keeps `fit_params`, so it keeps both the valve and
-  the fitted budget.
+- A single-file load builds its context the same way a sharded one does, so both
+  keep qvac-fabric's automatic MoE cache. The single-file path used to go
+  through `common_init_from_params`, which runs its own in-place fit gated on
+  `fit_params`; suppressing that by clearing the flag would also have switched
+  off `moe_cache_auto`, and with it the automatic MoE cache `--fit` sizes at 10%
+  of the expert weight bytes — leaving a single-file MoE load without a feature
+  the sharded path, `llama-cli` and `llama-server` all get, on exactly the
+  large-MoE-on-small-VRAM case the fit exists for. The model is now loaded
+  directly and handed to `common_init_from_model_and_params`, which is what the
+  sharded path already uses and which consults no fit gate, so `fit_params`
+  stays as the caller set it on both paths and the same model behaves the same
+  way whether or not its GGUF is split.
 - `split-mode: none` resolves its device name to a handle in the addon instead
   of forwarding `--device <name>` to qvac-fabric's argument parser. The
   rejection rule is unchanged — an unknown name or a CPU device is still an

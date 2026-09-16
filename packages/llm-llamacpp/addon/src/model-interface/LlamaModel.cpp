@@ -210,10 +210,12 @@ void LlamaModel::init(bool acquireLock) {
   // for why that distinction is not cosmetic.
   //
   // `isStreaming()` is the first expression `initFromConfig` branches on, so
-  // !isStreaming() selects both of its on-disk arms: `common_init_from_params`
-  // when there are no shards, which runs the fit in place against `params`' own
-  // buffers and discards the status, and `initFromShards` when there are, which
-  // bypasses the fit entirely.
+  // !isStreaming() selects both of the on-disk arms. Neither reached a checked
+  // fit before this change: the single-file one went through
+  // `common_init_from_params`, which fits in place against `params`' own
+  // buffers and discards the status, and the sharded one through
+  // `initFromShards`, which bypasses the fit entirely. The load below now takes
+  // the same shape for both, so neither re-fits afterwards.
   //
   // The streamed arms are deliberately not fitted. The addon receives chunks
   // rather than a path, and every entry point in fabric's `common/fit.h` takes
@@ -235,34 +237,8 @@ void LlamaModel::init(bool acquireLock) {
     // `expandGGUFIntoShards` always regenerates the list from shard 1, so the
     // front entry is split 0 even when the caller named a later shard, and
     // `resolveShardPaths` has already made it absolute.
-    const size_t moeCacheSizeAsAsked = params.moe_cache_size;
-
     fit_to_free_device_memory::fitParamsToFreeDeviceMemory(
         params, shardedFromDisk ? snap->shards_.gguf_files.front() : modelPath);
-
-    if (singleFileFromDisk) {
-      // Do not adopt the fitted MoE cache budget on the arm that has to clear
-      // `fit_params` below. fabric derives the cache's own safety valve from
-      // the same flag — `cparams.moe_cache_auto = params.fit_params &&
-      // params.moe_cache_auto` (common/common.cpp) — and `llama_moe_cache`
-      // throws "MoE cache budget is smaller than one routed layer working set"
-      // where the automatic form logs "cache inactive" and carries on
-      // (src/llama-moe-cache.cpp). A fitted `moe_cache_size` with the valve
-      // shut is therefore a load that can fail where the same load succeeded
-      // before this change: `llama-context.cpp` builds the cache for any
-      // non-zero size, and `moe_cache_auto` defaults to true in `common.h` with
-      // nothing in this addon opting out.
-      //
-      // Leaving the budget as the caller asked keeps the pre-QVAC-25039
-      // behaviour exactly — the fit never ran on this path, so the budget was
-      // never set from it — and gives up only a tuning improvement rather than
-      // a working load. The sharded arm keeps `fit_params` set, so its valve
-      // survives and it adopts the fitted budget.
-      //
-      // Separating the two meanings of `fit_params` needs a fabric-side change;
-      // see the KNOWN DIVERGENCE note below.
-      params.moe_cache_size = moeCacheSizeAsAsked;
-    }
   }
 
   // Taken after the fit, so the snapshot keeps describing the configuration the
@@ -281,52 +257,52 @@ void LlamaModel::init(bool acquireLock) {
 
   snap.demoteToRead();
 
-  // The fit has already run, under conditions where its status is checked.
-  // fabric gates its own in-place fit on this flag, so clear it across the
-  // call — and put it back afterwards, because the flag records what the
-  // caller asked for rather than what has already happened. `params` is passed
-  // by reference and `common_init_from_params` writes model-derived sampler
-  // settings back into it, so this cannot be done on a copy.
+  // Both on-disk arms now load the same way, and neither re-fits.
   //
-  // Only the single-file arm needs this. `initFromShards` builds the model with
-  // `llama_model_load_from_splits` and then calls
-  // `common_init_from_model_and_params`, neither of which consults
-  // `fit_params` as a gate — so there is no second fit to suppress there, and
-  // the sharded arm is left with the flag exactly as the caller set it. That
-  // also spares it the divergence below.
+  // `initFromConfig`'s single-file branch is `common_init_from_params`, which
+  // gates its own in-place fit on `params.fit_params`. Reaching it would re-fit
+  // over the placement adopted above — in place, against `params`' own buffers,
+  // status discarded, which is the bug this whole change exists to avoid — and
+  // clearing the flag to suppress that is not free: fabric derives
+  // `cparams.moe_cache_auto` from the same flag
+  // (`common_context_params_to_llama`), so it would also switch off the
+  // automatic MoE cache that `--fit` had just sized (`fit.cpp` picks 10% of the
+  // expert weight bytes). That would leave this arm without a feature the
+  // sharded arm, `llama-cli` and `llama-server` all get, on exactly the
+  // large-MoE-on-small-VRAM configuration the fit is for — and it would make
+  // the same model behave differently depending only on whether its GGUF is
+  // split.
   //
-  // KNOWN DIVERGENCE: `fit_params` is not only the fit gate. fabric also reads
-  // it in `common_context_params_to_llama` as
-  // `cparams.moe_cache_auto = params.fit_params && params.moe_cache_auto`, and
-  // `common_init_result` builds cparams *before* it consults the gate — so on
-  // the unmodified path the load always reached `llama_init_from_model` with
-  // `moe_cache_auto` as the caller set it. Clearing the flag here therefore
-  // also clears `moe_cache_auto`, which is the flag that turns "the budget
-  // cannot hold one routed layer's working set" from a throw into a logged
-  // "cache inactive" (src/llama-moe-cache.cpp). The two meanings cannot be
-  // separated from outside fabric: with the gate set, fabric re-fits in place
-  // over the placement just adopted here, which is the bug this file exists to
-  // avoid.
+  // So take the sharded arm's shape instead. `common_init_from_params` is the
+  // file-based `common_init_result` constructor — which loads the model and
+  // runs the fit — followed by `common_init_from_model_and_params`. That second
+  // call is the one `initFromShards` already uses in production, and it does
+  // everything else the constructor would: the lora adapters,
+  // `common_init_sampler_from_model`, the `ignore_eos` handling, the EOG logit
+  // biases, the per-sequence samplers and `llama_init_from_model`, building
+  // `cparams` from `params` as it goes. Loading the model here and handing it
+  // to that overload keeps every step except the duplicate fit, with
+  // `fit_params` left exactly as the caller set it — so `moe_cache_auto`
+  // survives on both arms and there is no divergence left to document.
   //
-  // What makes the lost valve harmless rather than a narrowed set of loads is
-  // that the fit block above puts `moe_cache_size` back to the value the caller
-  // asked for on exactly this arm. `llama-context.cpp` builds the cache only
-  // for a non-zero size, so a caller that did not ask for one never reaches the
-  // throw, and one that did asked for a budget of its own rather than a fitted
-  // one — which is the same position it was in before this change.
+  // `params` is still passed by reference throughout, because that overload
+  // writes model-derived sampler settings back into it.
   common_init_result_ptr llamaInit;
-  {
-    const bool fitRequested = params.fit_params;
-    if (singleFileFromDisk) {
-      params.fit_params = false;
+  if (singleFileFromDisk) {
+    if (!std::filesystem::exists(modelPath)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          errorWhenFailed,
+          string_format(
+              "LlamaModel::init: model file not found: %s\n",
+              modelPath.c_str()));
     }
-    // Scoped to the call and RAII rather than a trailing assignment:
-    // `initFromConfig` throws `StatusError` on an unreadable or invalid model,
-    // and the restore has to land before `createContext` copies `params`.
-    ScopeGuard fitParamsGuard(
-        [&params, fitRequested] { params.fit_params = fitRequested; },
-        "restore-fit-params");
-
+    llama_model_params mparams = common_model_params_to_llama(params);
+    llama_model* model = llama_model_load_from_file(modelPath.c_str(), mparams);
+    // A null model yields a valid-but-empty result rather than a null pointer,
+    // which is what `createContext` below already expects from every other arm.
+    llamaInit = common_init_from_model_and_params(model, params);
+  } else {
     llamaInit = initFromConfig(
         params,
         modelPath,

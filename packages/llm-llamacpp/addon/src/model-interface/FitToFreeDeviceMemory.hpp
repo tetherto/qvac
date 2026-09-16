@@ -81,9 +81,15 @@ struct FitOutcome {
 /// describes the configuration the load will use rather than the one that was
 /// requested. Anything derived from @p params for reporting should be derived
 /// after this call, so the two agree.
-/// @note The caller must also clear `params.fit_params` before handing @p
-/// params to `common_init_from_params`, or fabric will run the fit a second
-/// time in place and discard its status.
+/// @note The caller must not then hand @p params to `common_init_from_params`,
+/// which gates its own in-place fit on `params.fit_params` and would re-fit
+/// over the placement adopted here, discarding the status. Clearing the flag is
+/// *not* the way to avoid that: fabric derives `cparams.moe_cache_auto` from
+/// the same flag, so clearing it also switches off the automatic MoE cache the
+/// fit had just sized. Load the model and call
+/// `common_init_from_model_and_params` instead — it does every other step the
+/// file-based path does and consults no fit gate, so `fit_params` can be left
+/// as the caller set it.
 FitOutcome fitParamsToFreeDeviceMemory(
     common_params& params, const std::string& modelPath,
     const LlamaFitInvoker& invoker = productionInvoker());

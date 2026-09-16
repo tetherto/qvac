@@ -299,6 +299,41 @@ TEST_F(ModelFullLoadingTest, ShardedFitResultIsWhatTheModelRunsWith) {
   expectTheFitReachedTheModel(loadUnpinned(shardedModel_.path));
 }
 
+// `fit_params` must survive the load on *both* on-disk arms, and it is not the
+// fit gate alone: fabric derives `cparams.moe_cache_auto` from the same flag
+// (`common_context_params_to_llama`), and that is what lets `--fit` size an
+// automatic MoE cache — 10% of the expert weight bytes (`fit.cpp`) — and what
+// turns "the budget cannot hold one routed layer's working set" from a throw
+// into a logged "cache inactive". Clearing it to stop a second in-place fit
+// would silently disable that on one arm only, so the same model would behave
+// differently depending on whether its GGUF is split.
+//
+// This asserts the precondition rather than the MoE cache itself: neither test
+// fixture is an MoE model, so `moe_cache_size` stays 0 on both regardless. What
+// is checkable everywhere, and what regressed if the flag were cleared again,
+// is that the flag reaches the loaded context intact.
+TEST_F(ModelFullLoadingTest, BothDiskArmsKeepFitParamsForTheLoadedContext) {
+  REQUIRE_MODEL(singleModel_);
+  {
+    LlamaModel model = loadModel(singleModel_.path);
+    model.waitForLoadInitialization();
+    ASSERT_TRUE(model.isLoaded());
+    EXPECT_TRUE(model.getCommonParams().fit_params)
+        << "the single-file arm cleared fit_params, which also clears "
+           "moe_cache_auto";
+  }
+
+  REQUIRE_MODEL(shardedModel_);
+  {
+    LlamaModel model = loadModel(shardedModel_.path);
+    model.waitForLoadInitialization();
+    ASSERT_TRUE(model.isLoaded());
+    EXPECT_TRUE(model.getCommonParams().fit_params)
+        << "the sharded arm cleared fit_params, which also clears "
+           "moe_cache_auto";
+  }
+}
+
 TEST_F(ModelFullLoadingTest, StreamingShards_LoadsSuccessfully) {
   REQUIRE_MODEL(shardedModel_);
   LlamaModel model = loadModel(shardedModel_.path);
