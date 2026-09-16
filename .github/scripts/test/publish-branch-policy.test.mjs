@@ -1,18 +1,6 @@
-// Keeps the addon publish pipelines off branches that can be an open PR's head.
-// Nothing else can: these workflows never run on a pull request, so a
-// reintroduced `feature-*` or `tmp-*` push filter is invisible until it
-// publishes off someone's PR branch -- which is how it went unnoticed from
-// March to September 2026.
-//
-// `release-*` is the only branch that may push-trigger a publish. Note this
-// also means no push builds addon prebuilds on merge to `main`: the PR lanes
-// gate prebuilds behind the ci-router labels and roughly a third of PRs carry
-// one, so a native break can reach `main` unbuilt and first surface on a
-// release push. That trade was made deliberately (QVAC-23047).
-//
-// Branch builds from a `tmp-*`/`feature-*` branch remain available through
-// workflow_dispatch, which npm-publish-logic handles on the same code path as
-// push.
+// Locks addon publish pipelines to release-* pushes. Nothing else can: these
+// workflows never run on a pull request, so a reintroduced feature-*/tmp-*
+// filter is invisible until it publishes off someone's PR branch.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -22,25 +10,20 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const WORKFLOW_DIR = join(root, '.github/workflows')
 
-// Publishing is identified by what the workflow does, not by its name, so a
-// renamed or newly added publish pipeline is still covered.
+// Keyed on behaviour, not filename, so a renamed pipeline stays covered.
 const PUBLISH_MARKER = /npm-publish-logic|publish-library-to-(gpr|npm)/
 
-// The only branch a publish pipeline may push-trigger on.
 const ALLOWED = ['release-*']
 
-// The JS library and SDK publishers share the publish markers but are a
-// different family: single-job npm publishes with no prebuild matrix, and a
-// separate cost case. QVAC-23047 scopes to the addon pipelines, so these are
-// exempt here rather than silently in scope and failing.
+// Same markers, different family: single-job npm publishes, out of QVAC-23047's
+// scope. Listed so they are explicitly exempt rather than silently failing.
 const LIBRARY_PUBLISHERS = new Set([
   'publish-registry-server.yml',
   'publish-sdk.yml',
   ...readdirSync(WORKFLOW_DIR).filter((n) => n.startsWith('trigger-reusable-')),
 ])
 
-// Every addon publish pipeline that exists today. Listed so the discovery below
-// cannot quietly return an empty set and pass vacuously after a rename.
+// Guards against discovery returning an empty set and passing vacuously.
 const KNOWN = [
   'on-merge-asr-ggml.yml',
   'on-merge-audiogen-ggml.yml',
@@ -70,8 +53,7 @@ function publishWorkflows() {
     .sort()
 }
 
-// Returns the body of the top-level `on:` block. Indentation-scoped rather than
-// YAML-parsed: these tests run with no dependencies installed.
+// Indentation-scoped, not YAML-parsed: this suite runs with no deps installed.
 function onBlock(source) {
   const lines = source.split('\n')
   const start = lines.findIndex((line) => /^on:\s*$/.test(line))
@@ -96,13 +78,9 @@ function pushBody(source) {
   return body
 }
 
-// Describes on.push.branches as one of:
-//   {kind:'none'}     no push trigger at all -- stricter than the policy
-//   {kind:'all'}      push with no branch filter, or a branches-ignore filter
-//   {kind:'list', branches:[...]}
-// 'all' is reported rather than skipped: an unparsed or absent filter is the
-// most permissive state there is, and silently allowing it is exactly how a
-// regression would slip past this suite.
+// 'none' = no push trigger; 'all' = no branch filter or branches-ignore;
+// 'list' = an explicit allow-list. 'all' is reported rather than skipped: an
+// absent filter is the most permissive state there is.
 function pushBranches(source) {
   const body = pushBody(source)
   if (body === null) return { kind: 'none' }
@@ -173,8 +151,7 @@ test('automatic pushes stay off PR-head branches', () => {
 test('the manual entry point survives', () => {
   for (const name of publishWorkflows()) {
     const source = read(name)
-    // A pure reusable (workflow_call, no triggers of its own) is a callee, not
-    // an entry point; its caller owns the dispatch.
+    // A pure reusable is a callee; its caller owns the dispatch.
     if (pushBranches(source).kind === 'none' && hasTrigger(source, 'workflow_call')) continue
     assert.ok(
       hasTrigger(source, 'workflow_dispatch'),
