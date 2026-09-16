@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.15.0] - 2026-09-15
 
 ### Changed
 
@@ -37,7 +37,8 @@
   lockstep pair — an addon linked with `-nostdlib++`
   (`qvac_addon_import_fabric_cxx_runtime`) requires a fabric from this release
   or later, and must not be mixed with an older one. Rationale and the
-  alternatives considered: `arch/qips/linux-fabric-libcxx-ownership.md`.
+  alternatives considered: `arch/qips/linux-fabric-libcxx-ownership.md`
+  ([#4468](https://github.com/tetherto/qvac/pull/4468)).
 
 ## [0.14.0] - 2026-09-15
 
