@@ -23,35 +23,24 @@ function step(name) {
 
 const SAVE = 'Cache test models (restore + save, trusted contexts)'
 const FORK = 'Cache test models (restore-only, untrusted contexts)'
-const KEEP = 'Keep the cache entry alive (exact key only)'
-
-test('the keep-alive carries no restore-keys', () => {
-  // The whole point: exact key or nothing. With a prefix it latches onto
-  // whatever sits under it and refreshes THAT entry's prune clock instead.
-  assert.ok(
-    !step(KEEP).includes('restore-keys'),
-    'keep-alive must not fall back to a prefix match',
-  )
-})
-
-test('the fork-PR restore keeps its restore-keys', () => {
-  // There a prefix hit is wanted: partial recovery for a lane that cannot save.
+test('both cache branches carry restore-keys for partial recovery', () => {
+  assert.match(step(SAVE), /restore-keys:/)
   assert.match(step(FORK), /restore-keys:/)
 })
 
 test('restore-keys is never suppressed by an empty-string ternary', () => {
-  // `A && '' || B` always yields B in GitHub expressions -- '' is falsy. A
-  // previous attempt to suppress the prefix this way shipped as a no-op.
+  // `A && '' || B` always yields B in GitHub expressions -- '' is falsy. An
+  // earlier attempt to suppress a prefix this way shipped as a silent no-op;
+  // keep the shape out of the file entirely.
   assert.ok(
     !/restore-keys:\s*\$\{\{[^}]*&&\s*''\s*\|\|/.test(src),
     "restore-keys must not be gated with `&& '' ||`; use a separate step",
   )
 })
 
-test('only the trusted branch can save, and restore-only subtracts from it', () => {
+test('only the trusted branch can save', () => {
   const save = step(SAVE)
   assert.match(save, /uses: actions\/cache@/, 'the save branch is the combined action')
-  assert.match(save, /inputs\.restore-only != 'true'/, 'restore-only must exclude the save branch')
   for (const evt of ['push', 'workflow_dispatch', 'merge_group', 'schedule']) {
     assert.ok(save.includes(`github.event_name == '${evt}'`), `save branch must list ${evt}`)
   }
@@ -59,23 +48,26 @@ test('only the trusted branch can save, and restore-only subtracts from it', () 
     save.includes('github.event.pull_request.head.repo.full_name == github.repository'),
     'save branch must require a same-repo head',
   )
-  // The other two only ever restore.
-  for (const s of [step(FORK), step(KEEP)]) {
+  // The other branch only ever restores.
+  for (const s of [step(FORK)]) {
     assert.match(s, /uses: actions\/cache\/restore@/)
     assert.ok(!/uses: actions\/cache@/.test(s), 'restore steps must not use the saving action')
   }
 })
 
-test('the three cache branches are mutually exclusive', () => {
-  // Fork path and keep-alive must both exclude each other and the save branch.
-  assert.match(step(FORK), /inputs\.restore-only != 'true'/)
-  assert.match(step(KEEP), /inputs\.restore-only == 'true'/)
-  assert.match(step(FORK), /github\.event_name != 'push'/)
+test('the two cache branches are mutually exclusive', () => {
+  // The fork branch is the exact negation of the save branch's event list, so
+  // exactly one runs whenever the probe missed.
+  const fork = step(FORK)
+  for (const evt of ['push', 'workflow_dispatch', 'merge_group', 'schedule']) {
+    assert.ok(fork.includes(`github.event_name != '${evt}'`), `fork branch must negate ${evt}`)
+  }
+  assert.ok(fork.includes('github.event.pull_request.head.repo.full_name != github.repository'))
 })
 
 test('the cache-hit output considers every branch that can run', () => {
   const out = src.slice(0, src.indexOf('runs:'))
-  for (const id of ['steps.cache.outputs.cache-hit', 'steps.cache-restore-only.outputs.cache-hit', 'steps.cache-keep-alive.outputs.cache-hit']) {
+  for (const id of ['steps.cache.outputs.cache-hit', 'steps.cache-restore-only.outputs.cache-hit']) {
     assert.ok(out.includes(id), `cache-hit output must fall through to ${id}`)
   }
   // The probe is compared explicitly because a step that ran and missed emits

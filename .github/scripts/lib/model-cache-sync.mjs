@@ -295,43 +295,60 @@ export function findOrphanedSeeds(files) {
 export const KNOWN_COLLISIONS = [
   {
     a: 'integration-test-asr-ggml.yml',
+    aSuffix: '',
+    aGlob: '',
     b: 'cpp-test-coverage-asr-ggml.yml',
-    shorter: '',
-    longer: 'cpp-tests',
-    why: "asr's C++ coverage lane caches packages/asr-ggml/models under suffix cpp-tests; the integration lane's empty suffix reaches it",
+    bSuffix: 'cpp-tests',
+    bGlob: '.github/workflows/cpp-test-coverage-asr-ggml.yml',
+    why: "asr's C++ coverage lane caches packages/asr-ggml/models under suffix cpp-tests; the pin-model-manifest job's empty suffix (legacy default glob) reaches it",
   },
   {
     a: 'integration-test-asr-ggml.yml',
+    aSuffix: '',
+    aGlob: 'packages/asr-ggml/test/integration/*.manifest.json',
+    b: 'cpp-test-coverage-asr-ggml.yml',
+    bSuffix: 'cpp-tests',
+    bGlob: '.github/workflows/cpp-test-coverage-asr-ggml.yml',
+    why: "same, from the integration job",
+  },
+  {
+    a: 'integration-test-asr-ggml.yml',
+    aSuffix: '',
+    aGlob: 'packages/asr-ggml/test/integration/*.manifest.json',
     b: 'integration-test-asr-ggml.yml',
-    shorter: '',
-    longer: '',
+    bSuffix: '',
+    bGlob: '',
     why: "pin-model-manifest and the integration job share a path list and suffix but hash different globs, so one prefix covers both keys",
   },
   {
     a: 'integration-test-translation-nmtcpp.yml',
+    aSuffix: '',
+    aGlob: '.github/actions/download-translation-models/action.yml',
     b: 'packages/translation-nmtcpp/project.json',
-    shorter: '',
-    longer: '',
-    why: 'the nx lane and the per-addon lane cache the same directory under different globs; resolving it needs one download definition (see #3903)',
+    bSuffix: '',
+    bGlob: 'packages/translation-nmtcpp/project.json',
+    why: "the nx lane and the per-addon lane cache the same directory under different globs; resolving it needs one download definition (see #3903)",
   },
   {
     a: 'integration-test-vla.yml',
+    aSuffix: '',
+    aGlob: '.github/actions/download-vla-models/action.yml',
     b: 'packages/vla-ggml/project.json',
-    shorter: '',
-    longer: '',
-    why: 'same as translation: nx and the per-addon lane share a path list',
+    bSuffix: '',
+    bGlob: 'packages/vla-ggml/project.json',
+    why: "same as translation: nx and the per-addon lane share a path list",
   },
 ]
 
-// Matched on the file pair AND the suffix pair. File-pair alone would let the
-// asr self-entry (pin-model-manifest vs the integration job, both empty suffix)
-// permanently suppress every future intra-file collision in that workflow.
-const isKnown = (c) =>
-  KNOWN_COLLISIONS.some(
-    (k) =>
-      (k.a === c.a.file && k.b === c.b.file && k.shorter === c.shorter && k.longer === c.longer) ||
-      (k.a === c.b.file && k.b === c.a.file && k.shorter === c.longer && k.longer === c.shorter),
-  )
+const sig = (c) => [c.a.file, parse(c.a.id)['cache-key-suffix'], parse(c.a.id)['hash-files-glob'],
+                    c.b.file, parse(c.b.id)['cache-key-suffix'], parse(c.b.id)['hash-files-glob']].join('\u0000')
+const known = (k) => [k.a, k.aSuffix, k.aGlob, k.b, k.bSuffix, k.bGlob].join('\u0000')
+const knownRev = (k) => [k.b, k.bSuffix, k.bGlob, k.a, k.aSuffix, k.aGlob].join('\u0000')
+
+// Matched on BOTH sites' file, suffix AND glob. Keying on file+suffix alone was
+// a blanket amnesty: three entries carry the suffix pair ('',''), so any new
+// empty-suffix collision in those files was silently pardoned.
+const isKnown = (c) => KNOWN_COLLISIONS.some((k) => sig(c) === known(k) || sig(c) === knownRev(k))
 
 export function findAllPrefixCollisions(files) {
   const { consumers } = collect(files)
@@ -376,3 +393,22 @@ export const findPrefixCollisions = (files) =>
 
 /** Collisions that exist on main and are recorded in KNOWN_COLLISIONS. */
 export const findKnownCollisions = (files) => findAllPrefixCollisions(files).filter(isKnown)
+
+/**
+ * Recorded collisions that are no longer observed.
+ *
+ * Without this the amnesty list doubles as a blind spot: if a parser regression
+ * drops one of a call site's INPUTS, that site moves to a different version
+ * bucket, its recorded collision quietly stops firing, and the run stays green
+ * -- and the same regression would equally hide a NEW collision. The floors in
+ * findParserGaps count sites and identities, so they do not catch it.
+ *
+ * A stale entry here is also just bit-rot: if someone genuinely fixes one of
+ * these, the entry should be deleted rather than left as a standing pardon.
+ */
+export function findUnobservedKnownCollisions(files) {
+  const seen = findKnownCollisions(files)
+  return KNOWN_COLLISIONS.filter(
+    (k) => !seen.some((c) => sig(c) === known(k) || sig(c) === knownRev(k)),
+  )
+}

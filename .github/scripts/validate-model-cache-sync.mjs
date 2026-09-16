@@ -16,6 +16,7 @@ import {
   findKnownCollisions,
   findOrphanedSeeds,
   findParserGaps,
+  findUnobservedKnownCollisions,
   findPrefixCollisions,
 } from './lib/model-cache-sync.mjs'
 
@@ -26,6 +27,18 @@ function main() {
     console.error('validate-model-cache-sync: the parser has gone blind, so every')
     console.error('other check below would pass vacuously:')
     for (const g of gaps) console.error(`  ${g}`)
+    process.exit(1)
+  }
+
+  const vanished = findUnobservedKnownCollisions()
+  if (vanished.length > 0) {
+    console.error('validate-model-cache-sync: recorded collision(s) no longer observed.')
+    console.error('Either the parser has degraded and is now hiding hazards, or these')
+    console.error('were fixed and the entries should be deleted from KNOWN_COLLISIONS:')
+    for (const k of vanished) {
+      console.error(`  ${k.a} (${k.aSuffix || 'empty'}) <-> ${k.b} (${k.bSuffix || 'empty'})`)
+      console.error(`      ${k.why}`)
+    }
     process.exit(1)
   }
 

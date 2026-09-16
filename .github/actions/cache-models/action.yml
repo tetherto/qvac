@@ -87,18 +87,6 @@ inputs:
       refresh an entry by hand before it ages out.
     required: false
     default: 'false'
-  restore-only:
-    description: |
-      Set to 'true' to force the restore-only branch regardless of event, and
-      never save. For a KEEP-ALIVE: an addon whose integration lane already
-      writes a complete entry (its post-job save captures whatever the suite
-      staged) does not need seeding -- it needs the entry kept from ageing out
-      between those runs. Only a real download moves the cache server's
-      lastDownloadedAt, so a full restore resets the prune clock; writing
-      nothing means the complete entry is never replaced by a partial one.
-      A miss is a legitimate no-op: the lane will recreate the entry.
-    required: false
-    default: 'false'
   assert-exists:
     description: |
       Set to 'true' ONLY by a seed workflow's verify job, which runs after the
@@ -119,7 +107,7 @@ outputs:
     # 'false', which is truthy in a GitHub expression and would short-circuit
     # the later terms. Only an empty value (step skipped) may fall through, so
     # the probe is compared explicitly.
-    value: ${{ steps.probe.outputs.cache-hit == 'true' && 'true' || steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit || steps.cache-keep-alive.outputs.cache-hit }}
+    value: ${{ steps.probe.outputs.cache-hit == 'true' && 'true' || steps.cache.outputs.cache-hit || steps.cache-restore-only.outputs.cache-hit }}
 
 runs:
   using: composite
@@ -212,8 +200,7 @@ runs:
     - name: Cache test models (restore + save, trusted contexts)
       id: cache
       if: >-
-        steps.probe.outputs.cache-hit != 'true' &&
-        inputs.restore-only != 'true' && (
+        steps.probe.outputs.cache-hit != 'true' && (
         github.event_name == 'push' ||
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'merge_group' ||
@@ -232,7 +219,6 @@ runs:
       id: cache-restore-only
       if: >-
         steps.probe.outputs.cache-hit != 'true' &&
-        inputs.restore-only != 'true' &&
         github.event_name != 'push' &&
         github.event_name != 'workflow_dispatch' &&
         github.event_name != 'merge_group' &&
@@ -244,28 +230,6 @@ runs:
         key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
         restore-keys: |
           models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-
-        enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
-
-    # Keep-alive: refresh ONE entry's prune clock, nothing else.
-    #
-    # A separate step rather than a conditional `restore-keys:` on the step
-    # above, because the `A && '' || B` idiom silently does not work in GitHub
-    # expressions: '' is falsy, so it always yields B. The prefix would still
-    # have been emitted and this would have shipped as a no-op.
-    #
-    # No restore-keys is the entire point. With them this latches onto whatever
-    # sits under the prefix -- an obsolete entry, or another suffix's -- and
-    # refreshes THAT entry instead, keeping a stale entry alive forever while
-    # the one the lane asks for ages out. Observed in a real run: a keep-alive
-    # restored `models-tts-ggml-v1-seed-...` left over from an earlier
-    # experiment. Exact key or nothing.
-    - name: Keep the cache entry alive (exact key only)
-      id: cache-keep-alive
-      if: steps.probe.outputs.cache-hit != 'true' && inputs.restore-only == 'true'
-      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-      with:
-        path: ${{ inputs.paths != '' && inputs.paths || steps.model-paths.outputs.paths }}
-        key: models-${{ inputs.package }}-${{ inputs.cache-version }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}-${{ hashFiles(steps.keyglob.outputs.glob) }}
         enableCrossOsArchive: ${{ inputs.enable-cross-os == 'true' }}
 
     # Download any models NOT provided by the restore, as an ordinary step with

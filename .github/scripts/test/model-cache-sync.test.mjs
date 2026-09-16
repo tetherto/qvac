@@ -71,15 +71,17 @@ test('fails when a consumer bumps cache-version and the seed does not', () => {
 test('fails when a consumer moves its cached paths and the seed does not', () => {
   const dir = sandbox()
   try {
+    // audiogen, not translation: translation appears in KNOWN_COLLISIONS, so
+    // moving its paths would trip the unobserved-collision check first.
     edit(
       dir,
-      'integration-test-translation-nmtcpp.yml',
-      'paths: packages/translation-nmtcpp/model',
-      'paths: packages/translation-nmtcpp/model-v2',
+      'integration-test-audiogen-ggml.yml',
+      'paths: packages/audiogen-ggml/models',
+      'paths: packages/audiogen-ggml/models-v2',
     )
     const r = run(dir)
     assert.equal(r.status, 1, r.stdout)
-    assert.match(r.stderr, /on-merge-model-cache-translation\.yml/)
+    assert.match(r.stderr, /on-merge-model-cache-audiogen\.yml/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -118,6 +120,42 @@ test('rejects a collision between two distinct consumer call sites', () => {
     assert.equal(r.status, 1, r.stdout)
     assert.match(r.stderr, /restore-key prefix collision/)
     assert.match(r.stderr, /suffix base reaches suffix base-extra/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// The amnesty list must pardon exactly the recorded pairs, not a whole file.
+test('a NEW collision in an allowlisted file still fails', () => {
+  const dir = sandbox()
+  try {
+    const f = wf(dir, 'cpp-test-coverage-asr-ggml.yml')
+    const src = readFileSync(f, 'utf8')
+    // a second asr call site with a different glob: same class, not recorded
+    const extra = src.replace(
+      'cache-key-suffix: cpp-tests',
+      'cache-key-suffix: cpp-tests-extra',
+    )
+    assert.notEqual(extra, src, 'fixture stale')
+    writeFileSync(f, extra)
+    const r = run(dir)
+    assert.equal(r.status, 1, r.stdout)
+    assert.match(r.stderr, /restore-key prefix collision|no longer observed/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// If a parser regression drops one of a call site's inputs, that site changes
+// version bucket and its recorded collision stops firing -- silently, and the
+// same regression would hide a NEW collision just as well.
+test('fails when a recorded collision stops being observed', () => {
+  const dir = sandbox()
+  try {
+    edit(dir, 'cpp-test-coverage-asr-ggml.yml', /^ +paths: packages\/asr-ggml\/models$/m, '')
+    const r = run(dir)
+    assert.equal(r.status, 1, r.stdout)
+    assert.match(r.stderr, /no longer observed/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
