@@ -26236,6 +26236,25 @@ export const WHISPER_Q8_0_1 = {
   params: models[733].params
 } as const
 
+// Compatibility aliases for model constants renamed after publication.
+/** @deprecated Use PARAKEET_NEMOTRON_0_6B_F16 instead. */
+export const PARAKEET_0_6B_F16 = {
+  ...PARAKEET_NEMOTRON_0_6B_F16,
+  name: 'PARAKEET_0_6B_F16'
+} as const
+
+/** @deprecated Use PARAKEET_NEMOTRON_0_6B_Q4_0 instead. */
+export const PARAKEET_0_6B_Q4_0 = {
+  ...PARAKEET_NEMOTRON_0_6B_Q4_0,
+  name: 'PARAKEET_0_6B_Q4_0'
+} as const
+
+/** @deprecated Use PARAKEET_NEMOTRON_0_6B_Q8_0 instead. */
+export const PARAKEET_0_6B_Q8_0 = {
+  ...PARAKEET_NEMOTRON_0_6B_Q8_0,
+  name: 'PARAKEET_0_6B_Q8_0'
+} as const
+
 /**
  * Looks up a model in the built-in catalog by its constant name.
  *

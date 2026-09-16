@@ -37,35 +37,11 @@ if (!audioFilePath) {
 
 const inputPath = audioFilePath
 
-function decodeToS16le(path: string): Promise<Uint8Array> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = []
-    const ffmpeg = spawn(
-      'ffmpeg',
-      ['-i', path, '-ar', String(SAMPLE_RATE), '-ac', '1', '-f', 's16le', 'pipe:1'],
-      { stdio: ['ignore', 'pipe', 'inherit'] }
-    )
-
-    ffmpeg.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-    ffmpeg.on('error', reject)
-    ffmpeg.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(`ffmpeg exited with code ${code}`))
-        return
-      }
-
-      const pcm = Buffer.concat(chunks)
-      resolve(new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength))
-    })
-  })
-}
-
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 async function runStreaming(modelId: string): Promise<void> {
-  const pcm = await decodeToS16le(inputPath)
   const chunkBytes = Math.floor((INPUT_CHUNK_MS / 1000) * SAMPLE_RATE) * BYTES_PER_S16_SAMPLE
 
   // No parakeetStreamingConfig.chunkMs override: the addon reads the Nemotron
@@ -79,11 +55,40 @@ async function runStreaming(modelId: string): Promise<void> {
       }
     })()
 
-    for (let offset = 0; offset < pcm.length; offset += chunkBytes) {
-      const end = Math.min(offset + chunkBytes, pcm.length)
-      session.write(pcm.subarray(offset, end))
-      if (end < pcm.length) await delay(INPUT_CHUNK_MS)
+    const ffmpeg = spawn(
+      'ffmpeg',
+      ['-i', inputPath, '-ar', String(SAMPLE_RATE), '-ac', '1', '-f', 's16le', 'pipe:1'],
+      { stdio: ['ignore', 'pipe', 'inherit'] }
+    )
+    let processError: Error | null = null
+    const exited = new Promise<void>((resolve) => {
+      ffmpeg.once('error', (error) => {
+        processError = error
+        resolve()
+      })
+      ffmpeg.once('close', (code) => {
+        if (code !== 0) processError = new Error(`ffmpeg exited with code ${code}`)
+        resolve()
+      })
+    })
+
+    let incomplete = Buffer.alloc(0)
+    for await (const decoded of ffmpeg.stdout) {
+      const pcm = incomplete.length === 0 ? decoded : Buffer.concat([incomplete, decoded])
+      let offset = 0
+
+      while (pcm.length - offset >= chunkBytes) {
+        session.write(pcm.subarray(offset, offset + chunkBytes))
+        offset += chunkBytes
+        await delay(INPUT_CHUNK_MS)
+      }
+
+      incomplete = pcm.subarray(offset)
     }
+
+    await exited
+    if (processError) throw processError
+    if (incomplete.length > 0) session.write(incomplete)
 
     session.end()
     await output
