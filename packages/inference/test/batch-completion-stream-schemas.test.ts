@@ -184,3 +184,27 @@ test('batchCompletionStreamResponseSchema: stats is optional', (t) => {
   }
   t.is(batchCompletionStreamResponseSchema.safeParse(response).success, true)
 })
+
+test('batchCompletionClientParamsSchema: a demanding tool_choice needs the prompt tools', (t) => {
+  const required = { ...prompt, generationParams: { tool_choice: 'required' } }
+  t.is(
+    batchCompletionClientParamsSchema.safeParse({ modelId: 'm', prompts: [required] }).success,
+    false,
+    'required without tools'
+  )
+  t.is(
+    batchCompletionClientParamsSchema.safeParse({
+      modelId: 'm',
+      prompts: [{ ...required, tools: [tool] }]
+    }).success,
+    true
+  )
+  t.is(
+    batchCompletionClientParamsSchema.safeParse({
+      modelId: 'm',
+      prompts: [{ ...prompt, tools: [tool], generationParams: { tool_choice: 'get_time' } }]
+    }).success,
+    false,
+    'name not among the prompt tools'
+  )
+})
