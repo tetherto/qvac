@@ -30,16 +30,16 @@ test('stripMultiGpuKeys: preserves diffusion backend and VRAM controls', (t) => 
   // These select placement and memory budgets, not device enumeration or
   // multi-GPU splitting, so they remain valid on a single-GPU mobile device.
   const config: Record<string, unknown> = {
-    backend: 'cuda0',
+    backend: 'gpu',
     params_backend: 'diffusion=cpu',
-    max_vram: 'cuda0=6'
+    max_vram: 6
   }
   const stripped = stripMultiGpuKeys(config)
   t.alike([...stripped], [])
   t.alike(config, {
-    backend: 'cuda0',
+    backend: 'gpu',
     params_backend: 'diffusion=cpu',
-    max_vram: 'cuda0=6'
+    max_vram: 6
   })
 })
 
