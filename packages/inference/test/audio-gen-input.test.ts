@@ -118,6 +118,46 @@ test('resolveAudioGenPcm rejects non-finite samples and oversized clips before t
   )
 })
 
+test('resolveAudioGenPcm keeps out-of-range samples only off the edit path', async (t) => {
+  // The addon vets an edit source with `requireNormalizedPcm` and every other
+  // input with `requireFinitePcm`, which takes any finite sample. Generation
+  // and understanding must therefore pass a hot buffer straight through; only
+  // an edit source is held to `[-1, 1]`.
+  const hot = { type: 'base64' as const, value: stereoFloat32Bytes([0, 1.5]).toString('base64') }
+
+  const generation = await resolveAudioGenPcm(hot, 'sourceAudio')
+  t.alike(Array.from(generation), [0, 1.5], 'generation takes any finite sample')
+
+  const editError = await rejection(
+    resolveAudioGenPcm(hot, 'sourceAudio', { requireNormalized: true })
+  )
+  t.ok(editError instanceof InvalidAudioInputError, 'an edit source is held to the range')
+  t.ok(/sourceAudio must contain samples in \[-1, 1\]/.test((editError as Error).message))
+
+  const inRange = await resolveAudioGenPcm(
+    { type: 'base64', value: stereoFloat32Bytes([-1, 1, 0, 0.5]).toString('base64') },
+    'sourceAudio',
+    { requireNormalized: true }
+  )
+  t.alike(Array.from(inRange), [-1, 1, 0, 0.5], 'the endpoints are inside the range')
+
+  const dir = createTempDir()
+  t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const rawPath = path.join(dir, 'clipped.f32le')
+  fs.writeFileSync(rawPath, stereoFloat32Bytes([-1.5, 0]))
+  const belowError = await rejection(
+    resolveAudioGenPcm({ type: 'filePath', value: rawPath }, 'referenceAudio', {
+      requireNormalized: true
+    })
+  )
+  t.ok(belowError instanceof InvalidAudioInputError, 'raw PCM files are checked too')
+  t.ok(/\[-1, 1\]/.test((belowError as Error).message))
+  t.ok(
+    (await resolveAudioGenPcm({ type: 'filePath', value: rawPath }, 'referenceAudio')).length > 0,
+    'and left alone when the caller does not ask for the range'
+  )
+})
+
 test('resolveAudioGenPcm rejects oversized decodable files before invoking the decoder', async (t) => {
   const dir = createTempDir()
   t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
@@ -360,6 +400,57 @@ test('audioGen plugin operation omits unset controls and audio from the addon ca
   }
 
   t.alike(capturedOptions, { seed: 42 }, 'only explicitly provided options reach the addon')
+  t.is(getRequestRegistry().get(requestId), null)
+})
+
+test('audioGen plugin operation forwards caption augmentation and frozen codes as an Int32Array', async (t) => {
+  const modelId = 'audio-gen-operation-frozen-codes'
+  const requestId = 'audio-gen-request-frozen-codes'
+  let capturedOptions: GenerateOptions | undefined
+  const model = new AudioGen({
+    files: {
+      textEncModel: 'text-encoder.gguf',
+      lmModel: 'lm.gguf',
+      ditModel: 'dit.gguf',
+      vaeModel: 'vae.gguf'
+    }
+  })
+  model.run = async function (_caption: string, opts?: GenerateOptions) {
+    capturedOptions = opts
+    return createResponse(
+      [{ outputArray: new Int16Array([1, -1]), sampleRate: 48000, channels: 2 }],
+      {}
+    )
+  }
+  registerModel(modelId, {
+    model: model as unknown as AnyModel,
+    path: '',
+    config: {},
+    modelType: ModelType.audiogenGgml
+  })
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  for await (const _frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId,
+    modelId,
+    caption: 'energetic cumbia with brass stabs',
+    bpm: 98,
+    keyscale: 'A minor',
+    augmentCaptionWithMetadata: true,
+    audioCodes: [12095, 63487, 12741]
+  })) {
+    // drain
+  }
+
+  t.is(capturedOptions?.augmentCaptionWithMetadata, true)
+  t.ok(
+    capturedOptions?.audioCodes instanceof Int32Array,
+    'the wire array reaches the addon as the Int32Array it requires'
+  )
+  t.alike(Array.from(capturedOptions?.audioCodes ?? []), [12095, 63487, 12741])
   t.is(getRequestRegistry().get(requestId), null)
 })
 

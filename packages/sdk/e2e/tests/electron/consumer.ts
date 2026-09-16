@@ -555,8 +555,8 @@ export const executor = createExecutor({
       'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
     ),
     new SkipExecutor(
-      /^audio-gen-/,
-      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
+      /^audio-(gen|edit|understand)-/,
+      'AudioGen e2e is desktop-only: the ACE-Step stack is four GGUFs, too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
       /^finetune-/,
@@ -565,6 +565,10 @@ export const executor = createExecutor({
     new SkipExecutor(
       /^no-lingering-bare-/,
       'Electron skips no-lingering-bare tests because they spawn and terminate standalone Bare workers outside the packaged app lifecycle'
+    ),
+    new SkipExecutor(
+      /^worker-restart-/,
+      'Electron skips the kv-cache worker-restart test because it asserts on Bare worker processes outside the packaged app lifecycle'
     ),
     new SkipExecutor(
       /^vla-/,
