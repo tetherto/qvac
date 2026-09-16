@@ -17,9 +17,10 @@ namespace fitmem = fit_to_free_device_memory;
 namespace {
 
 /// A model file the fitter could open. The fake invoker never reads it, but
-/// `fitParamsToFreeDeviceMemory` refuses to run without one —
-/// `common_fit_params` segfaults on a path it cannot open, so the guard is
-/// load-bearing.
+/// `fitParamsToFreeDeviceMemory` refuses to run without one: at the pinned
+/// fabric an unreadable path is reported as `COMMON_PARAMS_FIT_STATUS_ERROR`
+/// rather than crashing, and the guard turns that into a specific warning and a
+/// skipped descent search.
 class ReadableModelFile {
 public:
   ReadableModelFile() {

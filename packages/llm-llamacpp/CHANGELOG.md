@@ -41,10 +41,6 @@ before and neither runs it now. Sharded placement is fixed in
   back, leaving every later log line from every live model in the process going
   through a freed frame.
 
-Sharded and streamed loads are deliberately untouched: neither ran the fit
-before and neither runs it now. Sharded placement is fixed in
-`inference-addon-cpp`, which owns the split loader.
-
 ## [0.53.0] - 2026-09-15
 
 ### Added

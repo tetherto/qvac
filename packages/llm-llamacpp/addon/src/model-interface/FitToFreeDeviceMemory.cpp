@@ -6,6 +6,7 @@
 #include <iterator>
 #include <limits>
 #include <mutex>
+#include <string>
 #include <system_error>
 #include <vector>
 
@@ -31,20 +32,29 @@ namespace {
 /// skipped descent search instead of an error-level report of a fault that was
 /// never the fitter's.
 ///
-/// `ggml_fopen`, not `std::fopen`: on Windows the former converts the UTF-8
-/// path to UTF-16 (`_wfopen`) while the latter goes through the ANSI code page,
-/// so a model under a non-ASCII path — `C:\Users\Müller\models\…`, any
-/// CJK or Cyrillic directory — is openable by llama's loader and not by a plain
-/// `fopen`. Getting that wrong here would skip the fit on exactly those paths
-/// and reinstate the unfitted load this file exists to prevent. The
-/// `is_regular_file` test comes first because `fopen` succeeds on a directory
-/// on Linux and macOS, and blocks indefinitely on a FIFO.
+/// Both steps treat @p modelPath as UTF-8, because that is what llama.cpp does
+/// with it and what the addon is handed from JS. `ggml_fopen` converts with
+/// `MultiByteToWideChar(CP_UTF8, …)` and opens via `_wfopen` on Windows, where
+/// plain `std::fopen` would go through the active code page; and a
+/// `std::filesystem::path` built from a *narrow* string is likewise interpreted
+/// in the native narrow encoding, which on Windows is that same code page
+/// rather than UTF-8. Going through `std::u8string` pins the filesystem check
+/// to the same interpretation as the open. Getting either half wrong would
+/// reject `C:\Users\Müller\models\…`, or any CJK or Cyrillic directory, skip
+/// the fit and reinstate the unfitted load this file exists to prevent — and
+/// `win32-x64` ships in the CI matrix.
+///
+/// The `is_regular_file` test comes first, not after the open, because `fopen`
+/// succeeds on a directory on Linux and macOS and blocks indefinitely on a
+/// FIFO; checking the already-open handle instead would reintroduce the hang.
 bool modelIsReadable(const std::string& modelPath) {
   if (modelPath.empty()) {
     return false;
   }
+  const std::u8string utf8Path(modelPath.begin(), modelPath.end());
   std::error_code ignored;
-  if (!std::filesystem::is_regular_file(modelPath, ignored)) {
+  if (!std::filesystem::is_regular_file(
+          std::filesystem::path(utf8Path), ignored)) {
     return false;
   }
   FILE* handle = ggml_fopen(modelPath.c_str(), "rb");
