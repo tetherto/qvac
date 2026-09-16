@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-16
+
+### Fixed
+
+- Mobile platform packages (`@qvac/tts-ggml-android-arm64`, `@qvac/tts-ggml-ios`)
+are no longer `os`-filtered `optionalDependencies` of the meta package. No
+build host ever reports a mobile `os`, so installers could never select them
+during a cross-build and mobile bundles failed verification with missing
+prebuilds. They now publish without install filters; mobile applications
+declare the target's platform package as a direct dependency pinned to the
+exact meta package version.
+
 ## [0.9.1] - 2026-09-15
 
 This release repairs native binding resolution for the per-platform prebuild
