@@ -107,6 +107,8 @@ export async function checkPrebuilds(
   const issues: MissingPrebuildIssue[] = []
 
   for (const host of hosts) {
+    if (addon.linkedHosts !== undefined && !addon.linkedHosts.includes(host)) continue
+
     const locations = await resolvePrebuildLocations(addon, host)
     if (await anyLocationHasPrebuild(locations)) continue
 
