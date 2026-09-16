@@ -470,7 +470,9 @@ jobs:
           probe="qvac-egress-preflight-$$"
           cleanup() { lxc delete -f "$probe" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
-          lxc launch ubuntu:22.04 "$probe" >/dev/null 2>&1
+          # Don't swallow launch output: under `set -e` a failed launch would exit
+          # with an empty log and never reach the actionable `::error::` below.
+          lxc launch ubuntu:22.04 "$probe"
           for _ in $(seq 1 20); do
             if lxc exec "$probe" -- getent hosts github.com >/dev/null 2>&1; then break; fi
             sleep 2
