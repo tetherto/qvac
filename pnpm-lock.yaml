@@ -973,7 +973,7 @@ importers:
         specifier: ^0.6.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.24.0
+        specifier: ^0.25.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: ^0.37.0
@@ -1624,7 +1624,7 @@ importers:
         specifier: ^0.6.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.24.0
+        specifier: ^0.25.0
         version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: ^0.37.0
@@ -4185,10 +4185,6 @@ packages:
 
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
-
-  '@qvac/diffusion-cpp@0.23.0':
-    resolution: {integrity: sha512-X5t0gRqJq80pnimWTabVUjqXdEUtleSQDdy9oh4/1pKhdDbSdx5cxlfxAjFN27u0pMcH6pffPP+D1CKno2TFzw==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/dl-base@0.1.1':
     resolution: {integrity: sha512-AacmpwhUrgWQGO8dqlBNk8SLaxjWZlwBdnoj26cTVHA/L5zHAh9PisxuVbsSrXpigv342t2+PwmJv5ZH9GN97Q==}
@@ -13280,14 +13276,6 @@ snapshots:
       bare-os: 3.9.3
       which-runtime: 1.4.0
     optional: true
-
-  '@qvac/diffusion-cpp@0.23.0(bare-abort-controller@1.1.2)':
-    dependencies:
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
 
   '@qvac/dl-base@0.1.1(bare-abort-controller@1.1.2)':
     dependencies:

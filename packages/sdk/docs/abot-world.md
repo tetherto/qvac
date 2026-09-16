@@ -28,6 +28,39 @@ const { frameStream } = worldStep({ modelId, keys: ['W', 'L'] })
 for await (const frame of frameStream) render(frame)
 ```
 
+## Layer streaming
+
+Pass walk memory controls under `modelConfig.world`:
+
+```ts
+world: {
+  backend: 'gpu',
+  paramsBackend: 'diffusion=cpu',
+  maxVram: 2,
+  streamLayers: true,
+  kvCache: true,
+  verbosity: 3
+}
+```
+
+These use the same engine machinery as MiniMax-H3. `paramsBackend` controls
+weight residency (`diffusion` = DiT, `vae` = taehv); explicit assignments
+override the `offloadParamsToCpu` default. `maxVram` accepts GiB numbers or
+per-device strings such as `'cuda0=6,vulkan0=4'`; negative numbers reserve
+free-memory headroom, and zero disables cuts. CPU-backed `streamLayers`
+requires GPU execution and a nonzero budget. It works with or without `kvCache`.
+
+For lazy disk reads, use `paramsBackend: 'diffusion=disk,vae=disk'` and a
+graph budget as needed. Leave memory for attention history and decoding;
+`maxVram` is a DiT graph budget, not a total VRAM cap. Scene creation keeps
+its separate encoder configuration. See the [addon memory controls](../../diffusion-cpp/docs/abot-world.md#layer-streaming-and-disk-residency)
+for details and native log evidence.
+
+The CLI accepts these same fields in its model configuration JSON (`qvac
+configure` / `qvac serve`); no separate CLI flags are needed. Flat batch
+options such as `modelConfig.stream_layers` are rejected with a pointer to
+their World equivalent.
+
 ## Hardware, and why there is no delegation
 
 The walk session holds the DiT, the pixel decoder and the scene resident.

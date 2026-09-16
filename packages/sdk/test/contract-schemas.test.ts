@@ -46,6 +46,20 @@ test('contract diffusion load config: memory controls and removed options', (t) 
   t.is(validate({ stream_layers: 'true' }), false)
 })
 
+test('contract regeneration preserves four-coordinate OCR boxes', (t) => {
+  for (const [bbox, valid] of [
+    [[1, 2, 3, 4], true],
+    [[1, 2, 3], false],
+    [[1, 2, 3, 4, 5], false]
+  ] as const) {
+    t.is(
+      contractValidate('ocrStream.response', { type: 'ocrStream', blocks: [{ text: 'box', bbox }] })
+        .valid,
+      valid
+    )
+  }
+})
+
 // Contract-artifact checks: validate representative payloads against the
 // committed contract/schema.json (what generated clients consume). The Zod
 // round-trip checks for these same schemas live in @qvac/inference's suite; here

@@ -2038,7 +2038,20 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "type": ["string", "number", "boolean", "null"]
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               }
                             },
@@ -3007,7 +3020,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -3613,7 +3639,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -14521,7 +14560,14 @@
                     },
                     "max_vram": {
                       "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-                      "type": ["number", "string"]
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     },
                     "stream_layers": {
                       "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -15694,6 +15740,47 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
+                        },
+                        "paramsBackend": {
+                          "description": "Walk weight residency: diffusion=cpu or diffusion=disk,vae=cpu. Explicit assignments override offloadParamsToCpu.",
+                          "type": "string",
+                          "maxLength": 4096
+                        },
+                        "maxVram": {
+                          "description": "DiT graph budget in GiB or per-device assignments. Negative values reserve free-memory headroom; 0 disables cuts. Excludes attention history and the decoder.",
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "streamLayers": {
+                          "description": "Retain leading DiT segments within maxVram and transfer the remainder from CPU parameters.",
+                          "type": "boolean"
+                        },
+                        "verbosity": {
+                          "description": "Shared native diffusion log level: 0=error, 1=warn, 2=info, 3=debug.",
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "const": 0
+                            },
+                            {
+                              "type": "number",
+                              "const": 1
+                            },
+                            {
+                              "type": "number",
+                              "const": 2
+                            },
+                            {
+                              "type": "number",
+                              "const": 3
+                            }
+                          ]
                         },
                         "threads": {
                           "description": "CPU threads for the session. -1 = auto-detect (default).",
