@@ -50,7 +50,7 @@ const test = require('brittle')
 const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
 const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
 const { readImageDimensions } = require('@qvac/diffusion-cpp/addon.js')
-const { ensureModelPath, setupJsLogger } = require('./utils.js')
+const { ensureModelPath, setupJsLogger, releaseJsLogger } = require('./utils.js')
 const {
   pngLuminanceStddev,
   pngMeanAbsoluteError,
@@ -150,6 +150,7 @@ test(
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
+    t.teardown(releaseJsLogger)
 
     const dir = overrideDir || path.resolve(__dirname, '../model/abot')
     if (!overrideDir) {
@@ -202,6 +203,7 @@ test(
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
+    t.teardown(releaseJsLogger)
 
     const dir = overrideDir || path.resolve(__dirname, '../model/abot')
     if (!overrideDir) {
@@ -488,6 +490,7 @@ test(
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
+    t.teardown(releaseJsLogger)
 
     const provisioned = await provisionWorldGeneration(t)
     if (!provisioned) return
@@ -689,6 +692,7 @@ test(
   { skip, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
+    t.teardown(releaseJsLogger)
 
     const provisioned = await provisionWorldGeneration(t)
     if (!provisioned) return
