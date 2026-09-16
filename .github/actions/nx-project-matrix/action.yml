@@ -75,6 +75,26 @@ runs:
       run: pnpm install --frozen-lockfile --ignore-scripts
     - if: github.event_name == 'pull_request'
       uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
+    # nx-set-shas derives both SHAs from the working tree, which on
+    # pull_request_target is the base branch, so it would diff main against
+    # itself and nothing is ever affected. Take them from the event payload,
+    # and fetch the head commit without checking it out: the diff needs the
+    # object present, not the PR's files in the tree. base.sha is what GitHub
+    # itself diffs the PR against, so this matches the Files changed tab.
+    - if: github.event_name == 'pull_request_target'
+      shell: bash
+      env:
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        set -euo pipefail
+        # Unauthenticated: the checkout above sets persist-credentials: false and
+        # qvac is public. A fork's head is reachable here via refs/pull/N/head.
+        git fetch --no-tags origin "+${PR_HEAD_SHA}:refs/nx/head"
+        {
+          echo "NX_BASE=${PR_BASE_SHA}"
+          echo "NX_HEAD=${PR_HEAD_SHA}"
+        } >> "$GITHUB_ENV"
     - id: compute
       shell: bash
       env:
