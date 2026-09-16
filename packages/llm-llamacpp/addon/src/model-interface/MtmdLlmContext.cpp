@@ -2399,7 +2399,8 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),
-        "MtmdLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
+        "MtmdLlmContext::saveCache: failed to save session file '" + cacheKey +
+            "'");
   }
   if (saveMtpState) {
     llama_synchronize(ctxDraft_.get());
