@@ -22,7 +22,7 @@
 
 include_guard(GLOBAL)
 
-set(QVAC_ADDON_CMAKE_VERSION "0.2.0")
+set(QVAC_ADDON_CMAKE_VERSION "0.3.0")
 
 # ---------------------------------------------------------------------------
 # qvac_addon_preproject()
@@ -145,6 +145,20 @@ endmacro()
 # process' one C++ runtime; these symbols resolve from the fabric module already
 # on the target's link line.
 #
+# -nostdlib++ on its own does not achieve that, and this flag only works in
+# concert with the named version node in fabric's symbols.map. bare's executable
+# links GNU libstdc++.so.6, so libstdc++ is in the process' global lookup scope,
+# which the dynamic linker searches before a dlopen'd module's own DT_NEEDED
+# chain: a target linked only with -nostdlib++ takes __cxa_throw,
+# __gxx_personality_v0 and the std:: typeinfo objects from libstdc++ while still
+# getting the libc++-only names from fabric, and a std::exception_ptr that
+# crosses that seam is re-raised with a foreign exception class that GNU's
+# personality routine will only match against catch (...). The version node
+# makes the linker record a DT_VERNEED that libstdc++ cannot satisfy, which is
+# what pins these references to fabric. qvac_addon_finalize asserts the result
+# on the built module, because the failure is silent at both build and load
+# time.
+#
 # Only a target that links fabric may use this — anything else has nothing to
 # resolve libc++ from and wants qvac_addon_static_cxx_runtime instead.
 #
@@ -157,6 +171,9 @@ endmacro()
 function(qvac_addon_import_fabric_cxx_runtime target)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(${target} PRIVATE -nostdlib++)
+    # Marks the target as owing its C++ runtime to fabric, so qvac_addon_finalize
+    # knows to assert that it actually got it.
+    set_property(TARGET ${target} PROPERTY QVAC_ADDON_IMPORTS_FABRIC_CXX ON)
   endif()
 endfunction()
 
@@ -205,7 +222,9 @@ endfunction()
 # qvac_addon_finalize(<addon_target> [SUBDIR <value>])
 #
 # Apply the settings every addon module needs:
-#   * Linux symbol hygiene (--exclude-libs,ALL),
+#   * Linux symbol hygiene (--exclude-libs,ALL, plus a version script that
+#     narrows the module's exports to the bare C entry points),
+#   * the assertion that a fabric-linked module imports fabric's C++ runtime,
 #   * JS_LOGGER + BACKENDS_SUBDIR compile definitions,
 #   * platform-derived GGML_BACKEND_DL (Linux/Android load ggml backends as
 #     dlopen'd modules; macOS/Windows/iOS link them static into the runtime),
@@ -219,8 +238,62 @@ endfunction()
 function(qvac_addon_finalize addon_target)
   cmake_parse_arguments(PARSE_ARGV 1 _QAF "" "SUBDIR" "")
 
+  # The module's outward interface is the bare entry points and nothing else;
+  # see addon-symbols.map. Hides definitions only, so the C++ runtime the module
+  # imports from fabric is unaffected. Applied to every ELF target, matching
+  # packages/asr-ggml, since co-loaded addons interposing each other's statics is
+  # as much an Android concern as a Linux one.
+  if(UNIX AND NOT APPLE)
+    set(_qaf_exports "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/addon-symbols.map")
+    target_link_options(${addon_target}_module PRIVATE
+      "-Wl,--version-script=${_qaf_exports}")
+    set_property(TARGET ${addon_target}_module APPEND PROPERTY
+      LINK_DEPENDS "${_qaf_exports}")
+  endif()
+
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(${addon_target}_module PRIVATE -Wl,--exclude-libs,ALL)
+
+    # A module that dropped its own C++ runtime must have actually inherited
+    # fabric's. Both halves of getting that wrong are silent, so it is checked on
+    # the built ELF rather than trusted to the link line.
+    get_property(_qaf_imports_fabric_cxx TARGET ${addon_target}_module
+      PROPERTY QVAC_ADDON_IMPORTS_FABRIC_CXX)
+    if(_qaf_imports_fabric_cxx)
+      if(NOT DEFINED QVAC_FABRIC_OWNS_CXX_RUNTIME)
+        message(FATAL_ERROR
+          "qvac-addon: the installed @qvac/fabric predates "
+          "QVAC_FABRIC_OWNS_CXX_RUNTIME, so it exports its C++ runtime with no "
+          "ELF version node and ${addon_target} would resolve that runtime from "
+          "the host process instead, silently, at both build and load time. "
+          "Update @qvac/fabric. A workspace build that reaches this has usually "
+          "fallen back to a registry fabric because the local version no longer "
+          "satisfies this package's range.")
+      elseif(QVAC_FABRIC_OWNS_CXX_RUNTIME)
+        # CMake sets CMAKE_READELF for ELF toolchains; fall back to PATH rather
+        # than skip the check on a host where it did not.
+        set(_qaf_readelf "${CMAKE_READELF}")
+        if(NOT _qaf_readelf)
+          find_program(_qaf_readelf NAMES llvm-readelf readelf)
+        endif()
+        if(NOT _qaf_readelf)
+          message(FATAL_ERROR
+            "qvac-addon: no readelf found (CMAKE_READELF unset, nothing on "
+            "PATH). It verifies that ${addon_target} imports fabric's C++ "
+            "runtime, which nothing else detects; install binutils or llvm.")
+        endif()
+        add_custom_command(TARGET ${addon_target}_module POST_BUILD
+          COMMAND ${CMAKE_COMMAND}
+            -D "READELF=${_qaf_readelf}"
+            -D "MODULE=$<TARGET_FILE:${addon_target}_module>"
+            -D "VERSION=${QVAC_FABRIC_ABI_VERSION}"
+            -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/assert-fabric-cxx-runtime.cmake"
+          VERBATIM
+          COMMENT "qvac-addon: verifying ${addon_target} imports fabric's C++ runtime")
+      endif()
+      # Otherwise fabric links a shared libc++ in this configuration (Android,
+      # the ASan build) and exports no runtime, so there is no node to pin to.
+    endif()
   endif()
 
   target_compile_definitions(${addon_target} PRIVATE JS_LOGGER)

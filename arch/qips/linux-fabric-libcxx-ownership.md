@@ -37,6 +37,7 @@ Keep embedding libc++ **inside** the fabric prebuild (`-static-libstdc++` on the
 4. **Lockstep:** a fabric that exports cxxabi and an addon that still statically links libc++ can interpose weak typeinfo, and an addon built before the version node silently keeps resolving the runtime from libstdc++. Ship as one coordinated prebuild set, not mixed old addons + new fabric on Linux. The mechanics are load-bearing and easy to get wrong:
    - Release the change as a **minor** bump (`0.16.0`), never a patch. On `0.x`, consumers’ `^0.15.0` ranges resolve `>=0.15.0 <0.16.0`, so a minor is what keeps already-published addons away from a fabric they were not built against. A `0.15.1` would reach them and degrade them silently.
    - Bump fabric’s version and all seven consumer ranges **in the same commit**. `pnpm-workspace.yaml` sets `linkWorkspacePackages: true` and falls back to the registry when the local version does not satisfy the range, so a lone fabric bump would quietly build every addon against the published, unversioned fabric.
+   - The template asserts both halves at build time rather than trusting the link line (see *Verification*).
 
 Responsibilities:
 
@@ -144,6 +145,7 @@ The `qvac-fabric` vcpkg port appends `-static-libstdc++` to Linux `VCPKG_LINKER_
 
 **Verification**
 
+- `qvac_addon_finalize` runs `cmake/qvac-addon/assert-fabric-cxx-runtime.cmake` on every fabric-linked module: `readelf --dyn-syms` must show no undefined `__cxa_*` / `__gxx_personality_v0` / `_ZT*` / `_ZNSt*` / operator-new symbol without a `QVAC_FABRIC_ABI_1` requirement (`__cxa_atexit`, `__cxa_finalize` and `_Unwind_*` excepted — glibc and libgcc_s own those). Configure fails outright if the installed fabric publishes no `QVAC_FABRIC_ABI_VERSION`, which is what catches a workspace that has fallen back to a registry fabric.
 - **A C++ test binary cannot detect this class of failure.** `qvac_addon_stage_fabric_for_test` produces executables that link no libstdc++, so fabric's is the only C++ runtime in those processes and the interposition never happens — the same module that fails under `bare` passes there. Coverage for the runtime seam has to run in a host that owns a GNU C++ runtime, i.e. the `bare` integration tests (or Node). Treat a green C++ suite as saying nothing about it.
 - `llm-llamacpp` is not a fabric consumer on `main`, so the in-tree guard is a `model-fit` unit case: an unknown `cache-type-k` is rejected only inside fabric, and `parseGenericConfig` wraps the same parser in the same `catch (const std::exception&)` that `LoadFitNormalization.cpp` does. It asserts the catch matched *by type*, separating that from a `catch (...)` that matched anything — which is exactly the pre-fix Linux behaviour.
 - Once `llm-llamacpp` migrates, re-run `config-parameters.test.js` “Negative repeat penalty…” on linux-x64 and linux-arm64; expect the Darwin message, not `Unknown error`.
