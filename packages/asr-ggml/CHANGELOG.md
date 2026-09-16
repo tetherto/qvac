@@ -14,6 +14,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-16
+
+### Changed
+
+- The binding loader now verifies that `require.addon()` returned an ASR native
+binding before using it. If the result is the JavaScript package entry, loading
+falls through to `#host-addon`; the resolved platform package is validated as
+well, and the original lookup failure is retained as the error cause for clearer
+diagnostics. This prevents initialization failures caused by missing native
+methods such as `setLogger` while preserving local source-build behavior.
+
 ## [0.5.0] - 2026-09-11
 
 ### Added
