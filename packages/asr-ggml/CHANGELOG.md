@@ -14,6 +14,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
+  one engine stack. The pinned engine adds an optional Apple-only Core ML
+  sidecar for the Sortformer diarization encoder; the prebuilds keep it
+  disabled, so published behavior is unchanged.
+
 ## [0.5.2] - 2026-09-16
 
 ### Fixed
