@@ -34,6 +34,7 @@ type LooseHandler = (request: unknown) => AsyncGenerator<unknown, unknown, unkno
 type RecordedCall = {
   messages: { role?: string; type?: string; name?: string; content?: string }[]
   prefill: boolean
+  toolChoice?: string | undefined
 }
 
 type ToolDef = {
@@ -108,17 +109,24 @@ function registerRecordingModel(
   modelId: string,
   calls: RecordedCall[],
   config: Record<string, unknown> = { tools: true },
-  cachePaths?: string[]
+  cachePaths?: string[],
+  stats: Record<string, unknown> = {}
 ): void {
   registerModel(modelId, {
     model: {
       run(
         prompt: unknown,
-        opts?: { prefill?: boolean; cacheKey?: string; saveCacheToDisk?: boolean }
+        opts?: {
+          prefill?: boolean
+          cacheKey?: string
+          saveCacheToDisk?: boolean
+          generationParams?: { tool_choice?: string }
+        }
       ) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
-          prefill: opts?.prefill === true
+          prefill: opts?.prefill === true,
+          toolChoice: opts?.generationParams?.tool_choice
         })
         if (cachePaths && opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         const written =
@@ -131,7 +139,7 @@ function registerRecordingModel(
             yield 'The area is 25 square units.'
           },
           await: () => written,
-          stats: {}
+          stats
         }
       }
     } as unknown as AnyModel,
@@ -144,7 +152,11 @@ function registerRecordingModel(
 function completer(modelId: string, kvCacheKey: string) {
   const handler = llmPlugin.handlers.completionStream.handler as unknown as LooseHandler
   let request = 0
-  return async (history: HistoryEntry[], tools?: ToolDef[]): Promise<void> => {
+  return async (
+    history: HistoryEntry[],
+    tools?: ToolDef[],
+    generationParams?: Record<string, unknown>
+  ): Promise<void> => {
     request += 1
     const gen = handler({
       modelId,
@@ -152,7 +164,8 @@ function completer(modelId: string, kvCacheKey: string) {
       history,
       stream: true,
       kvCache: kvCacheKey,
-      ...(tools ? { tools } : {})
+      ...(tools ? { tools } : {}),
+      ...(generationParams ? { generationParams } : {})
     })
     for await (const _ of gen) void _
   }
@@ -314,6 +327,131 @@ test('completion: kv-cache resends the tool block after a turn that could not re
     toolNames(turnCalls[1]!),
     ['calculate_triangle_area'],
     'the next turn resends the block instead of trusting the unrendered one'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The addon reports whether the template rendered the tools it was handed
+// (`toolDefinitionsDropped`). When it does, that report decides whether the
+// block is in the cache, in both directions, and the user-message guess is
+// only the fallback for an addon that says nothing.
+test('completion: kv-cache resends the tool block when the addon reports it dropped', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-dropped-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, undefined, {
+    toolDefinitionsDropped: 1
+  })
+
+  const complete = completer(modelId, 'tools-dropped-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  await complete([first], [areaTool])
+  await complete([first, assistant('25.'), user('And base 4 height 3?')], [areaTool])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+  t.alike(
+    toolNames(turnCalls[1]!),
+    ['calculate_triangle_area'],
+    'a user message is not enough once the addon says the render dropped the tools'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: kv-cache trusts an addon-confirmed render over the user-message guess', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-confirmed-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, undefined, {
+    toolDefinitionsDropped: 0
+  })
+
+  const complete = completer(modelId, 'tools-confirmed-key')
+  const seeded = [system('You are helpful.'), assistant('Shall I continue?')]
+  await complete(seeded, [areaTool])
+  await complete([...seeded, assistant('Continuing.'), user('Area, base 10 height 5?')], [areaTool])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+  t.absent(
+    turnCalls[1]!.messages.some(isToolEntry),
+    'the block is not resent when the addon confirmed the user-less render kept it'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// The addon arms the tool-call grammar only for a payload that carries tools,
+// so a turn that demands a call has to carry the block even into a prefix that
+// already holds one. A plain turn afterwards goes back to skipping it.
+test('completion: kv-cache resends the tool block on a turn whose tool_choice demands a call', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-required-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'tools-required-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  const reply = assistant('The area is 25 square units.')
+  const second = user('And with base 4 height 3?')
+  const third = user('Thanks. What about base 6 height 2?')
+
+  await complete([first], [areaTool])
+  await complete([first, reply, second], [areaTool], { tool_choice: 'required' })
+  await complete([first, reply, second, reply, third], [areaTool])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.alike(
+    toolNames(turnCalls[1]!),
+    ['calculate_triangle_area'],
+    'the required turn carries the block so the grammar can arm'
+  )
+  t.is(turnCalls[1]!.toolChoice, 'required', 'tool_choice reaches the addon')
+  t.absent(
+    turnCalls[2]!.messages.some(isToolEntry),
+    'the following auto turn trusts the prefix again'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+// A named tool_choice renders only that tool, so the copy such a turn writes
+// into the cache is not the full block and must not be trusted as one.
+test('completion: kv-cache does not trust a block written under a named tool_choice', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-tools-named-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, undefined, {
+    toolDefinitionsDropped: 0
+  })
+
+  const complete = completer(modelId, 'tools-named-key')
+  const first = user('Area of a triangle, base 10 height 5?')
+  await complete([first], [areaTool], { tool_choice: 'calculate_triangle_area' })
+  await complete([first, assistant('25.'), user('And base 4 height 3?')], [areaTool])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 2, 'both turns reached the model')
+  t.is(turnCalls[0]!.toolChoice, 'calculate_triangle_area', 'the name reaches the addon')
+  t.alike(
+    toolNames(turnCalls[1]!),
+    ['calculate_triangle_area'],
+    'the next turn resends the full block rather than trusting the narrowed one'
   )
 
   unregisterModel(modelId)

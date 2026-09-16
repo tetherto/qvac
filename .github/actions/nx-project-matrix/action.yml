@@ -75,6 +75,38 @@ runs:
       run: pnpm install --frozen-lockfile --ignore-scripts
     - if: github.event_name == 'pull_request'
       uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
+    # nx-set-shas reads both SHAs off the working tree (HEAD_SHA is git rev-parse
+    # HEAD, and BASE_SHA is merge-base against it), which on pull_request_target
+    # is the base branch, so it diffs main against itself and nothing is ever
+    # affected. --base/--head only exist to produce a file list, so ask the API
+    # for the paths instead: nx needs no commit, and the PR's objects never enter
+    # this privileged checkout.
+    - if: github.event_name == 'pull_request_target'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        # previous_filename too: a rename reports only its destination under
+        # .filename, so taking that alone selects the new package and misses the
+        # one the file left.
+        gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
+          --jq '.[] | .filename, (.previous_filename // empty)' > "${RUNNER_TEMP}/nx-changed-files.txt"
+        count=$(wc -l < "${RUNNER_TEMP}/nx-changed-files.txt")
+        if [ "$count" -eq 0 ]; then
+          echo "::error::the API reported no changed paths for PR ${PR_NUMBER}"
+          exit 1
+        fi
+        # The endpoint truncates at 3000 files rather than erroring, and a short
+        # list under-selects silently, which is the failure this step exists to
+        # fix. Today's largest PRs are ~80 files, so this is an assertion.
+        if [ "$count" -ge 3000 ]; then
+          echo "::error::hit the 3000-file API cap for PR ${PR_NUMBER}; the path list is truncated"
+          exit 1
+        fi
+        echo "Changed paths: $count"
     - id: compute
       shell: bash
       env:
@@ -102,9 +134,19 @@ runs:
           AFFECTED=$(echo "$INPUT_PACKAGES" | jq -c 'map(sub("^@qvac/"; ""))')
           echo "Explicit packages ($TARGET, no affected computation): $AFFECTED"
         else
-          AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
-            | tail -n1 \
-            | jq -c 'map(sub("^@qvac/"; ""))')
+          # On pull_request_target the paths come from the API (see above), fed in
+          # newline-delimited. --stdin conflicts with --base/--head in nx, so the
+          # two forms stay separate. Transitive expansion is identical either way.
+          CHANGED_FILES="${RUNNER_TEMP}/nx-changed-files.txt"
+          if [ -f "$CHANGED_FILES" ]; then
+            AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --stdin --json < "$CHANGED_FILES" \
+              | tail -n1 \
+              | jq -c 'map(sub("^@qvac/"; ""))')
+          else
+            AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
+              | tail -n1 \
+              | jq -c 'map(sub("^@qvac/"; ""))')
+          fi
           echo "Affected ($TARGET, transitive): $AFFECTED"
         fi
 
