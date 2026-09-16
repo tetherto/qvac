@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 
 #include <bare.h>
 // For GGML_TYPE_COUNT: the typeK/typeV bound is taken from the same header the
@@ -17,6 +18,7 @@
 
 #include "fit/FitParams.hpp"
 #include "fit/LlamaLoadConfig.hpp"
+#include "js-interface/PromiseTask.hpp"
 
 namespace model_fit::bindings {
 
@@ -224,16 +226,7 @@ js_value_t* fitResultObject(js_env_t* env, const FitResult& result) {
   return out;
 }
 
-} // namespace
-
-/// `paramsFit(config)` — synchronous memory-fit preflight. Reads a plain config
-/// object, runs `common_fit_params` (no weights are loaded), and returns the
-/// fitted "load plan" as a JS object. Throwing goes through `JSCATCH`, which
-/// converts C++ exceptions into JS errors.
-inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
-  addon_cpp::JsArgsParser args(env, info);
-  auto config = args.getJsObject(0, "config");
-
+FitRequest parseFitRequest(js_env_t* env, jsu::Object config) {
   FitRequest req;
   req.modelPath =
       config.getProperty<jsu::String>(env, "modelPath").as<std::string>(env);
@@ -338,14 +331,11 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
         "model-fit: 'mainGpu' -1 requires 'nGpuLayers' 0 and 'splitMode' NONE");
   }
 
-  const FitResult res = runFit(req);
-  return fitResultObject(env, res);
+  return req;
 }
-JSCATCH
 
-inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
-  addon_cpp::JsArgsParser args(env, info);
-  auto config = args.getJsObject(0, "config");
+LlamaLoadFitRequest parseLlamaLoadFitRequest(
+    js_env_t* env, addon_cpp::JsArgsParser& args, jsu::Object config) {
   static const std::unordered_set<std::string_view> allowedFields = {
       "loadKind", "modelPath", "params", "backendsDir", "marginMiB", "nCtxMin"};
   requireAllowedProperties(env, config, allowedFields);
@@ -437,7 +427,53 @@ inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
         "model-fit: 'nCtxMin' must not exceed concrete 'ctx-size'");
   }
 
+  return request;
+}
+
+} // namespace
+
+/// Synchronous memory-fit preflight; C++ exceptions become JS errors via
+/// `JSCATCH`.
+inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  const FitRequest req = parseFitRequest(env, args.getJsObject(0, "config"));
+  return fitResultObject(env, runFit(req));
+}
+JSCATCH
+
+/// Same preflight on a worker thread, as a Promise. Argument errors still
+/// throw synchronously.
+inline js_value_t* paramsFitAsync(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  FitRequest req = parseFitRequest(env, args.getJsObject(0, "config"));
+  // Registration stays on the JS thread, as on the synchronous path; only the
+  // fit itself moves to the worker.
+  registerBackends(req.backendsDir);
+  return PromiseTask<FitResult>::run(
+      env, [req = std::move(req)]() { return runFit(req); }, fitResultObject);
+}
+JSCATCH
+
+inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  const LlamaLoadFitRequest request =
+      parseLlamaLoadFitRequest(env, args, args.getJsObject(0, "config"));
   return fitResultObject(env, runLlamaFit(request));
+}
+JSCATCH
+
+inline js_value_t*
+llamaConfigFitAsync(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  LlamaLoadFitRequest request =
+      parseLlamaLoadFitRequest(env, args, args.getJsObject(0, "config"));
+  if (!preBackendUnsupportedLlamaLoad(request.params).has_value()) {
+    registerBackends(request.backendsDir);
+  }
+  return PromiseTask<FitResult>::run(
+      env,
+      [request = std::move(request)]() { return runLlamaFit(request); },
+      fitResultObject);
 }
 JSCATCH
 
@@ -458,7 +494,9 @@ js_value_t* model_fit_exports(js_env_t* env, js_value_t* exports) {
   }
 
   V("paramsFit", model_fit::bindings::paramsFit)
+  V("paramsFitAsync", model_fit::bindings::paramsFitAsync)
   V("llamaConfigFit", model_fit::bindings::llamaConfigFit)
+  V("llamaConfigFitAsync", model_fit::bindings::llamaConfigFitAsync)
 
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)

@@ -597,8 +597,8 @@ export const executor = createExecutor({
       'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
     ),
     new SkipExecutor(
-      /^audio-gen-/,
-      'ACE-Step AudioGen uses four large GGUFs and is covered by desktop e2e'
+      /^audio-(gen|edit|understand)-/,
+      'ACE-Step AudioGen loads four large GGUFs and is covered by desktop e2e'
     ),
     new SkipExecutor(
       /^vla-pi05-/,
