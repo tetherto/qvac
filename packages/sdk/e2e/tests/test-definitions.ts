@@ -355,7 +355,8 @@ export const tests = [
   // No-lingering-bare regression tests
   ...noLingeringBareTests,
 
-  // Multi-GPU config smoke (verifies split-mode and main-gpu flow through stack)
+  // Multi-GPU config smoke (verifies split-mode flows through the stack, and
+  // that a tensor-split matching no device list is rejected)
   ...multiGpuTests,
 
   // Typed cancel outcomes + KvCacheSession rollback e2e
