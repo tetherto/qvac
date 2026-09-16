@@ -6,6 +6,7 @@ import path = require('bare-path')
 /** Shape of the native addon this module wraps. */
 interface FitBinding {
   paramsFit(config: FitConfig): FitResult
+  paramsFitAsync(config: FitConfig): Promise<FitResult>
 }
 
 export interface FitConfig {
@@ -339,27 +340,8 @@ function validateRelationships (config: FitConfig): void {
   }
 }
 
-/**
- * Memory-fit preflight for a llama.cpp GGUF model. Runs `common_fit_params`,
- * which simulates allocations (no weights are loaded) to project whether the
- * model fits available device memory and, if so, with which offload plan.
- *
- * This is a synchronous, blocking in-process native call. Callers that need
- * isolation should use `@qvac/model-fit/process` to run it in a disposable
- * Bare subprocess.
- *
- * Calls are serialised process-wide: `common_fit_params` mutates global llama
- * logger state and is not thread safe, so concurrent callers block instead of
- * running together.
- *
- * Backends must be registered before the fitter can see any device. When
- * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
- * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
- * statically linked build, which self-registers.
- * Every backend library in that directory is `dlopen`ed into this process, so
- * it must be an application-controlled location — never remote or user input.
- */
-export function fitParams (config: FitConfig): FitResult {
+// Validation and backendsDir resolution shared by both entry points.
+function prepareFitConfig (config: FitConfig): FitConfig {
   if (config === null || config === undefined || typeof config !== 'object' || Array.isArray(config)) {
     throw new TypeError('model-fit: config object is required')
   }
@@ -394,5 +376,42 @@ export function fitParams (config: FitConfig): FitResult {
     }
   }
 
-  return binding.paramsFit(resolved)
+  return resolved
+}
+
+/**
+ * Memory-fit preflight for a llama.cpp GGUF model. Runs `common_fit_params`,
+ * which simulates allocations (no weights are loaded) to project whether the
+ * model fits available device memory and, if so, with which offload plan.
+ *
+ * This is a synchronous, blocking in-process native call; `fitParamsAsync`
+ * runs the same fit on a worker thread. Callers that need isolation should use
+ * `@qvac/model-fit/process` to run it in a disposable Bare subprocess.
+ *
+ * Calls are serialised process-wide: `common_fit_params` mutates global llama
+ * logger state and is not thread safe, so concurrent callers block instead of
+ * running together.
+ *
+ * Backends must be registered before the fitter can see any device. When
+ * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
+ * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
+ * statically linked build, which self-registers.
+ * Every backend library in that directory is `dlopen`ed into this process, so
+ * it must be an application-controlled location — never remote or user input.
+ */
+export function fitParams (config: FitConfig): FitResult {
+  return binding.paramsFit(prepareFitConfig(config))
+}
+
+/**
+ * `fitParams` on a worker thread. Same config, same validation, same result;
+ * the JS loop stays free for the duration of the fit, which on a cold darwin
+ * start includes compiling the Metal library. Validation failures reject
+ * rather than throw.
+ *
+ * Fits are still serialised process-wide, so a call made while another fit is
+ * running — synchronous or not — waits for it.
+ */
+export async function fitParamsAsync (config: FitConfig): Promise<FitResult> {
+  return binding.paramsFitAsync(prepareFitConfig(config))
 }

@@ -4,7 +4,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 const process = require('bare-process')
-const { fitParams, FIT_STATUS } = require('../../index.js')
+const { fitParams, fitParamsAsync, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
 
 // Deliberately never created. Argument validation must reject configs using it
@@ -787,4 +787,49 @@ test('fitParams on a missing file reports ERROR (does not throw)', function (t) 
   // status alone cannot separate an unreadable model from a machine with no
   // usable backend; the SDK needs to tell "retry later" from "never will work".
   t.is(res.reason, 'model-unreadable', 'the ERROR cause is distinguishable')
+})
+
+test('fitParamsAsync rejects invalid config before any native work', async function (t) {
+  await t.exception.all(fitParamsAsync(), /config object is required/)
+  await t.exception.all(fitParamsAsync({}), /modelPath must be a non-empty string/)
+  await t.exception.all(
+    fitParamsAsync({ modelPath: UNREACHABLE_MODEL, nCtx: 'big' }),
+    /nCtx must be a safe integer/
+  )
+})
+
+test('fitParamsAsync resolves the verdict fitParams returns', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+
+  const sync = fitParams({ modelPath })
+  const async = await fitParamsAsync({ modelPath })
+  // Free memory moves between two probes, so the projection rows are not
+  // compared; the verdict and the plan are what has to agree.
+  t.is(async.status, sync.status)
+  t.is(async.reason, sync.reason)
+  t.is(async.nCtx, sync.nCtx)
+  t.is(async.nGpuLayers, sync.nGpuLayers)
+  t.is(async.nDevices, sync.nDevices)
+  t.alike(async.tensorSplit, sync.tensorSplit)
+  t.alike(Object.keys(async).sort(), Object.keys(sync).sort())
+})
+
+test('fitParamsAsync surfaces a native argument error as a rejection', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  await t.exception.all(
+    fitParamsAsync({ modelPath, nCtx: 75000000 }),
+    /exceeds the context length the model declares/
+  )
+})
+
+test('concurrent fitParamsAsync calls serialise and all settle', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const results = await Promise.all([
+    fitParamsAsync({ modelPath }),
+    fitParamsAsync({ modelPath }),
+    fitParamsAsync({ modelPath: path.join(process.cwd(), 'nonexistent', 'does-not-exist.gguf') })
+  ])
+  t.not(results[0].status, FIT_STATUS.ERROR)
+  t.not(results[1].status, FIT_STATUS.ERROR)
+  t.is(results[2].reason, 'model-unreadable')
 })

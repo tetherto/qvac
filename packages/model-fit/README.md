@@ -53,6 +53,18 @@ const plan = fitParams({
 // }
 ```
 
+`fitParamsAsync(config)` takes the same config and resolves to the same result,
+running the fit on a worker thread so the caller's JS loop is not blocked while
+the fitter probes the devices (on a cold darwin start that includes compiling
+the Metal library). Validation failures reject instead of throwing. Fits are
+serialised process-wide either way — see below.
+
+```js
+const { fitParamsAsync } = require('@qvac/model-fit')
+
+const plan = await fitParamsAsync({ modelPath: '/abs/path/model.gguf' })
+```
+
 ### The memory projection
 
 `projection` explains the verdict in bytes: one row per device the model was

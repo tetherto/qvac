@@ -2,7 +2,7 @@
 // declaration parses; this proves the discriminated union actually narrows the
 // way an SDK would rely on. Type-checked by `npm run test:dts`, never executed.
 
-import { fitParams, FIT_STATUS } from '../../index'
+import { fitParams, fitParamsAsync, FIT_STATUS } from '../../index'
 import type { FitConfig, FitResult, FitReason, FitPlan, FitProjectionRow } from '../../index'
 
 declare function assertNever (value: never): never
@@ -17,6 +17,10 @@ const invalidSwaFull: FitConfig = { modelPath: '/model.gguf', swaFull: 1 }
 void invalidSwaFull
 
 const result: FitResult = fitParams({ modelPath: '/model.gguf' })
+
+// The async entry point yields the same union, one await away.
+const pending: Promise<FitResult> = fitParamsAsync({ modelPath: '/model.gguf' })
+void pending
 
 // The inventory is readable on every branch, before any narrowing.
 const devices: number = result.nDevices
