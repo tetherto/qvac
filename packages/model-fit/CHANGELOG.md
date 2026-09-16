@@ -2,10 +2,25 @@
 
 ## [0.12.0] - 2026-09-16
 
-### Added
+This release adds a non-blocking way to run the memory-fit preflight. Callers that run the fit in the same process as their inference — the mobile advisory check today — no longer stall their JS loop for the duration of the probe.
 
-- `fitParamsAsync(config)`: `fitParams` on a worker thread, returned as a Promise — same config, validation and result, without blocking the caller's JS loop. Backend registration still happens on the calling thread before the fit is queued, so the registry sees the same ordering as the synchronous path ([#4495](https://github.com/tetherto/qvac/pull/4495)).
-- `llamaConfigFitAsync` on the private binding: the same worker-thread shape for the load-config fitter the process runner and `@qvac/inference` use.
+### New APIs
+
+#### `fitParamsAsync(config)`
+
+Takes the same config as `fitParams` and resolves to the same result, but runs `common_fit_params` on a worker thread. Validation failures reject instead of throwing. Backend registration still happens on the calling thread before the fit is queued, so the ggml registry sees the same ordering as the synchronous path, and fits remain serialised process-wide.
+
+```js
+const { fitParamsAsync } = require('@qvac/model-fit')
+
+const plan = await fitParamsAsync({ modelPath: '/abs/path/model.gguf' })
+```
+
+`llamaConfigFitAsync` on the private binding gives the load-config fitter used by the process runner and `@qvac/inference` the same worker-thread shape.
+
+### Pull Requests
+
+- [#4495](https://github.com/tetherto/qvac/pull/4495) - QVAC-25156 feat[api]: add fitParamsAsync to @qvac/model-fit
 
 ## [0.11.1] - 2026-09-16
 
