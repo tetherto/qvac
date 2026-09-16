@@ -3,8 +3,7 @@
 const process = require('bare-process')
 const binding = require('../../binding-internal.js')
 
-// argv[2] is the request; an optional argv[3] of 'async' routes it through the
-// promise-returning entry point instead of the synchronous one.
+// argv[3] === 'async' routes the request through the promise-returning entry.
 const request = JSON.parse(process.argv[2])
 const viaAsync = process.argv[3] === 'async'
 

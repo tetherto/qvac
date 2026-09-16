@@ -226,8 +226,6 @@ js_value_t* fitResultObject(js_env_t* env, const FitResult& result) {
   return out;
 }
 
-/// Reads a `FitConfig` object into a request. Everything the fitter could not
-/// act on is rejected here, before any native work runs.
 FitRequest parseFitRequest(js_env_t* env, jsu::Object config) {
   FitRequest req;
   req.modelPath =
@@ -434,10 +432,8 @@ LlamaLoadFitRequest parseLlamaLoadFitRequest(
 
 } // namespace
 
-/// `paramsFit(config)` — synchronous memory-fit preflight. Runs
-/// `common_fit_params` (no weights are loaded) and returns the fitted "load
-/// plan" as a JS object. Throwing goes through `JSCATCH`, which converts C++
-/// exceptions into JS errors.
+/// Synchronous memory-fit preflight; C++ exceptions become JS errors via
+/// `JSCATCH`.
 inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
   const FitRequest req = parseFitRequest(env, args.getJsObject(0, "config"));
@@ -445,10 +441,8 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-/// `paramsFitAsync(config)` — the same preflight on a worker thread, returned
-/// as a Promise. Argument errors still throw here, synchronously; the fit
-/// itself — which on a cold darwin start includes compiling the Metal library
-/// — no longer blocks the JS loop.
+/// Same preflight on a worker thread, as a Promise. Argument errors still
+/// throw synchronously.
 inline js_value_t* paramsFitAsync(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
   FitRequest req = parseFitRequest(env, args.getJsObject(0, "config"));

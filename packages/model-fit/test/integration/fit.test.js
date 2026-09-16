@@ -803,8 +803,7 @@ test('fitParamsAsync resolves the verdict fitParams returns', async function (t)
 
   const sync = fitParams({ modelPath })
   const async = await fitParamsAsync({ modelPath })
-  // Free memory moves between two probes, so the projection rows are not
-  // compared; the verdict and the plan are what has to agree.
+  // Projection rows track live free memory; compare verdict and plan only.
   t.is(async.status, sync.status)
   t.is(async.reason, sync.reason)
   t.is(async.nCtx, sync.nCtx)

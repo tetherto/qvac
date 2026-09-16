@@ -18,7 +18,6 @@ void invalidSwaFull
 
 const result: FitResult = fitParams({ modelPath: '/model.gguf' })
 
-// The async entry point yields the same union, one await away.
 const pending: Promise<FitResult> = fitParamsAsync({ modelPath: '/model.gguf' })
 void pending
 

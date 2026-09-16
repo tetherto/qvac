@@ -509,7 +509,6 @@ test(
   'direct binding async entry point settles like the synchronous one',
   { skip: !HAS_NATIVE_PREBUILD },
   async (t) => {
-    // Rejected before backend initialization, as a rejection rather than a throw.
     const invalid = await runDirectBinding({ ...config, unknown: true }, 'completion', 'async')
     t.is(invalid.signal, null)
     t.is(invalid.code, 0)
@@ -517,8 +516,7 @@ test(
     t.is(rejected.ok, false)
     t.ok(rejected.message.includes('unknown'))
 
-    // A fit that runs to a verdict resolves with the same shape the sync path
-    // returns. The model does not exist, so this is the cheapest full pass.
+    // Missing model: the cheapest path to a full verdict.
     const [sync, async] = await Promise.all([
       runDirectBinding(config),
       runDirectBinding(config, 'completion', 'async')

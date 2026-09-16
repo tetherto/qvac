@@ -404,13 +404,9 @@ export function fitParams (config: FitConfig): FitResult {
 }
 
 /**
- * `fitParams` on a worker thread. Same config, same validation, same result;
- * the JS loop stays free for the duration of the fit, which on a cold darwin
- * start includes compiling the Metal library. Validation failures reject
- * rather than throw.
- *
- * Fits are still serialised process-wide, so a call made while another fit is
- * running — synchronous or not — waits for it.
+ * `fitParams` on a worker thread: same config, validation and result, without
+ * blocking the JS loop. Validation failures reject. Fits stay serialised
+ * process-wide.
  */
 export async function fitParamsAsync (config: FitConfig): Promise<FitResult> {
   return binding.paramsFitAsync(prepareFitConfig(config))
