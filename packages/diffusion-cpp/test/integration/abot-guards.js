@@ -73,14 +73,15 @@ function pngRgb(png) {
     pixels.set(line, y * stride)
     prev = line
   }
-  return pixels
+  return { pixels, width, height }
 }
 
 // Mean-subtracted luminance spread. Healthy ABot walk frames measure 30+;
 // conditioning collapses measure 8-12. Returns -1 for unsupported formats.
 function pngLuminanceStddev(png) {
-  const pixels = pngRgb(png)
-  if (!pixels) return -1
+  const decoded = pngRgb(png)
+  if (!decoded) return -1
+  const { pixels } = decoded
   let sum = 0
   let sumSq = 0
   for (let i = 0; i < pixels.length; i += 3) {
@@ -96,10 +97,14 @@ function pngLuminanceStddev(png) {
 function pngMeanAbsoluteError(a, b) {
   const left = pngRgb(a)
   const right = pngRgb(b)
-  if (!left || !right || left.length !== right.length) return Infinity
+  if (!left || !right || left.width !== right.width || left.height !== right.height) {
+    return Infinity
+  }
   let total = 0
-  for (let i = 0; i < left.length; i++) total += Math.abs(left[i] - right[i])
-  return total / left.length
+  for (let i = 0; i < left.pixels.length; i++) {
+    total += Math.abs(left.pixels[i] - right.pixels[i])
+  }
+  return total / left.pixels.length
 }
 
 // Prompt-row census of a scene pack (safetensors), read from its bytes.

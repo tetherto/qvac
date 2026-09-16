@@ -147,6 +147,14 @@ test('pngMeanAbsoluteError: compares decoded pixels across PNG filters', functio
     3
   )
   t.is(pngMeanAbsoluteError(original, Buffer.alloc(64)), Infinity)
+  t.is(
+    pngMeanAbsoluteError(
+      makePng(32, 32, () => [1, 2, 3]),
+      makePng(16, 64, () => [1, 2, 3])
+    ),
+    Infinity,
+    'equal pixel counts do not hide a dimension mismatch'
+  )
 })
 
 test('pngLuminanceStddev: separates collapsed frames from real ones', function (t) {
