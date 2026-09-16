@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- A fit stub is documented and covered as an accepted `modelPath`, single-file
+  and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
+  tokenizer tables and no data section, which the registry serves in place of
+  the artefact. It projects the same plan as the full file, and needs no padding
+  out to the artefact length. Two fabric behaviours make that work and both are
+  covered — 10549.0.0 skips the file-bounds check under no_alloc, and the vocab
+  load it does *not* skip is satisfied by `tokenizer.ggml.model = none` plus a
+  surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
+  that reports failure as an absent projection rather than an error, is asserted
+  on the same files. No API change.
+
 ## [0.12.0] - 2026-09-16
 
 This release adds a non-blocking way to run the memory-fit preflight. Callers that run the fit in the same process as their inference — the mobile advisory check today — no longer stall their JS loop for the duration of the probe.

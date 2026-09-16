@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
+  one engine stack. Nothing in the window touches the whisper engine this
+  package builds, so published behavior is unchanged.
+
 ## [0.9.1] - 2026-09-11
 
 ### Changed
