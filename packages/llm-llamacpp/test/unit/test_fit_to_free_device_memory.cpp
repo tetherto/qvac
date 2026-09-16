@@ -243,6 +243,110 @@ TEST(FitToFreeDeviceMemoryTest, TensorSplitScratchSpansTheWholeArray) {
   EXPECT_FLOAT_EQ(params.tensor_split[widthSeen - 1], 1.0F);
 }
 
+// The other array fabric indexes by registered-device id, and for the same
+// reason: `fit_params_target` is only `llama_max_devices()` wide, while fabric
+// reads `margins[id]` for every registered device with no clamp to that cap.
+TEST(FitToFreeDeviceMemoryTest, MarginsScratchIsAsWideAsTheTensorSplitScratch) {
+  const ReadableModelFile model;
+  common_params params = fitEnabledParams();
+  const size_t width = std::size(common_params{}.tensor_split);
+  ASSERT_GT(width, params.fit_params_target.size());
+  size_t lastMarginSeen = 0;
+
+  fitmem::fitParamsToFreeDeviceMemory(
+      params,
+      model.path(),
+      [width, &lastMarginSeen](
+          const char*,
+          llama_model_params*,
+          llama_context_params*,
+          float*,
+          llama_model_tensor_buft_override* buftOverrides,
+          size_t* margins,
+          uint32_t,
+          bool,
+          ggml_log_level) {
+        // Reading the slot past the end of `fit_params_target` is the over-read
+        // under test; writing it proves the buffer is the helper's own.
+        margins[width - 1] = 4096;
+        lastMarginSeen = margins[width - 1];
+        buftOverrides[0] = {nullptr, nullptr};
+        return COMMON_PARAMS_FIT_STATUS_SUCCESS;
+      });
+
+  EXPECT_EQ(lastMarginSeen, 4096U);
+  // The scratch is the helper's, so the caller's targets are not rewritten.
+  EXPECT_EQ(params.fit_params_target.size(), llama_max_devices());
+}
+
+// Fabric's two "no changes needed" early returns report SUCCESS having written
+// nothing. Nothing may be adopted from that — including the one-entry
+// `{nullptr, nullptr}` the terminator search would otherwise find at index 0 of
+// the zeroed scratch — and the log must not claim a placement was applied.
+TEST(FitToFreeDeviceMemoryTest, NoOpSuccessChangesNothing) {
+  const ReadableModelFile model;
+  common_params params = fitEnabledParams();
+  const int32_t gpuLayersBefore = params.n_gpu_layers;
+  const int32_t nCtxBefore = params.n_ctx;
+
+  const auto outcome = fitmem::fitParamsToFreeDeviceMemory(
+      params,
+      model.path(),
+      [](const char*,
+         llama_model_params*,
+         llama_context_params*,
+         float*,
+         llama_model_tensor_buft_override*,
+         size_t*,
+         uint32_t,
+         bool,
+         ggml_log_level) { return COMMON_PARAMS_FIT_STATUS_SUCCESS; });
+
+  EXPECT_TRUE(outcome.invoked);
+  EXPECT_EQ(outcome.status, COMMON_PARAMS_FIT_STATUS_SUCCESS);
+  // SUCCESS, but nothing moved — so not "applied".
+  EXPECT_FALSE(outcome.applied);
+  EXPECT_EQ(params.n_gpu_layers, gpuLayersBefore);
+  EXPECT_EQ(params.n_ctx, nCtxBefore);
+  EXPECT_TRUE(params.tensor_buft_overrides.empty());
+}
+
+// A caller list long enough to fill the scratch would have its terminator
+// truncated away by the seed copy, and the unterminated array then goes to a C
+// API. Fabric rejects a caller-set override list before it reads that far, but
+// that is fabric's invariant rather than this file's.
+TEST(FitToFreeDeviceMemoryTest, OverlongCallerOverridesStayTerminated) {
+  const ReadableModelFile model;
+  common_params params = fitEnabledParams();
+  static constexpr const char* kCallerPattern = "blk\\..*\\.ffn_up_exps";
+  params.tensor_buft_overrides.assign(
+      llama_max_tensor_buft_overrides() + 8,
+      {kCallerPattern, ggml_backend_cpu_buffer_type()});
+  params.tensor_buft_overrides.back() = {nullptr, nullptr};
+  bool lastScratchEntryWasTerminator = false;
+
+  fitmem::fitParamsToFreeDeviceMemory(
+      params,
+      model.path(),
+      [&lastScratchEntryWasTerminator](
+          const char*,
+          llama_model_params*,
+          llama_context_params*,
+          float*,
+          llama_model_tensor_buft_override* buftOverrides,
+          size_t*,
+          uint32_t,
+          bool,
+          ggml_log_level) {
+        const auto& last = buftOverrides[llama_max_tensor_buft_overrides() - 1];
+        lastScratchEntryWasTerminator =
+            last.pattern == nullptr && last.buft == nullptr;
+        return COMMON_PARAMS_FIT_STATUS_FAILURE;
+      });
+
+  EXPECT_TRUE(lastScratchEntryWasTerminator);
+}
+
 // An invoker that returns SUCCESS without terminating the override list would,
 // if adopted, trip common_model_params_to_llama's GGML_ASSERT and abort the
 // process. Decline instead.

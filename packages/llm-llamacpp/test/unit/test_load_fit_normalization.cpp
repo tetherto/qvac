@@ -36,42 +36,6 @@ void expectOnlyMappedFieldChanges(
   EXPECT_EQ(toggledSnapshot, expectedSnapshot);
 }
 
-/// Whether @p name resolves to a registered, non-CPU ggml device.
-///
-/// This is byte-for-byte the check qvac-fabric applies to `--device`
-/// (common/arg.cpp): it calls `ggml_backend_load_all()`, looks the name up, and
-/// rejects an absent device or one of CPU type with "invalid device: <name>".
-/// Almost every test in this file names a fabricated device, which is harmless
-/// because the split-mode paths pin devices by *handle*
-/// (LoadFitNormalization.cpp) and the name is never validated. `split-mode:
-/// none` is the one path that sends the name through to fabric, so a test that
-/// takes it needs the name to exist for real.
-bool hasRegisteredNonCpuDevice(const char* name) {
-  ggml_backend_load_all();
-  ggml_backend_dev_t device = ggml_backend_dev_by_name(name);
-  return device != nullptr &&
-         ggml_backend_dev_type(device) != GGML_BACKEND_DEVICE_TYPE_CPU;
-}
-
-/// The registered devices, for a skip message that says what was found rather
-/// than only what was missing — otherwise a guard that has silently started
-/// skipping everywhere is indistinguishable from one that is working.
-std::string registeredDeviceNames() {
-  ggml_backend_load_all();
-  std::string names;
-  for (size_t index = 0; index < ggml_backend_dev_count(); ++index) {
-    ggml_backend_dev_t device = ggml_backend_dev_get(index);
-    if (!names.empty()) {
-      names += ", ";
-    }
-    names += ggml_backend_dev_name(device);
-    if (ggml_backend_dev_type(device) == GGML_BACKEND_DEVICE_TYPE_CPU) {
-      names += " (CPU)";
-    }
-  }
-  return names.empty() ? "none" : names;
-}
-
 } // namespace
 
 TEST(LoadFitSnapshotTest, CapturesEveryFitAffectingCommonParam) {
@@ -387,7 +351,18 @@ protected:
                               const std::optional<backend_selection::MainGpu>&,
                               const ModelMetaData&,
                               bool) { return selected; },
-        .splitDevices = [devices]() { return devices; }};
+        .splitDevices = [devices]() { return devices; },
+        // A fabricated non-CPU handle for any name the suite uses, which is
+        // what makes the `split-mode: none` branch testable at all: it is the
+        // only one that starts from a name rather than a handle, and the
+        // production resolver answers it from the live ggml registry. Nothing
+        // dereferences the handle — `params.devices` is a list of opaque
+        // pointers until fabric loads a model, which no test here does.
+        .resolveDeviceByName =
+            [](const std::string&) {
+              static char handle = 0;
+              return reinterpret_cast<ggml_backend_dev_t>(&handle);
+            }};
   }
 
   static lfn::ConfigMap baseConfig() {
@@ -1095,22 +1070,15 @@ TEST_F(
 // split-mode 'none' resolves through chooseBackend, so a GPU result on an
 // Adreno-<800 one-bit BitNet load proves the split filter did not run.
 //
-// Unlike its neighbours this case pins the device by *name*: split-mode 'none'
-// is the only branch that emits `--device <name>`, and fabric resolves that
-// against the live ggml registry. The fabricated "vulkan0" every other test in
-// this file uses is therefore only valid here on a host that actually has a
-// non-CPU device under that name — CI's macOS (Metal), Windows and Linux
-// runners do not, so the case is skipped there rather than reporting a
-// hardware gap as a logic failure. Guarded the same way the suite already
-// guards its other hardware-dependent cases.
+// Unlike its neighbours this case starts from a device *name*: split-mode
+// 'none' is the only branch with no handle from `splitDevices`. That name used
+// to go to fabric as `--device <name>` and be resolved against the live ggml
+// registry, which made the case unrunnable anywhere without a real device
+// called "vulkan0" — none of CI's macOS, Windows or Linux runners has one.
+// `resolveDeviceByName` is that lookup, so the fixture answers it and the
+// policy assertion runs on every host.
 TEST_F(
     LoadFitNormalizationTest, SplitModeNoneLeavesAdrenoPolicyToChooseBackend) {
-  if (!hasRegisteredNonCpuDevice("vulkan0")) {
-    GTEST_SKIP() << "no registered non-CPU device named \"vulkan0\"; "
-                    "split-mode 'none' sends the device to fabric by name and "
-                    "fabric rejects a name it cannot resolve. Registered: "
-                 << registeredDeviceNames();
-  }
   test_common::MockModelMetaData bitnet{true, "bitnet"};
   auto config = baseConfig();
   config["split-mode"] = "none";
@@ -1128,6 +1096,48 @@ TEST_F(
   EXPECT_EQ(result.runtimeBackendDevice, 1);
   EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
   EXPECT_EQ(result.adrenoVersion, 740);
+  // The named device is pinned by handle, exactly as the multi-GPU modes do.
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_NE(result.params.devices.front(), nullptr);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+// The rejection fabric used to raise from `parse_device_list` has to survive
+// moving the lookup here, or a typo'd or absent device would silently load on
+// whatever the backend picked instead.
+TEST_F(LoadFitNormalizationTest, SplitModeNoneRejectsAnUnresolvableDevice) {
+  auto config = baseConfig();
+  config["split-mode"] = "none";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan9"}, {});
+  dependencies.resolveDeviceByName = [](const std::string&) {
+    return static_cast<ggml_backend_dev_t>(nullptr);
+  };
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
+// The production resolver is the half the fixture replaces, so it gets its own
+// check against the live registry: a name no host has must not resolve, and a
+// CPU device must be rejected even though it does resolve.
+TEST(LoadFitProductionDeviceResolverTest, RejectsAbsentAndCpuDevices) {
+  const auto resolve = lfn::productionDependencies(nullptr).resolveDeviceByName;
+  ASSERT_TRUE(static_cast<bool>(resolve));
+
+  EXPECT_EQ(resolve("no-such-device-0"), nullptr);
+
+  ggml_backend_load_all();
+  for (size_t index = 0; index < ggml_backend_dev_count(); ++index) {
+    ggml_backend_dev_t device = ggml_backend_dev_get(index);
+    if (ggml_backend_dev_type(device) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+      EXPECT_EQ(resolve(ggml_backend_dev_name(device)), nullptr)
+          << "CPU device " << ggml_backend_dev_name(device)
+          << " must not be pinnable as --device";
+    }
+  }
 }
 
 // QVAC-24253: split-mode 'tensor' (LLAMA_SPLIT_MODE_TENSOR).
@@ -1154,9 +1164,8 @@ TEST_F(LoadFitNormalizationTest, TensorSplitParsesAndDisablesFit) {
 }
 
 TEST_F(LoadFitNormalizationTest, TensorSplitLeavesFitEnabledForOtherModes) {
-  // 'none' is covered separately below with the CPU backend: it forwards
-  // `--device <name>` to llama.cpp's parser, which rejects a device that does
-  // not exist on the host running the test.
+  // 'none' is covered separately below with the CPU backend, which is the
+  // branch that yields the bare terminator rather than a pinned handle.
   auto layerConfig = baseConfig();
   layerConfig["split-mode"] = "layer";
   const auto layer = lfn::normalizeLoadForFit(

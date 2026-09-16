@@ -758,11 +758,18 @@ TEST_F(LlamaModelTest, OrdinaryLoadReachesTheAutomaticPlacement) {
     // Restore under RAII: if the load throws, an un-ended capture makes the
     // next CaptureStdout() in this binary abort with "Only one stdout capturer
     // can exist at a time", taking unrelated tests with it.
+    //
+    // The flag, not `logged.empty()`: a load that logged nothing at all is a
+    // legitimate outcome, and inferring "still capturing" from an empty string
+    // would end the capture twice — itself a gtest fatal, with the same blast
+    // radius as the leak this guard exists to prevent.
+    bool captureEnded = false;
     testing::internal::CaptureStdout();
     ScopeGuard captureGuard(
-        [&logged, priorVerbosity] {
-          if (logged.empty()) {
+        [&logged, &captureEnded, priorVerbosity] {
+          if (!captureEnded) {
             logged = testing::internal::GetCapturedStdout();
+            captureEnded = true;
           }
           qvac_lib_inference_addon_llama::logging::g_verbosityLevel =
               priorVerbosity;
@@ -772,6 +779,7 @@ TEST_F(LlamaModelTest, OrdinaryLoadReachesTheAutomaticPlacement) {
     LlamaModel model = createModelWithConfig(std::move(config));
     model.waitForLoadInitialization();
     logged = testing::internal::GetCapturedStdout();
+    captureEnded = true;
 
     ASSERT_TRUE(model.isLoaded());
     // One of the verdicts the fitter can report, and explicitly *not* the
@@ -782,6 +790,8 @@ TEST_F(LlamaModelTest, OrdinaryLoadReachesTheAutomaticPlacement) {
     // very message it exists to exclude.
     const bool reachedAVerdict =
         logged.find("automatic placement applied") != std::string::npos ||
+        logged.find("automatic placement completed with no changes") !=
+            std::string::npos ||
         logged.find("automatic placement did not apply") != std::string::npos ||
         logged.find("automatic placement hit an internal error") !=
             std::string::npos;

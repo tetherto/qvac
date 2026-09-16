@@ -1,3 +1,6 @@
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <string>
 #include <unordered_map>
@@ -72,8 +75,7 @@ protected:
     try {
       std::string path = modelPath;
       std::string projection;
-      LlamaModel model(
-          std::move(path), std::move(projection), std::move(cfg));
+      LlamaModel model(std::move(path), std::move(projection), std::move(cfg));
       model.waitForLoadInitialization();
       loaded = model.isLoaded();
     } catch (...) {
@@ -86,6 +88,91 @@ protected:
 
     EXPECT_EQ(loaded, expectLoaded) << "captured log:\n" << logged;
     return logged;
+  }
+
+  /// What an unpinned load ended up with, for the assertion that the loader
+  /// actually consumes the fit's verdict rather than merely logging it.
+  ///
+  /// `gpu_layers` and `ctx_size` are dropped from the config on purpose: the
+  /// rest of this fixture pins both, and fabric treats a pinned value as user
+  /// intent it must not override, so a pinned load can never show the fit's
+  /// decision reaching the model. The model is kept alive until after
+  /// `getCommonParams()` is read, which is why this does not go through
+  /// `captureLoadLog`.
+  struct UnpinnedLoad {
+    std::string logged;
+    bool loaded = false;
+    int32_t nGpuLayers = 0;
+  };
+
+  UnpinnedLoad loadUnpinned(const std::string& modelPath) {
+    namespace logging = qvac_lib_inference_addon_llama::logging;
+    const auto priorVerbosity = logging::g_verbosityLevel;
+
+    auto cfg = config_;
+    cfg.erase("gpu_layers");
+    cfg.erase("ctx_size");
+    cfg["verbosity"] = "2"; // INFO, so the outcome line is not suppressed
+
+    UnpinnedLoad out;
+    testing::internal::CaptureStdout();
+    try {
+      std::string path = modelPath;
+      std::string projection;
+      LlamaModel model(std::move(path), std::move(projection), std::move(cfg));
+      model.waitForLoadInitialization();
+      out.loaded = model.isLoaded();
+      if (out.loaded) {
+        out.nGpuLayers = model.getCommonParams().n_gpu_layers;
+      }
+    } catch (...) {
+      out.logged = testing::internal::GetCapturedStdout();
+      logging::g_verbosityLevel = priorVerbosity;
+      throw;
+    }
+    out.logged = testing::internal::GetCapturedStdout();
+    logging::g_verbosityLevel = priorVerbosity;
+    return out;
+  }
+
+  /// Asserts that whatever the fit decided is what the loaded model runs with.
+  ///
+  /// Three verdicts are possible on an arbitrary host and all three are
+  /// checkable: "applied" names the chosen `n_gpu_layers`, which the model must
+  /// then carry; "no changes needed" and "did not apply" both mean the request
+  /// stands, so the model must still carry the unpinned sentinel. What is *not*
+  /// acceptable on any host is the fit being skipped, or a placement being
+  /// logged that the model did not take.
+  static void expectTheFitReachedTheModel(const UnpinnedLoad& load) {
+    ASSERT_TRUE(load.loaded) << "captured log:\n" << load.logged;
+    ASSERT_NE(
+        load.logged.find("[LlamaModel] automatic placement"), std::string::npos)
+        << "the fitter was never reached; captured log:\n"
+        << load.logged;
+    ASSERT_EQ(
+        load.logged.find("[LlamaModel] skipping automatic placement"),
+        std::string::npos)
+        << "the fit was skipped before it ran; captured log:\n"
+        << load.logged;
+
+    static constexpr const char* kApplied =
+        "[LlamaModel] automatic placement applied: n_gpu_layers=";
+    const size_t appliedAt = load.logged.find(kApplied);
+    if (appliedAt == std::string::npos) {
+      // Nothing moved, so the unpinned request has to have survived intact.
+      EXPECT_EQ(load.nGpuLayers, -1)
+          << "no placement was applied, but the model did not keep the "
+             "unpinned request; captured log:\n"
+          << load.logged;
+      return;
+    }
+
+    const int32_t announced = static_cast<int32_t>(std::strtol(
+        load.logged.c_str() + appliedAt + std::strlen(kApplied), nullptr, 10));
+    EXPECT_EQ(load.nGpuLayers, announced)
+        << "the placement was logged but the loaded model runs with something "
+           "else; captured log:\n"
+        << load.logged;
   }
 
   void streamShardsIntoModel(
@@ -166,10 +253,10 @@ TEST_F(ModelFullLoadingTest, ShardedLoadReachesTheAutomaticPlacement) {
 
 // The fitter has to be handed split 0: llama reads `split.count` from the file
 // it is given, checks that file's own `split.no` is 0, and throws "illegal
-// split file idx" otherwise (src/llama-model-loader.cpp). `expandGGUFIntoShards`
-// always regenerates the list from shard 1, so naming a later shard must still
-// fit against the first — which is what `gguf_files.front()` in
-// LlamaModel::init buys.
+// split file idx" otherwise (src/llama-model-loader.cpp).
+// `expandGGUFIntoShards` always regenerates the list from shard 1, so naming a
+// later shard must still fit against the first — which is what
+// `gguf_files.front()` in LlamaModel::init buys.
 //
 // That throw is the assertion. It surfaces as COMMON_PARAMS_FIT_STATUS_ERROR
 // and logs "hit an internal error", so passing `modelPath` instead of
@@ -189,6 +276,27 @@ TEST_F(ModelFullLoadingTest, ShardedFitUsesTheFirstShardNotTheNamedOne) {
       << "the fit was handed the shard the caller named rather than split 0; "
          "captured log:\n"
       << logged;
+}
+
+// The other half of the QVAC-25039 claim. The two tests above prove the fitter
+// is *reached* on each on-disk path; these prove its answer is what the model
+// is then built with, which is what "the fit now works" actually has to mean.
+//
+// Deliberately not a memory-pressure test. Which placement fabric picks is a
+// function of free device memory at the instant the probe runs, so a unit test
+// that asserted a particular redistribution would be asserting the state of the
+// machine, not the behaviour of this code. Asserting that the model carries
+// whatever was decided holds on every host, including CI's CPU-only runners.
+// Real GPU and MoE redistribution is validated by hand and by the desktop
+// integration suite, which runs inference against the loaded model.
+TEST_F(ModelFullLoadingTest, SingleFileFitResultIsWhatTheModelRunsWith) {
+  REQUIRE_MODEL(singleModel_);
+  expectTheFitReachedTheModel(loadUnpinned(singleModel_.path));
+}
+
+TEST_F(ModelFullLoadingTest, ShardedFitResultIsWhatTheModelRunsWith) {
+  REQUIRE_MODEL(shardedModel_);
+  expectTheFitReachedTheModel(loadUnpinned(shardedModel_.path));
 }
 
 TEST_F(ModelFullLoadingTest, StreamingShards_LoadsSuccessfully) {

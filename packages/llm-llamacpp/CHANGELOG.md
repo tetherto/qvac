@@ -45,6 +45,26 @@ than a local one.
   only on success: a `FAILURE` or an `ERROR` leaves the load to proceed with
   exactly the configuration the caller asked for, and an `ERROR` is reported at
   error level rather than passing as quietly as a routine "does not fit".
+- The log now says which of three things the placement did. qvac-fabric reports
+  success from two "no changes needed" early checks that write no placement at
+  all, so a fit that moved nothing used to read as `automatic placement applied`
+  carrying the caller's own unset values. It now says it completed with no
+  changes needed. That ambiguity, in the other direction, is the report this
+  ticket started from.
+- A single-file load no longer adopts the fitted MoE cache budget. Clearing
+  `fit_params` so qvac-fabric does not re-fit in place also clears
+  `moe_cache_auto`, which is what turns "the budget cannot hold one routed
+  layer's working set" from a throw into a logged `cache inactive` — so a fitted
+  budget with that valve shut could fail a load that previously succeeded. The
+  caller's own budget is used instead, which is the position this path was in
+  before. The sharded path keeps `fit_params`, so it keeps both the valve and
+  the fitted budget.
+- `split-mode: none` resolves its device name to a handle in the addon instead
+  of forwarding `--device <name>` to qvac-fabric's argument parser. The
+  rejection rule is unchanged — an unknown name or a CPU device is still an
+  invalid-argument error — but the lookup is no longer wired directly to the
+  live ggml registry, which is what made this branch's backend policy
+  untestable on any machine without the exact GPU the test names.
 - The process-global ggml log callback is restored after every fit. The fitter
   installs a pointer to one of its own stack frames as the log user_data and
   restores it on the way out, but not exception-safely — it throws from inside

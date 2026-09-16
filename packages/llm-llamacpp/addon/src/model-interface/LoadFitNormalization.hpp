@@ -83,10 +83,25 @@ using BackendResolver = std::function<SelectedBackend(
     const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
     bool)>;
 
+/// Resolves a backend device *name* to a handle that can be pinned, or nullptr
+/// if this host has no such device or the one it has is a CPU device.
+///
+/// `split-mode: none` is the only branch that has a name and no handle — every
+/// multi-GPU mode gets handles from `splitDevices` — so it used to hand the
+/// name to qvac-fabric as `--device <name>` and let `parse_device_list`
+/// (common/arg.cpp) do the lookup. That put a live ggml registry between the
+/// test and the policy under test: the whole branch was unreachable on any host
+/// without the exact GPU named. Resolving here instead keeps the same rejection
+/// rule and makes the boundary injectable.
+using DeviceResolver = std::function<ggml_backend_dev_t(const std::string&)>;
+
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   /// Authoritative eligible device set for every multi-GPU split mode.
   std::function<backend_selection::SplitDeviceSelection()> splitDevices;
+  /// Name-to-handle lookup for `split-mode: none`. Defaulted so existing
+  /// callers and tests that pin by handle need not supply one.
+  DeviceResolver resolveDeviceByName;
 };
 
 struct NormalizedLoad {

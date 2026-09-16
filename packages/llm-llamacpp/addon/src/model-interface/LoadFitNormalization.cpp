@@ -720,7 +720,19 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
                 .isMetal = isMetal};
           },
       .splitDevices =
-          []() { return backend_selection::getSplitDeviceSelection(); }};
+          []() { return backend_selection::getSplitDeviceSelection(); },
+      // Byte-for-byte what fabric's `--device` did with the same name:
+      // `ggml_backend_load_all()`, look the name up, and treat an absent device
+      // or a CPU-type one as invalid (`parse_device_list`, common/arg.cpp).
+      .resolveDeviceByName = [](const std::string& name) -> ggml_backend_dev_t {
+        ggml_backend_load_all();
+        ggml_backend_dev_t device = ggml_backend_dev_by_name(name.c_str());
+        if (device == nullptr ||
+            ggml_backend_dev_type(device) == GGML_BACKEND_DEVICE_TYPE_CPU) {
+          return nullptr;
+        }
+        return device;
+      }};
 }
 
 NormalizedLoad normalizeLoadForFit(
@@ -1156,8 +1168,36 @@ NormalizedLoad normalizeLoadForFit(
           "'cpu'.\n");
     }
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
-      configVector.emplace_back("--device");
-      configVector.emplace_back(selected.name);
+      // Resolved here rather than forwarded as `--device <name>`. Fabric's
+      // parser does the same lookup against the live ggml registry and throws
+      // "invalid device: <name>" for a name it cannot find — which made this
+      // branch, the only one that pins by name instead of by handle,
+      // unreachable from a test on any host without that exact GPU. The
+      // rejection rule and the resulting `params.devices` shape are unchanged:
+      // "none" yields the bare terminator, anything else yields
+      // `{device, nullptr}`.
+      params.devices.clear();
+      if (selected.name == "none") {
+        params.devices.push_back(nullptr);
+      } else {
+        ggml_backend_dev_t device =
+            dependencies.resolveDeviceByName
+                ? dependencies.resolveDeviceByName(selected.name)
+                : nullptr;
+        if (device == nullptr) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InvalidArgument),
+              string_format(
+                  "%s: error while handling argument \"--device\": invalid "
+                  "device: %s\n\n",
+                  K_LEGACY_PARSER_NAME.data(),
+                  selected.name.c_str()));
+        }
+        params.devices.push_back(device);
+        params.devices.push_back(nullptr);
+      }
     } else {
       std::string deviceList;
       params.devices.clear();

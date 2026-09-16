@@ -235,9 +235,34 @@ void LlamaModel::init(bool acquireLock) {
     // `expandGGUFIntoShards` always regenerates the list from shard 1, so the
     // front entry is split 0 even when the caller named a later shard, and
     // `resolveShardPaths` has already made it absolute.
+    const size_t moeCacheSizeAsAsked = params.moe_cache_size;
+
     fit_to_free_device_memory::fitParamsToFreeDeviceMemory(
-        params,
-        shardedFromDisk ? snap->shards_.gguf_files.front() : modelPath);
+        params, shardedFromDisk ? snap->shards_.gguf_files.front() : modelPath);
+
+    if (singleFileFromDisk) {
+      // Do not adopt the fitted MoE cache budget on the arm that has to clear
+      // `fit_params` below. fabric derives the cache's own safety valve from
+      // the same flag — `cparams.moe_cache_auto = params.fit_params &&
+      // params.moe_cache_auto` (common/common.cpp) — and `llama_moe_cache`
+      // throws "MoE cache budget is smaller than one routed layer working set"
+      // where the automatic form logs "cache inactive" and carries on
+      // (src/llama-moe-cache.cpp). A fitted `moe_cache_size` with the valve
+      // shut is therefore a load that can fail where the same load succeeded
+      // before this change: `llama-context.cpp` builds the cache for any
+      // non-zero size, and `moe_cache_auto` defaults to true in `common.h` with
+      // nothing in this addon opting out.
+      //
+      // Leaving the budget as the caller asked keeps the pre-QVAC-25039
+      // behaviour exactly — the fit never ran on this path, so the budget was
+      // never set from it — and gives up only a tuning improvement rather than
+      // a working load. The sharded arm keeps `fit_params` set, so its valve
+      // survives and it adopts the fitted budget.
+      //
+      // Separating the two meanings of `fit_params` needs a fabric-side change;
+      // see the KNOWN DIVERGENCE note below.
+      params.moe_cache_size = moeCacheSizeAsAsked;
+    }
   }
 
   // Taken after the fit, so the snapshot keeps describing the configuration the
@@ -281,10 +306,14 @@ void LlamaModel::init(bool acquireLock) {
   // "cache inactive" (src/llama-moe-cache.cpp). The two meanings cannot be
   // separated from outside fabric: with the gate set, fabric re-fits in place
   // over the placement just adopted here, which is the bug this file exists to
-  // avoid. The exposure is narrow — the fitted budget is a fraction of total
-  // expert memory and normally far exceeds one layer's slices — but it is a
-  // removed safety valve, and separating the two meanings needs a fabric-side
-  // change.
+  // avoid.
+  //
+  // What makes the lost valve harmless rather than a narrowed set of loads is
+  // that the fit block above puts `moe_cache_size` back to the value the caller
+  // asked for on exactly this arm. `llama-context.cpp` builds the cache only
+  // for a non-zero size, so a caller that did not ask for one never reaches the
+  // throw, and one that did asked for a budget of its own rather than a fitted
+  // one — which is the same position it was in before this change.
   common_init_result_ptr llamaInit;
   {
     const bool fitRequested = params.fit_params;

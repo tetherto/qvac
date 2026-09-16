@@ -35,8 +35,13 @@ struct FitOutcome {
   /// case `status` is meaningless.
   bool invoked = false;
   common_params_fit_status status = COMMON_PARAMS_FIT_STATUS_ERROR;
-  /// The fit succeeded and its placement was folded into `params`. No
-  /// *placement* is written when this is false — but `tensor_buft_overrides`
+  /// The fit succeeded **and moved something**. False both when the fit did not
+  /// succeed and when it succeeded from one of fabric's "no changes needed"
+  /// early returns, which report SUCCESS without writing any scratch at all
+  /// (common/fit.cpp) — in that case the fold-back still runs, but every field
+  /// round-trips the value it was seeded with, so `params` is unchanged.
+  ///
+  /// No *placement* is written when this is false — but `tensor_buft_overrides`
   /// may still have been normalised in place, since an unterminated override
   /// list has to be terminated before the fitter can be handed it at all.
   bool applied = false;
