@@ -408,16 +408,21 @@ function allKvs(meta) {
   return meta.kvs.map((raw) => ({ raw }))
 }
 
+/** Directory the fixtures are written to, beside the downloaded test model. */
+function fixtureDir() {
+  return path.resolve(__dirname, '../model')
+}
+
 /** Absolute path of a fixture beside the downloaded test model. */
 function fixturePath(name) {
-  return path.resolve(__dirname, '../model', name)
+  return path.join(fixtureDir(), name)
 }
 
 module.exports = {
+  fixtureDir,
   fixturePath,
   kvValue,
   readGguf,
-  splitPath,
   writeFitStub,
   writeSplit
 }

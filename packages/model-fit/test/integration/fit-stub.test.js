@@ -18,7 +18,7 @@ const fs = require('bare-fs')
 const process = require('bare-process')
 const { fitParams, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
-const { fixturePath, kvValue, readGguf, writeFitStub, writeSplit } = require('./gguf')
+const { fixtureDir, fixturePath, kvValue, readGguf, writeFitStub, writeSplit } = require('./gguf')
 
 const SPLIT_COUNT = 2
 
@@ -37,6 +37,13 @@ async function ensureFixtures() {
   if (fixtures) return fixtures
 
   const fullPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+
+  // The fixtures are written beside the downloaded model, and downloading is
+  // what creates that directory. FIT_MODEL_PATH skips the download, so on a
+  // fresh checkout the directory is not there — this file is the first to write
+  // into it rather than only read from it.
+  fs.mkdirSync(fixtureDir(), { recursive: true })
+
   fixtures = {
     fullPath,
     stubPath: writeFitStub(fullPath, fixturePath('fit-stub.gguf')),
@@ -78,8 +85,17 @@ test('the stub is the shape the registry serves', async function (t) {
   t.ok(fs.statSync(stubPath).size < fs.statSync(fullPath).size, 'the stub is shorter')
 
   t.is(stub.tensors.length, full.tensors.length, 'every tensor info survives')
+
+  // The stub keeps the artefact's layout, so its offsets are the full file's.
+  // That is what puts them past its own EOF: nothing follows the header, so any
+  // non-zero offset is already beyond every byte the stub holds. Phrasing that
+  // as arithmetic against the stub's own size would reduce to `offset >= 0`
+  // given the equality above, and would hold for a stub with every offset 0.
+  const offsets = (meta) => meta.tensors.map((tensor) => tensor.offset).sort((a, b) => a - b)
+  t.alike(offsets(stub), offsets(full), 'the offsets are the artefact layout')
+
   const last = stub.tensors.reduce((a, b) => (a.offset > b.offset ? a : b))
-  t.ok(stub.dataOffset + last.offset >= fs.statSync(stubPath).size, 'tensor offsets point past EOF')
+  t.ok(last.offset > 0, 'the last tensor starts past the end of the stub')
 
   // The vocab load still runs, so these are the keys that cannot go.
   t.is(kvValue(stub, 'tokenizer.ggml.model'), 'none', 'the tokenizer is declared absent')
