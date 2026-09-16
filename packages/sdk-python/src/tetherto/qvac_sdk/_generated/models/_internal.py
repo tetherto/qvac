@@ -15686,6 +15686,12 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscaler(GeneratedBaseModel):
 
 
 class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"clip_on_cpu", "control_net_cpu", "vae_on_cpu"})
+    __forbidden_field_guidance__ = {
+        "clip_on_cpu": "Removed. Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
+        "control_net_cpu": "Removed. Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
+        "vae_on_cpu": "Removed. Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
+    }
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
@@ -15739,12 +15745,6 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
             title="LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng",
         ),
     ] = None
-    clip_on_cpu: Annotated[
-        bool | None, Field(description="Force CLIP text encoder to run on CPU")
-    ] = None
-    vae_on_cpu: Annotated[
-        bool | None, Field(description="Force VAE decoder to run on CPU")
-    ] = None
     vae_auto_cpu_fallback: Annotated[
         bool | None,
         Field(
@@ -15766,27 +15766,34 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     offload_to_cpu: Annotated[
         bool | None,
         Field(
-            description="Keep model weights in CPU memory and offload them during GPU compute"
+            description="Keep model weights in CPU memory and offload them during GPU compute. Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module."
         ),
     ] = None
     backend: Annotated[
         str | None,
-        Field(description="Native compute backend assignment; overrides main-gpu."),
+        Field(
+            description="Runtime backend for diffusion and video graphs, globally or per module, for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'.",
+            max_length=4096,
+        ),
     ] = None
     params_backend: Annotated[
         str | None,
         Field(
-            description="Native parameter placement; overrides legacy CPU-offload flags."
+            description="Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offload_to_cpu enabled, explicit assignments override CPU residency only for the specified modules.",
+            max_length=4096,
         ),
     ] = None
     max_vram: Annotated[
         float | str | None,
         Field(
-            description="Native VRAM limit or per-backend limits, for example cuda0=6,vulkan0=2."
+            description="VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
         ),
     ] = None
     stream_layers: Annotated[
-        bool | None, Field(description="Stream model layers during native inference.")
+        bool | None,
+        Field(
+            description="Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
+        ),
     ] = None
     flash_attn: Annotated[
         bool | None, Field(description="Enable flash attention to reduce memory usage")

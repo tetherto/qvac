@@ -272,6 +272,33 @@ test('runBundleAndVerify: defaults to host arch when hosts is null', async (t) =
   t.alike(calls.verifyHosts, expected, 'verifyBundle got host fallback')
 })
 
+test('runBundleAndVerify: narrowed and absent linkedHosts both survive reporting', async (t) => {
+  const commands = {
+    bundleSdk: async () => ({
+      bundlePath: '/fake/qvac/worker.bundle.js',
+      plugins: [],
+      addons: [],
+      entryPaths: { worker: '/fake/qvac/worker.entry.mjs' },
+      manifestPath: '/fake/qvac/addons.manifest.json'
+    }),
+    verifyBundle: async () => ({
+      issues: [],
+      addons: [
+        { name: 'bare-posix', version: '1.0.1', linkedHosts: [] },
+        { name: 'bare-crypto', version: '1.15.3', linkedHosts: ['win32-x64'] },
+        { name: 'bare-os', version: '3.9.3' }
+      ]
+    }),
+    hasErrors: () => false,
+    formatVerifyBundleResult: () => ''
+  }
+  const result = await runBundleAndVerify(commands, '/fake/project', {
+    configPath: null,
+    hosts: ['win32-x64', 'linux-x64']
+  })
+  t.ok(result.bundlePath, 'reporting an unlinked addon does not break the flow')
+})
+
 test('runBundleAndVerify: bundleSdk failure is wrapped in QvacForgePluginError', async (t) => {
   const commands = {
     bundleSdk: async () => {
