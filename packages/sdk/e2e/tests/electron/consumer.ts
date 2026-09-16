@@ -556,7 +556,7 @@ export const executor = createExecutor({
     ),
     new SkipExecutor(
       /^audio-(gen|edit|understand)-/,
-      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
+      'AudioGen e2e is desktop-only: the ACE-Step stack is four GGUFs, too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
       /^finetune-/,

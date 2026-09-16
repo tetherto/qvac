@@ -598,7 +598,7 @@ export const executor = createExecutor({
     ),
     new SkipExecutor(
       /^audio-(gen|edit|understand)-/,
-      'ACE-Step AudioGen uses four large GGUFs and is covered by desktop e2e'
+      'ACE-Step AudioGen loads four large GGUFs and is covered by desktop e2e'
     ),
     new SkipExecutor(
       /^vla-pi05-/,
