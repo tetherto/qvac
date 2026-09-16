@@ -1,4 +1,6 @@
 import { promises as fsp } from 'node:fs'
+import path from 'node:path'
+import { DEFAULT_HOSTS } from '@/commands/bundle/constants'
 import {
   buildNestedPathIndex,
   extractBarePackHeader,
@@ -10,6 +12,20 @@ import {
   type CollectDiagnostics,
   type NativeAddon
 } from '@/commands/verify/addon-source'
+
+/** bare-pack resolves a linked native addon to this prefix instead of a module path. */
+const LINKED_PREFIX = 'linked:'
+
+/** Reserved resolution key naming the package.json that owns a module. */
+const PACKAGE_KEY = '#package'
+
+/** Export conditions that name a platform. */
+const PLATFORMS = new Set(DEFAULT_HOSTS.map(platformOf))
+
+/** `win32-x64` -> `win32`, `ios-arm64-simulator` -> `ios`. */
+function platformOf(host: string): string {
+  return host.split('-')[0] ?? host
+}
 
 export class InvalidBundleSourceError extends Error {
   bundlePath: string
@@ -28,13 +44,15 @@ export class InvalidBundleSourceError extends Error {
 export interface CollectAddonsFromBundleOptions {
   bundlePath: string
   projectRoot: string
+  /** Omitting these leaves `linkedHosts` unset, so every host stays checked. */
+  hosts?: string[]
   diagnostics?: CollectDiagnostics
 }
 
 export async function collectAddonsFromBundle(
   options: CollectAddonsFromBundleOptions
 ): Promise<NativeAddon[]> {
-  const { bundlePath, projectRoot, diagnostics } = options
+  const { bundlePath, projectRoot, hosts, diagnostics } = options
 
   let bundleText: string
   try {
@@ -44,10 +62,14 @@ export async function collectAddonsFromBundle(
   }
 
   let resolutions: Record<string, unknown>
+  let main: string | undefined
+  let imports: Record<string, unknown>
   try {
     const packed = extractPackedString(bundleText)
     const header = extractBarePackHeader(packed)
     resolutions = header.resolutions ?? {}
+    main = header.main
+    imports = header.imports ?? {}
   } catch (error) {
     throw new InvalidBundleSourceError(bundlePath, error)
   }
@@ -57,6 +79,14 @@ export async function collectAddonsFromBundle(
   }
 
   const pathsByPackage = buildNestedPathIndex(resolutions, projectRoot)
+  const analysed = analyseLinkedHosts({
+    resolutions,
+    main,
+    imports,
+    hosts: hosts ?? [],
+    projectRoot,
+    pathsByPackage
+  })
 
   const addons: NativeAddon[] = []
   for (const [pkgName, candidates] of pathsByPackage) {
@@ -66,6 +96,7 @@ export async function collectAddonsFromBundle(
         expectedName: pkgName
       })
       if (result.isAddon && result.addon) {
+        if (analysed !== null) result.addon.linkedHosts = analysed.get(candidate) ?? []
         addons.push(result.addon)
       } else if (result.invalid !== undefined && diagnostics !== undefined) {
         diagnostics.invalidPackageJsons.push(result.invalid)
@@ -74,4 +105,155 @@ export async function collectAddonsFromBundle(
   }
 
   return deduplicateAddons(addons)
+}
+
+interface AnalyseLinkedHostsOptions {
+  resolutions: Record<string, unknown>
+  main: string | undefined
+  imports: Record<string, unknown>
+  hosts: string[]
+  projectRoot: string
+  pathsByPackage: Map<string, Set<string>>
+}
+
+/**
+ * `mapLinkedHosts`, rejected unless its keys line up with the paths the path
+ * index found. A disagreement would read as "nothing is linked" and drop every
+ * prebuild check, so require an overlap before trusting the map.
+ */
+function analyseLinkedHosts(options: AnalyseLinkedHostsOptions): Map<string, string[]> | null {
+  const { pathsByPackage, ...mapOptions } = options
+  const linkedHosts = mapLinkedHosts(mapOptions)
+  if (linkedHosts === null) return null
+
+  for (const candidates of pathsByPackage.values()) {
+    for (const candidate of candidates) {
+      if (linkedHosts.has(candidate)) return linkedHosts
+    }
+  }
+  return null
+}
+
+interface MapLinkedHostsOptions {
+  resolutions: Record<string, unknown>
+  main: string | undefined
+  imports: Record<string, unknown>
+  hosts: string[]
+  projectRoot: string
+}
+
+/**
+ * Which of `hosts` link each package's addon, keyed by the owning package.json.
+ * A host counts only when the bundle both reaches a module of that package on
+ * its platform *and* resolves a `linked:` addon there.
+ *
+ * Both halves are needed because bare-pack emits two graph shapes: for a single
+ * host it resolves conditions eagerly, dropping the binding module of a package
+ * whose platform export is a JS stub; for several hosts it keeps every branch
+ * and links a name per host, so only reachability separates the platforms.
+ *
+ * Null leaves every host checked, as if no analysis had run.
+ */
+function mapLinkedHosts(options: MapLinkedHostsOptions): Map<string, string[]> | null {
+  const { resolutions, main, imports, hosts, projectRoot } = options
+
+  if (hosts.length === 0) return null
+  if (main === undefined || !Object.prototype.hasOwnProperty.call(resolutions, main)) return null
+  // `main` is the only root we walk; an import map could reach past it.
+  if (Object.keys(imports).length > 0) return null
+
+  const linked = new Map<string, Set<string>>()
+  const ownersByPlatform = new Map<string, Set<string> | null>()
+
+  for (const host of hosts) {
+    const platform = platformOf(host)
+    let owners = ownersByPlatform.get(platform)
+    if (owners === undefined) {
+      owners = linkedOwnersOn(resolutions, main, platform, projectRoot)
+      ownersByPlatform.set(platform, owners)
+    }
+
+    if (owners === null) return null
+
+    for (const owner of owners) {
+      let forOwner = linked.get(owner)
+      if (forOwner === undefined) {
+        forOwner = new Set()
+        linked.set(owner, forOwner)
+      }
+      forOwner.add(host)
+    }
+  }
+
+  return new Map([...linked].map(([owner, forOwner]) => [owner, [...forOwner].sort()]))
+}
+
+/**
+ * package.json paths of the addons linked on `platform`, walking from `main`.
+ * Null if a linked module names no owning package.
+ */
+function linkedOwnersOn(
+  resolutions: Record<string, unknown>,
+  main: string,
+  platform: string,
+  projectRoot: string
+): Set<string> | null {
+  const owners = new Set<string>()
+  const seen = new Set<string>()
+  const stack = [main]
+
+  while (stack.length > 0) {
+    const module = stack.pop()!
+    if (seen.has(module)) continue
+    seen.add(module)
+
+    const edges = asRecord(resolutions[module])
+    if (edges === null) continue
+
+    let linksAddon = false
+    for (const [specifier, target] of Object.entries(edges)) {
+      if (specifier === PACKAGE_KEY) continue
+      for (const resolved of targetsOn(target, platform)) {
+        if (resolved.startsWith(LINKED_PREFIX)) linksAddon = true
+        else stack.push(resolved)
+      }
+    }
+
+    if (!linksAddon) continue
+
+    const owner = edges[PACKAGE_KEY]
+    if (typeof owner !== 'string') return null
+    owners.add(path.join(projectRoot, owner))
+  }
+
+  return owners
+}
+
+/**
+ * Every target a specifier can resolve to on `platform`, first-match-wins: this
+ * platform or `default` settles it, another platform is ruled out. A condition
+ * the host cannot decide (`require`, `bare`, ...) is kept and the scan goes on,
+ * so reachability is over- rather than under-reported.
+ */
+function targetsOn(target: unknown, platform: string): string[] {
+  if (typeof target === 'string') return [target]
+  const conditions = asRecord(target)
+  if (conditions === null) return []
+
+  const targets: string[] = []
+  for (const [condition, value] of Object.entries(conditions)) {
+    if (PLATFORMS.has(condition)) {
+      if (condition !== platform) continue
+      targets.push(...targetsOn(value, platform))
+      break
+    }
+    targets.push(...targetsOn(value, platform))
+    if (condition === 'default') break
+  }
+  return targets
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  return value as Record<string, unknown>
 }

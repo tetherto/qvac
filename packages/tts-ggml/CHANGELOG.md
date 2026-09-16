@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-15
+
+This release repairs native binding resolution for the per-platform prebuild
+layout introduced in 0.9.0. On hosts where the binding was resolved to the
+wrong module, every model load failed; the loader now verifies what it was
+handed instead of trusting it.
+
+## Bug Fixes
+
+### The addon loader no longer exports a non-binding
+
+Since the 0.9.0 per-platform split this package ships no `prebuilds/` of its
+own, so `require.addon()` is expected to miss and the real binding comes from
+the `#host-addon` platform package. Some runtimes answer that call with this
+package's own JavaScript entry — the `TTSGgml` class — rather than failing, and
+`binding.js` returned it verbatim. Consumers then received a module with no
+`createInstance`, the platform package was never consulted even though it was
+installed and loadable, and the first visible symptom was an unrelated
+`this._binding.createInstance is not a function` deep inside a model load, or a
+`logging.module must have a setLogger(callback) function` rejection when a host
+attached an addon logger. `binding.js` now treats anything without a
+`createInstance` function as a miss and falls through to the platform package,
+so a host that has the correct platform package installed loads normally.
+
+When neither source yields the native binding, the failure is now reported at
+the point of loading and names the cause: a missing platform package keeps the
+existing message naming the exact `@qvac/tts-ggml-<host>` package to install,
+and a platform package that resolves to something other than the binding
+raises an error saying so instead of silently degrading.
+
+## Pull Requests
+
+- [#4485](https://github.com/tetherto/qvac/pull/4485) - fix: reject a non-binding from require.addon() and fall back to the platform package
+
+
 ## [0.9.0] - 2026-09-11
 
 ### Added
