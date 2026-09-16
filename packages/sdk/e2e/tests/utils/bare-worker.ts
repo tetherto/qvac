@@ -52,16 +52,26 @@ function findBareChildrenPosix(parentPid: number): number[] {
 }
 
 function findBareChildrenWin32(parentPid: number): number[] {
-  const psOutput = execFileSync(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-Command',
-      `Get-CimInstance Win32_Process -Filter "ParentProcessId=${parentPid}" ` +
-        `| ForEach-Object { "$($_.ProcessId)|$($_.Name)" }`
-    ],
-    { encoding: 'utf-8' }
-  )
+  let psOutput: string
+  try {
+    psOutput = execFileSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        `Get-CimInstance Win32_Process -Filter "ParentProcessId=${parentPid}" ` +
+          `| ForEach-Object { "$($_.ProcessId)|$($_.Name)" }`
+      ],
+      { encoding: 'utf-8' }
+    )
+  } catch (error: unknown) {
+    // `execFileSync` puts the whole command in `message` and leaves stderr out
+    // of it, so the reason the query failed is lost unless it is read here.
+    const code = (error as { code?: string })?.code
+    if (code === 'ENOENT') throw new Error('powershell.exe not found in PATH')
+    const msg = (error as { stderr?: string })?.stderr ?? String(error)
+    throw new Error(`PowerShell query failed: ${msg}`)
+  }
 
   const bare: number[] = []
   for (const line of psOutput.split('\n')) {
