@@ -655,6 +655,15 @@ async function runBundleAndVerify(commands, projectDir, options) {
     )
   }
 
+  // Narrowed prebuild checks are otherwise invisible in the log.
+  const narrowed = verifyResult.addons.filter(
+    (addon) => Array.isArray(addon.linkedHosts) && addon.linkedHosts.length < hosts.length
+  )
+  for (const addon of narrowed) {
+    const where = addon.linkedHosts.length === 0 ? 'no host' : addon.linkedHosts.join(', ')
+    logger.info(`verifyBundle: ${addon.name}@${addon.version} is linked on ${where}`)
+  }
+
   return bundleResult
 }
 

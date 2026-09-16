@@ -61,6 +61,20 @@ describe('configure: param-schemas', () => {
     if (model.kind === 'object') assert.ok(model.fields.length > 10)
   })
 
+  it('hides removed diffusion fields from configure while the schema still rejects them', () => {
+    const schema = configSchemaForAddon('diffusion')
+    assert.ok(schema)
+    const model = configParamModel(schema)
+    assert.ok(model)
+    assert.equal(model.kind, 'object')
+    if (model.kind !== 'object') return
+
+    for (const field of ['control_net_cpu', 'clip_on_cpu', 'vae_on_cpu']) {
+      assert.ok(!model.fields.some((candidate) => candidate.name === field))
+    }
+    assert.equal(schema.safeParse({ clip_on_cpu: true }).success, false)
+  })
+
   it('models a discriminated-union addon as variants with described fields', () => {
     const schema = configSchemaForAddon('tts')
     assert.ok(schema)
