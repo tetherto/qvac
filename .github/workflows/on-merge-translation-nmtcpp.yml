@@ -3,7 +3,6 @@ name: On Merge Trigger (NMTCPP)
 on:
   push:
     branches:
-      - main
       - release-*
     paths:
       - "packages/translation-nmtcpp/**"

@@ -4,11 +4,11 @@
 // publishes off someone's PR branch -- which is how it went unnoticed from
 // March to September 2026.
 //
-// `main` and `release-*` stay allowed. A merge to `main` is the only thing that
-// still builds addon prebuilds across all 9 platforms on merged content: the PR
-// lanes gate prebuilds behind the ci-router labels, so an unlabeled PR builds
-// nothing. Dropping `main` here would let a broken iOS or win32 build merge
-// green and stay hidden until a release push.
+// `release-*` is the only branch that may push-trigger a publish. Note this
+// also means no push builds addon prebuilds on merge to `main`: the PR lanes
+// gate prebuilds behind the ci-router labels and roughly a third of PRs carry
+// one, so a native break can reach `main` unbuilt and first surface on a
+// release push. That trade was made deliberately (QVAC-23047).
 //
 // Branch builds from a `tmp-*`/`feature-*` branch remain available through
 // workflow_dispatch, which npm-publish-logic handles on the same code path as
@@ -26,9 +26,8 @@ const WORKFLOW_DIR = join(root, '.github/workflows')
 // renamed or newly added publish pipeline is still covered.
 const PUBLISH_MARKER = /npm-publish-logic|publish-library-to-(gpr|npm)/
 
-// The only branches a publish pipeline may push-trigger on. Neither can be an
-// open PR's head in this repo: PRs target them, they are not pushed from one.
-const ALLOWED = ['main', 'release-*']
+// The only branch a publish pipeline may push-trigger on.
+const ALLOWED = ['release-*']
 
 // The JS library and SDK publishers share the publish markers but are a
 // different family: single-job npm publishes with no prebuild matrix, and a

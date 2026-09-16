@@ -3,7 +3,6 @@ name: On Merge Trigger (LLM)
 on:
   push:
     branches:
-      - main
       - release-*
     paths:
       - "packages/llm-llamacpp/**"

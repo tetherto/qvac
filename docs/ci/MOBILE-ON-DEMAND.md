@@ -193,16 +193,16 @@ git push origin HEAD:refs/heads/$BRANCH
 gh workflow run on-merge-$WF.yml --repo tetherto/qvac --ref $BRANCH
 ```
 
-The push alone builds nothing. These pipelines push-trigger on `main` and
-`release-*` only, so pushing to an open PR's branch no longer starts a
-9-platform matrix behind your back — a branch build is a deliberate dispatch.
+The push alone builds nothing. These pipelines push-trigger on `release-*` only,
+so pushing to an open PR's branch no longer starts a 9-platform matrix behind
+your back — every non-release build is a deliberate dispatch.
 
 > **Dispatch from a `tmp-*` or `feature-*` branch, never a `release-*` one.**
 > `npm-publish-logic` reads the branch name, and on a `release-*` ref a dispatch
 > sets `publish_release`, which runs `publish-npm` and ships a real release to
 > the **public npm registry**. From `main` it publishes a GPR `dev` build. Only
 > `tmp-*`/`feature-*` give you the throwaway build this page is about; a branch
-> name outside all four publishes nothing at all.
+> name outside those four publishes nothing at all.
 
 The version string is unaffected — it is built from the run id, so it is the
 same whether the run came from a push or a dispatch. The GPR dist-tag can

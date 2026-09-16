@@ -81,11 +81,12 @@ This repo assumes a **fork-first** workflow:
 3) **Publishing happens on merge to upstream**  
    - Merge to `release-*` can publish to **NPM** for that package/version.
    - Merge to `main` can publish **dev** builds (GitHub Packages) when package paths changed.
-   - `feature-*` / `tmp-*` publish **feature/temp** builds (GitHub Packages), but how
-     that build starts depends on the package. Libraries and the SDK publish on push.
-     Native addon pipelines (`on-merge-<addon>.yml`) do **not** push-trigger on
-     `feature-*` / `tmp-*`: a push there would start a 9-platform matrix off an open
-     PR's branch. Run the workflow with `workflow_dispatch` on the branch instead.
+   - `feature-*` / `tmp-*` publish **feature/temp** builds (GitHub Packages).
+   - **Native addons publish on `release-*` pushes only.** Their
+     `on-merge-<addon>.yml` pipelines do not push-trigger on `main`, `feature-*` or
+     `tmp-*`, because a push to a `feature-*`/`tmp-*` branch would start a 9-platform
+     matrix off an open PR's branch. Every non-release addon build is started with
+     `workflow_dispatch` on the branch.
 
 ### One-time fork setup (recommended)
 
@@ -128,9 +129,9 @@ git push -u origin feature-<package>-<short-desc>
 | Feature | `feature-<package>-*` | Optional (maintainers) | Share a dev build for a large/isolated effort | GitHub Packages (**feature**) | Never publish to NPM. Addons: dispatch only |
 | Temp | `tmp-<package>-*` | Optional (maintainers) | Experiments / QA previews | GitHub Packages (**temp**) | Never publish to NPM. Addons: dispatch only |
 
-For native addons, a `feature-*` / `tmp-*` build is started by running
-`on-merge-<addon>.yml` with `workflow_dispatch` on that branch; pushing to the
-branch does not start one. The dist-tag such a build lands on is usually `dev`
+For native addons, any non-`release-*` build — `main` included — is started by
+running `on-merge-<addon>.yml` with `workflow_dispatch` on that branch; pushing
+to the branch does not start one. The dist-tag such a build lands on is usually `dev`
 rather than `feature`/`temp`, because most addons let the dispatch `tag` input
 override the branch-derived tag — pin the exact version rather than the tag. See
 [MOBILE-ON-DEMAND.md](ci/MOBILE-ON-DEMAND.md#testing-unmerged--unpublished-native-code).
