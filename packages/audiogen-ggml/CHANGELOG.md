@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`AUDIOGEN_COREML`); the prebuilds keep it disabled, so published behavior
   is unchanged until a build opts in.
 
+### Fixed
+
+- Mobile platform packages (`@qvac/audiogen-ggml-android-arm64`,
+`@qvac/audiogen-ggml-ios`) are no longer `os`-filtered `optionalDependencies`
+of the meta package. No build host ever reports a mobile `os`, so installers
+could never select them during a cross-build and mobile bundles failed
+verification with missing prebuilds. They now publish without install filters;
+mobile applications declare the target's platform package as a direct
+dependency pinned to the exact meta package version.
+
 ## [0.4.0] - 2026-09-11
 
 ### Added
