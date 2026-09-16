@@ -10,7 +10,11 @@
 #include <system_error>
 #include <vector>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <system_error>
+#else
+#include <cerrno>
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -40,32 +44,34 @@ namespace {
 ///
 /// The POSIX half takes @p modelPath byte-for-byte, which is the same sequence
 /// llama's loader will open; the Windows half has to re-encode it, and the
-/// comment on that branch says why.
+/// comment on that branch says why. Windows keeps the older two-step and none
+/// of the guarantees below: it has no `O_NONBLOCK`, and no `fstat`-on-a-handle
+/// reachable from the CRT layer ggml uses.
 ///
-/// The open and the regular-file test have to be race-free against each
-/// other, because this runs inside `LlamaModel`'s exclusive state lock: a
-/// name-then-name pair can be swapped for a FIFO in between, and `fopen` on a
-/// FIFO with no writer blocks forever, holding that lock for the life of the
-/// model. A hung network mount reaches the same place with nobody doing
-/// anything deliberate. On POSIX one `open(O_RDONLY | O_NONBLOCK)` followed by
-/// `fstat` on the resulting descriptor closes both: the flag makes the FIFO
-/// case return instead of blocking, and `fstat` describes the object that was
-/// actually opened rather than whatever the name points at by then.
+/// What the POSIX half guarantees, precisely, because this is the comment a
+/// later reader will rely on: **this function** cannot be made to block or to
+/// touch a device node. It does *not* make the fit as a whole race-free. The
+/// descriptor is closed before returning, and `common_fit_params` reopens the
+/// same path by name (and the loader again after it), so a FIFO swapped in
+/// after this returns still blocks fabric's own `fopen` with `fitMutex` and the
+/// exclusive state lock held. `O_NONBLOCK` also does nothing for a wedged NFS
+/// or SMB mount, where the VFS blocks in lookup before any flag is consulted.
+/// Closing those needs a timeout around the fitter, which this does not have.
+///
+/// Within that scope: the name is classified with `stat` *before* anything is
+/// opened, because `open` is not side-effect free on a device node —
+/// `/dev/watchdog` arms the watchdog timer, a tape device rewinds, a tty gets
+/// claimed — and the guard this replaced never opened a non-regular file.
+/// `fstat` on the descriptor is then the authoritative check, so a path swapped
+/// between the two steps is caught rather than trusted. `O_NONBLOCK` keeps a
+/// FIFO that slipped into that window from blocking, `O_NOCTTY` stops a tty
+/// path becoming this process's controlling terminal, and `O_CLOEXEC` keeps the
+/// descriptor out of a `child_process.spawn` racing on another thread.
 bool modelIsReadable(const std::string& modelPath) {
   if (modelPath.empty()) {
     return false;
   }
-#ifndef _WIN32
-  const int descriptor = ::open(modelPath.c_str(), O_RDONLY | O_NONBLOCK);
-  if (descriptor < 0) {
-    return false;
-  }
-  struct stat info = {};
-  const bool regular =
-      ::fstat(descriptor, &info) == 0 && S_ISREG(info.st_mode) != 0;
-  ::close(descriptor);
-  return regular;
-#else
+#ifdef _WIN32
   // Windows has no `O_NONBLOCK` and no `fstat`-on-a-handle equivalent reachable
   // from the CRT layer ggml uses, so this half stays a best-effort two-step and
   // the race above is not closed there. It is a narrower exposure than it looks
@@ -98,6 +104,24 @@ bool modelIsReadable(const std::string& modelPath) {
   }
   std::fclose(handle);
   return true;
+#else
+  struct stat named = {};
+  if (::stat(modelPath.c_str(), &named) != 0 || S_ISREG(named.st_mode) == 0) {
+    return false;
+  }
+  int descriptor = -1;
+  do {
+    descriptor =
+        ::open(modelPath.c_str(), O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+  } while (descriptor < 0 && errno == EINTR);
+  if (descriptor < 0) {
+    return false;
+  }
+  struct stat opened = {};
+  const bool regular =
+      ::fstat(descriptor, &opened) == 0 && S_ISREG(opened.st_mode) != 0;
+  ::close(descriptor);
+  return regular;
 #endif
 }
 
@@ -199,20 +223,48 @@ FitOutcome fitParamsToFreeDeviceMemory(
   // goes straight to a C API. fabric rejects a caller-set override list before
   // it reads past the first entry (`fit.cpp`), so this is unreachable today —
   // but that is fabric's invariant, not this file's, and the fold-back below
-  // already declines to trust fabric in the other direction.
-  buftOverrides.back() = {nullptr, nullptr};
+  // already declines to trust fabric in the other direction. Guarded on
+  // non-empty for the same reason: the width is a runtime call, and `back()` on
+  // an empty vector is UB rather than a bad fit.
+  const bool overridesTruncated =
+      params.tensor_buft_overrides.size() > buftOverrides.size();
+  if (!buftOverrides.empty()) {
+    buftOverrides.back() = {nullptr, nullptr};
+  }
+  if (overridesTruncated) {
+    // Silently dropping part of what the caller pinned is the one outcome this
+    // file must never produce quietly.
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[LlamaModel] %zu tensor buffer override(s) exceed the %zu the "
+            "fitter accepts; the excess is not passed to automatic placement "
+            "for \"%s\"\n",
+            params.tensor_buft_overrides.size(),
+            buftOverrides.size(),
+            modelPath.c_str()));
+  }
 
   // Same reasoning as `tensor_split` above, applied to the other array fabric
   // indexes by registered-device id. `fit_params_target` is
   // `std::vector<size_t>(llama_max_devices(), …)` (`common.h`), and fabric
   // reads `margins_s[id]` for `id < nd` with no clamp to that cap — so the
   // buffer it is handed has to be at least as wide as the widest thing it can
-  // index, on the same host where the `tensor_split` argument applies. Padded
-  // with the caller's own value rather than a zero, which would read as "leave
-  // no free memory on this device".
+  // index, on the same host where the `tensor_split` argument applies.
+  //
+  // Never padded with zero. fabric's step-1 checks are
+  // `projected_free >= margins[id]` (`fit.cpp`), so a zero margin always reads
+  // as "no changes needed" and returns SUCCESS having written nothing — a
+  // widened buffer would then silently turn the fit into a no-op, which is the
+  // exact outcome this widening exists to avoid. The caller's own last value
+  // extends the policy it chose; an empty vector falls back to fabric's default
+  // rather than to zero.
   std::vector<size_t> margins = params.fit_params_target;
   if (margins.size() < tensorSplit.size()) {
-    margins.resize(tensorSplit.size(), margins.empty() ? 0U : margins.back());
+    const size_t marginFill = margins.empty()
+                                  ? common_params{}.fit_params_target.front()
+                                  : margins.back();
+    margins.resize(tensorSplit.size(), marginFill);
   }
 
   // `common/fit.h`: `common_fit_params` "is NOT thread safe because it modifies

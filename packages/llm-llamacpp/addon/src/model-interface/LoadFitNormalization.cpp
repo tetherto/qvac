@@ -721,11 +721,17 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
           },
       .splitDevices =
           []() { return backend_selection::getSplitDeviceSelection(); },
-      // Byte-for-byte what fabric's `--device` did with the same name:
-      // `ggml_backend_load_all()`, look the name up, and treat an absent device
-      // or a CPU-type one as invalid (`parse_device_list`, common/arg.cpp).
+      // fabric's `--device` rule, minus its backend load. `parse_device_list`
+      // (common/arg.cpp) calls `ggml_backend_load_all()` first, which searches
+      // the executable path and the working directory — so a `libggml-*.so` or
+      // `.dll` dropped in the cwd is a candidate for `dlopen`. This addon pins
+      // that to a known directory with `ggml_backend_load_all_from_path`
+      // (LlamaLazyInitializeBackend.cpp), and `LlamaModel::init` constructs
+      // `LlamaBackendsHandle` before it calls `normalizeLoadForFit`, so the
+      // registry is already populated from the pinned path by the time this
+      // runs. Loading again here would reintroduce the unpinned search that
+      // this addon deliberately avoids.
       .resolveDeviceByName = [](const std::string& name) -> ggml_backend_dev_t {
-        ggml_backend_load_all();
         ggml_backend_dev_t device = ggml_backend_dev_by_name(name.c_str());
         if (device == nullptr ||
             ggml_backend_dev_type(device) == GGML_BACKEND_DEVICE_TYPE_CPU) {
@@ -1180,10 +1186,20 @@ NormalizedLoad normalizeLoadForFit(
       if (selected.name == "none") {
         params.devices.push_back(nullptr);
       } else {
+        if (!dependencies.resolveDeviceByName) {
+          // Distinct from "invalid device": the name was never looked up. A
+          // caller that assembled `NormalizationDependencies` without this
+          // member would otherwise see every `split-mode: none` GPU load fail
+          // as though the host were missing the device.
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InternalError),
+              "normalizeLoadForFit: resolveDeviceByName dependency is not set; "
+              "split-mode 'none' cannot pin a device by name without it\n");
+        }
         ggml_backend_dev_t device =
-            dependencies.resolveDeviceByName
-                ? dependencies.resolveDeviceByName(selected.name)
-                : nullptr;
+            dependencies.resolveDeviceByName(selected.name);
         if (device == nullptr) {
           throw qvac_errors::StatusError(
               ADDON_ID,

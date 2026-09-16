@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -6,6 +7,14 @@
 #include <string>
 #include <system_error>
 #include <vector>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 #include <ggml-backend.h>
 #include <gtest/gtest.h>
@@ -21,17 +30,50 @@ namespace {
 /// fabric an unreadable path is reported as `COMMON_PARAMS_FIT_STATUS_ERROR`
 /// rather than crashing, and the guard turns that into a specific warning and a
 /// skipped descent search.
+int currentPid() {
+#ifdef _WIN32
+  return _getpid();
+#else
+  return ::getpid();
+#endif
+}
+
+/// The name is unique per process and per instance, and the file is created
+/// exclusively without following symlinks. A fixed name in the shared temp
+/// directory lets another user on a shared runner pre-create it as a symlink
+/// and have the test truncate whatever it points at, and makes two test
+/// binaries collide with each other.
 class ReadableModelFile {
 public:
   ReadableModelFile() {
+    static std::atomic<unsigned> counter{0};
     path_ = (std::filesystem::temp_directory_path() /
-             "qvac-fit-to-free-device-memory.gguf")
+             ("qvac-fit-to-free-device-memory-" +
+              std::to_string(static_cast<unsigned long long>(currentPid())) +
+              "-" + std::to_string(counter.fetch_add(1)) + ".gguf"))
                 .string();
-    FILE* handle = std::fopen(path_.c_str(), "wb");
+#ifdef _WIN32
+    // "x" is C11 exclusive-create: fails if the path already exists. Windows
+    // has no O_NOFOLLOW equivalent here, but it also has no world-writable
+    // shared temp directory in the CI images, so exclusive creation is enough
+    // to stop the collision this guards against.
+    FILE* handle = std::fopen(path_.c_str(), "wbx");
     if (handle != nullptr) {
       std::fputs("GGUF", handle);
       std::fclose(handle);
     }
+#else
+    const int descriptor = ::open(
+        path_.c_str(),
+        O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+        S_IRUSR | S_IWUSR);
+    if (descriptor >= 0) {
+      const char kMagic[] = "GGUF";
+      const ssize_t written = ::write(descriptor, kMagic, sizeof(kMagic) - 1);
+      (void)written;
+      ::close(descriptor);
+    }
+#endif
   }
   ReadableModelFile(const ReadableModelFile&) = delete;
   ReadableModelFile& operator=(const ReadableModelFile&) = delete;
@@ -54,7 +96,11 @@ struct InvocationRecord {
   int calls = 0;
   bool tensorSplitWasNull = true;
   bool buftOverridesWasNull = true;
-  bool marginsWasNull = true;
+  /// The pointer itself, not whether it was null: `margins` is handed
+  /// `std::vector::data()` on a non-empty vector either way, so a null check
+  /// can never fail. What distinguishes the fixed code from the broken code is
+  /// whether it aliases the caller's `fit_params_target`.
+  const size_t* marginsSeen = nullptr;
   llama_model_tensor_buft_override firstOverrideSeen{nullptr, nullptr};
   int32_t nGpuLayersSeen = 0;
   uint32_t nCtxMinSeen = 0;
@@ -80,7 +126,7 @@ fitmem::LlamaFitInvoker recordingInvoker(
     record.calls++;
     record.tensorSplitWasNull = tensorSplit == nullptr;
     record.buftOverridesWasNull = buftOverrides == nullptr;
-    record.marginsWasNull = margins == nullptr;
+    record.marginsSeen = margins;
     record.nGpuLayersSeen = mparams->n_gpu_layers;
     record.nCtxMinSeen = nCtxMin;
     if (buftOverrides != nullptr) {
@@ -174,7 +220,8 @@ TEST(FitToFreeDeviceMemoryTest, FitterReceivesWritableBuffers) {
   ASSERT_EQ(record.calls, 1);
   EXPECT_FALSE(record.tensorSplitWasNull);
   EXPECT_FALSE(record.buftOverridesWasNull);
-  EXPECT_FALSE(record.marginsWasNull);
+  // Scratch, not the caller's targets — see MarginsAreScratchNotCallerTargets.
+  EXPECT_NE(record.marginsSeen, params.fit_params_target.data());
   EXPECT_EQ(record.firstOverrideSeen.pattern, nullptr);
   EXPECT_EQ(record.firstOverrideSeen.buft, nullptr);
   EXPECT_EQ(record.nCtxMinSeen, 4096U);
@@ -243,20 +290,33 @@ TEST(FitToFreeDeviceMemoryTest, TensorSplitScratchSpansTheWholeArray) {
   EXPECT_FLOAT_EQ(params.tensor_split[widthSeen - 1], 1.0F);
 }
 
-// The other array fabric indexes by registered-device id, and for the same
-// reason: `fit_params_target` is only `llama_max_devices()` wide, while fabric
-// reads `margins[id]` for every registered device with no clamp to that cap.
-TEST(FitToFreeDeviceMemoryTest, MarginsScratchIsAsWideAsTheTensorSplitScratch) {
+// The other array fabric indexes by registered-device id: `fit_params_target`
+// is only `llama_max_devices()` wide, while fabric reads `margins[id]` for
+// every registered device with no clamp to that cap.
+//
+// Probing the *width* — writing the last slot the helper must own — is
+// deliberately not done. On a regression `margins` is the caller's 16-entry
+// `fit_params_target`, so that write lands a kilobyte into unrelated heap;
+// `-fsanitize=address` is applied through `target_link_libraries` only in
+// test/unit/CMakeLists.txt, never `target_compile_options`, so the addon
+// sources are uninstrumented and nothing would catch it. The test would corrupt
+// the heap to assert something it cannot observe anyway, since the fake invoker
+// cannot see the buffer's length. What it can observe, in bounds, is whether
+// the buffer aliases the caller's vector — and that is exactly what a
+// regression to `params.fit_params_target.data()` would change. Width itself is
+// held by construction at the `resize` in the helper.
+TEST(FitToFreeDeviceMemoryTest, MarginsAreScratchNotCallerTargets) {
   const ReadableModelFile model;
   common_params params = fitEnabledParams();
-  const size_t width = std::size(common_params{}.tensor_split);
-  ASSERT_GT(width, params.fit_params_target.size());
-  size_t lastMarginSeen = 0;
+  ASSERT_FALSE(params.fit_params_target.empty());
+  const size_t callerMargin = params.fit_params_target.front();
+  const size_t* callerTargets = params.fit_params_target.data();
+  const size_t* marginsSeen = nullptr;
 
   fitmem::fitParamsToFreeDeviceMemory(
       params,
       model.path(),
-      [width, &lastMarginSeen](
+      [&marginsSeen](
           const char*,
           llama_model_params*,
           llama_context_params*,
@@ -266,17 +326,59 @@ TEST(FitToFreeDeviceMemoryTest, MarginsScratchIsAsWideAsTheTensorSplitScratch) {
           uint32_t,
           bool,
           ggml_log_level) {
-        // Reading the slot past the end of `fit_params_target` is the over-read
-        // under test; writing it proves the buffer is the helper's own.
-        margins[width - 1] = 4096;
-        lastMarginSeen = margins[width - 1];
+        marginsSeen = margins;
+        // Index 0 is in bounds for both the fixed and the broken buffer, so
+        // this is safe to write either way — and on the broken one it lands in
+        // the caller's own vector, which the assertions below catch.
+        margins[0] = 4096;
         buftOverrides[0] = {nullptr, nullptr};
         return COMMON_PARAMS_FIT_STATUS_SUCCESS;
       });
 
-  EXPECT_EQ(lastMarginSeen, 4096U);
-  // The scratch is the helper's, so the caller's targets are not rewritten.
+  EXPECT_NE(marginsSeen, callerTargets)
+      << "the fitter was handed the caller's fit_params_target rather than a "
+         "scratch copy";
+  EXPECT_EQ(params.fit_params_target.front(), callerMargin)
+      << "the fit rewrote the caller's margin policy";
   EXPECT_EQ(params.fit_params_target.size(), llama_max_devices());
+}
+
+// The widening must not change the policy the margins express. fabric's step-1
+// checks are `projected_free >= margins[id]`, so a zero-padded tail always
+// reads as "no changes needed" and the fit silently becomes a no-op.
+TEST(FitToFreeDeviceMemoryTest, WidenedMarginsAreNeverZero) {
+  const ReadableModelFile model;
+  common_params params = fitEnabledParams();
+  // The empty case is the one that used to pad with zero. Every slot takes the
+  // same fill when the caller supplied none, so index 0 — in bounds for any
+  // buffer the helper can hand over — carries the whole question.
+  params.fit_params_target.clear();
+  size_t firstMarginSeen = 0;
+
+  fitmem::fitParamsToFreeDeviceMemory(
+      params,
+      model.path(),
+      [&firstMarginSeen](
+          const char*,
+          llama_model_params*,
+          llama_context_params*,
+          float*,
+          llama_model_tensor_buft_override* buftOverrides,
+          size_t* margins,
+          uint32_t,
+          bool,
+          ggml_log_level) {
+        firstMarginSeen = margins[0];
+        buftOverrides[0] = {nullptr, nullptr};
+        return COMMON_PARAMS_FIT_STATUS_SUCCESS;
+      });
+
+  EXPECT_NE(firstMarginSeen, 0U)
+      << "a zero margin always reads as \"no changes needed\" in fabric's "
+         "step-1 checks, which would make the fit a silent no-op";
+  EXPECT_EQ(firstMarginSeen, common_params{}.fit_params_target.front())
+      << "an empty caller target list padded the margins with something other "
+         "than fabric's default";
 }
 
 // Fabric's two "no changes needed" early returns report SUCCESS having written

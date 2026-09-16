@@ -99,8 +99,11 @@ struct NormalizationDependencies {
   BackendResolver resolveBackend;
   /// Authoritative eligible device set for every multi-GPU split mode.
   std::function<backend_selection::SplitDeviceSelection()> splitDevices;
-  /// Name-to-handle lookup for `split-mode: none`. Defaulted so existing
-  /// callers and tests that pin by handle need not supply one.
+  /// Name-to-handle lookup for `split-mode: none`. **Required** whenever that
+  /// branch can be reached with a GPU backend — leaving it unset does not fall
+  /// through to a default, it fails the load, because there is no handle to
+  /// pin and no other source for one. Every other split mode takes handles
+  /// from `splitDevices` and never consults this.
   DeviceResolver resolveDeviceByName;
 };
 

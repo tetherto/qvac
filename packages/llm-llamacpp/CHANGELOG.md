@@ -64,7 +64,18 @@ than a local one.
   rejection rule is unchanged — an unknown name or a CPU device is still an
   invalid-argument error — but the lookup is no longer wired directly to the
   live ggml registry, which is what made this branch's backend policy
-  untestable on any machine without the exact GPU the test names.
+  untestable on any machine without the exact GPU the test names. It also no
+  longer triggers qvac-fabric's `ggml_backend_load_all()`, which searches the
+  executable path and the working directory; this addon loads backends from a
+  pinned directory before the fit runs, and that pin is now respected on this
+  branch too.
+- The model-path readability guard no longer opens anything that is not a
+  regular file. It classifies the path first and only then opens it, so a
+  character or block device named as a model — `/dev/watchdog`, a tape device, a
+  tty — is rejected rather than opened for inspection. The descriptor is also
+  opened close-on-exec, so a `child_process.spawn` racing on another thread
+  cannot inherit it, and an interrupted open is retried rather than reported as
+  an unreadable model.
 - The process-global ggml log callback is restored after every fit. The fitter
   installs a pointer to one of its own stack frames as the log user_data and
   restores it on the way out, but not exception-safely — it throws from inside
