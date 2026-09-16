@@ -5,10 +5,7 @@ name: General CI/CD (native addons, nx)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/asr-ggml/**"
       - "packages/audiogen-ggml/**"
