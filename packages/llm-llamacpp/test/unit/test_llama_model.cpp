@@ -16,6 +16,7 @@
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ScopeGuard.hpp"
 
 namespace fs = std::filesystem;
 
@@ -741,32 +742,63 @@ TEST_F(LlamaModelTest, OrdinaryLoadRetainsCanonicalNormalizationSnapshot) {
 // say the placement had been skipped — which is the whole complaint in the bug
 // report. This drives a real load and asserts the fitter was reached.
 //
-// The fixture pins `gpu_layers`, so fabric declines to move it and the fit
-// reports "does not fit" on every platform. That is the deterministic outcome
-// worth asserting: reaching the verdict at all is what was broken.
+// Which verdict comes back is not deterministic — fabric only reaches its
+// "already set by user" bail-outs when it actually needs to move something, so
+// a small model on a roomy host reports SUCCESS having changed nothing, while a
+// constrained one reports FAILURE. What is deterministic, and what was broken,
+// is that a verdict is reached at all.
 TEST_F(LlamaModelTest, OrdinaryLoadReachesTheAutomaticPlacement) {
   auto config = config_files;
   config["verbosity"] = "2"; // INFO
   const auto priorVerbosity =
       qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
 
-  testing::internal::CaptureStdout();
-  LlamaModel model = createModelWithConfig(std::move(config));
-  model.waitForLoadInitialization();
-  const std::string logged = testing::internal::GetCapturedStdout();
-  qvac_lib_inference_addon_llama::logging::g_verbosityLevel = priorVerbosity;
+  std::string logged;
+  {
+    // Restore under RAII: if the load throws, an un-ended capture makes the
+    // next CaptureStdout() in this binary abort with "Only one stdout capturer
+    // can exist at a time", taking unrelated tests with it.
+    testing::internal::CaptureStdout();
+    ScopeGuard captureGuard(
+        [&logged, priorVerbosity] {
+          if (logged.empty()) {
+            logged = testing::internal::GetCapturedStdout();
+          }
+          qvac_lib_inference_addon_llama::logging::g_verbosityLevel =
+              priorVerbosity;
+        },
+        "end-stdout-capture");
 
-  ASSERT_TRUE(model.isLoaded());
-  EXPECT_NE(logged.find("automatic placement"), std::string::npos)
-      << "the fitter was never reached; captured log:\n"
-      << logged;
+    LlamaModel model = createModelWithConfig(std::move(config));
+    model.waitForLoadInitialization();
+    logged = testing::internal::GetCapturedStdout();
 
-  // The fit ran against scratch, so the parameters the model reports are still
-  // the ones that were asked for.
-  EXPECT_EQ(
-      std::to_string(model.getCommonParams().n_gpu_layers),
-      std::string(test_common::getTestGpuLayers()));
-  EXPECT_TRUE(model.getCommonParams().fit_params);
+    ASSERT_TRUE(model.isLoaded());
+    // One of the verdicts the fitter can report, and explicitly *not* the
+    // early-return branch. A bare "automatic placement" substring would also
+    // match "skipping automatic placement: no readable model file", so a
+    // regression that stopped reaching the fitter at all — the Windows
+    // non-ASCII path case, say — would leave this test green while printing the
+    // very message it exists to exclude.
+    const bool reachedAVerdict =
+        logged.find("automatic placement applied") != std::string::npos ||
+        logged.find("automatic placement did not apply") != std::string::npos ||
+        logged.find("automatic placement hit an internal error") !=
+            std::string::npos;
+    EXPECT_TRUE(reachedAVerdict)
+        << "the fitter was never reached; captured log:\n"
+        << logged;
+    EXPECT_EQ(logged.find("skipping automatic placement"), std::string::npos)
+        << "the fit was skipped before it ran; captured log:\n"
+        << logged;
+
+    // A pinned `gpu_layers` survives the fit whatever verdict it reached:
+    // fabric only rewrites a parameter the caller left at its default.
+    EXPECT_EQ(
+        std::to_string(model.getCommonParams().n_gpu_layers),
+        std::string(test_common::getTestGpuLayers()));
+    EXPECT_TRUE(model.getCommonParams().fit_params);
+  }
 }
 
 TEST_F(LlamaModelTest, OmittedContextSnapshotMatchesAllocatedContext) {

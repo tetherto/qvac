@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <iterator>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -86,10 +88,19 @@ fitmem::LlamaFitInvoker recordingInvoker(
       buftOverrides[1] = {nullptr, nullptr};
     }
     if (tensorSplit != nullptr) {
+      // Several entries, not just [0]: the fold-back copies the whole array, so
+      // a wrong length or an off-by-one on the seed slice has to be visible.
       tensorSplit[0] = 0.25F;
+      tensorSplit[1] = 0.5F;
+      tensorSplit[2] = 0.25F;
     }
     mparams->n_gpu_layers = 11;
     cparams->n_ctx = 2048;
+    // The other two fields the fitter can move. Without sentinels here the
+    // fold-back lines carrying them never run against a value that
+    // distinguishes a correct copy from a missing one.
+    cparams->prefetch_weights = true;
+    cparams->moe_cache_size = 7340032; // 7 MiB
     return status;
   };
 }
@@ -183,13 +194,87 @@ TEST(FitToFreeDeviceMemoryTest, SuccessIsFoldedBackIntoParams) {
   EXPECT_TRUE(outcome.applied);
   EXPECT_EQ(params.n_gpu_layers, 11);
   EXPECT_EQ(params.n_ctx, 2048);
+  // All six fields the fitter can move, so none of the fold-back lines is
+  // carried by an untested assumption.
+  EXPECT_TRUE(params.prefetch_weights);
+  EXPECT_EQ(params.moe_cache_size, 7340032U);
   EXPECT_FLOAT_EQ(params.tensor_split[0], 0.25F);
+  EXPECT_FLOAT_EQ(params.tensor_split[1], 0.5F);
+  EXPECT_FLOAT_EQ(params.tensor_split[2], 0.25F);
   // Copied only as far as the terminator, so the unused tail of the 4096-entry
   // scratch never reaches `params`.
   ASSERT_EQ(params.tensor_buft_overrides.size(), 2U);
   EXPECT_STREQ(
       params.tensor_buft_overrides[0].pattern, "blk\\.[0-9]+\\.ffn_.*_exps");
   EXPECT_EQ(params.tensor_buft_overrides[1].pattern, nullptr);
+}
+
+// The scratch is as wide as the array fabric writes through, not as wide as
+// `llama_max_devices()`: fabric writes one entry per registered device and
+// nothing truncates that to the 16-device cap.
+TEST(FitToFreeDeviceMemoryTest, TensorSplitScratchSpansTheWholeArray) {
+  const ReadableModelFile model;
+  common_params params = fitEnabledParams();
+  size_t widthSeen = 0;
+
+  fitmem::fitParamsToFreeDeviceMemory(
+      params,
+      model.path(),
+      [&widthSeen](
+          const char*,
+          llama_model_params*,
+          llama_context_params*,
+          float* tensorSplit,
+          llama_model_tensor_buft_override* buftOverrides,
+          size_t*,
+          uint32_t,
+          bool,
+          ggml_log_level) {
+        // Write the last slot the production buffer must own. A narrower
+        // scratch would make this a heap overflow rather than a pass.
+        widthSeen = std::size(common_params{}.tensor_split);
+        tensorSplit[widthSeen - 1] = 1.0F;
+        buftOverrides[0] = {nullptr, nullptr};
+        return COMMON_PARAMS_FIT_STATUS_SUCCESS;
+      });
+
+  ASSERT_GT(widthSeen, llama_max_devices());
+  EXPECT_FLOAT_EQ(params.tensor_split[widthSeen - 1], 1.0F);
+}
+
+// An invoker that returns SUCCESS without terminating the override list would,
+// if adopted, trip common_model_params_to_llama's GGML_ASSERT and abort the
+// process. Decline instead.
+TEST(FitToFreeDeviceMemoryTest, UnterminatedFitResultIsNotAdopted) {
+  const ReadableModelFile model;
+  common_params params = fitEnabledParams();
+  const int32_t gpuLayersBefore = params.n_gpu_layers;
+
+  const auto outcome = fitmem::fitParamsToFreeDeviceMemory(
+      params,
+      model.path(),
+      [](const char*,
+         llama_model_params* mparams,
+         llama_context_params*,
+         float*,
+         llama_model_tensor_buft_override* buftOverrides,
+         size_t*,
+         uint32_t,
+         bool,
+         ggml_log_level) {
+        for (size_t index = 0; index < llama_max_tensor_buft_overrides();
+             ++index) {
+          buftOverrides[index] = {
+              "blk\\.0\\.ffn_up_exps", ggml_backend_cpu_buffer_type()};
+        }
+        mparams->n_gpu_layers = 11;
+        return COMMON_PARAMS_FIT_STATUS_SUCCESS;
+      });
+
+  EXPECT_TRUE(outcome.invoked);
+  EXPECT_FALSE(outcome.applied);
+  EXPECT_EQ(params.n_gpu_layers, gpuLayersBefore);
+  EXPECT_TRUE(params.tensor_buft_overrides.empty());
 }
 
 // The regression this whole helper exists for. common_fit_params restores the
@@ -284,17 +369,31 @@ TEST(FitToFreeDeviceMemoryTest, UnterminatedCallerOverridesAreTerminated) {
 
 // The fitter installs a pointer to one of its own stack frames as the
 // process-global log user_data and its restore is not exception safe. This
-// addon installs a global callback of its own, so anything left behind would
-// send every later log line from every live model through a freed frame.
-TEST(FitToFreeDeviceMemoryTest, LogCallbackIsRestored) {
+// addon installs a global callback of its own, exactly once per process behind
+// a `g_initialized` early return, so anything left behind would send every
+// later log line from every live model through a freed frame — and nothing
+// re-installs it.
+//
+// The same reason this test has to put back whatever was installed on entry
+// rather than resetting to llama's default: every test that runs after it in
+// this binary would otherwise lose the addon's log routing, including
+// `OrdinaryLoadReachesTheAutomaticPlacement`, which asserts on captured log
+// output.
+class FitLoggerRestoreTest : public ::testing::Test {
+protected:
+  void SetUp() override { llama_log_get(&entryCallback_, &entryUserData_); }
+  void TearDown() override { llama_log_set(entryCallback_, entryUserData_); }
+
+private:
+  ggml_log_callback entryCallback_ = nullptr;
+  void* entryUserData_ = nullptr;
+};
+
+TEST_F(FitLoggerRestoreTest, LogCallbackIsRestoredOnReturn) {
   const ReadableModelFile model;
   common_params params = fitEnabledParams();
 
-  static int sentinelCalls = 0;
-  sentinelCalls = 0;
-  const auto sentinel = [](ggml_log_level, const char*, void*) {
-    sentinelCalls++;
-  };
+  const auto sentinel = [](ggml_log_level, const char*, void*) {};
   int sentinelUserData = 0;
   llama_log_set(sentinel, &sentinelUserData);
 
@@ -310,7 +409,7 @@ TEST(FitToFreeDeviceMemoryTest, LogCallbackIsRestored) {
          uint32_t,
          bool,
          ggml_log_level) {
-        // What the fitter does and then fails to undo when it throws.
+        // What the fitter does to the global logger and then restores.
         llama_log_set(nullptr, nullptr);
         return COMMON_PARAMS_FIT_STATUS_FAILURE;
       });
@@ -320,6 +419,45 @@ TEST(FitToFreeDeviceMemoryTest, LogCallbackIsRestored) {
   llama_log_get(&restoredCallback, &restoredUserData);
   EXPECT_EQ(restoredUserData, &sentinelUserData);
   EXPECT_NE(restoredCallback, nullptr);
+}
 
-  llama_log_set(nullptr, nullptr);
+// The path the production restore was originally missing: fabric's own restore
+// is skipped when it throws, and a straight-line `llama_log_set` after the call
+// would be skipped too. Only an exception escaping the *invoker* reaches this —
+// `common_fit_params` catches everything derived from `std::exception`, so in
+// production this is the empty-seam / alternate-invoker case.
+TEST_F(FitLoggerRestoreTest, LogCallbackIsRestoredWhenTheInvokerThrows) {
+  const ReadableModelFile model;
+  common_params params = fitEnabledParams();
+
+  const auto sentinel = [](ggml_log_level, const char*, void*) {};
+  int sentinelUserData = 0;
+  llama_log_set(sentinel, &sentinelUserData);
+
+  EXPECT_THROW(
+      {
+        fitmem::fitParamsToFreeDeviceMemory(
+            params,
+            model.path(),
+            [](const char*,
+               llama_model_params*,
+               llama_context_params*,
+               float*,
+               llama_model_tensor_buft_override*,
+               size_t*,
+               uint32_t,
+               bool,
+               ggml_log_level) -> common_params_fit_status {
+              llama_log_set(nullptr, nullptr);
+              throw std::runtime_error("invoker failed mid-fit");
+            });
+      },
+      std::runtime_error);
+
+  ggml_log_callback restoredCallback = nullptr;
+  void* restoredUserData = nullptr;
+  llama_log_get(&restoredCallback, &restoredUserData);
+  EXPECT_EQ(restoredUserData, &sentinelUserData)
+      << "an exception escaping the fitter left its logger installed";
+  EXPECT_NE(restoredCallback, nullptr);
 }

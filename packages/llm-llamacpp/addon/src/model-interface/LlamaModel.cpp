@@ -213,8 +213,9 @@ void LlamaModel::init(bool acquireLock) {
   //
   // The two conditions are the exact expressions `initFromConfig` branches on,
   // and together they select its `common_init_from_params` arm. The streamed
-  // arms have no on-disk GGUF for the fitter to read, and the sharded arm is
-  // fitted inside inference-addon-cpp, so neither is touched here.
+  // arms have no on-disk GGUF for the fitter to read, and the sharded arm will
+  // be fitted inside inference-addon-cpp once #4446 lands as port 1.5.0 — at
+  // this revision it runs no fit at all — so neither is touched here.
   const bool singleFileFromDisk = !snap->asyncWeightsLoader_.isStreaming() &&
                                   snap->shards_.gguf_files.empty();
   if (singleFileFromDisk) {
@@ -243,22 +244,45 @@ void LlamaModel::init(bool acquireLock) {
   // caller asked for rather than what has already happened. `params` is passed
   // by reference and `common_init_from_params` writes model-derived sampler
   // settings back into it, so this cannot be done on a copy.
-  const bool fitRequested = params.fit_params;
-  if (singleFileFromDisk) {
-    params.fit_params = false;
+  //
+  // KNOWN DIVERGENCE: `fit_params` is not only the fit gate. fabric also reads
+  // it in `common_context_params_to_llama` as
+  // `cparams.moe_cache_auto = params.fit_params && params.moe_cache_auto`, and
+  // `common_init_result` builds cparams *before* it consults the gate — so on
+  // the unmodified path the load always reached `llama_init_from_model` with
+  // `moe_cache_auto` as the caller set it. Clearing the flag here therefore
+  // also clears `moe_cache_auto`, which is the flag that turns "the budget
+  // cannot hold one routed layer's working set" from a throw into a logged
+  // "cache inactive" (src/llama-moe-cache.cpp). The two meanings cannot be
+  // separated from outside fabric: with the gate set, fabric re-fits in place
+  // over the placement just adopted here, which is the bug this file exists to
+  // avoid. The exposure is narrow — the fitted budget is a fraction of total
+  // expert memory and normally far exceeds one layer's slices — but it is a
+  // removed safety valve, and separating the two meanings needs a fabric-side
+  // change.
+  common_init_result_ptr llamaInit;
+  {
+    const bool fitRequested = params.fit_params;
+    if (singleFileFromDisk) {
+      params.fit_params = false;
+    }
+    // Scoped to the call and RAII rather than a trailing assignment:
+    // `initFromConfig` throws `StatusError` on an unreadable or invalid model,
+    // and the restore has to land before `createContext` copies `params`.
+    ScopeGuard fitParamsGuard(
+        [&params, fitRequested] { params.fit_params = fitRequested; },
+        "restore-fit-params");
+
+    llamaInit = initFromConfig(
+        params,
+        modelPath,
+        streamedFiles,
+        snap->shards_,
+        loadingContext_,
+        snap->asyncWeightsLoader_.isStreaming(),
+        ADDON_ID,
+        errorWhenFailed);
   }
-
-  common_init_result_ptr llamaInit = initFromConfig(
-      params,
-      modelPath,
-      streamedFiles,
-      snap->shards_,
-      loadingContext_,
-      snap->asyncWeightsLoader_.isStreaming(),
-      ADDON_ID,
-      errorWhenFailed);
-
-  params.fit_params = fitRequested;
 
   if (!snap.promoteToWrite()) {
     return;

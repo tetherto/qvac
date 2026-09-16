@@ -6,6 +6,12 @@
 #include <common/common.h>
 #include <common/fit.h>
 
+// TODO(QVAC-25039 follow-up): delete this header and its .cpp once
+// llm-llamacpp moves to qvac-lib-inference-addon-cpp 1.5.0 (#4446 plus its
+// registry publish and baseline bump). That port gains the same scratch-buffer
+// fit inside `initFromConfig`, for every loader rather than just the
+// single-file one, and this local copy exists only because a port change
+// cannot reach this package without that republish.
 namespace fit_to_free_device_memory {
 
 /// @brief Seam over qvac-fabric's `common_fit_params`.
@@ -29,8 +35,10 @@ struct FitOutcome {
   /// case `status` is meaningless.
   bool invoked = false;
   common_params_fit_status status = COMMON_PARAMS_FIT_STATUS_ERROR;
-  /// The fit succeeded and its placement was folded into `params`. Nothing was
-  /// written to `params` when this is false.
+  /// The fit succeeded and its placement was folded into `params`. No
+  /// *placement* is written when this is false — but `tensor_buft_overrides`
+  /// may still have been normalised in place, since an unterminated override
+  /// list has to be terminated before the fitter can be handed it at all.
   bool applied = false;
 };
 

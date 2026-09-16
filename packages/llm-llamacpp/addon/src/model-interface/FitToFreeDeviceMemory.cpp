@@ -2,14 +2,18 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <iterator>
 #include <limits>
 #include <mutex>
+#include <system_error>
 #include <vector>
 
 #include <common/log.h>
+#include <ggml.h>
 
 #include "utils/LoggingMacros.hpp"
+#include "utils/ScopeGuard.hpp"
 
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
@@ -20,20 +24,30 @@ namespace {
 
 /// Whether the fitter can read @p modelPath at all.
 ///
-/// Not a convenience check. `common_fit_params` segfaults on a path it cannot
-/// open: `gguf_init_from_file` logs the failure but the fit path then
-/// dereferences the null model. packages/model-fit guards its own call the same
-/// way (addon/src/fit/FitParams.cpp). This addon's own existence check does not
-/// happen until `initFromConfig`, which is after the fit, so the guard has to
-/// be here.
+/// Defensive rather than crash-prevention: at the pinned fabric an unreadable
+/// path is already handled — `common_get_device_memory_data_impl` null-checks
+/// the load and throws (common/fit.cpp), which `common_fit_params` maps to
+/// `COMMON_PARAMS_FIT_STATUS_ERROR`. What this buys is a specific warning and a
+/// skipped descent search instead of an error-level report of a fault that was
+/// never the fitter's.
+///
+/// `ggml_fopen`, not `std::fopen`: on Windows the former converts the UTF-8
+/// path to UTF-16 (`_wfopen`) while the latter goes through the ANSI code page,
+/// so a model under a non-ASCII path — `C:\Users\Müller\models\…`, any
+/// CJK or Cyrillic directory — is openable by llama's loader and not by a plain
+/// `fopen`. Getting that wrong here would skip the fit on exactly those paths
+/// and reinstate the unfitted load this file exists to prevent. The
+/// `is_regular_file` test comes first because `fopen` succeeds on a directory
+/// on Linux and macOS, and blocks indefinitely on a FIFO.
 bool modelIsReadable(const std::string& modelPath) {
   if (modelPath.empty()) {
     return false;
   }
-  // `fopen` rather than `std::filesystem::exists`: the question is whether the
-  // fitter can read the bytes, not whether a directory entry exists. A path
-  // that exists but cannot be opened crashes it just the same.
-  FILE* handle = std::fopen(modelPath.c_str(), "rb");
+  std::error_code ignored;
+  if (!std::filesystem::is_regular_file(modelPath, ignored)) {
+    return false;
+  }
+  FILE* handle = ggml_fopen(modelPath.c_str(), "rb");
   if (handle == nullptr) {
     return false;
   }
@@ -91,7 +105,8 @@ FitOutcome fitParamsToFreeDeviceMemory(
 
   // `common_model_params_to_llama` asserts that a non-empty override list ends
   // in a null entry and aborts the process otherwise. Normalise rather than let
-  // an unterminated list take the process down.
+  // an unterminated list take the process down. Note this mutates @p params
+  // whatever the fit then decides — see the note on `FitOutcome::applied`.
   if (!params.tensor_buft_overrides.empty() &&
       params.tensor_buft_overrides.back().pattern != nullptr) {
     params.tensor_buft_overrides.push_back({nullptr, nullptr});
@@ -107,10 +122,15 @@ FitOutcome fitParamsToFreeDeviceMemory(
   // placement, or every MoE expert pinned to CPU, in `params` for the load
   // below to pick up. Seeded from `params` so a field the fitter never writes
   // (tensor_split with a single device) still round-trips the caller's value.
-  const size_t maxDevices = llama_max_devices();
+  //
+  // `tensor_split` is sized to the whole `common_params` array rather than to
+  // `llama_max_devices()`: fabric writes one entry per *registered* device
+  // (`set_ngl_tensor_split_tbo`, common/fit.cpp) and nothing truncates that
+  // count to the 16-device cap, so a host with more devices than the cap would
+  // write past a 16-wide buffer. Matching fabric's own call site, which passes
+  // the 128-wide array, makes the buffer as wide as anything it can write.
   std::vector<float> tensorSplit(
-      std::begin(params.tensor_split),
-      std::begin(params.tensor_split) + maxDevices);
+      std::begin(params.tensor_split), std::end(params.tensor_split));
   std::vector<llama_model_tensor_buft_override> buftOverrides(
       llama_max_tensor_buft_overrides());
   std::copy_n(
@@ -121,25 +141,44 @@ FitOutcome fitParamsToFreeDeviceMemory(
   // `common/fit.h`: `common_fit_params` "is NOT thread safe because it modifies
   // the global llama logger state" — it installs a pointer to one of its own
   // stack frames as the process-global log user_data for the duration of the
-  // call. This guards the call, not the load: unlike @qvac/model-fit, which
-  // serialises whole fits behind `g_fitMutex`, this addon keeps many models
-  // alive concurrently and cannot serialise their loads.
+  // call, and its inner probe repeats that save/restore on every iteration, so
+  // two concurrent fits would corrupt each other's chain. The lock therefore
+  // cannot be narrowed below the whole call.
+  //
+  // Cost model, because it is not free: concurrent single-file loads have their
+  // fit phases fully serialised, and that window is now a complete descent
+  // search rather than the single probe an unpinned load used to abort after.
+  // It is still strictly safer than the status quo, where the same fit ran from
+  // `common_init_from_params` with no lock at all. Removing the serialisation
+  // needs thread-local logger state in fabric.
+  //
+  // Narrower than @qvac/model-fit's `g_fitMutex`, which guards whole fits:
+  // `FitParams.cpp` notes that this addon keeps many models alive concurrently
+  // and therefore cannot serialise their loads.
   static std::mutex
       fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
-  // The fitter restores the logger on the way out, but not exception-safely:
-  // it throws from inside that window and the handler in `common_fit_params`
-  // maps the throw to a status rather than putting the logger back. This addon
-  // installs a process-global callback of its own (LlamaLazyInitializeBackend),
-  // so without an unconditional restore every subsequent log line from every
-  // live model would go through a freed frame. A no-op when the fitter did
-  // restore it.
-  ggml_log_callback priorLogCallback = nullptr;
-  void* priorLogUserData = nullptr;
-
   {
     const std::lock_guard<std::mutex> fitLock(fitMutex);
+
+    // The fitter restores the logger on the way out, but not exception-safely:
+    // it throws from inside that window and the handler in `common_fit_params`
+    // maps the throw to a status rather than putting the logger back. This
+    // addon installs a process-global callback of its own
+    // (LlamaLazyInitializeBackend), so anything left behind would send every
+    // later log line from every live model through a freed frame. The guard
+    // rather than a trailing call, so an exception escaping the invoker — a
+    // `std::bad_function_call` from an empty seam, or a test double — cannot
+    // skip it. A no-op when the fitter did restore it.
+    ggml_log_callback priorLogCallback = nullptr;
+    void* priorLogUserData = nullptr;
     llama_log_get(&priorLogCallback, &priorLogUserData);
+    ScopeGuard loggerGuard(
+        [priorLogCallback, priorLogUserData] {
+          llama_log_set(priorLogCallback, priorLogUserData);
+        },
+        "fit-logger-restore");
+
     outcome.invoked = true;
     outcome.status = invoker(
         modelPath.c_str(),
@@ -152,25 +191,50 @@ FitOutcome fitParamsToFreeDeviceMemory(
         params.prefetch_weights_auto,
         params.verbosity >= LOG_LEVEL_DEBUG ? GGML_LOG_LEVEL_DEBUG
                                             : GGML_LOG_LEVEL_ERROR);
-    llama_log_set(priorLogCallback, priorLogUserData);
   }
 
   if (outcome.status != COMMON_PARAMS_FIT_STATUS_SUCCESS) {
-    // FAILURE means "no placement fits", and the caller's own configuration is
-    // the right thing to fall back to — fabric has already logged the reason,
-    // which is usually that the caller pinned one of the parameters the fitter
-    // would have had to move. ERROR is an internal fault, so nothing it
-    // produced is trustworthy; say so rather than let it pass as quietly as a
-    // routine "does not fit".
+    // WARNING, not INFO: this library's default verbosity is ERROR, and
+    // `LoadFitNormalization.cpp` already settled the same question the same way
+    // — a notice carrying a real OOM consequence must not be invisible by
+    // default. Not "found nothing to change":
+    // `COMMON_PARAMS_FIT_STATUS_FAILURE` covers both "a parameter you pinned
+    // stopped the fit" and "no placement fits at all" (common/fit.h), and
+    // fabric has already logged which.
     QLOG_IF(
         outcome.status == COMMON_PARAMS_FIT_STATUS_ERROR ? Priority::ERROR
-                                                         : Priority::INFO,
+                                                         : Priority::WARNING,
         string_format(
-            "[LlamaModel] automatic placement %s; loading \"%s\" as requested "
-            "instead\n",
+            "[LlamaModel] automatic placement %s; loading \"%s\" with the "
+            "configuration as given\n",
             outcome.status == COMMON_PARAMS_FIT_STATUS_ERROR
                 ? "hit an internal error"
-                : "found nothing to change",
+                : "did not apply (see the qvac-fabric message above for why)",
+            modelPath.c_str()));
+    return outcome;
+  }
+
+  // Copy only as far as the terminator. The fitter needs
+  // `llama_max_tensor_buft_overrides()` writable entries while it runs, but the
+  // loader reads only up to the null entry, and `params` is copied by value
+  // into every per-slot context and kept for the model's lifetime.
+  const auto terminator = std::find_if(
+      buftOverrides.begin(),
+      buftOverrides.end(),
+      [](const llama_model_tensor_buft_override& candidate) {
+        return candidate.pattern == nullptr;
+      });
+  if (terminator == buftOverrides.end()) {
+    // Unreachable with the real fitter, which always writes a terminator and
+    // throws rather than overflow. Reachable through the seam, and adopting an
+    // unterminated list would trip `common_model_params_to_llama`'s
+    // GGML_ASSERT — a process abort. Decline the result instead, which is what
+    // the rest of this function does with output it cannot trust.
+    QLOG_IF(
+        Priority::ERROR,
+        string_format(
+            "[LlamaModel] automatic placement returned an unterminated "
+            "override list; loading \"%s\" with the configuration as given\n",
             modelPath.c_str()));
     return outcome;
   }
@@ -187,23 +251,13 @@ FitOutcome fitParamsToFreeDeviceMemory(
   params.moe_cache_size = cparams.moe_cache_size;
   std::copy(
       tensorSplit.begin(), tensorSplit.end(), std::begin(params.tensor_split));
-
-  // Copy only as far as the terminator. The fitter needs
-  // `llama_max_tensor_buft_overrides()` writable entries while it runs, but the
-  // loader reads only up to the null entry, and `params` is copied by value
-  // into every per-slot context and kept for the model's lifetime.
-  const auto terminator = std::find_if(
-      buftOverrides.begin(),
-      buftOverrides.end(),
-      [](const llama_model_tensor_buft_override& candidate) {
-        return candidate.pattern == nullptr;
-      });
-  params.tensor_buft_overrides.assign(
-      buftOverrides.begin(),
-      terminator == buftOverrides.end() ? terminator : terminator + 1);
+  params.tensor_buft_overrides.assign(buftOverrides.begin(), terminator + 1);
 
   // The complaint that started QVAC-25039 was that a skipped placement was
   // indistinguishable from an applied one in the log. State what was chosen.
+  // INFO rather than WARNING because this is the intended path, not an
+  // override of something the caller asked for; the non-success branch above
+  // is the one that has to be visible by default.
   QLOG_IF(
       Priority::INFO,
       string_format(
@@ -211,9 +265,7 @@ FitOutcome fitParamsToFreeDeviceMemory(
           "n_ctx=%d, %zu tensor buffer override(s)\n",
           params.n_gpu_layers,
           params.n_ctx,
-          params.tensor_buft_overrides.empty()
-              ? 0U
-              : params.tensor_buft_overrides.size() - 1U));
+          params.tensor_buft_overrides.size() - 1U));
 
   outcome.applied = true;
   return outcome;

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Sharded and streamed loads are deliberately untouched: neither ran the fit
+before and neither runs it now. Sharded placement is fixed in
+`inference-addon-cpp`, which owns the split loader.
+
 ### Fixed
 
 - qvac-fabric's automatic GPU/CPU placement (`--fit`) now runs when a single-file
