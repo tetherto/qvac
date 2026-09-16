@@ -63,11 +63,48 @@ function unwrapLoggingModule(resolved: unknown): unknown {
   return resolved
 }
 
-function assertLoggingModuleShape(modelType: string, candidate: unknown): PluginLoggingModule {
+/**
+ * What a logging module actually turned out to be. A plugin that hands over a
+ * resolver produces its module at load time from an addon the engine does not
+ * control, so a rejection has to carry the evidence: saying only that
+ * `setLogger` is missing leaves an operator with nothing to act on.
+ */
+function describeLoggingModule(value: unknown): string {
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  const type = typeof value
+  if (type !== 'object' && type !== 'function') return type
+  let keys: string[]
+  try {
+    keys = Object.keys(value as object)
+  } catch {
+    return `${type} whose keys could not be read`
+  }
+  const shown = keys.slice(0, 12).join(', ')
+  const rest = keys.length > 12 ? `, +${keys.length - 12} more` : ''
+  const setLogger = typeof (value as Record<string, unknown>)['setLogger']
+  const inner = (value as Record<string, unknown>)['default']
+  const innerSetLogger =
+    inner && (typeof inner === 'object' || typeof inner === 'function')
+      ? typeof (inner as Record<string, unknown>)['setLogger']
+      : undefined
+  return (
+    `${type} { ${shown}${rest} }, setLogger: ${setLogger}` +
+    (innerSetLogger === undefined ? '' : `, default.setLogger: ${innerSetLogger}`)
+  )
+}
+
+function assertLoggingModuleShape(
+  modelType: string,
+  candidate: unknown,
+  source?: string
+): PluginLoggingModule {
   if (!candidate || typeof (candidate as Record<string, unknown>)['setLogger'] !== 'function') {
     throw new PluginLoggingInvalidError(
       modelType,
-      'logging.module must have a setLogger(callback) function'
+      'logging.module must have a setLogger(callback) function' +
+        (source ? `; resolved from ${source}` : '') +
+        ` but got ${describeLoggingModule(candidate)}`
     )
   }
   return candidate as PluginLoggingModule
@@ -186,7 +223,19 @@ export async function ensureAddonLoggerReady(plugin: QvacPlugin): Promise<void> 
     // the whole cleanup.
     if (!isNamespaceClaimed(namespace)) return
 
-    const loggingModule = assertLoggingModuleShape(plugin.modelType, resolved)
+    // DEBUG (temporary): when the logging module comes back unusable, look at
+    // the addon's binding directly. addonLogging reads setLogger off it, so
+    // this separates "the binding has no setLogger" from "the JS wrapper lost
+    // it". Removed before this lands.
+    let bindingDebug = ''
+    if (!resolved || typeof (resolved as Record<string, unknown>)['setLogger'] !== 'function') {
+      bindingDebug = ` [binding: ${await describeBindingForDebug(plugin.addonPackage)}]`
+    }
+    const loggingModule = assertLoggingModuleShape(
+      plugin.modelType,
+      resolved,
+      `${plugin.addonPackage}/addonLogging (namespace ${namespace})${bindingDebug}`
+    )
 
     for (const [wiredNamespace, wiredModule] of lazyAddonLoggers) {
       if (wiredModule === loggingModule && wiredNamespace !== namespace) {
@@ -311,4 +360,97 @@ export function clearPlugins(): void {
   for (const [namespace, loggingModule] of lazyModules) {
     releaseLoggerSafely(loggingModule, `namespace ${namespace}`, 'clearPlugins')
   }
+}
+
+/**
+ * DEBUG (temporary): report which files the addon's specifiers actually
+ * resolve to, and what each module contains. Carried in the thrown error
+ * because the engine logger does not cross the worker boundary in CI.
+ */
+async function describeBindingForDebug(addonPackage: string): Promise<string> {
+  const parts: string[] = []
+  const meta = import.meta as unknown as { resolve?: (s: string) => string; url?: string }
+  parts.push(`registry-url=${meta.url ?? 'unknown'}`)
+  // Which copy of the addon is on disk here: a registry install, or a link to
+  // the in-repo package (which ships no prebuilds and no platform deps).
+  try {
+    const fs = await import('bare-fs')
+    const urlMod = await import('bare-url')
+    const pkgUrl = meta.resolve ? meta.resolve(`${addonPackage}/package`) : ''
+    const pkgPath = pkgUrl ? urlMod.fileURLToPath(pkgUrl) : ''
+    const real = pkgPath ? String(fs.realpathSync(pkgPath)) : 'n/a'
+    const root = real.replace(/package\.json$/, '')
+    const pkg = JSON.parse(String(fs.readFileSync(real)))
+    parts.push(`pkg version=${pkg.version} symlinked=${real !== String(pkgPath)} root=${root}`)
+    // Is the os/cpu filtered platform package actually on disk next to it?
+    const scopeDir = root.replace(/[^/]+\/$/, '')
+    try {
+      parts.push(`scope=${fs.readdirSync(scopeDir).join(',')}`)
+    } catch (error) {
+      parts.push(`scope read failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    const hostPkg = `${addonPackage}-linux-x64`
+    try {
+      parts.push(`resolve(${hostPkg})=${meta.resolve ? meta.resolve(hostPkg) : 'n/a'}`)
+    } catch (error) {
+      parts.push(
+        `resolve(${hostPkg}) threw: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+    // What is actually inside the platform package on this runner?
+    const platformRoot = root.replace(/[^/]+\/$/, '') + `${addonPackage.split('/')[1]}-linux-x64/`
+    try {
+      parts.push(`platform ls=${fs.readdirSync(platformRoot).join(',')}`)
+      const ver = JSON.parse(String(fs.readFileSync(platformRoot + 'package.json'))).version
+      parts.push(`platform version=${ver}`)
+      parts.push(`platform index.js=${String(fs.readFileSync(platformRoot + 'index.js')).trim()}`)
+      parts.push(`platform addon ls=${fs.readdirSync(platformRoot + 'addon').join(',')}`)
+      parts.push(
+        `platform prebuilds ls=${fs.readdirSync(platformRoot + 'addon/prebuilds').join(',')}`
+      )
+      parts.push(
+        `platform host ls=${fs.readdirSync(platformRoot + 'addon/prebuilds/linux-x64').join(',')}`
+      )
+    } catch (error) {
+      parts.push(`platform probe failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    for (const sub of ['prebuilds', 'binding.js', 'index.js', 'addonLogging.js']) {
+      let info = 'missing'
+      try {
+        const st = fs.statSync(root + sub)
+        info = st.isDirectory() ? `dir(${fs.readdirSync(root + sub).join(',')})` : `${st.size}b`
+      } catch {
+        info = 'missing'
+      }
+      parts.push(`${sub}=${info}`)
+    }
+  } catch (error) {
+    parts.push(`tree-probe failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  for (const sub of ['', '/binding.js', '/addonLogging', '/package', '-linux-x64']) {
+    const specifier = `${addonPackage}${sub}`
+    let resolvedUrl = 'n/a'
+    try {
+      resolvedUrl = meta.resolve ? meta.resolve(specifier) : 'no import.meta.resolve'
+    } catch (error) {
+      resolvedUrl = `resolve threw: ${error instanceof Error ? error.message : String(error)}`
+    }
+    try {
+      const mod = (await import(specifier)) as Record<string, unknown>
+      const inner = mod['default']
+      parts.push(
+        `${specifier} @ ${resolvedUrl} -> ${describeLoggingModule(mod)}` +
+          (inner ? ` ; default -> ${describeLoggingModule(inner)}` : '')
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const cause = (error as { cause?: unknown }).cause
+      parts.push(
+        `${specifier} @ ${resolvedUrl} THREW: ${message}` +
+          (cause ? ` (cause: ${cause instanceof Error ? cause.message : String(cause)})` : '')
+      )
+    }
+  }
+  return parts.join(' || ')
 }
