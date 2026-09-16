@@ -17,6 +17,12 @@ on:
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
       - ".github/workflows/reusable-ts-checks.yml"
+      # nx marks every project affected when these change, so on-pr-nx
+      # awaits this package's ts-check. nx.json and the root package.json
+      # fan out via hard-coded locators in nx, not via namedInputs.
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "nx.json"
 
 permissions:
   contents: read
