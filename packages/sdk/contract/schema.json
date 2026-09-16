@@ -11,7 +11,13 @@
           "$ref": "#/$defs/assessModelFit.request"
         },
         {
+          "$ref": "#/$defs/audioEditStream.request"
+        },
+        {
           "$ref": "#/$defs/audioGenStream.request"
+        },
+        {
+          "$ref": "#/$defs/audioUnderstand.request"
         },
         {
           "$ref": "#/$defs/batchCompletionStream.request"
@@ -137,7 +143,13 @@
           "$ref": "#/$defs/assessModelFit.response"
         },
         {
+          "$ref": "#/$defs/audioEditStream.response"
+        },
+        {
           "$ref": "#/$defs/audioGenStream.response"
+        },
+        {
+          "$ref": "#/$defs/audioUnderstand.response"
         },
         {
           "$ref": "#/$defs/batchCompletionStream.response"
@@ -549,6 +561,418 @@
       "required": ["verdict", "basis", "execution", "models", "reasons", "assumptions", "type"],
       "additionalProperties": false
     },
+    "audioEditStream.request": {
+      "title": "AudioEditStreamRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operations": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "flow-edit"
+                  },
+                  "from": {
+                    "type": "object",
+                    "properties": {
+                      "caption": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "lyrics": {
+                        "description": "Lyrics for this prompt; omit for `[Instrumental]`.",
+                        "type": "string"
+                      }
+                    },
+                    "required": ["caption"],
+                    "additionalProperties": false,
+                    "description": "Description of the unedited source audio.",
+                    "title": "AudioEditStreamRequestOperationsItemFlowEditFrom"
+                  },
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "caption": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "lyrics": {
+                        "description": "Lyrics for this prompt; omit for `[Instrumental]`.",
+                        "type": "string"
+                      }
+                    },
+                    "required": ["caption"],
+                    "additionalProperties": false,
+                    "description": "Description of the desired audio.",
+                    "title": "AudioEditStreamRequestOperationsItemFlowEditTo"
+                  },
+                  "nMin": {
+                    "description": "Start of the Flow-Edit diffusion window (0..1, default 0).",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "nMax": {
+                    "description": "End of the Flow-Edit diffusion window (0..1, default 1).",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "nAvg": {
+                    "description": "Forward-noise samples averaged per active step (default 1).",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["type", "from", "to"],
+                "additionalProperties": false,
+                "title": "AudioEditStreamRequestOperationsItemFlowEdit"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "repaint"
+                  },
+                  "caption": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "lyrics": {
+                    "description": "Lyrics for the repainted region; omit for `[Instrumental]`.",
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Region start in seconds; must lie inside the source recording."
+                  },
+                  "end": {
+                    "description": "Region end in seconds; omit to repaint through the end of the source. The range must span at least one latent frame (1/25 s).",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "mode": {
+                    "description": "Preservation mode outside the repainted region (default balanced).",
+                    "type": "string",
+                    "enum": ["conservative", "balanced", "aggressive"],
+                    "title": "AudioEditStreamRequestOperationsItemRepaintMode"
+                  },
+                  "strength": {
+                    "description": "Balanced-mode preservation strength (0..1, default 0.5).",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": ["type", "caption", "start"],
+                "additionalProperties": false,
+                "title": "AudioEditStreamRequestOperationsItemRepaint"
+              }
+            ]
+          },
+          "description": "Ordered edit pipeline: operations run in array order and may repeat or mix. Flow-Edit is supported on turbo DiT variants only."
+        },
+        "seed": {
+          "description": "Seeds the first operation; each following operation uses seed + its index.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "sourceAudio": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioEditStreamRequestSourceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioEditStreamRequestSourceAudioFilePath"
+            }
+          ],
+          "description": "Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1]."
+        },
+        "type": {
+          "type": "string",
+          "const": "audioEditStream"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["modelId", "operations", "sourceAudio", "type"],
+      "additionalProperties": false
+    },
+    "audioEditStream.response": {
+      "title": "AudioEditStreamResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "audioEditStream"
+        },
+        "progress": {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "total": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value."
+            }
+          },
+          "required": ["stage", "step", "total"],
+          "additionalProperties": false,
+          "title": "AudioEditStreamResponseProgress"
+        },
+        "data": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sampleRate": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "channels": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bitsPerSample": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "done": {
+          "default": false,
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "AudioEditStreamResponseStopReason"
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "audioDurationMs": {
+              "type": "number"
+            },
+            "totalTimeMs": {
+              "type": "number"
+            },
+            "realTimeFactor": {
+              "type": "number"
+            },
+            "backendDevice": {
+              "type": "number"
+            },
+            "backendId": {
+              "type": "number"
+            },
+            "lyricsScore": {
+              "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+              "type": "number"
+            },
+            "lrc": {
+              "description": "LRC-formatted lyric timestamps. Present only when the run set `generateLrc`.",
+              "type": "string"
+            },
+            "qualityScore": {
+              "description": "Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+              "type": "number"
+            },
+            "understand": {
+              "description": "The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string"
+                },
+                "bpm": {
+                  "type": "number"
+                },
+                "duration": {
+                  "type": "number",
+                  "description": "LM estimate in seconds. The recovered codes fix the true length."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "timesignature": {
+                  "type": "string"
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "audioCodes": {
+                  "maxItems": 3000,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
+                  "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                }
+              },
+              "required": [
+                "caption",
+                "bpm",
+                "duration",
+                "keyscale",
+                "timesignature",
+                "vocalLanguage",
+                "audioCodes"
+              ],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseStatsUnderstand"
+            }
+          },
+          "additionalProperties": false,
+          "title": "AudioEditStreamResponseStats"
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "AudioEditStreamResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "AudioEditStreamResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "AudioEditStreamResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "AudioEditStreamResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "AudioEditStreamResponseDiagnostics"
+        }
+      },
+      "required": ["type", "done"],
+      "additionalProperties": false
+    },
     "audioGenStream.request": {
       "title": "AudioGenStreamRequest",
       "type": "object",
@@ -585,6 +1009,54 @@
         "timesignature": {
           "type": "string",
           "minLength": 1
+        },
+        "augmentCaptionWithMetadata": {
+          "description": "Append BPM/tempo, time signature, and key guidance to the internal conditioning caption while the result metadata keeps the original caption (default: false). ACE-Step only; rejected by MiniMax.",
+          "type": "boolean"
+        },
+        "simpleMode": {
+          "description": "Treat `caption` as a short natural-language query and let the LM compose the full request before synthesis: a detailed caption, lyrics, and any metadata left unset. Options you set are kept. Requires `taskType: 'text2music'` and no `audioCodes`; leave `lyrics` unset for LM-written vocals or pass '[Instrumental]' for an instrumental. Mutually exclusive with `rewriteQuery`. ACE-Step only.",
+          "type": "boolean"
+        },
+        "rewriteQuery": {
+          "description": "Query Rewriting: the LM rewrites `caption` into a detailed musical description before synthesis, preserving the lyric content and filling metadata left unset. Takes caption AND lyrics as input, so real `lyrics` are required ('[Instrumental]' belongs to Simple Mode). Requires `taskType: 'text2music'`; mutually exclusive with `simpleMode`. Faithful rewriting needs the 1.7B LM. ACE-Step only.",
+          "type": "boolean"
+        },
+        "generateLrc": {
+          "description": "Align the lyrics with the generated audio and return karaoke-style LRC text in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`. Needs lyrics to align — pass `lyrics` or let Simple Mode write them; instrumental requests are rejected. Requires `taskType: 'text2music'`. ACE-Step only.",
+          "type": "boolean"
+        },
+        "computeQualityScore": {
+          "description": "Teacher-force the generated audio codes back through the LM and report a weighted [0, 1] match against the request in `stats.qualityScore` (caption/lyrics PMI plus metadata recall). Costs extra LM forwards after code generation; made for ranking a batch of takes. Requires `taskType: 'text2music'`. ACE-Step only.",
+          "type": "boolean"
+        },
+        "normalizeLoudness": {
+          "description": "Percentile loudness normalization on the generated audio (default: true): the 99.999th-percentile sample scales to full scale and the tiny tail above it clips. Set false for the raw engine output. Audio edits are never normalized. ACE-Step only.",
+          "type": "boolean"
+        },
+        "guidanceScale": {
+          "description": "DiT classifier-free guidance scale. 0 (the default) resolves automatically: 1.0 on turbo variants, which disables CFG, and 7.0 on base/sft. Values above 1 run CFG via APG and double the DiT cost per step. ACE-Step only.",
+          "type": "number",
+          "minimum": 0
+        },
+        "track": {
+          "description": "Instrument layer the `lego` task regenerates. Required when `taskType` is 'lego' and rejected otherwise. ACE-Step only.",
+          "type": "string",
+          "enum": [
+            "vocals",
+            "backing_vocals",
+            "drums",
+            "bass",
+            "guitar",
+            "keyboard",
+            "percussion",
+            "strings",
+            "synth",
+            "fx",
+            "brass",
+            "woodwinds"
+          ],
+          "title": "AudioGenStreamRequestTrack"
         },
         "duration": {
           "description": "Approximate requested duration in seconds. Engines round to their frame grid; use output frames or stats.audioDurationMs as authoritative.",
@@ -650,9 +1122,9 @@
           "minimum": 0
         },
         "taskType": {
-          "description": "Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+          "description": "Generation task: text2music (default), cover-nofsq (requires sourceAudio), or lego (requires track).",
           "type": "string",
-          "enum": ["text2music", "cover-nofsq"],
+          "enum": ["text2music", "cover-nofsq", "lego"],
           "title": "AudioGenStreamRequestTaskType"
         },
         "audioCoverStrength": {
@@ -666,6 +1138,17 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "audioCodes": {
+          "minItems": 1,
+          "maxItems": 3000,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "description": "Frozen ACE-Step semantic codes (int32) to synthesize instead of running the LM, e.g. codes recovered from an earlier run. ACE-Step only; rejected by MiniMax."
         },
         "referenceAudio": {
           "description": "Optional timbre reference audio; omit to keep the engine default.",
@@ -820,6 +1303,64 @@
             },
             "backendId": {
               "type": "number"
+            },
+            "lyricsScore": {
+              "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+              "type": "number"
+            },
+            "lrc": {
+              "description": "LRC-formatted lyric timestamps. Present only when the run set `generateLrc`.",
+              "type": "string"
+            },
+            "qualityScore": {
+              "description": "Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+              "type": "number"
+            },
+            "understand": {
+              "description": "The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string"
+                },
+                "bpm": {
+                  "type": "number"
+                },
+                "duration": {
+                  "type": "number",
+                  "description": "LM estimate in seconds. The recovered codes fix the true length."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "timesignature": {
+                  "type": "string"
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "audioCodes": {
+                  "maxItems": 3000,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
+                  "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                }
+              },
+              "required": [
+                "caption",
+                "bpm",
+                "duration",
+                "keyscale",
+                "timesignature",
+                "vocalLanguage",
+                "audioCodes"
+              ],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseStatsUnderstand"
             }
           },
           "additionalProperties": false,
@@ -925,6 +1466,350 @@
       "required": ["type", "done"],
       "additionalProperties": false
     },
+    "audioUnderstand.request": {
+      "title": "AudioUnderstandRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seed": {
+          "description": "RNG seed for the LM decode; omit for a random seed.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "vocalLanguage": {
+          "description": "Language hint (e.g. 'es') forced into the result instead of the LM's guess.",
+          "type": "string",
+          "minLength": 1
+        },
+        "lmTemperature": {
+          "description": "LM sampling temperature (default 0.85).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lmTopP": {
+          "description": "LM nucleus-sampling probability (default 0.9).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lmTopK": {
+          "description": "LM top-k cutoff; 0 disables top-k filtering.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceAudio": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioUnderstandRequestSourceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioUnderstandRequestSourceAudioFilePath"
+            }
+          ],
+          "description": "Recording to analyse: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1]."
+        },
+        "type": {
+          "type": "string",
+          "const": "audioUnderstand"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["modelId", "sourceAudio", "type"],
+      "additionalProperties": false
+    },
+    "audioUnderstand.response": {
+      "title": "AudioUnderstandResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "audioUnderstand"
+        },
+        "progress": {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "total": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value."
+            }
+          },
+          "required": ["stage", "step", "total"],
+          "additionalProperties": false,
+          "title": "AudioUnderstandResponseProgress"
+        },
+        "understand": {
+          "type": "object",
+          "properties": {
+            "caption": {
+              "type": "string"
+            },
+            "bpm": {
+              "type": "number"
+            },
+            "duration": {
+              "type": "number",
+              "description": "LM estimate in seconds. The recovered codes fix the true length."
+            },
+            "keyscale": {
+              "type": "string"
+            },
+            "timesignature": {
+              "type": "string"
+            },
+            "vocalLanguage": {
+              "type": "string"
+            },
+            "audioCodes": {
+              "maxItems": 3000,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+            }
+          },
+          "required": [
+            "caption",
+            "bpm",
+            "duration",
+            "keyscale",
+            "timesignature",
+            "vocalLanguage",
+            "audioCodes"
+          ],
+          "additionalProperties": false,
+          "title": "AudioUnderstandResponseUnderstand"
+        },
+        "done": {
+          "default": false,
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "AudioUnderstandResponseStopReason"
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "audioDurationMs": {
+              "type": "number"
+            },
+            "totalTimeMs": {
+              "type": "number"
+            },
+            "realTimeFactor": {
+              "type": "number"
+            },
+            "backendDevice": {
+              "type": "number"
+            },
+            "backendId": {
+              "type": "number"
+            },
+            "lyricsScore": {
+              "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+              "type": "number"
+            },
+            "lrc": {
+              "description": "LRC-formatted lyric timestamps. Present only when the run set `generateLrc`.",
+              "type": "string"
+            },
+            "qualityScore": {
+              "description": "Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+              "type": "number"
+            },
+            "understand": {
+              "description": "The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string"
+                },
+                "bpm": {
+                  "type": "number"
+                },
+                "duration": {
+                  "type": "number",
+                  "description": "LM estimate in seconds. The recovered codes fix the true length."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "timesignature": {
+                  "type": "string"
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "audioCodes": {
+                  "maxItems": 3000,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
+                  "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                }
+              },
+              "required": [
+                "caption",
+                "bpm",
+                "duration",
+                "keyscale",
+                "timesignature",
+                "vocalLanguage",
+                "audioCodes"
+              ],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseStatsUnderstand"
+            }
+          },
+          "additionalProperties": false,
+          "title": "AudioUnderstandResponseStats"
+        },
+        "diagnostics": {
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "AudioUnderstandResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "AudioUnderstandResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "AudioUnderstandResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "AudioUnderstandResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "AudioUnderstandResponseDiagnostics"
+        }
+      },
+      "required": ["type", "done"],
+      "additionalProperties": false
+    },
     "batchCompletionStream.request": {
       "title": "BatchCompletionStreamRequest",
       "type": "object",
@@ -1023,6 +1908,11 @@
                   "remove_thinking_from_context": {
                     "description": "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.",
                     "type": "boolean"
+                  },
+                  "tool_choice": {
+                    "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "additionalProperties": false,
@@ -1414,6 +2304,9 @@
                           "avgConcurrentSeq": {
                             "type": "number"
                           },
+                          "toolDefinitionsDropped": {
+                            "type": "number"
+                          },
                           "backendDevice": {
                             "type": "string",
                             "enum": ["cpu", "gpu"],
@@ -1537,6 +2430,9 @@
               "type": "number"
             },
             "avgConcurrentSeq": {
+              "type": "number"
+            },
+            "toolDefinitionsDropped": {
               "type": "number"
             },
             "backendDevice": {
@@ -2184,6 +3080,11 @@
             "remove_thinking_from_context": {
               "description": "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.",
               "type": "boolean"
+            },
+            "tool_choice": {
+              "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "type": "string",
+              "minLength": 1
             }
           },
           "additionalProperties": false,
@@ -2486,6 +3387,9 @@
                       "avgConcurrentSeq": {
                         "type": "number"
                       },
+                      "toolDefinitionsDropped": {
+                        "type": "number"
+                      },
                       "backendDevice": {
                         "type": "string",
                         "enum": ["cpu", "gpu"],
@@ -2782,6 +3686,11 @@
             "remove_thinking_from_context": {
               "description": "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.",
               "type": "boolean"
+            },
+            "tool_choice": {
+              "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "type": "string",
+              "minLength": 1
             }
           },
           "additionalProperties": false,
@@ -3076,6 +3985,9 @@
                       "avgConcurrentSeq": {
                         "type": "number"
                       },
+                      "toolDefinitionsDropped": {
+                        "type": "number"
+                      },
                       "backendDevice": {
                         "type": "string",
                         "enum": ["cpu", "gpu"],
@@ -3173,17 +4085,61 @@
       "required": ["type", "events"],
       "additionalProperties": false
     },
+    "constants.AudioGenEditOperation": {
+      "title": "AudioGenEditOperation",
+      "type": "string",
+      "enum": ["flow-edit", "repaint"],
+      "x-enum-varnames": ["FLOW_EDIT", "REPAINT"]
+    },
     "constants.AudioGenEngine": {
       "title": "AudioGenEngine",
       "type": "string",
       "enum": ["acestep", "minimax"],
       "x-enum-varnames": ["ACESTEP", "MINIMAX"]
     },
+    "constants.AudioGenRepaintMode": {
+      "title": "AudioGenRepaintMode",
+      "type": "string",
+      "enum": ["conservative", "balanced", "aggressive"],
+      "x-enum-varnames": ["CONSERVATIVE", "BALANCED", "AGGRESSIVE"]
+    },
     "constants.AudioGenTaskType": {
       "title": "AudioGenTaskType",
       "type": "string",
-      "enum": ["text2music", "cover-nofsq"],
-      "x-enum-varnames": ["TEXT2MUSIC", "COVER_NOFSQ"]
+      "enum": ["text2music", "cover-nofsq", "lego"],
+      "x-enum-varnames": ["TEXT2MUSIC", "COVER_NOFSQ", "LEGO"]
+    },
+    "constants.AudioGenTrack": {
+      "title": "AudioGenTrack",
+      "type": "string",
+      "enum": [
+        "vocals",
+        "backing_vocals",
+        "drums",
+        "bass",
+        "guitar",
+        "keyboard",
+        "percussion",
+        "strings",
+        "synth",
+        "fx",
+        "brass",
+        "woodwinds"
+      ],
+      "x-enum-varnames": [
+        "VOCALS",
+        "BACKING_VOCALS",
+        "DRUMS",
+        "BASS",
+        "GUITAR",
+        "KEYBOARD",
+        "PERCUSSION",
+        "STRINGS",
+        "SYNTH",
+        "FX",
+        "BRASS",
+        "WOODWINDS"
+      ]
     },
     "constants.ModelType": {
       "title": "ModelType",
@@ -13520,14 +14476,6 @@
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
                     },
-                    "clip_on_cpu": {
-                      "description": "Force CLIP text encoder to run on CPU",
-                      "type": "boolean"
-                    },
-                    "vae_on_cpu": {
-                      "description": "Force VAE decoder to run on CPU",
-                      "type": "boolean"
-                    },
                     "vae_auto_cpu_fallback": {
                       "description": "Automatically move the VAE to CPU when GPU memory is insufficient",
                       "type": "boolean"
@@ -13543,23 +14491,40 @@
                       "type": "boolean"
                     },
                     "offload_to_cpu": {
-                      "description": "Keep model weights in CPU memory and offload them during GPU compute",
+                      "description": "Keep model weights in CPU memory and offload them during GPU compute. Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module.",
                       "type": "boolean"
                     },
+                    "control_net_cpu": {
+                      "description": "Removed. Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
+                    "clip_on_cpu": {
+                      "description": "Removed. Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
+                    "vae_on_cpu": {
+                      "description": "Removed. Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
                     "backend": {
-                      "description": "Native compute backend assignment; overrides main-gpu.",
-                      "type": "string"
+                      "description": "Runtime backend for diffusion and video graphs, globally or per module, for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'.",
+                      "type": "string",
+                      "maxLength": 4096
                     },
                     "params_backend": {
-                      "description": "Native parameter placement; overrides legacy CPU-offload flags.",
-                      "type": "string"
+                      "description": "Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offload_to_cpu enabled, explicit assignments override CPU residency only for the specified modules.",
+                      "type": "string",
+                      "maxLength": 4096
                     },
                     "max_vram": {
-                      "description": "Native VRAM limit or per-backend limits, for example cuda0=6,vulkan0=2.",
+                      "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
                       "type": ["number", "string"]
                     },
                     "stream_layers": {
-                      "description": "Stream model layers during native inference.",
+                      "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
                       "type": "boolean"
                     },
                     "flash_attn": {
