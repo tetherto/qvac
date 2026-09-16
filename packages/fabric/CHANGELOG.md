@@ -1,5 +1,58 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- On Linux every export now carries the named ELF version node
+  `QVAC_FABRIC_ABI_1` instead of an anonymous one. That is what actually makes a
+  consumer import the C++ runtime from this module.
+
+  0.15.0 exported the runtime, but nothing reached it. The `bare` executable
+  links GNU `libstdc++.so.6`, so a second complete C++ runtime sits in the
+  process' **global** lookup scope, which the dynamic linker searches before a
+  `dlopen`'d module's own `DT_NEEDED` chain. A consumer linked with
+  `-nostdlib++` therefore took `__cxa_throw`, `__gxx_personality_v0` and the
+  `std::` typeinfo objects from libstdc++, and only the libc++-only names from
+  here. `std::exception_ptr` split down that seam — `std::current_exception`
+  binding to libstdc++ and `std::rethrow_exception` to this module's libc++,
+  which re-raises the exception stamped `CLNGC++`, where GNU's personality
+  routine may only match `catch (...)`. Every native error out of a consumer's
+  load path still reached JS as `INTERNAL_ERROR` / `"Unknown error"` on Linux,
+  which is the symptom 0.15.0 set out to fix.
+
+  A named node makes the linker record a `DT_VERNEED` in every consumer that
+  libstdc++ cannot satisfy, since it does not define that version. The node
+  covers the whole export surface rather than only the C++ ABI: an anonymous
+  version node cannot coexist with a named one, and the spliced ABI block has to
+  stay inside the same `global:` list to keep its precedence over `local: *;`.
+  It pins this module's own internal references too, which were being interposed
+  the same way.
+
+  The CMake package config now publishes `QVAC_FABRIC_ABI_VERSION` and
+  `QVAC_FABRIC_OWNS_CXX_RUNTIME`, so a consumer's build can assert it pinned the
+  runtime instead of trusting its link line, and can tell a deliberately shared
+  libc++ (Android, the ASan build) from a fabric too old to pin at all.
+
+  **Consumers must be rebuilt against this release.** This is a **minor** for
+  that reason rather than for surface growth: a mixed pairing is *worse* than
+  the old one and fails silently. Pinning this module's internal references
+  removes the accident that both sides previously resolved the runtime from
+  libstdc++ and so agreed on one, while a consumer that is not rebuilt keeps
+  using libstdc++ — measured, a direct throw from here that used to be catchable
+  by type stops matching. It still loads, because an unversioned reference binds
+  to a default-versioned definition. On `0.x` a caret range locks the minor, so
+  `^0.15.0` is what keeps already-published consumers away from it; a patch
+  would reach them and degrade them.
+
+  The node name is part of the Linux ABI: renaming it is a rebuild of every
+  consumer. Android is the other ELF target sharing `symbols.map` and exports
+  the same set, now version-stamped, but its consumers share `libc++_shared.so`
+  instead of importing the runtime from here, so they are unaffected; Darwin,
+  iOS and Windows use no version script and are untouched. Rationale,
+  alternatives and measurements:
+  `arch/qips/linux-fabric-libcxx-ownership.md`.
+
 ## [0.15.0] - 2026-09-15
 
 ### Changed
