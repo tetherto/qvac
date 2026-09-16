@@ -9,8 +9,8 @@ export const SLICE_DEFINITIONS = [
   { suffix: 'darwin-arm64', hosts: ['darwin-arm64'], os: ['darwin'], cpu: ['arm64'] },
   { suffix: 'darwin-x64', hosts: ['darwin-x64'], os: ['darwin'], cpu: ['x64'] },
   { suffix: 'win32-x64', hosts: ['win32-x64'], os: ['win32'], cpu: ['x64'] },
-  { suffix: 'android-arm64', hosts: ['android-arm64'], os: ['android'], cpu: ['arm64'] },
-  { suffix: 'ios', hosts: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'], os: ['ios'] }
+  { suffix: 'android-arm64', hosts: ['android-arm64'], crossBuilt: true },
+  { suffix: 'ios', hosts: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'], crossBuilt: true }
 ]
 
 export const PLATFORM_INDEX_SOURCE = "module.exports = require.addon('./addon')\n"
@@ -79,7 +79,6 @@ export function buildSliceManifest (metaManifest, definition) {
       './package': './package.json'
     },
     files: ['index.js', 'addon', 'NOTICE'],
-    os: definition.os,
     repository: metaManifest.repository,
     author: metaManifest.author,
     license: metaManifest.license,
@@ -87,6 +86,7 @@ export function buildSliceManifest (metaManifest, definition) {
     homepage: metaManifest.homepage,
     engines: metaManifest.engines
   }
+  if (definition.os) manifest.os = definition.os
   if (definition.cpu) manifest.cpu = definition.cpu
   if (definition.libc) manifest.libc = definition.libc
   return manifest
@@ -104,7 +104,17 @@ export function buildSliceReadme (metaManifest, definition) {
   return '# ' + metaManifest.name + '-' + definition.suffix + '\n\n' +
     'Prebuilt ' + definition.suffix + ' binaries for [' + metaManifest.name +
     '](https://www.npmjs.com/package/' + metaManifest.name + ').\n\n' +
-    'Do not depend on this package directly. Install ' + metaManifest.name +
+    buildSliceReadmeUsage(metaManifest, definition)
+}
+
+function buildSliceReadmeUsage (metaManifest, definition) {
+  if (definition.crossBuilt) {
+    return 'This target is cross-built: no install host ever reports its platform, so\n' +
+      '`os`/`cpu` filtered optional dependencies can never select it. Applications\n' +
+      'targeting ' + definition.suffix + ' must depend on this package directly,\n' +
+      'pinned to the exact ' + metaManifest.name + ' version.\n'
+  }
+  return 'Do not depend on this package directly. Install ' + metaManifest.name +
     ' instead; package managers that support `os`/`cpu` filtered optional\n' +
     'dependencies (npm 7+, pnpm, bun, Yarn Berry) select the right platform\n' +
     'package automatically.\n'
@@ -112,10 +122,14 @@ export function buildSliceReadme (metaManifest, definition) {
 
 export function buildOptionalDependencies (metaManifest, definitions) {
   const optionalDependencies = {}
-  for (const definition of definitions) {
+  for (const definition of selectHostFilteredDefinitions(definitions)) {
     optionalDependencies[metaManifest.name + '-' + definition.suffix] = metaManifest.version
   }
   return optionalDependencies
+}
+
+function selectHostFilteredDefinitions (definitions) {
+  return definitions.filter((definition) => !definition.crossBuilt)
 }
 
 function readManifest (manifestPath) {
@@ -217,7 +231,11 @@ export function slicePlatformPackages (options) {
   removeEmptiedPrebuildsDir(prebuildsDir)
   metaManifest.optionalDependencies = buildOptionalDependencies(metaManifest, SLICE_DEFINITIONS)
   writeManifest(metaManifestPath, metaManifest)
-  log('Injected ' + SLICE_DEFINITIONS.length + ' optionalDependencies into ' + metaManifest.name)
+  log(
+    'Injected ' + Object.keys(metaManifest.optionalDependencies).length +
+    ' host-filtered optionalDependencies into ' + metaManifest.name +
+    '; cross-built targets are direct dependencies of the consuming application'
+  )
 
   return sliceDirs
 }
