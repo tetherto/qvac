@@ -1389,7 +1389,7 @@ curl http://localhost:11434/v1/videos \
 | `prompt` | Text prompt, 1–32000 characters. | Yes |
 | `size` | `"WIDTHxHEIGHT"` with both dimensions multiples of 16. Accepts any `WxH` in addition to OpenAI's 4-value enum. When omitted, the size is backfilled from the model output. | No |
 | `seconds` | Target duration as a **string** (e.g. `"2"`; OpenAI uses `"4"` / `"8"` / `"12"`). For MiniMax-H3, mapped at 24 FPS to the nearest `17k+5`; other models retain the existing nearest `4k+1` mapping using `fps`. Model-specific validation still applies. | No |
-| `fps` | QVAC extension. `0 < fps ≤ 120`, default `16`. | No |
+| `fps` | QVAC extension. `0 < fps ≤ 120`, default `16`. MiniMax-H3 requires exactly `24` and rejects any other value; its `seconds` mapping always uses 24 regardless of what is sent here. | No |
 | `steps` | QVAC extension. Diffusion sampler step count. | No |
 | `seed` | QVAC extension. Random seed; the SDK picks one when omitted. | No |
 | `negative_prompt` | QVAC extension. Negative prompt for the sampler. | No |

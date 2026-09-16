@@ -236,6 +236,28 @@ The following script conditions LTX-2 on a composite reference sheet so the gene
 </Tab>
 </Tabs>
 
+### Text-to-video with audio (MiniMax-H3)
+
+The following script loads MiniMax-H3 with its split layout (diffusion model + Qwen3-VL text encoder + video VAE + audio VAE) and generates a clip with a synchronized 32 kHz audio track. It uses the H3 constraints (dimensions in multiples of 32, `17*k + 5` frames, 24 FPS) and leaves `offload_to_cpu` on so the run fits on a single GPU:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-txt2vid-minimax-h3.js title="diffusion-txt2vid-minimax-h3.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid-minimax-h3.ts title="diffusion-txt2vid-minimax-h3.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
 <Callout type="info">
 The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/python-sdk) for the API surface.
 </Callout>
