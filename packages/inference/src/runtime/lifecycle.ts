@@ -1,5 +1,6 @@
 import { initEnv } from '@/runtime/env'
 import { closeAllRagInstances } from '@/rag/index'
+import { disposeAllVectorIndexes } from '@/runtime/vector-index-registry'
 import { cleanupDownloads } from '@/handlers/load-model/download-manager'
 import { unloadAllModels } from '@/runtime/model-registry'
 import { closeRegistryClient } from '@/runtime/registry-client'
@@ -70,6 +71,7 @@ async function runCleanup(): Promise<void> {
   cleanupRan = true
   destroyResourceCollector()
   clearRegistries()
+  disposeAllVectorIndexes()
   await Promise.allSettled([
     closeAllRagInstances(),
     cleanupDownloads(),

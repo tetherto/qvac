@@ -81,6 +81,12 @@ export const ERROR_CODES = {
   RAG_CHUNK_FAILED: 52810,
   RAG_WORKSPACE_NOT_OPEN: 52811,
 
+  // Vector index (52,850-52,899)
+  VECTOR_INDEX_PROVIDER_UNAVAILABLE: 52850,
+  VECTOR_INDEX_NOT_FOUND: 52851,
+  VECTOR_INDEX_INVALID_VECTORS: 52852,
+  VECTOR_INDEX_FAILED: 52853,
+
   // Download / resource (53,000-53,199)
   FILE_NOT_FOUND: 53000,
   DOWNLOAD_CANCELLED: 53001,
@@ -465,6 +471,26 @@ const errorDefinitions: ErrorCodesMap = {
   [ERROR_CODES.RAG_WORKSPACE_NOT_OPEN]: {
     name: 'RAG_WORKSPACE_NOT_OPEN',
     message: (workspace: string) => `RAG workspace '${workspace}' is not open`
+  },
+
+  // Vector index
+  [ERROR_CODES.VECTOR_INDEX_PROVIDER_UNAVAILABLE]: {
+    name: 'VECTOR_INDEX_PROVIDER_UNAVAILABLE',
+    message: () =>
+      'No vector index provider is registered. Register a plugin that exposes the turbovecIndexProvider capability, such as the built-in llamacpp-embedding plugin'
+  },
+  [ERROR_CODES.VECTOR_INDEX_NOT_FOUND]: {
+    name: 'VECTOR_INDEX_NOT_FOUND',
+    message: (indexId: string) =>
+      `Vector index '${indexId}' is not open. It was disposed or the worker restarted; create a new index or load a snapshot`
+  },
+  [ERROR_CODES.VECTOR_INDEX_INVALID_VECTORS]: {
+    name: 'VECTOR_INDEX_INVALID_VECTORS',
+    message: (details: string) => `Invalid vector input: ${details}`
+  },
+  [ERROR_CODES.VECTOR_INDEX_FAILED]: {
+    name: 'VECTOR_INDEX_FAILED',
+    message: (details: string) => `Vector index operation failed: ${details}`
   },
 
   // Download / resource
