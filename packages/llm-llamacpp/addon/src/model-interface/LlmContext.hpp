@@ -213,16 +213,18 @@ enum class SessionMetadataField : uint8_t {
   RetiredFirstMsgCacheTokens = 3,
 };
 
-/// Number of `llama_token` fields in the session metadata contract above.
+/// Number of `llama_token` fields in the base session metadata contract above.
 inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
+/// MTP caches append a two-word generation ID to the base metadata.
+inline constexpr size_t MTP_SESSION_METADATA_FIELD_COUNT = 6;
 
 /// The wire form of the contract above. Every `saveCache` / `loadCache` goes
-/// through this so the `{nPast, nPast, cacheTokens, cacheTokens}` layout has
-/// one home: a writer that left a retired slot at 0 makes an older,
+/// through this so the `{nPast, nPast, cacheTokens, cacheTokens}` prefix has
+/// one home. A writer that left a retired slot at 0 makes an older,
 /// still-sliding build evict from position 0 instead of protecting the first
 /// message, and that is silent.
 struct SessionMetadata {
-  std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
+  std::array<llama_token, MTP_SESSION_METADATA_FIELD_COUNT> tokens = {};
 
   /// Reads the two live fields off a context, then mirrors them into the
   /// retired slots so a downgraded build refuses to slide rather than
@@ -244,12 +246,33 @@ struct SessionMetadata {
 
   [[nodiscard]] llama_token* data() { return tokens.data(); }
   [[nodiscard]] const llama_token* data() const { return tokens.data(); }
-  [[nodiscard]] size_t size() const { return tokens.size(); }
+  [[nodiscard]] size_t size() const { return SESSION_METADATA_FIELD_COUNT; }
+  [[nodiscard]] size_t capacity() const { return tokens.size(); }
+
+  void setMtpGeneration(uint64_t generation) {
+    tokens[SESSION_METADATA_FIELD_COUNT] =
+        static_cast<llama_token>(static_cast<uint32_t>(generation));
+    tokens[SESSION_METADATA_FIELD_COUNT + 1] =
+        static_cast<llama_token>(static_cast<uint32_t>(generation >> 32U));
+  }
+
+  [[nodiscard]] std::optional<uint64_t> mtpGeneration(size_t tokenCount) const {
+    if (tokenCount != MTP_SESSION_METADATA_FIELD_COUNT) {
+      return std::nullopt;
+    }
+    const uint64_t low =
+        static_cast<uint32_t>(tokens[SESSION_METADATA_FIELD_COUNT]);
+    const uint64_t high =
+        static_cast<uint32_t>(tokens[SESSION_METADATA_FIELD_COUNT + 1]);
+    const uint64_t generation = low | (high << 32U);
+    return generation == 0 ? std::nullopt : std::optional<uint64_t>(generation);
+  }
 
   /// A partial header leaves `cacheTokens` at zero, which diverges from
   /// `nPast` under M-RoPE and breaks later cap checks.
   [[nodiscard]] static bool isComplete(size_t tokenCount) {
-    return tokenCount >= SESSION_METADATA_FIELD_COUNT;
+    return tokenCount == SESSION_METADATA_FIELD_COUNT ||
+           tokenCount == MTP_SESSION_METADATA_FIELD_COUNT;
   }
 };
 
@@ -510,7 +533,7 @@ public:
     specPromptEvalMs_ = 0.0;
     specGenerationMs_ = 0.0;
     lastGenerationUsedSpec_ = false;
-    specRequestStart_ = std::chrono::steady_clock::now();
+    specPromptStart_.reset();
   }
 
   /**
@@ -638,10 +661,15 @@ protected:
   int64_t specPromptTokens_ = 0;
   double specPromptEvalMs_ = 0.0;
   double specGenerationMs_ = 0.0;
-  std::chrono::steady_clock::time_point specRequestStart_ =
-      std::chrono::steady_clock::now();
+  std::optional<std::chrono::steady_clock::time_point> specPromptStart_;
   bool lastGenerationUsedSpec_ = false;
   std::atomic<bool> stopGeneration_ = false;
+
+  void startSpecPromptEvaluation() {
+    if (spec_) {
+      specPromptStart_ = std::chrono::steady_clock::now();
+    }
+  }
 
   // Mirror a target-context KV rollback onto the MTP draft context so the two
   // stay aligned. `startPos` is the first position to drop (matching the
@@ -821,6 +849,9 @@ protected:
   }
 
   void rollbackDraftContext(llama_pos startPos = -1) noexcept {
+    if (startPos < 0 && spec_) {
+      common_speculative_set_state(spec_.get(), seqId_, {});
+    }
     if (!ctxDraft_) {
       return;
     }
@@ -1037,10 +1068,13 @@ protected:
     // at position -1. Sample the first generated token and treat it as id_last.
     bool sampled = false;
     llama_token idLast = specSampleFirstToken(sampled);
-    specPromptEvalMs_ =
-        std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - specRequestStart_)
-            .count();
+    if (specPromptStart_) {
+      specPromptEvalMs_ =
+          std::chrono::duration<double, std::milli>(
+              std::chrono::steady_clock::now() - *specPromptStart_)
+              .count();
+      specPromptStart_.reset();
+    }
     if (specShouldRecoverReasoning(idLast)) {
       // First generated token is EOS inside <think>: recover inline (close
       // marker decoded via specBatch, then sample the answer), mirroring the

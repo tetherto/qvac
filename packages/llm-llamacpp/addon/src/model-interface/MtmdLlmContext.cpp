@@ -21,6 +21,7 @@
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/MtpCachePersistence.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
 #include "utils/ScopeGuard.hpp"
@@ -41,9 +42,6 @@ bool isFileInitialized(const std::filesystem::path& path) {
   return !errorCode && size != 0;
 }
 
-std::string mtpDraftCachePath(const std::string& cacheKey) {
-  return cacheKey + ".mtp-draft";
-}
 } // namespace
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -288,6 +286,10 @@ void MtmdLlmContext::initVisionContext() {
   mparams.n_threads = params_.cpuparams.n_threads;
   mparams.image_tile_mode = params_.image_tile_mode;
   mparams.image_no_upscale = params_.image_no_upscale;
+  // Defaulted to true in normalizeLoadForFit; mmproj-no-audio=0 turns it back
+  // off. Independent of mmproj_use_gpu, which picks the backend rather than
+  // the modality.
+  mparams.skip_audio = params_.mmproj_no_audio;
   // Forward the per-image token budget to the vision encoder. These were
   // previously dropped: the addon parsed image_min/max_tokens into
   // common_params but never copied them into mtmd_context_params, so a
@@ -703,6 +705,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     specTextBatch = LlamaBatch((nBatchCap > 0 ? nBatchCap : 1) + 1, 0, 1);
   }
 
+  startSpecPromptEvaluation();
   for (size_t i = 0; i < nChunks; i++) {
     bool chunkLogitsLast = (i == nChunks - 1 && !prefill);
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
@@ -2181,7 +2184,8 @@ bool MtmdLlmContext::onCancel(
 
 /// Prompt caching on the multimodal batch path round-trips the full four-field
 /// session-metadata contract (`SessionMetadataField` in LlmContext.hpp),
-/// exactly as `CacheManager` does. `cacheTokens` matters on its own here: for
+/// exactly as `CacheManager` does. MTP caches may append a two-word generation
+/// ID. `cacheTokens` matters on its own here: for
 /// M-RoPE media the KV-cell count diverges from the positional span
 /// (`current_.pos` vs `current_.cacheTokens`). Slots 1 and 3 are retired, and
 /// `SessionMetadata::capture` mirrors the live cursors into them rather than
@@ -2208,7 +2212,7 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
       cacheKey.c_str(),
       seqId_,
       metadata.data(),
-      metadata.size(),
+      metadata.capacity(),
       &tokenCount);
   if (loadedBytes == 0) {
     throw qvac_errors::StatusError(
@@ -2246,7 +2250,7 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
         toString(UnableToLoadSessionFile),
         "MtmdLlmContext::loadCache: cache '" + cacheKey +
             "' has incomplete session metadata (" + std::to_string(tokenCount) +
-            " of " + std::to_string(SESSION_METADATA_FIELD_COUNT) + " fields)");
+            " fields; expected 4 or 6)");
   }
 
   metadata.applyTo(*this);
@@ -2299,8 +2303,13 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
   if (ctxDraft_) {
     const std::string draftPath = mtpDraftCachePath(cacheKey);
+    const std::string statePath = mtpDriverStateCachePath(cacheKey);
+    const auto targetGeneration = metadata.mtpGeneration(tokenCount);
+    const auto driverState = readMtpDriverStateFile(statePath);
     bool draftRestored = false;
-    if (isFileInitialized(draftPath)) {
+    if (targetGeneration && driverState &&
+        driverState->generation == *targetGeneration &&
+        isFileInitialized(draftPath)) {
       spec_.reset();
       size_t draftTokenCount = 0;
       SessionMetadata draftMetadata;
@@ -2309,11 +2318,13 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
           draftPath.c_str(),
           seqId_,
           draftMetadata.data(),
-          draftMetadata.size(),
+          draftMetadata.capacity(),
           &draftTokenCount);
       auto* draftMem = llama_get_memory(ctxDraft_.get());
+      const auto draftGeneration = draftMetadata.mtpGeneration(draftTokenCount);
       draftRestored =
           draftBytes != 0 && mtmdSessionMetadataIsComplete(draftTokenCount) &&
+          draftGeneration && *draftGeneration == *targetGeneration &&
           draftMetadata.nPast() == getNPast() &&
           draftMetadata.cacheTokens() == getCacheTokens() &&
           draftMem != nullptr &&
@@ -2321,6 +2332,13 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
           static_cast<llama_pos>(llama_memory_seq_token_count(
               draftMem, seqId_)) == getCacheTokens() &&
           rebuildMtpSpeculator("MtmdLlm");
+      if (draftRestored) {
+        common_speculative_set_state(spec_.get(), seqId_, driverState->state);
+        std::vector<uint8_t> restoredDriverState;
+        draftRestored = common_speculative_get_state(
+                            spec_.get(), seqId_, restoredDriverState) &&
+                        restoredDriverState == driverState->state;
+      }
     }
     if (!draftRestored) {
       teardownSpeculative();
@@ -2344,49 +2362,77 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
 
   // Persist all four metadata slots in SessionMetadataField order so the
   // physical KV-cell count that diverges under M-RoPE survives restore.
-  const SessionMetadata metadata = SessionMetadata::capture(*this);
+  SessionMetadata metadata = SessionMetadata::capture(*this);
   const std::string tmpCacheKey = cacheKey + ".tmp";
   const std::string draftCacheKey = mtpDraftCachePath(cacheKey);
   const std::string tmpDraftCacheKey = draftCacheKey + ".tmp";
+  const std::string stateCacheKey = mtpDriverStateCachePath(cacheKey);
+  const std::string tmpStateCacheKey = stateCacheKey + ".tmp";
+  const bool saveMtpState = ctxDraft_ && spec_;
+  std::vector<uint8_t> driverState;
+  uint64_t generation = 0;
+  if (saveMtpState) {
+    if (!common_speculative_get_state(spec_.get(), seqId_, driverState)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToSaveSessionFile),
+          "MtmdLlmContext::saveCache: MTP driver state is unavailable");
+    }
+    generation = makeMtpCacheGeneration();
+    metadata.setMtpGeneration(generation);
+  }
+  ScopeGuard tmpFileGuard([&]() noexcept {
+    std::error_code ec;
+    std::filesystem::remove(tmpCacheKey, ec);
+    ec.clear();
+    std::filesystem::remove(tmpDraftCacheKey, ec);
+    ec.clear();
+    std::filesystem::remove(tmpStateCacheKey, ec);
+  });
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
       tmpCacheKey.c_str(),
       seqId_,
       metadata.data(),
-      metadata.size());
+      saveMtpState ? metadata.capacity() : metadata.size());
   if (savedBytes == 0) {
-    std::error_code ec;
-    std::filesystem::remove(tmpCacheKey, ec);
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),
         "MtmdLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
   }
-  if (ctxDraft_ && spec_) {
+  if (saveMtpState) {
     llama_synchronize(ctxDraft_.get());
     const auto draftBytes = llama_state_seq_save_file(
         ctxDraft_.get(),
         tmpDraftCacheKey.c_str(),
         seqId_,
         metadata.data(),
-        metadata.size());
+        metadata.capacity());
     if (draftBytes == 0) {
-      std::error_code targetEc;
-      std::filesystem::remove(tmpCacheKey, targetEc);
-      std::error_code draftEc;
-      std::filesystem::remove(tmpDraftCacheKey, draftEc);
       throw qvac_errors::StatusError(
           ADDON_ID,
           toString(UnableToSaveSessionFile),
           "MtmdLlmContext::saveCache: failed to save MTP draft cache '" +
               draftCacheKey + "'");
     }
+    if (!writeMtpDriverStateFile(tmpStateCacheKey, generation, driverState)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToSaveSessionFile),
+          "MtmdLlmContext::saveCache: failed to save MTP driver state '" +
+              stateCacheKey + "'");
+    }
+    CacheManager::atomicPromoteFile(tmpStateCacheKey, stateCacheKey);
     CacheManager::atomicPromoteFile(tmpDraftCacheKey, draftCacheKey);
   } else {
     std::error_code ec;
     std::filesystem::remove(draftCacheKey, ec);
+    ec.clear();
+    std::filesystem::remove(stateCacheKey, ec);
   }
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
+  tmpFileGuard.dismiss();
 }
 
 void MtmdLlmContext::snapshotPreRequestCursor() { preRequestUsage_ = current_; }

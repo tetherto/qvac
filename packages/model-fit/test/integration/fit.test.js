@@ -311,6 +311,50 @@ test('fitParams on a real GGUF projects a load plan', async function (t) {
   }
 })
 
+test('a decided verdict carries its per-device memory projection', async function (t) {
+  const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
+  const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
+
+  t.not(res.status, FIT_STATUS.ERROR, 'fixture yields a decided verdict')
+
+  const projection = Array.isArray(res.projection) ? res.projection : []
+  t.ok(Array.isArray(res.projection), 'projection is present on a decided verdict')
+  t.ok(projection.length >= 1, 'projection has at least the host row')
+
+  // Absent or empty is a documented outcome (a failed probe, an older runner),
+  // so stop before dereferencing rows: that reports one failed assertion
+  // instead of a TypeError that takes the rest of the file down with it.
+  if (projection.length === 0) {
+    return
+  }
+
+  const host = projection[projection.length - 1]
+  t.is(host.name, 'host', 'the trailing row is the host')
+  for (const row of projection) {
+    t.ok(typeof row.name === 'string' && row.name.length > 0, 'row is named')
+    for (const key of [
+      'totalBytes',
+      'freeBytes',
+      'marginBytes',
+      'modelBytes',
+      'contextBytes',
+      'computeBytes'
+    ]) {
+      t.ok(
+        Number.isFinite(row[key]) && row[key] >= 0,
+        `${row.name}.${key} is a non-negative number`
+      )
+    }
+    // The budget the verdict was judged against is `freeBytes - marginBytes`,
+    // so the row has to carry the margin the request asked for.
+    t.is(row.marginBytes, 1024 * 1024 * 1024, `${row.name} carries the requested margin`)
+  }
+
+  // Describes this load, not a machine snapshot: the weight bytes must land somewhere.
+  const projectedModelBytes = projection.reduce((sum, row) => sum + row.modelBytes, 0)
+  t.ok(projectedModelBytes > 0, 'the model bytes were projected onto some row')
+})
+
 test('the plan carries every parameter the fitter is free to rewrite', async function (t) {
   const modelPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
   const res = fitParams({ modelPath, nCtx: 2048, nCtxMin: 512, marginMiB: 1024 })
