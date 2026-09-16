@@ -137,6 +137,24 @@ struct BuftOverride {
   std::string bufferType;
 };
 
+/// Projected memory for one device (or the host row) at the parameters the
+/// result reports, in bytes. `free`/`margin` give the budget the verdict was
+/// judged against; `model`/`context`/`compute` are the projected demand.
+struct FitProjectionRow {
+  /// Device name as the backend reports it, or "host" for the host row.
+  std::string name;
+  uint64_t totalBytes = 0;
+  /// Raw backend gauge. The fitter judged against `freeBytes - marginBytes`,
+  /// except on a device sharing the host pool (Apple silicon, Adreno/Mali),
+  /// which fabric clamps below that.
+  uint64_t freeBytes = 0;
+  /// The margin applied to this row, in bytes (`marginMiB` * MiB).
+  uint64_t marginBytes = 0;
+  uint64_t modelBytes = 0;
+  uint64_t contextBytes = 0;
+  uint64_t computeBytes = 0;
+};
+
 /// Result of `runFit`. `status` mirrors `enum common_params_fit_status`
 /// (0 SUCCESS, 1 FAILURE, 2 ERROR). The remaining fields carry the fitted
 /// "load plan" the SDK can hand to the LLM addon.
@@ -193,6 +211,13 @@ struct FitResult {
 
   /// Raw GPU/iGPU subset of `nDevices`; may include unsupported families.
   size_t nGpuDevices = 0;
+
+  /// Projected memory per device the model was assigned to, in
+  /// `llama_model_get_device` order (the index `tensorSplit` uses), ending with
+  /// the host row. Not `nDevices`: the CPU device is counted there but its
+  /// demand lands in the host row. Populated on SUCCESS and FAILURE; empty on
+  /// ERROR, and empty when the probe that produces it fails.
+  std::vector<FitProjectionRow> projection;
 };
 
 /// Whether a SUCCESS plan runs entirely on the host: the bare device

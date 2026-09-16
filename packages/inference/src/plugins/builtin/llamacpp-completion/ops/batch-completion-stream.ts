@@ -14,6 +14,7 @@ import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/utils/addon-responses'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import {
+  seedConfiguredSystemPrompt,
   transformMessages,
   type CompletionGenerationParams
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
@@ -69,6 +70,7 @@ type BatchModelStreamResult = {
 
 type BatchPromptRenderOptions = {
   toolsEnabled: boolean
+  modelConfig: unknown
 }
 
 function runBatchModel(model: AnyModel, prompts: AddonBatchPrompt[]) {
@@ -100,10 +102,11 @@ function renderPromptHistory(
 ) {
   const tools =
     options.toolsEnabled && prompt.tools && prompt.tools.length > 0 ? prompt.tools : undefined
-  let historyWithTools: Array<HistoryMessage | Tool> = prompt.history
+  const history = seedConfiguredSystemPrompt(prompt.history, options.modelConfig)
+  let historyWithTools: Array<HistoryMessage | Tool> = history
 
   if (tools) {
-    historyWithTools = prependToolsToHistory(prompt.history, tools)
+    historyWithTools = prependToolsToHistory(history, tools)
   }
 
   // Uses the same attachment expansion as single completion: each
@@ -156,7 +159,8 @@ export async function* batchCompletion(
   const model = getModel(modelId)
   const modelConfig = getModelConfig(modelId)
   const renderOptions: BatchPromptRenderOptions = {
-    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true
+    toolsEnabled: (modelConfig as { tools?: boolean }).tools === true,
+    modelConfig
   }
 
   // Cancel via the batch response, mirroring completion(): the addon routes

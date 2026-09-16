@@ -1,6 +1,40 @@
 # Changelog
 
-## [Unreleased]
+## [0.11.1] - 2026-09-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.11.x` line pick this up without a range change of their own.
+
+### Fixed
+
+- On Linux, a llama load setting that only fabric can reject — an unknown
+  `cache-type-k`, say — now surfaces as an invalid argument naming the setting
+  and carrying fabric's message. It previously escaped the fitter's handler
+  entirely: the addon and `qvac__fabric@0.bare` each statically linked their own
+  libc++, so each had its own `std::exception` typeinfo, and RTTI matches
+  typeinfo by address, so `parseGenericConfig`'s `catch (const std::exception&)`
+  never matched a throw that came from inside fabric. Fabric now owns the one
+  C++ runtime in the process and this addon imports it
+  (`qvac_addon_import_fabric_cxx_runtime`). The unit suite covers the boundary
+  directly, and distinguishes a `catch` that matched by type from one that only
+  caught `...`. See `arch/qips/linux-fabric-libcxx-ownership.md`
+  ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
+## [0.11.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own.
+- The fitter projects memory for models it does not itself run, so 10549.1.0 matters to it only where the projection must agree with the loader — and the MoE expert-cache fixes change what the loader tolerates at large context.
+
+### Added
+
+- `fit()` results now carry a per-device memory projection, and `@qvac/model-fit/process` gains the matching surface ([#4174](https://github.com/tetherto/qvac/pull/4174)). Landed after `0.10.0` with no version bump of its own, so this release is what publishes it.
+
+### Breaking
+
+- GPU devices are filtered to the supported backends and `split-mode: 'row'` is dropped ([#4330](https://github.com/tetherto/qvac/pull/4330)). A caller passing `'row'` no longer receives a degraded-to-`'layer'` projection; the value is rejected. This matches `@qvac/llm-llamacpp` and `@qvac/embed-llamacpp`, which made the same change, so the fitter and the loaders agree on what is accepted. Landed after `0.10.0` with no version bump of its own.
 
 ### Fixed
 

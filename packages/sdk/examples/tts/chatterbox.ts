@@ -13,6 +13,8 @@ import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './uti
 // Usage: node chatterbox.ts [referenceAudioSrc]
 const [referenceAudioSrc] = process.argv.slice(2)
 
+// Only a fallback: the engine reports the rate it actually produced, and
+// `outputSampleRate` (plus the LavaSR enhancer) can move it off this default.
 const CHATTERBOX_SAMPLE_RATE = 24000
 
 try {
@@ -47,18 +49,16 @@ try {
   })
 
   const audioBuffer = await result.buffer
+  const sampleRate = (await result.sampleRate) ?? CHATTERBOX_SAMPLE_RATE
   console.log(`▸ TTS complete. Total bytes: ${audioBuffer.length}`)
 
   console.log('▸ Saving audio to file...')
-  createWav(audioBuffer, CHATTERBOX_SAMPLE_RATE, 'tts-output.wav')
+  createWav(audioBuffer, sampleRate, 'tts-output.wav')
   console.log('▸ Audio saved to tts-output.wav')
 
   console.log('▸ Playing audio...')
   const audioData = int16ArrayToBuffer(audioBuffer)
-  const wavBuffer = Buffer.concat([
-    createWavHeader(audioData.length, CHATTERBOX_SAMPLE_RATE),
-    audioData
-  ])
+  const wavBuffer = Buffer.concat([createWavHeader(audioData.length, sampleRate), audioData])
   playAudio(wavBuffer)
   console.log('▸ Audio playback complete')
 

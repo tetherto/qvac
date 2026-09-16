@@ -1703,6 +1703,204 @@ TEST_F(LoadFitNormalizationTest, UnknownGenericArgumentRemainsInvalid) {
       qvac_errors::StatusError);
 }
 
+TEST_F(LoadFitNormalizationTest, PositiveNegatableBooleanEnablesKvOffload) {
+  auto config = baseConfig();
+  config["kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_FALSE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+  EXPECT_EQ(result.params.n_parallel, 2);
+}
+
+TEST_F(LoadFitNormalizationTest, NegatedSpellingDisablesKvOffload) {
+  auto config = baseConfig();
+  config["no-kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.no_kv_offload);
+}
+
+TEST_F(LoadFitNormalizationTest, NegatableBooleanLeavesNeighbouringKeysIntact) {
+  auto config = baseConfig();
+  config["ctx-size"] = "2048";
+  config["no-kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_ctx, 2048);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+}
+
+TEST_F(LoadFitNormalizationTest, FalseyValueDisablesKvOffload) {
+  auto config = baseConfig();
+  config["kv-offload"] = "off";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+  EXPECT_EQ(result.params.n_parallel, 2);
+}
+
+TEST_F(LoadFitNormalizationTest, FalseyValueOnNegatedSpellingEnablesKvOffload) {
+  auto config = baseConfig();
+  config["no-kv-offload"] = "false";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_FALSE(result.params.no_kv_offload);
+}
+
+TEST_F(LoadFitNormalizationTest, UnknownBooleanValueIsRejected) {
+  auto config = baseConfig();
+  config["kv-offload"] = "maybe";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, ContradictorySpellingsAreRejected) {
+  auto config = baseConfig();
+  config["kv-offload"] = "";
+  config["no-kv-offload"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, ContradictoryUnderscoreAliasesAreRejected) {
+  auto config = baseConfig();
+  config["kv_offload"] = "on";
+  config["no_kv_offload"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, AgreeingSpellingsAreAccepted) {
+  auto config = baseConfig();
+  config["kv-offload"] = "off";
+  config["no-kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+  EXPECT_EQ(result.params.n_parallel, 2);
+}
+
+TEST_F(
+    LoadFitNormalizationTest,
+    DeprecatedAliasesSelectingDifferentModesAreRejected) {
+  auto config = baseConfig();
+  config["no-mmap"] = "";
+  config["direct-io"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, DeprecatedAliasesAgreeingOnNoneAreAccepted) {
+  auto config = baseConfig();
+  config["no-mmap"] = "";
+  config["no-direct-io"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
+TEST_F(LoadFitNormalizationTest, DeprecatedAliasPolarityFromValueIsHonoured) {
+  auto config = baseConfig();
+  config["mmap"] = "off";
+  config["direct-io"] = "off";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
+TEST_F(LoadFitNormalizationTest, LoadModeWithDeprecatedMmapAliasIsRejected) {
+  auto config = baseConfig();
+  config["load-mode"] = "mlock";
+  config["no-mmap"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(
+    LoadFitNormalizationTest, LoadModeWithDeprecatedDirectIoAliasIsRejected) {
+  auto config = baseConfig();
+  config["load_mode"] = "dio";
+  config["no_direct_io"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, InvalidChatTemplateRemainsInvalid) {
   auto config = baseConfig();
   config["chat-template"] = "invalid_template_name_xyz123";

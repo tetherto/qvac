@@ -72,7 +72,9 @@ Present, in the same order, in essentially every addon:
   `node_modules`.
 - `VCPKG_OVERLAY_TRIPLETS` prepend of `../../vcpkg-overlays/triplets`.
 - Android STL set before `project()`.
-- libc++ on Linux (`-stdlib=libc++`, `-static-libstdc++`).
+- libc++ on Linux (`-stdlib=libc++`) — the library, but not how it is linked:
+  each target either imports the one runtime fabric owns or carries its own
+  static copy, chosen per target by the two helpers below.
 - lint-cpp sync (`configure_file` of `.clang-format` / `.clang-tidy` /
   `.valgrind.supp` / pre-commit hook).
 - C++20 block (`CMAKE_CXX_STANDARD 20`, `EXTENSIONS OFF`, `PIC ON`).
@@ -170,7 +172,22 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
   `BACKENDS_SUBDIR_VALUE` (`<host>/qvac__fabric`) in the caller's scope.
 - `qvac_addon_link_fabric(<addon_target> <fabric_target>)` — the two-target link
   split (`qvac-fabric::headers` on the lib, `${fabric_target}_module` on the
-  module).
+  module), plus `qvac_addon_import_fabric_cxx_runtime` on the module.
+- `qvac_addon_import_fabric_cxx_runtime(<target>)` — Linux only: link `<target>`
+  with `-nostdlib++` so libc++ / libc++abi come from fabric rather than a second
+  static copy. Two copies means two `std::exception` typeinfos, and RTTI matches
+  by address, so an addon could not `catch` what fabric threw. Fabric exports the
+  ABI from `packages/fabric/symbols-linux-cxx-runtime.map`, spliced into its
+  version script for Linux targets only; Android keeps the NDK's shared libc++ on
+  both sides and needs none of this. Only a target that links fabric may use
+  this. Applied for you by `qvac_addon_link_fabric` and
+  `qvac_addon_stage_fabric_for_test`. Rationale:
+  `arch/qips/linux-fabric-libcxx-ownership.md`.
+- `qvac_addon_static_cxx_runtime(<target>)` — Linux only: the other half of that
+  choice, `-static-libstdc++`, for a target that does *not* link fabric and so
+  has no runtime to import. Applied for you by `qvac_addon_add_fuzz_target` when
+  `LINK_FABRIC` is omitted. Mutually exclusive with the helper above: both on one
+  target leaves `-static-libstdc++` inert and the driver says so.
 - `qvac_addon_finalize(<addon_target> [SUBDIR <value>])` — everything applied to
   every module: Linux `--exclude-libs,ALL`, `JS_LOGGER`, `BACKENDS_SUBDIR`
   define, platform-derived `GGML_BACKEND_DL`, and (via dedicated helpers it
@@ -181,7 +198,9 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
 - `qvac_addon_stage_fabric_for_test(<test_target> <fabric_target>)` — test-only:
   `GGML_BACKEND_DL`/`GGML_BACKEND_DIR`, copy `qvac__fabric@0.bare` + glob fabric
   backends next to the test binary, set `$ORIGIN`/`@loader_path` rpath, link
-  `bare_delay_load` on win32. (ASan and coverage stay in the addon's test file.)
+  `bare_delay_load` on win32, and take fabric's C++ runtime on Linux so the test
+  binary links the way the production module does. (ASan and coverage stay in the
+  addon's test file.)
 
 ### Target template skeleton
 
