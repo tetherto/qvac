@@ -23,7 +23,12 @@ const DEFERRED_MODULES = ['expo-file-system', 'react-native-bare-kit']
  */
 const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn', '@qvac/model-fit/process']
 
-const MOBILE_HOSTS = ['android-arm64', 'ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
+type MobilePlatform = 'android' | 'ios'
+
+const MOBILE_HOSTS_BY_PLATFORM: Record<MobilePlatform, string[]> = {
+  android: ['android-arm64'],
+  ios: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
+}
 
 type BareKitLinkerPaths = {
   android: string | null
@@ -54,10 +59,17 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       ...MOBILE_UNSUPPORTED_MODULES,
       `${sdkPackage.name}/worker.mobile.bundle`
     ]
-    const linkerPaths = await runBundler(projectRoot, sdkPackage.dir, configPath, deferredModules)
+    const hosts = mobileHostsForPlatform(config.modRequest.platform)
+    const linkerPaths = await runBundler(
+      projectRoot,
+      sdkPackage.dir,
+      configPath,
+      deferredModules,
+      hosts
+    )
 
     const generatedBundle = path.join(projectRoot, 'qvac', 'worker.bundle.js')
-    await runVerifier(projectRoot, generatedBundle, configPath)
+    await runVerifier(projectRoot, generatedBundle, configPath, hosts)
 
     fs.copyFileSync(generatedBundle, outputPath)
 
@@ -74,6 +86,15 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
   return config
 }
 
+function mobileHostsForPlatform(platform: string) {
+  if (platform !== 'android' && platform !== 'ios') {
+    throw new Error(
+      `QVAC: withMobileBundle only supports android and ios builds, got "${platform}"`
+    )
+  }
+  return MOBILE_HOSTS_BY_PLATFORM[platform]
+}
+
 /** Finds qvac.config.* file in project root */
 function findConfigFile(projectRoot: string): string | null {
   for (const candidate of CONFIG_CANDIDATES) {
@@ -88,7 +109,8 @@ function findConfigFile(projectRoot: string): string | null {
 async function runVerifier(
   projectRoot: string,
   generatedBundle: string,
-  configPath: string | null
+  configPath: string | null,
+  hosts: string[]
 ) {
   if (!configPath) {
     console.log(
@@ -101,7 +123,7 @@ async function runVerifier(
   const result = await verifyBundle({
     projectRoot,
     addonsSource: generatedBundle,
-    hosts: MOBILE_HOSTS,
+    hosts,
     ...(configPath ? { configPath } : {})
   })
 
@@ -117,7 +139,8 @@ async function runBundler(
   projectRoot: string,
   qvacSdkPath: string,
   configPath: string | null,
-  deferredModules: string[]
+  deferredModules: string[],
+  hosts: string[]
 ): Promise<BareKitLinkerPaths> {
   const linkerPaths = patchBareKitLinkers(projectRoot, qvacSdkPath)
 
@@ -125,7 +148,7 @@ async function runBundler(
     projectRoot,
     sdkPath: qvacSdkPath,
     ...(configPath ? { configPath } : {}),
-    hosts: MOBILE_HOSTS,
+    hosts,
     defer: deferredModules,
     quiet: true
   })
@@ -212,7 +235,13 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string): BareKitL
   return { android: androidLinkerPath, ios: iosLinkerPath }
 }
 
-export { MOBILE_HOSTS, MOBILE_UNSUPPORTED_MODULES, patchBareKitLinkers, runIOSAddonLinker }
-export type { BareKitLinkerPaths }
+export {
+  MOBILE_HOSTS_BY_PLATFORM,
+  MOBILE_UNSUPPORTED_MODULES,
+  mobileHostsForPlatform,
+  patchBareKitLinkers,
+  runIOSAddonLinker
+}
+export type { BareKitLinkerPaths, MobilePlatform }
 
 export default withMobileBundle

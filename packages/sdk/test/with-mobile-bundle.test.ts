@@ -3,14 +3,18 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  MOBILE_HOSTS,
+  MOBILE_HOSTS_BY_PLATFORM,
   MOBILE_UNSUPPORTED_MODULES,
+  mobileHostsForPlatform,
   patchBareKitLinkers,
   runIOSAddonLinker
 } from '@/expo/plugins/withMobileBundle'
 
-test('MOBILE_HOSTS: canonical mobile host set', (t) => {
-  t.alike(MOBILE_HOSTS, ['android-arm64', 'ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'])
+test('mobileHostsForPlatform: each build target bundles and verifies only its own hosts', (t) => {
+  t.alike(mobileHostsForPlatform('android'), ['android-arm64'])
+  t.alike(mobileHostsForPlatform('ios'), ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator'])
+  t.alike(Object.keys(MOBILE_HOSTS_BY_PLATFORM), ['android', 'ios'])
+  t.exception(() => mobileHostsForPlatform('web'), /only supports android and ios/)
 })
 
 test('MOBILE_UNSUPPORTED_MODULES: desktop-only fit subprocess stays out of mobile bundles', (t) => {
