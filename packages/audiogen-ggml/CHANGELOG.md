@@ -21,7 +21,7 @@ model load. Local source-build behaviour is unchanged.
 
 ## Pull Requests
 
-- [#PR](https://github.com/tetherto/qvac/pull/PR) - fix(audiogen-ggml): handle split package addon loading
+- [#4496](https://github.com/tetherto/qvac/pull/4496) - fix(audiogen-ggml): handle split package addon loading
 
 
 ### Changed
