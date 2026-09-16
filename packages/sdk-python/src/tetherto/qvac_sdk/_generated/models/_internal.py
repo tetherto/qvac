@@ -1585,6 +1585,13 @@ class BatchCompletionStreamRequestPromptsItemGenerationParams(GeneratedBaseModel
             description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
+    tool_choice: Annotated[
+        str | None,
+        Field(
+            description='Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.',
+            min_length=1,
+        ),
+    ] = None
 
 
 class BatchCompletionStreamRequestPromptsItemResponseFormatText(GeneratedBaseModel):
@@ -1952,6 +1959,9 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    tool_definitions_dropped: Annotated[
+        float | None, Field(alias="toolDefinitionsDropped")
+    ] = None
     backend_device: Annotated[
         BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice
         | None,
@@ -2084,6 +2094,9 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    tool_definitions_dropped: Annotated[
+        float | None, Field(alias="toolDefinitionsDropped")
+    ] = None
     backend_device: Annotated[
         BatchCompletionStreamResponseStatsBackendDevice | None,
         Field(
@@ -2549,6 +2562,13 @@ class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
             description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
         ),
     ] = None
+    tool_choice: Annotated[
+        str | None,
+        Field(
+            description='Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.',
+            min_length=1,
+        ),
+    ] = None
 
 
 class CompletionOrchestrateRequestToolDialect(Enum):
@@ -2828,6 +2848,9 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    tool_definitions_dropped: Annotated[
+        float | None, Field(alias="toolDefinitionsDropped")
+    ] = None
     backend_device: Annotated[
         CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice | None,
         Field(
@@ -3085,6 +3108,13 @@ class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
         bool | None,
         Field(
             description="When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error."
+        ),
+    ] = None
+    tool_choice: Annotated[
+        str | None,
+        Field(
+            description='Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.',
+            min_length=1,
         ),
     ] = None
 
@@ -3355,6 +3385,9 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
+    tool_definitions_dropped: Annotated[
+        float | None, Field(alias="toolDefinitionsDropped")
+    ] = None
     backend_device: Annotated[
         CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice | None,
         Field(
