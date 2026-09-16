@@ -17,8 +17,12 @@ from .._transport import Transport
 from . import (
     AssessModelFitRequest,
     AssessModelFitResponse,
+    AudioEditStreamRequest,
+    AudioEditStreamResponse,
     AudioGenStreamRequest,
     AudioGenStreamResponse,
+    AudioUnderstandRequest,
+    AudioUnderstandResponse,
     BatchCompletionStreamRequest,
     BatchCompletionStreamResponse,
     BciTranscribeRequest,
@@ -108,12 +112,28 @@ async def assess_model_fit(
     return AssessModelFitResponse.model_validate(await transport.call(payload))
 
 
+async def audio_edit_stream(
+    transport: Transport, params: AudioEditStreamRequest
+) -> AsyncIterator[AudioEditStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioEditStreamResponse.model_validate(chunk)
+
+
 async def audio_gen_stream(
     transport: Transport, params: AudioGenStreamRequest
 ) -> AsyncIterator[AudioGenStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield AudioGenStreamResponse.model_validate(chunk)
+
+
+async def audio_understand(
+    transport: Transport, params: AudioUnderstandRequest
+) -> AsyncIterator[AudioUnderstandResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioUnderstandResponse.model_validate(chunk)
 
 
 async def batch_completion_stream(
@@ -457,7 +477,9 @@ async def world_step_stream(
 
 __all__ = [
     "assess_model_fit",
+    "audio_edit_stream",
     "audio_gen_stream",
+    "audio_understand",
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",

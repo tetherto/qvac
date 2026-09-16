@@ -8,7 +8,9 @@
  */
 export const methodShapes = {
   assessModelFit: 'reply',
+  audioEditStream: 'stream',
   audioGenStream: 'stream',
+  audioUnderstand: 'stream',
   batchCompletionStream: 'stream',
   bciTranscribe: 'stream',
   bciTranscribeStream: 'duplex',
