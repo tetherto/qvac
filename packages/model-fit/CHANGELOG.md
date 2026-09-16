@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0] - 2026-09-16
+
+### Added
+
+- `fitParamsAsync(config)`: `fitParams` on a worker thread, returned as a Promise — same config, validation and result, without blocking the caller's JS loop. Backend registration still happens on the calling thread before the fit is queued, so the registry sees the same ordering as the synchronous path ([#4495](https://github.com/tetherto/qvac/pull/4495)).
+- `llamaConfigFitAsync` on the private binding: the same worker-thread shape for the load-config fitter the process runner and `@qvac/inference` use.
+
 ## [0.11.1] - 2026-09-16
 
 ### Changed
