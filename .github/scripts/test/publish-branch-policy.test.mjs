@@ -15,8 +15,8 @@ const PUBLISH_MARKER = /npm-publish-logic|publish-library-to-(gpr|npm)/
 
 const ALLOWED = ['release-*']
 
-// Same markers, different family: single-job npm publishes, out of QVAC-23047's
-// scope. Listed so they are explicitly exempt rather than silently failing.
+// Same markers, different family: single-job npm publishes with no prebuild
+// matrix. Listed so they are explicitly exempt rather than silently failing.
 const LIBRARY_PUBLISHERS = new Set([
   'publish-registry-server.yml',
   'publish-sdk.yml',
