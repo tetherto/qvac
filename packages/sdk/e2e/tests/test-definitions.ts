@@ -13,6 +13,7 @@ import { translationBergamotCacheTests } from './translation-bergamot-cache-test
 import { translationLlmTests } from './translation-llm-tests.js'
 import { modelInfoTests } from './model-info-tests.js'
 import { kvCacheTests } from './kv-cache-tests.js'
+import { kvCacheRestartTests } from './kv-cache-restart-tests.js'
 import { errorTests } from './error-tests.js'
 import { toolsTests } from './tools-tests.js'
 import { ocrTests } from './ocr-tests.js'
@@ -299,6 +300,7 @@ export const tests = [
 
   // KV cache tests
   ...kvCacheTests,
+  ...kvCacheRestartTests,
 
   // Error tests
   ...errorTests,
