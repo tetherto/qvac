@@ -186,8 +186,10 @@ jobs:
           tag: ${{ inputs.npm_tag || 'latest' }}
 
       # Move each prebuilds/<host> dir into a per-platform package and inject
-      # the version-locked optionalDependencies into the meta package.json, so
-      # the meta tarball published below ships JS only.
+      # the version-locked optionalDependencies for host-filtered (desktop)
+      # slices into the meta package.json, so the meta tarball published below
+      # ships JS only. Cross-built mobile slices are not injected: consumers
+      # declare them as direct dependencies.
       - name: Slice platform packages
         run: node scripts/ci/slice-platform-packages.mjs --workdir packages/audiogen-ggml --out-dir "${{ runner.temp }}/platform-packages"
 
