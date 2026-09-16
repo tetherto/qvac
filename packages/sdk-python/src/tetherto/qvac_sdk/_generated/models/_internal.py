@@ -8306,7 +8306,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     gpu_layers: Annotated[
         float | None,
         Field(
-            description="Number of model layers to offload to the GPU. Default 99 (offload all)."
+            description="Number of model layers to offload to the GPU. Unset by default, which lets the runtime fit the placement to free device memory (offloading every layer when it fits). Setting it pins the layer count and disables that fit."
         ),
     ] = None
     lora: Annotated[
