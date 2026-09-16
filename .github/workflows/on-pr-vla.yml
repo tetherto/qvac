@@ -16,12 +16,13 @@ on:
     paths:
       - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
-      # The files these lanes' model cache keys hash. project.json defines the
-      # S3 set for the integration lane and the nx lane alike; the composite
-      # still defines the GR00T parity set for cpp-tests. Without them a PR that
-      # only edits one moves the cache key without running a single vla test.
-      - "packages/vla-ggml/project.json"
+      # What decides the model set and how it is laid out. project.json is
+      # already covered by packages/vla-ggml/** above; these are not, and a PR
+      # touching only one of them would otherwise change what the lane stages
+      # without running a single vla test.
       - ".github/actions/download-vla-groot-parity/**"
+      - ".github/actions/stage-integration-models/**"
+      - ".github/actions/project-model-s3/**"
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:

@@ -17,6 +17,13 @@ on:
     # invalidate the entry.
     paths:
       - "packages/translation-nmtcpp/project.json"
+      # And the code that lays the models out. project.json says WHAT to fetch;
+      # these decide where it lands. A fix to the destdir handling that is not
+      # in any key and not in any filter would never re-seed: the old layout
+      # keeps being restored, and every nmtcpp entry is skipOnCacheHit so the
+      # lane downloads nothing and stays green on it.
+      - ".github/actions/stage-integration-models/**"
+      - ".github/actions/project-model-s3/**"
       # `paths` is pinned at the call site, but cache-models still builds the key
       # string and resolves the hash glob, so an edit there can still move this
       # entry. A run that finds nothing moved costs seconds: the probe answers

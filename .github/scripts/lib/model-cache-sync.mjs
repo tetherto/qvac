@@ -287,7 +287,9 @@ export function findOrphanedSeeds(files) {
  *
  * The nx-vs-per-addon pairs for vla and translation were here until those two
  * moved onto project.json as their single model definition -- all three
- * consumers now share one key, so there is nothing left to collide. Each is a real hazard: the
+ * consumers now share one key, so there is nothing left to collide.
+ *
+ * Each remaining entry is a real hazard: the
  * shorter leg can prefix-match the other's entry, find its files present, skip
  * its own download and save the union under its own key. None is introduced by
  * the model-cache seeding work, and fixing them changes what other lanes
