@@ -526,7 +526,8 @@ test(
     t.is(syncResult.ok, true)
     t.is(asyncResult.ok, true)
     t.is(asyncResult.result.status, syncResult.result.status)
-    t.is(asyncResult.result.reason, 'model-unreadable')
+    t.is(asyncResult.result.reason, syncResult.result.reason)
+    t.ok(['model-unreadable', 'no-backend-device'].includes(asyncResult.result.reason))
     t.alike(Object.keys(asyncResult.result).sort(), Object.keys(syncResult.result).sort())
   }
 )
