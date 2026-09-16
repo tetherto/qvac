@@ -538,6 +538,10 @@ private:
   bool isPrefillOnlyRequest_ = false;
   bool mtpDraftRequested_ = false;
   bool specDisabledByCache_ = false;
+  // Avoid retrying a known-failing full draft-context allocation on every
+  // reset after a cache-sidecar mismatch. A model reload creates a new context
+  // and may try again.
+  bool specBuildFailed_ = false;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
   // prefill-entry snapshot (cancel during prefill), the reasoning-boundary

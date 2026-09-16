@@ -1989,9 +1989,11 @@ void TextLlmContext::resetState(bool resetStats) {
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
 
-  if (specDisabledByCache_ && mtpDraftRequested_ && params_.n_parallel <= 1 &&
-      params_.n_batch >= 2) {
-    specDisabledByCache_ = !buildMtpDraftContext("TextLlm");
+  if (specDisabledByCache_ && !specBuildFailed_ && mtpDraftRequested_ &&
+      params_.n_parallel <= 1 && params_.n_batch >= 2) {
+    const bool rebuilt = buildMtpDraftContext("TextLlm");
+    specDisabledByCache_ = !rebuilt;
+    specBuildFailed_ = !rebuilt;
   }
 }
 
