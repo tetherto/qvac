@@ -142,3 +142,12 @@ jobs:
           npm.cmd config get loglevel
           npm.cmd install --loglevel=verbose --foreground-scripts --timing
           exit $LASTEXITCODE
+
+      - name: Check original PowerShell npm invocation from a clean install
+        working-directory: ${{ github.workspace }}/packages/tts-ggml
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force node_modules
+          Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
+          npm install
+          exit $LASTEXITCODE
