@@ -30,6 +30,12 @@ const MOBILE_HOSTS_BY_PLATFORM: Record<MobilePlatform, string[]> = {
   ios: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
 }
 
+/** Resolver copied beside each patched linker; the patch imports it relatively. */
+const PLATFORM_ADDON_RESOLVER = 'qvac-platform-addons.mjs'
+
+/** Every mobile host, in platform order. The bundle covers all of them. */
+const MOBILE_HOSTS = [...MOBILE_HOSTS_BY_PLATFORM.android, ...MOBILE_HOSTS_BY_PLATFORM.ios]
+
 type BareKitLinkerPaths = {
   android: string | null
   ios: string | null
@@ -59,17 +65,25 @@ function withMobileBundle(config: ExpoConfig): ExpoConfig {
       ...MOBILE_UNSUPPORTED_MODULES,
       `${sdkPackage.name}/worker.mobile.bundle`
     ]
-    const hosts = mobileHostsForPlatform(config.modRequest.platform)
+    // The bundle is one shared artifact both platforms import, so it is built
+    // for every mobile host: a dual-platform `expo prebuild` runs this mod twice
+    // and the second run would otherwise overwrite the first platform's bundle
+    // with one that resolved the other platform's conditions.
     const linkerPaths = await runBundler(
       projectRoot,
       sdkPackage.dir,
       configPath,
       deferredModules,
-      hosts
+      MOBILE_HOSTS
     )
 
     const generatedBundle = path.join(projectRoot, 'qvac', 'worker.bundle.js')
-    await runVerifier(projectRoot, generatedBundle, configPath, hosts)
+    await runVerifier(
+      projectRoot,
+      generatedBundle,
+      configPath,
+      mobileHostsForPlatform(config.modRequest.platform)
+    )
 
     fs.copyFileSync(generatedBundle, outputPath)
 
@@ -210,32 +224,36 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string): BareKitL
     return { android: null, ios: null }
   }
 
-  const androidPatch = path.join(patchesDir, 'android-link.mjs')
-  const androidTarget = path.join(bareKitPath, 'android', 'link.mjs')
-  let androidLinkerPath: string | null = null
-  if (fs.existsSync(androidPatch)) {
-    fs.copyFileSync(androidPatch, androidTarget)
-    console.log('✅ QVAC: Patched android/link.mjs for manifest-aware linking')
-    androidLinkerPath = androidTarget
-  } else {
-    console.log(`⚠️ QVAC: Android linker patch not found (${androidPatch})`)
+  return {
+    android: copyLinkerPatch(patchesDir, path.join(bareKitPath, 'android'), 'android-link.mjs'),
+    ios: copyLinkerPatch(patchesDir, path.join(bareKitPath, 'ios'), 'ios-link.mjs')
+  }
+}
+
+/**
+ * Copies one linker patch and the split-addon resolver it imports, returning the
+ * installed linker path. The resolver has to sit beside the linker: the patch is
+ * installed into react-native-bare-kit and imports it relatively.
+ */
+function copyLinkerPatch(patchesDir: string, targetDir: string, patchName: string): string | null {
+  const patch = path.join(patchesDir, patchName)
+  const resolver = path.join(patchesDir, PLATFORM_ADDON_RESOLVER)
+  if (!fs.existsSync(patch) || !fs.existsSync(resolver)) {
+    // Installing the patch without the resolver it imports would break linking
+    // outright, so leave the stock linker in place instead.
+    console.log(`⚠️ QVAC: linker patch incomplete (${patch}), leaving the stock linker`)
+    return null
   }
 
-  const iosPatch = path.join(patchesDir, 'ios-link.mjs')
-  const iosTarget = path.join(bareKitPath, 'ios', 'link.mjs')
-  let iosLinkerPath: string | null = null
-  if (fs.existsSync(iosPatch)) {
-    fs.copyFileSync(iosPatch, iosTarget)
-    console.log('✅ QVAC: Patched ios/link.mjs for manifest-aware linking')
-    iosLinkerPath = iosTarget
-  } else {
-    console.log(`⚠️ QVAC: iOS linker patch not found (${iosPatch})`)
-  }
-
-  return { android: androidLinkerPath, ios: iosLinkerPath }
+  const target = path.join(targetDir, 'link.mjs')
+  fs.copyFileSync(patch, target)
+  fs.copyFileSync(resolver, path.join(targetDir, PLATFORM_ADDON_RESOLVER))
+  console.log(`✅ QVAC: Patched ${path.basename(targetDir)}/link.mjs for manifest-aware linking`)
+  return target
 }
 
 export {
+  MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
   MOBILE_UNSUPPORTED_MODULES,
   mobileHostsForPlatform,
