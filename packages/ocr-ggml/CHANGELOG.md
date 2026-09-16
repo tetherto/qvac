@@ -4,11 +4,11 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.25.0] - 2026-09-15
+## [0.24.1] - 2026-09-16
 
 ### Changed
 
-- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own.
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.24.x` line pick this up without a range change of their own.
 - One C++ runtime per process means one copy of every `std::` typeinfo, and RTTI matches typeinfo by address rather than by name. Where this addon surfaces an exception raised inside the shared runtime, it now arrives with its own message, because `JSCATCH`'s `catch (const std::exception&)` arm matches the throw instead of falling through to the catch-all that reports `INTERNAL_ERROR` / `"Unknown error"`. The EasyOCR and DocTR pipelines define no `std::exception` handler of their own, so no behavioural change is expected here — for this package the release is the link model and the floor. Linux only; macOS, Windows, Android and iOS already shared one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4477](https://github.com/tetherto/qvac/pull/4477)).
 
 ## [0.24.0] - 2026-09-15

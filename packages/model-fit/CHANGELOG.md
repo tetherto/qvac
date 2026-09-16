@@ -1,10 +1,10 @@
 # Changelog
 
-## [0.12.0] - 2026-09-15
+## [0.11.1] - 2026-09-16
 
 ### Changed
 
-- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own.
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.11.x` line pick this up without a range change of their own.
 
 ### Fixed
 
