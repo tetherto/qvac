@@ -455,6 +455,35 @@ jobs:
           snap version
           snapcraft --version
 
+      # Preflight: snapcraft's gpu-2404/graphics-core22 part clones github.com
+      # (IPv4-only) from inside the LXD build instance. If the runner drops IPv4
+      # forwarding off the lxdbr0 bridge (Docker's `iptables -P FORWARD DROP` with
+      # no ACCEPT for lxdbr0), that clone hangs ~2 min and dies with exit 128 — and
+      # IPv6-capable mirrors (snap store, archive) keep working, hiding the cause.
+      # Reproduce the exact path cheaply and fail in ~15s with an actionable message.
+      # LXD-only (self-hosted); the github-hosted `destructive` build has no LXD.
+      - name: Preflight — LXD instance IPv4 egress to GitHub
+        if: inputs.consumer == 'snap' && env.QVAC_TEST_SNAP_BUILD_MODE == 'lxd'
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe="qvac-egress-preflight-$$"
+          cleanup() { lxc delete -f "$probe" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          # Don't swallow launch output: under `set -e` a failed launch would exit
+          # with an empty log and never reach the actionable `::error::` below.
+          lxc launch ubuntu:22.04 "$probe"
+          for _ in $(seq 1 20); do
+            if lxc exec "$probe" -- getent hosts github.com >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          if lxc exec "$probe" -- curl -4 -fsS --max-time 15 -o /dev/null https://github.com; then
+            echo "IPv4 egress from an LXD instance to github.com is OK."
+          else
+            echo "::error::LXD build instances cannot reach github.com over IPv4, so snapcraft's gpu-2404/graphics-core22 part will hang cloning it. This is almost always Docker's 'iptables -P FORWARD DROP' with no ACCEPT for the lxdbr0 bridge. Fix on the runner: ensure lxd-docker-forward.service is enabled (qvac-devops ansible: --tags snap-fw) so DOCKER-USER accepts lxdbr0 in+out."
+            exit 1
+          fi
+
       - name: Build first Snap revision
         if: inputs.consumer == 'snap'
         working-directory: ${{ inputs.working-directory }}

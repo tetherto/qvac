@@ -6,6 +6,24 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  * Generates PCM audio using a loaded AudioGen model.
  *
  * @param params - Loaded model ID, required caption, and optional lyrics, musical controls, duration, and seed.
+ * @param params.augmentCaptionWithMetadata - ACE-Step only: append BPM/tempo, time signature, and
+ *   key guidance to the internal conditioning caption (default `false`).
+ * @param params.audioCodes - ACE-Step only: frozen semantic codes (`Int32Array` or `number[]`)
+ *   to synthesize instead of running the LM.
+ * @param params.simpleMode - ACE-Step only: treat `caption` as a short query and let the LM compose
+ *   the full request. Requires `taskType: "text2music"`; mutually exclusive with `rewriteQuery`.
+ * @param params.rewriteQuery - ACE-Step only: the LM rewrites `caption` into a detailed description,
+ *   keeping the lyrics. Needs real `lyrics`, and `taskType: "text2music"`.
+ * @param params.generateLrc - ACE-Step only: return karaoke-style LRC in `stats.lrc` with an
+ *   alignment confidence in `stats.lyricsScore`. Needs lyrics, and `taskType: "text2music"`.
+ * @param params.computeQualityScore - ACE-Step only: report a weighted `[0, 1]` match of the codes
+ *   against the request in `stats.qualityScore`. Requires `taskType: "text2music"`.
+ * @param params.normalizeLoudness - ACE-Step only: percentile loudness normalization on the output
+ *   (default `true`). Set `false` for the raw engine output.
+ * @param params.guidanceScale - ACE-Step only: DiT classifier-free guidance scale; `0` (default)
+ *   resolves per DiT variant.
+ * @param params.track - ACE-Step only: the instrument layer the `"lego"` task regenerates.
+ *   Required when `taskType` is `"lego"` and rejected otherwise.
  * @param params.maxFrames - MiniMax semantic-frame cap; mutually exclusive with `duration`.
  * @param params.inferenceSteps - MiniMax flow steps for this run.
  * @param params.cfgScale - MiniMax flow classifier-free guidance scale for this run.
@@ -13,7 +31,7 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  *   or raw interleaved stereo 48 kHz Float32 LE PCM bytes.
  * @param params.sourceAudio - Source audio to re-render (same forms as `referenceAudio`);
  *   required when `taskType` is `"cover-nofsq"`.
- * @param params.taskType - `"text2music"` (default) or `"cover-nofsq"`.
+ * @param params.taskType - `"text2music"` (default), `"cover-nofsq"`, or `"lego"`.
  * @param params.audioCoverStrength - Source-context strength for cover tasks (0..1).
  * @param params.coverNoiseStrength - Initial source/noise blend for cover tasks (0..1).
  * @returns A run with a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise describing the backend the run resolved to.
@@ -62,6 +80,25 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  *   sourceAudio: "/path/to/source.wav",
  *   referenceAudio: "/path/to/reference.mp3",
  *   coverNoiseStrength: 0.75,
+ * });
+ *
+ * // Let the LM expand a one-line query, and score and timestamp the take:
+ * const assisted = audioGen({
+ *   modelId,
+ *   caption: "a hopeful indie track for a road-trip montage",
+ *   simpleMode: true,
+ *   generateLrc: true,
+ *   computeQualityScore: true,
+ * });
+ * const { lrc, lyricsScore, qualityScore } = (await assisted.stats) ?? {};
+ *
+ * // Rebuild one layer of an existing song:
+ * const newDrums = audioGen({
+ *   modelId,
+ *   caption: "the same song with a busier, live-sounding kit",
+ *   taskType: "lego",
+ *   track: "drums",
+ *   sourceAudio: "/path/to/song.wav",
  * });
  * ```
  */
