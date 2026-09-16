@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.16.0] - 2026-09-16
 
 ### Changed
 
@@ -43,7 +43,11 @@
   by type stops matching. It still loads, because an unversioned reference binds
   to a default-versioned definition. On `0.x` a caret range locks the minor, so
   `^0.15.0` is what keeps already-published consumers away from it; a patch
-  would reach them and degrade them.
+  would reach them and degrade them. The six in-tree consumers move to
+  `^0.16.0` in the same commit: `pnpm-workspace.yaml` sets
+  `linkWorkspacePackages: true` and resolves from the registry once the
+  workspace version stops satisfying the range, so a lone bump here would have
+  quietly built all of them against the published 0.15.0.
 
   The node name is part of the Linux ABI: renaming it is a rebuild of every
   consumer. Android is the other ELF target sharing `symbols.map` and exports
