@@ -33,7 +33,7 @@ struct ContextUsage {
 /// rejected and the restored KV cleared, never accepted with a defaulted
 /// `cacheTokens`. See `MtmdLlmContext::loadCache`.
 [[nodiscard]] inline bool mtmdSessionMetadataIsComplete(size_t tokenCount) {
-  return tokenCount == SESSION_METADATA_FIELD_COUNT;
+  return SessionMetadata::isComplete(tokenCount);
 }
 
 /// Multimodal LLM context. Implements both the legacy `LlmContext` API

@@ -16,6 +16,7 @@
 // lines) into the test log.
 
 const path = require('bare-path')
+const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest, cleanupIntegrationCacheFiles } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -67,6 +68,10 @@ const PROMPT = [
   { role: 'system', content: 'You are a helpful assistant.' },
   { role: 'user', content: 'What is the capital of France? Answer in one complete sentence.' }
 ]
+
+function mtpCacheFiles(cachePath) {
+  return [cachePath, `${cachePath}.mtp-draft`, `${cachePath}.mtp-state`]
+}
 
 async function collectResponse(response) {
   const chunks = []
@@ -326,7 +331,7 @@ safeTest(
 
 safeTest('Qwen3.5-0.8B MTP commits a one-token generation', { timeout: 600_000 }, async (t) => {
   const cachePath = path.join(os.tmpdir(), `qvac-mtp-one-token-${Date.now()}.bin`)
-  t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
+  t.teardown(() => cleanupIntegrationCacheFiles(mtpCacheFiles(cachePath)))
 
   const addon = await loadAddon(t, { withSpec: true, overrides: { n_predict: '1' } })
   const response = await addon.run(PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })
@@ -416,7 +421,7 @@ safeTest(
     // cache-state-machine.test.js's `path.join(dirPath, '<name>.bin')`.
     const [, dirPath] = await ensureModel({ modelName: MODEL.name })
     const cachePath = path.join(dirPath, 'mtp-cache-roundtrip.bin')
-    t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
+    t.teardown(() => cleanupIntegrationCacheFiles(mtpCacheFiles(cachePath)))
 
     const addon = await loadAddon(t, { withSpec: true })
     const runOpts = { cacheKey: cachePath, saveCacheToDisk: true }
@@ -442,15 +447,22 @@ safeTest(
   async (t) => {
     const [, dirPath] = await ensureModel({ modelName: MODEL.name })
     const cachePath = path.join(dirPath, 'mtp-cache-cold-load.bin')
-    t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
+    t.teardown(() => cleanupIntegrationCacheFiles(mtpCacheFiles(cachePath)))
 
-    const firstAddon = await loadAddon(t, { withSpec: true })
+    const firstAddon = await loadAddon(t, {
+      withSpec: true,
+      overrides: { n_predict: '2' }
+    })
     const first = await firstAddon.run(PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })
     const firstOutput = await collectResponse(first)
     t.ok(firstOutput.length > 0, 'first addon wrote a populated MTP cache')
+    t.ok(fs.statSync(`${cachePath}.mtp-state`).size > 0, 'first addon persisted MTP driver state')
     await firstAddon.unload()
 
-    const secondAddon = await loadAddon(t, { withSpec: true })
+    const secondAddon = await loadAddon(t, {
+      withSpec: true,
+      overrides: { n_predict: '2' }
+    })
     const second = await secondAddon.run(PROMPT, {
       cacheKey: cachePath,
       saveCacheToDisk: true
@@ -460,8 +472,62 @@ safeTest(
     t.ok(second.stats.draftTotal > 0, 'fresh addon restored enough draft state to propose tokens')
     t.ok(
       second.stats.draftAccepted > 0,
-      `fresh addon accepted MTP drafts after cold load (draftAccepted=${second.stats.draftAccepted})`
+      'fresh addon accepted a draft in the first and only verify round after cold load ' +
+        `(draftAccepted=${second.stats.draftAccepted})`
     )
+  }
+)
+
+safeTest(
+  'Qwen3.5-0.8B MTP rejects incomplete or mixed cache generations',
+  { timeout: 600_000 },
+  async (t) => {
+    const [, dirPath] = await ensureModel({ modelName: MODEL.name })
+    const sourceA = path.join(dirPath, 'mtp-cache-generation-a.bin')
+    const sourceB = path.join(dirPath, 'mtp-cache-generation-b.bin')
+    const interrupted = path.join(dirPath, 'mtp-cache-interrupted.bin')
+    const stateMismatch = path.join(dirPath, 'mtp-cache-state-mismatch.bin')
+    const missingDraft = path.join(dirPath, 'mtp-cache-missing-draft.bin')
+    const allPaths = [sourceA, sourceB, interrupted, stateMismatch, missingDraft]
+    t.teardown(() => cleanupIntegrationCacheFiles(allPaths.flatMap(mtpCacheFiles)))
+
+    const writer = await loadAddon(t, {
+      withSpec: true,
+      overrides: { n_predict: '8' }
+    })
+    await collectResponse(await writer.run(PROMPT, { cacheKey: sourceA, saveCacheToDisk: true }))
+    await collectResponse(await writer.run(PROMPT, { cacheKey: sourceB, saveCacheToDisk: true }))
+    await writer.unload()
+
+    fs.copyFileSync(sourceA, interrupted)
+    fs.copyFileSync(`${sourceB}.mtp-draft`, `${interrupted}.mtp-draft`)
+    fs.copyFileSync(`${sourceB}.mtp-state`, `${interrupted}.mtp-state`)
+
+    fs.copyFileSync(sourceA, stateMismatch)
+    fs.copyFileSync(`${sourceA}.mtp-draft`, `${stateMismatch}.mtp-draft`)
+    fs.copyFileSync(`${sourceB}.mtp-state`, `${stateMismatch}.mtp-state`)
+
+    fs.copyFileSync(sourceA, missingDraft)
+    fs.copyFileSync(`${sourceA}.mtp-state`, `${missingDraft}.mtp-state`)
+
+    for (const [label, cachePath] of [
+      ['interrupted promotion', interrupted],
+      ['mismatched driver state', stateMismatch],
+      ['missing draft', missingDraft]
+    ]) {
+      const reader = await loadAddon(t, {
+        withSpec: true,
+        overrides: { n_predict: '8' }
+      })
+      const response = await reader.run(PROMPT, {
+        cacheKey: cachePath,
+        saveCacheToDisk: false
+      })
+      const output = await collectResponse(response)
+      t.ok(output.length > 0, `${label} keeps the valid target cache usable`)
+      t.is(response.stats.draftTotal, 0, `${label} disables MTP for the restored cache`)
+      await reader.unload()
+    }
   }
 )
 

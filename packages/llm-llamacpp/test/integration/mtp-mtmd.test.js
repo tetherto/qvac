@@ -42,6 +42,10 @@ const TEXT_PROMPT = [
   { role: 'user', content: 'What is the capital of France? Answer in one complete sentence.' }
 ]
 
+function mtpCacheFiles(cachePath) {
+  return [cachePath, `${cachePath}.mtp-draft`, `${cachePath}.mtp-state`]
+}
+
 async function collectResponse(response) {
   const chunks = []
   const ticker = setInterval(() => {}, 50)
@@ -106,9 +110,44 @@ safeTest('mtmd context: text turn drafts through the MTP head', { timeout: 600_0
   )
 })
 
+safeTest(
+  'mtmd context: fresh addon restores MTP driver state at the cache boundary',
+  { timeout: 600_000 },
+  async (t) => {
+    const [, dirPath] = await ensureModel({ modelName: MODEL.name })
+    const cachePath = path.join(dirPath, 'mtp-mtmd-cache-cold-load.bin')
+    t.teardown(() => cleanupIntegrationCacheFiles(mtpCacheFiles(cachePath)))
+
+    const firstAddon = await loadMtmdMtp(t, { n_predict: '2' })
+    const first = await firstAddon.run(TEXT_PROMPT, {
+      cacheKey: cachePath,
+      saveCacheToDisk: true
+    })
+    const firstOutput = await collectResponse(first)
+    t.ok(firstOutput.length > 0, 'first mtmd addon wrote a populated MTP cache')
+    t.ok(fs.statSync(`${cachePath}.mtp-state`).size > 0, 'mtmd persisted MTP driver state')
+    await firstAddon.unload()
+
+    const secondAddon = await loadMtmdMtp(t, { n_predict: '2' })
+    const second = await secondAddon.run(TEXT_PROMPT, {
+      cacheKey: cachePath,
+      saveCacheToDisk: false
+    })
+    const secondOutput = await collectResponse(second)
+    t.ok(secondOutput.length > 0, 'fresh mtmd addon used the persisted target cache')
+    t.ok(second.stats.draftTotal > 0, 'fresh mtmd addon proposed a boundary draft')
+    t.ok(
+      second.stats.draftAccepted > 0,
+      'fresh mtmd addon accepted a draft in the first and only verify round ' +
+        `(draftAccepted=${second.stats.draftAccepted})`
+    )
+    await secondAddon.unload()
+  }
+)
+
 safeTest('mtmd context: one-token MTP text turn commits to KV', { timeout: 600_000 }, async (t) => {
   const cachePath = path.join(os.tmpdir(), `qvac-mtp-mtmd-one-token-${Date.now()}.bin`)
-  t.teardown(() => cleanupIntegrationCacheFiles(cachePath, `${cachePath}.mtp-draft`))
+  t.teardown(() => cleanupIntegrationCacheFiles(mtpCacheFiles(cachePath)))
 
   const addon = await loadMtmdMtp(t, { n_predict: '1' })
   const response = await addon.run(TEXT_PROMPT, { cacheKey: cachePath, saveCacheToDisk: true })

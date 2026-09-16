@@ -17,14 +17,15 @@
 #include "model-interface/SequenceDriver.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
+#include "utils/MtpCachePersistence.hpp"
 
 using test_common::getStatValue;
 
 namespace fs = std::filesystem;
 
 namespace {
-constexpr uint32_t kQwen35MultimodalPrefillCells = 2899;
-constexpr llama_pos kQwen35MultimodalPrefillPosMax = 90;
+constexpr uint32_t K_QWEN35_MULTIMODAL_PREFILL_CELLS = 2899;
+constexpr llama_pos K_QWEN35_MULTIMODAL_PREFILL_POS_MAX = 90;
 
 std::vector<uint8_t> readBinaryFile(const fs::path& path) {
   std::ifstream stream(path, std::ios::binary);
@@ -443,9 +444,9 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalReportsMemoryTokenCountAndPosMax) {
       "sequenceCells=" + std::to_string(sequenceCells) + ", totalCells=" +
       std::to_string(totalCells) + ", posMax=" + std::to_string(posMax));
 
-  EXPECT_EQ(sequenceCells, kQwen35MultimodalPrefillCells);
-  EXPECT_EQ(totalCells, kQwen35MultimodalPrefillCells);
-  EXPECT_EQ(posMax, kQwen35MultimodalPrefillPosMax);
+  EXPECT_EQ(sequenceCells, K_QWEN35_MULTIMODAL_PREFILL_CELLS);
+  EXPECT_EQ(totalCells, K_QWEN35_MULTIMODAL_PREFILL_CELLS);
+  EXPECT_EQ(posMax, K_QWEN35_MULTIMODAL_PREFILL_POS_MAX);
 
   const auto stats = model->runtimeStats();
   EXPECT_EQ(
@@ -500,9 +501,9 @@ TEST_F(
       "sequenceCells=" + std::to_string(sequenceCells) + ", totalCells=" +
       std::to_string(totalCells) + ", posMax=" + std::to_string(posMax));
 
-  EXPECT_GT(sequenceCells, kQwen35MultimodalPrefillCells);
+  EXPECT_GT(sequenceCells, K_QWEN35_MULTIMODAL_PREFILL_CELLS);
   EXPECT_EQ(totalCells, sequenceCells);
-  EXPECT_GT(posMax, kQwen35MultimodalPrefillPosMax);
+  EXPECT_GT(posMax, K_QWEN35_MULTIMODAL_PREFILL_POS_MAX);
 
   const auto stats = model->runtimeStats();
   EXPECT_EQ(
@@ -1295,11 +1296,12 @@ TEST_F(MtmdLlmContextTest, ProcessWithMultipleTools) {
 }
 
 /// `loadCache` may only restore a multimodal session when the GGSQ header
-/// carried all four `SessionMetadataField` values. The old gate accepted any
+/// carried all four base `SessionMetadataField` values. MTP caches append a
+/// two-word generation ID. The old gate accepted any
 /// `tokenCount > 1`, so a partial header (2 or 3 fields) was restored with
 /// `cacheTokens`/`firstMsgCacheTokens` defaulted to zero — which diverges from
-/// `nPast` under M-RoPE and corrupts later cap checks. An over-long layout
-/// (`> 4`) is equally unexpected. Only an exact four-field header is complete.
+/// `nPast` under M-RoPE and corrupts later cap checks. Only the four-field base
+/// layout and six-field MTP extension are complete.
 /// The retired slots are written as a downgrade guard, not as zeros. An older
 /// build reads slot 1 as its protected-prefix boundary and evicts
 /// `[slot1, slot1 + n_discarded)`; a 0 there points that at position 0 and
@@ -1324,13 +1326,41 @@ TEST(SessionMetadataDowngradeGuard, RetiredSlotsMirrorTheLiveCursors) {
   EXPECT_EQ(metadata.cacheTokens(), 160);
 }
 
-TEST(MtmdSessionMetadataGate, AcceptsOnlyTheFullFourFieldContract) {
+TEST(MtmdSessionMetadataGate, AcceptsBaseAndMtpMetadataContracts) {
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(0));
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(1));
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(2));
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(3));
   EXPECT_TRUE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT));
   EXPECT_FALSE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT + 1));
+  EXPECT_TRUE(mtmdSessionMetadataIsComplete(MTP_SESSION_METADATA_FIELD_COUNT));
+  EXPECT_FALSE(
+      mtmdSessionMetadataIsComplete(MTP_SESSION_METADATA_FIELD_COUNT + 1));
+}
+
+TEST(MtpCachePersistence, GenerationAndDriverStateRoundTrip) {
+  constexpr uint64_t generation = 0xfedcba9876543210ULL;
+  SessionMetadata metadata;
+  metadata.setMtpGeneration(generation);
+  EXPECT_EQ(
+      metadata.mtpGeneration(MTP_SESSION_METADATA_FIELD_COUNT), generation);
+  EXPECT_FALSE(metadata.mtpGeneration(SESSION_METADATA_FIELD_COUNT));
+
+  const fs::path statePath =
+      fs::temp_directory_path() / "qvac-mtp-driver-state.bin";
+  std::error_code ec;
+  fs::remove(statePath, ec);
+  const std::vector<uint8_t> state = {0, 1, 2, 3, 4, 255};
+  ASSERT_TRUE(
+      qvac_lib_inference_addon_llama::utils::writeMtpDriverStateFile(
+          statePath.string(), generation, state));
+  const auto restored =
+      qvac_lib_inference_addon_llama::utils::readMtpDriverStateFile(
+          statePath.string());
+  ASSERT_TRUE(restored.has_value());
+  EXPECT_EQ(restored->generation, generation);
+  EXPECT_EQ(restored->state, state);
+  fs::remove(statePath, ec);
 }
 
 TEST_F(MtmdLlmContextTest, RejectMediaMarkerWithoutBuffer) {
