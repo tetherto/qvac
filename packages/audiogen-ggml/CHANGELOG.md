@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-16
+
+### Changed
+
+- The binding loader now verifies that `require.addon()` returned an AudioGen
+native binding before using it. If the result is the JavaScript package entry,
+loading falls through to `#host-addon`; the resolved platform package is
+validated as well, and the original lookup failure is retained as the error
+cause for clearer diagnostics. Without this the wrong module was returned
+verbatim and the first symptom was `createInstance is not a function` deep in a
+model load. Local source-build behaviour is unchanged.
+
+## Pull Requests
+
+- [#PR](https://github.com/tetherto/qvac/pull/PR) - fix(audiogen-ggml): handle split package addon loading
+
+
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-09-11`. The pinned engine adds an
