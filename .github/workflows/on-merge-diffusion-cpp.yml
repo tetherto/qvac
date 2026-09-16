@@ -3,6 +3,7 @@ name: On Merge Trigger (Stable Diffusion)
 on:
   push:
     branches:
+      - main
       - release-*
     paths:
       - "packages/diffusion-cpp/**"

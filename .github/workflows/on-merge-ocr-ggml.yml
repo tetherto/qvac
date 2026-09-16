@@ -3,6 +3,7 @@ name: On Merge Trigger (OCR-GGML)
 on:
   push:
     branches:
+      - main
       - release-*
     paths:
       - "packages/ocr-ggml/**"

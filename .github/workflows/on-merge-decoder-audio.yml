@@ -3,6 +3,7 @@ name: On Merge Trigger (Decoder-audio)
 on:
   push:
     branches:
+      - main
       - release-*
     paths:
       - "packages/decoder-audio/**"

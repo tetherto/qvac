@@ -3,6 +3,7 @@ name: On Merge Trigger (Model Fit)
 on:
   push:
     branches:
+      - main
       - release-*
     paths:
       - "packages/model-fit/**"

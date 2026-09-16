@@ -3,6 +3,7 @@ name: On Merge Trigger (Fabric)
 on:
   push:
     branches:
+      - main
       - release-*
     paths:
       - "packages/fabric/**"

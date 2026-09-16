@@ -3,6 +3,7 @@ name: On Merge Trigger (ASR GGML)
 on:
   push:
     branches:
+      - main
       - release-*
     paths:
       - "packages/asr-ggml/**"

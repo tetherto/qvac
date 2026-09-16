@@ -3,6 +3,7 @@ name: On Merge Trigger (Vla)
 on:
   push:
     branches:
+      - main
       - release-*
     paths:
       - "packages/vla-ggml/**"

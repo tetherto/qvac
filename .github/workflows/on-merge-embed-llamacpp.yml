@@ -3,6 +3,7 @@ name: On Merge Trigger (Embed)
 on:
   push:
     branches:
+      - main
       - release-*
     paths:
       - "packages/embed-llamacpp/**"

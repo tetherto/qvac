@@ -81,10 +81,11 @@ This repo assumes a **fork-first** workflow:
 3) **Publishing happens on merge to upstream**  
    - Merge to `release-*` can publish to **NPM** for that package/version.
    - Merge to `main` can publish **dev** builds (GitHub Packages) when package paths changed.
-   - Merge to `feature-*` / `tmp-*` can publish **feature/temp** builds (GitHub Packages).
-   - **Native addons are the exception.** Their `on-merge-<addon>.yml` pipelines
-     push-trigger on `release-*` only. A `main`, `feature-*` or `tmp-*` addon build is
-     produced by dispatching that workflow on the branch, never by pushing to it.
+   - `feature-*` / `tmp-*` publish **feature/temp** builds (GitHub Packages), but how
+     that build starts depends on the package. Libraries and the SDK publish on push.
+     Native addon pipelines (`on-merge-<addon>.yml`) do **not** push-trigger on
+     `feature-*` / `tmp-*`: a push there would start a 9-platform matrix off an open
+     PR's branch. Run the workflow with `workflow_dispatch` on the branch instead.
 
 ### One-time fork setup (recommended)
 
@@ -124,13 +125,14 @@ git push -u origin feature-<package>-<short-desc>
 |---|---|---:|---|---|---|
 | Main | `main` | Maintainers | All active development | GitHub Packages (**dev**) | Default integration branch |
 | Release | `release-<package>-<x.y.z>` | Maintainers | Versioned release line | **NPM** | Stable releases only |
-| Feature | `feature-<package>-*` | Optional (maintainers) | Share a dev build for a large/isolated effort | GitHub Packages (**feature**) | Never publish to NPM |
-| Temp | `tmp-<package>-*` | Optional (maintainers) | Experiments / QA previews | GitHub Packages (**temp**) | Never publish to NPM |
+| Feature | `feature-<package>-*` | Optional (maintainers) | Share a dev build for a large/isolated effort | GitHub Packages (**feature**) | Never publish to NPM. Addons: dispatch only |
+| Temp | `tmp-<package>-*` | Optional (maintainers) | Experiments / QA previews | GitHub Packages (**temp**) | Never publish to NPM. Addons: dispatch only |
 
-The **Publishes to** column describes what a branch is *for*. How a build is
-started differs by package family: libraries and the SDK publish on push, while
-native addon pipelines push-trigger on `release-*` only and take every other
-branch by `workflow_dispatch` on that branch. See
+For native addons, a `feature-*` / `tmp-*` build is started by running
+`on-merge-<addon>.yml` with `workflow_dispatch` on that branch; pushing to the
+branch does not start one. The dist-tag such a build lands on is usually `dev`
+rather than `feature`/`temp`, because most addons let the dispatch `tag` input
+override the branch-derived tag — pin the exact version rather than the tag. See
 [MOBILE-ON-DEMAND.md](ci/MOBILE-ON-DEMAND.md#testing-unmerged--unpublished-native-code).
 
 **Publishing semantics**
