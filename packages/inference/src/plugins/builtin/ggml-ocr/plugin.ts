@@ -14,7 +14,6 @@ import {
 } from '@/schemas/index'
 import { ModelLoadFailedError } from '@/errors/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
-import ocrAddonLogging from '@qvac/ocr-ggml/addonLogging'
 import { OcrGgml } from '@qvac/ocr-ggml'
 import { ocr } from '@/plugins/builtin/ggml-ocr/ops/ocr-stream'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
@@ -151,7 +150,7 @@ export const ocrPlugin = definePlugin({
   },
 
   logging: {
-    module: ocrAddonLogging,
+    module: () => import('@qvac/ocr-ggml/addonLogging'),
     namespace: ModelType.ggmlOcr
   }
 })
