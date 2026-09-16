@@ -33,13 +33,15 @@ function getIndex(indexId: string): OpenVectorIndex {
 
 // Backends throw plain TypeError/RangeError/Error values from the native
 // layer; wrap them so the caller receives a coded error with the original
-// message preserved as cause.
-function runBackend<T>(action: () => T): T {
+// message preserved as cause. `describe` adds caller context to the message
+// and is evaluated at throw time, so it can report progress made so far.
+function runBackend<T>(action: () => T, describe?: (detail: string) => string): T {
   try {
     return action()
   } catch (error) {
     if (error instanceof QvacErrorBase) throw error
-    throw new VectorIndexFailedError(error instanceof Error ? error.message : String(error), error)
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new VectorIndexFailedError(describe ? describe(detail) : detail, error)
   }
 }
 
@@ -128,16 +130,13 @@ export function removeVectors(params: { indexId: string; ids: VectorIdWire[] }) 
   const index = getIndex(params.indexId)
   const removed: boolean[] = []
   for (const id of params.ids) {
-    try {
-      removed.push(index.remove(BigInt(id)))
-    } catch (error) {
-      if (error instanceof QvacErrorBase) throw error
-      const detail = error instanceof Error ? error.message : String(error)
-      throw new VectorIndexFailedError(
-        `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`,
-        error
+    removed.push(
+      runBackend(
+        () => index.remove(BigInt(id)),
+        (detail) =>
+          `remove applied ${removed.length} of ${params.ids.length} ids before failing: ${detail}`
       )
-    }
+    )
   }
   return { removed, length: index.length }
 }
