@@ -33,6 +33,11 @@ namespace {
 std::mutex
     g_fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+/// Serialises backend registration on its own: the async entry points
+/// register on the JS thread while a worker may be inside a fit.
+std::mutex
+    g_registryMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
 /// Attaches the per-device memory projection for the resolved parameters.
 ///
 /// Runs one more no-alloc probe, so it costs roughly what the fit cost. A probe
@@ -152,7 +157,7 @@ std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
 /// open — so freeing here would pull those tables out from under live
 /// inference. Leaving the backends registered costs nothing: ggml's registry
 /// de-duplicates by reg pointer, and every fit needs the same inventory anyway.
-void registerBackends(const std::string& backendsDir) {
+void loadBackends(const std::string& backendsDir) {
   bool loadedFromPath = false;
 
   if (!backendsDir.empty()) {
@@ -236,6 +241,11 @@ void countDevices(size_t& nDevices, size_t& nGpuDevices) {
 }
 
 } // namespace
+
+void registerBackends(const std::string& backendsDir) {
+  const std::lock_guard<std::mutex> registryLock(g_registryMutex);
+  loadBackends(backendsDir);
+}
 
 FitResult runFit(const FitRequest& req) {
   // Held for the whole call — see g_fitMutex. Concurrent callers block rather

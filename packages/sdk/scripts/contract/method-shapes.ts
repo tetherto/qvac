@@ -46,6 +46,7 @@ export const methodShapes = {
   translate: 'stream',
   unloadModel: 'reply',
   upscaleStream: 'stream',
+  vectorIndex: 'reply',
   videoStream: 'stream',
   worldSceneStream: 'stream',
   worldStepStream: 'stream'

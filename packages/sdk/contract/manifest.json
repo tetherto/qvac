@@ -251,6 +251,12 @@
       "responseSchema": "schema.json#/$defs/upscaleStream.response"
     },
     {
+      "name": "vectorIndex",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/vectorIndex.request",
+      "responseSchema": "schema.json#/$defs/vectorIndex.response"
+    },
+    {
       "name": "videoStream",
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/videoStream.request",

@@ -45,7 +45,7 @@ const FLASH_ATTN_TYPE: Record<string, number> = {
 const SPLIT_MODE: Record<string, number> = {
   none: 0,
   layer: 1,
-  row: 2
+  tensor: 3
 }
 
 function parseOptionalInt(value: string | undefined) {
