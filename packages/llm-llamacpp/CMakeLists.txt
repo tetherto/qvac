@@ -58,7 +58,7 @@ message("Building inference-addon-llama with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_
 
 # Install dynamic libs to prebuild folder
 set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
+if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
   endforeach()
@@ -185,7 +185,7 @@ if(BUILD_CLI)
   target_compile_features(cli_tool PRIVATE cxx_std_20)
 
   # Install ggml backends next to the CLI tool binary in build folder
-  if((ANDROID OR UNIX) AND NOT APPLE)
+  if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
     foreach(_backend ${GGML_AVAILABLE_BACKENDS})
       add_custom_command(TARGET cli_tool POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different

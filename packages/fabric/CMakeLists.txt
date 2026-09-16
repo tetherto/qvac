@@ -107,19 +107,18 @@ endif()
 # they ship with @qvac/fabric and resolve their ggml_* references against this
 # single loaded runtime (exported via symbols.map).
 #
-# On desktop with static vcpkg linkage the backends are static archives that get
-# linked directly into qvac__fabric.bare and self-register via static
-# initializers, so there is nothing to stage (and we must not ship the .a files).
+# Without GGML_BACKEND_DL the backends are static archives that get linked
+# directly into qvac__fabric.bare, so there is nothing to stage.
 set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
+if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if(TARGET ggml::${_backend})
       get_target_property(_backend_type ggml::${_backend} TYPE)
       # GGML_BACKEND_DL backends are imported as MODULE libraries (dlopen'd at
       # runtime), not SHARED_LIBRARY: ggml-targets.cmake emits each as
       # `add_library(ggml::ggml-cpu-* MODULE IMPORTED)`, so TYPE is
-      # MODULE_LIBRARY. Accept both so the .so backends are actually staged next
-      # to the module (matching only SHARED_LIBRARY silently shipped nothing).
+      # MODULE_LIBRARY. Accept both so the backend modules are staged next to
+      # the runtime (matching only SHARED_LIBRARY silently shipped nothing).
       if(_backend_type STREQUAL "SHARED_LIBRARY" OR _backend_type STREQUAL "MODULE_LIBRARY")
         list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
       endif()
@@ -164,8 +163,8 @@ endif()
 # load/link time. A version script / exported-symbols list only filters
 # already-present symbols; it never pulls archive members in. This mirrors the
 # Windows path, which scans ggml::ggml / ggml::ggml-base when generating the
-# export .def. Static archives only: on Linux/Android the DL compute backends
-# are separate MODULE .so targets (staged via BACKEND_DL_LIBS) and must not be
+# export .def. Static archives only: the DL compute backends are separate
+# MODULE targets (staged via BACKEND_DL_LIBS) and must not be
 # whole-archived here; the type guard also skips ggml core if a build exposes it
 # as a shared/interface target.
 #
