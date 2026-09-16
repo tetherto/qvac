@@ -99,6 +99,7 @@ import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
+import { KvCacheRestartExecutor } from '../shared/executors/node/kv-cache-restart-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
@@ -735,6 +736,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
+    new KvCacheRestartExecutor(resources),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
     new PluginExecutor(resources)
