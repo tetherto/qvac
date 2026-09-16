@@ -8144,7 +8144,6 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigMainGpu(Enum):
 class LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode(Enum):
     none = "none"
     layer = "layer"
-    row = "row"
     tensor = "tensor"
 
 
@@ -8411,7 +8410,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
         ),
     ] = None
@@ -9644,7 +9643,6 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu(Enum):
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode(Enum):
     none = "none"
     layer = "layer"
-    row = "row"
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
@@ -9722,7 +9720,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode | None,
         Field(
             alias="splitMode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU) or `'layer'` (pipeline parallelism).",
             title="LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode",
         ),
     ] = None
