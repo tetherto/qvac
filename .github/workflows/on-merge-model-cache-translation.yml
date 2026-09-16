@@ -92,7 +92,8 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
-      # Must match integration-test-translation-nmtcpp.yml:222-233 exactly.
+      # Must match integration-test-translation-nmtcpp.yml's "Cache NMT models"
+      # step exactly. Named, not line-numbered: line numbers rot.
       - name: Cache NMT models
         id: model-cache
         uses: ./.github/actions/cache-models

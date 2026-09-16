@@ -84,7 +84,8 @@ jobs:
         with:
           node-version: lts/*
 
-      # Must match integration-test-diffusion-cpp.yml:197-228 exactly. All three
+      # Must match integration-test-diffusion-cpp.yml's three "Cache ... integration
+      # test models" steps exactly. Named, not line-numbered: line numbers rot. All three
       # call sites there pass cache-key-suffix equal to the group name and
       # cache-version v2, so one matrix entry covers each.
       - name: Seed integration test models (${{ matrix.group }})
