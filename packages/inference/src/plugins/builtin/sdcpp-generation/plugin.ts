@@ -180,9 +180,9 @@ export const diffusionPlugin = definePlugin({
       const worldEquivalent: Record<string, string> = {
         device: 'world.backend',
         'main-gpu': 'world.backend',
+        backend: 'world.backend',
         threads: 'world.threads',
         offload_to_cpu: 'world.offloadParamsToCpu',
-        backend: 'world.backend',
         params_backend: 'world.paramsBackend',
         max_vram: 'world.maxVram',
         stream_layers: 'world.streamLayers',

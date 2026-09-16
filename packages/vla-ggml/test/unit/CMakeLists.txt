@@ -82,9 +82,10 @@ qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
 
 # AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
 # addon-test dynamically links the shared @qvac/fabric runtime
-# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
-# -static-libstdc++. See packages/classification-ggml/test/unit/CMakeLists.txt
-# for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI runs.
+# (qvac__fabric@0.bare), and the shipped fabric prebuild embeds its own libc++
+# rather than being instrumented. See
+# packages/classification-ggml/test/unit/CMakeLists.txt for the full rationale.
+# scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI runs.
 if(NOT WIN32)
   target_link_libraries(addon-test PRIVATE -fsanitize=address)
 endif()

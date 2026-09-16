@@ -69,17 +69,19 @@ void WorldSessionModel::load() {
   if (config_.streamLayers &&
       !qvac_lib_inference_addon_sd::maxVramSpecHasNonZeroBudget(
           config_.maxVram)) {
-    QLOG_IF(logger::Priority::ERROR,
-            "streamLayers needs a non-zero maxVram to enable graph cutting; "
-            "layer streaming will not run for this configuration");
+    QLOG_IF(
+        logger::Priority::ERROR,
+        "streamLayers needs a non-zero maxVram to enable graph cutting; "
+        "layer streaming will not run for this configuration");
   }
   if (config_.offloadParamsToCpu &&
       qvac_lib_inference_addon_sd::paramsBackendSpecOverridesCpuDefault(
           config_.paramsBackend)) {
-    QLOG_IF(logger::Priority::ERROR,
-            "paramsBackend replaces the offloadParamsToCpu default; use a "
-            "module-specific assignment to keep CPU offload for the remaining "
-            "modules");
+    QLOG_IF(
+        logger::Priority::ERROR,
+        "paramsBackend replaces the offloadParamsToCpu default; use a "
+        "module-specific assignment to keep CPU offload for the remaining "
+        "modules");
   }
 
   session_ = sd_abot_session_new(&params);

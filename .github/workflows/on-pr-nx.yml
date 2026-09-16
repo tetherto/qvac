@@ -533,7 +533,14 @@ jobs:
   # once per affected package. PREBUILD_RESULT is the aggregate result: fail-closed.
   publish-prebuild-status:
     needs: [prebuild, ci-router, matrix, verify-prebuild-linking]
-    if: always() && !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && needs.matrix.outputs.prebuilds != '[]'
+    # A skipped matrix exposes its outputs as '' not '[]', so always() plus
+    # `!= '[]'` expands the strategy to an empty list and errors the run.
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+      needs.matrix.result == 'success' &&
+      needs.matrix.outputs.prebuilds != '' &&
+      needs.matrix.outputs.prebuilds != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -570,9 +577,8 @@ jobs:
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      # Every status leads with the fabric guard: a failed detection leaves
-      # needs_fabric_artifact empty, which would otherwise satisfy != 'true'
-      # and let a stack PR built against released fabric read as a pass.
-      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
-      build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
-      integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}
+      # These accept `skipped` as a pass, so authorize + a successful matrix must
+      # gate them; a failed fabric detection leaves needs_fabric_artifact empty.
+      sanity-checks-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
+      build-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
+      integration-tests-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}
