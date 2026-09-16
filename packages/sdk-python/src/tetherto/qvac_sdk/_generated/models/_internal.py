@@ -13270,8 +13270,6 @@ class MaxVram(RootModel[str]):
         Field(
             description="VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
             max_length=4096,
-            min_length=1,
-            pattern="^\\s*(?:[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)|[^,=\\s]+\\s*=\\s*[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))(?:\\s*,\\s*[^,=\\s]+\\s*=\\s*[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))*\\s*$",
         ),
     ]
 
@@ -14890,8 +14888,6 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         Field(
             description="Runtime backend for diffusion and video graphs, globally or per module, for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'.",
             max_length=4096,
-            min_length=1,
-            pattern="^\\s*[^,=\\s]+(?:\\s*=\\s*[^,=\\s]+)?(?:\\s*,\\s*[^,=\\s]+(?:\\s*=\\s*[^,=\\s]+)?)*\\s*$",
         ),
     ] = None
     params_backend: Annotated[
@@ -14899,8 +14895,6 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         Field(
             description="Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offload_to_cpu enabled, explicit assignments override CPU residency only for the specified modules.",
             max_length=4096,
-            min_length=1,
-            pattern="^\\s*[^,=\\s]+(?:\\s*=\\s*[^,=\\s]+)?(?:\\s*,\\s*[^,=\\s]+(?:\\s*=\\s*[^,=\\s]+)?)*\\s*$",
         ),
     ] = None
     max_vram: Annotated[
