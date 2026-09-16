@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own. No API change for this package from the fabric bump itself.
+- NMT translation exercises none of 10549.1.0's MoE, multimodal-projector or speculative-decoding paths, so the bump keeps this package on the current shared runtime rather than a superseded one.
+
+### Fixed
+
+- GPU backend selection is now an explicit allowlist of Vulkan, Metal, OpenCL and CUDA ([#4329](https://github.com/tetherto/qvac/pull/4329)), rather than "any non-CPU ggml device". `use_gpu` and `gpu_backend` are documented accordingly: `gpu_backend` filters over eligible device names only, and any explicit selector resolving to OpenCL still bypasses the build-time `USE_OPENCL` guard. This landed after `0.15.0` with no version bump of its own, so this release is what publishes it. Bergamot remains CPU-only and unaffected.
+- Also ships the iOS test-harness work from [#4399](https://github.com/tetherto/qvac/pull/4399) — hardlinked pre-staged models and iOS crash-report capture. `test/` only; no shipped code changes with it.
+
 ## [0.15.0] - 2026-09-10
 
 ### Changed
