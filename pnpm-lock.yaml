@@ -873,7 +873,7 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       '@qvac/model-fit':
-        specifier: ^0.11.0
+        specifier: ^0.11.1
         version: link:../model-fit
       '@qvac/rag':
         specifier: ^0.8.1
@@ -967,7 +967,7 @@ importers:
         specifier: ^0.9.1
         version: link:../bci-whispercpp
       '@qvac/classification-ggml':
-        specifier: ^0.26.0
+        specifier: ^0.26.1
         version: link:../classification-ggml
       '@qvac/decoder-audio':
         specifier: ^0.6.0
@@ -976,7 +976,7 @@ importers:
         specifier: ^0.23.0
         version: 0.23.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
-        specifier: ^0.41.0
+        specifier: ^0.41.1
         version: link:../embed-llamacpp
       '@qvac/langdetect-text':
         specifier: ^0.1.2
@@ -985,16 +985,16 @@ importers:
         specifier: ^0.53.0
         version: link:../llm-llamacpp
       '@qvac/ocr-ggml':
-        specifier: ^0.24.0
+        specifier: ^0.24.1
         version: link:../ocr-ggml
       '@qvac/translation-nmtcpp':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../translation-nmtcpp
       '@qvac/tts-ggml':
         specifier: ^0.9.1
         version: link:../tts-ggml
       '@qvac/vla-ggml':
-        specifier: ^0.27.0
+        specifier: ^0.27.1
         version: link:../vla-ggml
       '@types/brittle':
         specifier: ^3.5.0
@@ -1618,7 +1618,7 @@ importers:
         specifier: ^0.9.1
         version: link:../bci-whispercpp
       '@qvac/classification-ggml':
-        specifier: ^0.26.0
+        specifier: ^0.26.1
         version: link:../classification-ggml
       '@qvac/decoder-audio':
         specifier: ^0.6.0
@@ -1627,7 +1627,7 @@ importers:
         specifier: ^0.23.0
         version: 0.23.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
-        specifier: ^0.41.0
+        specifier: ^0.41.1
         version: link:../embed-llamacpp
       '@qvac/error':
         specifier: ^0.1.1
@@ -1645,19 +1645,19 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/ocr-ggml':
-        specifier: ^0.24.0
+        specifier: ^0.24.1
         version: link:../ocr-ggml
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: link:../registry-server/client
       '@qvac/translation-nmtcpp':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../translation-nmtcpp
       '@qvac/tts-ggml':
         specifier: ^0.9.1
         version: link:../tts-ggml
       '@qvac/vla-ggml':
-        specifier: ^0.27.0
+        specifier: ^0.27.1
         version: link:../vla-ggml
       bare-abort-controller:
         specifier: ^1.0.0
