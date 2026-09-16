@@ -1,6 +1,8 @@
 import test from 'brittle'
 import {
   completionClientParamsSchema,
+  completionOrchestrateRequestSchema,
+  completionStreamRequestSchema,
   completionStreamResponseSchema,
   completionStatsSchema,
   generationParamsSchema,
@@ -178,4 +180,54 @@ test('completionClientParamsSchema: a demanding tool_choice needs matching tools
 test('completionClientParamsSchema: auto and none need no tools', (t) => {
   t.is(acceptsCompletion({ generationParams: { tool_choice: 'auto' } }), true)
   t.is(acceptsCompletion({ generationParams: { tool_choice: 'none' } }), true)
+})
+
+// The orchestrate request is the entry point for the worker's tool loop, and
+// the inner turn it dispatches is never re-parsed -- so an unmatched
+// tool_choice has to be rejected here or it reaches the addon.
+test('request schemas: every completion entry point rejects an unmatched tool_choice', (t) => {
+  const cases = [
+    { generationParams: { tool_choice: 'required' } },
+    { generationParams: { tool_choice: 'get_weather' } },
+    { tools: [weatherTool], generationParams: { tool_choice: 'get_time' } }
+  ]
+  const accepted = { tools: [weatherTool], generationParams: { tool_choice: 'get_weather' } }
+
+  for (const params of cases) {
+    t.is(
+      completionStreamRequestSchema.safeParse({
+        ...baseCompletion,
+        type: 'completionStream',
+        ...params
+      }).success,
+      false,
+      `completionStream: ${JSON.stringify(params.generationParams)}`
+    )
+    t.is(
+      completionOrchestrateRequestSchema.safeParse({
+        ...baseCompletion,
+        type: 'completionOrchestrate',
+        ...params
+      }).success,
+      false,
+      `completionOrchestrate: ${JSON.stringify(params.generationParams)}`
+    )
+  }
+
+  t.is(
+    completionStreamRequestSchema.safeParse({
+      ...baseCompletion,
+      type: 'completionStream',
+      ...accepted
+    }).success,
+    true
+  )
+  t.is(
+    completionOrchestrateRequestSchema.safeParse({
+      ...baseCompletion,
+      type: 'completionOrchestrate',
+      ...accepted
+    }).success,
+    true
+  )
 })

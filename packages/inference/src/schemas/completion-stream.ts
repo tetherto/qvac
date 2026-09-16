@@ -286,6 +286,7 @@ export const completionOrchestrateRequestSchema = completionClientParamsBaseSche
       )
   })
   .superRefine(refineNoToolsWithStructuredOutput)
+  .superRefine(refineToolChoiceMatchesTools)
 
 /**
  * Downstream frame of the orchestrated completion duplex stream. Exactly one
