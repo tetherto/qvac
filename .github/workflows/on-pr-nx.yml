@@ -533,12 +533,10 @@ jobs:
   # once per affected package. PREBUILD_RESULT is the aggregate result: fail-closed.
   publish-prebuild-status:
     needs: [prebuild, ci-router, matrix, verify-prebuild-linking]
-    # always() is needed to publish a fail-closed status when prebuild fails, but
-    # it also survives a skipped matrix. A skipped job's outputs are '', not '[]',
-    # so `!= '[]'` passes and the strategy expands to an empty include list, which
-    # is a workflow-level error rather than a skip. Gate on the matrix result too:
-    # every sibling already gates on authorize.allowed, which is what keeps them
-    # out of this. Reproduced on a draft PR, where authorize returns allowed=false.
+    # always() publishes a fail-closed status when prebuild fails, but it also
+    # survives a skipped matrix, whose outputs are '' rather than '[]'. Without
+    # the result check `!= '[]'` passes and the strategy expands to an empty
+    # include list, which errors the run instead of skipping the job.
     if: >-
       always() && !cancelled() &&
       (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
@@ -581,25 +579,12 @@ jobs:
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      # Every status leads with two guards.
-      #
-      # The trust guard first. Consolidation had to accept `skipped` as a pass,
-      # because one workflow now serves every package and its jobs legitimately
-      # skip when nothing is affected. The per-package workflows did not need
-      # that: they only ran for their own package, so sanity-checks always ran
-      # and main asserts `result == 'success'` outright.
-      #
-      # `skipped` alone cannot tell "not applicable" from "the gate refused" or
-      # "matrix failed". Without this clause a draft PR, a fork PR awaiting
-      # approval, or a failed matrix job skips every downstream job and all
-      # three statuses read true, greening the required check with nothing
-      # verified. Requiring authorize + a successful matrix restores main's
-      # meaning: skips only count as passes once the decision to skip is itself
-      # trustworthy.
-      #
-      # Then the fabric guard: a failed detection leaves needs_fabric_artifact
-      # empty, which would otherwise satisfy != 'true' and let a stack PR built
-      # against released fabric read as a pass.
+      # Every status leads with two guards. Trust: these accept `skipped` as a
+      # pass, so without authorize + a successful matrix a draft, an unapproved
+      # fork, or a failed matrix skips everything and greens the required check.
+      # Fabric: a failed detection leaves needs_fabric_artifact empty, which
+      # would otherwise satisfy != 'true' and pass a PR built against released
+      # fabric.
       sanity-checks-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') && (needs.cpp-lint.result == 'success' || needs.cpp-lint.result == 'skipped') && (needs.ts-checks.result == 'success' || needs.ts-checks.result == 'skipped') && (needs.fabric-lockstep.result == 'success' || needs.fabric-lockstep.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
       build-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped') && needs.verify-prebuild-linking.result != 'failure' }}
       integration-tests-status: ${{ needs.authorize.outputs.allowed == 'true' && needs.matrix.result == 'success' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}
