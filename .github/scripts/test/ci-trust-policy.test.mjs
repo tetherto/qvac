@@ -2224,8 +2224,9 @@ const TRUSTED_CACHE_EVENTS = ['push', 'workflow_dispatch', 'merge_group', 'sched
 const TRUSTED_CACHE_EXEMPT = new Set([
   '.github/workflows/cpp-test-coverage-asr-ggml.yml',
   '.github/workflows/cpp-test-coverage-tts-ggml.yml',
-  // Three ungated actions/cache@ writes, reachable from on-pr-nx.yml
-  // (pull_request_target). Needs its own ticket.
+  // Exempt only for its three pre-existing ungated actions/cache@ writes (ccache,
+  // parakeet GGUF, tts venv), reachable from on-pr-nx.yml (pull_request_target).
+  // Needs its own ticket. Its vcpkg cache write IS gated, and is checked below.
   '.github/workflows/cpp-tests-nx.yml',
 ])
 
@@ -2256,7 +2257,7 @@ function eachCppTestsCacheStep (opts = {}) {
 
 test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
   const offenders = []
-  for (const { path, step } of eachCppTestsCacheStep({ match: /uses: actions\/cache(@|\/save@)/ })) {
+  const check = (path, step) => {
     const missing = TRUSTED_CACHE_EVENTS.filter((e) => !step.includes(`github.event_name == '${e}'`))
     if (missing.length) {
       offenders.push(`${path}: a cache write step does not gate on ${missing.join(', ')}`)
@@ -2265,6 +2266,19 @@ test('cache policy: cpp-tests cache writes are gated on trusted events', () => {
     if (forbidden.length) {
       offenders.push(`${path}: a cache write step admits untrusted ${forbidden.join(', ')}`)
     }
+  }
+  const seen = new Set()
+  for (const { path, step, index } of eachCppTestsCacheStep({ match: /uses: actions\/cache(@|\/save@)/ })) {
+    seen.add(`${path}#${index}`)
+    check(path, step)
+  }
+  // An exempt file is exempt only for the ungated model/ccache caches it already
+  // had; a vcpkg cache write carries the full gate wherever it appears.
+  for (const { path, step, index } of eachCppTestsCacheStep({
+    match: /uses: actions\/cache\/save@[\s\S]*vcpkg\/cache/, includeExempt: true,
+  })) {
+    if (seen.has(`${path}#${index}`)) continue
+    check(path, step)
   }
   assert.deepEqual(offenders, [])
 })
