@@ -973,8 +973,8 @@ importers:
         specifier: ^0.6.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.23.0
-        version: 0.23.0(bare-abort-controller@1.1.2)
+        specifier: ^0.24.0
+        version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: ^0.37.0
         version: 0.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1624,8 +1624,8 @@ importers:
         specifier: ^0.6.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
-        specifier: ^0.23.0
-        version: 0.23.0(bare-abort-controller@1.1.2)
+        specifier: ^0.24.0
+        version: link:../diffusion-cpp
       '@qvac/embed-llamacpp':
         specifier: ^0.37.0
         version: 0.37.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
