@@ -258,13 +258,13 @@ function resolveToolBlockCached(
  * its own, and only with the turn that writes it into the cache — see
  * `skipToolBlock` below.
  */
-function prepareMessagesForCache(
+async function prepareMessagesForCache(
   session: KvCacheSession,
   turn: TurnHandle,
   history: HistoryMsg[],
   tools?: Tool[],
   toolChoice?: string
-): CachePayload {
+): Promise<CachePayload> {
   const toolBlock = tools?.length ? transformMessages(tools) : []
 
   // Slice from the turn's `savedCount` so callers can
@@ -273,13 +273,13 @@ function prepareMessagesForCache(
   // saved boundary would slice the history down to an empty payload
   // (e.g. after a cancelled mid-decode), it falls back to the full
   // history and signals the caller to drop the bad entry.
-  // The session owns the entry; `dropStaleSavedCount` clears it
-  // without touching the on-disk file (the file is still trustworthy
-  // — only the boundary count is wrong).
+  // The session owns the entry; `dropStaleSavedCount` clears it in memory
+  // and on disk without touching the cache file (the file is still
+  // trustworthy — only the boundary count is wrong).
   const { messages, clearStaleCount } = decideCachedHistorySlice(turn.savedCount, history)
 
   if (clearStaleCount) {
-    session.dropStaleSavedCount(turn)
+    await session.dropStaleSavedCount(turn)
   }
 
   // The block is never trimmed back out of the cache, so re-sending it every
@@ -525,9 +525,9 @@ export async function* completion(
   let preserveCacheOnUnwind = false
   scope.defer(() => (preserveCacheOnUnwind ? session.releaseTurn(turn) : session.rollback(turn)))
 
-  let payload: ReturnType<typeof prepareMessagesForCache>
+  let payload: Awaited<ReturnType<typeof prepareMessagesForCache>>
   try {
-    payload = prepareMessagesForCache(
+    payload = await prepareMessagesForCache(
       session,
       turn,
       history,
