@@ -26236,24 +26236,26 @@ export const WHISPER_Q8_0_1 = {
   params: models[733].params
 } as const
 
-// Compatibility aliases for model constants renamed after publication.
-/** @deprecated Use PARAKEET_NEMOTRON_0_6B_F16 instead. */
 export const PARAKEET_0_6B_F16 = {
   ...PARAKEET_NEMOTRON_0_6B_F16,
   name: 'PARAKEET_0_6B_F16'
 } as const
 
-/** @deprecated Use PARAKEET_NEMOTRON_0_6B_Q4_0 instead. */
 export const PARAKEET_0_6B_Q4_0 = {
   ...PARAKEET_NEMOTRON_0_6B_Q4_0,
   name: 'PARAKEET_0_6B_Q4_0'
 } as const
 
-/** @deprecated Use PARAKEET_NEMOTRON_0_6B_Q8_0 instead. */
 export const PARAKEET_0_6B_Q8_0 = {
   ...PARAKEET_NEMOTRON_0_6B_Q8_0,
   name: 'PARAKEET_0_6B_Q8_0'
 } as const
+
+const modelNameCompatibilityAliases: Readonly<Record<string, RegistryItem>> = {
+  PARAKEET_0_6B_F16: PARAKEET_0_6B_F16,
+  PARAKEET_0_6B_Q4_0: PARAKEET_0_6B_Q4_0,
+  PARAKEET_0_6B_Q8_0: PARAKEET_0_6B_Q8_0
+}
 
 /**
  * Looks up a model in the built-in catalog by its constant name.
@@ -26262,7 +26264,7 @@ export const PARAKEET_0_6B_Q8_0 = {
  * @returns The matching `RegistryItem`, or `undefined` when no catalog entry has that name.
  */
 export function getModelByName(name: string): RegistryItem | undefined {
-  return models.find((model) => model.name === name)
+  return models.find((model) => model.name === name) ?? modelNameCompatibilityAliases[name]
 }
 
 /**

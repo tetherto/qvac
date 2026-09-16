@@ -102,6 +102,12 @@ test('parakeetRuntimeConfigSchema: accepts Indic ids and Nemotron locale aliases
   }
 })
 
+test('parakeetRuntimeConfigSchema: rejects invalid language values', (t) => {
+  for (const language of ['english', 'en_US', 'en-US-extra', 'auto-US']) {
+    t.exception(() => parakeetRuntimeConfigSchema.parse({ language }), language)
+  }
+})
+
 test('parakeetRuntimeConfigSchema: rejects negative streamingSpkCacheLen', (t) => {
   t.exception(() => parakeetRuntimeConfigSchema.parse({ streamingSpkCacheLen: -1 }))
 })

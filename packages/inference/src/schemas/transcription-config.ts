@@ -198,6 +198,8 @@ export const whisperConfigSchema = z.object({
 
 export type WhisperConfig = z.infer<typeof whisperConfigSchema>
 
+const PARAKEET_LANGUAGE_PATTERN = /^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$/
+
 // === Parakeet (NVIDIA NeMo GGML) engine config ===
 //
 // Backed by the ggml-based qvac-parakeet.cpp engine. A single GGUF
@@ -255,7 +257,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'Optional ASR energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.'
+      'CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.'
     ),
   streamingLeftContextMs: z
     .number()
@@ -271,6 +273,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .describe('ASR encoder right-lookahead window in ms; omit to keep the model default (2000).'),
   language: z
     .string()
+    .regex(PARAKEET_LANGUAGE_PATTERN)
     .optional()
     .describe(
       'Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.'

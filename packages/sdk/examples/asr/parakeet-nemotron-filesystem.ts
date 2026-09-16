@@ -1,128 +1,198 @@
-/**
- * Nemotron 3.5 ASR batch or cache-aware streaming transcription from a file.
- *
- * Usage:
- *   bun run examples/asr/parakeet-nemotron-filesystem.ts \
- *     <audio-file> [locale] [--streaming]
- *
- * `locale` defaults to `auto`; examples include `en-US` and `hi-IN`.
- * Streaming deliberately leaves the engine cadence unset so Nemotron uses its
- * model-specific 320 ms default. FFmpeg is required for streaming input.
- */
 import {
   loadModel,
   PARAKEET_NEMOTRON_0_6B_Q4_0,
   transcribe,
   transcribeStream,
-  unloadModel
+  unloadModel,
+  type TranscribeStreamConversationSession
 } from '@qvac/sdk'
-import { spawn } from 'child_process'
+import { spawn, type ChildProcessByStdio } from 'child_process'
+import type { Readable } from 'stream'
 
 const SAMPLE_RATE = 16000
 const BYTES_PER_S16_SAMPLE = 2
 const INPUT_CHUNK_MS = 160
+const MILLISECONDS_PER_SECOND = 1000
+const BYTES_PER_MEGABYTE = 1e6
+const DEFAULT_LOCALE = 'auto'
+const FFMPEG_PROTOCOLS = 'file,pipe'
+const STREAMING_FLAG = '--streaming'
+const EARLY_OUTPUT_END_MESSAGE = 'The transcription stream ended before the decoder input completed'
+const USAGE =
+  'Usage: bun run examples/asr/parakeet-nemotron-filesystem.ts ' +
+  '<audio-file> [locale] [nemotron-gguf] [--streaming]'
 
-const args = process.argv.slice(2)
-const streaming = args.includes('--streaming')
-const positional = args.filter((argument) => !argument.startsWith('--'))
-const [audioFilePath, locale = 'auto'] = positional
+type StreamingSession = TranscribeStreamConversationSession
+type Decoder = ChildProcessByStdio<null, Readable, null>
 
-if (!audioFilePath) {
-  console.error(
-    'Usage: bun run examples/asr/parakeet-nemotron-filesystem.ts ' +
-      '<audio-file> [locale] [--streaming]'
-  )
-  process.exit(1)
+function parseArguments(args: string[]) {
+  const streaming = args.includes(STREAMING_FLAG)
+  const positional = args.filter((argument) => argument !== STREAMING_FLAG)
+  const [audioFilePath, locale = DEFAULT_LOCALE, modelSource] = positional
+
+  return { audioFilePath, locale, modelSource, streaming }
 }
 
-const inputPath = audioFilePath
+function requireAudioFilePath(audioFilePath: string | undefined): string {
+  if (audioFilePath) return audioFilePath
+
+  throw new Error(USAGE)
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function runStreaming(modelId: string): Promise<void> {
-  const chunkBytes = Math.floor((INPUT_CHUNK_MS / 1000) * SAMPLE_RATE) * BYTES_PER_S16_SAMPLE
+function calculateChunkBytes(): number {
+  const samplesPerChunk = Math.floor((INPUT_CHUNK_MS / MILLISECONDS_PER_SECOND) * SAMPLE_RATE)
+  return samplesPerChunk * BYTES_PER_S16_SAMPLE
+}
 
-  // No parakeetStreamingConfig.chunkMs override: the addon reads the Nemotron
-  // metadata and selects its trained 320 ms operating point.
+function createDecoder(inputPath: string): Decoder {
+  return spawn(
+    'ffmpeg',
+    [
+      '-protocol_whitelist',
+      FFMPEG_PROTOCOLS,
+      '-i',
+      inputPath,
+      '-ar',
+      String(SAMPLE_RATE),
+      '-ac',
+      '1',
+      '-f',
+      's16le',
+      'pipe:1'
+    ],
+    { stdio: ['ignore', 'pipe', 'inherit'] }
+  )
+}
+
+function waitForDecoder(decoder: Decoder): Promise<Error | null> {
+  return new Promise((resolve) => {
+    decoder.once('error', resolve)
+    decoder.once('close', (code) => {
+      if (code === 0) resolve(null)
+      else resolve(new Error(`ffmpeg exited with code ${code}`))
+    })
+  })
+}
+
+function stopDecoder(decoder: Decoder | undefined): void {
+  if (decoder?.exitCode === null && !decoder.killed) decoder.kill()
+}
+
+async function printTranscription(session: StreamingSession): Promise<void> {
+  for await (const event of session) {
+    if (event.type === 'text' && event.text) process.stdout.write(event.text)
+  }
+}
+
+async function rejectWhenOutputEnds(output: Promise<void>): Promise<never> {
+  await output
+  throw new Error(EARLY_OUTPUT_END_MESSAGE)
+}
+
+async function writeAvailableChunks(
+  session: StreamingSession,
+  pcm: Buffer<ArrayBufferLike>,
+  chunkBytes: number
+): Promise<Buffer<ArrayBufferLike>> {
+  let offset = 0
+
+  while (pcm.length - offset >= chunkBytes) {
+    session.write(pcm.subarray(offset, offset + chunkBytes))
+    offset += chunkBytes
+    await delay(INPUT_CHUNK_MS)
+  }
+
+  return pcm.subarray(offset)
+}
+
+async function feedDecoderOutput(
+  session: StreamingSession,
+  decoder: Decoder,
+  chunkBytes: number
+): Promise<Buffer<ArrayBufferLike>> {
+  let incomplete: Buffer<ArrayBufferLike> = Buffer.alloc(0)
+
+  for await (const decoded of decoder.stdout) {
+    const pcm =
+      incomplete.length === 0 ? Buffer.from(decoded) : Buffer.concat([incomplete, decoded])
+    incomplete = await writeAvailableChunks(session, pcm, chunkBytes)
+  }
+
+  return incomplete
+}
+
+async function runStreaming(modelId: string, inputPath: string): Promise<void> {
   const session = await transcribeStream({ modelId, parakeetStreamingConfig: {} })
+  const output = printTranscription(session)
+  let decoder: Decoder | undefined
+  let exited: Promise<Error | null> | undefined
+  let feeding: Promise<Buffer<ArrayBufferLike>> | undefined
 
   try {
-    const output = (async () => {
-      for await (const event of session) {
-        if (event.type === 'text' && event.text) process.stdout.write(event.text)
-      }
-    })()
+    decoder = createDecoder(inputPath)
+    exited = waitForDecoder(decoder)
+    feeding = feedDecoderOutput(session, decoder, calculateChunkBytes())
+    const incomplete = await Promise.race([feeding, rejectWhenOutputEnds(output)])
 
-    const ffmpeg = spawn(
-      'ffmpeg',
-      ['-i', inputPath, '-ar', String(SAMPLE_RATE), '-ac', '1', '-f', 's16le', 'pipe:1'],
-      { stdio: ['ignore', 'pipe', 'inherit'] }
-    )
-    let processError: Error | null = null
-    const exited = new Promise<void>((resolve) => {
-      ffmpeg.once('error', (error) => {
-        processError = error
-        resolve()
-      })
-      ffmpeg.once('close', (code) => {
-        if (code !== 0) processError = new Error(`ffmpeg exited with code ${code}`)
-        resolve()
-      })
-    })
-
-    let incomplete = Buffer.alloc(0)
-    for await (const decoded of ffmpeg.stdout) {
-      const pcm = incomplete.length === 0 ? decoded : Buffer.concat([incomplete, decoded])
-      let offset = 0
-
-      while (pcm.length - offset >= chunkBytes) {
-        session.write(pcm.subarray(offset, offset + chunkBytes))
-        offset += chunkBytes
-        await delay(INPUT_CHUNK_MS)
-      }
-
-      incomplete = pcm.subarray(offset)
-    }
-
-    await exited
-    if (processError) throw processError
+    const decoderError = await exited
+    if (decoderError) throw decoderError
     if (incomplete.length > 0) session.write(incomplete)
 
     session.end()
     await output
     process.stdout.write('\n')
   } finally {
-    // Safe after normal iteration and necessary if feeding or decoding fails.
+    stopDecoder(decoder)
     session.destroy()
+    await Promise.allSettled([exited, feeding, output])
   }
 }
 
-let modelId: string | null = null
+function printDownloadProgress(progress: {
+  percentage: number
+  downloaded: number
+  total: number
+}): void {
+  const downloaded = (progress.downloaded / BYTES_PER_MEGABYTE).toFixed(1)
+  const total = (progress.total / BYTES_PER_MEGABYTE).toFixed(1)
+  const percentage = progress.percentage.toFixed(0)
+  const line = `Downloading ${percentage}% (${downloaded}/${total} MB)`
 
-try {
-  console.log(`▸ Loading Nemotron with locale ${locale}...`)
-  modelId = await loadModel({
-    modelSrc: PARAKEET_NEMOTRON_0_6B_Q4_0,
-    modelType: 'parakeet-transcription',
-    modelConfig: {
-      language: locale,
-      streaming
-      // Do not set streamingChunkMs: Nemotron selects 320 ms natively.
+  process.stderr.write(process.stderr.isTTY ? `\r${line}` : `${line}\n`)
+  if (progress.percentage >= 100) process.stderr.write('\n')
+}
+
+async function run(): Promise<void> {
+  const { audioFilePath, locale, modelSource, streaming } = parseArguments(process.argv.slice(2))
+  const inputPath = requireAudioFilePath(audioFilePath)
+  let modelId: string | null = null
+
+  try {
+    console.log(`Loading Nemotron with locale ${locale}...`)
+    modelId = await loadModel({
+      modelSrc: modelSource ?? PARAKEET_NEMOTRON_0_6B_Q4_0,
+      modelType: 'parakeet-transcription',
+      modelConfig: { language: locale, streaming },
+      onProgress: printDownloadProgress
+    })
+
+    if (streaming) {
+      console.log('Streaming with the Nemotron native 320 ms operating point...')
+      await runStreaming(modelId, inputPath)
+    } else {
+      console.log('Transcribing in batch mode...')
+      console.log(await transcribe({ modelId, audioChunk: inputPath }))
     }
-  })
-
-  if (streaming) {
-    console.log('▸ Streaming with Nemotron’s native 320 ms operating point...')
-    await runStreaming(modelId)
-  } else {
-    console.log('▸ Transcribing in batch mode...')
-    console.log(await transcribe({ modelId, audioChunk: inputPath }))
+  } finally {
+    if (modelId) await unloadModel({ modelId })
   }
-} catch (error) {
-  console.error('✖', error)
-  process.exitCode = 1
-} finally {
-  if (modelId) await unloadModel({ modelId })
 }
+
+run().catch((error) => {
+  console.error(error)
+  process.exitCode = 1
+})
