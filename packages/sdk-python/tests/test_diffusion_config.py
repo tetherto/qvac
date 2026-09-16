@@ -24,6 +24,17 @@ def test_diffusion_memory_controls_serialize(
     }
 
 
+@pytest.mark.parametrize("budget", ["6", "cuda0=6,vulkan0=4"])
+def test_string_budgets_read_back_as_plain_str(budget: str) -> None:
+    # A constraint on a union member makes datamodel-codegen wrap the arm in a
+    # RootModel, so the attribute stops being a str while model_dump still
+    # unwraps it -- invisible to a dump-only assertion. Read the attribute.
+    config = LoadModelSrcRequestSdcppGenerationModelConfig(max_vram=budget)
+    assert isinstance(config.max_vram, str)
+    assert config.max_vram == budget
+    assert config.max_vram.startswith(budget[0])
+
+
 @pytest.mark.parametrize("key", ["clip_on_cpu", "vae_on_cpu", "control_net_cpu"])
 @pytest.mark.parametrize("value", [True, False, None])
 def test_removed_diffusion_options_are_rejected(key: str, value: bool | None) -> None:

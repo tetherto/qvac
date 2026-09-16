@@ -13264,16 +13264,6 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng(Enum):
     std_default = "std_default"
 
 
-class MaxVram(RootModel[str]):
-    root: Annotated[
-        str,
-        Field(
-            description="VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-            max_length=4096,
-        ),
-    ]
-
-
 class LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode(Enum):
     auto = "auto"
     immediately = "immediately"
@@ -14898,7 +14888,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         ),
     ] = None
     max_vram: Annotated[
-        float | MaxVram | None,
+        float | str | None,
         Field(
             description="VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
         ),

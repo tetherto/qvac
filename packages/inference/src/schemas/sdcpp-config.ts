@@ -205,7 +205,11 @@ export const sdcppConfigSchema = z.object({
         'assignments override CPU residency only for the specified modules.'
     ),
   max_vram: z
-    .union([z.number().finite(), z.string().max(4096)])
+    // No .max() on the string arm: a constraint here makes datamodel-codegen
+    // wrap it in a `MaxVram(RootModel[str])`, so Python callers read back a
+    // wrapper instead of a str. backend/params_backend keep their cap because
+    // they are not union members. The addon parses the spec either way.
+    .union([z.number().finite(), z.string()])
     .optional()
     .describe(
       'VRAM budget in GiB for diffusion and video graph-cut execution. Positive ' +
