@@ -43,6 +43,8 @@ export {
   diffusion,
   type DiffusionProgressTick,
   audioGen,
+  audioEdit,
+  audioUnderstand,
   classify,
   video,
   type VideoProgressTick,
