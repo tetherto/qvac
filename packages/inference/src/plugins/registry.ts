@@ -63,11 +63,49 @@ function unwrapLoggingModule(resolved: unknown): unknown {
   return resolved
 }
 
-function assertLoggingModuleShape(modelType: string, candidate: unknown): PluginLoggingModule {
+/**
+ * What a logging module turned out to be. A plugin that hands over a resolver
+ * produces its module at load time from an addon the engine does not control,
+ * so a rejection has to carry the evidence: reporting only that `setLogger` is
+ * missing leaves nothing to act on, and the shapes that reach here in practice
+ * differ in ways the keys make obvious.
+ */
+function describeLoggingModule(value: unknown): string {
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  const type = typeof value
+  if (type !== 'object' && type !== 'function') return type
+  let keys: string[]
+  try {
+    keys = Object.keys(value as object)
+  } catch {
+    return `${type} whose keys could not be read`
+  }
+  const shown = keys.slice(0, 12).join(', ')
+  const rest = keys.length > 12 ? `, +${keys.length - 12} more` : ''
+  const setLogger = typeof (value as Record<string, unknown>)['setLogger']
+  const inner = (value as Record<string, unknown>)['default']
+  const innerSetLogger =
+    inner && (typeof inner === 'object' || typeof inner === 'function')
+      ? typeof (inner as Record<string, unknown>)['setLogger']
+      : undefined
+  return (
+    `${type} { ${shown}${rest} }, setLogger: ${setLogger}` +
+    (innerSetLogger === undefined ? '' : `, default.setLogger: ${innerSetLogger}`)
+  )
+}
+
+function assertLoggingModuleShape(
+  modelType: string,
+  candidate: unknown,
+  source?: string
+): PluginLoggingModule {
   if (!candidate || typeof (candidate as Record<string, unknown>)['setLogger'] !== 'function') {
     throw new PluginLoggingInvalidError(
       modelType,
-      'logging.module must have a setLogger(callback) function'
+      'logging.module must have a setLogger(callback) function' +
+        (source ? `; resolved from ${source}` : '') +
+        ` but got ${describeLoggingModule(candidate)}`
     )
   }
   return candidate as PluginLoggingModule
@@ -186,7 +224,11 @@ export async function ensureAddonLoggerReady(plugin: QvacPlugin): Promise<void> 
     // the whole cleanup.
     if (!isNamespaceClaimed(namespace)) return
 
-    const loggingModule = assertLoggingModuleShape(plugin.modelType, resolved)
+    const loggingModule = assertLoggingModuleShape(
+      plugin.modelType,
+      resolved,
+      `${plugin.addonPackage}/addonLogging (namespace ${namespace})`
+    )
 
     for (const [wiredNamespace, wiredModule] of lazyAddonLoggers) {
       if (wiredModule === loggingModule && wiredNamespace !== namespace) {

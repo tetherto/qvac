@@ -109,10 +109,25 @@ export async function loadModel(
     isShardedModel
   })
 
-  // Load the addon's logger before the addon itself runs. Plugins that defer
+  // Attach the addon's logger before the addon itself runs. Plugins that defer
   // their logging module do so to keep registration free of native loads, so
-  // this is the first point their addon is genuinely required.
-  await ensureAddonLoggerReady(plugin)
+  // this is the first point their addon is genuinely reachable.
+  //
+  // The attachment is not allowed to fail the load. It forwards the addon's
+  // own log lines into the SDK logger: a model whose logger never attaches
+  // still loads and runs, only more quietly. And when the addon is genuinely
+  // unreachable, `createModel` below fails on it anyway and reports the
+  // addon's own reason, which tells a caller far more than a logging error
+  // raised a few lines earlier. So a failure here is reported and stepped
+  // over rather than turned into a failed load.
+  try {
+    await ensureAddonLoggerReady(plugin)
+  } catch (error) {
+    logger.warn(
+      `${modelType}: addon logging is unavailable, loading without it — ` +
+        (error instanceof Error ? error.message : String(error))
+    )
+  }
 
   logger.info(`${modelType}: Loading model ${modelId}...`)
   startLogBuffering(modelId)

@@ -1,4 +1,6 @@
 import test from 'brittle'
+import fs from 'fs'
+import os from 'os'
 import path from 'path'
 
 const PLUGIN_PATH = path.join(__dirname, '../src/electron-forge/index.cjs')
@@ -6,6 +8,8 @@ const PLUGIN_PATH = path.join(__dirname, '../src/electron-forge/index.cjs')
 const {
   createIgnore,
   diffAddons,
+  diffPlatformPackages,
+  readPlatformPackageAddon,
   detectTargetHosts,
   resolveHosts,
   runBundleAndVerify,
@@ -38,6 +42,68 @@ test('diffAddons: required matches all installed → no exclusions', (t) => {
 
 test('diffAddons: empty installed → no exclusions', (t) => {
   t.alike(diffAddons([], ['@qvac/llm-llamacpp']), [])
+})
+
+// ============================================
+// per-platform prebuild packages
+// ============================================
+
+test('diffPlatformPackages: a platform package follows its addon', (t) => {
+  const platformPackages = [
+    { name: '@qvac/tts-ggml-darwin-arm64', addon: '@qvac/tts-ggml' },
+    { name: '@qvac/asr-ggml-darwin-arm64', addon: '@qvac/asr-ggml' }
+  ]
+  t.alike(
+    diffPlatformPackages(platformPackages, ['@qvac/tts-ggml']),
+    ['@qvac/asr-ggml-darwin-arm64'],
+    'excluded addon → its platform package is excluded'
+  )
+  t.alike(
+    diffPlatformPackages(platformPackages, ['@qvac/tts-ggml', '@qvac/asr-ggml']),
+    [],
+    'required addons keep their platform packages'
+  )
+  t.alike(
+    diffPlatformPackages(platformPackages, []).sort(),
+    ['@qvac/asr-ggml-darwin-arm64', '@qvac/tts-ggml-darwin-arm64'],
+    'nothing required → every platform package excluded'
+  )
+  t.alike(diffPlatformPackages([], ['@qvac/tts-ggml']), [], 'no platform packages → nothing')
+})
+
+test('readPlatformPackageAddon: reads the inner addon/package.json', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-forge-platform-'))
+  try {
+    const platformDir = path.join(dir, 'tts-ggml-darwin-arm64')
+    fs.mkdirSync(path.join(platformDir, 'addon'), { recursive: true })
+    fs.writeFileSync(
+      path.join(platformDir, 'package.json'),
+      JSON.stringify({ name: '@qvac/tts-ggml-darwin-arm64', version: '0.9.0' })
+    )
+    fs.writeFileSync(
+      path.join(platformDir, 'addon', 'package.json'),
+      JSON.stringify({ name: '@qvac/tts-ggml', version: '0.9.0', addon: true })
+    )
+    t.is(readPlatformPackageAddon(platformDir), '@qvac/tts-ggml', 'platform package → meta addon')
+
+    const plainDir = path.join(dir, 'logging')
+    fs.mkdirSync(plainDir, { recursive: true })
+    fs.writeFileSync(
+      path.join(plainDir, 'package.json'),
+      JSON.stringify({ name: '@qvac/logging', version: '0.1.0' })
+    )
+    t.is(readPlatformPackageAddon(plainDir), null, 'no addon/ dir → not a platform package')
+
+    const notAddonDir = path.join(dir, 'other')
+    fs.mkdirSync(path.join(notAddonDir, 'addon'), { recursive: true })
+    fs.writeFileSync(
+      path.join(notAddonDir, 'addon', 'package.json'),
+      JSON.stringify({ name: '@qvac/other', version: '0.1.0' })
+    )
+    t.is(readPlatformPackageAddon(notAddonDir), null, 'inner package without addon: true → ignored')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 // ============================================
