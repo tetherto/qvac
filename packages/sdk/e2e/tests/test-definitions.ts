@@ -6,6 +6,7 @@ import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
 import { embeddingTests } from './embedding-tests.js'
 import { ragTests } from './rag-tests.js'
+import { vectorIndexTests } from './vector-index-tests.js'
 import { translationIndicTransTests } from './translation-indictrans-tests.js'
 import { translationBergamotTests } from './translation-bergamot-tests.js'
 import { translationBergamotCacheTests } from './translation-bergamot-cache-tests.js'
@@ -272,6 +273,9 @@ export const tests = [
 
   // RAG tests
   ...ragTests,
+
+  // Vector index tests (embed + TurboVec index, no RAG workspace)
+  ...vectorIndexTests,
 
   // Translation: IndicTrans2 (EN↔HI)
   ...translationIndicTransTests,

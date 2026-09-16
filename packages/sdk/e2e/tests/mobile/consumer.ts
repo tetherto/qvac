@@ -64,6 +64,7 @@ import { MobileOcrExecutor } from './executors/ocr-executor.js'
 import { VlaExecutor } from '../shared/executors/vla-executor.js'
 import { MobileClassificationExecutor } from './executors/classification-executor.js'
 import { MobileRagExecutor } from './executors/rag-executor.js'
+import { VectorIndexExecutor } from '../shared/executors/vector-index-executor.js'
 import { MobileConfigReloadExecutor } from './executors/config-reload-executor.js'
 import { MobileTtsExecutor } from './executors/tts-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
@@ -675,6 +676,7 @@ export const executor = createExecutor({
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new MobileRagExecutor(resources),
+    new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
