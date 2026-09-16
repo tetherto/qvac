@@ -139,11 +139,7 @@ npm run build:vulkan     # explicit Vulkan (the default on Windows/Linux)
 ```
 
 macOS builds default to Metal; Android to OpenCL+Vulkan. Native dependencies
-resolve from the QVAC vcpkg registry, as declared in `vcpkg.json` and
-`vcpkg-configuration.json`. During review, this branch uses a package-local
-`vcpkg/ports/stable-diffusion-cpp` pinned to the ABot streaming engine
-PR. After the engine and registry repin merge, replace this overlay with the
-published registry revision before merging the addon.
+are pinned in `vcpkg.json` and `vcpkg-configuration.json`.
 
 ## Layer streaming and disk residency
 

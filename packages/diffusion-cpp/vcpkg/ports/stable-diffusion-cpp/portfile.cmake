@@ -1,11 +1,11 @@
-# QVAC-25129: temporary overlay for tetherto/qvac-ext-stable-diffusion.cpp#42.
+# Temporary engine source override until the registry repin.
 # Based on the published 2026-08-11#1 port; only the engine source pin changes.
 # Remove after the engine and registry repin merge. Keep ggml on its published pin.
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-ext-stable-diffusion.cpp
-    REF 44875945bdca55472ec64d33badb11e558b98e5d
-    SHA512 7482b493ebe70ed547d809478fe1570c31fa976db79bf27573c1ef96af4579846e3e9d04beef9fc1e9d209b1439878d78c02c4948d9baec6db4e55ea5ea8b780
+    REF 44cc9d1f75d3dff5f3fc849427554463040af52b
+    SHA512 2cb6cfada0bd81b820427b614935130a3f3822e735142357fa4e9ca6a8f4de628be2bbe04599417af5facc73e3c1565122164ea09e1eb518facdc3e064b94aeb
 )
 
 # Even under SD_USE_SYSTEM_GGML the sources reach into one ggml *internal*

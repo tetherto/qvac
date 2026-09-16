@@ -454,13 +454,13 @@ test(
     }
     function compare(expected, actual) {
       for (let block = 0; block < expected.length; block++) {
-        const a = expected[block][expected[block].length - 1]
-        const b = actual[block][actual[block].length - 1]
-        const error = pngMeanAbsoluteError(a, b)
-        t.ok(
-          error <= 1,
-          `block ${block}: mean pixel error ${error.toFixed(4)} <= 1/255 against resident execution`
-        )
+        for (let frame = 0; frame < expected[block].length; frame++) {
+          const error = pngMeanAbsoluteError(expected[block][frame], actual[block][frame])
+          t.ok(
+            error <= 1,
+            `block ${block}, frame ${frame}: mean pixel error ${error.toFixed(4)} <= 1/255 against resident execution`
+          )
+        }
       }
     }
     try {
