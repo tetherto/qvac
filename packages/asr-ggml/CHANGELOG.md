@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-16
+
 ### Fixed
 
 - Mobile platform packages (`@qvac/asr-ggml-android-arm64`, `@qvac/asr-ggml-ios`)
