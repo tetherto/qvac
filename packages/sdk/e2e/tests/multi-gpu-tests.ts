@@ -1,5 +1,13 @@
 import type { TestDefinition } from '@qvac/test-suite'
 
+const multiGpuSkip =
+  process.env.QVAC_HAS_MULTI_GPU === '1'
+    ? undefined
+    : {
+        reason: 'Requires a runner with at least two eligible GPUs',
+        issue: 'QVAC-24821'
+      }
+
 export const multiGpuConfigSmoke: TestDefinition = {
   testId: 'multi-gpu-config-smoke',
   params: {
@@ -7,6 +15,7 @@ export const multiGpuConfigSmoke: TestDefinition = {
   },
   expectation: { validation: 'contains-all', contains: ['4'] },
   suites: ['smoke'],
+  skip: multiGpuSkip,
   metadata: {
     category: 'multi-gpu',
     dependency: 'none',
@@ -21,6 +30,7 @@ export const multiGpuTensorConfigSmoke: TestDefinition = {
   },
   expectation: { validation: 'contains-all', contains: ['4'] },
   suites: ['smoke'],
+  skip: multiGpuSkip,
   metadata: {
     category: 'multi-gpu',
     dependency: 'none',
@@ -35,6 +45,7 @@ export const multiGpuEmbedConfigSmoke: TestDefinition = {
   },
   expectation: { validation: 'type', expectedType: 'array' },
   suites: ['smoke'],
+  skip: multiGpuSkip,
   metadata: {
     category: 'multi-gpu',
     dependency: 'none',

@@ -4,6 +4,8 @@ import type { Logger } from '@/logging/types'
 
 interface BarePackHeader {
   id?: string
+  main?: string
+  imports?: Record<string, unknown>
   resolutions?: Record<string, unknown>
 }
 

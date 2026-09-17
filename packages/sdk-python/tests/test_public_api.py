@@ -68,6 +68,8 @@ def test_js_client_api_capabilities_have_python_equivalents():
     # method; the capability, not each helper, is what's guarded here.
     js_to_python = {
         "audioGen": "audio_gen_stream",
+        "audioEdit": "audio_edit_stream",
+        "audioUnderstand": "audio_understand",
         "batchCompletion": "batch_completion_stream",
         "completion": "completion",
         "deleteCache": "delete_cache",
@@ -107,6 +109,10 @@ def test_js_client_api_capabilities_have_python_equivalents():
         "vlaPreprocessImage": "vla_preprocess_image",
         "vlaPadState": "vla_pad_state",
         "rag*": "rag",
+        # createVectorIndex/loadVectorIndex return a handle object in JS; Python
+        # reaches the same worker operations through the generated stub.
+        "createVectorIndex": "vector_index",
+        "loadVectorIndex": "vector_index",
     }
     missing = {js: py for js, py in js_to_python.items() if not hasattr(qvac, py)}
     assert not missing, f"JS client/api capabilities missing from qvac: {missing}"

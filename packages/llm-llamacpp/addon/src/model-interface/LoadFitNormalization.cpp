@@ -7,7 +7,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 
 #include <common/arg.h>
@@ -71,54 +70,6 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
   }
   const std::string key = *architecture + ".context_length";
   return metadata.tryGetU32(key.c_str()).value_or(0);
-}
-
-// Mirrors llm_arch_supports_sm_tensor() in qvac-fabric src/llama-arch.cpp,
-// which qvac-fabric does not install: it lives in the internal
-// src/llama-arch.h, not the public include/ tree. The values below
-// are the GGUF `general.architecture` strings from LLM_ARCH_NAMES, NOT the enum
-// names lower-cased — e.g. LLM_ARCH_FALCON_H1 is "falcon-h1" and
-// LLM_ARCH_GRANITE_HYBRID is "granitehybrid". Deliberately absent, because
-// fabric does support them: "deepseek2-ocr" and "t5encoder".
-//
-// RE-CHECK ON EVERY qvac-fabric BUMP — this is a manual mirror and nothing
-// enforces it. LoadFitNormalizationTest.TensorSplitArchDenylistCoversFabric
-// exercises this list but reads nothing from fabric, so it cannot detect
-// drift; it only pins the addon against its own copy. Verified by hand
-// against qvac-fabric v10297.1.1 (27 entries). v10297.1.1 leaves
-// src/llama-arch.cpp untouched relative to v10297.1.0, so the list is
-// unchanged across that bump.
-//
-// The bump from v10297.0.0 to v10297.1.0 REMOVED three entries — fabric now
-// supports tensor split for deepseek4, qwen35 and qwen35moe. Leaving them here
-// would reject architectures fabric accepts, so the list shrank rather than
-// grew. A denylist drifts in both directions; re-derive it from
-// llm_arch_supports_sm_tensor rather than only appending.
-//
-// An absent general.architecture returns "supported": fabric's own check at
-// src/llama-model.cpp:328 remains the backstop, this list is only a UX layer
-// that turns a bare std::runtime_error into a structured InvalidArgument.
-bool archSupportsTensorSplit(const ModelMetaData& metadata) {
-  static const std::unordered_set<std::string> kUnsupported = {
-      "grok",          "mpt",
-      "plamo2",        "minicpm3",
-      "gemma3n",       "mamba",
-      "mamba2",        "jamba",
-      "falcon-h1",     "olmo2",
-      "olmoe",         "deepseek2",
-      "deepseek32",    "glm-dsa",
-      "bitnet",        "t5",
-      "nemotron_h",    "nemotron_h_moe",
-      "granitehybrid", "lfm2",
-      "lfm2moe",       "minimax-m2",
-      "minimax-m3",    "mistral4",
-      "kimi-linear",   "qwen3tts",
-      "qwen3next"};
-  const auto architecture = metadata.tryGetString("general.architecture");
-  if (!architecture.has_value()) {
-    return true;
-  }
-  return kUnsupported.count(*architecture) == 0;
 }
 
 // Lambda form rather than a bare ::tolower: the value is caller-supplied and
@@ -1211,22 +1162,8 @@ NormalizedLoad normalizeLoadForFit(
   // flash-attn defaults — on by default, and forced off when finetuning — so
   // this is the first point at which the effective value can be read. Moving
   // this block up into the GPU branch would see only a caller-supplied value
-  // and miss both. (tuneLoadConfigMap also forces it off for BitNet, but that
-  // path is unreachable here: "bitnet" is on the unsupported-architecture list
-  // checked immediately below, so it throws before flash-attn is consulted.)
+  // and miss both.
   if (params.split_mode == LLAMA_SPLIT_MODE_TENSOR) {
-    if (!archSupportsTensorSplit(metadata)) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "%s: split-mode 'tensor' is not supported for architecture '%s' "
-              "by this qvac-fabric version; use split-mode 'layer'.\n",
-              K_LEGACY_PARSER_NAME.data(),
-              metadata.tryGetString("general.architecture")
-                  .value_or("unknown")
-                  .c_str()));
-    }
-
     // qvac-fabric returns a null context (src/llama-context.cpp, "SPLIT_MODE_
     // TENSOR requires flash_attn to be enabled") rather than a diagnosable
     // error, so reject here instead of silently flipping a value the caller
@@ -1637,6 +1574,11 @@ NormalizedLoad normalizeLoadForFit(
   if (!params.tensor_buft_overrides.empty()) {
     params.tensor_buft_overrides.push_back({nullptr, nullptr});
   }
+  params.tensor_buft_overrides.resize(
+      std::max(
+          params.tensor_buft_overrides.size(),
+          llama_max_tensor_buft_overrides()),
+      {nullptr, nullptr});
 
   if (!params.chat_template.empty() &&
       !common_chat_verify_template(params.chat_template, params.use_jinja)) {
