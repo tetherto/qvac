@@ -1,0 +1,4 @@
+build/
+prebuilds/
+.clang-format
+.clang-tidy
