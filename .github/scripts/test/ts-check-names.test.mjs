@@ -48,6 +48,39 @@ function producerJobs() {
   return jobs
 }
 
+// The paths: list of one trigger, e.g. pull_request or pull_request_target.
+// null when the trigger is absent; [] when it has no paths: filter at all,
+// which means it fires on every change.
+function triggerPaths(source, trigger) {
+  const start = source.search(new RegExp(`^ {2}${trigger}:$`, 'm'))
+  if (start === -1) return null
+
+  const rest = source.slice(start)
+  const next = rest.slice(1).search(/^ {2}\S/m)
+  const block = next === -1 ? rest : rest.slice(0, next + 1)
+
+  const at = block.search(/^ {4}paths:$/m)
+  if (at === -1) return []
+
+  const paths = []
+  for (const line of block.slice(at).split('\n').slice(1)) {
+    const entry = line.match(/^ {6}- ["']?([^"'\s]+)["']?\s*$/)
+    if (!entry) break
+    paths.push(entry[1])
+  }
+  return paths
+}
+
+// Whether a producer path covers a consumer one. Exact match, or a "/**" suffix
+// covering everything beneath it, so a broad producer glob still satisfies a
+// narrower consumer path. Only "/**" is understood; any other glob is compared
+// literally, which can only produce a false failure, never a false pass.
+function covers(producerGlob, consumerPath) {
+  if (producerGlob === consumerPath) return true
+  return producerGlob.endsWith('/**') &&
+    consumerPath.startsWith(producerGlob.slice(0, -2))
+}
+
 // The check run a job publishes: "<name or id> / ts-checks" when it calls the
 // reusable, and just the job name when it runs its steps inline.
 function publishedNames() {
@@ -120,4 +153,31 @@ test('each producer job is gated on the nx-affected list', () => {
     )
     assert.match(body, /^ {4}needs:.*matrix/m, `${id} must need the matrix job`)
   }
+})
+
+// The invariant the whole design rests on. Narrowing the producer's trigger
+// below the consumer's is the original bug: on-pr-nx runs, on-pr-ts-nx does
+// not, nx never gets to narrow anything, and every await times out. Tests 1-2
+// close the name loop; this closes the trigger loop.
+test('on-pr-ts-nx triggers on everything on-pr-nx triggers on', () => {
+  const producer = triggerPaths(readFileSync(producerPath, 'utf8'), 'pull_request')
+  const consumer = triggerPaths(
+    readFileSync(join(workflows, 'on-pr-nx.yml'), 'utf8'),
+    'pull_request_target'
+  )
+
+  assert.ok(producer, 'on-pr-ts-nx has no pull_request trigger')
+  assert.ok(consumer, 'on-pr-nx has no pull_request_target trigger')
+  assert.ok(
+    consumer.length > 0,
+    'on-pr-nx now fires on every path, so on-pr-ts-nx cannot be a superset by paths alone'
+  )
+
+  const uncovered = consumer.filter((path) => !producer.some((glob) => covers(glob, path)))
+  assert.deepEqual(
+    uncovered,
+    [],
+    'on-pr-nx triggers on these but on-pr-ts-nx does not, so the producer never ' +
+      'runs and every await times out:\n  ' + uncovered.join('\n  ')
+  )
 })

@@ -8,7 +8,13 @@
 # package for reasons its paths never see — a dependency edge, the lockfile,
 # nx.json — so the check was never produced and the await burned its 25 minute
 # timeout. Here the trigger is deliberately broad and nx does the narrowing, so
-# producer and consumer use the same selection and cannot disagree.
+# both resolve against the same graph and the same on-pr target.
+#
+# Same graph and target, not identical inputs: this workflow computes the
+# changed files from nx-set-shas' git range, while on-pr-nx feeds the API file
+# list to nx --stdin. Base-sha resolution and rename handling can therefore
+# diverge at the edges. That asymmetry is inherent to the privileged split and
+# is not a guarantee of equality.
 name: PR-head TypeScript Checks (nx)
 
 on:
