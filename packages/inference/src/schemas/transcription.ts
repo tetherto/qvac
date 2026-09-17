@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type Buffer from 'bare-buffer'
+import { inferenceBackendDiagnosticsSchema } from '@/schemas/system-resources'
 
 export const audioInputSchema = z.discriminatedUnion('type', [
   z.object({
@@ -46,20 +47,89 @@ export const transcribeStatsSchema = z.object({
   backendId: z.number().optional(),
   gpuUnsupported: z.number().optional(),
   gpuMemTotalMb: z.number().optional(),
-  gpuMemFreeMb: z.number().optional()
+  gpuMemFreeMb: z.number().optional(),
+
+  // Shared engine counters.
+  totalTime: z.number().optional().describe('Total native inference time for the run, in ms.'),
+  totalWallMs: z
+    .number()
+    .optional()
+    .describe('Wall-clock time spent inside the native engine for the run, in ms.'),
+  totalSamples: z.number().optional().describe('Audio samples processed across the run.'),
+  processCalls: z
+    .number()
+    .optional()
+    .describe('Native `process()` invocations made across the run.'),
+
+  // Whisper-only stage timings.
+  whisperSampleMs: z.number().optional().describe('Whisper: sampling time, in ms.'),
+  whisperBatchdMs: z.number().optional().describe('Whisper: batched-decode time, in ms.'),
+  whisperPromptMs: z.number().optional().describe('Whisper: prompt-processing time, in ms.'),
+
+  // Parakeet-only counters.
+  totalTranscriptions: z
+    .number()
+    .optional()
+    .describe('Parakeet: transcriptions produced across the session.'),
+  modelLoadMs: z.number().optional().describe('Parakeet: model load time, in ms.'),
+  totalEncodedFrames: z
+    .number()
+    .optional()
+    .describe('Parakeet: encoder frames produced across the run.'),
+  encoderOnCoreml: z
+    .number()
+    .optional()
+    .describe('Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.')
 })
+
+/**
+ * Compute backends the ASR engines report through `stats.backendId`, mirroring
+ * the addon's `BackendId` enum. Exported so callers can decode the number
+ * instead of hardcoding it.
+ *
+ * Numeric, so it is deliberately not in the generated-constants registry:
+ * that mechanism emits string enums only.
+ */
+export const ASR_BACKEND_IDS = Object.freeze({
+  CPU: 0,
+  Metal: 1,
+  CUDA: 2,
+  Vulkan: 3,
+  OpenCL: 4,
+  Other: 99
+} as const)
+
+export type AsrBackendId = (typeof ASR_BACKEND_IDS)[keyof typeof ASR_BACKEND_IDS]
 
 export const transcribeSegmentSchema = z.object({
   text: z.string(),
   startMs: z.number(),
   endMs: z.number(),
   append: z.boolean(),
-  id: z.number()
+  id: z.number(),
+  isEndOfTurn: z
+    .boolean()
+    .optional()
+    .describe(
+      'Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.'
+    ),
+  startsWord: z
+    .boolean()
+    .optional()
+    .describe(
+      'Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.'
+    )
 })
 
 export const vadStateEventSchema = z.object({
   speaking: z.boolean(),
-  probability: z.number()
+  probability: z.number(),
+  source: z
+    .enum(['silero', 'energy'])
+    .optional()
+    .describe(
+      "Detector behind the event: `'silero'` for the whisper engine's VAD model, `'energy'` for parakeet's energy hint. Absent on legacy wire frames that predate the field."
+    )
 })
 
 export const whisperEndOfTurnEventSchema = z.object({
@@ -115,7 +185,12 @@ const transcriptionResultBase = z.object({
   error: z.string().optional(),
   segment: transcribeSegmentSchema.optional(),
   vad: vadStateEventSchema.optional(),
-  endOfTurn: endOfTurnEventSchema.optional()
+  endOfTurn: endOfTurnEventSchema.optional(),
+  diagnostics: inferenceBackendDiagnosticsSchema
+    .optional()
+    .describe(
+      'Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
+    )
 })
 
 export const transcribeResponseSchema = transcriptionResultBase.extend({

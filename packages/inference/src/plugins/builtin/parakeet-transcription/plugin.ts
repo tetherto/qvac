@@ -104,13 +104,14 @@ export const parakeetPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats } = result.value
+          const { modelExecutionMs, stats, diagnostics } = result.value
           yield attachModelExecutionMs(
             {
               type: 'transcribe' as const,
               text: '',
               done: true,
-              ...(stats && { stats })
+              ...(stats && { stats }),
+              ...(diagnostics && { diagnostics })
             },
             modelExecutionMs
           )
@@ -178,13 +179,14 @@ export const parakeetPlugin = definePlugin({
             result = await iterator.next()
           }
 
-          const { modelExecutionMs, stats } = result.value
+          const { modelExecutionMs, stats, diagnostics } = result.value
           yield attachModelExecutionMs(
             {
               type: 'transcribeStream' as const,
               text: '',
               done: true,
-              ...(stats && { stats })
+              ...(stats && { stats }),
+              ...(diagnostics && { diagnostics })
             },
             modelExecutionMs
           )
