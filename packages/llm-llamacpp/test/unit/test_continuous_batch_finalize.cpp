@@ -1,7 +1,7 @@
 // Terminal lifecycle-hook routing for ContinuousBatchScheduler. Guards the
 // SequenceDriver contract that every error/cancel termination runs
-// onCancel/onGenerationFinished (and thus TextLlmContext's post-generation
-// policy work, e.g. thinking-block compaction), not a bare
+// onCancel/onGenerationFinished (and thus TextLlmContext's transactional
+// commit/rollback policy), not a bare
 // onSequenceEnd flush.
 #include <algorithm>
 #include <functional>
@@ -71,7 +71,7 @@ const std::function<void(const std::string&)> kNoCallback;
 
 /// Decode-error finalization must run the generation-complete hook
 /// (onCancel/onGenerationFinished), which is what triggers TextLlmContext's
-/// post-generation policy work (e.g. thinking-block compaction). The pre-fix
+/// transactional post-generation policy. The pre-fix
 /// path called only onSequenceEnd, which flushes UTF-8 and skips that policy
 /// work, leaving KV state inconsistent.
 TEST(ContinuousBatchFinalize, DecodeErrorRunsGenerationCompleteHook) {

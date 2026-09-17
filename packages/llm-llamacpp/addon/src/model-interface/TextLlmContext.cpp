@@ -12,7 +12,7 @@
 
 #include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
-#include "ReasoningRecoveryHelpers.hpp"
+#include "RequestRecoveryHelpers.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/common.h"
 #include "common/log.h"
@@ -20,7 +20,7 @@
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
-#include "utils/ReasoningSnapshotPolicy.hpp"
+#include "utils/ModelMemoryPolicy.hpp"
 #include "utils/ReasoningUtils.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
 #include "utils/ScopeGuard.hpp"
@@ -28,7 +28,7 @@
 
 using namespace qvac_lib_inference_addon_llama;
 using namespace qvac_lib_inference_addon_llama::errors;
-using namespace qvac_lib_inference_addon_llama::reasoning_recovery;
+using namespace qvac_lib_inference_addon_llama::request_recovery;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::utils;
 
@@ -48,8 +48,7 @@ bool isFileInitialized(const std::filesystem::path& path) {
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 TextLlmContext::TextLlmContext(
     common_params& commonParams, common_init_result_ptr llamaInit)
-    : llamaInit_(std::move(llamaInit)), params_(commonParams),
-      compactor_(rollbackState_) {
+    : llamaInit_(std::move(llamaInit)), params_(commonParams) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
   initializeCommonState();
@@ -60,7 +59,7 @@ TextLlmContext::TextLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
     llama_seq_id seqId, llama_pos perSeqCtxCeiling)
     : modelCtx_(shared), params_(commonParams),
-      perSeqCtxCeiling_(perSeqCtxCeiling), compactor_(rollbackState_) {
+      perSeqCtxCeiling_(perSeqCtxCeiling) {
   seqId_ = seqId;
   initializeCommonState();
 }
@@ -86,20 +85,17 @@ void TextLlmContext::initializeCommonState() {
     modelCtx_.vocab = llama_model_get_vocab(modelCtx_.model);
   }
 
-  // Models with recurrent state (Mamba / RWKV pure-recurrent) or
-  // hybrid SSM + attention (Qwen3.5, Qwen3-Next, Jamba,
-  // Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear) need the snapshot +
-  // replay path in `compactThinkSpan` because the recurrent hidden
-  // state isn't positionally indexed and `seq_rm` on an interior
-  // range silently leaves the SSM inconsistent.
+  // Models with recurrent state or hybrid SSM + attention need full-state
+  // snapshots because their hidden state is not positionally indexed and
+  // `seq_rm` cannot remove an arbitrary tail safely.
   //
   // We deliberately do NOT gate on `llama_memory_can_shift`: that
   // predicate is about RoPE-based K-shift (position shifting) and
   // returns `true` for all memory types in fabric today, including
   // recurrent and hybrid. The real architectural property we care
-  // about is "does this model need full-state replay?" DeepSeek V4 needs that
-  // path as well even though its compressed cache is not reported by either
-  // model predicate.
+  // about is "does this model need full-state restore?" DeepSeek V4 needs
+  // that path as well even though its compressed cache is not reported by
+  // either model predicate.
   const auto* const model = modelCtx_.model;
   const std::optional<std::string> architecture =
       qvac_lib_inference_addon_llama::utils::getModelArchitecture(model);
@@ -113,14 +109,12 @@ void TextLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
-  compactor_.setNeedsRecurrentSnapshot(needsRecurrentSnapshot_);
   // EOS-inside-reasoning recovery (close-marker substitution +
   // trailing newlines) is a Qwen3-specific workaround. Gate it on the
   // explicit Qwen3-family predicate so the policy is documented at the
   // call site and cannot drift if `selectReasoningTagsForArchitecture`
   // is later extended to cover non-Qwen families. Other families with
-  // a recognised channel (e.g. Gemma 4) still get detection / span
-  // tracking / compaction via `reasoningEnabled_`, just not this
+  // a recognised channel (e.g. Gemma 4) still get detection, just not this
   // recovery.
   {
     isQwen3ReasoningFamily_ =
@@ -417,7 +411,6 @@ void TextLlmContext::tokenizeChat(
   configureReasoningTags(
       rendered.thinkingStartTag,
       rendered.thinkingEndTag,
-      thinkingForcedOpenText_,
       fallbackReasoningTags);
   const Tokenizer tokenize = [this](const std::string& text) {
     return ::common_tokenize(modelCtx_.lctx, text, false, true);
@@ -545,11 +538,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
     bool prefill) {
   // Clear per-inference rollback state before capturing this request's generic
   // prefill-entry checkpoint.
-  rollbackState_.reset();
-
-  // Lazy reconciliation performs no post-generation replay, so this remains
-  // empty. Clear it defensively for the existing runtime-stats hook.
-  userVisiblePerf_.reset();
+  requestRollback_.clear();
   lastGeneratedTokenCount_ = 0;
 
   const std::vector<llama_token> inputTokens =
@@ -568,7 +557,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   // (which is a no-op for recurrent memory per PR #2808), so the
   // snapshot is skipped on that path.
   if (needsRecurrentSnapshot_) {
-    if (!rollbackState_.capturePrefillEntry(modelCtx_.lctx, seqId_, nPast_)) {
+    if (!requestRollback_.capture(modelCtx_.lctx, seqId_, nPast_)) {
       // Capture failed: the cancel path will be unable to roll back the
       // recurrent half of the cache, so degrade to a warning.
       QLOG_IF(
@@ -586,17 +575,17 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       // never read on the cancel path. Finish it before rolling KV back.
       llama_synchronize(modelCtx_.lctx);
       bool rollbackOk = true;
-      if (rollbackState_.hasPrefillEntry()) {
+      if (requestRollback_.hasSnapshot()) {
         // Recurrent / hybrid path: full-state restore is the only way
         // to drop partially decoded tokens; `removeLastNTokens` is a
         // no-op on recurrent memory and `seq_rm` over a partial tail
         // is rejected by the recurrent module.
-        const llama_pos restoredNPast = rollbackState_.prefillEntryNPast();
+        const llama_pos restoredNPast = requestRollback_.nPast();
         const bool forceRestoreFailure =
             forcePrefillEntryRestoreFailureForTesting_;
         forcePrefillEntryRestoreFailureForTesting_ = false;
         if (!forceRestoreFailure &&
-            rollbackState_.restorePrefillEntry(modelCtx_.lctx, seqId_)) {
+            requestRollback_.restore(modelCtx_.lctx, seqId_)) {
           nPast_ = restoredNPast;
         } else {
           // Restore underflowed: the recurrent half is in an undefined
@@ -748,15 +737,10 @@ void TextLlmContext::onPrefillComplete(
   // single-prompt and continuous-batching paths).
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
-  compactor_.reset();
-
   // Template force-opened the reasoning channel (e.g. Qwen3 / DeepSeek-R1
-  // assistant prefix ends with `<think>\n`): the opening tokens are
-  // already in the KV cache, record their span so compactThinkSpan
-  // can drop them at end-of-generation.
+  // assistant prefix ends with `<think>\n`). Mark the parser as already
+  // inside reasoning; the tokens remain resident until prompt reconciliation.
   if (thinkingForcedOpen_ && reasoningEnabled_) {
-    setOpenThinkSpan(
-        nPast_ - static_cast<llama_pos>(reasoningState_.forcedOpenTokenCount));
     reasoningState_.inside_reasoning = true;
   }
 }
@@ -880,10 +864,6 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
-  // Finalise the previous iteration's deferred close-position capture;
-  // the close-marker token has been committed by now.
-  capturePendingThinkClose();
-
   if (stopGeneration_.load()) {
     // Leave `stopGeneration_` set so the post-loop `onCancel` runs;
     // do NOT emit EOT since the rollback drops all sampled tokens.
@@ -979,52 +959,9 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     emitOutputPiece(outputCallback, completeChars);
   }
 
-  // Record post-reasoning tokens for replay. Post-reasoning capture
-  // is started by the prior turn's `capturePendingThinkClose()`
-  // (called at the top of this function), so the very first sampled
-  // token after the close marker lands here.
-  recordPostReasoningTokenIfActive(tokenId);
-
   if (reasoningEnabled_) {
-    const bool wasInside = reasoningState_.inside_reasoning;
-    // Seed the sampled token into the replay buffer BEFORE
-    // running the reasoning detector: on generated-opener templates
-    // (`thinkingForcedOpen == false`) every token sampled after
-    // end-of-prefill and up to and including the token that flips
-    // `inside_reasoning` from false to true is part of the pre-
-    // reasoning span (template preamble + opener pieces). The
-    // compactor's restored boundary snapshot does not contain
-    // any of those tokens, so the replay must carry them or the next turn
-    // would resume from an unbalanced state. Every model replays now, so this
-    // is a no-op only when the feature is off or before the boundary exists.
-    if (!wasInside) {
-      compactor_.recordPreReasoningToken(tokenId);
-    }
     qvac_lib_inference_addon_llama::utils::updateReasoningBuffer(
         tokenStr, reasoningState_);
-    const bool nowInside = reasoningState_.inside_reasoning;
-    if (!wasInside && nowInside) {
-      // The current sampled token is the LAST piece of the open marker;
-      // earlier pieces (openTokenCount - 1) are already in the cache.
-      setOpenThinkSpan(
-          nPast_ - static_cast<llama_pos>(reasoningState_.openTokenCount - 1));
-    }
-    if (wasInside && !nowInside) {
-      // The full-state boundary sits at the end of prefill, so the restored
-      // prefix still opens a block. Seed the canonical close so the replay
-      // balances it again. Pure attention anchors before the span and drops
-      // this in the compactor, keeping `preamble + answer`.
-      //
-      // Canonical token, not `tokenId`: a close carrying whitespace padding
-      // (Qwen3's `"\n</think>\n\n"`) defers the detector flip onto the
-      // padding piece, and seeding that replays a newline with nothing
-      // closing the block.
-      compactor_.recordCloseMarkerForReplay(
-          reasoningState_.cached_close_tag_tokens);
-      // Defer end capture: the close-marker token has not yet been committed
-      // to the cache.
-      compactor_.requestCloseCapture();
-    }
   }
 
   const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
@@ -1075,11 +1012,6 @@ SequenceStepResult TextLlmContext::onLogitsReady(
         common_sampler_accept(smpl_.get(), tokenId, true);
       }
       reasoningState_.inside_reasoning = false;
-      // EOS substitution: the original EOS reached the capture site with
-      // capture still off and the substituted close never does, so seed it
-      // here or the restored state opens a block nothing closes.
-      compactor_.recordCloseMarkerForReplay(tokenId);
-      compactor_.requestCloseCapture();
       if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
         forcedTokens_.push_back(reasoningState_.cached_newline_token);
@@ -1148,7 +1080,6 @@ bool TextLlmContext::onGenerationFinished(
   if (terminalReason != GenerationStopReason::None) {
     generationStopReason_ = terminalReason;
   }
-  capturePendingThinkClose();
   onSequenceEnd(outputCallback);
   const bool emptyGeneration =
       cacheRequestActive_ &&
@@ -1162,7 +1093,7 @@ bool TextLlmContext::onGenerationFinished(
   // Generation completed; cancel cannot fire anymore so the
   // prefill-entry rollback checkpoint is no longer reachable. Drop
   // its temp file now instead of waiting for the next inference.
-  rollbackState_.clearPrefillEntry();
+  requestRollback_.clear();
   // `generationStopReason_` intentionally persists: runtime stats read
   // it after generateResponse() returns; it is re-initialized at the
   // next generation's entry.
@@ -1174,25 +1105,9 @@ bool TextLlmContext::onCancel(
   return rollbackCurrentRequest(outputCallback);
 }
 
-bool TextLlmContext::shouldRollbackInterruptedReasoning() const {
-  return qvac_lib_inference_addon_llama::utils::
-      shouldRollbackInterruptedReasoning(
-          generationStopReason_,
-          needsRecurrentSnapshot_,
-          false,
-          reasoningEnabled_,
-          reasoningState_.inside_reasoning,
-          compactor_.hasOpenSpan(),
-          compactor_.hasCapturedCloseSpan());
-}
-
 bool TextLlmContext::rollbackCurrentRequest(
     const std::function<void(const std::string&)>& outputCallback) {
-  // Rollback = "request never happened": roll back to the pre-request
-  // cursor for cancellation or a known truncation inside reasoning.
-  // `reasoningBoundary` is compaction-only and not used here — restoring
-  // it would leak the cancelled prompt / generated-prefix state into
-  // the cache.
+  // Rollback = "request never happened": restore the pre-request cursor.
   // If cancellation lands after llama_decode() but before the next sampler
   // read, the implicit sampler-side synchronize is skipped. Finish any queued
   // backend work before mutating KV/recurrent state during rollback.
@@ -1214,7 +1129,7 @@ bool TextLlmContext::rollbackCurrentRequest(
       .needsRecurrentSnapshot = needsRecurrentSnapshot_,
       .currentPos = nPast_,
       .preRequestPos = preRequestNPast_,
-      .rollback = rollbackState_,
+      .rollback = requestRollback_,
       .onRecurrentRestored =
           [this](llama_pos restoredNPast) { nPast_ = restoredNPast; },
       .onRecurrentRestoreFailed =
@@ -1226,10 +1141,7 @@ bool TextLlmContext::rollbackCurrentRequest(
       .onPureAttentionRolledBack = [this]() { nPast_ = preRequestNPast_; },
   });
 
-  rollbackState_.clearPrefillEntry();
-  rollbackState_.clearReasoningBoundary();
-  rollbackState_.clearPostReasoning();
-  compactor_.clearSpan();
+  requestRollback_.clear();
   generationStopReason_ = stopReasonAfterRequestRollback(generationStopReason_);
   // The sampled tokens were accepted before rollback; clear sampler history so
   // the next clean request cannot inherit a request that "never happened".
@@ -1239,7 +1151,6 @@ bool TextLlmContext::rollbackCurrentRequest(
 
 void TextLlmContext::configureReasoningTags(
     const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-    const std::string& forcedOpenText,
     const std::optional<ReasoningTags>& fallbackTags) {
   // Family-default tags act as both the fallback when the active chat
   // template does not expose reasoning tags, and as the source for the
@@ -1252,7 +1163,6 @@ void TextLlmContext::configureReasoningTags(
 
   reasoningState_ = ReasoningState{};
   reasoningEnabled_ = false;
-  compactor_.setReasoningEnabled(false);
   if (!reasoningTags.has_value()) {
     return;
   }
@@ -1262,53 +1172,18 @@ void TextLlmContext::configureReasoningTags(
     eosRecoveryCloseTag = fallbackTags->close;
   }
 
-  // Gate on the init return: if the open marker's first piece is not
-  // a CONTROL / USER_DEFINED special token, prior context could
-  // BPE-merge into the marker at runtime, the span-start math would
-  // silently drift, and the recorded range would drop the wrong KV
-  // window. Disable detection and surface a warning in that case.
   const bool reasoningInitOk = initializeReasoningState(
-      modelCtx_.lctx,
-      reasoningState_,
-      *reasoningTags,
-      forcedOpenText,
-      eosRecoveryCloseTag);
+      modelCtx_.lctx, reasoningState_, *reasoningTags, eosRecoveryCloseTag);
   if (reasoningInitOk) {
     reasoningEnabled_ = true;
-    compactor_.setReasoningEnabled(true);
     return;
   }
 
   QLOG_IF(
       Priority::WARNING,
       string_format(
-          "[TextLlm] reasoning detection disabled: first piece of open "
-          "marker '%s' is not a special token under this vocab; "
-          "reasoning-channel tracking will be skipped\n",
+          "[TextLlm] reasoning detection disabled for marker '%s'\n",
           reasoningTags->open.c_str()));
-}
-
-void TextLlmContext::setOpenThinkSpan(llama_pos start) {
-  compactor_.setOpenSpan(start);
-}
-
-void TextLlmContext::capturePendingThinkClose() {
-  if (!compactor_.hasPendingCloseCapture()) {
-    return;
-  }
-  compactor_.onCloseCommitted(nPast_);
-}
-
-void TextLlmContext::recordPostReasoningTokenIfActive(llama_token tokenId) {
-  compactor_.recordPostReasoningToken(tokenId);
-}
-
-int32_t TextLlmContext::getThinkingBlockDiscards() const {
-  return compactor_.blockDiscards();
-}
-
-void TextLlmContext::resetThinkingBlockDiscards() {
-  compactor_.resetBlockDiscards();
 }
 
 int32_t TextLlmContext::getToolDefinitionsDropped() const {
@@ -1317,13 +1192,6 @@ int32_t TextLlmContext::getToolDefinitionsDropped() const {
 
 void TextLlmContext::resetToolDefinitionsDropped() {
   toolDefinitionsDropped_ = 0;
-}
-
-std::optional<llama_perf_context_data>
-TextLlmContext::takeUserVisiblePerfSnapshot() {
-  auto snapshot = userVisiblePerf_;
-  userVisiblePerf_.reset();
-  return snapshot;
 }
 
 std::vector<llama_token> TextLlmContext::cacheStateTokens() const {
@@ -1652,11 +1520,11 @@ void TextLlmContext::snapshotPreRequestRollbackAnchor() {
   if (!needsRecurrentSnapshot_) {
     return;
   }
-  if (!rollbackState_.capturePrefillEntry(modelCtx_.lctx, seqId_, nPast_)) {
+  if (!requestRollback_.capture(modelCtx_.lctx, seqId_, nPast_)) {
     // Silent failure would make `hasPrefillEntry()` false at cancel
     // time, turn `onCancel`'s rollback into a no-op, and let peak
     // `nPast` leak back into `CacheTokens`. This is cancel-path
-    // bookkeeping, unrelated to `remove_thinking_from_context`
+    // bookkeeping for transactional request recovery
     // cleanup, so we log a warning rather than hard-failing the
     // request.
     QLOG_IF(
@@ -1687,27 +1555,13 @@ void TextLlmContext::resetState(bool resetStats) {
   nPast_ = 0;
   clearCacheReconciliationState();
 
-  // On partial reset (resetStats=false), preserve the block discards so
-  // `runtimeStats()` can read the per-inference value. On full reset
-  // (resetStats=true), clear them along with perf stats.
-  if (resetStats) {
-    compactor_.resetBlockDiscards();
-  }
-
   // Clear UTF-8 buffer when resetting state
   utf8Buffer_.clear();
   forcedTokens_.clear();
   banEogAfterReasoningRecovery_ = false;
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
-  compactor_.reset();
-  rollbackState_.reset();
-  // Gated on `resetStats` — the partial reset between generation and
-  // `runtimeStats()` must preserve the compactor's perf snapshot.
-  if (resetStats) {
-    userVisiblePerf_.reset();
-  }
-
+  requestRollback_.clear();
   // Finish queued backend work before mutating KV/recurrent memory.
   llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
@@ -1827,26 +1681,6 @@ bool TextLlmContext::handleReasoningEOS(
   // path's forced-token branch. Left alone because this function's decode
   // bookkeeping is shared with recurrent rollback.
   //
-  // Close marker just committed — record span end before injecting
-  // the trailing newlines (they are excluded from the span).
-  // Seed the replay buffer with the substituted close-tag token id
-  // first so it lands ahead of the newlines that the loop below
-  // records once `onCloseCommitted` flips capture on.
-  //
-  // `onCloseCommitted` is gated on `pendingThinkCloseCapture_`: that
-  // flag is the finaliser for the iter-deferred "marker seen, commit
-  // position next iter" handshake used by the normal buffer-transition
-  // path. EOS substitution skips that handshake (there is no real
-  // `</think>` token going through `updateReasoningBuffer` to trip
-  // `requestCloseCapture`), so flip it here so the compactor actually
-  // records the span end. Without this, the substituted close is
-  // invisible to the compactor and `compactThinkSpan` later bails at
-  // `end < 0` — observable as multi-turn reasoning blocks no longer
-  // being compacted when the model emits EOS instead of `</think>`.
-  compactor_.recordCloseMarkerForReplay(tokenId);
-  compactor_.requestCloseCapture();
-  compactor_.onCloseCommitted(nPast);
-
   // Inject 2 newlines after closing tag
   if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
     for (int i = 0; i < 2; i++) {
@@ -1872,8 +1706,6 @@ bool TextLlmContext::handleReasoningEOS(
       ++nPast;
       appendResidentToken(reasoningState_.cached_newline_token);
       ++lastGeneratedTokenCount_;
-      recordPostReasoningTokenIfActive(reasoningState_.cached_newline_token);
-
       std::string newlineStr = common_token_to_piece(
           modelCtx_.lctx,
           reasoningState_.cached_newline_token,

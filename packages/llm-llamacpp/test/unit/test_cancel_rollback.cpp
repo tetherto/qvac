@@ -20,14 +20,13 @@
 
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
-#include "model-interface/ReasoningBlockCompactor.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
 
-// Tests for the cancel-rollback paths introduced alongside
-// `remove_thinking_from_context` for hybrid SSM models. Two layers of
+// Tests for the transactional cancel-rollback paths for hybrid SSM models.
+// Two layers of
 // coverage:
 //   1. Snapshot / restore primitive against a real `llama_context`
 //      (hybrid + pure-attention). Pins the foundational behaviour that
@@ -405,14 +404,10 @@ TEST_F(
       << "post-cancel prefill must successfully decode tokens";
 }
 
-// `onCancel` on a hybrid driver with `remove_thinking_from_context: true`:
-// after prefill (which takes the prefill-entry AND reasoning-boundary
-// snapshots), calling `onCancel` directly must restore the
-// PREFILL-ENTRY snapshot — i.e. roll the cache back to the cursor that
+// Calling `onCancel` on a hybrid driver after prefill must restore the
+// pre-request snapshot — i.e. roll the cache back to the cursor that
 // existed BEFORE this request's prompt was submitted, matching the
-// "request never happened" cancel semantics. The reasoning-boundary
-// snapshot is reserved for normal thinking-block compaction and must
-// NOT be used for cancel.
+// "request never happened" cancel semantics.
 TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
   auto model = loadTextModel(qwen35HybridModelPath());
   if (!model) {
@@ -596,54 +591,6 @@ TEST_F(
       << "a short prefill must still succeed after the refused one";
   EXPECT_FALSE(recoveryResult.cancelled);
   EXPECT_TRUE(recoveryResult.rollbackOk);
-}
-
-// ============================================================================
-// User-visible perf snapshot lifecycle on `TextLlmContext`
-// ============================================================================
-//
-// Lazy reconciliation performs no post-generation restore/replay decode, so
-// no synthetic performance snapshot should be produced. The base interface
-// remains for ABI-compatible runtime-stat collection.
-
-// Newly constructed driver: no snapshot. Guards the initial state — a
-// stray non-empty snapshot here would leak into the first inference's
-// `runtimeStats()` and report zeroed-out counters.
-TEST_F(TextLlmContextCancelTest, FreshDriverReportsNoUserVisiblePerfSnapshot) {
-  auto model = loadTextModel(qwen3PureAttentionModelPath());
-  if (!model) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-
-  LlmModelContext shared = makeShared(*model);
-  common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, /*seqId=*/0);
-
-  EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
-      << "Newly constructed driver must report no user-visible perf snapshot";
-}
-
-TEST_F(
-    TextLlmContextCancelTest, LazyReasoningDoesNotCaptureReplayPerfSnapshot) {
-  auto model = loadTextModel(qwen3PureAttentionModelPath());
-  if (!model) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-
-  LlmModelContext shared = makeShared(*model);
-  common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, /*seqId=*/0);
-
-  std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
-  const LlmContext::EvalMessageResult evalResult = driver.evalMessageWithTools(
-      chatMsgs, {}, /*isCacheLoaded=*/false, /*prefill=*/false);
-  ASSERT_TRUE(evalResult.ok);
-  EXPECT_FALSE(evalResult.cancelled);
-  EXPECT_TRUE(evalResult.rollbackOk);
-  ASSERT_TRUE(driver.generateResponse([](const std::string&) {}).ok);
-
-  EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
-      << "lazy reconciliation must not run a post-generation replay decode";
 }
 
 // ============================================================================
@@ -874,13 +821,8 @@ TEST(
     longPrompt.input = R"([
       {"role":"user","content":"Write a long story about a dragon."}
     ])";
-    // `remove_thinking_from_context` does NOT gate the cancel-restore
-    // path anymore — that path now uses the `prefillEntry` snapshot,
-    // which is captured unconditionally for hybrid / recurrent models.
-    // We leave the flag enabled so this test also exercises the
-    // `reasoningBoundary` capture lifecycle alongside the cancel path,
-    // catching regressions where the two snapshots interfere with each
-    // other.
+    // The pre-request snapshot is captured unconditionally for hybrid /
+    // recurrent models.
     longPrompt.outputCallback = [&](const std::string&) {
       const unsigned seen = callbackCount.fetch_add(1) + 1;
       if (seen >= 2 && !cancelIssued.exchange(true)) {
@@ -1223,7 +1165,7 @@ TEST(
 }
 
 // ============================================================================
-// Layer 2c: TextLlmContext reasoning-compaction failure recovery
+// Layer 2c: cache-save failure recovery
 // ============================================================================
 
 namespace {} // namespace

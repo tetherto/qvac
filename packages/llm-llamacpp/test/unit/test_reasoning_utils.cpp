@@ -136,11 +136,8 @@ TEST_F(ReasoningUtilsTest, ReasoningStateDefaultInitialization) {
   EXPECT_FALSE(state.inside_reasoning);
   EXPECT_TRUE(state.tags.open.empty());
   EXPECT_TRUE(state.tags.close.empty());
-  EXPECT_EQ(state.openTokenCount, 0);
-  EXPECT_EQ(state.forcedOpenTokenCount, 0);
   EXPECT_EQ(state.cached_close_tag_token, LLAMA_TOKEN_NULL);
   EXPECT_EQ(state.cached_newline_token, LLAMA_TOKEN_NULL);
-  EXPECT_FALSE(state.close_is_single_token);
   EXPECT_TRUE(state.recent_output_buffer.empty());
   EXPECT_EQ(state.BUFFER_SIZE, 50);
 }
@@ -199,22 +196,16 @@ TEST_F(ReasoningUtilsTest, UpdateBufferStaysOutsideForUnrelatedContent) {
   EXPECT_FALSE(state.inside_reasoning);
 }
 
-// Regression guard for the recurrent-replay close-token seeding
-// invariant: on chat templates whose `state.tags.close` carries
+// Regression guard for padded close-tag detection: on chat templates whose
+// `state.tags.close` carries
 // surrounding whitespace padding (Qwen3's canonical form is
 // `"\n</think>\n\n"`), `updateReasoningBuffer` runs
 // `find(state.tags.close)` against the streamed piece buffer, so the
 // `inside_reasoning` flip fires only once the entire padded string is
 // present — i.e. on the LAST padding piece, not on `</think>` itself.
 //
-// `TextLlmContext` / `MtmdLlmContext` therefore must NOT seed the
-// recurrent replay buffer with the sampled token that tripped the
-// flip (that would be a trailing newline piece), and instead pass
-// `reasoningState_.cached_close_tag_token` — the canonical
-// single-vocab `</think>`. This test pins the flip-token semantics
-// on which that fix relies; if the detector ever moves to matching
-// the canonical close directly and the drivers regress to seeding
-// `tokenId`, one of the two must change together.
+// EOS recovery therefore uses `reasoningState_.cached_close_tag_token`, the
+// canonical single-vocab `</think>`, instead of the sampled padding token.
 TEST_F(
     ReasoningUtilsTest, UpdateBufferFlipDefersToTrailingPaddingOnPaddedClose) {
   ReasoningState state;
@@ -237,6 +228,5 @@ TEST_F(
   updateReasoningBuffer("\n", state);
   EXPECT_FALSE(state.inside_reasoning)
       << "flip fires only on the LAST padding token, so the sampled `tokenId` "
-         "at the flip site is a padding newline — not the canonical close. "
-         "Recurrent replay must seed `cached_close_tag_token`, never `tokenId`";
+         "at the flip site is a padding newline — not the canonical close";
 }

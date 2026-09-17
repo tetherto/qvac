@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include "common/common.h"
 
@@ -19,12 +18,8 @@ namespace utils {
 // defaults are only a fallback. Owning strings so callers can safely
 // construct from temporaries.
 //
-// Two invariants when adding a new family in `selectReasoningTagsForModel`:
-//   - Both markers must fit comfortably within `ReasoningState::BUFFER_SIZE`
-//     (substring detection runs over the last BUFFER_SIZE chars).
-//   - `tags.open` must be a registered special token so the cached
-//     `openTokenCount` matches the model's in-context emission — the
-//     span start-position arithmetic relies on this alignment.
+// Both markers must fit comfortably within `ReasoningState::BUFFER_SIZE`
+// because substring detection runs over the last BUFFER_SIZE chars.
 struct ReasoningTags {
   std::string open;
   std::string close;
@@ -32,28 +27,10 @@ struct ReasoningTags {
 
 struct ReasoningState {
   ReasoningTags tags;
-  // Number of tokens the open marker tokenises to under the active
-  // tokenizer. Cached at init for span start-position arithmetic.
-  int openTokenCount = 0;
-  // Token count for the template-forced reasoning prefix some chat
-  // templates append to the assistant turn. Defaults to
-  // `tags.open + "\n"` when the caller does not provide the exact
-  // prompt suffix. 0 when not applicable.
-  int forcedOpenTokenCount = 0;
   // Cached close-marker id when the marker tokenises to a single
   // token (enables EOS-inside-reasoning replacement).
   llama_token cached_close_tag_token = LLAMA_TOKEN_NULL;
-  // Every token of the canonical close marker, in order. The replay path
-  // seeds all of them so a marker that tokenises to several pieces still
-  // restores a balanced `<think>...</think>` span. Empty when reasoning is
-  // not configured.
-  std::vector<llama_token> cached_close_tag_tokens;
   llama_token cached_newline_token = LLAMA_TOKEN_NULL;
-  // True iff `tags.close` tokenises to a single token under the active vocab.
-  // Only EOS-inside-reasoning substitution needs this: it swaps a sampled EOS
-  // for the close marker, which is a single-token operation. Compaction does
-  // not consult it, because no structural marker is replayed.
-  bool close_is_single_token = false;
   bool inside_reasoning = false;
   std::string recent_output_buffer;
 
@@ -65,25 +42,13 @@ struct ReasoningState {
 // Initialise `state` with `tags`. Tokenises both markers under
 // `lctx`'s vocab to populate the cached counts and ids. Empty
 // `tags.open`/`tags.close` leave the state in a disabled mode.
-// `forcedOpenText`, when non-empty, must be the exact template suffix
-// already present in the prompt when `thinking_forced_open` is true.
 // `eosRecoveryCloseTag`, when non-empty, is tokenised separately for
 // the Qwen-family EOS-inside-reasoning recovery path; detection still
 // uses `tags.close`.
 //
-// Returns `true` iff the open marker satisfies the BPE-merge-barrier
-// invariant required by the span-start arithmetic in
-// `TextLlmContext::onLogitsReady` (`nPast_ - (openTokenCount - 1)`):
-//   - openTokenCount >= 1, AND
-//   - every piece tokenises to a CONTROL or USER_DEFINED token, so the
-//     standalone tokenisation matches the in-context emission piece-for-
-//     piece (no BPE merges across surrounding text bytes).
-// Returns `false` (and clears markers / token counts) if the invariant is
-// violated — callers should disable reasoning detection in that case to
-// avoid corrupting the KV cache with an off-by-one span start.
+// Returns false only when the context or markers are unavailable.
 [[nodiscard]] bool initializeReasoningState(
     ::llama_context* lctx, ReasoningState& state, ReasoningTags tags,
-    const std::string& forcedOpenText = {},
     const std::string& eosRecoveryCloseTag = {});
 
 // Append `tokenStr` to the rolling buffer and flip

@@ -1,10 +1,7 @@
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <string>
-#include <vector>
 
 #include <llama.h>
 
@@ -34,8 +31,7 @@ namespace utils {
 // wasteful) — neither is useful for our usage. Moves transfer file
 // ownership and leave the source in an empty state.
 //
-// `nPast` records the next-position-to-write at snapshot time. The
-// caller uses it as the replay anchor and the post-restore `nPast_`.
+// `nPast` records the next-position-to-write at snapshot time.
 class RecurrentStateSnapshot {
 public:
   RecurrentStateSnapshot() = default;
@@ -65,12 +61,6 @@ public:
   // empty" on restore). Mostly useful for tests / diagnostics.
   [[nodiscard]] bool hasFile() const noexcept { return !filePath_.empty(); }
 
-  // True when the boundary records only a position, no state payload.
-  // Pure-attention memory is positionally indexed, so rewinding to the
-  // boundary is a tail trim rather than a state reload: there is nothing
-  // to restore that re-decoding the kept tokens does not rebuild.
-  [[nodiscard]] bool isPositionOnly() const noexcept { return positionOnly_; }
-
   // Best-effort cleanup. Removes the underlying file (if any) and
   // resets `nPast` / `captured_`. Safe to call multiple times, safe on
   // a snapshot that never adopted a file.
@@ -78,7 +68,7 @@ public:
 
   // Test seam. Adopts a path without going through
   // `llama_state_seq_save_file`, so unit tests can exercise the
-  // `hasReasoningBoundary()` / `empty()` gates without loading a real
+  // `empty()` gates without loading a real
   // `llama_context`. The path does not have to exist on disk —
   // production code MUST use `snapshotRecurrentState` instead so the
   // payload is actually valid for restore.
@@ -102,20 +92,9 @@ public:
   // `set_data_ext` on the empty-state serialization.
   void adoptEmpty(llama_pos nPastAt) noexcept;
 
-  // Record a position-only boundary at `nPastAt`. Restore trims the
-  // sequence back to that position instead of reloading state. Only
-  // valid for memory that can drop a partial tail, which is every
-  // pure-attention model; recurrent / hybrid modules reject that range
-  // and must keep using the full-state capture above.
-  void adoptPositionOnly(llama_pos nPastAt) noexcept;
-
-  // Test seam for the position-only branch, no `llama_context` needed.
-  void seedPositionOnlyForTesting(llama_pos nPastAt) noexcept;
-
 private:
   std::string filePath_;
   bool captured_ = false;
-  bool positionOnly_ = false;
 };
 
 // Captures the full state of `seqId` into `out` by writing it to a
@@ -149,37 +128,6 @@ bool snapshotRecurrentState(
 bool restoreRecurrentState(
     ::llama_context* lctx, llama_seq_id seqId,
     const RecurrentStateSnapshot& snapshot);
-
-// Replays `tokens` through `lctx` against `seqId`, attaching them to
-// positions starting at `startPos` (so position[i] == startPos + i).
-// Used after a partial-state restore to advance the recurrent state
-// across the post-reasoning span without re-running the sampler. The
-// batch is chunked to fit within `llama_n_batch(lctx)` so callers can
-// pass arbitrarily long token vectors.
-//
-// `outputLogitsForLast` controls whether the final token in `tokens`
-// requests output logits from `llama_decode` — set true when the
-// caller intends to immediately sample the next token from the
-// post-replay state, false when the replay is purely for SSM advance.
-//
-// Returns true on success. Returns false if any sub-batch decode call
-// reports a non-zero error code; the caller should treat the recurrent
-// state as undefined in that case (the attention KV the caller
-// previously compacted is unaffected).
-bool replayTokensThroughDecoder(
-    ::llama_context* lctx, llama_seq_id seqId,
-    const std::vector<llama_token>& tokens, llama_pos startPos,
-    bool outputLogitsForLast = false);
-
-using ReplayDecodeFunc = std::function<int(::llama_context*, llama_batch)>;
-
-// Test seam for replay chunking and failure propagation. Production callers
-// should use `replayTokensThroughDecoder`, which derives the chunk size from
-// the live context and decodes with llama.cpp directly.
-bool replayTokensThroughDecoderForTesting(
-    ::llama_context* lctx, llama_seq_id seqId,
-    const std::vector<llama_token>& tokens, llama_pos startPos,
-    bool outputLogitsForLast, int32_t chunkSize, ReplayDecodeFunc decodeFunc);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

@@ -444,7 +444,7 @@ Both targeted forms honour the same threading rule as `cancel(seqId, admissionId
 
 Stats are collected in two places and merged at the end:
 
-- **Per-step** — `RuntimeStatsSnapshot::recordDecodeStep` accumulates prefill vs decode tokens and their wall-clock duration. A pure step lands wholly in its own bucket. A **mixed** step — a newcomer's prompt tokens riding along with other sequences' generation, which is the normal case under continuous batching — is split **proportionally by token count**: 1 prefill token beside 3 decode tokens sends a quarter of the step's elapsed time to the prefill bucket and three quarters to the decode bucket, with the tokens counted in their own buckets. That split is what keeps `ppTPS` and batch `TTFT` (which reads `prefillTimeMs()`) honest; charging a mixed step wholly to decode would silently drop the piggybacked prompt tokens and their time, under-reporting both. Compactor replay decode is excluded because `onGenerationFinished` runs outside the timed block, not by any special case here.
+- **Per-step** — `RuntimeStatsSnapshot::recordDecodeStep` accumulates prefill vs decode tokens and their wall-clock duration. A pure step lands wholly in its own bucket. A **mixed** step — a newcomer's prompt tokens riding along with other sequences' generation, which is the normal case under continuous batching — is split **proportionally by token count**: 1 prefill token beside 3 decode tokens sends a quarter of the step's elapsed time to the prefill bucket and three quarters to the decode bucket, with the tokens counted in their own buckets. That split is what keeps `ppTPS` and batch `TTFT` (which reads `prefillTimeMs()`) honest; charging a mixed step wholly to decode would silently drop the piggybacked prompt tokens and their time, under-reporting both.
 - **Per-slot** — `accumulateSlotRuntimeStats` folds `nPast` and cache tokens for each completed slot into the scheduler's `RuntimeStatsSnapshot`.
 
 `avgConcurrentSeq` is computed as:
@@ -500,7 +500,7 @@ whether a per-job stats source exists for that id:
   snapshot starts from that same aggregate, then `TTFT`, `TPS`,
   `generatedTokens` and `promptTokens` are overridden with the job's OWN
   observed figures. All other keys (`ppTPS`, `CacheTokens`,
-  `thinkingBlockDiscards`, `avgConcurrentSeq`, `backendDevice`) stay
+  `avgConcurrentSeq`, `backendDevice`) stay
   model-level.
 
 Four variants:
@@ -537,7 +537,6 @@ no separate per-job source, nothing is overridden.
   "CacheTokens": 210,
   "generatedTokens": 180,
   "promptTokens": 30,
-  "thinkingBlockDiscards": 0,
   "stopReason": "eos",
   "visionEncodeMs": 0,
   "visionEncodeTiles": 0,
@@ -564,7 +563,6 @@ job's observed figures:
   "CacheTokens": 840,
   "generatedTokens": 174,
   "promptTokens": 28,
-  "thinkingBlockDiscards": 0,
   "stopReason": "eos",
   "avgConcurrentSeq": 2.9,
   "backendDevice": "gpu"
@@ -618,7 +616,6 @@ the model actually interleaved ~3-4 sequences, i.e. Y's prompts ran too):
   "CacheTokens": 840,
   "generatedTokens": 355,
   "promptTokens": 61,
-  "thinkingBlockDiscards": 0,
   "avgConcurrentSeq": 3.4,
   "backendDevice": "gpu"
 }
