@@ -982,7 +982,7 @@ importers:
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.53.0
+        specifier: ^0.53.1
         version: link:../llm-llamacpp
       '@qvac/ocr-ggml':
         specifier: ^0.24.1
@@ -1361,7 +1361,7 @@ importers:
         specifier: ^0.41.1
         version: link:../embed-llamacpp
       '@qvac/llm-llamacpp':
-        specifier: ^0.53.0
+        specifier: ^0.53.1
         version: link:../llm-llamacpp
       '@qvac/registry-client':
         specifier: ^0.6.0
@@ -1639,7 +1639,7 @@ importers:
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.53.0
+        specifier: ^0.53.1
         version: link:../llm-llamacpp
       '@qvac/logging':
         specifier: ^0.1.0
