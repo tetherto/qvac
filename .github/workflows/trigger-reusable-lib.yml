@@ -177,7 +177,7 @@ jobs:
     # below, not here: a job-level result is matrix-wide, so a qvac-ci lint
     # failure would otherwise suppress every sibling library in the same push.
     if: >-
-      always() &&
+      always() && needs.detect.result == 'success' &&
       (needs.publish-logic.outputs.publish_main == 'true' ||
       needs.publish-logic.outputs.publish_feature == 'true' ||
       needs.publish-logic.outputs.publish_tmp == 'true')
@@ -230,7 +230,7 @@ jobs:
     # forces a release-* run to exactly one package, so this can only ever block
     # the package being released.
     if: |-
-      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') && needs.lint-and-test.result != 'failure' && needs.lint-and-test.result != 'cancelled')
+      (always() && needs.detect.result == 'success' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') && needs.lint-and-test.result != 'failure' && needs.lint-and-test.result != 'cancelled')
     strategy:
       fail-fast: false
       matrix:
