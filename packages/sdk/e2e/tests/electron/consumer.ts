@@ -69,6 +69,7 @@ import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { TranscriptionExecutor } from '../shared/executors/node/transcription-executor.js'
 import { TranscribeStreamEventsExecutor } from '../shared/executors/node/transcribe-stream-events-executor.js'
 import { RagExecutor } from '../shared/executors/node/rag-executor.js'
+import { VectorIndexExecutor } from '../shared/executors/vector-index-executor.js'
 import { OcrExecutor } from '../shared/executors/node/ocr-executor.js'
 import { ClassificationExecutor } from '../shared/executors/node/classification-executor.js'
 import { ConfigReloadExecutor } from '../shared/executors/node/config-reload-executor.js'
@@ -555,8 +556,8 @@ export const executor = createExecutor({
       'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
     ),
     new SkipExecutor(
-      /^audio-gen-/,
-      'AudioGen e2e is desktop-only because ACE-Step generation is too heavy for the stable Electron pass'
+      /^audio-(gen|edit|understand)-/,
+      'AudioGen e2e is desktop-only: the ACE-Step stack is four GGUFs, too heavy for the stable Electron pass'
     ),
     new SkipExecutor(
       /^finetune-/,
@@ -565,6 +566,10 @@ export const executor = createExecutor({
     new SkipExecutor(
       /^no-lingering-bare-/,
       'Electron skips no-lingering-bare tests because they spawn and terminate standalone Bare workers outside the packaged app lifecycle'
+    ),
+    new SkipExecutor(
+      /^worker-restart-/,
+      'Electron skips the kv-cache worker-restart test because it asserts on Bare worker processes outside the packaged app lifecycle'
     ),
     new SkipExecutor(
       /^vla-/,
@@ -579,6 +584,7 @@ export const executor = createExecutor({
     new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
+    new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),

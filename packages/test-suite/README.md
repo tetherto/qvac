@@ -256,6 +256,11 @@ qvac-test report:format --input comparison.json --format markdown --output comme
 - Snap consumers build, install, and launch a Linux Snap whose packaged entry receives mounted
   `QVAC_TEST_*` paths.
 - Mobile consumers use the `@qvac/test-suite/mobile` runtime and generated Expo scaffolding
+- Mobile consumer manifests automatically declare the build target's prebuild package for
+  each split native addon installed in the config directory (`@qvac/<addon>-android-arm64`
+  for Android, `@qvac/<addon>-ios` for iOS), pinned to the addon's exact version. These
+  packages are cross-built, so a package manager can never select them from the build host
+  alone. Declaring one yourself overrides the selection.
 - `.env` files are loaded automatically before config resolution
 
 ## Local development

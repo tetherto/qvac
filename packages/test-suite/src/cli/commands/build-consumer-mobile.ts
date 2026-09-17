@@ -32,8 +32,10 @@ function detectTeamIdFromKeychain(): string | undefined {
   return undefined
 }
 
+type MobilePlatform = 'ios' | 'android'
+
 export interface MobileBuildOptions {
-  platform: 'ios' | 'android'
+  platform: MobilePlatform
   config: string
   runId?: string
   mqttBroker?: string
@@ -252,7 +254,7 @@ export async function buildConsumerMobile(options: MobileBuildOptions) {
 
     // Generate package.json with dependencies
     console.log('📦 Setting up dependencies...')
-    await generatePackageJson(configDir, outputDir, mobileConfig.dependencies)
+    await generatePackageJson(configDir, outputDir, mobileConfig.dependencies, options.platform)
 
     // Generate app.json with config
     console.log('⚙️  Configuring app.json...')
@@ -997,7 +999,8 @@ function copyDirectoryRecursive(src: string, dest: string): void {
 async function generatePackageJson(
   configDir: string,
   outputDir: string,
-  dependencies: 'auto' | Record<string, string> | undefined
+  dependencies: 'auto' | Record<string, string> | undefined,
+  platform: MobilePlatform
 ): Promise<void> {
   // Read template
   const templatePath = path.resolve(
@@ -1039,6 +1042,8 @@ async function generatePackageJson(
     }
   }
 
+  addMobilePlatformPackages(template.dependencies ?? {}, configDir, platform)
+
   // Pin RN-stack versions across the entire dependency graph via npm overrides.
   // Without this, transitive peer ranges like react-native-bare-kit's
   // `react-native: *` can pull in a different react-native at install time.
@@ -1064,6 +1069,191 @@ async function generatePackageJson(
   }
 
   fs.writeFileSync(path.join(outputDir, 'package.json'), JSON.stringify(template, null, 2))
+}
+
+const HOST_ADDON_IMPORT = '#host-addon'
+
+const PLATFORM_PREBUILD_HOSTS: Record<MobilePlatform, string[]> = {
+  android: ['android-arm64'],
+  ios: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
+}
+
+export interface HostAddonPackage {
+  name: string
+  version: string
+  hostAddon: unknown
+  packageRoot: string
+}
+
+/**
+ * Adds the build target's prebuild package for every split addon the consumer
+ * installs. The mobile slices are cross-built, so no install host ever matches
+ * their platform and `optionalDependencies` can never select them; they have to
+ * be direct dependencies of the generated manifest.
+ */
+function addMobilePlatformPackages(
+  dependencies: Record<string, string>,
+  configDir: string,
+  platform: MobilePlatform
+): void {
+  const additions = selectMobilePlatformPackages(
+    platform,
+    collectHostAddonPackages(configDir),
+    dependencies
+  )
+  for (const [name, version] of Object.entries(additions)) {
+    dependencies[name] = version
+  }
+  reportSelectedPlatformPackages(additions)
+}
+
+function reportSelectedPlatformPackages(additions: Record<string, string>): void {
+  for (const [name, version] of Object.entries(additions)) {
+    console.log(`   ➕ ${name}@${version}`)
+  }
+}
+
+/**
+ * Decides which prebuild packages a mobile manifest must declare. Pure: the
+ * caller supplies the installed addons and the dependencies already declared,
+ * which always win.
+ */
+export function selectMobilePlatformPackages(
+  platform: MobilePlatform,
+  addons: HostAddonPackage[],
+  declared: Record<string, string>
+): Record<string, string> {
+  const additions: Record<string, string> = {}
+  for (const addon of addons) {
+    collectAddonPlatformEntries(addon, platform, declared, additions)
+  }
+  return additions
+}
+
+function collectAddonPlatformEntries(
+  addon: HostAddonPackage,
+  platform: MobilePlatform,
+  declared: Record<string, string>,
+  additions: Record<string, string>
+): void {
+  const platformPackage = resolvePlatformPackageName(addon.hostAddon, platform)
+  if (!platformPackage || !platformPackage.startsWith(`${addon.name}-`)) return
+  if (!ownsAddonVersion(declared[addon.name], addon.version)) return
+  if (hasLocalPrebuild(addon.packageRoot, platform)) return
+
+  // The slice ships a `.bare` built against its meta package's JS layer, so the
+  // pair must install as one unit; nothing downstream compares the two versions.
+  addUnlessDeclared(additions, declared, platformPackage, addon.version)
+  addUnlessDeclared(additions, declared, addon.name, addon.version)
+}
+
+/**
+ * A consumer that pins the addon itself owns the pair. Anything other than the
+ * exact installed version — a range, a `file:` path, a different version — could
+ * resolve to a different addon in the generated app than the slice was built
+ * for, so the selection steps aside and leaves the slice to the consumer.
+ */
+function ownsAddonVersion(declaredSpec: string | undefined, installedVersion: string): boolean {
+  return declaredSpec === undefined || declaredSpec === installedVersion
+}
+
+function addUnlessDeclared(
+  additions: Record<string, string>,
+  declared: Record<string, string>,
+  name: string,
+  version: string
+): void {
+  if (declared[name] === undefined) additions[name] = version
+}
+
+function hasLocalPrebuild(packageRoot: string, platform: MobilePlatform): boolean {
+  return PLATFORM_PREBUILD_HOSTS[platform].some((host) =>
+    fs.existsSync(path.join(packageRoot, 'prebuilds', host))
+  )
+}
+
+/**
+ * Resolves the platform package a `#host-addon` map points at for one build
+ * target. Android nests the package under its architecture; every iOS flavour
+ * collapses onto a single package, matching the publish-time slice definitions.
+ */
+export function resolvePlatformPackageName(
+  hostAddon: unknown,
+  platform: MobilePlatform
+): string | undefined {
+  const branch = readImportsBranch(hostAddon, platform)
+  const candidate = platform === 'android' ? readImportsBranch(branch, 'arm64') : branch
+  return firstPackageName(candidate)
+}
+
+function readImportsBranch(value: unknown, key: string): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  return (value as Record<string, unknown>)[key]
+}
+
+function firstPackageName(candidate: unknown): string | undefined {
+  const name = Array.isArray(candidate) ? candidate[0] : candidate
+  if (typeof name !== 'string' || name.startsWith('.')) return undefined
+  return name
+}
+
+/**
+ * Reads the installed tree for packages that route their native binding through
+ * a `#host-addon` imports map. That map names the platform packages the addon
+ * resolves at runtime, so it cannot drift from what the publish-time slicer
+ * produced, and pre-split versions are skipped by having no map at all.
+ */
+function collectHostAddonPackages(configDir: string): HostAddonPackage[] {
+  const modulesDir = path.join(configDir, 'node_modules')
+  if (!fs.existsSync(modulesDir)) {
+    console.warn(
+      `   ⚠️  No node_modules in ${configDir}; skipping addon prebuild package selection. ` +
+        'Install the config directory before building the consumer.'
+    )
+    return []
+  }
+  return listInstalledPackageDirs(modulesDir).flatMap(readHostAddonPackage)
+}
+
+function listInstalledPackageDirs(modulesDir: string): string[] {
+  const dirs: string[] = []
+  for (const entry of readDirSafe(modulesDir)) {
+    if (entry.startsWith('.')) continue
+    const entryPath = path.join(modulesDir, entry)
+    if (!entry.startsWith('@')) {
+      dirs.push(entryPath)
+      continue
+    }
+    for (const scoped of readDirSafe(entryPath)) {
+      dirs.push(path.join(entryPath, scoped))
+    }
+  }
+  return dirs
+}
+
+function readDirSafe(dir: string): string[] {
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .map((entry) => entry.name)
+  } catch {
+    return []
+  }
+}
+
+function readHostAddonPackage(packageRoot: string): HostAddonPackage[] {
+  let manifest: { name?: unknown; version?: unknown; imports?: Record<string, unknown> }
+  try {
+    manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf-8'))
+  } catch {
+    return []
+  }
+  const hostAddon = manifest?.imports?.[HOST_ADDON_IMPORT]
+  if (!hostAddon || typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
+    return []
+  }
+  return [{ name: manifest.name, version: manifest.version, hostAddon, packageRoot }]
 }
 
 function generateAppJson(
