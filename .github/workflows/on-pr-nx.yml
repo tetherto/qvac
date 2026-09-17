@@ -9,6 +9,10 @@ on:
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/**"
+      # The shared addon CMake template: a change there alters every consuming
+      # module's link line and build-time assertions, so it has to reach the
+      # native matrix even when no package file moves with it.
+      - "cmake/qvac-addon/**"
   workflow_dispatch:
     inputs:
       repository:

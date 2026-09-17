@@ -1,0 +1,6 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "qvac-addon-cmake",
+  "projectType": "library",
+  "targets": {}
+}
