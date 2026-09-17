@@ -43,9 +43,7 @@ export const llmConfigBaseSchema = z.object({
   gpu_layers: z
     .number()
     .optional()
-    .describe(
-      'Number of model layers to offload to the GPU. Unset by default, which lets the runtime fit the placement to free device memory (offloading every layer when it fits). Setting it pins the layer count and disables that fit.'
-    ),
+    .describe('Number of model layers to offload to the GPU. Default 99 (offload all).'),
   lora: z
     .string()
     .optional()
@@ -185,10 +183,10 @@ export const llmConfigBaseSchema = z.object({
 
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>
 
-// Leave gpu_layers unset so Fabric can choose placement. An explicit value
-// pins the layer count and disables automatic fit.
+// Default values - typed as partial of the config
 export const LLM_CONFIG_DEFAULTS = {
   ctx_size: 1024,
+  gpu_layers: 99,
   device: 'gpu',
   system_prompt: 'You are a helpful assistant.',
   image_tile_mode: 'sequential'
