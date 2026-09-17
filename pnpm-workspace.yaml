@@ -33,3 +33,9 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@qvac/model-fit@0.11.1'
+  - '@qvac/asr-ggml-darwin-arm64@0.5.3'
+  - '@qvac/asr-ggml-darwin-x64@0.5.3'
+  - '@qvac/asr-ggml-linux-arm64@0.5.3'
+  - '@qvac/asr-ggml-linux-x64@0.5.3'
+  - '@qvac/asr-ggml-win32-x64@0.5.3'
+  - '@qvac/asr-ggml@0.5.3'
