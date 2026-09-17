@@ -505,6 +505,17 @@ jobs:
           }
           fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
 
+      - name: Pin validation llm build in inference
+        working-directory: packages/inference
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const spec = 'npm:@tetherto/llm-llamacpp-mono@0.53.1-tmp.runid-35264728754';
+          manifest.peerDependencies['@qvac/llm-llamacpp'] = spec;
+          manifest.devDependencies['@qvac/llm-llamacpp'] = spec;
+          fs.writeFileSync('package.json', `${JSON.stringify(manifest, null, 2)}\n`);
+
       - name: Resolve and prepare inference
         id: inference
         shell: bash
