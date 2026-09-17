@@ -874,7 +874,7 @@ importers:
         version: 0.1.1
       '@qvac/model-fit':
         specifier: ^0.11.1
-        version: link:../model-fit
+        version: 0.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       '@qvac/rag':
         specifier: ^0.8.1
         version: link:../rag
@@ -1415,7 +1415,7 @@ importers:
         specifier: ^2.11.0
         version: 2.13.3
       '@qvac/registry-schema':
-        specifier: ^0.3.0
+        specifier: ^0.4.0
         version: link:shared
       autobase:
         specifier: ^7.18.1
@@ -1524,7 +1524,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/registry-schema':
-        specifier: ^0.3.0
+        specifier: ^0.4.0
         version: link:../shared
       b4a:
         specifier: ^1.6.7
@@ -4213,6 +4213,10 @@ packages:
 
   '@qvac/logging@0.1.1':
     resolution: {integrity: sha512-un8/b8JZBXRW/ljezFj3VGPxALhMvONeD62F/NHaU3TGs4SmdXWDcG65Aot+Bi4rIjaKQS5iY1P4WYGKU6Chew==}
+
+  '@qvac/model-fit@0.11.1':
+    resolution: {integrity: sha512-0QArxgpDFtwJoNEx5rtyM3jg09yOMqy28cUv1JYob2N2SA2kTg2NCVqPvo3rfJLWXkvhksDxlxfZh+8hToEXRA==}
+    engines: {bare: '>=1.24.0'}
 
   '@qvac/registry-client@0.4.1':
     resolution: {integrity: sha512-BZz/7HASD1Wth/r8f7NpWF1bAihND04xKaRjJ2s31ujnQPHO0m04daM/PEiffzPPKYDHQTSGkecOh13451imlw==}
@@ -13291,6 +13295,21 @@ snapshots:
   '@qvac/logging@0.1.1':
     dependencies:
       bare-env: 3.0.1
+
+  '@qvac/model-fit@0.11.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)':
+    dependencies:
+      '@qvac/fabric': 0.15.0
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
+      bare-path: 3.1.1
+      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - bare-pipe
+      - bare-url
+      - react-native-b4a
 
   '@qvac/registry-client@0.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)':
     dependencies:
