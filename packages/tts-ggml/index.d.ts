@@ -463,6 +463,13 @@ interface RuntimeStats {
      */
     generatedFrames?: number;
     /**
+     * Audio8 only, macOS / iOS: 1 while an Apple Core ML sidecar for the codec's
+     * synthesis stack is attached (a compiled `audio8-codec-decoder.mlmodelc`
+     * next to the decoder GGUF); 0 without one, or once a failing sidecar has
+     * been retired.
+     */
+    codecSidecarLoaded?: number;
+    /**
      * Audio8 only: 1 when this synthesis ran the codec's synthesis stack on the
      * Apple Core ML sidecar -- a compiled `audio8-codec-decoder.mlmodelc` next
      * to the decoder GGUF on macOS / iOS -- 0 when it ran on the ggml backend

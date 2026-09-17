@@ -657,9 +657,11 @@ registration and the addon falls back to Vulkan or CPU.
 > Apple Core ML: the prebuilds are built with `speech-cpp[coreml]`, and the
 > engine picks up a compiled `audio8-codec-decoder.mlmodelc` sitting next to
 > the decoder GGUF (any quant tier) at `load()`, falling back to the ggml
-> backend when it is absent or cannot serve a call. `response.stats.codecOnCoreml`
-> reports where that synthesis actually ran its codec; the language model
-> always stays on `backendId`. Export the
+> backend when it is absent or cannot serve a call (a sidecar that fails is
+> retired, and later calls go straight to ggml). `response.stats.codecSidecarLoaded`
+> reports whether the sidecar is attached and `response.stats.codecOnCoreml`
+> where that synthesis actually ran its codec; the language model always stays
+> on `backendId`. Export the
 > sidecar from the decoder GGUF with `qvac-fabric-speech.cpp`'s
 > `engines/tts/scripts/export-audio8-codec-coreml.py` (see its
 > [Audio8 guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar)
@@ -943,6 +945,8 @@ response.stats.audioDurationMs
 response.stats.totalSamples
 response.stats.tokensPerSecond   // Audio8 counts codec frames, the others characters
 response.stats.generatedFrames   // Audio8 only: codec frames, on a fixed 46 ms grid
+response.stats.codecSidecarLoaded // Audio8 only, macOS / iOS: 1 while the Apple Core ML codec sidecar is attached
+response.stats.codecOnCoreml     // Audio8 only: 1 when this synthesis ran the codec on that sidecar, 0 when on the ggml backend
 response.stats.backendDevice     // 0=CPU, 1=GPU
 response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other
 // present when a LavaSR enhancer is active:
