@@ -82,16 +82,34 @@ template <typename ConfigMap> Selector parse(const ConfigMap& config) {
 
 // Keep every registry slot, including CPU and excluded backends. Whisper's
 // ordinal counts all GPU/IGPU devices, including those excluded by our policy.
+// `identity` is populated for GPU-type slots so the CPU-fallback warning can
+// name every device the allowlist and safety guards refused.
 struct Device {
   int whisperIndex = -1;
   bool integrated = false;
   bool eligible = false;
   bool adrenoOpencl = false;
+  std::string identity;
 };
 struct Selection {
   int whisperIndex = -1; // -1 means CPU.
   bool outOfRange = false;
+  // GPU-type registry slots that were seen but not chosen. Populated only when
+  // the selection falls back to CPU so callers can log an actionable reason.
+  std::vector<std::string> refused;
 };
+
+inline std::vector<std::string>
+refusedIdentities(const std::vector<Device>& registry) {
+  std::vector<std::string> refused;
+  for (const auto& device : registry) {
+    if (device.whisperIndex >= 0 && !device.eligible &&
+        !device.identity.empty()) {
+      refused.push_back(device.identity);
+    }
+  }
+  return refused;
+}
 
 inline Selection
 select(const std::vector<Device>& registry, Selector selector) {
@@ -100,7 +118,10 @@ select(const std::vector<Device>& registry, Selector selector) {
     if (selector.index >= 0 &&
         static_cast<size_t>(selector.index) < registry.size()) {
       const auto& selected = registry[selector.index];
-      return {selected.eligible ? selected.whisperIndex : -1};
+      if (selected.eligible) {
+        return {selected.whisperIndex};
+      }
+      return {-1, false, refusedIdentities(registry)};
     }
     outOfRange = true;
     selector.kind = Kind::Automatic;
@@ -120,7 +141,7 @@ select(const std::vector<Device>& registry, Selector selector) {
       }
     }
   }
-  return {-1, outOfRange};
+  return {-1, outOfRange, refusedIdentities(registry)};
 }
 
 } // namespace main_gpu

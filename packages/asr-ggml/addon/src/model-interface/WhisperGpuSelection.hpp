@@ -33,7 +33,23 @@ struct GgmlRegistry {
   const char* description(ggml_backend_dev_t dev) const {
     return ggml_backend_dev_description(dev);
   }
+  const char* name(ggml_backend_dev_t dev) const {
+    return ggml_backend_dev_name(dev);
+  }
 };
+
+// Formatted "name (registry)" identity used in the CPU-fallback warning so
+// operators can trace which physical device the allowlist or Adreno guard
+// refused. Empty registry name reads as `unknown-registry` to keep the string
+// unambiguous.
+template <typename Registry, typename Dev>
+std::string deviceIdentity(const Registry& registry, Dev dev) {
+  const char* namePtr = registry.name(dev);
+  const char* regPtr = registry.backend(dev);
+  const std::string name = namePtr != nullptr ? namePtr : "unnamed";
+  const std::string reg = regPtr != nullptr ? regPtr : "unknown-registry";
+  return name + " (" + reg + ")";
+}
 
 // The registry adapter lets tests exercise the same enumeration and ordinal
 // translation as the loader, including CPU/null slots and backend identities.
@@ -57,7 +73,9 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
     const auto backend = lower(registry.backend(dev));
     const auto description = lower(registry.description(dev));
     // Families provided by the pinned ggml-speech port features. Metal
-    // registers as MTL; retain Metal as a compatibility spelling.
+    // registers as MTL; retain Metal as a compatibility spelling. Every other
+    // family (HIP/ROCm, SYCL, MUSA, RPC, unknown) is refused with its identity
+    // captured for the CPU-fallback warning.
     device.eligible = backend == "mtl" || backend == "metal" ||
                       backend == "cuda" || backend == "vulkan" ||
                       backend == "opencl";
@@ -65,6 +83,7 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
     device.adrenoOpencl = backend == "opencl" && adreno;
     hasAdrenoOpencl = hasAdrenoOpencl || device.adrenoOpencl;
     adrenoVulkan[i] = backend == "vulkan" && adreno;
+    device.identity = deviceIdentity(registry, dev);
   }
   // Preserve the existing Adreno guard without redirecting an explicit index.
   // Selecting a refused Vulkan slot must use CPU, never its OpenCL sibling.

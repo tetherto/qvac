@@ -87,6 +87,7 @@ struct MockDevice {
   enum ggml_backend_dev_type type;
   const char* backend;
   const char* description;
+  const char* name = nullptr;
 };
 struct MockRegistry {
   std::vector<const MockDevice*> devices;
@@ -96,6 +97,9 @@ struct MockRegistry {
   const char* backend(const MockDevice* dev) const { return dev->backend; }
   const char* description(const MockDevice* dev) const {
     return dev->description;
+  }
+  const char* name(const MockDevice* dev) const {
+    return dev->name != nullptr ? dev->name : dev->description;
   }
 };
 
@@ -144,5 +148,37 @@ TEST(MainGpuRegistry, AdrenoGuardRequiresOpenclBackendAndAdrenoDescription) {
   const MockDevice intel{GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL", "Intel"};
   devices = main_gpu::registryDevices(MockRegistry{{&mali, &intel}});
   EXPECT_EQ(select(devices, {Kind::Index, 0}).whisperIndex, 0);
+}
+
+TEST(MainGpuRegistry, CpuFallbackNamesEveryRefusedGpuTypeDevice) {
+  const MockDevice rocm{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "ROCm", "Radeon 7900", "rocm0"};
+  const MockDevice sycl{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "SYCL", "Intel Arc A770", "sycl0"};
+  const MockDevice adrenoVulkan{
+      GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan", "Adreno 740", "vulkan0"};
+  const MockDevice adrenoOpencl{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL", "Adreno 740", "opencl0"};
+
+  const auto refusedOnly =
+      main_gpu::registryDevices(MockRegistry{{&rocm, &sycl}});
+  const auto fallback = select(refusedOnly, {});
+  EXPECT_EQ(fallback.whisperIndex, -1);
+  ASSERT_EQ(fallback.refused.size(), 2);
+  EXPECT_EQ(fallback.refused[0], "rocm0 (ROCm)");
+  EXPECT_EQ(fallback.refused[1], "sycl0 (SYCL)");
+
+  const auto mixed = main_gpu::registryDevices(
+      MockRegistry{{&rocm, &adrenoVulkan, &adrenoOpencl}});
+  EXPECT_EQ(select(mixed, {}).whisperIndex, 2);
+  const auto guarded = select(mixed, {Kind::Index, 1});
+  EXPECT_EQ(guarded.whisperIndex, -1);
+  ASSERT_EQ(guarded.refused.size(), 2);
+  EXPECT_EQ(guarded.refused[0], "rocm0 (ROCm)");
+  EXPECT_EQ(guarded.refused[1], "vulkan0 (Vulkan)");
+
+  const auto eligibleOnly =
+      main_gpu::registryDevices(MockRegistry{{&adrenoOpencl}});
+  EXPECT_TRUE(select(eligibleOnly, {}).refused.empty());
 }
 } // namespace
