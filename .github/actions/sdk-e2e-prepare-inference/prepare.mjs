@@ -147,7 +147,16 @@ function resolveRegistryVersion(requestedVersion) {
 
 function packBranch(inferenceDirectory, artifactDirectory) {
   fs.mkdirSync(artifactDirectory, { recursive: true });
-  run("bun", ["install", "--ignore-scripts"], { cwd: inferenceDirectory });
+  const packageNpmrc = path.join(inferenceDirectory, ".npmrc");
+  const userNpmrc = process.env.NPM_CONFIG_USERCONFIG;
+  if (userNpmrc && fs.existsSync(userNpmrc)) {
+    fs.copyFileSync(userNpmrc, packageNpmrc);
+  }
+  try {
+    run("bun", ["install", "--ignore-scripts"], { cwd: inferenceDirectory });
+  } finally {
+    fs.rmSync(packageNpmrc, { force: true });
+  }
   run("bun", ["run", "build"], { cwd: inferenceDirectory });
   const output = run(
     "npm",
