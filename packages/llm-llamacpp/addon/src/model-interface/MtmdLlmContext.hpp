@@ -8,12 +8,11 @@
 #include <llama.h>
 #include <llama/mtmd/mtmd.h>
 
-#include "../utils/ReasoningRollbackState.hpp"
+#include "../utils/RequestRollbackState.hpp"
 #include "../utils/ReasoningUtils.hpp"
 #include "../utils/RecurrentStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
-#include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
@@ -150,9 +149,6 @@ public:
   [[nodiscard]] int32_t getVisionEncodeTiles() const override;
   void resetVisionEncodeMs() override;
 
-  [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
-  void resetThinkingBlockDiscards() override;
-
   [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
   void resetToolDefinitionsDropped() override;
 
@@ -174,9 +170,6 @@ public:
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
   }
-
-  [[nodiscard]] std::optional<llama_perf_context_data>
-  takeUserVisiblePerfSnapshot() override;
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -251,10 +244,8 @@ public:
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
 
-  /// Disk prompt-cache for a multimodal batch slot, round-tripping the full
-  /// four-field session metadata (see MtmdLlmContext.cpp). Returns false
-  /// (cache miss) on an empty key, a missing file, or a header that fails the
-  /// four-field metadata check.
+  /// Disk prompt-cache for a multimodal batch slot, embedding the versioned
+  /// token/media ledger in the sequence-state file.
   [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
   void saveCache(const std::string& cacheKey) const override;
 
@@ -324,25 +315,15 @@ private:
   void initializeCommonState();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
-  // Reasoning-channel tracking is retained for output parsing, stop handling,
-  // and rollback. Generated reasoning stays resident until reconciliation.
-  void setOpenThinkSpan(llama_pos start);
-  void capturePendingThinkClose();
-  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
+  // Reasoning-channel tracking is retained for output parsing and stop
+  // handling. Generated reasoning stays resident until reconciliation.
   // See TextLlmContext::configureReasoningTags: `fallbackTags` is the
   // model-family reasoning channel, resolved by the caller so the
   // reasoning-budget markers come from the same value.
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-      const std::string& forcedOpenText,
       const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
           fallbackTags);
-
-  // Delegates to `rollbackState_.recordPostReasoningToken` while the
-  // post-reasoning capture phase is active, which starts once the close
-  // marker is committed. Every model kind anchors a boundary, so this runs
-  // on pure attention too; it is a no-op only when the feature is off.
-  void recordPostReasoningTokenIfActive(llama_token tokenId);
 
   struct CacheCheckpoint {
     qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot state;
@@ -362,12 +343,9 @@ private:
   bool restorePreRequestCacheState();
   void appendResidentToken(llama_token token);
 
-  // Cancel-during-generation cleanup. On recurrent / hybrid memory,
-  // restores the reasoning-boundary snapshot to drop any partially decoded
-  // generation (including an in-flight reasoning span) from both
-  // attention KV and recurrent state. On pure-attention models or when
-  // no snapshot is available, only flushes the UTF-8 buffer. Used by
-  // the cancel exits in `generateResponse`.
+  // Cancel-during-generation cleanup. On recurrent / hybrid memory, restores
+  // the request-entry snapshot; pure-attention memory removes the decoded
+  // tail directly.
   // Returns `true` when the rollback (metadata + live memory) is
   // coherent with the pre-request cursor and any downstream cache save
   // is safe. Returns `false` when the recurrent full-state restore was
@@ -439,26 +417,18 @@ private:
 
   // True only for architectures in the Qwen3 reasoning family. Gates
   // the EOS-inside-reasoning recovery (close-marker substitution),
-  // which is the historical Qwen3-specific workaround. Detection /
-  // span tracking / KV compaction stay family-agnostic via
-  // `reasoningEnabled_`. In practice no multimodal model is in the
+  // which is the historical Qwen3-specific workaround. In practice no
+  // multimodal model is in the
   // Qwen3 family today, so this gate keeps the recovery dormant on
   // the multimodal path until a Qwen3-family vision model ships.
   bool isQwen3ReasoningFamily_ = false;
 
-  // True when this context's model is recurrent or hybrid
-  // (`llama_model_is_recurrent || llama_model_is_hybrid`). Drives the
-  // snapshot + replay path in `compactThinkSpan`. See
-  // `TextLlmContext::needsRecurrentSnapshot_` for the full rationale.
+  // True when this model requires full-state snapshots for request rollback
+  // and divergent-history checkpoints.
   bool needsRecurrentSnapshot_ = false;
 
-  // Tracks whether the currently-prepared prefill is a cache-warm
-  // (prefill-only) request. Captured from `preparePrefill` on the
-  // batch path and `evalMessageWithTools` on the single-prompt path,
-  // then consulted by `snapshotForRecurrentRollback`: prefill-only
-  // requests never enter generation and cannot emit reasoning tokens,
-  // so there is no reasoning boundary to anchor. See
-  // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
+  // Tracks whether the current request is prefill-only so the cache
+  // transaction can commit immediately after successful prefill.
   bool isPrefillOnlyRequest_ = false;
 
   bool cacheReconciliationEnabled_ = false;
@@ -474,19 +444,9 @@ private:
   std::deque<CacheCheckpoint> cacheCheckpoints_;
   size_t pendingReuseEntries_ = 0;
 
-  // Shared rollback state for recurrent / hybrid SSM models. Owns the
-  // prefill-entry snapshot (cancel during prefill), the reasoning-boundary
-  // snapshot (compaction + cancel during generation), and the
-  // post-reasoning token replay buffer. Inactive on pure-attention
-  // models.
-  qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
-  // Reasoning-channel tracker. Post-generation compaction is disabled;
-  // complete-prompt reconciliation determines whether reasoning is retained.
-  qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
-
-  // Kept for the existing runtime-stats interface. Lazy reconciliation does
-  // not perform a post-generation replay, so this remains empty.
-  std::optional<llama_perf_context_data> userVisiblePerf_;
+  // Generic request-entry snapshot for cancellation on memory that cannot
+  // remove an arbitrary decoded tail.
+  qvac_lib_inference_addon_llama::utils::RequestRollbackState requestRollback_;
 
   std::atomic<bool> stopGeneration_ = false;
 };

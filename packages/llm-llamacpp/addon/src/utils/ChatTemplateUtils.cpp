@@ -171,10 +171,6 @@ bool isQwen3ReasoningFamilyArchitecture(std::string_view architecture) {
          QWEN3_REASONING_FAMILY_ARCHES.end();
 }
 
-bool usesThinkingCompactionByDefault(std::string_view architecture) {
-  return isQwen3ReasoningFamilyArchitecture(architecture);
-}
-
 bool isDeepSeekV4Architecture(std::string_view architecture) {
   return normalizeArchitecture(architecture) == "deepseek4";
 }

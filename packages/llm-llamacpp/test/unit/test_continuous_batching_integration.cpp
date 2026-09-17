@@ -761,7 +761,7 @@ TEST_F(
 }
 
 /// Generated reasoning stays resident after generation. Continuous batching
-/// must not run the retired eager compaction path for hybrid models.
+/// must retain generated reasoning for later full-prompt reconciliation.
 TEST_F(
     ContinuousBatchingIntegrationTest,
     TwoPromptBatchQwen35HybridRetainsReasoningLazily) {
@@ -792,12 +792,6 @@ TEST_F(
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_FALSE(outputs[1].empty());
 
-  const auto stats = model->runtimeStats();
-  const double thinkingDiscards =
-      test_common::getStatValue(stats, "thinkingBlockDiscards");
-
-  EXPECT_EQ(thinkingDiscards, 0.0)
-      << "lazy reconciliation must not discard reasoning at generation end";
 }
 
 TEST_F(
@@ -1562,9 +1556,8 @@ TEST_F(
   }
 }
 
-/// The finalize window in `drainFinishedLocked` also drops the mutex, because
-/// `onGenerationFinished` runs reasoning compaction, which now rewinds and
-/// REPLAYS the kept tokens through `llama_decode`. Unlike the decode window it
+/// The finalize window in `drainFinishedLocked` also drops the mutex because
+/// `onGenerationFinished` may restore a full recurrent snapshot. Unlike the decode window it
 /// holds a reference into `slots_` across the unlock, so the usual
 /// reconcile-on-every-reacquisition would run `onCancel` on a driver
 /// mid-finalize and free the slot the drain loop is still using: the slot
@@ -2007,7 +2000,7 @@ std::vector<uint8_t> readFileBytes(const fs::path& path) {
 /// file (identical bytes, fresh mtime); under the fix it never opens
 /// it. Byte equality is kept as a secondary regression guard for the
 /// class of bugs where a driver whose accounting was reset to zero
-/// (e.g. hybrid-recurrent compaction throw path) is subsequently
+/// (e.g. hybrid-recurrent rollback failure) is subsequently
 /// serialized on top of the warm baseline.
 ///
 /// The `cancelSlotLocked(SaveCachePolicy::Save)` graceful contract is
@@ -2089,7 +2082,7 @@ TEST_F(
 
   // Secondary regression guard: even if a future save ever became a
   // no-op-when-bytes-match, this still catches the class of bugs
-  // where a driver reset (e.g. hybrid-recurrent compaction throw
+  // where a driver reset (e.g. hybrid-recurrent rollback failure
   // zeroing nPast_) leaks into an on-disk overwrite of the warm
   // baseline.
   const auto postFailBytes = readFileBytes(cachePath);
@@ -2564,16 +2557,9 @@ TEST_F(
   EXPECT_FALSE(outputs[1].empty())
       << "second MTMD slot must complete generation";
 
-  const auto stats = model->runtimeStats();
-  const double discards =
-      test_common::getStatValue(stats, "thinkingBlockDiscards");
   SCOPED_TRACE(
-      "thinkingBlockDiscards=" + std::to_string(discards) +
-      ", output[0] (first 200 chars): " + outputs[0].substr(0, 200) +
+      "output[0] (first 200 chars): " + outputs[0].substr(0, 200) +
       ", output[1] (first 200 chars): " + outputs[1].substr(0, 200));
-
-  EXPECT_EQ(discards, 0.0)
-      << "lazy reconciliation must not discard reasoning at generation end";
 }
 
 /// MTMD + hybrid (Qwen3.5 M-RoPE + recurrent memory) is the hardest cancel
@@ -2701,21 +2687,17 @@ TEST_F(
   fs::remove(cachePath, ec2);
 }
 
-// GGSQ unification (sub-task 3): four metadata fields everywhere. The
-// single-prompt CacheManager persists all four fields; the text batch path must
-// read them too, otherwise a single-prompt-saved cache cannot be resumed in
-// batch -- llama_state_seq_load_file rejects the file ("token count exceeded
-// capacity") when its four stored tokens exceed a two-field reader. This proves
-// the shared format actually round-trips across both paths.
+// The embedded cache ledger must round-trip across the single-prompt and batch
+// paths, not just within the path that wrote it.
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    BatchTextLoadsFourFieldSinglePromptCache) {
+    BatchTextLoadsLedgerFromSinglePromptCache) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
   const fs::path cachePath =
       fs::temp_directory_path() / ("xpath-cache-" + uniqueTestId() + ".bin");
 
-  // Single-prompt save -> CacheManager writes GGSQ with all four fields.
+  // Single-prompt save -> CacheManager writes GGSQ with the embedded ledger.
   auto savePrompt = makePrompt("The capital of France is Paris.");
   savePrompt.prefill = true;
   savePrompt.cacheKey = cachePath.string();
@@ -2723,7 +2705,7 @@ TEST_F(
   ASSERT_NO_THROW(model->processPrompt(savePrompt));
   ASSERT_TRUE(fs::exists(cachePath));
 
-  // Batch text load of that same four-field file via the per-slot path.
+  // Batch text load of that same ledger-bearing file via the per-slot path.
   auto loadPrompt = makePrompt("Name that capital again in one word.");
   loadPrompt.cacheKey = cachePath.string();
   std::vector<LlamaModel::Prompt> prompts;
@@ -2737,7 +2719,7 @@ TEST_F(
     err = e.what();
   }
   EXPECT_TRUE(err.empty())
-      << "batch text path could not load the four-field single-prompt cache: "
+      << "batch text path could not load the single-prompt cache ledger: "
       << err;
   ASSERT_EQ(outputs.size(), 1u);
   EXPECT_FALSE(outputs[0].empty());

@@ -19,7 +19,7 @@ const MODEL = {
 // Qwen3.5 is a separate family checkpoint: the PR widened reasoning detection
 // from exact-match `qwen3` to a `qwen3*` prefix to cover it, and 3.5 is known
 // to drive the KV cache differently (iM-RoPE / longer thinking traces), so the
-// compaction path needs its own end-to-end coverage and not just the
+// reasoning reconciliation path needs its own end-to-end coverage and not just the
 // architecture-string unit test.
 const QWEN35_MODEL = {
   name: 'Qwen3.5-0.8B-Q8_0.gguf',
@@ -336,22 +336,12 @@ safeTest(
       saveCacheToDisk: true
     })
     verifyReasoningTags(t, turn1.response, 'turn 1')
-    t.is(
-      toNumber(turn1.stats.thinkingBlockDiscards),
-      0,
-      'generation completion must retain reasoning in the resident cache'
-    )
 
     const visibleAnswer = stripReasoningForPrompt(turn1.response)
     const fullHistory = createFollowUpMessages(initial, visibleAnswer)
     const turn2 = await runCompletionWithStats(inference, fullHistory, { cacheKey })
 
     t.ok(turn2.response.length > 0, 'full-history continuation should generate')
-    t.is(
-      toNumber(turn2.stats.thinkingBlockDiscards),
-      0,
-      'omitted reasoning is removed by prefix reconciliation, not compaction'
-    )
     t.ok(toNumber(turn2.stats.CacheTokens) > 0, 'reconciled cache should remain resident')
   }
 )
@@ -382,20 +372,10 @@ safeTest(
     const initial = createInitialMessages()
     const turn1 = await runCompletionWithStats(inference, initial, { cacheKey })
     t.ok(turn1.response.length > 0, 'hybrid turn 1 should generate')
-    t.is(
-      toNumber(turn1.stats.thinkingBlockDiscards),
-      0,
-      'hybrid reasoning must stay resident after generation'
-    )
 
     const fullHistory = createFollowUpMessages(initial, stripReasoningForPrompt(turn1.response))
     const turn2 = await runCompletionWithStats(inference, fullHistory, { cacheKey })
     t.ok(turn2.response.length > 0, 'hybrid checkpoint reconciliation should generate')
     t.ok(toNumber(turn2.stats.CacheTokens) > 0, 'hybrid cache should remain resident')
-    t.is(
-      toNumber(turn2.stats.thinkingBlockDiscards),
-      0,
-      'hybrid divergence must not invoke eager reasoning compaction'
-    )
   }
 )

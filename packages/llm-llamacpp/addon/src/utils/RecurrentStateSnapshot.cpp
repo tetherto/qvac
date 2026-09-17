@@ -1,13 +1,11 @@
 #include "RecurrentStateSnapshot.hpp"
 
-#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
 #include <string>
 #include <system_error>
 #include <utility>
-#include <vector>
 
 #ifdef _WIN32
 #include <process.h>
@@ -15,7 +13,6 @@
 #include <unistd.h>
 #endif
 
-#include <common/common.h>
 #include <llama.h>
 
 namespace qvac_lib_inference_addon_llama {
@@ -64,45 +61,6 @@ void removeFileQuiet(const std::string& path) noexcept {
   std::filesystem::remove(path, ec);
 }
 
-bool replayTokensThroughDecoderImpl(
-    ::llama_context* lctx, llama_seq_id seqId,
-    const std::vector<llama_token>& tokens, llama_pos startPos,
-    bool outputLogitsForLast, int32_t chunkSize,
-    const ReplayDecodeFunc& decodeFunc) {
-  if (tokens.empty()) {
-    return true;
-  }
-  if (lctx == nullptr || chunkSize <= 0 || !decodeFunc) {
-    return false;
-  }
-
-  const int32_t total = static_cast<int32_t>(tokens.size());
-
-  // A replay is usually a short answer tail, so allocate for the work rather
-  // than for the context's full logical batch capacity.
-  llama_batch batch = llama_batch_init(std::min(chunkSize, total), 0, 1);
-  bool ok = true;
-  for (int32_t offset = 0; offset < total && ok; offset += chunkSize) {
-    const int32_t end = std::min(offset + chunkSize, total);
-    common_batch_clear(batch);
-    for (int32_t i = offset; i < end; ++i) {
-      const bool isFinal = (i == total - 1);
-      const bool requestLogits = outputLogitsForLast && isFinal;
-      common_batch_add(
-          batch,
-          tokens[i],
-          startPos + static_cast<llama_pos>(i),
-          {seqId},
-          requestLogits);
-    }
-    if (decodeFunc(lctx, batch) != 0) {
-      ok = false;
-    }
-  }
-  llama_batch_free(batch);
-  return ok;
-}
-
 } // namespace
 
 // ---- RecurrentStateSnapshot ----
@@ -114,11 +72,10 @@ RecurrentStateSnapshot::~RecurrentStateSnapshot() {
 RecurrentStateSnapshot::RecurrentStateSnapshot(
     RecurrentStateSnapshot&& other) noexcept
     : nPast(other.nPast), filePath_(std::move(other.filePath_)),
-      captured_(other.captured_), positionOnly_(other.positionOnly_) {
+      captured_(other.captured_) {
   other.filePath_.clear();
   other.nPast = 0;
   other.captured_ = false;
-  other.positionOnly_ = false;
 }
 
 RecurrentStateSnapshot&
@@ -128,11 +85,9 @@ RecurrentStateSnapshot::operator=(RecurrentStateSnapshot&& other) noexcept {
     filePath_ = std::move(other.filePath_);
     nPast = other.nPast;
     captured_ = other.captured_;
-    positionOnly_ = other.positionOnly_;
     other.filePath_.clear();
     other.nPast = 0;
     other.captured_ = false;
-    other.positionOnly_ = false;
   }
   return *this;
 }
@@ -142,7 +97,6 @@ void RecurrentStateSnapshot::clear() noexcept {
   filePath_.clear();
   nPast = 0;
   captured_ = false;
-  positionOnly_ = false;
 }
 
 void RecurrentStateSnapshot::seedForTesting(
@@ -151,7 +105,6 @@ void RecurrentStateSnapshot::seedForTesting(
   filePath_ = std::move(filePath);
   nPast = nPastAt;
   captured_ = true;
-  positionOnly_ = false;
 }
 
 void RecurrentStateSnapshot::seedEmptyForTesting(llama_pos nPastAt) noexcept {
@@ -159,7 +112,6 @@ void RecurrentStateSnapshot::seedEmptyForTesting(llama_pos nPastAt) noexcept {
   filePath_.clear();
   nPast = nPastAt;
   captured_ = true;
-  positionOnly_ = false;
 }
 
 void RecurrentStateSnapshot::adoptFile(
@@ -168,7 +120,6 @@ void RecurrentStateSnapshot::adoptFile(
   filePath_ = std::move(filePath);
   nPast = nPastAt;
   captured_ = true;
-  positionOnly_ = false;
 }
 
 void RecurrentStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
@@ -176,20 +127,6 @@ void RecurrentStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
   filePath_.clear();
   nPast = nPastAt;
   captured_ = true;
-  positionOnly_ = false;
-}
-
-void RecurrentStateSnapshot::adoptPositionOnly(llama_pos nPastAt) noexcept {
-  removeFileQuiet(filePath_);
-  filePath_.clear();
-  nPast = nPastAt;
-  captured_ = true;
-  positionOnly_ = true;
-}
-
-void RecurrentStateSnapshot::seedPositionOnlyForTesting(
-    llama_pos nPastAt) noexcept {
-  adoptPositionOnly(nPastAt);
 }
 
 // ---- Free functions ----
@@ -243,21 +180,8 @@ bool restoreRecurrentState(
     return false;
   }
   if (snapshot.empty()) {
-    // No capture recorded — nothing to do, but report success so
-    // callers can chain restore + replay without special-casing the
-    // "no snapshot taken" path.
+    // No capture recorded — nothing to do.
     return true;
-  }
-  if (snapshot.isPositionOnly()) {
-    // Pure-attention boundary: the cells are positionally indexed, so
-    // rewinding is a tail trim and the caller's replay re-decodes the kept
-    // tokens into the same positions. No state payload is needed, and no
-    // `seq_add` either, which is the whole point of taking this path.
-    auto* mem = llama_get_memory(lctx);
-    if (mem == nullptr) {
-      return false;
-    }
-    return llama_memory_seq_rm(mem, seqId, snapshot.nPast, -1);
   }
   if (!snapshot.hasFile()) {
     // Captured-but-empty: rewind the sequence to a clean state. We
@@ -290,49 +214,6 @@ bool restoreRecurrentState(
       /*n_token_capacity=*/0,
       &nTokenCount);
   return loadedBytes != 0;
-}
-
-bool replayTokensThroughDecoder(
-    ::llama_context* lctx, llama_seq_id seqId,
-    const std::vector<llama_token>& tokens, llama_pos startPos,
-    bool outputLogitsForLast) {
-  if (tokens.empty()) {
-    return true;
-  }
-  if (lctx == nullptr) {
-    return false;
-  }
-
-  // Chunk the replay so it fits within the context's micro-batch
-  // capacity. `llama_n_batch` returns the logical batch size; we use
-  // it as an upper bound on `common_batch_add` calls per `llama_decode`.
-  const auto nBatchU = llama_n_batch(lctx);
-  if (nBatchU == 0) {
-    return false;
-  }
-  const int32_t chunkSize = static_cast<int32_t>(nBatchU);
-  return replayTokensThroughDecoderImpl(
-      lctx,
-      seqId,
-      tokens,
-      startPos,
-      outputLogitsForLast,
-      chunkSize,
-      [](auto* ctx, llama_batch batch) { return llama_decode(ctx, batch); });
-}
-
-bool replayTokensThroughDecoderForTesting(
-    ::llama_context* lctx, llama_seq_id seqId,
-    const std::vector<llama_token>& tokens, llama_pos startPos,
-    bool outputLogitsForLast, int32_t chunkSize, ReplayDecodeFunc decodeFunc) {
-  return replayTokensThroughDecoderImpl(
-      lctx,
-      seqId,
-      tokens,
-      startPos,
-      outputLogitsForLast,
-      chunkSize,
-      decodeFunc);
 }
 
 } // namespace utils

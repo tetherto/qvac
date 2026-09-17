@@ -479,7 +479,7 @@ void tuneLoadConfigMap(
   // and cuts KV-cache memory ~47%. CPU keeps the f16 default — ARM q8_0 carries
   // a measured quality and decode-throughput cost. OpenCL (Adreno) is also
   // EXCLUDED: q8_0 attention works there, but quantized KV-cache *shifts*
-  // (reasoning-block compaction / state restore) abort natively in
+  // (state restore) abort natively in
   // llama_kv_cache::update on Adreno, so f16 stays the safe default — and
   // block 3 now *rejects* any explicit quantized KV on OpenCL (q8_0 and q4_0
   // both crash on a shift). Also skipped for finetuning (manages its own KV
@@ -528,7 +528,7 @@ void tuneLoadConfigMap(
   // 3. OpenCL (Adreno): reject ALL quantized KV-cache types. q4_0/q8_0
   // attention works, but a quantized K cache needs a
   // dequantize->RoPE->requantize copy on every KV-cache *shift* (reasoning-
-  // block compaction / state restore), and ggml-opencl has no F32->quantized
+  // state restore), and ggml-opencl has no F32->quantized
   // copy kernel for that requantize step, so the shift aborts natively in
   // llama_kv_cache::update on Adreno. Confirmed for BOTH q8_0 and q4_0 (CI run
   // 28448086915: S25/S26 crash on a q4_0 KV-cache shift; Mali Vulkan passes).
@@ -577,7 +577,7 @@ void tuneLoadConfigMap(
                 "[LlamaModel] cache-type-%s=%s: quantized KV-cache is not "
                 "supported on the OpenCL (Adreno) backend. A quantized K or V "
                 "cache aborts in llama_kv_cache::update on KV-cache shifts / "
-                "cache management (reasoning-block compaction, state restore), "
+                "cache state restore, "
                 "because ggml-opencl has no F32->quantized copy kernel for the "
                 "requantize step (true for q8_0 and q4_0 alike). Use "
                 "cache-type-%s f32/f16/bf16, or switch device to a Vulkan GPU "

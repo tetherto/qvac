@@ -80,13 +80,12 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MtmdLlmContext.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TextLlmContext.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ReasoningBlockCompactor.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/LoggingMacros.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningRollbackState.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
 )
 

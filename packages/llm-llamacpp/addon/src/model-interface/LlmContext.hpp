@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -167,73 +166,6 @@ struct LlmModelContext {
 
 /// Canonical layout of the per-session cache metadata that every cache
 /// (de)serializer must persist and restore. Any driver implementing
-/// `loadCache`/`saveCache` MUST round-trip all four fields in this order.
-///
-/// `cacheTokens` (physical KV-cell usage) is owned separately from `nPast`
-/// (logical positional span) because multimodal M-RoPE media can occupy more
-/// KV cells than its positional span. See `getCacheTokens` below.
-///
-/// Slots 1 and 3 are retired: they carried the first-message counters the
-/// removed sliding-context feature protected. The four-field width stays so a
-/// file written by either build still loads, and this build's readers ignore
-/// them.
-///
-/// They are not written as 0. A build that still slides reads slot 1 as its
-/// protected-prefix boundary and would evict from position 0, silently
-/// dropping the system prompt and tool definitions. Mirroring the live cursor
-/// instead drives its `leftTokens` negative, so it refuses the slide and
-/// reports a context overflow with the cache intact.
-///
-/// That refusal covers the prefill slide only, the generation slide carried no
-/// such guard, so mirroring is the better of the two values we can write, not
-/// a guarantee at every slide site.
-enum class SessionMetadataField : uint8_t {
-  NPast = 0,
-  RetiredFirstMsgTokens = 1,
-  CacheTokens = 2,
-  RetiredFirstMsgCacheTokens = 3,
-};
-
-/// Number of `llama_token` fields in the session metadata contract above.
-inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
-
-/// The wire form of the contract above. Every `saveCache` / `loadCache` goes
-/// through this so the `{nPast, nPast, cacheTokens, cacheTokens}` layout has
-/// one home: a writer that left a retired slot at 0 makes an older,
-/// still-sliding build evict from position 0 instead of protecting the first
-/// message, and that is silent.
-struct SessionMetadata {
-  std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
-
-  /// Reads the two live fields off a context, then mirrors them into the
-  /// retired slots so a downgraded build refuses to slide rather than
-  /// evicting from position 0. See the contract above.
-  static SessionMetadata capture(const class LlmContext& context);
-
-  /// Writes the two live fields back onto a context.
-  void applyTo(class LlmContext& context) const;
-
-  [[nodiscard]] llama_token field(SessionMetadataField which) const {
-    return tokens[static_cast<size_t>(which)];
-  }
-  [[nodiscard]] llama_token nPast() const {
-    return field(SessionMetadataField::NPast);
-  }
-  [[nodiscard]] llama_token cacheTokens() const {
-    return field(SessionMetadataField::CacheTokens);
-  }
-
-  [[nodiscard]] llama_token* data() { return tokens.data(); }
-  [[nodiscard]] const llama_token* data() const { return tokens.data(); }
-  [[nodiscard]] size_t size() const { return tokens.size(); }
-
-  /// A partial header leaves `cacheTokens` at zero, which diverges from
-  /// `nPast` under M-RoPE and breaks later cap checks.
-  [[nodiscard]] static bool isComplete(size_t tokenCount) {
-    return tokenCount >= SESSION_METADATA_FIELD_COUNT;
-  }
-};
-
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
   LlmContext() = default;
@@ -369,16 +301,11 @@ public:
 
   /**
    * Versioned token/media ledger embedded in the same sequence-state file as
-   * KV/recurrent state. Concrete contexts override these methods; the default
-   * preserves source compatibility for lightweight test drivers.
+   * KV/recurrent state.
    */
-  [[nodiscard]] virtual std::vector<llama_token> cacheStateTokens() const {
-    const SessionMetadata metadata = SessionMetadata::capture(*this);
-    return {metadata.tokens.begin(), metadata.tokens.end()};
-  }
-  virtual void restoreCacheStateTokens(const std::vector<llama_token>& tokens) {
-    (void)tokens;
-  }
+  [[nodiscard]] virtual std::vector<llama_token> cacheStateTokens() const = 0;
+  virtual void
+  restoreCacheStateTokens(const std::vector<llama_token>& tokens) = 0;
   virtual void clearCacheReconciliationState() {}
   [[nodiscard]] virtual bool rollbackFailedRequest() { return true; }
   [[nodiscard]] virtual bool shouldPersistAfterFinalize() const { return true; }
@@ -387,14 +314,6 @@ public:
   /// scheduler set this before rendering so uncached callers retain their
   /// existing behavior.
   virtual void setCacheReconciliationEnabled(bool enabled) { (void)enabled; }
-
-  /**
-   * Number of `<think>` reasoning blocks compacted out of the KV
-   * cache during the most recent generation. 0 for contexts without
-   * reasoning channel support.
-   */
-  [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
-  virtual void resetThinkingBlockDiscards() {}
 
   /**
    * Number of renders in the most recent request where the chat template
@@ -421,16 +340,6 @@ public:
    */
   [[nodiscard]] virtual GenerationStopReason getGenerationStopReason() const {
     return GenerationStopReason::None;
-  }
-
-  /**
-   * Consume an optional per-inference performance snapshot. Lazy reasoning
-   * reconciliation no longer creates one, but the hook remains for compatible
-   * runtime-stat collection and other internal replay operations.
-   */
-  [[nodiscard]] virtual std::optional<llama_perf_context_data>
-  takeUserVisiblePerfSnapshot() {
-    return std::nullopt;
   }
 
   /**
@@ -559,24 +468,3 @@ protected:
   /// scheduler-assigned slot id at construction.
   llama_seq_id seqId_ = 0;
 };
-
-inline SessionMetadata SessionMetadata::capture(const LlmContext& context) {
-  SessionMetadata metadata;
-  using Field = SessionMetadataField;
-  metadata.tokens[static_cast<size_t>(Field::NPast)] =
-      static_cast<llama_token>(context.getNPast());
-  metadata.tokens[static_cast<size_t>(Field::CacheTokens)] =
-      static_cast<llama_token>(context.getCacheTokens());
-  // Retired here, read as the protected prefix by any build still sliding.
-  // Mirroring the live cursors makes that build's slide guard fail closed.
-  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgTokens)] =
-      metadata.tokens[static_cast<size_t>(Field::NPast)];
-  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgCacheTokens)] =
-      metadata.tokens[static_cast<size_t>(Field::CacheTokens)];
-  return metadata;
-}
-
-inline void SessionMetadata::applyTo(LlmContext& context) const {
-  context.setNPast(nPast());
-  context.setCacheTokens(cacheTokens());
-}

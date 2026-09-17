@@ -164,8 +164,6 @@ public:
   /// from this value rather than `getNPast()`.
   [[nodiscard]] virtual llama_pos getKvCellsUsed() const { return getNPast(); }
 
-  [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
-
   /// Renders where the template rejected the tool definitions (see
   /// `LlmContext::getToolDefinitionsDropped`).
   [[nodiscard]] virtual int32_t getToolDefinitionsDropped() const { return 0; }
