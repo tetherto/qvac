@@ -37,6 +37,19 @@
           ]
         }
       ]
+    },
+    "rpc-rdma": {
+      "description": "Build the ggml RPC client backend with libibverbs/RDMA auto-negotiation support on Linux.",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "version>=": "10297.0.0",
+          "features": [
+            "rpc-rdma"
+          ],
+          "platform": "linux"
+        }
+      ]
     }
   }
 }
