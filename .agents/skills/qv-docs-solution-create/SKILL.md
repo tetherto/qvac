@@ -22,15 +22,27 @@ Defer to the package's own sources for anything about the site itself; this skil
 
 ## Scope gate
 
-Classify the material before drafting. Solutions documents how to build, deploy, or integrate something with QVAC. It is not a defect catalog.
+Two checks run before drafting. Both must pass.
+
+The first check classifies the material. Solutions documents how to build, deploy, or integrate something with QVAC. It is not a defect catalog.
 
 Draft a Solution when the material is a use case: someone set out to achieve something with QVAC, and the recommended way to do it is now known.
 
 If the material is a defect, a crash, an error message, a missing system library, an environment that fails to start, or a regression, do not draft a Solution. That knowledge belongs in `docs/website/content/docs/troubleshooting.mdx`, which already carries the Situation / Cause / Solution shape for it. Say so and stop.
 
+If the material is setting up or building an app on a platform the docs already teach, do not draft a Solution. That knowledge belongs in the matching tutorial — `docs/website/content/docs/tutorials/electron.mdx` for Electron, `docs/website/content/docs/tutorials/expo.mdx` for Expo. Say so and stop.
+
 If the material is an unresolved product gap with no working approach yet, recommend an issue instead of a page.
 
 A Solution may state a known limitation and the architecture that works around it, as long as the subject of the page is the use case and not the defect.
+
+A Solution may run on a platform a tutorial covers, as long as the subject of the page is the use case and not the platform setup. Link the tutorial under `Related resources` rather than repeating it.
+
+The second check tests the objective against the site as it already is. State in one sentence the objective the page would serve, phrased as the reader's goal. Then search `docs/website/content/docs/` for a page that already serves that same objective, by title, by description, and by content.
+
+If a page already fulfills exactly that objective, do not draft a Solution. Name that page and stop. Propose extending it instead when the material adds something the page lacks.
+
+Overlapping subject matter is not a reason to stop. Solutions indexes the documentation by scenario, while the rest of the site indexes it by surface, so the same facts legitimately appear on both axes. Only an identical objective blocks the page. Never restate a specification another page owns — summarize what the Solution needs and link that page under `Related resources`.
 
 ## Ground the page
 
