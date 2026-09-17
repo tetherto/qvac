@@ -108,34 +108,38 @@ runs:
           exit 1
         fi
 
-        # Drop paths under a package this checkout has no project for. The
-        # checkout is the trusted ref, never the PR, so a package the PR adds is
-        # not here; nx cannot resolve it, fails open, and marks every project
-        # affected. Nothing is lost by ignoring it: a package absent from the
-        # trusted ref has no options.ci here either, so it could never have
-        # produced a matrix row.
-        dropped=""
-        : > "${RUNNER_TEMP}/nx-changed-files.txt"
-        while IFS= read -r path; do
-          pkg=""
-          case "$path" in
-            packages/*/*) pkg="${path#packages/}"; pkg="${pkg%%/*}" ;;
-          esac
-          if [ -n "$pkg" ] && [ ! -d "packages/${pkg}" ]; then
-            case " $dropped " in
-              *" $pkg "*) ;;
-              *) dropped="$dropped $pkg" ;;
-            esac
-            continue
-          fi
-          printf '%s\n' "$path" >> "${RUNNER_TEMP}/nx-changed-files.txt"
-        done < "$raw"
+        # This checkout is the trusted ref, never the PR, so a package the PR
+        # adds is not on disk here. nx cannot resolve a project it cannot see,
+        # so it fails open and marks every project affected. Drop those paths.
+        # Nothing is lost: a package absent from the trusted ref has no
+        # options.ci here either, so it could never have produced a matrix row.
 
-        for pkg in $dropped; do
-          echo "::notice::packages/${pkg} is not on the trusted ref yet, so its paths are ignored for affected selection. Land its package.json on the base branch first."
+        # The "|| true" on each grep is load-bearing: grep exits 1 when it prints
+        # nothing, and under "set -e" that would abort the step. Both cases are
+        # normal here, a diff touching no package at all and a diff that is
+        # entirely one new package.
+
+        # 1. Which packages does the diff touch? "packages/foo/bar.js" -> "foo"
+        touched_packages=$(grep '^packages/' "$raw" | cut -d/ -f2 | sort -u || true)
+
+        # 2. Of those, which have no directory in this checkout?
+        absent_packages=""
+        for pkg in $touched_packages; do
+          if [ ! -d "packages/$pkg" ]; then
+            absent_packages="$absent_packages $pkg"
+          fi
         done
 
-        kept=$(wc -l < "${RUNNER_TEMP}/nx-changed-files.txt")
+        # 3. Remove their paths. Everything else passes through untouched.
+        filtered="${RUNNER_TEMP}/nx-changed-files.txt"
+        cp "$raw" "$filtered"
+        for pkg in $absent_packages; do
+          grep -v "^packages/$pkg/" "$filtered" > "$filtered.tmp" || true
+          mv "$filtered.tmp" "$filtered"
+          echo "::notice::packages/$pkg is not on the trusted ref yet, so its paths are ignored for affected selection. Land its project.json on the base branch first."
+        done
+
+        kept=$(wc -l < "$filtered")
         echo "Changed paths: $count (using $kept after dropping packages absent from the trusted ref)"
     - id: compute
       shell: bash
