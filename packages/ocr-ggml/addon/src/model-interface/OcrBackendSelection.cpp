@@ -34,6 +34,8 @@ std::string toLower(std::string_view value) {
   return lower;
 }
 
+bool isBrokenGpuDevice(ggml_backend_dev_t dev);
+
 // True when a ggml device description identifies a Qualcomm Adreno GPU (the
 // description reads e.g. "Adreno (TM) 830"). Adreno's Vulkan compute path is
 // numerically broken: vla-ggml measured cos-sim ~0.73 vs reference on Adreno
@@ -59,6 +61,52 @@ const char* deviceTypeName(enum ggml_backend_dev_type type) {
   default:
     return "UNKNOWN";
   }
+}
+
+// "name (registry)" identity used in CPU-fallback logs so the operator can see
+// which physical GPU devices were registered but not chosen for the requested
+// backend family. Empty inputs read as `unnamed` / `unknown-registry` so the
+// string is never ambiguous.
+std::string identityOf(ggml_backend_dev_t dev) {
+  const char* namePtr = ggml_backend_dev_name(dev);
+  ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+  const char* regPtr = reg != nullptr ? ggml_backend_reg_name(reg) : nullptr;
+  const std::string name = namePtr != nullptr ? namePtr : "unnamed";
+  const std::string registry = regPtr != nullptr ? regPtr : "unknown-registry";
+  return name + " (" + registry + ")";
+}
+
+// Every GPU/IGPU-type registry slot, formatted for the CPU-fallback message so
+// callers can tell whether an unmatched request would have succeeded on a
+// different backend family (e.g. Vulkan asked for, only OpenCL registered).
+std::vector<std::string> unmatchedGpuIdentities(
+    bool (*matches)(std::string_view), bool includeRejectedAdrenoVulkan) {
+  std::vector<std::string> identities;
+  const size_t count = ggml_backend_dev_count();
+  for (size_t i = 0; i < count; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    if (dev == nullptr) {
+      continue;
+    }
+    const enum ggml_backend_dev_type type = ggml_backend_dev_type(dev);
+    if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    const char* namePtr = ggml_backend_dev_name(dev);
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    const char* regPtr = reg != nullptr ? ggml_backend_reg_name(reg) : nullptr;
+    const bool nameMatches = namePtr != nullptr && matches(namePtr);
+    const bool regMatches = regPtr != nullptr && matches(regPtr);
+    if (nameMatches || regMatches) {
+      if (includeRejectedAdrenoVulkan && isBrokenGpuDevice(dev)) {
+        identities.push_back(identityOf(dev));
+      }
+      continue;
+    }
+    identities.push_back(identityOf(dev));
+  }
+  return identities;
 }
 
 // A GPU/iGPU device matched against the requested backend, retaining its ggml
@@ -404,6 +452,13 @@ bool trySelectGpu(
       sel.fallbackReason = std::string(label) + " backend requested but no " +
                            std::string(label) +
                            "-capable GPU device was found; falling back to CPU";
+    }
+    const auto others = unmatchedGpuIdentities(matches, rejectAdreno);
+    if (!others.empty()) {
+      sel.fallbackReason += "; other GPU-type devices registered:";
+      for (const auto& identity : others) {
+        sel.fallbackReason += " [" + identity + "]";
+      }
     }
     QLOG(Priority::WARN, std::string("ocr-ggml: ") + sel.fallbackReason);
     return false;

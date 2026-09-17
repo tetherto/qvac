@@ -158,3 +158,22 @@ TEST_F(OcrBackendSelectionTest, CpuRemainsExplicitAndConflictingSelectorsFail) {
       selectBackendDevice(BackendDevice::VULKAN, 0, MainGpu{3}),
       std::invalid_argument);
 }
+
+TEST_F(
+    OcrBackendSelectionTest,
+    CpuFallbackNamesOtherGpuDevicesForUnmatchedRequest) {
+  devices = {
+      {"ROCm0", "AMD MI250", GGML_BACKEND_DEVICE_TYPE_GPU, {"ROCm"}},
+      {"SYCL0", "Intel Arc A770", GGML_BACKEND_DEVICE_TYPE_GPU, {"SYCL"}},
+      {"MTL0", "Apple", GGML_BACKEND_DEVICE_TYPE_IGPU, {"Metal"}},
+      {"CPU", "CPU", GGML_BACKEND_DEVICE_TYPE_CPU, {"CPU"}},
+  };
+  const auto sel = selectBackendDevice(BackendDevice::VULKAN);
+  EXPECT_TRUE(sel.selectedIsCpu());
+  EXPECT_NE(
+      sel.fallbackReason.find("other GPU-type devices registered"),
+      std::string::npos);
+  EXPECT_NE(sel.fallbackReason.find("ROCm0 (ROCm)"), std::string::npos);
+  EXPECT_NE(sel.fallbackReason.find("SYCL0 (SYCL)"), std::string::npos);
+  EXPECT_NE(sel.fallbackReason.find("MTL0 (Metal)"), std::string::npos);
+}
