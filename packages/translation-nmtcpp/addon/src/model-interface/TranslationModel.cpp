@@ -700,7 +700,7 @@ void TranslationModel::
       if (!std::isfinite(value) || value < -2147483648.0 || value > maxIndex ||
           std::floor(value) != value) {
         throw std::invalid_argument(
-            "main-gpu must be a signed 32-bit integer");
+            "main-gpu must be a signed 32-bit integer, dedicated or integrated");
       }
       mainGpu = static_cast<int64_t>(value);
     }
