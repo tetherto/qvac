@@ -274,6 +274,18 @@ test('models registry catalog exports every named model constant', (t) => {
   t.ok(names.includes('QWEN3_600M_INST_Q4'), 'includes a known model constant')
   t.ok(names.includes('BCI_EMBEDDER'), 'includes the hand-derived BCI_EMBEDDER constant')
 
+  for (const [legacyName, canonicalName] of [
+    ['PARAKEET_0_6B_F16', 'PARAKEET_NEMOTRON_0_6B_F16'],
+    ['PARAKEET_0_6B_Q4_0', 'PARAKEET_NEMOTRON_0_6B_Q4_0'],
+    ['PARAKEET_0_6B_Q8_0', 'PARAKEET_NEMOTRON_0_6B_Q8_0']
+  ] as const) {
+    const legacy = catalog[legacyName]
+    const canonical = catalog[canonicalName]
+    t.ok(legacy, `${legacyName}: compatibility alias is exported`)
+    t.is(legacy?.name, legacyName, `${legacyName}: catalog key matches its published name`)
+    t.is(legacy?.src, canonical?.src, `${legacyName}: resolves to the Nemotron model`)
+  }
+
   for (const name of names) {
     const entry = catalog[name] as Record<string, unknown>
     t.is(entry['name'], name, `${name}: name field matches its catalog key`)

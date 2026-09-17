@@ -21,6 +21,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   sidecar for the Sortformer diarization encoder; the prebuilds keep it
   disabled, so published behavior is unchanged.
 
+## [0.5.3] - 2026-09-17
+
+- Fix recovery requests being rejected while a closing streaming session finishes native teardown.
+
 ## [0.5.2] - 2026-09-16
 
 ### Fixed

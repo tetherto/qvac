@@ -33,6 +33,8 @@ class MockedBinding {
     this._streamingConfig = null
     this._streamingSamplesFed = 0
     this._streamingDropOutputs = false
+    this._deferNextStreamingTerminal = false
+    this._deferredStreamingTerminal = null
     // History of streaming actions for tests to assert against
     // (counts of starts / appends / ends / cancels, plus the
     // last streamingConfig that was passed). Reset implicitly via
@@ -152,6 +154,19 @@ class MockedBinding {
     return true
   }
 
+  deferNextStreamingTerminal() {
+    this._deferNextStreamingTerminal = true
+  }
+
+  flushDeferredStreamingTerminal() {
+    if (!this._deferredStreamingTerminal) {
+      throw new Error('No deferred streaming terminal event')
+    }
+    const emitTerminal = this._deferredStreamingTerminal
+    this._deferredStreamingTerminal = null
+    process.nextTick(emitTerminal)
+  }
+
   appendStreamingAudio(handle, data) {
     if (handle !== this._handle) throw new Error('Invalid handle')
     if (!this._streamingActive) {
@@ -208,7 +223,7 @@ class MockedBinding {
     // events, so it lands AFTER every output scheduled before this call.
     // The JS wrapper's endStreaming awaits its arrival instead of
     // synthesising a JobEnded of its own.
-    process.nextTick(() => {
+    const emitTerminal = () => {
       this._callCallbacks(
         'RuntimeStats',
         {
@@ -218,7 +233,13 @@ class MockedBinding {
         },
         null
       )
-    })
+    }
+    if (this._deferNextStreamingTerminal) {
+      this._deferNextStreamingTerminal = false
+      this._deferredStreamingTerminal = emitTerminal
+    } else {
+      process.nextTick(emitTerminal)
+    }
     return {
       cleaned: true,
       audioDurationMs,
