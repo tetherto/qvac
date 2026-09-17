@@ -92,9 +92,10 @@ runs:
         # previous_filename too: a rename reports only its destination under
         # .filename, so taking that alone selects the new package and misses the
         # one the file left.
+        raw="${RUNNER_TEMP}/nx-changed-files.raw"
         gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
-          --jq '.[] | .filename, (.previous_filename // empty)' > "${RUNNER_TEMP}/nx-changed-files.txt"
-        count=$(wc -l < "${RUNNER_TEMP}/nx-changed-files.txt")
+          --jq '.[] | .filename, (.previous_filename // empty)' > "$raw"
+        count=$(wc -l < "$raw")
         if [ "$count" -eq 0 ]; then
           echo "::error::the API reported no changed paths for PR ${PR_NUMBER}"
           exit 1
@@ -106,7 +107,36 @@ runs:
           echo "::error::hit the 3000-file API cap for PR ${PR_NUMBER}; the path list is truncated"
           exit 1
         fi
-        echo "Changed paths: $count"
+
+        # Drop paths under a package this checkout has no project for. The
+        # checkout is the trusted ref, never the PR, so a package the PR adds is
+        # not here; nx cannot resolve it, fails open, and marks every project
+        # affected. Nothing is lost by ignoring it: a package absent from the
+        # trusted ref has no options.ci here either, so it could never have
+        # produced a matrix row.
+        dropped=""
+        : > "${RUNNER_TEMP}/nx-changed-files.txt"
+        while IFS= read -r path; do
+          pkg=""
+          case "$path" in
+            packages/*/*) pkg="${path#packages/}"; pkg="${pkg%%/*}" ;;
+          esac
+          if [ -n "$pkg" ] && [ ! -d "packages/${pkg}" ]; then
+            case " $dropped " in
+              *" $pkg "*) ;;
+              *) dropped="$dropped $pkg" ;;
+            esac
+            continue
+          fi
+          printf '%s\n' "$path" >> "${RUNNER_TEMP}/nx-changed-files.txt"
+        done < "$raw"
+
+        for pkg in $dropped; do
+          echo "::notice::packages/${pkg} is not on the trusted ref yet, so its paths are ignored for affected selection. Land its package.json on the base branch first."
+        done
+
+        kept=$(wc -l < "${RUNNER_TEMP}/nx-changed-files.txt")
+        echo "Changed paths: $count (using $kept after dropping packages absent from the trusted ref)"
     - id: compute
       shell: bash
       env:
