@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { inferenceBackendDiagnosticsSchema } from '@/schemas/system-resources'
 import {
   transcribeSegmentSchema,
   transcribeStatsSchema,
@@ -58,7 +59,12 @@ const bciTranscriptionResultBase = z.object({
   done: z.boolean().optional(),
   stats: transcribeStatsSchema.optional(),
   error: z.string().optional(),
-  segment: transcribeSegmentSchema.optional()
+  segment: transcribeSegmentSchema.optional(),
+  diagnostics: inferenceBackendDiagnosticsSchema
+    .optional()
+    .describe(
+      'Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
+    )
 })
 
 export const bciTranscribeResponseSchema = bciTranscriptionResultBase.extend({
