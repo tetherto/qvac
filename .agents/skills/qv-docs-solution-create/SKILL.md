@@ -104,7 +104,7 @@ In the example above the provider and the region drop out because nothing in tha
 
 ## Write the page
 
-Write in English. Create one file per Solution at `docs/website/content/docs/solutions/<kebab-slug>.mdx`, following the editorial contract. The directory already exists and carries no landing page.
+Write in English. Create one file per Solution at `docs/website/content/docs/solutions/<kebab-slug>.mdx`, following the editorial contract. The directory already exists and carries no landing page. If that path already exists, stop and ask whether to update it; do not overwrite.
 
 Draft in this order:
 
