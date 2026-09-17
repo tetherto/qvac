@@ -49,5 +49,11 @@ export function transformLlmConfig(llmConfig: LlmConfig) {
     transformed[enabled ? 'kv-offload' : 'no-kv-offload'] = ''
   }
 
+  if (transformed['prefetch-weights'] === 'true') {
+    transformed['prefetch-weights'] = '1'
+  } else if (transformed['prefetch-weights'] === 'false') {
+    transformed['prefetch-weights'] = '0'
+  }
+
   return transformed
 }
