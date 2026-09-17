@@ -125,6 +125,9 @@
           "$ref": "#/$defs/upscaleStream.request"
         },
         {
+          "$ref": "#/$defs/vectorIndex.request"
+        },
+        {
           "$ref": "#/$defs/videoStream.request"
         },
         {
@@ -267,6 +270,9 @@
         },
         {
           "$ref": "#/$defs/upscaleStream.response"
+        },
+        {
+          "$ref": "#/$defs/vectorIndex.response"
         },
         {
           "$ref": "#/$defs/videoStream.response"
@@ -4444,6 +4450,12 @@
         "UK",
         "VI"
       ]
+    },
+    "constants.VectorIndexStorage": {
+      "title": "VectorIndexStorage",
+      "type": "string",
+      "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+      "x-enum-varnames": ["F32", "Q8", "Q4", "TURBOVEC_Q4", "TURBOVEC_Q2"]
     },
     "constants.Verbosity": {
       "title": "Verbosity",
@@ -9791,9 +9803,9 @@
                       ]
                     },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
                       "type": "string",
-                      "enum": ["none", "layer", "row", "tensor"],
+                      "enum": ["none", "layer", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
                     },
                     "flash-attn": {
@@ -10865,9 +10877,9 @@
                       ]
                     },
                     "splitMode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU) or `'layer'` (pipeline parallelism).",
                       "type": "string",
-                      "enum": ["none", "layer", "row"],
+                      "enum": ["none", "layer"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode"
                     },
                     "tensorSplit": {
@@ -14476,14 +14488,6 @@
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
                     },
-                    "clip_on_cpu": {
-                      "description": "Force CLIP text encoder to run on CPU",
-                      "type": "boolean"
-                    },
-                    "vae_on_cpu": {
-                      "description": "Force VAE decoder to run on CPU",
-                      "type": "boolean"
-                    },
                     "vae_auto_cpu_fallback": {
                       "description": "Automatically move the VAE to CPU when GPU memory is insufficient",
                       "type": "boolean"
@@ -14499,23 +14503,40 @@
                       "type": "boolean"
                     },
                     "offload_to_cpu": {
-                      "description": "Keep model weights in CPU memory and offload them during GPU compute",
+                      "description": "Keep model weights in CPU memory and offload them during GPU compute. Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module.",
                       "type": "boolean"
                     },
+                    "control_net_cpu": {
+                      "description": "Removed. Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
+                    "clip_on_cpu": {
+                      "description": "Removed. Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
+                    "vae_on_cpu": {
+                      "description": "Removed. Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
                     "backend": {
-                      "description": "Native compute backend assignment; overrides main-gpu.",
-                      "type": "string"
+                      "description": "Runtime backend for diffusion and video graphs, globally or per module, for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'.",
+                      "type": "string",
+                      "maxLength": 4096
                     },
                     "params_backend": {
-                      "description": "Native parameter placement; overrides legacy CPU-offload flags.",
-                      "type": "string"
+                      "description": "Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offload_to_cpu enabled, explicit assignments override CPU residency only for the specified modules.",
+                      "type": "string",
+                      "maxLength": 4096
                     },
                     "max_vram": {
-                      "description": "Native VRAM limit or per-backend limits, for example cuda0=6,vulkan0=2.",
+                      "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
                       "type": ["number", "string"]
                     },
                     "stream_layers": {
-                      "description": "Stream model layers during native inference.",
+                      "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
                       "type": "boolean"
                     },
                     "flash_attn": {
@@ -19899,6 +19920,474 @@
       },
       "required": ["type"],
       "additionalProperties": false
+    },
+    "vectorIndex.request": {
+      "title": "VectorIndexRequest",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "default": "turbovec-q4",
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexRequestCreateStorage"
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "create"
+            }
+          },
+          "required": ["dim", "type", "operation"],
+          "title": "VectorIndexRequestCreate"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "load"
+            }
+          },
+          "required": ["path", "type", "operation"],
+          "title": "VectorIndexRequestLoad"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "vectors": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "add"
+            }
+          },
+          "required": ["ids", "vectors", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestAdd"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "queries": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "k": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "search"
+            }
+          },
+          "required": ["queries", "k", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestSearch"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "remove"
+            }
+          },
+          "required": ["ids", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestRemove"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "contains"
+            }
+          },
+          "required": ["ids", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestContains"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "write"
+            }
+          },
+          "required": ["path", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestWrite"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "dispose"
+            }
+          },
+          "required": ["type", "indexId", "operation"],
+          "title": "VectorIndexRequestDispose"
+        }
+      ]
+    },
+    "vectorIndex.response": {
+      "title": "VectorIndexResponse",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "create"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexResponseCreateStorage"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "indexId", "dim", "storage", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseCreate"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "load"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexResponseLoadStorage"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "indexId", "dim", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseLoad"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "add"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseAdd"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "search"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "score": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["id", "score"],
+                  "additionalProperties": false,
+                  "title": "VectorIndexResponseSearchResultsItemItem"
+                }
+              }
+            }
+          },
+          "required": ["type", "operation", "results"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseSearch"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "remove"
+            },
+            "removed": {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              }
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "removed", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseRemove"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "contains"
+            },
+            "present": {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              }
+            }
+          },
+          "required": ["type", "operation", "present"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseContains"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "write"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": ["type", "operation", "path"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseWrite"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "dispose"
+            },
+            "disposed": {
+              "type": "boolean"
+            }
+          },
+          "required": ["type", "operation", "disposed"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseDispose"
+        }
+      ]
     },
     "videoStream.request": {
       "title": "VideoStreamRequest",

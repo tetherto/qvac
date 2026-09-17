@@ -179,6 +179,7 @@ The registry can optionally use [blind peers](https://github.com/holepunchto/bli
 - **`add-all-models`**: Bulk upload models from JSON config
 - **`init-writer`**: Creates/loads a writer keypair and updates the allowlist
 - **`sync-models`**: Syncs JSON config against database (adds new, updates metadata)
+- **`fill:fit-blobs`**: Gives records a weightless description; `--force` replaces a stale one
 - **`build:spec`**: Builds database specification from schema
 
 #### Utility Scripts
@@ -255,10 +256,52 @@ corestore/
 3. **Add model** (via RPC):
    - Downloads files from source
    - Uploads to Hyperblobs
+   - Uploads a weightless description of the artifact to the same core
    - Creates blob pointers
    - Inserts metadata into HyperDB
 4. **Client queries**: Reads metadata from HyperDB
 5. **Client downloads**: Uses blob pointers to fetch from Hyperblobs
+
+#### Weightless Descriptions
+
+Alongside every GGUF and safetensors artifact, ingest stores a weightless
+description of it, which is what an engine's dry-run fitter reads to project
+memory use before any weights are downloaded.
+
+For a GGUF it is a short GGUF of its own: the tensor list and the settings,
+with the tokenizer tables left out. `tokenizer.ggml.model` is set to `none`,
+`{arch}.vocab_size` is carried through or taken from the second dimension of
+`token_embd.weight`, and a BERT-family `tokenizer.ggml.token_type_count` is
+kept. Dropping every `tokenizer.*` key would make the file unloadable, and
+dropping the vocabulary size would under-project the output buffer. That leaves
+tens of kilobytes where the tokenizer tables alone run to megabytes. For a
+safetensors it is the length-prefixed JSON header.
+
+The description is written to the writer's active Hyperblobs core, under the same
+Merkle verification as the weights, and the record points at it through the
+optional `fitBlobBinding` field. Clients that do not know the field ignore it; records
+without one keep working unchanged.
+
+Every file is described on its own, each shard of a split model included. Formats
+that interleave tensor data with the descriptions — whisper's `ggml` `.bin`
+among them — get no description and no pointer.
+
+Records without a pointer are filled in with `npm run fill:fit-blobs`. It reads
+each artifact from the blob core the record names, taking only blocks the writer
+already holds, and from the record's source when the writer holds none of it.
+A downloaded copy is accepted only while it still hashes to what the record
+binds. Weights are never re-uploaded. Each artifact is staged in `TEMP_STORAGE`
+one at a time, so that volume has to fit the largest model in the registry.
+Records that already carry a pointer are skipped, so a run is safe to repeat and
+can be taken in batches:
+
+```bash
+npm run fill:fit-blobs -- --dry-run
+npm run fill:fit-blobs -- --filter qwen3.5 --limit 20
+```
+
+`--force` also considers records that already carry a pointer, replacing a
+description whose checksum no longer matches its artifact.
 
 #### External Pointer Pattern
 

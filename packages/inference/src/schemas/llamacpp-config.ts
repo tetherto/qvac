@@ -124,10 +124,10 @@ export const llmConfigBaseSchema = z.object({
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
   'split-mode': z
-    .enum(['none', 'layer', 'row', 'tensor'])
+    .enum(['none', 'layer', 'tensor'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
+      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
     ),
   'flash-attn': z
     .enum(['on', 'off', 'auto'])
@@ -245,10 +245,10 @@ export const embedConfigBaseSchema = z.object({
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
   splitMode: z
-    .enum(['none', 'layer', 'row'])
+    .enum(['none', 'layer'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism)."
+      "How to split the model across GPUs: `'none'` (default, single GPU) or `'layer'` (pipeline parallelism)."
     ),
   tensorSplit: z
     .string()
