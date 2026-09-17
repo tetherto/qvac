@@ -6,7 +6,7 @@ import {
   resolveAddonPlatformPackage,
   resolvePlatformAddonRoots,
   resolvePlatformPackageName
-} from '@/expo/plugins/patches/qvac-platform-addons.mjs'
+} from '@/expo/plugins/patches/qvac-platform-addons'
 import {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
@@ -118,9 +118,13 @@ test('patchBareKitLinkers: returns paths for patched platforms', (t) => {
   mkdirSync(join(bareKitPath, 'android'), { recursive: true })
   mkdirSync(join(bareKitPath, 'ios'), { recursive: true })
   mkdirSync(patchesDir, { recursive: true })
+  mkdirSync(join(sdkPath, 'dist', 'src', 'expo', 'plugins', 'patches'), { recursive: true })
   writeFileSync(join(patchesDir, 'android-link.mjs'), 'android patch')
   writeFileSync(join(patchesDir, 'ios-link.mjs'), 'ios patch')
-  writeFileSync(join(patchesDir, 'qvac-platform-addons.mjs'), 'resolver')
+  writeFileSync(
+    join(sdkPath, 'dist', 'src', 'expo', 'plugins', 'patches', 'qvac-platform-addons.js'),
+    'resolver'
+  )
 
   const linkerPaths = patchBareKitLinkers(projectRoot, sdkPath)
 
@@ -129,11 +133,11 @@ test('patchBareKitLinkers: returns paths for patched platforms', (t) => {
   t.ok(existsSync(iosTarget), 'copies the iOS linker patch')
   t.ok(
     existsSync(join(bareKitPath, 'android', 'qvac-platform-addons.mjs')),
-    'copies the resolver the Android patch imports'
+    'copies the compiled resolver the Android patch imports'
   )
   t.ok(
     existsSync(join(bareKitPath, 'ios', 'qvac-platform-addons.mjs')),
-    'copies the resolver the iOS patch imports'
+    'copies the compiled resolver the iOS patch imports'
   )
 })
 

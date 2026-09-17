@@ -4,7 +4,7 @@ import { formatAddonId, type NativeAddon } from '@/commands/verify/addon-source'
 import {
   HOST_ADDON_IMPORT,
   resolveAddonPlatformPackage
-} from '../../expo/plugins/patches/qvac-platform-addons.mjs'
+} from '@/expo/plugins/patches/qvac-platform-addons'
 
 export interface MissingPrebuildIssue {
   code: 'missing-prebuild'

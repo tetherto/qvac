@@ -1,20 +1,29 @@
 /**
  * Resolves split-addon platform packages from the meta package's `#host-addon`
- * map. Linker, verify, and the missing-prebuild error all call this file so the
- * slice name cannot drift from what the addon actually imports.
+ * map. Linker, verify, and the missing-prebuild error all call this module so
+ * the slice name cannot drift from what the addon actually imports.
  *
- * This file is copied next to the patched link.mjs by withMobileBundle.ts, and
- * copied into dist so compiled verify can import it.
+ * Keep this file free of `@/` imports: the compiled JS is copied next to the
+ * patched `link.mjs` as `qvac-platform-addons.mjs`.
  */
-import fs from 'fs'
-import path from 'path'
+import * as fs from 'fs'
+import * as path from 'path'
 
 export const HOST_ADDON_IMPORT = '#host-addon'
 
 const DEFAULT_ANDROID_CPU = 'arm64'
 
-export function resolvePlatformAddonRoots(projectRoot, addonNames, platform) {
-  const roots = []
+export interface PlatformAddonRoot {
+  dir: string
+  pkg: { name?: string; version?: string; addon?: boolean }
+}
+
+export function resolvePlatformAddonRoots(
+  projectRoot: string,
+  addonNames: string[],
+  platform: string
+): PlatformAddonRoot[] {
+  const roots: PlatformAddonRoot[] = []
   for (const name of addonNames) {
     const root = resolvePlatformAddonRoot(projectRoot, name, platform)
     if (root !== null) roots.push(root)
@@ -22,7 +31,11 @@ export function resolvePlatformAddonRoots(projectRoot, addonNames, platform) {
   return roots
 }
 
-function resolvePlatformAddonRoot(projectRoot, metaName, platform) {
+function resolvePlatformAddonRoot(
+  projectRoot: string,
+  metaName: string,
+  platform: string
+): PlatformAddonRoot | null {
   const metaManifest = readManifest(packageDir(projectRoot, metaName))
   if (metaManifest === null) return null
 
@@ -41,13 +54,22 @@ function resolvePlatformAddonRoot(projectRoot, metaName, platform) {
   return { dir: addonDir, pkg: addonManifest }
 }
 
-function packageDir(projectRoot, packageName) {
+function packageDir(projectRoot: string, packageName: string): string {
   return path.join(projectRoot, 'node_modules', ...packageName.split('/'))
 }
 
-function readManifest(dir) {
+interface AddonManifest {
+  name?: string
+  version?: string
+  addon?: boolean
+  imports?: Record<string, unknown>
+}
+
+function readManifest(dir: string): AddonManifest | null {
   try {
-    return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+    return parsed as AddonManifest
   } catch {
     return null
   }
@@ -58,9 +80,13 @@ function readManifest(dir) {
  * `host` is a Bare host (`android-arm64`, `ios-arm64-simulator`, `darwin-arm64`)
  * or a mobile build target (`android`, `ios`).
  */
-export function resolveAddonPlatformPackage(metaName, hostAddon, host) {
+export function resolveAddonPlatformPackage(
+  metaName: string,
+  hostAddon: unknown,
+  host: string
+): string | null {
   const name = resolvePlatformPackageName(hostAddon, host)
-  if (name === null || typeof metaName !== 'string') return null
+  if (name === null) return null
   if (!name.startsWith(`${metaName}-`)) return null
   return name
 }
@@ -70,7 +96,7 @@ export function resolveAddonPlatformPackage(metaName, hostAddon, host) {
  * Android nests the package under its architecture; iOS is a flat list.
  * A platform-only `android` target uses arm64, matching the current mobile host.
  */
-export function resolvePlatformPackageName(hostAddon, host) {
+export function resolvePlatformPackageName(hostAddon: unknown, host: string): string | null {
   if (typeof host !== 'string' || host.length === 0) return null
 
   const separator = host.indexOf('-')
@@ -85,13 +111,14 @@ export function resolvePlatformPackageName(hostAddon, host) {
   return packageName(readBranch(branch, cpuKey))
 }
 
-function packageName(candidate) {
+function packageName(candidate: unknown): string | null {
   const name = Array.isArray(candidate) ? candidate[0] : candidate
   if (typeof name !== 'string' || name.startsWith('.')) return null
   return name
 }
 
-function readBranch(value, key) {
+function readBranch(value: unknown, key: string): unknown {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
-  return value[key]
+  if (!Object.hasOwn(value, key)) return undefined
+  return (value as Record<string, unknown>)[key]
 }
