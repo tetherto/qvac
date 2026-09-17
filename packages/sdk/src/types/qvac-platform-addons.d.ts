@@ -1,4 +1,4 @@
-declare module '@/expo/plugins/patches/qvac-platform-addons.mjs' {
+declare module '*qvac-platform-addons.mjs' {
   export const HOST_ADDON_IMPORT: '#host-addon'
 
   export function resolvePlatformAddonRoots(

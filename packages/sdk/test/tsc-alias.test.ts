@@ -135,3 +135,11 @@ await test('alias rewriting is limited to the internal "@/" alias', () => {
   // bypass the exports map.
   assert.deepEqual(Object.keys(config.compilerOptions.paths), ['@/*'])
 })
+
+await test('verify prebuilds imports the platform-addon resolver with a relative specifier', () => {
+  const src = readFileSync(join(sdkRoot, 'src/commands/verify/prebuilds.ts'), 'utf8')
+  // tsc-alias only rewrites @/ when the target already exists in dist. The
+  // resolver is a copied .mjs, so verify must not depend on that rewrite.
+  assert.match(src, /from '\.\.\/\.\.\/expo\/plugins\/patches\/qvac-platform-addons\.mjs'/)
+  assert.doesNotMatch(src, /from '@\/expo\/plugins\/patches\/qvac-platform-addons\.mjs'/)
+})
