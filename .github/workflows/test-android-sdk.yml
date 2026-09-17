@@ -311,6 +311,15 @@ jobs:
           fs.writeFileSync(target, npmrc, 'utf8');
           console.log(`.npmrc configured at ${target}`);
 
+      - name: Pin validation llm build
+        working-directory: ${{ inputs.project-directory }}
+        shell: node {0}
+        run: |
+          const fs = require('fs');
+          const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          manifest.dependencies['@qvac/llm-llamacpp'] = 'npm:@tetherto/llm-llamacpp-mono@0.53.1-tmp.runid-35264728754';
+          fs.writeFileSync('package.json', `${JSON.stringify(manifest, null, 2)}\n`);
+
       - name: Apply resolved inference
         uses: ./.github/actions/sdk-e2e-prepare-inference
         with:
