@@ -1,5 +1,5 @@
-#include <cstdint>
 #include <algorithm>
+#include <cstdint>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -95,12 +95,15 @@ TEST(ParakeetStreamingGetters, PreserveUnifiedOperatingPointOverrides) {
 
   // speech-cpp snaps untrained values down to the nearest trained chunk;
   // the addon must forward them untouched so that decision stays in one place.
-  EXPECT_EQ(ParakeetModel::resolveStreamingChunkMs(ModelType::RNNT, 1000), 1000);
-  EXPECT_EQ(ParakeetModel::resolveStreamingChunkMs(ModelType::RNNT, 2000), 2000);
+  EXPECT_EQ(
+      ParakeetModel::resolveStreamingChunkMs(ModelType::RNNT, 1000), 1000);
+  EXPECT_EQ(
+      ParakeetModel::resolveStreamingChunkMs(ModelType::RNNT, 2000), 2000);
 }
 
 TEST(ParakeetStreamingGetters, UnifiedDefaultIsATrainedOperatingPoint) {
-  const int resolved = ParakeetModel::resolveStreamingChunkMs(ModelType::RNNT, 0);
+  const int resolved =
+      ParakeetModel::resolveStreamingChunkMs(ModelType::RNNT, 0);
   EXPECT_EQ(resolved, ParakeetConfig::DEFAULT_UNIFIED_STREAMING_CHUNK_MS);
   const std::vector<int> trained = {80, 160, 560, 1040};
   EXPECT_NE(std::find(trained.begin(), trained.end(), resolved), trained.end());
