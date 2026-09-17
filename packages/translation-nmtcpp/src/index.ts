@@ -757,9 +757,9 @@ namespace TranslationNmtcpp {
      * Unsupported devices fall back to CPU; out-of-range indices warn and auto-select.
      * Cannot be combined with gpu_backend/gpu_device or their camelCase aliases.
      */
-    "main-gpu"?: number | `${number}` | "dedicated" | "integrated";
+    "main-gpu"?: number | string;
     /** Alias for main-gpu; specifying both keys is rejected. */
-    main_gpu?: number | `${number}` | "dedicated" | "integrated";
+    main_gpu?: number | string;
 
     /**
      * Ordinal within the matching compute devices. Defaults to 0.

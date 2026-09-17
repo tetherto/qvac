@@ -146,7 +146,7 @@ void loggingSurface;
 
 const mainGpuConfig: TranslationNmtcpp.TranslationNmtcppConfig = {
   modelType: "IndicTrans",
-  "main-gpu": "dedicated",
+  "main-gpu": "DEDICATED",
 };
 const aliasGpuConfig: TranslationNmtcpp.TranslationNmtcppConfig = {
   modelType: "IndicTrans",
@@ -156,7 +156,7 @@ void mainGpuConfig;
 void aliasGpuConfig;
 const invalidMainGpu: TranslationNmtcpp.TranslationNmtcppConfig = {
   modelType: "IndicTrans",
-  // @ts-expect-error Unsupported GPU class.
-  "main-gpu": "vulkan",
+  // @ts-expect-error GPU selectors must be numbers or strings.
+  "main-gpu": true,
 };
 void invalidMainGpu;
