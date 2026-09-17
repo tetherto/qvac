@@ -49,4 +49,6 @@ jobs:
       repository: ${{ inputs.repository }}
       include-vulkan-sdk: true
       fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}
+      linux-extra-packages: libibverbs-dev
+      post-artifact-build-command: bash ../../.github/scripts/validate-rpc-rdma-build.sh
     secrets: inherit
