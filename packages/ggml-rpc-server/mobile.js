@@ -1,0 +1,162 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RpcServerRdmaUnavailableError =
+  exports.RpcServerInvalidHostError =
+  exports.RpcServerNonLoopbackHostError =
+  exports.RpcServerPortAllocationError =
+  exports.DEFAULT_RPC_SERVER_HOST =
+    void 0;
+exports.allocateFreePort = allocateFreePort;
+exports.startRpcServer = startRpcServer;
+/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and native bindings expose CommonJS export shapes. */
+const net = require("bare-net");
+const path = require("bare-path");
+const binding = require("./binding");
+/* eslint-enable @typescript-eslint/no-require-imports */
+exports.DEFAULT_RPC_SERVER_HOST = "127.0.0.1";
+const TRUSTED_LAN_WARNING_CODE = "QVAC_GGML_RPC_SERVER_TRUSTED_LAN";
+const PACKAGED_BACKENDS_DIR = path.join(__dirname, "prebuilds");
+class RpcServerPortAllocationError extends Error {
+  constructor(cause) {
+    super("Failed to allocate a free port for ggml-rpc-server", { cause });
+    this.name = "RpcServerPortAllocationError";
+  }
+}
+exports.RpcServerPortAllocationError = RpcServerPortAllocationError;
+class RpcServerNonLoopbackHostError extends Error {
+  constructor(host) {
+    super(
+      `ggml-rpc-server only supports loopback hosts in this package: ${host}`,
+    );
+    this.name = "RpcServerNonLoopbackHostError";
+  }
+}
+exports.RpcServerNonLoopbackHostError = RpcServerNonLoopbackHostError;
+class RpcServerInvalidHostError extends Error {
+  constructor(host) {
+    super(`ggml-rpc-server requires an IPv4 address or localhost: ${host}`);
+    this.name = "RpcServerInvalidHostError";
+  }
+}
+exports.RpcServerInvalidHostError = RpcServerInvalidHostError;
+class RpcServerRdmaUnavailableError extends Error {
+  output;
+  constructor(output) {
+    super("RDMA is not available for the in-process Android/iOS RPC server");
+    this.name = "RpcServerRdmaUnavailableError";
+    this.output = output;
+  }
+}
+exports.RpcServerRdmaUnavailableError = RpcServerRdmaUnavailableError;
+function isLoopbackHost(host) {
+  const parts = host.split(".");
+  return (
+    parts.length === 4 &&
+    parts[0] === "127" &&
+    parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)
+  );
+}
+function isIpv4Host(host) {
+  const parts = host.split(".");
+  return (
+    parts.length === 4 &&
+    parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)
+  );
+}
+function normalizeHost(host) {
+  return host === "localhost" ? exports.DEFAULT_RPC_SERVER_HOST : host;
+}
+function assertSupportedHost(host) {
+  if (!isIpv4Host(host)) {
+    throw new RpcServerInvalidHostError(host);
+  }
+}
+function assertLoopbackHost(host, allowNonLoopbackHost = false) {
+  if (!allowNonLoopbackHost && !isLoopbackHost(host)) {
+    throw new RpcServerNonLoopbackHostError(host);
+  }
+}
+function warnForTrustedLanHost(host, allowNonLoopbackHost = false) {
+  if (!allowNonLoopbackHost || isLoopbackHost(host)) return;
+  console.warn(
+    `[${TRUSTED_LAN_WARNING_CODE}] ggml-rpc-server is binding to non-loopback host ${host}. ` +
+      "The ggml RPC transport has no authentication or encryption; use this only on a trusted private network with external access controls.",
+  );
+}
+function normalizeDevice(device) {
+  if (typeof device === "string" || device === undefined) return device;
+  return device.join(",");
+}
+function validatePort(port) {
+  if (!Number.isSafeInteger(port) || port <= 0 || port > 65535) {
+    throw new RangeError("port must be an integer between 1 and 65535");
+  }
+}
+function validateThreads(threads) {
+  if (
+    threads !== undefined &&
+    (!Number.isSafeInteger(threads) || threads <= 0)
+  ) {
+    throw new TypeError("threads must be a positive integer");
+  }
+}
+function allocateFreePort(
+  host = exports.DEFAULT_RPC_SERVER_HOST,
+  options = {},
+) {
+  const bindHost = normalizeHost(host);
+  assertSupportedHost(bindHost);
+  assertLoopbackHost(bindHost, options.allowNonLoopbackHost);
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", (error) =>
+      reject(new RpcServerPortAllocationError(error)),
+    );
+    server.listen(0, bindHost, () => {
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        server.close(() => reject(new RpcServerPortAllocationError()));
+        return;
+      }
+      server.close(() => resolve(address.port));
+    });
+  });
+}
+async function startRpcServer(options = {}) {
+  const host = normalizeHost(options.host ?? exports.DEFAULT_RPC_SERVER_HOST);
+  assertSupportedHost(host);
+  assertLoopbackHost(host, options.allowNonLoopbackHost);
+  warnForTrustedLanHost(host, options.allowNonLoopbackHost);
+  if (options.expectRdma === true) {
+    throw new RpcServerRdmaUnavailableError("");
+  }
+  validateThreads(options.threads);
+  const port =
+    options.port ??
+    (await allocateFreePort(host, {
+      allowNonLoopbackHost: options.allowNonLoopbackHost,
+    }));
+  validatePort(port);
+  const device = normalizeDevice(options.device);
+  const handle = binding.startServer({
+    endpoint: `${host}:${port}`,
+    device,
+    cache: options.cache ?? false,
+    threads: options.threads,
+    backendsDir: PACKAGED_BACKENDS_DIR,
+  });
+  let stopPromise;
+  return {
+    runtime: "in-process",
+    host,
+    port,
+    url: `${host}:${port}`,
+    device,
+    rdmaCapable: false,
+    logs: () => "",
+    stop: () => {
+      stopPromise ??= binding.stopServer(handle);
+      return stopPromise;
+    },
+  };
+}
