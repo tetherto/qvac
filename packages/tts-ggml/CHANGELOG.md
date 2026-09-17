@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Release the loaded Pocket model before activating its replacement on reload,
+  avoiding two live model allocations. Failed activation leaves the instance
+  unloaded with its last successful configuration available for `load()`.
 - Expose optional firstAudioMs stats and chunkIndex/isLast output metadata;
   preserve first-audio latency during streaming aggregation.
 - Require ggml-speech 2026-09-15 for the Pocket CPU planner fixes.

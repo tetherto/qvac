@@ -2376,12 +2376,11 @@ class TTSGgml {
         this._pocketLifecycleInProgress = true;
         let replacement = null;
         try {
+            // Drain native work and release its model before allocating another one.
+            // Failed activation leaves the instance unloaded with its last good config.
+            await this._unloadModel();
             replacement = this._createAddon(params, this._addonOutputCallback.bind(this));
             await replacement.activate();
-            const previous = this._optionalAddon();
-            if (previous)
-                await this.cancel();
-            this._failAndClearActiveResponse("Model was reloaded");
             this.addon = replacement;
             replacement = null;
             this._pocketParams = params;
@@ -2392,8 +2391,6 @@ class TTSGgml {
             this._config.outputSampleRate = this._outputSampleRate ?? undefined;
             this.state.configLoaded = true;
             this.state.weightsLoaded = true;
-            if (previous)
-                await previous.destroyInstance();
         }
         finally {
             try {
