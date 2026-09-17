@@ -170,9 +170,10 @@ const world = new WorldStableDiffusion({
 - `streamLayers` retains leading DiT segments within the budget and
   transfers/evicts the rest. It needs CPU-backed DiT weights, GPU execution,
   and a nonzero graph budget. Defaults remain unchanged when omitted.
-- `paramsBackend: 'diffusion=disk,vae=disk'` uses lazy disk reads and releases
+- `paramsBackend: 'diffusion=disk'` uses lazy disk reads and releases DiT
   weights after use. This is separate from CPU-backed `streamLayers` and can
-  be combined with graph cutting through `maxVram`.
+  be combined with graph cutting through `maxVram`. `vae=disk` is rejected
+  because the taehv decoder retains its prepared weights across walk steps.
 
 Both recomputed history and `kvCache: true` work with these controls. The
 separate `createScene()` encoder phase keeps its existing configuration;

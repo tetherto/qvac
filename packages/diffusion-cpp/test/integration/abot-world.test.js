@@ -434,7 +434,7 @@ test(
             'at least one DiT segment was streamed'
           )
         }
-        if (config.paramsBackend === 'diffusion=disk,vae=disk') {
+        if (config.paramsBackend === 'diffusion=disk') {
           t.ok(
             evidence.some((line) => line.includes('params=disk')),
             'disk placement reached the engine'
@@ -475,7 +475,7 @@ test(
         if (kvCache) {
           compare(
             baseline,
-            await run({ kvCache, paramsBackend: 'diffusion=disk,vae=disk', maxVram: 1 })
+            await run({ kvCache, paramsBackend: 'diffusion=disk', maxVram: 1 })
           )
         }
       }

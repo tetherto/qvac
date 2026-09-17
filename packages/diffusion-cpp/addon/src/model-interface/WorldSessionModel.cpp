@@ -49,8 +49,8 @@ void WorldSessionModel::load() {
   const auto tLoadStart = std::chrono::steady_clock::now();
   qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
 
-  sd_abot_session_params_t params;
-  sd_abot_session_params_init(&params);
+  sd_abot_session_params_v2_t params;
+  sd_abot_session_params_v2_init(&params);
   params.dit_model_path = config_.ditModelPath.c_str();
   params.taehv_path = config_.taehvPath.c_str();
   params.scene_path = config_.scenePath.c_str();
@@ -84,7 +84,7 @@ void WorldSessionModel::load() {
         "modules");
   }
 
-  session_ = sd_abot_session_new(&params);
+  session_ = sd_abot_session_new_v2(&params);
   if (session_ == nullptr) {
     throw StatusError(
         general_error::InternalError,

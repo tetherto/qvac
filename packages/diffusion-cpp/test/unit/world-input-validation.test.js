@@ -28,7 +28,7 @@ const SCENE_OK = {
 
 test('world load forwards layer streaming controls to the addon', async function (t) {
   const config = {
-    paramsBackend: 'diffusion=cpu,vae=disk',
+    paramsBackend: 'diffusion=cpu,vae=cpu',
     maxVram: 'cuda0=-1',
     streamLayers: true,
     kvCache: true,
