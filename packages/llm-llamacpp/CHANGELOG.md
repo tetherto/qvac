@@ -9,7 +9,8 @@
   normalized to the first shard so fabric can discover the complete split set,
   and `tensor_buft_overrides` is padded before initialization so automatic
   GPU/CPU placement receives its required writable output buffer. Streamed
-  model loading remains unchanged (QVAC-25039).
+  model loading remains unchanged. Tensor-split architecture support is now
+  validated by fabric instead of a duplicated addon denylist (QVAC-25039).
 
 ## [0.53.0] - 2026-09-15
 
