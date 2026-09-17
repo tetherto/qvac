@@ -267,7 +267,7 @@ const TranslationNmtcpp = class TranslationNmtcpp {
                     Number.isInteger(mainGpu) &&
                     mainGpu >= -2147483648 &&
                     mainGpu <= 2147483647)) {
-                throw new TypeError("main-gpu must be a signed 32-bit integer, dedicated or integrated");
+                throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
             }
             if (["gpu_backend", "gpuBackend", "gpu_device", "gpuDevice"].some((key) => otherConfig[key] !== undefined)) {
                 throw new TypeError("main-gpu cannot be combined with legacy GPU selectors");

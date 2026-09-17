@@ -422,7 +422,7 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
         )
       ) {
         throw new TypeError(
-          "main-gpu must be a signed 32-bit integer, dedicated or integrated",
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'",
         );
       }
       if (
