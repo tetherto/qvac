@@ -55,7 +55,6 @@ jobs:
       workdir: ${{ inputs.workdir }}
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
-      artifact-name-prefix: model-fit-
       include-vulkan-sdk: true
       extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
       fabric-overlay-artifact: ${{ inputs.fabric-overlay-artifact }}

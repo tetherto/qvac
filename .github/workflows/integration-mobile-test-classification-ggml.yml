@@ -206,7 +206,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/classification-ggml' }}
           addon-npm-name: '@qvac/classification-ggml'
-          prebuild-artifact-prefix: 'classification-ggml-'
+          prebuild-artifact-prefix: 'prebuild-classification-ggml-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # Manual dispatch (inputs.platform set). An empty `package` does NOT test
           # this branch's native code: a standalone dispatch produces no prebuild

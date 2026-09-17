@@ -46,7 +46,7 @@ import {
   type CanonicalModelType,
   type ModelTypeInput
 } from './model-types'
-import { sdcppConfigSchema } from './sdcpp-config'
+import { sdcppConfigSchema, type SdcppConfig } from './sdcpp-config'
 import { vlaConfigSchema } from './vla'
 import { classificationConfigSchema } from './classification'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
@@ -828,7 +828,7 @@ export type InferredConfig<S> = S extends {
               : S extends { engine: typeof ModelType.parakeetTranscription }
                 ? z.input<typeof parakeetConfigSchema>
                 : S extends { engine: typeof ModelType.sdcppGeneration }
-                  ? z.input<typeof sdcppConfigSchema>
+                  ? SdcppConfig
                   : S extends { engine: typeof ModelType.audiogenGgml }
                     ? z.input<typeof audioGenConfigSchema>
                     : S extends { engine: typeof ModelType.ggmlVla }

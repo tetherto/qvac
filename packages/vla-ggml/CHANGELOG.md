@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.27.1] - 2026-09-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.27.x` line pick this up without a range change of their own.
+- One C++ runtime per process means one copy of every `std::` typeinfo, and RTTI matches typeinfo by address rather than by name. An exception raised inside the shared runtime is therefore matched by type on the way out: this addon's own `catch (const std::exception&)` handlers in the model interface, and `JSCATCH`'s equivalent arm at the JS boundary, now match a throw that came from fabric, where before it fell through to the catch-all and reached JS as `INTERNAL_ERROR` / `"Unknown error"`. Linux only; macOS, Windows, Android and iOS already shared one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
+## [0.27.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own. No API change for this package.
+- The MoE fixes are the ones that matter here: the out-of-bounds write reproduced with the persistent expert cache at large context, which a mixture-of-experts VLA checkpoint can reach.
+- Also ships the iOS test-harness work from [#4399](https://github.com/tetherto/qvac/pull/4399), which landed after `0.26.0` with no version bump of its own. It hardlinks pre-staged models and captures iOS crash reports; it touches only `test/`, so no shipped code changes with it.
+
 ## [0.26.0] - 2026-09-10
 
 ### Changed

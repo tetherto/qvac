@@ -4,6 +4,10 @@ import {
   bootstrapProject,
   auditTsDoc,
 } from "../scripts/api-docs/audit-tsdoc.js";
+import {
+  CURATED_SINGLETONS,
+  convertCuratedSingletons,
+} from "../scripts/api-docs/curated-singletons.js";
 import type { AuditResult } from "../scripts/api-docs/types.js";
 
 /**
@@ -33,8 +37,26 @@ describe("tsdoc-completeness", () => {
 
   beforeAll(async () => {
     const project = await bootstrapProject(SDK_PATH);
-    result = await auditTsDoc(project, SDK_PATH, { quiet: true });
-  }, 60_000);
+    const { variables } = await convertCuratedSingletons(SDK_PATH, project);
+    result = await auditTsDoc(project, SDK_PATH, {
+      quiet: true,
+      curatedVariables: variables,
+    });
+  }, 120_000);
+
+  it.each(CURATED_SINGLETONS.map((s) => s.name))(
+    "audits the methods of the curated singleton %s",
+    (name) => {
+      const methods = result.diagnostics.filter((d) =>
+        d.functionName.startsWith(`${name}.`),
+      );
+      expect(
+        methods.length,
+        `${name} contributed no method diagnostics — the singleton dropped out ` +
+          `of the audited surface`,
+      ).toBeGreaterThan(0);
+    },
+  );
 
   it(`overall completeness is at least ${COMPLETENESS_THRESHOLD}%`, () => {
     expect(result.completenessPercent).toBeGreaterThanOrEqual(
