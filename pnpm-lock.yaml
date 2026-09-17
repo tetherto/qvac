@@ -958,8 +958,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@qvac/asr-ggml':
-        specifier: ^0.3.1
-        version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.5.2
+        version: link:../asr-ggml
       '@qvac/audiogen-ggml':
         specifier: ^0.4.0
         version: link:../audiogen-ggml
@@ -1609,8 +1609,8 @@ importers:
   packages/sdk:
     dependencies:
       '@qvac/asr-ggml':
-        specifier: ^0.3.1
-        version: 0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.5.2
+        version: link:../asr-ggml
       '@qvac/audiogen-ggml':
         specifier: ^0.4.0
         version: link:../audiogen-ggml
