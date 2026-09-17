@@ -124,10 +124,10 @@ export const llmConfigBaseSchema = z.object({
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
   'split-mode': z
-    .enum(['none', 'layer', 'row', 'tensor'])
+    .enum(['none', 'layer', 'tensor'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
+      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
     ),
   'flash-attn': z
     .enum(['on', 'off', 'auto'])
@@ -145,7 +145,7 @@ export const llmConfigBaseSchema = z.object({
     .number()
     .int()
     .min(1)
-    .max(2147483647)
+    .max(128)
     .optional()
     .describe('Maximum draft tokens proposed per MTP verification round. Addon default 3.'),
   'spec-draft-n-min': z
@@ -178,6 +178,18 @@ export const llmConfigBaseSchema = z.object({
     .max(2147483647)
     .optional()
     .describe('Draft GPU layer count. Unset keeps the addon default.'),
+  'spec-draft-type-k': z
+    .string()
+    .optional()
+    .describe(
+      'KV-cache key quantization type for the MTP draft context. Unset selects the addon default.'
+    ),
+  'spec-draft-type-v': z
+    .string()
+    .optional()
+    .describe(
+      'KV-cache value quantization type for the MTP draft context. Unset selects the addon default.'
+    ),
   'tensor-split': z
     .string()
     .optional()
@@ -288,10 +300,10 @@ export const embedConfigBaseSchema = z.object({
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
   splitMode: z
-    .enum(['none', 'layer', 'row'])
+    .enum(['none', 'layer'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism)."
+      "How to split the model across GPUs: `'none'` (default, single GPU) or `'layer'` (pipeline parallelism)."
     ),
   tensorSplit: z
     .string()

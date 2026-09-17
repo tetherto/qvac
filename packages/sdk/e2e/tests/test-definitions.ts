@@ -6,12 +6,14 @@ import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
 import { embeddingTests } from './embedding-tests.js'
 import { ragTests } from './rag-tests.js'
+import { vectorIndexTests } from './vector-index-tests.js'
 import { translationIndicTransTests } from './translation-indictrans-tests.js'
 import { translationBergamotTests } from './translation-bergamot-tests.js'
 import { translationBergamotCacheTests } from './translation-bergamot-cache-tests.js'
 import { translationLlmTests } from './translation-llm-tests.js'
 import { modelInfoTests } from './model-info-tests.js'
 import { kvCacheTests } from './kv-cache-tests.js'
+import { kvCacheRestartTests } from './kv-cache-restart-tests.js'
 import { errorTests } from './error-tests.js'
 import { toolsTests } from './tools-tests.js'
 import { ocrTests } from './ocr-tests.js'
@@ -272,6 +274,9 @@ export const tests = [
   // RAG tests
   ...ragTests,
 
+  // Vector index tests (embed + TurboVec index, no RAG workspace)
+  ...vectorIndexTests,
+
   // Translation: IndicTrans2 (EN↔HI)
   ...translationIndicTransTests,
 
@@ -295,6 +300,7 @@ export const tests = [
 
   // KV cache tests
   ...kvCacheTests,
+  ...kvCacheRestartTests,
 
   // Error tests
   ...errorTests,

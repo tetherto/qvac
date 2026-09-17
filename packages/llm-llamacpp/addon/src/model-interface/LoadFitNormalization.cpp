@@ -7,7 +7,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 
 #include <common/arg.h>
@@ -70,54 +69,6 @@ uint32_t trainedContext(const ModelMetaData& metadata) {
   }
   const std::string key = *architecture + ".context_length";
   return metadata.tryGetU32(key.c_str()).value_or(0);
-}
-
-// Mirrors llm_arch_supports_sm_tensor() in qvac-fabric src/llama-arch.cpp,
-// which qvac-fabric does not install: it lives in the internal
-// src/llama-arch.h, not the public include/ tree. The values below
-// are the GGUF `general.architecture` strings from LLM_ARCH_NAMES, NOT the enum
-// names lower-cased — e.g. LLM_ARCH_FALCON_H1 is "falcon-h1" and
-// LLM_ARCH_GRANITE_HYBRID is "granitehybrid". Deliberately absent, because
-// fabric does support them: "deepseek2-ocr" and "t5encoder".
-//
-// RE-CHECK ON EVERY qvac-fabric BUMP — this is a manual mirror and nothing
-// enforces it. LoadFitNormalizationTest.TensorSplitArchDenylistCoversFabric
-// exercises this list but reads nothing from fabric, so it cannot detect
-// drift; it only pins the addon against its own copy. Verified by hand
-// against qvac-fabric v10297.1.1 (27 entries). v10297.1.1 leaves
-// src/llama-arch.cpp untouched relative to v10297.1.0, so the list is
-// unchanged across that bump.
-//
-// The bump from v10297.0.0 to v10297.1.0 REMOVED three entries — fabric now
-// supports tensor split for deepseek4, qwen35 and qwen35moe. Leaving them here
-// would reject architectures fabric accepts, so the list shrank rather than
-// grew. A denylist drifts in both directions; re-derive it from
-// llm_arch_supports_sm_tensor rather than only appending.
-//
-// An absent general.architecture returns "supported": fabric's own check at
-// src/llama-model.cpp:328 remains the backstop, this list is only a UX layer
-// that turns a bare std::runtime_error into a structured InvalidArgument.
-bool archSupportsTensorSplit(const ModelMetaData& metadata) {
-  static const std::unordered_set<std::string> kUnsupported = {
-      "grok",          "mpt",
-      "plamo2",        "minicpm3",
-      "gemma3n",       "mamba",
-      "mamba2",        "jamba",
-      "falcon-h1",     "olmo2",
-      "olmoe",         "deepseek2",
-      "deepseek32",    "glm-dsa",
-      "bitnet",        "t5",
-      "nemotron_h",    "nemotron_h_moe",
-      "granitehybrid", "lfm2",
-      "lfm2moe",       "minimax-m2",
-      "minimax-m3",    "mistral4",
-      "kimi-linear",   "qwen3tts",
-      "qwen3next"};
-  const auto architecture = metadata.tryGetString("general.architecture");
-  if (!architecture.has_value()) {
-    return true;
-  }
-  return kUnsupported.count(*architecture) == 0;
 }
 
 // Lambda form rather than a bare ::tolower: the value is caller-supplied and
@@ -760,6 +711,30 @@ NormalizedLoad normalizeLoadForFit(
   std::optional<std::string> loadMode;
   for (const std::string& key : {"load-mode", "load_mode"}) {
     if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      // fabric's deprecated mmap / direct-io flags assign params.load_mode too,
+      // and the generic loop runs after this block, so one of them would
+      // silently overwrite the mode validated here.
+      for (const std::string& alias :
+           {"mmap",
+            "no-mmap",
+            "no_mmap",
+            "direct-io",
+            "direct_io",
+            "no-direct-io",
+            "no_direct_io"}) {
+        if (configFilemap.contains(alias)) {
+          throw qvac_errors::StatusError(
+              ADDON_ID,
+              qvac_errors::general_error::toString(
+                  qvac_errors::general_error::InvalidArgument),
+              string_format(
+                  "%s: '%s' cannot be combined with '%s'; use one or the "
+                  "other.\n",
+                  K_LEGACY_PARSER_NAME.data(),
+                  key.c_str(),
+                  alias.c_str()));
+        }
+      }
       const std::string value = toLowerAscii(it->second);
       if (loadMode.has_value() && loadMode.value() != value) {
         throw qvac_errors::StatusError(
@@ -794,6 +769,60 @@ NormalizedLoad normalizeLoadForFit(
     params.load_mode = mode->second;
   }
 
+  // The deprecated mmap and direct-io flags are separate options that both
+  // assign params.load_mode, and llama_load_mode is a flat selector rather
+  // than a bitfield, so the generic loop would let whichever ran last erase
+  // the other. Flags agreeing on a mode are left to it.
+  struct DeprecatedLoadFlag {
+    const char* key;
+    bool isPositive;
+    llama_load_mode enabled;
+  };
+  static constexpr DeprecatedLoadFlag kDeprecatedLoadFlags[] = {
+      {"mmap", true, LLAMA_LOAD_MODE_MMAP},
+      {"no-mmap", false, LLAMA_LOAD_MODE_MMAP},
+      {"no_mmap", false, LLAMA_LOAD_MODE_MMAP},
+      {"direct-io", true, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"direct_io", true, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"no-direct-io", false, LLAMA_LOAD_MODE_DIRECT_IO},
+      {"no_direct_io", false, LLAMA_LOAD_MODE_DIRECT_IO}};
+
+  std::optional<llama_load_mode> deprecatedMode;
+  const char* deprecatedKey = nullptr;
+  for (const auto& flag : kDeprecatedLoadFlags) {
+    const auto it = configFilemap.find(flag.key);
+    if (it == configFilemap.end()) {
+      continue;
+    }
+    bool requested = true;
+    if (!it->second.empty()) {
+      if (common_arg_utils::is_truthy(it->second)) {
+        requested = true;
+      } else if (common_arg_utils::is_falsey(it->second)) {
+        requested = false;
+      } else {
+        // The generic loop reports the unknown value against the key itself.
+        continue;
+      }
+    }
+    const llama_load_mode mode =
+        flag.isPositive == requested ? flag.enabled : LLAMA_LOAD_MODE_NONE;
+    if (deprecatedMode.has_value() && deprecatedMode.value() != mode) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          string_format(
+              "%s: '%s' and '%s' select different load modes; use 'load-mode' "
+              "instead.\n",
+              K_LEGACY_PARSER_NAME.data(),
+              deprecatedKey,
+              flag.key));
+    }
+    deprecatedMode = mode;
+    deprecatedKey = flag.key;
+  }
+
   // MedPsy ships only a Jinja chat template embedded in its GGUF; the non-jinja
   // fallback path used by llama.cpp does not execute the {%- set persona -%}
   // block that injects the model's persona system prompt, so the model loses
@@ -809,6 +838,9 @@ NormalizedLoad normalizeLoadForFit(
         "[LlamaModel] MedPsy basename detected; auto-enabling jinja so the "
         "embedded chat template is applied\n");
   }
+
+  // Skip the projector's audio encoder by default.
+  params.mmproj_no_audio = true;
 
   qvac_lib_inference_addon_llama::applyLoadConfigHandlers(
       params, configFilemap);
@@ -1129,22 +1161,8 @@ NormalizedLoad normalizeLoadForFit(
   // flash-attn defaults — on by default, and forced off when finetuning — so
   // this is the first point at which the effective value can be read. Moving
   // this block up into the GPU branch would see only a caller-supplied value
-  // and miss both. (tuneLoadConfigMap also forces it off for BitNet, but that
-  // path is unreachable here: "bitnet" is on the unsupported-architecture list
-  // checked immediately below, so it throws before flash-attn is consulted.)
+  // and miss both.
   if (params.split_mode == LLAMA_SPLIT_MODE_TENSOR) {
-    if (!archSupportsTensorSplit(metadata)) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "%s: split-mode 'tensor' is not supported for architecture '%s' "
-              "by this qvac-fabric version; use split-mode 'layer'.\n",
-              K_LEGACY_PARSER_NAME.data(),
-              metadata.tryGetString("general.architecture")
-                  .value_or("unknown")
-                  .c_str()));
-    }
-
     // qvac-fabric returns a null context (src/llama-context.cpp, "SPLIT_MODE_
     // TENSOR requires flash_attn to be enabled") rather than a diagnosable
     // error, so reject here instead of silently flipping a value the caller
@@ -1234,10 +1252,13 @@ NormalizedLoad normalizeLoadForFit(
 
   int size = static_cast<int>(configVector.size());
 
-  std::unordered_map<std::string, common_arg*> argToOptions;
+  std::unordered_map<std::string, std::pair<common_arg*, bool>> argToOptions;
   for (auto& opt : ctxArg.options) {
     for (const auto& arg : opt.args) {
-      argToOptions[arg] = &opt;
+      argToOptions[arg] = {&opt, /* isPositive */ true};
+    }
+    for (const auto& arg : opt.args_neg) {
+      argToOptions[arg] = {&opt, /* isPositive */ false};
     }
   }
 
@@ -1251,6 +1272,10 @@ NormalizedLoad normalizeLoadForFit(
           "Expected value for argument");
     }
   };
+
+  // configFilemap is unordered, so two spellings of one boolean option would
+  // otherwise apply in an arbitrary order and the last one would win.
+  std::unordered_map<const common_arg*, bool> appliedBooleans;
 
   for (int argIndex = 0; argIndex < size; argIndex++) {
     const std::string argPrefix = "--";
@@ -1270,7 +1295,9 @@ NormalizedLoad normalizeLoadForFit(
               qvac_errors::general_error::InvalidArgument),
           errorMsg);
     }
-    auto opt = *argToOptions[arg];
+    auto& entry = argToOptions[arg];
+    auto opt = *entry.first;
+    const bool isPositive = entry.second;
     if (opt.has_value_from_env()) {
       QLOG_IF(
           Priority::DEBUG,
@@ -1284,6 +1311,49 @@ NormalizedLoad normalizeLoadForFit(
     try {
       if (opt.handler_void != nullptr) {
         opt.handler_void(params);
+        continue;
+      }
+
+      if (opt.handler_bool != nullptr) {
+        bool requested = true;
+        if (argIndex + 1 < size &&
+            !configVector[argIndex + 1].starts_with(argPrefix)) {
+          const std::string& boolVal = configVector[++argIndex];
+          if (common_arg_utils::is_truthy(boolVal)) {
+            requested = true;
+          } else if (common_arg_utils::is_falsey(boolVal)) {
+            requested = false;
+          } else {
+            throw qvac_errors::StatusError(
+                ADDON_ID,
+                qvac_errors::general_error::toString(
+                    qvac_errors::general_error::InvalidArgument),
+                string_format(
+                    "%s: unknown value for %s: '%s'. Accepted (lower-case): "
+                    "on, enabled, true, 1, off, disabled, false, 0.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    arg.c_str(),
+                    boolVal.c_str()));
+          }
+        }
+        const bool effective = isPositive == requested;
+        const auto [applied, first] =
+            appliedBooleans.emplace(entry.first, effective);
+        if (!first) {
+          if (applied->second != effective) {
+            throw qvac_errors::StatusError(
+                ADDON_ID,
+                qvac_errors::general_error::toString(
+                    qvac_errors::general_error::InvalidArgument),
+                string_format(
+                    "%s: '%s' was given contradictory values; supply one "
+                    "spelling.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    opt.args.back()));
+          }
+          continue;
+        }
+        opt.handler_bool(params, effective);
         continue;
       }
 
@@ -1354,6 +1424,11 @@ NormalizedLoad normalizeLoadForFit(
   if (!params.tensor_buft_overrides.empty()) {
     params.tensor_buft_overrides.push_back({nullptr, nullptr});
   }
+  params.tensor_buft_overrides.resize(
+      std::max(
+          params.tensor_buft_overrides.size(),
+          llama_max_tensor_buft_overrides()),
+      {nullptr, nullptr});
 
   if (!params.chat_template.empty() &&
       !common_chat_verify_template(params.chat_template, params.use_jinja)) {

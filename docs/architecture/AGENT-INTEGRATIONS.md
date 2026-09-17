@@ -298,11 +298,12 @@ Common examples:
 
 Release lower layers before upper layers when a feature spans packages:
 
-1. `@qvac/sdk` — model constants, inference semantics, parser fixes (`tetherto-qvac-sdk` lockstep via `qv-sdk-lockstep-sync`).
-2. `@qvac/cli` — server routes or serve behavior that depends on SDK changes.
-3. `@qvac/ai-sdk-provider` — managed mode/provider changes that depend on CLI behavior.
-4. `@qvac/opencode-plugin` / `@qvac/openclaw-plugin` — plugin changes that depend on provider/CLI.
-5. Docs/models.dev can land alongside the package that makes the behavior real, but avoid documenting unreleased package behavior as current.
+1. `@qvac/inference` — engine changes, released first on the major.minor `@qvac/sdk` will adopt.
+2. `@qvac/sdk` — model constants, inference semantics, parser fixes (its `@qvac/inference` range + `tetherto-qvac-sdk` via `qv-sdk-inference-version`).
+3. `@qvac/cli` — server routes or serve behavior that depends on SDK changes.
+4. `@qvac/ai-sdk-provider` — managed mode/provider changes that depend on CLI behavior.
+5. `@qvac/opencode-plugin` / `@qvac/openclaw-plugin` — plugin changes that depend on provider/CLI.
+6. Docs/models.dev can land alongside the package that makes the behavior real, but avoid documenting unreleased package behavior as current.
 
 If upper packages use caret ranges that already resolve to a lower-layer patch fix, a new upper release may not be needed. Verify with a fresh install, not just lockfile assumptions.
 

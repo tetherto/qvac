@@ -8,7 +8,9 @@ const modelConfig: LlamacppCompletionConfig = {
   'spec-draft-p-min': 0.5,
   'spec-draft-backend-sampling': false,
   'spec-draft-device': 'CPU',
-  'spec-draft-ngl': 0
+  'spec-draft-ngl': 0,
+  'spec-draft-type-k': 'q8_0',
+  'spec-draft-type-v': 'f16'
 }
 
 const loadOptions: LoadModelOptions = {

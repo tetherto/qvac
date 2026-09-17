@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "schema": [
     {
       "name": "model-blob-binding",
@@ -173,6 +173,12 @@
           "required": false,
           "type": "string",
           "version": 2
+        },
+        {
+          "name": "fitBlobBinding",
+          "required": false,
+          "type": "@qvac-main-registry/model-blob-binding",
+          "version": 3
         }
       ]
     },

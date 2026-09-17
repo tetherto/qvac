@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.53.1] - 2026-09-16
+
+### Fixed
+
+- On-disk single-file and sharded models now use the same
+  `common_init_from_params` loading path as `llama-server`. Sharded paths are
+  normalized to the first shard so fabric can discover the complete split set,
+  and `tensor_buft_overrides` is padded before initialization so automatic
+  GPU/CPU placement receives its required writable output buffer. Streamed
+  model loading remains unchanged. Tensor-split architecture support is now
+  validated by fabric instead of a duplicated addon denylist (QVAC-25039).
+
+## [0.53.0] - 2026-09-15
 
 ### Added
 
@@ -67,9 +79,42 @@
     constrains decoding, and the caller receives a well-formed call against the
     wrong schema with nothing in the response to indicate it. This was a
     warning in earlier pre-release builds of this feature.
+- A `mmproj-no-audio` load config option (`mmproj_no_audio` also accepted),
+  taking `0`/`off`/`false` or `1`/`on`/`true`; anything else is rejected with
+  `InvalidArgument`. It drops the projector's audio encoder while keeping its
+  vision encoder, and is forwarded to the vision context as `skip_audio`. It is
+  independent of `mmproj_use_gpu`, which selects the backend rather than the
+  modality.
+
+### Changed
+
+- **Multimodal projectors now skip their audio encoder by default.** The addon
+  sets `mmproj-no-audio` to `true` during load normalization, so an
+  audio-capable mmproj loads vision-only unless the new option is passed
+  explicitly as `0`/`off`/`false`. Vision behaviour is unchanged; a caller
+  relying on audio input from a combined projector must now opt back in.
+- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0`. No API change for this package; the runtime changes as follows since `v10549.0.0`:
+  - Fixed an out-of-bounds tensor write in the MoE copy path. The used-expert scan ran unbounded, so a ubatch whose `ids` tensor had zero rows read past its own bitset and aborted on `GGML_ASSERT(offset <= nbytes ...)`. Reached with the persistent MoE expert cache — on by default under `--fit` — at `-c 65536` and above ([#260](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/260)).
+  - Fixed uninitialized ggml views after oversized MoE cache banks and context tensors ([#263](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/263)).
+  - `mtmd` gained the audio-encoder skip this release's `mmproj-no-audio` option drives ([#261](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/261)).
+  - Native MTP shares compute buffers and synchronizes draft catch-up before the target runs, now also on Vulkan and Metal and preserved across scheduler rebuilds ([#253](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/253)).
+  - qwen4exp correctness backports: `seq_cp`, block position keying, mtmd input, a CUDA abort, KV-unified NaN collapse, and indexer-cache `ext.x`/`ext.y` restore on state reload. Tensor parallelism is enabled and `-sm tensor` is now declared unsupported for the arch ([#255](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/255)).
 
 ### Fixed
 
+- `RuntimeStats.avgConcurrentSeq` is now a token-weighted mean rather than a
+  per-step one, so it measures how much traffic shared the backend instead of
+  how finely the scheduler sliced its work. The previous step-weighted mean
+  rose the more a co-resident prefill was throttled, which meant removing the
+  one-token-per-step prefill clamp read as a concurrency regression even
+  though the backend decoded exactly the same sequences over the same tokens.
+- The continuous-batching MTMD smoke test now pairs the image with a
+  *generating* text request instead of a one-word answer. Paired with a
+  one-word answer the text slot finished after ~2 decode steps while the image
+  still had a dozen media segments to encode, so the only way to clear the
+  co-residency bar was for the text slot to be starved — which is exactly what
+  the media-barrier prefill clamp used to do, and exactly what this test is
+  meant to catch.
 - A tool grammar applied for one request no longer leaks into a following
   request that carries no tools on the same loaded model, and no longer leaves
   its lazy-grammar triggers attached to a later per-request `grammar` or
@@ -115,6 +160,13 @@
   values already were. A model-supplied template controls that text, so it
   could previously forge log lines or, for a large template, write one very
   large record per failing request.
+- A sequence in the generation phase no longer throttles concurrently prefilling sequences to one prompt token per decode step. `MultiRequestBatcher` fed every active slot a single shared chunk size, computed as the minimum `remainingToFeed()` across them; a generating slot reports `1`, so as soon as any one request started generating, every request still feeding its prompt was cut to one token per step and needed roughly as many decode steps to reach its first token as its prompt had tokens. Slots are now budgeted individually and water-filled against the batch capacity, so a generating slot takes its one token while a concurrent prefill keeps its full micro-batch. On a `parallel: 4` model answering six concurrent requests, time to first token for the stalled group drops from ~1710 ms to ~308 ms, aggregate throughput rises ~25% and wall clock falls ~21%. Peak batch size is unchanged — the sum of the per-slot budgets is bounded by the same `batch.capacity()` the shared chunk was. Note that a step taken while a large prefill is co-resident now carries more tokens, so an already-generating sequence sees a correspondingly larger spread in per-token latency.
+
+## [0.52.1] - 2026-09-14
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0` -> `10549.0.0#1` (`LLAMA_OPENSSL=OFF`, so native prebuilds do not link OpenSSL; no API change for this package).
 
 ## [0.52.0] - 2026-09-10
 

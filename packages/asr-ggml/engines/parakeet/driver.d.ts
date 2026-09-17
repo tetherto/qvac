@@ -106,7 +106,7 @@ export declare class ParakeetDriver implements AsrDriver {
     createStreamingSession(audio: NormalizedAudioStream, opts?: ASRStreamingOptions): Promise<StreamingSession>;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
     _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;
-    _pumpStreamingAudio(audio: NormalizedAudioStream): Promise<void>;
+    _pumpStreamingAudio(audio: NormalizedAudioStream, markClosing: () => void): Promise<void>;
     _buildConfigurationParams(): ParakeetConfigurationParams;
     _createAddon(configurationParams: ParakeetConfigurationParams): ParakeetInterface;
     private _outputCallback;

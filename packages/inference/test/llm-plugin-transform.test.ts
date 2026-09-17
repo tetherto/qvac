@@ -15,7 +15,9 @@ test('transformLlmConfig: forwards MTP tuning with native keys and string values
       'spec-draft-p-min': 0.5,
       'spec-draft-backend-sampling': false,
       'spec-draft-device': 'CPU',
-      'spec-draft-ngl': 0
+      'spec-draft-ngl': 0,
+      'spec-draft-type-k': 'q8_0',
+      'spec-draft-type-v': 'f16'
     })
   )
   t.is(result['spec-type'], 'draft-mtp')
@@ -25,6 +27,8 @@ test('transformLlmConfig: forwards MTP tuning with native keys and string values
   t.is(result['spec-draft-backend-sampling'], 'false')
   t.is(result['spec-draft-device'], 'CPU')
   t.is(result['spec-draft-ngl'], '0')
+  t.is(result['spec-draft-type-k'], 'q8_0')
+  t.is(result['spec-draft-type-v'], 'f16')
 })
 
 test('transformLlmConfig: system_prompt is never forwarded to C++', (t) => {

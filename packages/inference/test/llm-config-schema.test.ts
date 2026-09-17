@@ -19,7 +19,9 @@ const MTP_CONFIG = {
   'spec-draft-p-min': 0.5,
   'spec-draft-backend-sampling': false,
   'spec-draft-device': 'CPU',
-  'spec-draft-ngl': 0
+  'spec-draft-ngl': 0,
+  'spec-draft-type-k': 'q8_0',
+  'spec-draft-type-v': 'f16'
 } as const
 
 test('MTP config survives load options, wire validation, and device defaults', (t) => {
@@ -47,7 +49,7 @@ test('MTP config rejects unsupported decoders and invalid tuning values', (t) =>
     { 'spec-draft-n-max': 0 },
     { 'spec-draft-n-max': -1 },
     { 'spec-draft-n-max': 1.5 },
-    { 'spec-draft-n-max': 2147483648 },
+    { 'spec-draft-n-max': 129 },
     { 'spec-draft-n-min': -1 },
     { 'spec-draft-n-min': 0.5 },
     { 'spec-draft-p-min': -0.1 },
@@ -65,15 +67,15 @@ test('MTP config rejects unsupported decoders and invalid tuning values', (t) =>
   }
 })
 
-test('llmConfigBaseSchema: accepts valid split-mode values', (t) => {
+test('llmConfigBaseSchema: accepts supported split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'none' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'layer' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'row' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'tensor' }).success, true)
 })
 
 test('llmConfigBaseSchema: rejects invalid split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'column' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'row' }).success, false)
 })
 
 test('llmConfigBaseSchema: accepts valid flash-attn values', (t) => {
@@ -231,7 +233,7 @@ test('loadModelSrcRequestSchema: accepts split-mode for LLM', (t) => {
     type: 'loadModel',
     modelType: ModelType.llamacppCompletion,
     modelSrc: 'model.gguf',
-    modelConfig: { 'split-mode': 'row', 'tensor-split': '3,1', 'main-gpu': 0 }
+    modelConfig: { 'split-mode': 'layer', 'tensor-split': '3,1', 'main-gpu': 0 }
   })
   t.is(result.success, true)
 })

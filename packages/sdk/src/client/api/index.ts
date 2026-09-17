@@ -24,6 +24,7 @@ export {
   ragCloseWorkspace,
   ragDeleteWorkspace
 } from './rag'
+export { createVectorIndex, loadVectorIndex, type VectorIndex } from './vector-index'
 export { textToSpeech, textToSpeechStream } from './text-to-speech'
 export { getModelInfo } from './get-model-info'
 export { getLoadedModelInfo } from './get-loaded-model-info'
@@ -54,3 +55,5 @@ export { state } from './state'
 export { vla, vlaHparams, vlaSetEmbodiment } from './vla'
 export { vlaPreprocessImage, vlaPadState, VLA_DEFAULT_IMAGE_SIZE } from './vla-helpers'
 export { audioGen } from '@/client/api/audio-gen'
+export { audioEdit } from '@/client/api/audio-edit'
+export { audioUnderstand } from '@/client/api/audio-understand'

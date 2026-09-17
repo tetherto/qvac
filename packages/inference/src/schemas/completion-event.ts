@@ -3,6 +3,7 @@ import {
   toolCallSchema,
   toolCallErrorSchema,
   type Tool,
+  type ToolCallError,
   type ToolCallWithCall
 } from '@/schemas/tools'
 import type { ToolDialect } from '@/schemas/completion-stream'
@@ -28,6 +29,9 @@ export const completionStatsSchema = z.object({
     .number()
     .optional()
     .describe('MTP draft tokens proposed for this request. Zero when MTP is inactive.'),
+  // Prompt renders that provably left the request's tool definitions out.
+  // Non-zero means the model never saw them; 0 is not proof it saw them all.
+  toolDefinitionsDropped: z.number().optional(),
   backendDevice: z.enum(['cpu', 'gpu']).optional()
 })
 
@@ -138,6 +142,13 @@ export type CompletionFinal = {
   contentText: string
   thinkingText?: string
   toolCalls: ToolCallWithCall[]
+  /**
+   * Tool-call regions the model emitted that could not be turned into a
+   * `toolCalls` entry — malformed markup, arguments failing the tool's
+   * schema, or a call to an undeclared tool. Omitted when there were none.
+   * Lets a caller tell "the model made a mistake" from "no tool was called".
+   */
+  toolErrors?: ToolCallError[]
   stats?: CompletionStats
   stopReason?: StopReason
   raw: {
