@@ -80,7 +80,10 @@ Present, in the same order, in essentially every addon:
 - C++20 block (`CMAKE_CXX_STANDARD 20`, `EXTENSIONS OFF`, `PIC ON`).
 - `WIN32` → `-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI`.
 - `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS …)`.
-- Linux `-Wl,--exclude-libs,ALL` symbol hygiene.
+- ELF symbol hygiene: Linux `-Wl,--exclude-libs,ALL`, plus a version script
+  narrowing the module's exports to the bare entry points
+  (`cmake/qvac-addon/addon-symbols.map`, generalizing what `asr-ggml` applies by
+  hand).
 - `JS_LOGGER` + `BACKENDS_SUBDIR` compile definitions.
 
 New shared blocks introduced by the fabric form (also extract):
@@ -125,6 +128,8 @@ New shared blocks introduced by the fabric form (also extract):
 | Android 16 KB page-size link flags | addon fails to load on Pixel 9-class devices | Applied unconditionally in `qvac_addon_finalize` |
 | Apple `compiler-rt` `force_load` (Xcode 16 `__isPlatformVersionAtLeast`) | module aborts at first `@available` call | Applied unconditionally in `qvac_addon_finalize` |
 | lint-cpp `.valgrind.supp` / pre-commit hook | inconsistent local dev hooks | Opt-in flags on `qvac_addon_project_setup` |
+| Fabric's C++ runtime actually reaching the module | `-nostdlib++` links fine, the module loads, and typed `catch` silently stops matching anything that crossed the fabric boundary — a package-level `"Unknown error"` with no build or load diagnostic | `qvac_addon_finalize` runs `assert-fabric-cxx-runtime.cmake` on the built ELF, which reads the node to require out of the fabric module on the link line and fails the build if that fabric exports no version node, or if the module imports its runtime unpinned or not at all |
+| Module exports beyond the bare entry points | co-loaded addons can interpose each other's typeinfo and `inference-addon-cpp` statics under an `RTLD_GLOBAL` host | `addon-symbols.map` applied to every ELF module by `qvac_addon_finalize` |
 
 > **The Android page-size and Apple `compiler-rt` fixes are folded into
 > `qvac_addon_finalize` unconditionally** to normalize the drift: every migrated
@@ -173,7 +178,7 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
 - `qvac_addon_link_fabric(<addon_target> <fabric_target>)` — the two-target link
   split (`qvac-fabric::headers` on the lib, `${fabric_target}_module` on the
   module), plus `qvac_addon_import_fabric_cxx_runtime` on the module.
-- `qvac_addon_import_fabric_cxx_runtime(<target>)` — Linux only: link `<target>`
+- `qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)` — Linux only: link `<target>`
   with `-nostdlib++` so libc++ / libc++abi come from fabric rather than a second
   static copy. Two copies means two `std::exception` typeinfos, and RTTI matches
   by address, so an addon could not `catch` what fabric threw. Fabric exports the
