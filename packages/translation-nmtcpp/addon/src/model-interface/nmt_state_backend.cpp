@@ -2,9 +2,9 @@
 #include "nmt_state_backend.hpp"
 
 #include <algorithm>
-#include <functional>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -342,7 +342,9 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
       params.use_gpu,
       params.gpu_backend,
       params.gpu_device,
-      "nmt_backend_init_gpu", params.main_gpu, params.legacy_gpu_selection);
+      "nmt_backend_init_gpu",
+      params.main_gpu,
+      params.legacy_gpu_selection);
 
   if (dev == nullptr) {
     QLOG(

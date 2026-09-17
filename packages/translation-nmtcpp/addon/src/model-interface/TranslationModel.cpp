@@ -10,12 +10,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
-#include <inference-addon-cpp/Errors.hpp>
+
 #include <ggml-backend.h>
+#include <inference-addon-cpp/Errors.hpp>
 
-
-#include "nmt_utils.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "nmt_utils.hpp"
 
 namespace qvac_lib_inference_addon_nmt {
 
@@ -662,7 +662,12 @@ void TranslationModel::
   const auto selector = canonical != config.end() ? canonical : alias;
   if (selector != config.end()) {
     for (const auto* legacy :
-         {"gpu_backend", "gpuBackend", "gpubackend", "gpu_device", "gpuDevice", "gpudevice"}) {
+         {"gpu_backend",
+          "gpuBackend",
+          "gpubackend",
+          "gpu_device",
+          "gpuDevice",
+          "gpudevice"}) {
       if (config.contains(legacy)) {
         throw std::invalid_argument(
             "main-gpu cannot be combined with legacy GPU selectors");
@@ -670,9 +675,10 @@ void TranslationModel::
     }
     if (const auto* asString = std::get_if<std::string>(&selector->second)) {
       std::string normalized = *asString;
-      std::ranges::transform(normalized, normalized.begin(), [](unsigned char chr) {
-        return static_cast<char>(std::tolower(chr));
-      });
+      std::ranges::transform(
+          normalized, normalized.begin(), [](unsigned char chr) {
+            return static_cast<char>(std::tolower(chr));
+          });
       if (normalized == "dedicated" || normalized == "integrated") {
         mainGpu = normalized;
       } else {
@@ -681,13 +687,15 @@ void TranslationModel::
         if (begin != end && *begin == '+') {
           ++begin;
           if (begin == end || *begin < '0' || *begin > '9') {
-            throw std::invalid_argument("main-gpu must be a signed 32-bit integer, dedicated or integrated");
+            throw std::invalid_argument("main-gpu must be a signed 32-bit "
+                                        "integer, dedicated or integrated");
           }
         }
         int32_t index = 0;
         const auto parsed = std::from_chars(begin, end, index);
         if (parsed.ec != std::errc{} || parsed.ptr != end) {
-          throw std::invalid_argument("main-gpu must be a signed 32-bit integer, dedicated or integrated");
+          throw std::invalid_argument("main-gpu must be a signed 32-bit "
+                                      "integer, dedicated or integrated");
         }
         mainGpu = static_cast<int64_t>(index);
       }
@@ -699,8 +707,8 @@ void TranslationModel::
               : std::get<double>(selector->second);
       if (!std::isfinite(value) || value < -2147483648.0 || value > maxIndex ||
           std::floor(value) != value) {
-        throw std::invalid_argument(
-            "main-gpu must be a signed 32-bit integer, dedicated or integrated");
+        throw std::invalid_argument("main-gpu must be a signed 32-bit integer, "
+                                    "dedicated or integrated");
       }
       mainGpu = static_cast<int64_t>(value);
     }

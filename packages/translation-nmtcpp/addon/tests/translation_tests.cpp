@@ -72,15 +72,20 @@ TEST(NmtMainGpuConfigTest, ValidatesNativeConfigBeforeLoading) {
   EXPECT_NO_THROW(model.setConfig({{"main-gpu", std::string{"-1"}}}));
   EXPECT_NO_THROW(model.setConfig({{"main-gpu", std::string{"+2"}}}));
   EXPECT_NO_THROW(model.setConfig({{"main-gpu", std::string{"INTEGRATED"}}}));
-  EXPECT_THROW(model.setConfig({{"main-gpu", std::string{"2junk"}}}), std::invalid_argument);
-  EXPECT_THROW(model.setConfig({{"main-gpu", std::string{"2147483648"}}}), std::invalid_argument);
+  EXPECT_THROW(
+      model.setConfig({{"main-gpu", std::string{"2junk"}}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      model.setConfig({{"main-gpu", std::string{"2147483648"}}}),
+      std::invalid_argument);
   EXPECT_THROW(model.setConfig({{"main-gpu", 0.5}}), std::invalid_argument);
-  EXPECT_THROW(model.setConfig({{"main-gpu", std::string{"vulkan"}}}),
-               std::invalid_argument);
+  EXPECT_THROW(
+      model.setConfig({{"main-gpu", std::string{"vulkan"}}}),
+      std::invalid_argument);
   EXPECT_THROW(
       model.setConfig({{"main-gpu", int64_t{0}}, {"main_gpu", int64_t{0}}}),
       std::invalid_argument);
-  for (const auto *legacy :
+  for (const auto* legacy :
        {"gpu_backend", "gpuBackend", "gpu_device", "gpuDevice"}) {
     EXPECT_THROW(
         model.setConfig({{"main-gpu", int64_t{0}}, {legacy, int64_t{0}}}),

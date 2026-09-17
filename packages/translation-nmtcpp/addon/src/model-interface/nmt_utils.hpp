@@ -50,7 +50,8 @@ struct NmtBackendInterface {
 // eligible family inventory, which lists dedicated GPUs before integrated ones.
 // mainGpu overrides legacy selectors and addresses a raw registry index or GPU
 // class. legacyGpuSelection preserves backend-first ordering for explicitly
-// supplied legacy ordinals; automatic selection prefers dedicated GPUs globally.
+// supplied legacy ordinals; automatic selection prefers dedicated GPUs
+// globally.
 //
 // `logPrefix` is used only for diagnostic WARN/DEBUG messages so each caller
 // can be identified in logcat (e.g. "[nmt_backend_init_gpu]" vs

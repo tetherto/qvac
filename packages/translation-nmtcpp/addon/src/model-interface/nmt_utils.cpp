@@ -259,15 +259,22 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   constexpr bool allowDefaultOpenCl = false;
 #endif
   return nmtSelectGpuDevice(
-      backend, useGpu, gpuBackend, gpuDevice, logPrefix, allowDefaultOpenCl,
-      mainGpu, legacyGpuSelection);
+      backend,
+      useGpu,
+      gpuBackend,
+      gpuDevice,
+      logPrefix,
+      allowDefaultOpenCl,
+      mainGpu,
+      legacyGpuSelection);
 }
 
 ggml_backend_dev_t
 nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     const NmtBackendInterface& backend, bool useGpu,
     const std::string& gpuBackend, int gpuDevice, const char* logPrefix,
-    bool allowDefaultOpenCl, const NmtMainGpu& mainGpu, bool legacyGpuSelection) {
+    bool allowDefaultOpenCl, const NmtMainGpu& mainGpu,
+    bool legacyGpuSelection) {
   if (!useGpu) {
     return nullptr;
   }
@@ -284,12 +291,14 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
           return target;
         }
       }
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-           "main-gpu registry device is ineligible; falling back to CPU");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "main-gpu registry device is ineligible; falling back to CPU");
       return nullptr;
     }
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-         "main-gpu registry index is out of range; using automatic selection");
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "main-gpu registry index is out of range; using automatic selection");
   }
   const bool hasMainGpu = !std::holds_alternative<std::monostate>(mainGpu);
   // A canonical selector must not inherit a stale legacy filter from an
