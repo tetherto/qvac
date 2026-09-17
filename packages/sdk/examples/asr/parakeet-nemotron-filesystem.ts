@@ -1,3 +1,16 @@
+/**
+ * Parakeet Nemotron transcription from an audio file.
+ *
+ * Usage:
+ *   bun run examples/asr/parakeet-nemotron-filesystem.ts \
+ *     <audio-file> [locale] [nemotron-gguf] [--streaming]
+ *   bun run examples/asr/parakeet-nemotron-filesystem.ts \
+ *     <audio-file> [nemotron-gguf] [--streaming]
+ *
+ * Uses `PARAKEET_NEMOTRON_0_6B_Q4_0` when the model is omitted and `auto` when
+ * the locale is omitted. Pass `--streaming` to stream decoded 16 kHz mono PCM;
+ * otherwise, the input is transcribed in batch mode.
+ */
 import {
   loadModel,
   PARAKEET_NEMOTRON_0_6B_Q4_0,
@@ -28,7 +41,12 @@ type Decoder = ChildProcessByStdio<null, Readable, null>
 function parseArguments(args: string[]) {
   const streaming = args.includes(STREAMING_FLAG)
   const positional = args.filter((argument) => argument !== STREAMING_FLAG)
-  const [audioFilePath, locale = DEFAULT_LOCALE, modelSource] = positional
+  const [audioFilePath, second, third] = positional
+  const secondIsModel =
+    second !== undefined &&
+    (second.endsWith('.gguf') || second.includes('/') || second.includes('\\'))
+  const locale = secondIsModel ? DEFAULT_LOCALE : (second ?? DEFAULT_LOCALE)
+  const modelSource = secondIsModel ? second : third
 
   return { audioFilePath, locale, modelSource, streaming }
 }
