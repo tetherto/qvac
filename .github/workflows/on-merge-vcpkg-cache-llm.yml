@@ -31,6 +31,9 @@ on:
       # until the cron.
       - ".github/workflows/cpp-tests-llm.yml"
       - ".github/actions/vcpkg-toolchain-fingerprint/**"
+      # This job also writes the unit-test model cache, whose key hashes this
+      # script. Without it that entry never refreshes when the model set changes.
+      - "packages/llm-llamacpp/scripts/download-unit-test-models.js"
   schedule:
     # Every 2 days, not weekly. The self-hosted cache server prunes an entry when
     # it has gone CACHE_CLEANUP_OLDER_THAN_DAYS=5 days without an upload AND

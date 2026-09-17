@@ -75,9 +75,53 @@ export const generationParamsSchema = z
       .optional()
       .describe(
         'When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.'
+      ),
+    tool_choice: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.'
       )
   })
   .strict()
+
+const TOOL_CHOICE_MODES = new Set(['auto', 'none', 'required'])
+
+/**
+ * Whether a `tool_choice` demands a tool call (`required` or a named tool),
+ * as opposed to `auto` / `none`, which only shape how the model may call one.
+ */
+export function toolChoiceDemandsCall(toolChoice: string | undefined): boolean {
+  return toolChoice !== undefined && toolChoice !== 'auto' && toolChoice !== 'none'
+}
+
+export function refineToolChoiceMatchesTools(
+  data: {
+    tools?: { type: 'function'; name: string }[] | undefined
+    generationParams?: { tool_choice?: string | undefined } | undefined
+  },
+  ctx: z.RefinementCtx
+): void {
+  const toolChoice = data.generationParams?.tool_choice
+  if (toolChoice === undefined || TOOL_CHOICE_MODES.has(toolChoice)) {
+    if (toolChoice === 'required' && !(data.tools && data.tools.length > 0)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'generationParams.tool_choice "required" needs at least one tool.',
+        path: ['generationParams', 'tool_choice']
+      })
+    }
+    return
+  }
+  if (!data.tools?.some((tool) => tool.name === toolChoice)) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `generationParams.tool_choice names "${toolChoice}", which is not one of the declared tools.`,
+      path: ['generationParams', 'tool_choice']
+    })
+  }
+}
 
 const jsonSchemaObjectSchema = z.record(z.string(), z.unknown())
 
@@ -202,15 +246,16 @@ function refineNoToolsWithStructuredOutput(
   }
 }
 
-export const completionClientParamsSchema = completionClientParamsBaseSchema.superRefine(
-  refineNoToolsWithStructuredOutput
-)
+export const completionClientParamsSchema = completionClientParamsBaseSchema
+  .superRefine(refineNoToolsWithStructuredOutput)
+  .superRefine(refineToolChoiceMatchesTools)
 
 export const completionStreamRequestSchema = completionClientParamsBaseSchema
   .extend({
     type: z.literal('completionStream')
   })
   .superRefine(refineNoToolsWithStructuredOutput)
+  .superRefine(refineToolChoiceMatchesTools)
 
 export const completionStreamResponseSchema = z
   .object({
@@ -241,6 +286,7 @@ export const completionOrchestrateRequestSchema = completionClientParamsBaseSche
       )
   })
   .superRefine(refineNoToolsWithStructuredOutput)
+  .superRefine(refineToolChoiceMatchesTools)
 
 /**
  * Downstream frame of the orchestrated completion duplex stream. Exactly one

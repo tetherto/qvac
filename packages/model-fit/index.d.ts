@@ -232,9 +232,9 @@ export declare const FIT_STATUS: Readonly<{
  * which simulates allocations (no weights are loaded) to project whether the
  * model fits available device memory and, if so, with which offload plan.
  *
- * This is a synchronous, blocking in-process native call. Callers that need
- * isolation should use `@qvac/model-fit/process` to run it in a disposable
- * Bare subprocess.
+ * This is a synchronous, blocking in-process native call; `fitParamsAsync`
+ * runs the same fit on a worker thread. Callers that need isolation should use
+ * `@qvac/model-fit/process` to run it in a disposable Bare subprocess.
  *
  * Calls are serialised process-wide: `common_fit_params` mutates global llama
  * logger state and is not thread safe, so concurrent callers block instead of
@@ -248,3 +248,9 @@ export declare const FIT_STATUS: Readonly<{
  * it must be an application-controlled location — never remote or user input.
  */
 export declare function fitParams(config: FitConfig): FitResult;
+/**
+ * `fitParams` on a worker thread: same config, validation and result, without
+ * blocking the JS loop. Validation failures reject. Fits stay serialised
+ * process-wide.
+ */
+export declare function fitParamsAsync(config: FitConfig): Promise<FitResult>;

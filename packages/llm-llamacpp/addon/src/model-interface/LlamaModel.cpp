@@ -203,6 +203,14 @@ void LlamaModel::init(bool acquireLock) {
   snap->normalizedFitSnapshot_ = normalized.fitSnapshot;
   runtimeBackendDevice_ = normalized.runtimeBackendDevice;
   common_params params = std::move(normalized.params);
+  const bool isStreaming = snap->asyncWeightsLoader_.isStreaming();
+
+  // Match llama-server for every on-disk GGUF. llama_model_load_from_file
+  // discovers the remaining split files from shard 0, while
+  // common_init_from_params runs fabric's automatic fit before loading.
+  if (!isStreaming && !snap->shards_.gguf_files.empty()) {
+    params.model.path = snap->shards_.gguf_files.front();
+  }
 
   const std::string errorWhenFailed = toString(UnableToLoadModel);
   auto streamedFiles =
@@ -210,15 +218,20 @@ void LlamaModel::init(bool acquireLock) {
 
   snap.demoteToRead();
 
-  common_init_result_ptr llamaInit = initFromConfig(
-      params,
-      modelPath,
-      streamedFiles,
-      snap->shards_,
-      loadingContext_,
-      snap->asyncWeightsLoader_.isStreaming(),
-      ADDON_ID,
-      errorWhenFailed);
+  common_init_result_ptr llamaInit;
+  if (isStreaming) {
+    llamaInit = initFromConfig(
+        params,
+        modelPath,
+        streamedFiles,
+        snap->shards_,
+        loadingContext_,
+        true,
+        ADDON_ID,
+        errorWhenFailed);
+  } else {
+    llamaInit = common_init_from_params(params);
+  }
 
   if (!snap.promoteToWrite()) {
     return;

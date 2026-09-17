@@ -5,6 +5,7 @@ import { handleUnloadModel } from '@/handlers/unload-model'
 import { handleLoggingStream } from '@/handlers/logging-stream'
 import { cancelHandler } from '@/handlers/cancelHandler'
 import { handleRag } from '@/rag/handler'
+import { handleVectorIndex } from '@/handlers/vector-index'
 import { handleDeleteCache } from '@/handlers/delete-cache'
 import { handleDownloadAsset } from '@/handlers/download-asset'
 import { handleGetModelInfo } from '@/handlers/get-model-info'
@@ -90,6 +91,7 @@ export const registry: Record<string, HandlerEntry> = {
   },
   downloadAsset: { type: 'reply', handler: handleDownloadAsset, supportsProgress: true },
   rag: { type: 'reply', handler: handleRag, supportsProgress: ragSupportsProgress },
+  vectorIndex: { type: 'reply', handler: handleVectorIndex },
   finetune: { type: 'reply', handler: handleFinetune, supportsProgress: finetuneSupportsProgress },
 
   // Stream
@@ -113,6 +115,8 @@ export const registry: Record<string, HandlerEntry> = {
   ocrStream: { type: 'stream', pluginOp: true, handler: pluginStream('ocrStream') },
   diffusionStream: { type: 'stream', pluginOp: true, handler: pluginStream('diffusionStream') },
   audioGenStream: { type: 'stream', pluginOp: true, handler: pluginStream('audioGenStream') },
+  audioEditStream: { type: 'stream', pluginOp: true, handler: pluginStream('audioEditStream') },
+  audioUnderstand: { type: 'stream', pluginOp: true, handler: pluginStream('audioUnderstand') },
   videoStream: { type: 'stream', pluginOp: true, handler: pluginStream('videoStream') },
   upscaleStream: { type: 'stream', pluginOp: true, handler: pluginStream('upscaleStream') },
   worldStepStream: { type: 'stream', pluginOp: true, handler: pluginStream('worldStepStream') },

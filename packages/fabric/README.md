@@ -60,8 +60,15 @@ consumer guide.
   only to register the `.bare` with the bare runtime before resolving their own
   addon (see INTEGRATION.md Step 5). All inference happens through the consumer's
   own C++ code against the shipped headers.
-- **Backends** — ggml compute backends resolve their `ggml_*` references against
-  the single loaded `qvac__fabric@0.bare`.
+- **One C++ runtime (Linux)** — the module embeds libc++ and exports the Itanium
+  C++ ABI under the ELF version node `QVAC_FABRIC_ABI_1`. Consumer addons link
+  with `-nostdlib++` and record a `DT_VERNEED` on that node, which is what keeps
+  their `__cxa_*` / typeinfo references from binding to the GNU `libstdc++.so.6`
+  that the `bare` executable brings into the process' global lookup scope. The
+  node name is part of the ABI: renaming it requires rebuilding every consumer.
+  See `symbols.map` and `arch/qips/linux-fabric-libcxx-ownership.md`.
+- **Backends** — ggml compute backends are self-contained: each links its own
+  ggml statically and imports no `ggml_*` from the module that `dlopen`s it.
 
 ## Build
 
