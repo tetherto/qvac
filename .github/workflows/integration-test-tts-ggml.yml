@@ -27,7 +27,13 @@ jobs:
         run: |
           npm install
           npm install -g --force bare
-          if ! command -v gdb; then sudo apt-get update && sudo apt-get install -y gdb; fi
+          if ! command -v gdb; then
+            mkdir -p "$RUNNER_TEMP/gdb-packages" "$RUNNER_TEMP/gdb"
+            cd "$RUNNER_TEMP/gdb-packages"
+            apt-get download gdb libbabeltrace1 libdebuginfod1t64 libipt2 libsource-highlight4t64 libboost-regex1.83.0 libpython3.12t64
+            for deb in ./*.deb; do dpkg-deb -x "$deb" "$RUNNER_TEMP/gdb"; done
+            echo "$RUNNER_TEMP/gdb/usr/bin" >> "$GITHUB_PATH"
+          fi
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: prebuild-tts-ggml-linux-x64
@@ -55,6 +61,8 @@ jobs:
           set -euo pipefail
           native_bare=$(node -e "const fs=require('fs'),p=require('path');const bin=fs.realpathSync(process.argv[1]);console.log(require(p.resolve(p.dirname(bin),'..'))(bin))" "$(command -v bare)")
           file "$native_bare"
+          export LD_LIBRARY_PATH="$RUNNER_TEMP/gdb/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+          gdb --version
           for variant in current previous; do
             rm -rf prebuilds/linux-x64
             mkdir -p prebuilds
