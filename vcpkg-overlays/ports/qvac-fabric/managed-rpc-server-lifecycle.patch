@@ -1,0 +1,195 @@
+diff --git a/ggml/include/ggml-rpc.h b/ggml/include/ggml-rpc.h
+index 820abad14..084b68003 100644
+--- a/ggml/include/ggml-rpc.h
++++ b/ggml/include/ggml-rpc.h
+@@ -38 +38,13 @@ GGML_BACKEND_API void ggml_backend_rpc_start_server(const char * endpoint, const
++// Managed server lifecycle for in-process hosts such as mobile Bare apps.
++// create() initializes devices and binds the listening socket synchronously;
++// run() blocks until stop() is requested and must be called from a worker
++// thread. The caller must wait for run() to return before calling free().
++typedef struct ggml_backend_rpc_server * ggml_backend_rpc_server_t;
++GGML_BACKEND_API ggml_backend_rpc_server_t ggml_backend_rpc_server_create(
++        const char * endpoint, const char * cache_dir,
++        size_t n_threads, size_t n_devices, ggml_backend_dev_t * devices);
++GGML_BACKEND_API void ggml_backend_rpc_server_run(ggml_backend_rpc_server_t server);
++GGML_BACKEND_API void ggml_backend_rpc_server_stop(ggml_backend_rpc_server_t server);
++GGML_BACKEND_API void ggml_backend_rpc_server_free(ggml_backend_rpc_server_t server);
++
+ GGML_BACKEND_API ggml_backend_reg_t ggml_backend_rpc_reg(void);
+diff --git a/ggml/src/ggml-rpc/ggml-rpc.cpp b/ggml/src/ggml-rpc/ggml-rpc.cpp
+index 0f7256385..6ab30afdc 100644
+--- a/ggml/src/ggml-rpc/ggml-rpc.cpp
++++ b/ggml/src/ggml-rpc/ggml-rpc.cpp
+@@ -3385,8 +3385,27 @@ static void rpc_serve_client(const std::vector<ggml_backend_t> & backends, const
+-void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir,
+-                                   size_t n_threads, size_t n_devices, ggml_backend_dev_t * devices) {
++struct ggml_backend_rpc_server {
++    std::vector<ggml_backend_t> backends;
++    std::string cache_dir;
++    std::string host;
++    socket_ptr server_socket;
++    socket_ptr client_socket;
++    std::mutex client_mutex;
++    std::atomic<bool> stop_requested{false};
++    std::atomic<bool> running{false};
++
++    ~ggml_backend_rpc_server() {
++        for (auto backend : backends) {
++            ggml_backend_free(backend);
++        }
++    }
++};
++
++ggml_backend_rpc_server_t ggml_backend_rpc_server_create(
++        const char * endpoint, const char * cache_dir,
++        size_t n_threads, size_t n_devices, ggml_backend_dev_t * devices) {
+     if (n_devices == 0 || devices == nullptr) {
+-        fprintf(stderr, "Invalid arguments to ggml_backend_rpc_start_server\n");
+-        return;
++        fprintf(stderr, "Invalid arguments to ggml_backend_rpc_server_create\n");
++        return nullptr;
+     }
+-    std::vector<ggml_backend_t> backends;
++    auto server = std::make_unique<ggml_backend_rpc_server>();
++    server->cache_dir = cache_dir ? cache_dir : "";
+     printf("Starting RPC server v%d.%d.%d\n",
+@@ -3407,5 +3426,5 @@ void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir
+             fprintf(stderr, "Failed to create backend for device %s\n", dev->iface.get_name(dev));
+-            return;
++            return nullptr;
+         }
+-        backends.push_back(backend);
++        server->backends.push_back(backend);
+         ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
+@@ -3420,5 +3439,4 @@ void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir
+-    std::string host;
+     int port;
+-    if (!parse_endpoint(endpoint, host, port)) {
+-        return;
++    if (!parse_endpoint(endpoint, server->host, port)) {
++        return nullptr;
+     }
+@@ -3432,14 +3450,28 @@ void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir
+         fprintf(stderr, "Failed to initialize RPC transport\n");
+-        return;
++        return nullptr;
+     }
+-    auto server_socket = socket_t::create_server(host.c_str(), port);
+-    if (server_socket == nullptr) {
++    server->server_socket = socket_t::create_server(server->host.c_str(), port);
++    if (server->server_socket == nullptr) {
+         fprintf(stderr, "Failed to create server socket\n");
++        return nullptr;
++    }
++    return server.release();
++}
++
++void ggml_backend_rpc_server_run(ggml_backend_rpc_server_t server) {
++    if (server == nullptr || server->running.exchange(true)) {
+         return;
+     }
+-    while (true) {
+-        auto client_socket = server_socket->accept();
++    while (!server->stop_requested.load()) {
++        auto client_socket = server->server_socket->accept(100);
+         if (client_socket == nullptr) {
+-            fprintf(stderr, "Failed to accept client connection\n");
+-            return;
++            continue;
++        }
++        {
++            std::lock_guard<std::mutex> lock(server->client_mutex);
++            if (server->stop_requested.load()) {
++                client_socket->shutdown();
++                break;
++            }
++            server->client_socket = client_socket;
+         }
+@@ -3447,3 +3479,11 @@ void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir
+         fflush(stdout);
+-        rpc_serve_client(backends, cache_dir, host, client_socket);
++        rpc_serve_client(
++            server->backends,
++            server->cache_dir.empty() ? nullptr : server->cache_dir.c_str(),
++            server->host,
++            client_socket);
++        {
++            std::lock_guard<std::mutex> lock(server->client_mutex);
++            server->client_socket.reset();
++        }
+         printf("Client connection closed\n");
+@@ -3451,5 +3491,13 @@ void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir
+     }
+-    rpc_transport_shutdown();
+-    for (auto backend : backends) {
+-        ggml_backend_free(backend);
++    server->running.store(false);
++}
++
++void ggml_backend_rpc_server_stop(ggml_backend_rpc_server_t server) {
++    if (server == nullptr) {
++        return;
++    }
++    server->stop_requested.store(true);
++    std::lock_guard<std::mutex> lock(server->client_mutex);
++    if (server->client_socket != nullptr) {
++        server->client_socket->shutdown();
+     }
+@@ -3458 +3506,16 @@ void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir
++void ggml_backend_rpc_server_free(ggml_backend_rpc_server_t server) {
++    delete server;
++}
++
++void ggml_backend_rpc_start_server(const char * endpoint, const char * cache_dir,
++                                   size_t n_threads, size_t n_devices, ggml_backend_dev_t * devices) {
++    ggml_backend_rpc_server_t server = ggml_backend_rpc_server_create(
++        endpoint, cache_dir, n_threads, n_devices, devices);
++    if (server == nullptr) {
++        return;
++    }
++    ggml_backend_rpc_server_run(server);
++    ggml_backend_rpc_server_free(server);
++}
++
+ static const char * ggml_backend_rpc_device_get_name(ggml_backend_dev_t dev) {
+@@ -3844,2 +3907,14 @@ static void * ggml_backend_rpc_get_proc_address(ggml_backend_reg_t reg, const ch
+     }
++    if (std::strcmp(name, "ggml_backend_rpc_server_create") == 0) {
++        return (void *)ggml_backend_rpc_server_create;
++    }
++    if (std::strcmp(name, "ggml_backend_rpc_server_run") == 0) {
++        return (void *)ggml_backend_rpc_server_run;
++    }
++    if (std::strcmp(name, "ggml_backend_rpc_server_stop") == 0) {
++        return (void *)ggml_backend_rpc_server_stop;
++    }
++    if (std::strcmp(name, "ggml_backend_rpc_server_free") == 0) {
++        return (void *)ggml_backend_rpc_server_free;
++    }
+     if (std::strcmp(name, "ggml_backend_comm_init") == 0) {
+diff --git a/ggml/src/ggml-rpc/transport.cpp b/ggml/src/ggml-rpc/transport.cpp
+index c23ea84b0..cfc9cdf3d 100644
+--- a/ggml/src/ggml-rpc/transport.cpp
++++ b/ggml/src/ggml-rpc/transport.cpp
+@@ -616 +616,13 @@ bool socket_t::set_timeout(int timeout_ms) {
++void socket_t::shutdown() {
++#ifdef _WIN32
++    if (pimpl->fd != INVALID_SOCKET) {
++        ::shutdown(pimpl->fd, SD_BOTH);
++    }
++#else
++    if (pimpl->fd >= 0) {
++        ::shutdown(pimpl->fd, SHUT_RDWR);
++    }
++#endif
++}
++
+ void socket_t::get_caps(uint8_t * local_caps) {
+diff --git a/ggml/src/ggml-rpc/transport.h b/ggml/src/ggml-rpc/transport.h
+index 2664f0acf..8e4bb8151 100644
+--- a/ggml/src/ggml-rpc/transport.h
++++ b/ggml/src/ggml-rpc/transport.h
+@@ -18,2 +18,3 @@ struct socket_t {
+     bool exchange_data(const void * send_data, void * recv_data, size_t size);
++    void shutdown();
+     bool set_timeout(int timeout_ms);
