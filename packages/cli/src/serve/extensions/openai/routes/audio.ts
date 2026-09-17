@@ -395,7 +395,6 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName, reply)
 
       const sdkModelId = registryEntry.sdkModelId ?? registryEntry.id
-      const sampleRate = resolveSampleRate(registryEntry.config)
       const ignoredParams: string[] = []
       for (const key of SPEECH_UNSUPPORTED_PARAMS) {
         if ((body as Record<string, unknown>)[key] !== undefined) ignoredParams.push(key)
@@ -412,10 +411,18 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         inputType: 'text',
         stream: true
       })
+      // A client that disconnects mid-synthesis should stop the engine, not
+      // just stop receiving — same binding completions and transcriptions use.
+      req.bindCancel(result.requestId)
 
       const samples: number[] = []
       for await (const sample of result.bufferStream) samples.push(sample)
       await result.done
+
+      // The engine reports the rate it actually emitted. Fall back to the
+      // config heuristic only when the run produced no audio, since that
+      // table cannot know about `outputSampleRate` or the LavaSR enhancer.
+      const sampleRate = (await result.sampleRate) ?? resolveSampleRate(registryEntry.config)
 
       if (samples.length === 0) {
         ctx.logger.warn(`  speech empty model=${alias} voice=${voice} chars=${input.length}`)

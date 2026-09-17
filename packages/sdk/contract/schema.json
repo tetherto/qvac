@@ -11,7 +11,13 @@
           "$ref": "#/$defs/assessModelFit.request"
         },
         {
+          "$ref": "#/$defs/audioEditStream.request"
+        },
+        {
           "$ref": "#/$defs/audioGenStream.request"
+        },
+        {
+          "$ref": "#/$defs/audioUnderstand.request"
         },
         {
           "$ref": "#/$defs/batchCompletionStream.request"
@@ -119,6 +125,9 @@
           "$ref": "#/$defs/upscaleStream.request"
         },
         {
+          "$ref": "#/$defs/vectorIndex.request"
+        },
+        {
           "$ref": "#/$defs/videoStream.request"
         },
         {
@@ -137,7 +146,13 @@
           "$ref": "#/$defs/assessModelFit.response"
         },
         {
+          "$ref": "#/$defs/audioEditStream.response"
+        },
+        {
           "$ref": "#/$defs/audioGenStream.response"
+        },
+        {
+          "$ref": "#/$defs/audioUnderstand.response"
         },
         {
           "$ref": "#/$defs/batchCompletionStream.response"
@@ -255,6 +270,9 @@
         },
         {
           "$ref": "#/$defs/upscaleStream.response"
+        },
+        {
+          "$ref": "#/$defs/vectorIndex.response"
         },
         {
           "$ref": "#/$defs/videoStream.response"
@@ -410,6 +428,12 @@
           "description": "The declared execution mode this result assumed.",
           "title": "AssessModelFitResponseExecution"
         },
+        "evidence": {
+          "description": "The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.",
+          "type": "string",
+          "enum": ["calibration", "computed-only"],
+          "title": "AssessModelFitResponseEvidence"
+        },
         "budget": {
           "description": "Absent when memory evidence was unusable.",
           "type": "object",
@@ -446,7 +470,7 @@
           "title": "AssessModelFitResponseBudget"
         },
         "estimate": {
-          "description": "Absent when the combined verdict is `unknown`.",
+          "description": "Combined two-sided bound. Absent when the combined verdict is `unknown` for want of evidence, and under computed-only evidence, which has no upper bound.",
           "type": "object",
           "properties": {
             "lowerBoundBytes": {
@@ -459,6 +483,10 @@
           "required": ["lowerBoundBytes", "upperBoundBytes"],
           "additionalProperties": false,
           "title": "AssessModelFitResponseEstimate"
+        },
+        "floorBytes": {
+          "description": "Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.",
+          "type": "number"
         },
         "models": {
           "type": "array",
@@ -474,8 +502,14 @@
                 "enum": ["likely-fits", "likely-too-large", "unknown"],
                 "title": "AssessModelFitResponseModelsItemVerdict"
               },
+              "evidence": {
+                "description": "What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
+                "type": "string",
+                "enum": ["calibration", "computed-only"],
+                "title": "AssessModelFitResponseModelsItemEvidence"
+              },
               "estimate": {
-                "description": "Absent when this model assessed as `unknown`.",
+                "description": "Two-sided bound from calibrated coefficients. Absent under computed-only evidence, or when this model assessed as `unknown` for want of any evidence.",
                 "type": "object",
                 "properties": {
                   "lowerBoundBytes": {
@@ -489,8 +523,12 @@
                 "additionalProperties": false,
                 "title": "AssessModelFitResponseModelsItemEstimate"
               },
+              "floorBytes": {
+                "description": "Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.",
+                "type": "number"
+              },
               "estimatorVersion": {
-                "description": "Estimator that produced the bounds, e.g. `llm-v1`.",
+                "description": "Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
                 "type": "string"
               },
               "reasons": {
@@ -529,6 +567,418 @@
       "required": ["verdict", "basis", "execution", "models", "reasons", "assumptions", "type"],
       "additionalProperties": false
     },
+    "audioEditStream.request": {
+      "title": "AudioEditStreamRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operations": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "flow-edit"
+                  },
+                  "from": {
+                    "type": "object",
+                    "properties": {
+                      "caption": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "lyrics": {
+                        "description": "Lyrics for this prompt; omit for `[Instrumental]`.",
+                        "type": "string"
+                      }
+                    },
+                    "required": ["caption"],
+                    "additionalProperties": false,
+                    "description": "Description of the unedited source audio.",
+                    "title": "AudioEditStreamRequestOperationsItemFlowEditFrom"
+                  },
+                  "to": {
+                    "type": "object",
+                    "properties": {
+                      "caption": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "lyrics": {
+                        "description": "Lyrics for this prompt; omit for `[Instrumental]`.",
+                        "type": "string"
+                      }
+                    },
+                    "required": ["caption"],
+                    "additionalProperties": false,
+                    "description": "Description of the desired audio.",
+                    "title": "AudioEditStreamRequestOperationsItemFlowEditTo"
+                  },
+                  "nMin": {
+                    "description": "Start of the Flow-Edit diffusion window (0..1, default 0).",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "nMax": {
+                    "description": "End of the Flow-Edit diffusion window (0..1, default 1).",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "nAvg": {
+                    "description": "Forward-noise samples averaged per active step (default 1).",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": ["type", "from", "to"],
+                "additionalProperties": false,
+                "title": "AudioEditStreamRequestOperationsItemFlowEdit"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "repaint"
+                  },
+                  "caption": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "lyrics": {
+                    "description": "Lyrics for the repainted region; omit for `[Instrumental]`.",
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Region start in seconds; must lie inside the source recording."
+                  },
+                  "end": {
+                    "description": "Region end in seconds; omit to repaint through the end of the source. The range must span at least one latent frame (1/25 s).",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "mode": {
+                    "description": "Preservation mode outside the repainted region (default balanced).",
+                    "type": "string",
+                    "enum": ["conservative", "balanced", "aggressive"],
+                    "title": "AudioEditStreamRequestOperationsItemRepaintMode"
+                  },
+                  "strength": {
+                    "description": "Balanced-mode preservation strength (0..1, default 0.5).",
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": ["type", "caption", "start"],
+                "additionalProperties": false,
+                "title": "AudioEditStreamRequestOperationsItemRepaint"
+              }
+            ]
+          },
+          "description": "Ordered edit pipeline: operations run in array order and may repeat or mix. Flow-Edit is supported on turbo DiT variants only."
+        },
+        "seed": {
+          "description": "Seeds the first operation; each following operation uses seed + its index.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "sourceAudio": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioEditStreamRequestSourceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioEditStreamRequestSourceAudioFilePath"
+            }
+          ],
+          "description": "Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1]."
+        },
+        "type": {
+          "type": "string",
+          "const": "audioEditStream"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["modelId", "operations", "sourceAudio", "type"],
+      "additionalProperties": false
+    },
+    "audioEditStream.response": {
+      "title": "AudioEditStreamResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "audioEditStream"
+        },
+        "progress": {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "total": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value."
+            }
+          },
+          "required": ["stage", "step", "total"],
+          "additionalProperties": false,
+          "title": "AudioEditStreamResponseProgress"
+        },
+        "data": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sampleRate": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "channels": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bitsPerSample": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "done": {
+          "default": false,
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "AudioEditStreamResponseStopReason"
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "audioDurationMs": {
+              "type": "number"
+            },
+            "totalTimeMs": {
+              "type": "number"
+            },
+            "realTimeFactor": {
+              "type": "number"
+            },
+            "backendDevice": {
+              "type": "number"
+            },
+            "backendId": {
+              "type": "number"
+            },
+            "lyricsScore": {
+              "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+              "type": "number"
+            },
+            "lrc": {
+              "description": "LRC-formatted lyric timestamps. Present only when the run set `generateLrc`.",
+              "type": "string"
+            },
+            "qualityScore": {
+              "description": "Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+              "type": "number"
+            },
+            "understand": {
+              "description": "The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string"
+                },
+                "bpm": {
+                  "type": "number"
+                },
+                "duration": {
+                  "type": "number",
+                  "description": "LM estimate in seconds. The recovered codes fix the true length."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "timesignature": {
+                  "type": "string"
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "audioCodes": {
+                  "maxItems": 3000,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
+                  "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                }
+              },
+              "required": [
+                "caption",
+                "bpm",
+                "duration",
+                "keyscale",
+                "timesignature",
+                "vocalLanguage",
+                "audioCodes"
+              ],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseStatsUnderstand"
+            }
+          },
+          "additionalProperties": false,
+          "title": "AudioEditStreamResponseStats"
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "AudioEditStreamResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "AudioEditStreamResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "AudioEditStreamResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "AudioEditStreamResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "AudioEditStreamResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "AudioEditStreamResponseDiagnostics"
+        }
+      },
+      "required": ["type", "done"],
+      "additionalProperties": false
+    },
     "audioGenStream.request": {
       "title": "AudioGenStreamRequest",
       "type": "object",
@@ -565,6 +1015,54 @@
         "timesignature": {
           "type": "string",
           "minLength": 1
+        },
+        "augmentCaptionWithMetadata": {
+          "description": "Append BPM/tempo, time signature, and key guidance to the internal conditioning caption while the result metadata keeps the original caption (default: false). ACE-Step only; rejected by MiniMax.",
+          "type": "boolean"
+        },
+        "simpleMode": {
+          "description": "Treat `caption` as a short natural-language query and let the LM compose the full request before synthesis: a detailed caption, lyrics, and any metadata left unset. Options you set are kept. Requires `taskType: 'text2music'` and no `audioCodes`; leave `lyrics` unset for LM-written vocals or pass '[Instrumental]' for an instrumental. Mutually exclusive with `rewriteQuery`. ACE-Step only.",
+          "type": "boolean"
+        },
+        "rewriteQuery": {
+          "description": "Query Rewriting: the LM rewrites `caption` into a detailed musical description before synthesis, preserving the lyric content and filling metadata left unset. Takes caption AND lyrics as input, so real `lyrics` are required ('[Instrumental]' belongs to Simple Mode). Requires `taskType: 'text2music'`; mutually exclusive with `simpleMode`. Faithful rewriting needs the 1.7B LM. ACE-Step only.",
+          "type": "boolean"
+        },
+        "generateLrc": {
+          "description": "Align the lyrics with the generated audio and return karaoke-style LRC text in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`. Needs lyrics to align — pass `lyrics` or let Simple Mode write them; instrumental requests are rejected. Requires `taskType: 'text2music'`. ACE-Step only.",
+          "type": "boolean"
+        },
+        "computeQualityScore": {
+          "description": "Teacher-force the generated audio codes back through the LM and report a weighted [0, 1] match against the request in `stats.qualityScore` (caption/lyrics PMI plus metadata recall). Costs extra LM forwards after code generation; made for ranking a batch of takes. Requires `taskType: 'text2music'`. ACE-Step only.",
+          "type": "boolean"
+        },
+        "normalizeLoudness": {
+          "description": "Percentile loudness normalization on the generated audio (default: true): the 99.999th-percentile sample scales to full scale and the tiny tail above it clips. Set false for the raw engine output. Audio edits are never normalized. ACE-Step only.",
+          "type": "boolean"
+        },
+        "guidanceScale": {
+          "description": "DiT classifier-free guidance scale. 0 (the default) resolves automatically: 1.0 on turbo variants, which disables CFG, and 7.0 on base/sft. Values above 1 run CFG via APG and double the DiT cost per step. ACE-Step only.",
+          "type": "number",
+          "minimum": 0
+        },
+        "track": {
+          "description": "Instrument layer the `lego` task regenerates. Required when `taskType` is 'lego' and rejected otherwise. ACE-Step only.",
+          "type": "string",
+          "enum": [
+            "vocals",
+            "backing_vocals",
+            "drums",
+            "bass",
+            "guitar",
+            "keyboard",
+            "percussion",
+            "strings",
+            "synth",
+            "fx",
+            "brass",
+            "woodwinds"
+          ],
+          "title": "AudioGenStreamRequestTrack"
         },
         "duration": {
           "description": "Approximate requested duration in seconds. Engines round to their frame grid; use output frames or stats.audioDurationMs as authoritative.",
@@ -630,9 +1128,9 @@
           "minimum": 0
         },
         "taskType": {
-          "description": "Generation task: text2music (default) or cover-nofsq (requires sourceAudio).",
+          "description": "Generation task: text2music (default), cover-nofsq (requires sourceAudio), or lego (requires track).",
           "type": "string",
-          "enum": ["text2music", "cover-nofsq"],
+          "enum": ["text2music", "cover-nofsq", "lego"],
           "title": "AudioGenStreamRequestTaskType"
         },
         "audioCoverStrength": {
@@ -646,6 +1144,17 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "audioCodes": {
+          "minItems": 1,
+          "maxItems": 3000,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          },
+          "description": "Frozen ACE-Step semantic codes (int32) to synthesize instead of running the LM, e.g. codes recovered from an earlier run. ACE-Step only; rejected by MiniMax."
         },
         "referenceAudio": {
           "description": "Optional timbre reference audio; omit to keep the engine default.",
@@ -800,6 +1309,64 @@
             },
             "backendId": {
               "type": "number"
+            },
+            "lyricsScore": {
+              "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+              "type": "number"
+            },
+            "lrc": {
+              "description": "LRC-formatted lyric timestamps. Present only when the run set `generateLrc`.",
+              "type": "string"
+            },
+            "qualityScore": {
+              "description": "Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+              "type": "number"
+            },
+            "understand": {
+              "description": "The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string"
+                },
+                "bpm": {
+                  "type": "number"
+                },
+                "duration": {
+                  "type": "number",
+                  "description": "LM estimate in seconds. The recovered codes fix the true length."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "timesignature": {
+                  "type": "string"
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "audioCodes": {
+                  "maxItems": 3000,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
+                  "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                }
+              },
+              "required": [
+                "caption",
+                "bpm",
+                "duration",
+                "keyscale",
+                "timesignature",
+                "vocalLanguage",
+                "audioCodes"
+              ],
+              "additionalProperties": false,
+              "title": "AudioGenStreamResponseStatsUnderstand"
             }
           },
           "additionalProperties": false,
@@ -905,6 +1472,350 @@
       "required": ["type", "done"],
       "additionalProperties": false
     },
+    "audioUnderstand.request": {
+      "title": "AudioUnderstandRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seed": {
+          "description": "RNG seed for the LM decode; omit for a random seed.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "vocalLanguage": {
+          "description": "Language hint (e.g. 'es') forced into the result instead of the LM's guess.",
+          "type": "string",
+          "minLength": 1
+        },
+        "lmTemperature": {
+          "description": "LM sampling temperature (default 0.85).",
+          "type": "number",
+          "minimum": 0
+        },
+        "lmTopP": {
+          "description": "LM nucleus-sampling probability (default 0.9).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lmTopK": {
+          "description": "LM top-k cutoff; 0 disables top-k filtering.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceAudio": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "base64"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioUnderstandRequestSourceAudioBase64"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "filePath"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": ["type", "value"],
+              "title": "AudioUnderstandRequestSourceAudioFilePath"
+            }
+          ],
+          "description": "Recording to analyse: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1]."
+        },
+        "type": {
+          "type": "string",
+          "const": "audioUnderstand"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["modelId", "sourceAudio", "type"],
+      "additionalProperties": false
+    },
+    "audioUnderstand.response": {
+      "title": "AudioUnderstandResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "audioUnderstand"
+        },
+        "progress": {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "total": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Total number of steps when greater than zero. Values less than or equal to zero mean indeterminate progress and must not be rendered as a step / total determinate progress value."
+            }
+          },
+          "required": ["stage", "step", "total"],
+          "additionalProperties": false,
+          "title": "AudioUnderstandResponseProgress"
+        },
+        "understand": {
+          "type": "object",
+          "properties": {
+            "caption": {
+              "type": "string"
+            },
+            "bpm": {
+              "type": "number"
+            },
+            "duration": {
+              "type": "number",
+              "description": "LM estimate in seconds. The recovered codes fix the true length."
+            },
+            "keyscale": {
+              "type": "string"
+            },
+            "timesignature": {
+              "type": "string"
+            },
+            "vocalLanguage": {
+              "type": "string"
+            },
+            "audioCodes": {
+              "maxItems": 3000,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
+              },
+              "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+            }
+          },
+          "required": [
+            "caption",
+            "bpm",
+            "duration",
+            "keyscale",
+            "timesignature",
+            "vocalLanguage",
+            "audioCodes"
+          ],
+          "additionalProperties": false,
+          "title": "AudioUnderstandResponseUnderstand"
+        },
+        "done": {
+          "default": false,
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "AudioUnderstandResponseStopReason"
+        },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "audioDurationMs": {
+              "type": "number"
+            },
+            "totalTimeMs": {
+              "type": "number"
+            },
+            "realTimeFactor": {
+              "type": "number"
+            },
+            "backendDevice": {
+              "type": "number"
+            },
+            "backendId": {
+              "type": "number"
+            },
+            "lyricsScore": {
+              "description": "Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.",
+              "type": "number"
+            },
+            "lrc": {
+              "description": "LRC-formatted lyric timestamps. Present only when the run set `generateLrc`.",
+              "type": "string"
+            },
+            "qualityScore": {
+              "description": "Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.",
+              "type": "number"
+            },
+            "understand": {
+              "description": "The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item.",
+              "type": "object",
+              "properties": {
+                "caption": {
+                  "type": "string"
+                },
+                "bpm": {
+                  "type": "number"
+                },
+                "duration": {
+                  "type": "number",
+                  "description": "LM estimate in seconds. The recovered codes fix the true length."
+                },
+                "keyscale": {
+                  "type": "string"
+                },
+                "timesignature": {
+                  "type": "string"
+                },
+                "vocalLanguage": {
+                  "type": "string"
+                },
+                "audioCodes": {
+                  "maxItems": 3000,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
+                  "description": "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+                }
+              },
+              "required": [
+                "caption",
+                "bpm",
+                "duration",
+                "keyscale",
+                "timesignature",
+                "vocalLanguage",
+                "audioCodes"
+              ],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseStatsUnderstand"
+            }
+          },
+          "additionalProperties": false,
+          "title": "AudioUnderstandResponseStats"
+        },
+        "diagnostics": {
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "AudioUnderstandResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "AudioUnderstandResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "AudioUnderstandResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "AudioUnderstandResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "AudioUnderstandResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "AudioUnderstandResponseDiagnostics"
+        }
+      },
+      "required": ["type", "done"],
+      "additionalProperties": false
+    },
     "batchCompletionStream.request": {
       "title": "BatchCompletionStreamRequest",
       "type": "object",
@@ -1003,6 +1914,11 @@
                   "remove_thinking_from_context": {
                     "description": "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.",
                     "type": "boolean"
+                  },
+                  "tool_choice": {
+                    "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "additionalProperties": false,
@@ -1376,6 +2292,9 @@
                           "tokensPerSecond": {
                             "type": "number"
                           },
+                          "promptTokensPerSecond": {
+                            "type": "number"
+                          },
                           "cacheTokens": {
                             "type": "number"
                           },
@@ -1389,6 +2308,9 @@
                             "type": "number"
                           },
                           "avgConcurrentSeq": {
+                            "type": "number"
+                          },
+                          "toolDefinitionsDropped": {
                             "type": "number"
                           },
                           "backendDevice": {
@@ -1498,6 +2420,9 @@
             "tokensPerSecond": {
               "type": "number"
             },
+            "promptTokensPerSecond": {
+              "type": "number"
+            },
             "cacheTokens": {
               "type": "number"
             },
@@ -1511,6 +2436,9 @@
               "type": "number"
             },
             "avgConcurrentSeq": {
+              "type": "number"
+            },
+            "toolDefinitionsDropped": {
               "type": "number"
             },
             "backendDevice": {
@@ -2158,6 +3086,11 @@
             "remove_thinking_from_context": {
               "description": "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.",
               "type": "boolean"
+            },
+            "tool_choice": {
+              "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "type": "string",
+              "minLength": 1
             }
           },
           "additionalProperties": false,
@@ -2442,6 +3375,9 @@
                       "tokensPerSecond": {
                         "type": "number"
                       },
+                      "promptTokensPerSecond": {
+                        "type": "number"
+                      },
                       "cacheTokens": {
                         "type": "number"
                       },
@@ -2455,6 +3391,9 @@
                         "type": "number"
                       },
                       "avgConcurrentSeq": {
+                        "type": "number"
+                      },
+                      "toolDefinitionsDropped": {
                         "type": "number"
                       },
                       "backendDevice": {
@@ -2753,6 +3692,11 @@
             "remove_thinking_from_context": {
               "description": "When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.",
               "type": "boolean"
+            },
+            "tool_choice": {
+              "description": "Controls tool calling for a request that declares `tools`, in the OpenAI style. `\"auto\"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `\"required\"` forces a tool call; `\"none\"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `\"required\"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "type": "string",
+              "minLength": 1
             }
           },
           "additionalProperties": false,
@@ -3029,6 +3973,9 @@
                       "tokensPerSecond": {
                         "type": "number"
                       },
+                      "promptTokensPerSecond": {
+                        "type": "number"
+                      },
                       "cacheTokens": {
                         "type": "number"
                       },
@@ -3042,6 +3989,9 @@
                         "type": "number"
                       },
                       "avgConcurrentSeq": {
+                        "type": "number"
+                      },
+                      "toolDefinitionsDropped": {
                         "type": "number"
                       },
                       "backendDevice": {
@@ -3141,17 +4091,61 @@
       "required": ["type", "events"],
       "additionalProperties": false
     },
+    "constants.AudioGenEditOperation": {
+      "title": "AudioGenEditOperation",
+      "type": "string",
+      "enum": ["flow-edit", "repaint"],
+      "x-enum-varnames": ["FLOW_EDIT", "REPAINT"]
+    },
     "constants.AudioGenEngine": {
       "title": "AudioGenEngine",
       "type": "string",
       "enum": ["acestep", "minimax"],
       "x-enum-varnames": ["ACESTEP", "MINIMAX"]
     },
+    "constants.AudioGenRepaintMode": {
+      "title": "AudioGenRepaintMode",
+      "type": "string",
+      "enum": ["conservative", "balanced", "aggressive"],
+      "x-enum-varnames": ["CONSERVATIVE", "BALANCED", "AGGRESSIVE"]
+    },
     "constants.AudioGenTaskType": {
       "title": "AudioGenTaskType",
       "type": "string",
-      "enum": ["text2music", "cover-nofsq"],
-      "x-enum-varnames": ["TEXT2MUSIC", "COVER_NOFSQ"]
+      "enum": ["text2music", "cover-nofsq", "lego"],
+      "x-enum-varnames": ["TEXT2MUSIC", "COVER_NOFSQ", "LEGO"]
+    },
+    "constants.AudioGenTrack": {
+      "title": "AudioGenTrack",
+      "type": "string",
+      "enum": [
+        "vocals",
+        "backing_vocals",
+        "drums",
+        "bass",
+        "guitar",
+        "keyboard",
+        "percussion",
+        "strings",
+        "synth",
+        "fx",
+        "brass",
+        "woodwinds"
+      ],
+      "x-enum-varnames": [
+        "VOCALS",
+        "BACKING_VOCALS",
+        "DRUMS",
+        "BASS",
+        "GUITAR",
+        "KEYBOARD",
+        "PERCUSSION",
+        "STRINGS",
+        "SYNTH",
+        "FX",
+        "BRASS",
+        "WOODWINDS"
+      ]
     },
     "constants.ModelType": {
       "title": "ModelType",
@@ -3223,6 +4217,60 @@
       "enum": [".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac", ".raw"],
       "x-enum-varnames": ["MP3", "M4A", "OGG", "WAV", "FLAC", "AAC", "RAW"]
     },
+    "constants.TtsChatterboxLanguage": {
+      "title": "TtsChatterboxLanguage",
+      "type": "string",
+      "enum": [
+        "en",
+        "es",
+        "fr",
+        "de",
+        "it",
+        "ja",
+        "pt",
+        "nl",
+        "pl",
+        "tr",
+        "sv",
+        "da",
+        "fi",
+        "no",
+        "el",
+        "ms",
+        "sw",
+        "ar",
+        "ko",
+        "he",
+        "ru",
+        "zh",
+        "hi"
+      ],
+      "x-enum-varnames": [
+        "EN",
+        "ES",
+        "FR",
+        "DE",
+        "IT",
+        "JA",
+        "PT",
+        "NL",
+        "PL",
+        "TR",
+        "SV",
+        "DA",
+        "FI",
+        "NO",
+        "EL",
+        "MS",
+        "SW",
+        "AR",
+        "KO",
+        "HE",
+        "RU",
+        "ZH",
+        "HI"
+      ]
+    },
     "constants.TtsCosyvoice3Emotion": {
       "title": "TtsCosyvoice3Emotion",
       "type": "string",
@@ -3283,11 +4331,131 @@
       "enum": ["loud", "soft"],
       "x-enum-varnames": ["LOUD", "SOFT"]
     },
+    "constants.TtsEngine": {
+      "title": "TtsEngine",
+      "type": "string",
+      "enum": ["chatterbox", "supertonic", "parler", "cosyvoice3", "audio8"],
+      "x-enum-varnames": ["CHATTERBOX", "SUPERTONIC", "PARLER", "COSYVOICE3", "AUDIO8"]
+    },
     "constants.TtsPace": {
       "title": "TtsPace",
       "type": "string",
       "enum": ["slow", "moderate", "fast"],
       "x-enum-varnames": ["SLOW", "MODERATE", "FAST"]
+    },
+    "constants.TtsParlerEmotion": {
+      "title": "TtsParlerEmotion",
+      "type": "string",
+      "enum": [
+        "command",
+        "anger",
+        "narration",
+        "conversation",
+        "disgust",
+        "fear",
+        "happy",
+        "neutral",
+        "proper noun",
+        "news",
+        "sad",
+        "surprise"
+      ],
+      "x-enum-varnames": [
+        "COMMAND",
+        "ANGER",
+        "NARRATION",
+        "CONVERSATION",
+        "DISGUST",
+        "FEAR",
+        "HAPPY",
+        "NEUTRAL",
+        "PROPER_NOUN",
+        "NEWS",
+        "SAD",
+        "SURPRISE"
+      ]
+    },
+    "constants.TtsSentenceDelimiterPreset": {
+      "title": "TtsSentenceDelimiterPreset",
+      "type": "string",
+      "enum": ["latin", "cjk", "multilingual"],
+      "x-enum-varnames": ["LATIN", "CJK", "MULTILINGUAL"]
+    },
+    "constants.TtsSupertonicLanguage": {
+      "title": "TtsSupertonicLanguage",
+      "type": "string",
+      "enum": [
+        "en",
+        "ko",
+        "ja",
+        "ar",
+        "bg",
+        "cs",
+        "da",
+        "de",
+        "el",
+        "es",
+        "et",
+        "fi",
+        "fr",
+        "hi",
+        "hr",
+        "hu",
+        "id",
+        "it",
+        "lt",
+        "lv",
+        "nl",
+        "pl",
+        "pt",
+        "ro",
+        "ru",
+        "sk",
+        "sl",
+        "sv",
+        "tr",
+        "uk",
+        "vi"
+      ],
+      "x-enum-varnames": [
+        "EN",
+        "KO",
+        "JA",
+        "AR",
+        "BG",
+        "CS",
+        "DA",
+        "DE",
+        "EL",
+        "ES",
+        "ET",
+        "FI",
+        "FR",
+        "HI",
+        "HR",
+        "HU",
+        "ID",
+        "IT",
+        "LT",
+        "LV",
+        "NL",
+        "PL",
+        "PT",
+        "RO",
+        "RU",
+        "SK",
+        "SL",
+        "SV",
+        "TR",
+        "UK",
+        "VI"
+      ]
+    },
+    "constants.VectorIndexStorage": {
+      "title": "VectorIndexStorage",
+      "type": "string",
+      "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+      "x-enum-varnames": ["F32", "Q8", "Q4", "TURBOVEC_Q4", "TURBOVEC_Q2"]
     },
     "constants.Verbosity": {
       "title": "Verbosity",
@@ -3312,6 +4480,21 @@
           },
           "required": ["type", "all"],
           "title": "DeleteCacheAllRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "deleteCache"
+            },
+            "auto": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": ["type", "auto"],
+          "title": "DeleteCacheAutoRequest"
         },
         {
           "type": "object",
@@ -8620,9 +9803,9 @@
                       ]
                     },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
                       "type": "string",
-                      "enum": ["none", "layer", "row", "tensor"],
+                      "enum": ["none", "layer", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
                     },
                     "flash-attn": {
@@ -9694,9 +10877,9 @@
                       ]
                     },
                     "splitMode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU) or `'layer'` (pipeline parallelism).",
                       "type": "string",
-                      "enum": ["none", "layer", "row"],
+                      "enum": ["none", "layer"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode"
                     },
                     "tensorSplit": {
@@ -10677,23 +11860,47 @@
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
                         },
+                        "outputSampleRate": {
+                          "type": "integer",
+                          "minimum": 8000,
+                          "maximum": 192000,
+                          "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
+                        },
+                        "ttsSpeed": {
+                          "description": "Speech-rate multiplier (1.0 = unchanged, <1 slower, >1 faster), applied as a pitch-preserving WSOLA time-stretch. Range 0.25–4.0.",
+                          "type": "number",
+                          "minimum": 0.25,
+                          "maximum": 4
+                        },
+                        "nCtx": {
+                          "description": "Cap on the T3 context length in tokens (prompt + generated speech, ~25 tokens ≈ 1 s of audio). The KV cache is allocated up front at this length, so it directly bounds memory; 0 uses the GGUF’s full context.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "kvCacheType": {
+                          "description": "T3 KV-cache storage dtype. `f16` is the safe cross-backend default; `q8_0` is smaller and faster where the backend implements its ops.",
+                          "type": "string",
+                          "enum": ["f32", "f16", "q8_0"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxKvCacheType"
+                        },
                         "streamChunkTokens": {
                           "description": "Speech tokens per native streaming chunk; 0 disables native chunk streaming.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "streamFirstChunkTokens": {
                           "description": "Smaller first streaming chunk for lower first-audio latency.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "cfmSteps": {
                           "description": "Chatterbox CFM Euler step count. Default 2.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "cfgRate": {
                           "description": "Chatterbox S3Gen classifier-free-guidance rate; `0` skips the unconditioned pass, a positive value overrides the model’s baked rate. Omit to keep the baked rate.",
@@ -10704,19 +11911,29 @@
                           "description": "CPU thread count; overrides the hardware default.",
                           "type": "integer",
                           "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
+                          "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
                         },
                         "seed": {
                           "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
                           "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "openclCacheDir": {
+                          "description": "Persistent directory for ggml-opencl's compiled-program cache (Android only).",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "s3genModelSrc": {
                           "description": "Chatterbox S3Gen + HiFT model source (speech tokens to 24 kHz waveform).",
@@ -11357,12 +12574,21 @@
                           "type": "string"
                         },
                         "ttsSpeed": {
-                          "description": "Speech-rate / duration multiplier (1.0 = unchanged, <1 slower, >1 faster). Supertonic scales its native duration predictor.",
-                          "type": "number"
+                          "description": "Speech-rate / duration multiplier (1.0 = unchanged, <1 slower, >1 faster). Supertonic scales its native duration predictor. Mutually exclusive with `pace`.",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "pace": {
+                          "description": "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`, applied when the engine is built. Mutually exclusive with `ttsSpeed`; cannot be changed per request.",
+                          "type": "string",
+                          "enum": ["slow", "moderate", "fast"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicPace"
                         },
                         "ttsNumInferenceSteps": {
                           "description": "Supertonic vector-estimator CFM steps; 0 uses the GGUF default.",
-                          "type": "number"
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
                         },
                         "useGPU": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
@@ -11374,8 +12600,36 @@
                           "maximum": 192000,
                           "description": "Desired output sample rate in Hz (8000–192000); omit to keep the engine’s native rate (or 48 kHz when the LavaSR enhancer is active)."
                         },
+                        "threads": {
+                          "description": "CPU thread count; overrides the hardware default.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "nGpuLayers": {
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "seed": {
+                          "description": "RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
                         "vulkanCacheDir": {
                           "description": "Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "openclCacheDir": {
+                          "description": "Persistent directory for ggml-opencl's compiled-program cache (Android only).",
                           "type": "string",
                           "minLength": 1
                         },
@@ -11689,7 +12943,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -11740,6 +12994,201 @@
                         "normalizeNumbers": {
                           "description": "Parler prompt digit expansion (engine default: enabled).",
                           "type": "boolean"
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerModelSrc": {
+                          "description": "LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc"
+                            }
+                          ]
+                        },
+                        "lavasrDenoiserModelSrc": {
+                          "description": "LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc"
+                            }
+                          ]
                         }
                       },
                       "required": ["ttsEngine"],
@@ -11818,6 +13267,11 @@
                             }
                           ]
                         },
+                        "promptText": {
+                          "description": "Verbatim transcript of `referenceAudioSrc`. Setting it selects zero-shot cloning (best fidelity in the reference’s own language); omitting it selects cross-lingual cloning (timbre only). Without a reference it overrides the baked voice’s transcript metadata.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "useGPU": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
@@ -11847,7 +13301,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -11857,6 +13311,16 @@
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "openclCacheDir": {
+                          "description": "Persistent directory for ggml-opencl's compiled-program cache (Android only).",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "lavasrEnhancerModelSrc": {
                           "description": "LavaSR enhancer model source; bandwidth-extends the output to 48 kHz.",
@@ -12047,6 +13511,291 @@
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc"
                             }
                           ]
+                        },
+                        "referenceAudioSrc": {
+                          "description": "CosyVoice3 voice-cloning reference recording source (wav; 0.5–30 s, 5–15 s of clean speech recommended). Replaces the baked voice.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc"
+                            }
+                          ]
+                        },
+                        "cosyvoice3S3tokModelSrc": {
+                          "description": "CosyVoice3 speech-tokenizer (speech_tokenizer_v3) model source; required with `referenceAudioSrc`.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc"
+                            }
+                          ]
+                        },
+                        "cosyvoice3CampplusModelSrc": {
+                          "description": "CosyVoice3 CAM++ speaker-encoder model source; required with `referenceAudioSrc`.",
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc"
+                            }
+                          ]
                         }
                       },
                       "required": ["ttsEngine"],
@@ -12110,7 +13859,7 @@
                           "maximum": 2147483647
                         },
                         "nGpuLayers": {
-                          "description": "Model layers to offload to the GPU backend (99 = all). Only relevant when `useGPU` is set.",
+                          "description": "Model layers to offload to the GPU backend (99 = all, 0 = CPU). Takes effect on its own and wins over `useGPU`; when both are set they must agree.",
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
@@ -12120,6 +13869,11 @@
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
+                        },
+                        "backendsDir": {
+                          "description": "Root directory for dynamically-loaded ggml backend `.so` files. Defaults to `prebuilds/`.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "audio8CodecDecoderModelSrc": {
                           "anyOf": [
@@ -12665,7 +14419,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU with at least 20 GB free VRAM.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU with at least 20 GB free VRAM.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video", "world"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -12734,14 +14488,6 @@
                       "enum": ["cpu", "cuda", "std_default"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng"
                     },
-                    "clip_on_cpu": {
-                      "description": "Force CLIP text encoder to run on CPU",
-                      "type": "boolean"
-                    },
-                    "vae_on_cpu": {
-                      "description": "Force VAE decoder to run on CPU",
-                      "type": "boolean"
-                    },
                     "vae_auto_cpu_fallback": {
                       "description": "Automatically move the VAE to CPU when GPU memory is insufficient",
                       "type": "boolean"
@@ -12757,7 +14503,40 @@
                       "type": "boolean"
                     },
                     "offload_to_cpu": {
-                      "description": "Keep model weights in CPU memory and offload them during GPU compute",
+                      "description": "Keep model weights in CPU memory and offload them during GPU compute. Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module.",
+                      "type": "boolean"
+                    },
+                    "control_net_cpu": {
+                      "description": "Removed. Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
+                    "clip_on_cpu": {
+                      "description": "Removed. Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, or modelConfig.backend: 'te=cpu' to run its graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
+                    "vae_on_cpu": {
+                      "description": "Removed. Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, or modelConfig.backend: 'vae=cpu' to run its graph on CPU.",
+                      "not": {},
+                      "deprecated": true
+                    },
+                    "backend": {
+                      "description": "Runtime backend for diffusion and video graphs, globally or per module, for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'.",
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "params_backend": {
+                      "description": "Parameter residency for diffusion and video, independent of graph execution. 'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights from the local model file on demand and releases them after use. Disk is never selected automatically. With offload_to_cpu enabled, explicit assignments override CPU residency only for the specified modules.",
+                      "type": "string",
+                      "maxLength": 4096
+                    },
+                    "max_vram": {
+                      "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
+                      "type": ["number", "string"]
+                    },
+                    "stream_layers": {
+                      "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
                       "type": "boolean"
                     },
                     "flash_attn": {
@@ -13064,7 +14843,7 @@
                       ]
                     },
                     "llmModelSrc": {
-                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Ideogram 4 (Qwen3-VL), and LTX-2 video (Gemma).",
+                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -13159,7 +14938,7 @@
                       ]
                     },
                     "vaeModelSrc": {
-                      "description": "VAE decoder model — required for FLUX.2 [klein], Ideogram 4, and LTX-2 video (video VAE); optional for SDXL.",
+                      "description": "VAE decoder model — required for FLUX.2 [klein], Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -13539,7 +15318,7 @@
                       ]
                     },
                     "audioVaeModelSrc": {
-                      "description": "Audio VAE decoder model — LTX-2 video only. Enables the synchronized 48 kHz audio track muxed into the output AVI; omit for silent video. Ignored by the Wan layout.",
+                      "description": "Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. Enables synchronized audio muxed into the output AVI. Omit for silent LTX-2 video; unsupported by Wan.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -17035,6 +18814,11 @@
         "modelId": {
           "type": "string"
         },
+        "requestId": {
+          "description": "Client-generated id for targeting this run with `cancel({ requestId })`.",
+          "type": "string",
+          "minLength": 1
+        },
         "inputType": {
           "default": "text",
           "type": "string"
@@ -17148,13 +18932,40 @@
           "default": false,
           "type": "boolean"
         },
+        "sampleRate": {
+          "description": "Sample rate in Hz of the signed 16-bit mono PCM in `buffer`.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
         "stats": {
           "type": "object",
           "properties": {
             "audioDuration": {
               "type": "number"
             },
+            "totalTime": {
+              "type": "number"
+            },
+            "realTimeFactor": {
+              "type": "number"
+            },
+            "tokensPerSecond": {
+              "type": "number"
+            },
             "totalSamples": {
+              "type": "number"
+            },
+            "generatedFrames": {
+              "type": "number"
+            },
+            "backendDevice": {
+              "type": "number"
+            },
+            "backendId": {
+              "type": "number"
+            },
+            "gpuUnsupported": {
               "type": "number"
             },
             "enhancerBackendDevice": {
@@ -17174,6 +18985,15 @@
         },
         "sentenceChunk": {
           "type": "string"
+        },
+        "isLast": {
+          "description": "True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "TextToSpeechResponseStopReason"
         }
       },
       "required": ["type", "buffer", "done"],
@@ -17185,6 +19005,11 @@
       "properties": {
         "modelId": {
           "type": "string"
+        },
+        "requestId": {
+          "description": "Client-generated id for targeting this run with `cancel({ requestId })`.",
+          "type": "string",
+          "minLength": 1
         },
         "inputType": {
           "default": "text",
@@ -17296,13 +19121,40 @@
           "default": false,
           "type": "boolean"
         },
+        "sampleRate": {
+          "description": "Sample rate in Hz of the signed 16-bit mono PCM in `buffer`.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
         "stats": {
           "type": "object",
           "properties": {
             "audioDuration": {
               "type": "number"
             },
+            "totalTime": {
+              "type": "number"
+            },
+            "realTimeFactor": {
+              "type": "number"
+            },
+            "tokensPerSecond": {
+              "type": "number"
+            },
             "totalSamples": {
+              "type": "number"
+            },
+            "generatedFrames": {
+              "type": "number"
+            },
+            "backendDevice": {
+              "type": "number"
+            },
+            "backendId": {
+              "type": "number"
+            },
+            "gpuUnsupported": {
               "type": "number"
             },
             "enhancerBackendDevice": {
@@ -17322,6 +19174,15 @@
         },
         "sentenceChunk": {
           "type": "string"
+        },
+        "isLast": {
+          "description": "True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
+          "type": "boolean"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": ["completed", "cancelled"],
+          "title": "TextToSpeechStreamResponseStopReason"
         }
       },
       "required": ["type", "buffer", "done"],
@@ -18060,6 +19921,474 @@
       "required": ["type"],
       "additionalProperties": false
     },
+    "vectorIndex.request": {
+      "title": "VectorIndexRequest",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "default": "turbovec-q4",
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexRequestCreateStorage"
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "create"
+            }
+          },
+          "required": ["dim", "type", "operation"],
+          "title": "VectorIndexRequestCreate"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "load"
+            }
+          },
+          "required": ["path", "type", "operation"],
+          "title": "VectorIndexRequestLoad"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "vectors": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "add"
+            }
+          },
+          "required": ["ids", "vectors", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestAdd"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "queries": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "k": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "search"
+            }
+          },
+          "required": ["queries", "k", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestSearch"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "remove"
+            }
+          },
+          "required": ["ids", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestRemove"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "contains"
+            }
+          },
+          "required": ["ids", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestContains"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "write"
+            }
+          },
+          "required": ["path", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestWrite"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "dispose"
+            }
+          },
+          "required": ["type", "indexId", "operation"],
+          "title": "VectorIndexRequestDispose"
+        }
+      ]
+    },
+    "vectorIndex.response": {
+      "title": "VectorIndexResponse",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "create"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexResponseCreateStorage"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "indexId", "dim", "storage", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseCreate"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "load"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexResponseLoadStorage"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "indexId", "dim", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseLoad"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "add"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseAdd"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "search"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "score": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["id", "score"],
+                  "additionalProperties": false,
+                  "title": "VectorIndexResponseSearchResultsItemItem"
+                }
+              }
+            }
+          },
+          "required": ["type", "operation", "results"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseSearch"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "remove"
+            },
+            "removed": {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              }
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "removed", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseRemove"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "contains"
+            },
+            "present": {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              }
+            }
+          },
+          "required": ["type", "operation", "present"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseContains"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "write"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": ["type", "operation", "path"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseWrite"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "dispose"
+            },
+            "disposed": {
+              "type": "boolean"
+            }
+          },
+          "required": ["type", "operation", "disposed"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseDispose"
+        }
+      ]
+    },
     "videoStream.request": {
       "title": "VideoStreamRequest",
       "type": "object",
@@ -18106,23 +20435,23 @@
           "maximum": 9007199254740991
         },
         "width": {
-          "description": "Video width in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
+          "description": "Video width in pixels (must be a multiple of 16). LTX-2, MiniMax-H3 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 and MiniMax-H3 are validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "multipleOf": 16
         },
         "height": {
-          "description": "Video height in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 is validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
+          "description": "Video height in pixels (must be a multiple of 16). LTX-2, MiniMax-H3 and Wan 2.2 TI2V-5B additionally require a multiple of 32. LTX-2 and MiniMax-H3 are validated against the loaded model before generation; the TI2V requirement is enforced natively, derived from the loaded GGUF rather than its filename.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "multipleOf": 16
         },
         "video_frames": {
-          "description": "Frame count for the generated video; must satisfy (4*k + 1), where k>=1. LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, validated against the loaded model before generation.",
+          "description": "Frame count validated against the loaded model: Wan uses 4*k+1 (k>=1), LTX-2 uses 8*k+1 (9–257 frames), and MiniMax-H3 uses 17*k+5 (k>=0).",
           "type": "integer",
-          "minimum": -9007199254740991,
+          "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
         "fps": {
@@ -18462,7 +20791,7 @@
               "type": "number"
             },
             "hasAudio": {
-              "description": "True when the output AVI includes a muxed audio track (LTX-2 loaded with audioVaeModelSrc), false otherwise.",
+              "description": "True when the output AVI includes a muxed audio track (MiniMax-H3 or LTX-2 loaded with audioVaeModelSrc), false otherwise.",
               "type": "boolean"
             },
             "audioSampleRate": {

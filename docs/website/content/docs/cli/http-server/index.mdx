@@ -215,6 +215,44 @@ qvac serve --openai --cors --cors-origin https://app.example.com
 
 Served by the QVAC surface, mounted by default. Base path: `/qvac/v1`.
 
+### KV cache
+
+Chat requests cache each conversation's prefix under `~/.qvac/kv-cache`, so a follow-up turn only prefills the new tail. Chat is the only endpoint that caches — Responses and Legacy completions run uncached and leave nothing here to reclaim. The directory grows on the order of hundreds of megabytes per conversation, but it is **bounded** — you do not need to write a sweeper of your own.
+
+| Bound | Value |
+| --- | --- |
+| Size quota | 4 GiB least-recently-used (512 MiB on mobile) |
+| Idle TTL | 24 hours |
+| Sweep frequency | After a cached turn finishes, at most every 5 minutes |
+
+Caches held by an in-flight request are never evicted.
+
+<Callout type="warn">
+**Named caches are not covered.** The policy applies only to the *automatic* caches these endpoints create. A caller-owned named cache — `completion({ kvCache: "my-session" })` through the SDK — is exempt from both the quota and the TTL, and the endpoint below never touches it. Clean those up with [`deleteCache({ kvCacheKey })`](/reference/api#deletecache). The server itself only ever creates automatic caches; it does not use named keys.
+</Callout>
+
+### `DELETE /qvac/v1/kv_cache`
+
+Frees every automatic KV cache no in-flight request is using, immediately, rather than waiting for the quota or the TTL. Use it when reclaiming disk matters more than keeping conversations warm: deleting a cache costs the next turn a full prefill instead of a partial one, and loses no conversation content, since a KV cache is derived data.
+
+```bash
+curl -X DELETE http://localhost:11434/qvac/v1/kv_cache
+```
+
+Response:
+
+```json
+{ "object": "kv_cache.reclaim", "deleted": true }
+```
+
+A failed delete returns `500 kv_cache_reclaim_failed`.
+
+<Callout type="info">
+**Scope is the host, not this server.** `~/.qvac/kv-cache` is shared by every QVAC process running under the same home directory, so this reclaims another local process's automatic caches too. That is the same scope the automatic sweep already acts on. Nothing in a cache path identifies the process that wrote it, because cache identity is content-derived, so per-server scoping is not available.
+</Callout>
+
+This route needs the QVAC surface mounted. It is absent under `--no-default`, and therefore under the deprecated `qvac serve openai`, which implies it.
+
 ### `POST /qvac/v1/translate`
 
 Translate text with an NMT model, backed by the SDK's `translate()`.
@@ -476,6 +514,8 @@ curl http://localhost:11434/v1/chat/completions \
   }'
 ```
 
+A `tools` request for a model loaded without `config.tools: true` returns `400 tools_not_enabled` rather than answering in prose.
+
 #### Message content
 
 `messages[].content` accepts both the plain string form and the OpenAI **array-of-parts** form (`[{ "type": "text", "text": "…" }, …]`) that modern clients such as Cline and Open WebUI send. Parts of type `text` are concatenated into a single string; non-text parts (`image_url`, `input_audio`, `file`) are **silently dropped** — the chat surface is text-only and vision is out of scope. Both shapes below are valid:
@@ -629,7 +669,7 @@ The same generation parameters (`temperature`, `top_p`, `seed`, `max_output_toke
 
 When generation is truncated because it hit `max_output_tokens` / `max_tokens`, the response is returned with `status: "incomplete"` and `incomplete_details.reason: "max_output_tokens"` — the Responses-API analogue of chat's `finish_reason: "length"`. `usage.output_tokens` uses the same SDK-stats accounting as the other chat-category routes (`input_tokens` is `0`).
 
-The following Responses-API features are intentionally rejected with `400`: `conversation`, `background: true`, and built-in tools (`web_search`, `file_search`, `code_interpreter`). `function`-typed tools work normally.
+The following Responses-API features are intentionally rejected with `400`: `conversation`, `background: true`, and built-in tools (`web_search`, `file_search`, `code_interpreter`). `function`-typed tools work when the model was loaded with `config.tools: true`; otherwise the request returns `400 tools_not_enabled`.
 
 #### `GET /v1/responses/:id`
 
@@ -1348,8 +1388,8 @@ curl http://localhost:11434/v1/videos \
 | `model` | Alias declared under `serve.models` (endpoint category `video`). | Yes |
 | `prompt` | Text prompt, 1–32000 characters. | Yes |
 | `size` | `"WIDTHxHEIGHT"` with both dimensions multiples of 16. Accepts any `WxH` in addition to OpenAI's 4-value enum. When omitted, the size is backfilled from the model output. | No |
-| `seconds` | Target duration as a **string** (e.g. `"2"`; OpenAI uses `"4"` / `"8"` / `"12"`). Mapped together with `fps` to the addon's `video_frames` (rounded to the nearest `4k+1`). | No |
-| `fps` | QVAC extension. `0 < fps ≤ 120`, default `16`. | No |
+| `seconds` | Target duration as a **string** (e.g. `"2"`; OpenAI uses `"4"` / `"8"` / `"12"`). For MiniMax-H3, mapped at 24 FPS to the nearest `17k+5`; other models retain the existing nearest `4k+1` mapping using `fps`. Model-specific validation still applies. | No |
+| `fps` | QVAC extension. `0 < fps ≤ 120`, default `16`. MiniMax-H3 requires exactly `24` and rejects any other value; its `seconds` mapping always uses 24 regardless of what is sent here. | No |
 | `steps` | QVAC extension. Diffusion sampler step count. | No |
 | `seed` | QVAC extension. Random seed; the SDK picks one when omitted. | No |
 | `negative_prompt` | QVAC extension. Negative prompt for the sampler. | No |

@@ -21,13 +21,12 @@ project(qvac-fabric VERSION ${_pkg_version} LANGUAGES C CXX)
 
 # Test-only AddressSanitizer build, enabled with QVAC_FABRIC_ASAN=1 (set by
 # link-local-qvac-fabric with asan:true, which also exports VCPKG_* sanitizer
-# flags for the qvac-fabric vcpkg port). Here we instrument the module itself
-# of -static-libstdc++. A module-local static libc++ would provide its own
-# operator new/delete and the symbols.map `local: *` rule would bind them
-# internally, so allocations made inside fabric would bottom out at malloc and
-# clash with the test executable's ASan operator delete. With the shared libc++
-# those operators resolve to the ASan runtime the test exe provides, so
-# cross-module allocations match and ASan sees the whole runtime.
+# flags for the qvac-fabric vcpkg port). Here we instrument the module itself and
+# link the *shared* libc++ rather than embedding it, so that fabric's operator
+# new/delete are left to the test executable's ASan runtime to provide and
+# allocations that cross the module boundary match. The release build reaches the
+# same place by a different route -- it embeds libc++ but exports its operators,
+# so they are interposable (see the Linux block below).
 set(QVAC_FABRIC_ASAN OFF)
 if(DEFINED ENV{QVAC_FABRIC_ASAN} AND NOT "$ENV{QVAC_FABRIC_ASAN}" STREQUAL "0")
   set(QVAC_FABRIC_ASAN ON)
@@ -39,7 +38,37 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
     add_link_options(-stdlib=libc++ -fsanitize=address)
   else()
-    add_link_options(-stdlib=libc++ -static-libstdc++)
+    # libc++ is still linked statically, so the prebuild stays self-contained
+    # (no DT_NEEDED on libc++.so.1), but it is whole-archived rather than pulled
+    # in by -static-libstdc++, and exported via symbols.map, so that this module
+    # is the one C++ runtime for every consumer addon that DT_NEEDEDs it. See
+    # arch/qips/linux-fabric-libcxx-ownership.md.
+    #
+    # Whole-archive is what makes that possible: -static-libstdc++ pulls in only
+    # the archive members llama/ggml/common themselves reference, and a version
+    # script filters symbols that are present rather than pulling members in
+    # (the same reason ggml is whole-archived below). An addon linked with
+    # -nostdlib++ would then fail to resolve every part of libc++ that fabric
+    # happens not to use -- measured on a probe: 111 undefined references for a
+    # single translation unit using ostringstream, regex and a local static.
+    execute_process(
+      COMMAND ${CMAKE_CXX_COMPILER} -stdlib=libc++ -print-file-name=libc++.a
+      OUTPUT_VARIABLE QVAC_FABRIC_LIBCXX_ARCHIVE
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+    # -print-file-name echoes the input unchanged when it cannot find the file,
+    # so an unusable answer must fail here rather than silently fall back to a
+    # runtime with an incomplete C++ ABI.
+    if(NOT IS_ABSOLUTE "${QVAC_FABRIC_LIBCXX_ARCHIVE}"
+       OR NOT EXISTS "${QVAC_FABRIC_LIBCXX_ARCHIVE}")
+      message(FATAL_ERROR
+        "qvac-fabric: could not locate libc++.a via "
+        "'${CMAKE_CXX_COMPILER} -print-file-name' (got "
+        "'${QVAC_FABRIC_LIBCXX_ARCHIVE}'). The Linux runtime must embed and "
+        "export libc++; install the libc++ static library for this toolchain.")
+    endif()
+    message(STATUS "qvac-fabric: embedding ${QVAC_FABRIC_LIBCXX_ARCHIVE}")
+    add_link_options(-stdlib=libc++ -nostdlib++)
   endif()
 endif()
 
@@ -56,6 +85,20 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
 find_package(ggml CONFIG REQUIRED)
+
+# The qvac-fabric[vector-index] feature exports the ANN index API
+# (ggml_vec_index_*) as a static library separate from the ggml core. We request
+# the feature unconditionally, so a missing target is a port contract break
+# rather than a supported configuration. Assert it here because the miss is
+# otherwise silent on ELF/Mach-O: the whole-archive loop below skips absent
+# targets, leaving a runtime that builds and links fine but exports none of the
+# API, and the failure only surfaces a package away when @qvac/embed-llamacpp
+# cannot resolve ggml_vec_index_*.
+if(NOT TARGET ggml::ggml-vector-index)
+  message(FATAL_ERROR
+    "qvac-fabric did not export ggml::ggml-vector-index despite the "
+    "vector-index feature being requested in vcpkg.json")
+endif()
 
 # --- ggml backends -----------------------------------------------------------
 # When ggml backends are built as separate shared libraries (e.g. Android, or a
@@ -125,16 +168,35 @@ endif()
 # are separate MODULE .so targets (staged via BACKEND_DL_LIBS) and must not be
 # whole-archived here; the type guard also skips ggml core if a build exposes it
 # as a shared/interface target.
+#
+# The vector-index library is whole-archived for a stronger version of the same
+# reason: no llama or ggml code calls ggml_vec_index_*, so nothing references
+# those members and a plain link would pull in none of them at all.
+#
+# Windows has no whole-archive equivalent here: the generated .def EXPORTS
+# entries are the references that pull members in, the same way ggml-base is
+# handled. ggml-base is already on the link line via llama; vector-index is
+# not (it is a standalone archive), so it must still be linked or those
+# EXPORTS have nowhere to resolve from (LNK2001).
 if(UNIX)
-  foreach(_ggml_core ggml::ggml ggml::ggml-base)
-    if(TARGET ${_ggml_core})
-      get_target_property(_ggml_core_type ${_ggml_core} TYPE)
-      if(_ggml_core_type STREQUAL "STATIC_LIBRARY")
+  foreach(_ggml_static ggml::ggml ggml::ggml-base ggml::ggml-vector-index)
+    if(TARGET ${_ggml_static})
+      get_target_property(_ggml_static_type ${_ggml_static} TYPE)
+      if(_ggml_static_type STREQUAL "STATIC_LIBRARY")
         target_link_libraries(${qvac-fabric}
-          PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${_ggml_core}>")
+          PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${_ggml_static}>")
       endif()
     endif()
   endforeach()
+elseif(WIN32)
+  target_link_libraries(${qvac-fabric} PRIVATE ggml::ggml-vector-index)
+endif()
+
+# Embed the whole C++ standard library so symbols.map has the complete runtime
+# to export (see the -nostdlib++ block above for why a plain link is not enough).
+if(QVAC_FABRIC_LIBCXX_ARCHIVE)
+  target_link_libraries(${qvac-fabric}
+    PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${QVAC_FABRIC_LIBCXX_ARCHIVE}>")
 endif()
 
 # Override install_name so that consumers using @loader_path rpath can resolve
@@ -148,9 +210,66 @@ endif()
 
 # Symbol visibility: export the llama / ggml / common runtime surface plus the
 # bare/napi entry points; hide everything else.
+#
+# The C++ ABI from symbols-linux-cxx-runtime.map is spliced in exactly when this
+# module embeds libc++ and is therefore the process' one C++ runtime, i.e. the
+# Linux release link above. Every other ELF configuration shares a runtime
+# through a libc++ shared library and defines none of those symbols itself:
+# Android links libc++_shared.so, and the Linux ASan build links libc++.so.1.
+# Applying the block there is a hard error rather than a no-op, because lld
+# defaults to --no-undefined-version and rejects a version script that assigns a
+# version to a symbol the output does not define.
 if(UNIX AND NOT APPLE)
+  # The ELF version node symbols.map stamps on every export. Consumers record a
+  # DT_VERNEED on it, which is what stops the host process' own C++ runtime from
+  # satisfying their references first; symbols.map carries the full rationale.
+  # Declared here as well so the name reaches consumers through the package
+  # config, and asserted against the script below so the two cannot drift.
+  set(QVAC_FABRIC_ABI_VERSION "QVAC_FABRIC_ABI_1")
+  # Whether consumers should expect to import their C++ runtime from this
+  # module. True only for the link that embeds libc++; Android links
+  # libc++_shared.so and the ASan build links libc++.so.1, so there the runtime
+  # is shared by other means and a consumer that pinned it here would find
+  # nothing to pin. Published through the package config so the addon template
+  # can tell "fabric does not own the runtime" apart from "fabric is too old".
+  if(QVAC_FABRIC_LIBCXX_ARCHIVE)
+    set(QVAC_FABRIC_OWNS_CXX_RUNTIME ON)
+  else()
+    set(QVAC_FABRIC_OWNS_CXX_RUNTIME OFF)
+  endif()
+  set(_fabric_version_script "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map")
+  if(QVAC_FABRIC_LIBCXX_ARCHIVE)
+    set(_fabric_cxx_runtime_map
+      "${CMAKE_CURRENT_SOURCE_DIR}/symbols-linux-cxx-runtime.map")
+    file(READ "${_fabric_version_script}" _fabric_symbols)
+    file(READ "${_fabric_cxx_runtime_map}" _fabric_cxx_runtime_symbols)
+    # Splice at an explicit marker rather than a syntactic anchor, and fail on a
+    # miss: dropping the block silently would leave a module that links and runs
+    # but has no exported C++ ABI, reintroducing the cross-module `catch`
+    # failures the block exists to fix.
+    if(NOT _fabric_symbols MATCHES "# QVAC_FABRIC_LINUX_CXX_RUNTIME")
+      message(FATAL_ERROR
+        "qvac-fabric: symbols.map has no '# QVAC_FABRIC_LINUX_CXX_RUNTIME' "
+        "marker to splice symbols-linux-cxx-runtime.map into. The Linux "
+        "runtime must export the C++ ABI; restore the marker.")
+    endif()
+    if(NOT _fabric_symbols MATCHES "(^|\n)${QVAC_FABRIC_ABI_VERSION}[ \t]*\\{")
+      message(FATAL_ERROR
+        "qvac-fabric: symbols.map does not declare the "
+        "'${QVAC_FABRIC_ABI_VERSION}' version node. Consumers pin their C++ "
+        "runtime to fabric through that node; an anonymous node leaves them "
+        "resolving it from the host's libstdc++ instead.")
+    endif()
+    string(REPLACE
+      "# QVAC_FABRIC_LINUX_CXX_RUNTIME" "${_fabric_cxx_runtime_symbols}"
+      _fabric_symbols "${_fabric_symbols}")
+    set(_fabric_version_script "${CMAKE_CURRENT_BINARY_DIR}/symbols-linux.map")
+    file(WRITE "${_fabric_version_script}" "${_fabric_symbols}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+      "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map" "${_fabric_cxx_runtime_map}")
+  endif()
   target_link_options(${qvac-fabric}_module PRIVATE
-    -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/symbols.map)
+    -Wl,--version-script=${_fabric_version_script})
 elseif(APPLE)
   target_link_options(${qvac-fabric}_module PRIVATE
     -Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/exports.txt)
@@ -181,7 +300,13 @@ elseif(WIN32)
     "$<TARGET_FILE:llama::llama-common>"
     "$<TARGET_FILE:llama::mtmd>"
     "$<TARGET_FILE:ggml::ggml>"
-    "$<TARGET_FILE:ggml::ggml-base>")
+    "$<TARGET_FILE:ggml::ggml-base>"
+    # Scanning the vector-index archive is what exports ggml_vec_index_*: the
+    # generated EXPORTS entries double as references that pull those members in,
+    # so unlike the ELF/Mach-O builds this needs no whole-archive. The archive
+    # itself is linked above; without that, EXPORTS would be unresolved
+    # (LNK2001) because llama/ggml do not depend on this target.
+    "$<TARGET_FILE:ggml::ggml-vector-index>")
   # llama-common-base (formerly build_info) carries the LLAMA_BUILD_NUMBER /
   # LLAMA_COMMIT data globals. Scan it only when it is a real archive; if the
   # vcpkg export ships it as an INTERFACE (or OBJECT) target with no TARGET_FILE,
@@ -280,8 +405,7 @@ install(FILES
 
 # --- Platform-specific -------------------------------------------------------
 if(ANDROID)
-  find_package(Vulkan REQUIRED)
-  target_link_libraries(${qvac-fabric} PRIVATE ${Vulkan_LIBRARY} log)
+  target_link_libraries(${qvac-fabric} PRIVATE log)
 endif()
 
 if(WIN32)

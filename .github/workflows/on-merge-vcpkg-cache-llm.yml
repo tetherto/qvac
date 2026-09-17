@@ -14,8 +14,14 @@ on:
       - "packages/llm-llamacpp/vcpkg-configuration.json"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
+      # This job also writes the unit-test model cache, whose key hashes this
+      # script. Without it that entry never refreshes when the model set changes.
+      - "packages/llm-llamacpp/scripts/download-unit-test-models.js"
+  # Twice weekly, not weekly. The cache server prunes entries older than
+  # CACHE_CLEANUP_OLDER_THAN_DAYS=5, so a 7-day refresh leaves the entry evicted
+  # for two days before every run. Keep the longest gap here under 5 days.
   schedule:
-    - cron: "17 4 * * 1"
+    - cron: "17 2 * * 1,4"
   workflow_dispatch:
 
 # Never cancel: a cancelled job cannot save the build it did not finish.

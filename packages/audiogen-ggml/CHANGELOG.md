@@ -7,8 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
+  one engine stack. Nothing in the window touches the audiogen engine, so
+  published behavior is unchanged.
+
+## [0.4.1] - 2026-09-16
+
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-11`. The pinned engine adds an
+  optional Apple-only Core ML sidecar for the ACE-Step VAE decoder
+  (`AUDIOGEN_COREML`); the prebuilds keep it disabled, so published behavior
+  is unchanged until a build opts in.
+
+- The binding loader now verifies that `require.addon()` returned an AudioGen
+  native binding before using it. If the result is the JavaScript package entry,
+  loading falls through to `#host-addon`; the resolved platform package is
+  validated as well, and the original lookup failure is retained as the error
+  cause for clearer diagnostics. Without this the wrong module was returned
+  verbatim and the first symptom was `createInstance is not a function` deep in
+  a model load. Local source-build behaviour is unchanged.
+  
+### Fixed
+
+- Mobile platform packages (`@qvac/audiogen-ggml-android-arm64`,
+`@qvac/audiogen-ggml-ios`) are no longer `os`-filtered `optionalDependencies`
+of the meta package. No build host ever reports a mobile `os`, so installers
+could never select them during a cross-build and mobile bundles failed
+verification with missing prebuilds. They now publish without install filters;
+mobile applications declare the target's platform package as a direct
+dependency pinned to the exact meta package version.
+
+
+## [0.4.0] - 2026-09-11
+
 ### Added
 
+- The published linux-x64 prebuild ships the CUDA backend again, next to
+  Vulkan and the CPU variants: with the per-platform prebuild packages the
+  CUDA module no longer pushes one npm tarball over the registry size limit.
+  CUDA stays a runtime-loaded module — the engine prefers it over Vulkan only
+  where the NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS)
+  resolve at load time; every other host keeps Vulkan or CPU. `npm run
+  build:cuda` builds the same configuration from source.
+
+- Extend opt-in CUDA builds (`ENABLE_CUDA=ON`) from linux-x64 to linux-arm64
+  and win32-x64. CUDA, Vulkan, and CPU variants ship as runtime-loaded modules
+  beside the addon, allowing hosts without an NVIDIA stack to fall back to
+  Vulkan or CPU. Published linux-arm64 and win32-x64 prebuilds remain
+  CUDA-free.
 - `generateLrc` generation control: karaoke-style synchronized lyric
   timestamps in `stats.lrc` (standard LRC text) with an alignment confidence
   in `stats.lyricsScore`. Requires lyrics — explicit or Simple-Mode written —
@@ -31,9 +80,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Require `speech-cpp` port revision `2026-09-03#1`, which adds the engine's
-  ACE-Step LRC generation, audio understanding (reverse pipeline) and Query
-  Rewriting (FORMAT pass) on top of the teacher-forced LM quality scoring.
+- Require `speech-cpp` port revision `2026-09-10` (one aligned stack across
+  the speech packages), which adds the engine's ACE-Step LRC generation,
+  audio understanding (reverse pipeline) and Query Rewriting (FORMAT pass) on
+  top of the teacher-forced LM quality scoring, rejects `[Instrumental]`
+  lyrics under Query Rewriting, and runs the ACE-Step LM on the GPU for every
+  Vulkan device except ARM Mali. Floor `ggml-speech` at 2026-09-09#1 for
+  hybrid CUDA modules on linux-arm64 and win32-x64, correct module-local
+  timing initialization, tinyBLAS CPU acceleration on x86 Linux and Apple
+  silicon, and CPU-variant modules on every linux-x64 build.
+
+- **Per-platform prebuild packages.** `@qvac/audiogen-ggml` is now a meta
+  package that ships the JavaScript wrapper only; native prebuilds install
+  through `os`/`cpu` filtered `optionalDependencies`
+  (`@qvac/audiogen-ggml-<platform>-<arch>`, iOS flavours grouped in
+  `@qvac/audiogen-ggml-ios`), version-locked to the meta package. Breaking for
+  the published file layout: `node_modules/@qvac/audiogen-ggml/prebuilds` no
+  longer exists in npm installs — use the new `resolveBackendsDir()` export
+  instead of hardcoding that path. Supported installers are npm 7+, pnpm, bun,
+  and Yarn Berry; Yarn v1 and `--omit=optional` installs fail at require time
+  with an error naming the missing platform package. A locally built
+  `prebuilds/` directory keeps taking precedence, so source builds are
+  unaffected.
 
 ## [0.3.3] - 2026-09-01
 

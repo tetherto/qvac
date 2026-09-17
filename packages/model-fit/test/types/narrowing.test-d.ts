@@ -2,8 +2,8 @@
 // declaration parses; this proves the discriminated union actually narrows the
 // way an SDK would rely on. Type-checked by `npm run test:dts`, never executed.
 
-import { fitParams, FIT_STATUS } from '../../index'
-import type { FitConfig, FitResult, FitReason, FitPlan } from '../../index'
+import { fitParams, fitParamsAsync, FIT_STATUS } from '../../index'
+import type { FitConfig, FitResult, FitReason, FitPlan, FitProjectionRow } from '../../index'
 
 declare function assertNever (value: never): never
 
@@ -18,11 +18,24 @@ void invalidSwaFull
 
 const result: FitResult = fitParams({ modelPath: '/model.gguf' })
 
+const pending: Promise<FitResult> = fitParamsAsync({ modelPath: '/model.gguf' })
+void pending
+
 // The inventory is readable on every branch, before any narrowing.
 const devices: number = result.nDevices
 const accelerators: number = result.nGpuDevices
 void devices
 void accelerators
+
+// Readable on every branch, but optional: a consumer must handle absence.
+const projection: FitProjectionRow[] | undefined = result.projection
+const hostRow: FitProjectionRow | undefined = projection?.[projection.length - 1]
+const hostFree: number | undefined = hostRow?.freeBytes
+void hostFree
+
+// @ts-expect-error the projection is optional; unguarded access must not compile
+const unguarded: FitProjectionRow[] = result.projection
+void unguarded
 
 if (result.status === FIT_STATUS.SUCCESS) {
   // SUCCESS: the plan is fully present, no optional-chaining needed.

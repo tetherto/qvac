@@ -1,4 +1,33 @@
-{
+# One named version node for the whole export surface. The name is an ABI tag,
+# not this package's version, and it is what pins a consumer to the C++ runtime
+# below.
+#
+# Without it, -nostdlib++ does not give an addon *this* module's runtime. bare's
+# executable links GNU libstdc++.so.6, so libstdc++ sits in the process' global
+# lookup scope, which the dynamic linker searches before a dlopen'd module's own
+# DT_NEEDED chain. An addon resolved __cxa_throw, __gxx_personality_v0 and the
+# std:: typeinfo objects from libstdc++, while the libc++-only names libstdc++
+# cannot provide — std::__1::*, and std::rethrow_exception, whose mangled name
+# is identical in both libraries — still came from here. That split is silent
+# and fatal: libstdc++ captures a throw into an exception_ptr, libc++abi
+# re-raises it stamped CLNGC++, and GNU's personality routine may only match
+# catch (...) on a foreign exception class, so every typed handler in the addon
+# is skipped and JSCATCH reports "Unknown error".
+#
+# A named node makes the linker record a DT_VERNEED on this version in every
+# consumer, and libstdc++ cannot satisfy a versioned reference to a version it
+# does not define. It pins this module's own internal references too, which were
+# being interposed the same way. The node has to cover the llama/ggml API as
+# well as the spliced C++ ABI: an anonymous node cannot coexist with a named one
+# ("anonymous version tag cannot be combined with other version tags"), and the
+# C++ ABI block must stay inside this global list ahead of `local: *;` to keep
+# its precedence over the catch-all.
+#
+# Renaming the node is a hard break — rebuild every consumer in the same
+# release. A consumer built against an unversioned fabric does not fail to load;
+# it silently goes back to resolving the runtime from libstdc++, which is worse
+# than before because this module's internals no longer follow it there.
+QVAC_FABRIC_ABI_1 {
   global:
     # Bare / Node-API runtime entry points (required for the .bare module).
     bare_*;
@@ -15,9 +44,11 @@
     # llama-common.
     LLAMA_*;
 
-    # ggml public C API (also consumed by the dlopen'd backend .so files at
-    # runtime via ggml_backend_load_all_from_path, which resolve these symbols
-    # from this single loaded module).
+    # ggml public C API, for the consumer addons. The backend .so files that
+    # ggml_backend_load_all_from_path dlopens do not rely on it: every backend
+    # shipped for linux-x64 and android-arm64 links its own ggml statically and
+    # imports no ggml_* / gguf_* at all, which is also why the version node
+    # above cannot affect them.
     ggml_*;
     gguf_*;
 
@@ -49,6 +80,14 @@
       postprocess_cpu_params*;
       metadata_handle_deleter*;
     };
+
+    # When this module embeds libc++ it is also the process' one C++ runtime and
+    # exports the Itanium C++ ABI. That export set lives in
+    # symbols-linux-cxx-runtime.map and is spliced in at the marker below by the
+    # version-script block in CMakeLists.txt, which applies it to that build only
+    # — Android and the ASan build link a shared libc++ and must not get it.
+    # Keep the marker: the splice fails the build without it.
+    # QVAC_FABRIC_LINUX_CXX_RUNTIME
 
   local:
     *;

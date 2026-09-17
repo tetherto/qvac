@@ -36,6 +36,8 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 * Event stream: `completion()` exposes a single ordered `events` async iterable plus an aggregated `final` promise. Events are discriminated by `type` — `contentDelta`, `thinkingDelta`, `toolCall`, `toolError`, `completionStats`, `completionDone`, `rawDelta`. The terminal `completionDone` event carries a `stopReason` (e.g. `"eos"`, `"length"`, `"cancelled"`).
 * Thinking content: models that emit `<think>` blocks surface them as dedicated `thinkingDelta` events (enable with `captureThinking: true`), so consumers don't have to parse tags from raw text.
 * Tool calls: the model emits structured tool calls as `toolCall` events ordered alongside content and thinking in the same stream.
+* Tool choice: `generationParams.tool_choice` takes `"auto"` (default), `"required"`, `"none"` or the name of a declared tool. On llama.cpp-backed models the sampler is constrained by the chat template's tool-call grammar, so `"required"` guarantees a call and a name restricts the call to that tool; a request that cannot honour the choice fails instead of answering in prose.
+* Tool errors: a tool-call region the model emitted that fails to parse or validate surfaces as a `toolError` event and in `final.toolErrors`, so an empty `toolCalls` can be told apart from a malformed call.
 * MCP: plug MCP servers into `completion()` so the model can use external tools (e.g., web search) via the same tool-call mechanism.
 * Raw output: with `emitRawDeltas: true`, every raw model token is also emitted as a `rawDelta` event in parallel to the structured events — useful for debugging or full-fidelity logging.
 * KV cache: cache and reuse the model's key/value attention state to speed up follow-up turns in long conversations. The `kvCache` parameter sets the cache key — pass a string to manage a session manually, or `true` to let the SDK auto-generate one.
@@ -183,10 +185,10 @@ You create and manage the MCP client, connect it to one or more MCP servers, and
 The `kvCache` parameter on `completion()` both enables caching and sets the cache key. It accepts:
 
 - A **non-empty string** (e.g. `"user-123-session-a"`) — use this key for a caller-managed cache. You control the session identity, so you can reuse the same key across turns and later clean it up with [`deleteCache({ kvCacheKey })`](/reference/api#deletecache).
-- `true` — SDK-managed auto cache. The SDK generates the key internally from the conversation history. Convenient for single-session use, but you don't get a stable key for manual cleanup.
+- `true` — SDK-managed auto cache. The SDK generates the key internally from the conversation history. Convenient for single-session use; you don't get a stable key for per-session cleanup, but you can reclaim them in bulk with [`deleteCache({ auto: true })`](/reference/api#deletecache).
 - `false` or `undefined` — no caching (default).
 
-SDK-managed auto caches are removed after 24 hours idle or under disk quota pressure. The quota is 512 MiB on React Native and 4 GiB on other runtimes. Caller-managed string-key caches are not subject to this automatic retention policy.
+SDK-managed auto caches are removed after 24 hours idle or under disk quota pressure. The quota is 512 MiB on React Native and 4 GiB on other runtimes. [`deleteCache({ auto: true })`](/reference/api#deletecache) reclaims them on demand instead of waiting for either bound, skipping any cache a request is still using. Caller-managed string-key caches are not subject to the automatic retention policy and are not touched by that call — clean those up with [`deleteCache({ kvCacheKey })`](/reference/api#deletecache).
 
 There is no separate `kvCacheKey` completion parameter — when you want a caller-managed cache, pass the key string directly as `kvCache`:
 

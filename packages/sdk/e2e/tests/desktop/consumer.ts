@@ -43,8 +43,8 @@ import {
   MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
   FLUX_2_KLEIN_4B_Q4_0,
   ABOT_WORLD_0_5B_Q8_0,
-  ABOT_WORLD_0_5B_LF_VAE,
-  ABOT_WORLD_0_5B_LF_VAE_F16,
+  ABOT_WORLD_0_5B_LF_TAEHV_VAE,
+  ABOT_WORLD_0_5B_LF_WAN_VAE,
   UMT5_XXL_ENC_Q8_0,
   FLUX_2_KLEIN_4B_VAE,
   QWEN3_4B_Q4_K_M,
@@ -76,6 +76,7 @@ import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { TranscriptionExecutor } from '../shared/executors/node/transcription-executor.js'
 import { TranscribeStreamEventsExecutor } from '../shared/executors/node/transcribe-stream-events-executor.js'
 import { RagExecutor } from '../shared/executors/node/rag-executor.js'
+import { VectorIndexExecutor } from '../shared/executors/vector-index-executor.js'
 import { OcrExecutor } from '../shared/executors/node/ocr-executor.js'
 import { VlaExecutor } from '../shared/executors/vla-executor.js'
 import { ClassificationExecutor } from '../shared/executors/node/classification-executor.js'
@@ -100,6 +101,7 @@ import { LifecycleExecutor } from '../shared/executors/lifecycle-executor.js'
 import { SystemResourcesExecutor } from '../shared/executors/system-resources-executor.js'
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { NoLingeringBareExecutor } from '../shared/executors/node/no-lingering-bare-executor.js'
+import { KvCacheRestartExecutor } from '../shared/executors/node/kv-cache-restart-executor.js'
 import { MultiGpuExecutor } from '../shared/executors/multi-gpu-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
@@ -565,9 +567,9 @@ resources.define('world', {
   type: 'sdcpp-generation',
   config: {
     mode: 'world',
-    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_TAEHV_VAE,
     t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
+    vaeModelSrc: ABOT_WORLD_0_5B_LF_WAN_VAE,
     world: { seed: 42, kvCache: true, frameJpegQuality: 85 }
   }
 })
@@ -618,7 +620,7 @@ resources.define('diffusion-esrgan', {
     device: 'gpu',
     threads: 4,
     prediction: 'v',
-    vae_on_cpu: true,
+    params_backend: 'vae=cpu',
     upscaler: {
       type: 'esrgan',
       model_src: REALESRGAN_X4PLUS_ANIME_6B,
@@ -715,6 +717,7 @@ export const executor = createExecutor({
     new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new RagExecutor(resources),
+    new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
@@ -751,6 +754,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
+    new KvCacheRestartExecutor(resources),
     new MultiGpuExecutor(resources),
     new NodeCancellationExecutor(resources),
     new FitStubExecutor(resources),

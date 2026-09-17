@@ -286,8 +286,8 @@ done
   push re-runs ALL consumers (`pull_request_target` fires on each synchronize). `workflow_dispatch`
   is a trusted event in `ci-router` (no label needed, every stage enabled) and lets you re-run only
   the consumer(s) you actually changed. `verified` is **not** one of the labels to avoid adding or
-  to add — `ci-router` reads only `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`,
-  `run-mobile-addon-tests` and `run-coload-tests`; `verified` selects nothing.
+  to add — `ci-router` reads only `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`
+  and `run-mobile-addon-tests`; `verified` selects nothing.
 - **A draft validation PR routes nothing at all.** `ci-router` sets `IS_AUTHORIZED=false` when
   `draft` is true, so *zero* stages run however many labels are on it — labels on a draft buy no
   coverage. Mark it ready, or drive it by dispatch.

@@ -182,7 +182,7 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           path: addon
           fetch-depth: 0
 
@@ -265,7 +265,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/diffusion-cpp' }}
           addon-npm-name: '@qvac/diffusion-cpp'
-          prebuild-artifact-prefix: 'sd-cpp-'
+          prebuild-artifact-prefix: 'prebuild-diffusion-cpp-'
           pat-token: ${{ secrets.GITHUB_TOKEN }}
           # Manual dispatch (inputs.platform set). An empty `package` does NOT test
           # this branch's native code: a standalone dispatch produces no prebuild

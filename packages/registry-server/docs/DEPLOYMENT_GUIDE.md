@@ -279,6 +279,10 @@ After all writers are indexers:
 
 ## Operations
 
+### Rotating Model Blob Cores
+
+Follow the [model blob-core rotation runbook](BLOB_CORE_ROTATION.md).
+
 ### Adding an Indexer
 
 Full walkthrough: add **Server 2** to a running **Server 1** cluster.
@@ -411,7 +415,9 @@ For production, configure `QVAC_INDEXER_KEYS` so CI clients connect directly to 
 QVAC_INDEXER_KEYS=<indexer1-z32-public-key>,<indexer2-z32-public-key>
 ```
 
-The RPC client picks a random indexer from the list on each connection attempt and only accepts peers whose public key matches the configured keys.
+When a live model sync contains at least one new model, the client queries each configured indexer for available space on its registry `--storage` filesystem and selects the indexer with the most space. Metadata-only and deprecation-only syncs retain the normal random selection. In all cases, the client only accepts peers whose public key matches the configured keys.
+
+Capacity-aware selection assumes that registry storage, `MODEL_DRIVES_STORAGE`, and `TEMP_STORAGE` reside on the same attached filesystem on each indexer. Hugging Face ingestion may temporarily require approximately twice the artifact size because the downloaded cache is copied into temporary ingestion storage.
 
 If `QVAC_INDEXER_KEYS` is not set, the client falls back to topic-based discovery (backward compatible).
 
@@ -686,17 +692,18 @@ Use Holepunch's pre-built [Grafana dashboard](https://grafana.com/grafana/dashbo
 
 ### Environment Variables
 
-| Variable                   | Description                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------ |
-| `QVAC_AUTOBASE_KEY`        | Autobase bootstrap key (auto-generated on first run)                                       |
-| `QVAC_REGISTRY_CORE_KEY`   | Registry view key (auto-generated on first run)                                            |
-| `QVAC_ADDITIONAL_INDEXERS` | Comma-separated writer local keys to promote to indexers                                   |
-| `QVAC_REMOVE_INDEXERS`     | Comma-separated writer local keys to remove from quorum (one-shot, clean up after restart) |
-| `QVAC_ALLOWED_WRITER_KEYS` | Comma-separated hex keys allowed to call add-model RPC                                     |
-| `QVAC_INDEXER_KEYS`        | Comma-separated z32 indexer public keys for authenticated CI RPC connections (see below)   |
-| `QVAC_BLIND_PEER_KEYS`     | Comma-separated blind peer public keys for replication                                     |
-| `QVAC_PRIMARY_KEY`         | Optional: Deterministic key generation (testing only)                                      |
-| `QVAC_WRITER_PRIMARY_KEY`  | Optional: Deterministic writer key (testing only)                                          |
+| Variable                    | Description                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| `QVAC_AUTOBASE_KEY`         | Autobase bootstrap key (auto-generated on first run)                                       |
+| `QVAC_REGISTRY_CORE_KEY`    | Registry view key (auto-generated on first run)                                            |
+| `QVAC_ADDITIONAL_INDEXERS`  | Comma-separated writer local keys to promote to indexers                                   |
+| `QVAC_REMOVE_INDEXERS`      | Comma-separated writer local keys to remove from quorum (one-shot, clean up after restart) |
+| `QVAC_ALLOWED_WRITER_KEYS`  | Comma-separated hex keys allowed to call add-model RPC                                     |
+| `QVAC_INDEXER_KEYS`         | Comma-separated z32 indexer public keys for authenticated CI RPC connections (see below)   |
+| `QVAC_BLIND_PEER_KEYS`      | Comma-separated blind peer public keys for replication                                     |
+| `QVAC_BLOB_CORE_GENERATION` | Generation suffix for the active model blob core; unset uses the legacy `models` core      |
+| `QVAC_PRIMARY_KEY`          | Optional: Deterministic key generation (testing only)                                      |
+| `QVAC_WRITER_PRIMARY_KEY`   | Optional: Deterministic writer key (testing only)                                          |
 
 ### Command Reference
 

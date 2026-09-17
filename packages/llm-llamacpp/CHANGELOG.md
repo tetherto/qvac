@@ -1,5 +1,191 @@
 # Changelog
 
+## [0.53.1] - 2026-09-16
+
+### Fixed
+
+- On-disk single-file and sharded models now use the same
+  `common_init_from_params` loading path as `llama-server`. Sharded paths are
+  normalized to the first shard so fabric can discover the complete split set,
+  and `tensor_buft_overrides` is padded before initialization so automatic
+  GPU/CPU placement receives its required writable output buffer. Streamed
+  model loading remains unchanged. Tensor-split architecture support is now
+  validated by fabric instead of a duplicated addon denylist (QVAC-25039).
+
+## [0.53.0] - 2026-09-15
+
+### Added
+
+- Tool calls are now constrained by the chat template's native tool grammar:
+  when a prompt carries tool definitions the sampler applies the grammar the
+  template computes, so malformed tool-call markup and schema-invalid
+  arguments cannot be generated. A load-time or per-request `grammar` /
+  `json_schema` still takes precedence over the tool grammar.
+- Chat-template `additional_stops` are plumbed through per request alongside the
+  load-time antiprompts. No template shipped by a qvac package populates the
+  field, so this is inert for those models; a user-supplied model whose
+  template does populate it will now stop on those strings. Template stops are
+  matched **byte-for-byte**, matching llama-server; the load-time `antiprompt`
+  list keeps its case-insensitive matching. A template stop is a protocol
+  delimiter, so folding its case would let a `</ASSISTANT>` the template never
+  emits truncate ordinary content.
+- `RuntimeStats.toolDefinitionsDropped` reports renders that provably left the
+  supplied tool definitions out — because the template rejected them, because
+  the prompt was rendered without a Jinja template, or because the template
+  rendered successfully while leaving them out. That last case is the quiet
+  one, and it is decided from the prompt that was produced rather than from
+  what the template is capable of: it covers both a template with no tools
+  branch at all and one whose tool block is guarded on a conversation shape
+  this request did not have. Every such drop is decided by rendering the same
+  inputs again with the tools removed and comparing: only a byte-identical
+  prompt counts as an omission. That is what makes conversation text unable to
+  mask a drop — the ordinary multi-turn tool loop replays the call by name, so
+  a tool name in the prompt proves nothing — and equally what stops a
+  definition the template emitted in some transformed form from being reported
+  as dropped. A template that cannot render at all without its tools leaves the
+  question unanswerable, and is reported as not dropped. The counter reads in
+  one direction: non-zero means the definitions were dropped, while 0 is
+  **not** a promise that the model saw all of them, because a template that
+  renders only some of the tools still changes the render. It is a per-request
+  figure: a job reports what happened to its own render, not what happened
+  across whatever else was in flight beside it.
+- `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
+  function name) controls whether a tool call is forced, allowed or disabled for
+  a request that declares tools; a function name restricts the call to it.
+  `"required"` and a function name now fail with `InvalidArgument` rather than
+  silently answering in prose when the demand cannot be honoured. Known limit:
+  the eager grammar these produce admits an unbounded `<think>` prefix on a
+  reasoning model, so `n_predict` can be spent before the tool call is
+  reached. Cap the reasoning channel with a positive `reasoning_budget`, which
+  forces the block closed at the cap, or disable it with `reasoning_budget: 0`,
+  when a call has to be emitted within a tight token budget.
+  A rejected `tool_choice` is now refused before any of the request's media is
+  staged on the multimodal context, so a bad value costs only the caller's own
+  request — previously the stray bitmap made the *next* multimodal request fail
+  in `mtmd_tokenize` with more bitmaps than markers.
+- Tool definitions in a prompt are validated before rendering, and three
+  further cases now fail with `InvalidArgument` alongside the existing
+  duplicate-name check, because each one leaves a declared tool unreachable:
+  - a tool named `auto`, `none` or `required`. Those are the `tool_choice` mode
+    words and are matched before any function lookup, so such a tool would be
+    advertised in the prompt and yet never be selectable by name.
+  - a tool with an empty name, which is unselectable for the same reason from
+    both directions: `tool_choice: ""` is rejected outright by the JS layer,
+    and natively an empty choice is read as `"auto"`.
+  - two tool names that fold to the same grammar rule — `get_weather` and
+    `get-weather`, say. Every tool grammar names its rules after the tool, so
+    both names resolve to whichever rule was registered last: under `"auto"` or
+    `"required"` both tools stay advertised while only one argument schema
+    constrains decoding, and the caller receives a well-formed call against the
+    wrong schema with nothing in the response to indicate it. This was a
+    warning in earlier pre-release builds of this feature.
+- A `mmproj-no-audio` load config option (`mmproj_no_audio` also accepted),
+  taking `0`/`off`/`false` or `1`/`on`/`true`; anything else is rejected with
+  `InvalidArgument`. It drops the projector's audio encoder while keeping its
+  vision encoder, and is forwarded to the vision context as `skip_audio`. It is
+  independent of `mmproj_use_gpu`, which selects the backend rather than the
+  modality.
+
+### Changed
+
+- **Multimodal projectors now skip their audio encoder by default.** The addon
+  sets `mmproj-no-audio` to `true` during load normalization, so an
+  audio-capable mmproj loads vision-only unless the new option is passed
+  explicitly as `0`/`off`/`false`. Vision behaviour is unchanged; a caller
+  relying on audio input from a combined projector must now opt back in.
+- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0`. No API change for this package; the runtime changes as follows since `v10549.0.0`:
+  - Fixed an out-of-bounds tensor write in the MoE copy path. The used-expert scan ran unbounded, so a ubatch whose `ids` tensor had zero rows read past its own bitset and aborted on `GGML_ASSERT(offset <= nbytes ...)`. Reached with the persistent MoE expert cache — on by default under `--fit` — at `-c 65536` and above ([#260](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/260)).
+  - Fixed uninitialized ggml views after oversized MoE cache banks and context tensors ([#263](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/263)).
+  - `mtmd` gained the audio-encoder skip this release's `mmproj-no-audio` option drives ([#261](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/261)).
+  - Native MTP shares compute buffers and synchronizes draft catch-up before the target runs, now also on Vulkan and Metal and preserved across scheduler rebuilds ([#253](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/253)).
+  - qwen4exp correctness backports: `seq_cp`, block position keying, mtmd input, a CUDA abort, KV-unified NaN collapse, and indexer-cache `ext.x`/`ext.y` restore on state reload. Tensor parallelism is enabled and `-sm tensor` is now declared unsupported for the arch ([#255](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/255)).
+
+### Fixed
+
+- `RuntimeStats.avgConcurrentSeq` is now a token-weighted mean rather than a
+  per-step one, so it measures how much traffic shared the backend instead of
+  how finely the scheduler sliced its work. The previous step-weighted mean
+  rose the more a co-resident prefill was throttled, which meant removing the
+  one-token-per-step prefill clamp read as a concurrency regression even
+  though the backend decoded exactly the same sequences over the same tokens.
+- The continuous-batching MTMD smoke test now pairs the image with a
+  *generating* text request instead of a one-word answer. Paired with a
+  one-word answer the text slot finished after ~2 decode steps while the image
+  still had a dozen media segments to encode, so the only way to clear the
+  co-residency bar was for the text slot to be starved — which is exactly what
+  the media-barrier prefill clamp used to do, and exactly what this test is
+  meant to catch.
+- A tool grammar applied for one request no longer leaks into a following
+  request that carries no tools on the same loaded model, and no longer leaves
+  its lazy-grammar triggers attached to a later per-request `grammar` or
+  `json_schema`.
+- A chat-template grammar the sampler rejects no longer stays resident in the
+  loaded model's sampling parameters, and a failing per-request restore can no
+  longer terminate the process.
+- `reasoning_budget` now takes effect on a model whose family has a known
+  reasoning channel but whose active chat template does not expose thinking
+  tags — a manual `chat_template` override, or a GGUF whose embedded template
+  omits them. Reasoning *detection* has always fallen back to the model-family
+  table in that case while the reasoning-budget sampler read the template's
+  tags alone, so the cap was silently inert. Both now come from one source.
+  With tools this also restores the guarantee the tool grammar depends on: the
+  budget sampler is what keeps a lazy tool grammar from arming inside the
+  reasoning block, so without it a `<tool_call>` written inside `<think>`
+  constrained the rest of the reasoning to tool-call syntax.
+- `reasoning_budget` is now enforced on every request, not only the first, for
+  models whose chat template force-opens the reasoning channel (a prompt ending
+  in `<think>`). The reasoning-budget matcher is stateful and survives a
+  request; it re-arms on its own when the *model* emits the opening tag, which
+  is why the Qwen3 family was unaffected, but a force-opened channel gives it no
+  tag to re-arm on and the second request onwards ran uncapped.
+- A failed multimodal request no longer costs the *next* one its turn. Media is
+  staged on the model's vision context and consumed when the prompt is
+  tokenized, so a request that failed in between — an invalid per-request
+  `grammar` or `json_schema`, among others — left its image behind, and the
+  following image request was then rejected outright for carrying more images
+  than its prompt had markers.
+- An empty string in a chat template's `additional_stops` no longer ends every
+  generation after a single token. Only relevant to a user-supplied template
+  that emits one, since no template shipped by a qvac package populates the
+  field at all.
+- `RuntimeStats.thinkingBlockDiscards` on a completed job is now that job's own
+  count rather than a batch-wide total. Both it and the new
+  `toolDefinitionsDropped` were read from the scheduler's shared accumulator,
+  which is copied into every job's terminal snapshot — so with several requests
+  in flight each one was told the sum of all of them. Only the per-job
+  (`jobEnded`) figures change; a whole-model `runtimeStats()` read is still the
+  aggregate it always was.
+- Upstream chat-template render errors and sampler-rebuild failures are
+  sanitised and length-capped before they reach the log, as caller-supplied
+  values already were. A model-supplied template controls that text, so it
+  could previously forge log lines or, for a large template, write one very
+  large record per failing request.
+- A sequence in the generation phase no longer throttles concurrently prefilling sequences to one prompt token per decode step. `MultiRequestBatcher` fed every active slot a single shared chunk size, computed as the minimum `remainingToFeed()` across them; a generating slot reports `1`, so as soon as any one request started generating, every request still feeding its prompt was cut to one token per step and needed roughly as many decode steps to reach its first token as its prompt had tokens. Slots are now budgeted individually and water-filled against the batch capacity, so a generating slot takes its one token while a concurrent prefill keeps its full micro-batch. On a `parallel: 4` model answering six concurrent requests, time to first token for the stalled group drops from ~1710 ms to ~308 ms, aggregate throughput rises ~25% and wall clock falls ~21%. Peak batch size is unchanged — the sum of the per-slot budgets is bounded by the same `batch.capacity()` the shared chunk was. Note that a step taken while a large prefill is co-resident now carries more tokens, so an already-generating sequence sees a correspondingly larger spread in per-token latency.
+
+## [0.52.1] - 2026-09-14
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0` -> `10549.0.0#1` (`LLAMA_OPENSSL=OFF`, so native prebuilds do not link OpenSSL; no API change for this package).
+
+## [0.52.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549; no API change for this package).
+
+## [0.51.0] - 2026-09-08
+
+### Fixed
+
+- Two separate still images of equal size passed in one request are no longer fused into a single two-frame video chunk on temporal-merge-capable models (Qwen-VL). `clip_encode` was writing a two-frame embedding into a buffer sized for one frame and aborting the process with `Output buffer size mismatch` (exit 134). Fixed in `qvac-fabric`, whose dependency is bumped `10297.1.1` -> `10297.1.2`; temporal merge is now opt-in per bitmap, so only real video frames merge.
+
+## [0.50.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.49.x` adopt the new build floor deliberately rather than automatically.
+
 ## [0.49.1] - 2026-09-02
 
 ### Fixed

@@ -97,7 +97,6 @@ const falseRoute = {
   run_cpp_tests: 'false',
   run_desktop: 'false',
   run_mobile: 'false',
-  run_coload: 'false',
 }
 
 const baselineRoute = {
@@ -129,7 +128,6 @@ test('ci-router: trusted non-PR events enable every stage', () => {
       run_cpp_tests: 'true',
       run_desktop: 'true',
       run_mobile: 'true',
-      run_coload: 'true',
     },
   )
 })
@@ -176,20 +174,6 @@ test('ci-router: internal granular labels select only requested stages', () => {
   )
 })
 
-test('ci-router: run-coload-tests selects the co-load stage and its prebuild', () => {
-  // The co-load overlays the PR's freshly-built prebuild, so the label pulls in
-  // run_prebuilds too. The Device Farm leg keys off run_mobile, so the co-load
-  // label alone is the cheap desktop co-load.
-  assert.deepEqual(
-    route({ PR_LABELS_JSON: '["run-coload-tests"]' }),
-    {
-      ...baselineRoute,
-      run_prebuilds: 'true',
-      run_coload: 'true',
-    },
-  )
-})
-
 test('ci-router: external fork ready PR gets baseline routing without verified label', () => {
   assert.deepEqual(route({ HEAD_REPO: 'outsider/qvac' }), baselineRoute)
   assert.deepEqual(
@@ -210,7 +194,7 @@ test('ci-router: external fork draft runs nothing even with heavy labels', () =>
     route({
       HEAD_REPO: 'outsider/qvac',
       IS_DRAFT: 'true',
-      PR_LABELS_JSON: '["run-coload-tests"]',
+      PR_LABELS_JSON: '["run-desktop-addon-tests"]',
     }),
     falseRoute,
   )
@@ -663,47 +647,6 @@ test('check-approvals no longer depends on verified and skips drafts', () => {
   assert.match(source, /!github\.event\.pull_request\.draft/)
 })
 
-test('coload smoke: Device Farm leg is co-load + mobile-label and authorisation gated', () => {
-  // The standalone coload-smoke-mobile-ggml.yml is replaced by a reusable
-  // workflow wired into each addon's on-pr pipeline. The expensive Device Farm
-  // leg stays opt-in: it requires the co-load label AND the mobile label, and
-  // authorisation (ci-router enforces same-repo/non-draft for internal PRs;
-  // fork-ci gates external forks via fork-approval). The reusable itself must
-  // pull_request trigger that could bypass that gating.
-  const reusable = read('.github/workflows/coload-smoke-mobile.yml')
-  assert.match(reusable, /on:\s*\n\s*workflow_call:/)
-  assert.match(
-    reusable,
-    /uses:\s*\.\/\.github\/workflows\/test-android-sdk\.yml/,
-  )
-  for (const path of [
-    '.github/workflows/on-pr-asr-ggml.yml',
-    '.github/workflows/on-pr-tts-ggml.yml',
-  ]) {
-    const block = jobBlock(read(path), 'coload-smoke-mobile')
-    assert.match(
-      block,
-      /uses:\s*\.\/\.github\/workflows\/coload-smoke-mobile\.yml/,
-      `${path} runs the reusable mobile co-load`,
-    )
-    assert.match(
-      block,
-      /needs\.ci-router\.outputs\.run_coload == 'true'/,
-      `${path} Device Farm co-load requires the co-load label`,
-    )
-    assert.match(
-      block,
-      /needs\.ci-router\.outputs\.run_mobile == 'true'/,
-      `${path} Device Farm co-load requires the mobile label`,
-    )
-    assert.match(
-      block,
-      /needs:[\s\S]*?\bfork-approval\b/,
-      `${path} Device Farm co-load requires fork-approval`,
-    )
-  }
-})
-
 const AWS_OIDC_SECRET = 'AWS_OIDC_ROLE_ARN'
 
 const MOBILE_SDK_WORKFLOWS = [
@@ -1134,6 +1077,104 @@ test('verify-prebuilds binds a prebuild status to its producing on-pr run', () =
   )
 })
 
+// on-pr-nx runs on pull_request_target, so every job that executes PR code or
+// holds a write scope must gate on fork-approval. Enumerated from the file so a
+// newly added job cannot land ungated: anything not explicitly exempted below
+// has to carry the gate.
+test('on-pr-nx: every non-exempt job gates on fork-approval', () => {
+  const source = read('.github/workflows/on-pr-nx.yml')
+
+  // Exempt, and why. Each either runs no PR code or establishes the gate itself.
+  const exempt = new Map([
+    ['fork-approval', 'is the gate'],
+    ['ci-router', 'reads PR labels from a trusted checkout; runs no PR code'],
+    ['authorize', 'needs fork-approval already, and is the second half of the gate'],
+    ['matrix', 'checks out the default branch only and reads options.ci off it'],
+    ['publish-prebuild-status', 'trusted sparse checkout; publishes a commit status after gated jobs'],
+  ])
+
+  const jobNames = [...source.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].map(
+    (m) => m[1],
+  )
+  assert.ok(jobNames.length > 10, 'parsed the on-pr-nx job list')
+
+  for (const job of jobNames) {
+    if (exempt.has(job)) continue
+    const block = jobBlock(source, job)
+    const needs = block.match(/needs:[\s\S]*?(?=\n {4}[a-z#]|\n {2}[a-z])/)
+    assert.ok(needs, `'${job}' declares needs`)
+    assert.match(
+      needs[0],
+      /\bfork-approval\b/,
+      `'${job}' must gate on fork-approval (or be added to the exempt map with a reason)`,
+    )
+  }
+
+  // The exempt map must not drift into naming jobs that no longer exist.
+  for (const job of exempt.keys()) {
+    assert.ok(jobNames.includes(job), `exempt job '${job}' still exists`)
+  }
+})
+
+test('on-pr-nx matrix job loads nx-project-matrix from the trusted default branch and reads config off it, never PR head', () => {
+  const source = read('.github/workflows/on-pr-nx.yml')
+  const matrix = jobBlock(source, 'matrix')
+
+  // (i) The matrix composite runs from a FULL (non-sparse) checkout of the trusted
+  // default branch, pinned before `uses:` — never PR head (fork RCE under pull_request_target).
+  const checkoutRefLine = matrix
+    .split('\n')
+    .find((line) => line.trim().startsWith('ref:'))
+  assert.ok(checkoutRefLine, 'matrix job checkout pins a ref')
+  assert.doesNotMatch(
+    checkoutRefLine,
+    /github\.event\.pull_request\.head\./,
+    'matrix checkout ref must never resolve to a PR-head expression',
+  )
+  assert.match(
+    checkoutRefLine,
+    /github\.event\.repository\.default_branch/,
+    'matrix checkout ref is the trusted default branch',
+  )
+  assert.doesNotMatch(
+    matrix,
+    /sparse-checkout:\s*\.github\/actions\/nx-project-matrix/,
+    'matrix job must NOT sparse-checkout (sparse config leaks into the action checkout and breaks the pnpm pin)',
+  )
+  assert.match(
+    matrix,
+    /persist-credentials:\s*false/,
+    'matrix job checkout must not persist credentials',
+  )
+
+  const trustedCheckoutIndex = matrix.search(
+    /uses: actions\/checkout@[0-9a-f]{40}/,
+  )
+  const usesIndex = matrix.indexOf('uses: ./.github/actions/nx-project-matrix')
+  assert.notEqual(usesIndex, -1, 'matrix job runs the nx-project-matrix composite')
+  assert.ok(
+    trustedCheckoutIndex !== -1 && trustedCheckoutIndex < usesIndex,
+    'the trusted default-branch checkout must precede `uses: ./.github/actions/nx-project-matrix`',
+  )
+
+  // (ii) config-ref (the options.ci source) must resolve to the trusted default
+  // branch, never a PR-head expression (else a fork points the git-show at its tree).
+  const configRefLine = matrix
+    .split('\n')
+    .find((line) => line.trim().startsWith('config-ref:'))
+  assert.ok(configRefLine, 'matrix job passes config-ref to nx-project-matrix')
+  assert.doesNotMatch(
+    configRefLine,
+    /github\.event\.pull_request\.head\./,
+    'config-ref must not resolve to a PR-head expression',
+  )
+  assert.match(
+    configRefLine,
+    /github\.event\.repository\.default_branch/,
+    'config-ref resolves to the trusted default branch',
+  )
+})
+
 test('publish-prebuild-status stamps its run URL into target_url', () => {
   const workflowDirectory = join(root, '.github/workflows')
   const offenders = readdirSync(workflowDirectory)
@@ -1407,6 +1448,28 @@ function jobDependsOnAuthorize(job) {
   return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text)
 }
 
+/**
+ * A job's `if:` value alone, flattened to one line. Both block-scalar styles
+ * (`|`/`|-`/`|+` and `>`/`>-`/`>+`) and the inline form are handled.
+ *
+ * Scoped to the condition rather than the whole job on purpose: several jobs
+ * forward the same expression as an input — sanity-checks passes
+ * `run-integration: ${{ needs.authorize.outputs.allowed == 'true' }}` — and
+ * matching job text would accept that as a gate when the `if:` has none.
+ */
+function jobCondition(jobText) {
+  const block = jobText.match(/^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|[ \t]*\n)*)/m)
+  if (block) {
+    return block[1]
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(' ')
+  }
+  const inline = jobText.match(/^ {4}if:[ \t]*(.+)$/m)
+  return inline ? inline[1].trim() : ''
+}
+
 const reusablePrivilege = new Map()
 
 /**
@@ -1459,6 +1522,12 @@ function jobRunsPrivilegedForkSurface(job) {
   return true
 }
 
+// always(), !cancelled(), success() and failure() each suppress the implicit
+// "all needs succeeded" check over the WHOLE of needs. A job carrying one of
+// them is no longer skipped by a failed or skipped fork-approval, so its
+// `needs:` entry stops being a gate and becomes mere ordering.
+const STATUS_CHECK_FUNCTION = /\b(?:always|cancelled|success|failure)\s*\(\s*\)/
+
 test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated fork run)', () => {
   for (const path of forkCiTargets()) {
     for (const job of eachJob(read(path))) {
@@ -1469,6 +1538,21 @@ test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated 
         job.text,
         /needs:[\s\S]*?\bfork-approval\b/,
         `${path}: job '${job.name}' gates on authorize but does not depend on fork-approval (fail-open)`,
+      )
+
+      // QVAC-24913. Same hazard as validate-artifacts above: once a status-check
+      // function is in the condition, `needs: [fork-approval, authorize]` no
+      // longer skips this job when either is skipped, so the ONLY thing keeping
+      // a fork PR off a credentialed self-hosted runner is the allowed clause
+      // written out in the `if:`. jobDependsOnAuthorize() is satisfied by the
+      // needs: entry alone, so without this assertion deleting that clause left
+      // the entire suite green.
+      const condition = jobCondition(job.text)
+      if (!STATUS_CHECK_FUNCTION.test(condition)) continue
+      assert.match(
+        condition,
+        /needs\.authorize\.outputs\.allowed == 'true'/,
+        `${path}: job '${job.name}' suppresses implicit needs-skipping with a status-check function, so it must if-gate on needs.authorize.outputs.allowed == 'true' explicitly (fail-open)`,
       )
     }
   }
@@ -1708,7 +1792,7 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
 
 test('mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs', () => {
   // (1) `${{ github.event.inputs.package }}` must never be interpolated into a
-  // run: script — it goes through an `env:` block per github-actions.mdc, else a
+  // run: script — it goes through an `env:` block per .github/AGENTS.md, else a
   // crafted spec (`"; curl … | bash; echo "`) breaks out of the scope check that
   // renders after the quotes break; (2) the model-match operator defaults to
   // EQUALS so a maxDevices:1 dispatch bills the exact fleet model, not a CONTAINS
@@ -1832,6 +1916,80 @@ test('mobile shards pass grep explicitly and retain host-phase failure logs', ()
   assert.match(collectLogs, /\*Test\*spec\*output\*/)
   assert.match(collectLogs, /\*Standard\*Output\*/)
   assert.match(collectLogs, /Host phase log:/)
+})
+
+// A native abort() kills the app before Bare flushes its console buffer, so the
+// .ips crash report is the only place the faulting stack survives.
+test('iOS mobile runs collect on-device crash reports', () => {
+  const generateTestspec = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
+  )
+  const collectLogs = read(
+    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
+  )
+
+  // Must run in the test phase: Device Farm skips post_test when the test phase
+  // exits non-zero, i.e. exactly when a crash report is what we need.
+  const wdioCall = generateTestspec.indexOf('node node_modules/@wdio/cli/bin/wdio.js')
+  const crashPull = generateTestspec.lastIndexOf('pymobiledevice3 crash pull')
+  const androidLogcat = generateTestspec.indexOf('adb logcat -d -b all')
+  // Anchor on the emitted YAML key, not the word — prose above mentions it too.
+  const postTestPhase = generateTestspec.indexOf('  post_test:\n    commands:')
+  assert.ok(crashPull > 0, 'iOS crash-report pull must exist')
+  assert.ok(androidLogcat > 0, 'Android logcat collection must stay in post_test')
+  assert.ok(
+    crashPull < postTestPhase,
+    'crash pull must be emitted in the test phase — post_test never runs on a failed test',
+  )
+
+  // Re-exits with wdio's own code, so wrapping cannot change a run's verdict.
+  const exitLine = generateTestspec.indexOf('exit $WDIO_RC')
+  const rcCapture = generateTestspec.indexOf('WDIO_RC=$?')
+  assert.ok(rcCapture > wdioCall, 'wdio exit code must be captured right after the run')
+  assert.ok(exitLine > crashPull, 'the wrapper must re-exit after collecting logs')
+  assert.match(
+    generateTestspec.slice(0, wdioCall),
+    /if \[ "\$PLATFORM" = "iOS" \]/,
+    'wrapper must be iOS-only',
+  )
+  assert.doesNotMatch(
+    generateTestspec.slice(wdioCall, exitLine),
+    /^\s+set -e$/m,
+    'set -e must not be re-enabled around log collection',
+  )
+
+  assert.match(generateTestspec, /\[CRASH_REPORT_START\]/)
+  assert.match(generateTestspec, /\[CRASH_REPORT_END\]/)
+
+  // Device Farm reuses phones and every shard is the same bundle id, so the
+  // reports already present before wdio ran are snapshotted by NAME and
+  // subtracted afterwards. An mtime window cannot distinguish them.
+  assert.ok(
+    generateTestspec.indexOf('BEFORE_LIST') < wdioCall,
+    'the pre-run crash snapshot must be taken before wdio starts',
+  )
+  assert.match(generateTestspec.slice(crashPull), /grep -Fxq "\$\(basename "\$f"\)" "\$BEFORE_LIST"/)
+  assert.doesNotMatch(generateTestspec, /-mmin/, 'no rolling time window — names are exact')
+
+  // A snapshot that never ran is not an empty phone. Both pulls are guarded,
+  // the snapshot's status is kept, and a report can only be presented as this
+  // run's when that status is good — otherwise it is labelled UNVERIFIED.
+  assert.match(generateTestspec, /SNAP_RC=\$\?/, "the snapshot's exit status must be captured")
+  assert.strictEqual(
+    (generateTestspec.match(/command -v pymobiledevice3 >\/dev\/null 2>&1/g) || []).length,
+    3,
+    'install check plus both pulls are guarded',
+  )
+  assert.match(
+    generateTestspec,
+    /if \[ -n "\$NEWEST" \] && \[ "\$SNAP_RC" -eq 0 \]/,
+    'a verified report requires a successful snapshot',
+  )
+  assert.match(generateTestspec, /CRASH_REPORT_START_UNVERIFIED/)
+
+  // ...and they have to reach the uploaded artifact.
+  assert.match(collectLogs, /-type d -name "crash-reports"/)
+  assert.match(collectLogs, /Extracted iOS crash report/)
 })
 
 test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {

@@ -516,6 +516,33 @@ nativeTest('FLUX img2img | throws when prediction is "auto"', async (t) => {
   }
 })
 
+nativeTest('FLUX img2img | throws when prediction is "flux_flow"', async (t) => {
+  const model = new ImgStableDiffusion({
+    files: {
+      model: '/tmp/flux-2-klein-4b-Q8_0.gguf',
+      llm: '/tmp/Qwen3-4B-Q4_K_M.gguf'
+    },
+    config: {
+      threads: 1,
+      prediction: 'flux_flow',
+      diffusion_fa: true,
+      verbosity: 2
+    },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  try {
+    await model.run({ prompt: 'test', init_image: VALID_PNG_HEADER })
+    t.fail('should have thrown')
+  } catch (err) {
+    t.ok(
+      /FLUX img2img requires an explicit prediction type/.test(err.message),
+      'prediction: "flux_flow" is rejected for FLUX img2img'
+    )
+  }
+})
+
 nativeTest('FLUX img2img | does NOT throw for txt2img even without prediction', async (t) => {
   const model = new ImgStableDiffusion({
     files: {

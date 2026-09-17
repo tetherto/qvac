@@ -11,15 +11,15 @@ import { PathTraversalError } from '@/errors'
 // and quickly drift out of sync.
 // The functional-equivalence assertions below pin the contract:
 //
-//   1. `beginTurn` primes the cache (calls the injected closure) the
-//      first time and reuses the in-memory init flag on subsequent
-//      turns — no spurious re-prime.
+//   1. `beginTurn` does no native work: a cold turn only reserves the path,
+//      the addon's own save establishes the file, and a later turn reuses it
+//      through the committed boundary.
 //   2. `commitTurn({ kind: "static" })` records the new saved count and
 //      flips the turn's `committed` flag so the deferred `rollback`
 //      becomes a no-op on the happy path.
 //   3. `rollback` clears every layer, even when the on-disk file
-//      doesn't exist (the `unlink` error is logged but not propagated;
-//      in-memory state is still cleared).
+//      doesn't exist (the `unlink` ENOENT is expected on a turn that failed
+//      before the addon saved; in-memory state is still cleared).
 //   4. `rollback` after `commitTurn` is a no-op (handle-internal flag
 //      protects the committed state from later disposal).
 //   5. Double-`rollback` is idempotent.
@@ -139,7 +139,7 @@ test('generateConfigHash: includes complete canonical tool definitions', async (
 
 // `configHash` is the on-disk `.bin` filename, so the digest of a tool-free
 // session is a compatibility surface: any change to the hash payload or its
-// serialization renames every plain-chat cache file and re-primes it cold.
+// serialization renames every plain-chat cache file and restarts it cold.
 // Pinning the shipped digests keeps that a deliberate decision.
 test('generateConfigHash: no-tools digests stay pinned', async (t) => {
   const { mod, cleanup } = await loadSession()
@@ -164,45 +164,41 @@ test('generateConfigHash: no-tools digests stay pinned', async (t) => {
   }
 })
 
-test('kv-cache-session: beginTurn primes the cache on first use, reuses on second', async (t) => {
+test('kv-cache-session: a cold turn establishes the cache from its own save, and the next turn reuses it', async (t) => {
   const { mod, utils, cleanup, writeFakeCache } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
-    let primeCallCount = 0
-    const primeIfMissing = async (cachePath: string) => {
-      primeCallCount++
-      writeFakeCache(cachePath)
-    }
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'session-a')
 
     const firstTurn = await session.beginTurn({
       kind: 'custom',
       customKey: 'session-a',
-      configHash,
-      primeIfMissing
+      configHash
     })
-    t.is(primeCallCount, 1, 'first turn primes the cache')
-    t.is(firstTurn.savedCount, 0, 'no saved count on a freshly-primed cache')
-    t.ok(
-      mod.__kvCacheSessionTestHooks.hasInitializedPath(
-        await utils.getCacheFilePath('test-model', configHash, 'session-a')
-      ),
-      'initializedCaches entry registered after prime'
+    t.is(firstTurn.savedCount, 0, 'a cold turn carries no saved count')
+    t.absent(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
+      'nothing is recorded before the addon has saved'
     )
 
+    // Stands in for the addon's own `saveCacheToDisk` at the end of the turn.
+    writeFakeCache(firstTurn.cachePath)
     await session.commitTurn(firstTurn, {
       kind: 'static',
       messageCount: 3,
       toolBlockCached: false
     })
+    t.ok(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
+      'the verified save records the cache'
+    )
 
     const secondTurn = await session.beginTurn({
       kind: 'custom',
       customKey: 'session-a',
-      configHash,
-      primeIfMissing
+      configHash
     })
-    t.is(primeCallCount, 1, 'second turn reuses the primed cache — no spurious re-prime')
     t.is(
       secondTurn.savedCount,
       3,
@@ -218,23 +214,20 @@ test('kv-cache-session: a second same-key turn waits for the first to release it
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (cachePath: string) => {
-      writeFakeCache(cachePath)
-    }
 
-    // First turn primes the cache and holds the write lock until it commits.
+    // The first turn holds the write lock until it commits.
     const first = await session.beginTurn({
       kind: 'custom',
       customKey: 'lock-a',
-      configHash,
-      primeIfMissing
+      configHash
     })
+    writeFakeCache(first.cachePath)
 
     // A second turn on the SAME key must block on the write lock — it cannot
     // observe or rewrite the same cache file while the first turn owns it.
     let secondResolved = false
     const secondPromise = session
-      .beginTurn({ kind: 'custom', customKey: 'lock-a', configHash, primeIfMissing })
+      .beginTurn({ kind: 'custom', customKey: 'lock-a', configHash })
       .then((handle) => {
         secondResolved = true
         return handle
@@ -257,8 +250,7 @@ test('kv-cache-session: a second same-key turn waits for the first to release it
     const third = await session.beginTurn({
       kind: 'custom',
       customKey: 'lock-a',
-      configHash,
-      primeIfMissing
+      configHash
     })
     t.ok(third, 'a later same-key turn acquires the lock after the queue drains')
     await session.commitTurn(third, { kind: 'static', messageCount: 2, toolBlockCached: false })
@@ -271,29 +263,22 @@ test('kv-cache-session: a queued same-key waiter recreates a parent a holder rol
   // Race: the holder rolls back (unlink + prune the empty parent dir) while a
   // same-key waiter is queued for the lock and not yet in activeCachePaths, so
   // the prune removes the waiter's parent. The waiter must recreate it after
-  // acquiring the lock. The prime writer does NOT mkdir — like the real addon —
-  // so a missing parent surfaces as ENOENT rather than being silently masked.
+  // acquiring the lock.
   const { mod, cleanup } = await loadSession()
-  const fs = await import('bare-fs')
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeNoMkdir = async (cachePath: string) => {
-      fs.writeFileSync(cachePath, 'fake-kv-cache-bytes')
-    }
-
     const holder = await session.beginTurn({
       kind: 'custom',
       customKey: 'race-a',
-      configHash,
-      primeIfMissing: primeNoMkdir
+      configHash
     })
 
     // Waiter queues on the same key: its getCacheFilePath made the parent, then
     // it blocks on the write lock the holder owns.
     let waiterErr: unknown = null
     const waiterPromise = session
-      .beginTurn({ kind: 'custom', customKey: 'race-a', configHash, primeIfMissing: primeNoMkdir })
+      .beginTurn({ kind: 'custom', customKey: 'race-a', configHash })
       .catch((err) => {
         waiterErr = err
         return null
@@ -304,7 +289,7 @@ test('kv-cache-session: a queued same-key waiter recreates a parent a holder rol
     await session.rollback(holder)
 
     const waiter = await waiterPromise
-    t.is(waiterErr, null, 'waiter recreated the pruned parent and primed without ENOENT')
+    t.is(waiterErr, null, 'waiter recreated the pruned parent without ENOENT')
     t.ok(waiter, 'waiter turn admitted after the holder rolled back')
     // Release the admitted waiter so it doesn't leak its write lock / active-path ref.
     if (waiter) await session.rollback(waiter)
@@ -313,16 +298,12 @@ test('kv-cache-session: a queued same-key waiter recreates a parent a holder rol
   }
 })
 
-test('kv-cache-session: an already-aborted turn does not prime (custom and auto)', async (t) => {
+test('kv-cache-session: an already-aborted turn rejects and leaves no artifacts (custom and auto)', async (t) => {
   const { fs, mod, cleanup, cacheRoot } = await loadSession()
   const { AbortController } = await import('bare-abort-controller')
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    let primeCalls = 0
-    const primeIfMissing = async () => {
-      primeCalls++
-    }
 
     const c1 = new AbortController()
     c1.abort(new Error('aborted'))
@@ -332,15 +313,14 @@ test('kv-cache-session: an already-aborted turn does not prime (custom and auto)
         kind: 'custom',
         customKey: 'aborted-a',
         configHash,
-        signal: c1.signal,
-        primeIfMissing
+        signal: c1.signal
       })
     } catch (e) {
       customErr = e
     }
     t.ok(
       customErr instanceof Error && customErr.name === 'CacheLockAbortError',
-      'custom: rejects with CacheLockAbortError, no prime'
+      'custom: rejects with CacheLockAbortError'
     )
 
     const c2 = new AbortController()
@@ -351,18 +331,15 @@ test('kv-cache-session: an already-aborted turn does not prime (custom and auto)
         kind: 'auto',
         configHash,
         history: [{ role: 'user', content: 'hi' }],
-        signal: c2.signal,
-        primeIfMissing
+        signal: c2.signal
       })
     } catch (e) {
       autoErr = e
     }
     t.ok(
       autoErr instanceof Error && autoErr.name === 'CacheLockAbortError',
-      'auto: rejects with CacheLockAbortError, no prime'
+      'auto: rejects with CacheLockAbortError'
     )
-
-    t.is(primeCalls, 0, 'neither an already-aborted custom nor auto turn primes')
 
     // No artifacts: the aborted turns pruned the parent dirs getCacheFilePath
     // created, and the auto turn removed the retention marker its discovery wrote.
@@ -380,27 +357,22 @@ test('kv-cache-session: an already-aborted turn does not prime (custom and auto)
 })
 
 test('kv-cache-session: turns on different cache keys do not block each other', async (t) => {
-  const { mod, cleanup, writeFakeCache } = await loadSession()
+  const { mod, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (cachePath: string) => {
-      writeFakeCache(cachePath)
-    }
-
     // First turn holds the write lock for key `lock-x`.
     const first = await session.beginTurn({
       kind: 'custom',
       customKey: 'lock-x',
-      configHash,
-      primeIfMissing
+      configHash
     })
 
     // A turn on a DIFFERENT key locks a different path, so it must proceed
     // without waiting for the first — this is the concurrency the fix preserves.
     let otherResolved = false
     const otherPromise = session
-      .beginTurn({ kind: 'custom', customKey: 'lock-y', configHash, primeIfMissing })
+      .beginTurn({ kind: 'custom', customKey: 'lock-y', configHash })
       .then((handle) => {
         otherResolved = true
         return handle
@@ -417,22 +389,18 @@ test('kv-cache-session: turns on different cache keys do not block each other', 
 })
 
 test('kv-cache-session: an auto turn and a custom key that resolve to the same file share one lock', async (t) => {
-  const { mod, utils, cleanup, writeFakeCache } = await loadSession()
+  const { mod, utils, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
     const history = [{ role: 'user', content: 'alias me' }]
     // The custom key equal to the auto-derived key resolves to the same .bin.
     const autoKey = utils.generateCacheKey(history)
-    const primeIfMissing = async (cachePath: string) => {
-      writeFakeCache(cachePath)
-    }
-
-    const autoTurn = await session.beginTurn({ kind: 'auto', configHash, history, primeIfMissing })
+    const autoTurn = await session.beginTurn({ kind: 'auto', configHash, history })
 
     let customResolved = false
     const customPromise = session
-      .beginTurn({ kind: 'custom', customKey: autoKey, configHash, primeIfMissing })
+      .beginTurn({ kind: 'custom', customKey: autoKey, configHash })
       .then((handle) => {
         customResolved = true
         return handle
@@ -451,21 +419,16 @@ test('kv-cache-session: an auto turn and a custom key that resolve to the same f
 })
 
 test('kv-cache-session: a cancelled waiter drops out without waiting for the holder', async (t) => {
-  const { mod, cleanup, writeFakeCache } = await loadSession()
+  const { mod, cleanup } = await loadSession()
   const { AbortController } = await import('bare-abort-controller')
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (cachePath: string) => {
-      writeFakeCache(cachePath)
-    }
-
     // First turn holds the lock and is never committed during the wait.
     const first = await session.beginTurn({
       kind: 'custom',
       customKey: 'k',
-      configHash,
-      primeIfMissing
+      configHash
     })
 
     const controller = new AbortController()
@@ -475,7 +438,6 @@ test('kv-cache-session: a cancelled waiter drops out without waiting for the hol
         kind: 'custom',
         customKey: 'k',
         configHash,
-        primeIfMissing,
         signal: controller.signal
       })
       .then(
@@ -502,8 +464,7 @@ test('kv-cache-session: a cancelled waiter drops out without waiting for the hol
     const third = await session.beginTurn({
       kind: 'custom',
       customKey: 'k',
-      configHash,
-      primeIfMissing
+      configHash
     })
     t.ok(third, 'a later turn acquires the lock after the cancelled waiter dropped')
     await session.commitTurn(third, { kind: 'static', messageCount: 1, toolBlockCached: false })
@@ -513,19 +474,14 @@ test('kv-cache-session: a cancelled waiter drops out without waiting for the hol
 })
 
 test('kv-cache-session: commitTurn records the new saved count and suppresses rollback', async (t) => {
-  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  const { fs, mod, utils, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (p: string) => {
-      writeFakeCache(p)
-    }
-
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'session-commit',
-      configHash,
-      primeIfMissing
+      configHash
     })
 
     // The addon silently swallows save errors, so the session
@@ -562,19 +518,14 @@ test('kv-cache-session: commitTurn records the new saved count and suppresses ro
 })
 
 test('kv-cache-session: rollback wipes every bookkeeping layer atomically', async (t) => {
-  const { fs, path, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  const { fs, path, mod, utils, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (p: string) => {
-      writeFakeCache(p)
-    }
-
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'session-rollback',
-      configHash,
-      primeIfMissing
+      configHash
     })
     fs.writeFileSync(turn.cachePath, 'stale-bytes')
     mod.__kvCacheSessionTestHooks.setSavedCountForTest(turn.cachePath, 4)
@@ -616,20 +567,14 @@ test('kv-cache-session: auto rename prunes the source cache-key directory', asyn
     const turn = await session.beginTurn({
       kind: 'auto',
       configHash,
-      history,
-      primeIfMissing: async (cachePath: string) => {
-        writeFakeCache(cachePath)
-      }
+      history
     })
     const target = await utils.getCurrentCacheInfo('test-model', configHash, [
       ...history,
       { role: 'assistant', content: 'hi' }
     ])
     const sourceDirectory = path.dirname(path.dirname(turn.cachePath))
-    t.ok(
-      mod.__kvCacheSessionTestHooks.hasInitializedPath(turn.cachePath),
-      'source path is marked initialized before the rename'
-    )
+    writeFakeCache(turn.cachePath)
 
     await session.commitTurn(turn, {
       kind: 'autoRename',
@@ -651,7 +596,7 @@ test('kv-cache-session: auto rename prunes the source cache-key directory', asyn
 })
 
 test('kv-cache-session: an auto turn cancelled before commit does not persist to the target', async (t) => {
-  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  const { fs, mod, utils, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
@@ -665,10 +610,7 @@ test('kv-cache-session: an auto turn cancelled before commit does not persist to
       kind: 'auto',
       configHash,
       history,
-      signal: ac.signal as never,
-      primeIfMissing: async (cachePath: string) => {
-        writeFakeCache(cachePath)
-      }
+      signal: ac.signal as never
     })
     const target = await utils.getCurrentCacheInfo('test-model', configHash, [
       ...history,
@@ -751,10 +693,7 @@ test('kv-cache-session: beginTurn defers retention until turn cleanup', async (t
     const turn = await session.beginTurn({
       kind: 'auto',
       configHash: mod.generateConfigHash('sys', []),
-      history: [{ role: 'user', content: 'active' }],
-      primeIfMissing: async (cachePath: string) => {
-        writeFakeCache(cachePath)
-      }
+      history: [{ role: 'user', content: 'active' }]
     })
 
     t.is(
@@ -826,11 +765,9 @@ test('kv-cache-session: retention never evicts an active auto cache', async (t) 
     const turn = await session.beginTurn({
       kind: 'auto',
       configHash,
-      history: [{ role: 'user', content: 'active' }],
-      primeIfMissing: async (cachePath: string) => {
-        writeFakeCache(cachePath)
-      }
+      history: [{ role: 'user', content: 'active' }]
     })
+    writeFakeCache(turn.cachePath)
     const inactiveKey = '4444444444444444'
     const inactivePath = await utils.getCacheFilePath('other-model', 'config', inactiveKey)
     writeFakeCache(inactivePath)
@@ -878,24 +815,19 @@ test('kv-cache-session: retention expires idle auto caches', async (t) => {
 })
 
 test('kv-cache-session: rollback tolerates a missing on-disk file', async (t) => {
-  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  const { fs, mod, utils, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (p: string) => {
-      writeFakeCache(p)
-    }
-
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'session-missing-file',
-      configHash,
-      primeIfMissing
+      configHash
     })
+    // A saved count with no file on disk: a turn whose addon save never landed,
+    // or whose file was removed externally.
     mod.__kvCacheSessionTestHooks.setSavedCountForTest(turn.cachePath, 2)
-    // Delete the file after beginTurn succeeds — simulates a cancelled
-    // mid-write turn where the file was removed externally.
-    fs.unlinkSync(turn.cachePath)
+    t.absent(fs.existsSync(turn.cachePath), 'no file on disk for the rollback to unlink')
 
     await session.rollback(turn)
 
@@ -917,19 +849,14 @@ test('kv-cache-session: rollback tolerates a missing on-disk file', async (t) =>
 })
 
 test('kv-cache-session: double-rollback is idempotent', async (t) => {
-  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  const { fs, mod, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (p: string) => {
-      writeFakeCache(p)
-    }
-
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'session-double',
-      configHash,
-      primeIfMissing
+      configHash
     })
     fs.writeFileSync(turn.cachePath, 'bytes')
 
@@ -946,25 +873,29 @@ test('kv-cache-session: dropStaleSavedCount forgets the count without touching t
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (p: string) => {
-      writeFakeCache(p)
-    }
-
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'session-stale',
-      configHash,
-      primeIfMissing
+      configHash
     })
-    fs.writeFileSync(turn.cachePath, 'good-bytes')
+    // Commit a real turn first, so the file and the init flag are both in the
+    // state a stale count would later be read against.
+    writeFakeCache(turn.cachePath)
+    await session.commitTurn(turn, { kind: 'static', messageCount: 2, toolBlockCached: false })
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(turn.cachePath)
+    t.ok(fs.existsSync(sidecarPath), 'the commit wrote the boundary sidecar')
     mod.__kvCacheSessionTestHooks.setSavedCountForTest(turn.cachePath, 99)
 
-    session.dropStaleSavedCount(turn)
+    await session.dropStaleSavedCount(turn)
 
     t.is(
       mod.__kvCacheSessionTestHooks.getSavedCount(turn.cachePath),
       undefined,
       'stale saved count was forgotten'
+    )
+    t.absent(
+      fs.existsSync(sidecarPath),
+      'the sidecar went with it, so a restart cannot revive the count'
     )
     t.ok(
       fs.existsSync(turn.cachePath),
@@ -974,7 +905,7 @@ test('kv-cache-session: dropStaleSavedCount forgets the count without touching t
       mod.__kvCacheSessionTestHooks.hasInitializedPath(
         await utils.getCacheFilePath('test-model', configHash, 'session-stale')
       ),
-      'init flag is preserved (cache is still primed)'
+      'init flag is preserved (the cache is still established)'
     )
   } finally {
     cleanup()
@@ -982,19 +913,14 @@ test('kv-cache-session: dropStaleSavedCount forgets the count without touching t
 })
 
 test('kv-cache-session: deleteKvCacheState({ kvCacheKey }) wipes every layer for the targeted key', async (t) => {
-  const { fs, path, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  const { fs, path, mod, utils, retention, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (p: string) => {
-      writeFakeCache(p)
-    }
-
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'delete-me',
-      configHash,
-      primeIfMissing
+      configHash
     })
     fs.writeFileSync(turn.cachePath, 'bytes')
     mod.__kvCacheSessionTestHooks.setSavedCountForTest(turn.cachePath, 11)
@@ -1044,17 +970,14 @@ test('kv-cache-session: deleteKvCacheState({ kvCacheKey }) wipes every layer for
 })
 
 test('kv-cache-session: a keyed delete blocks only a root-resolving target, not sanitized keys', async (t) => {
-  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  const { fs, mod, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'keep-me',
-      configHash,
-      primeIfMissing: async (p: string) => {
-        writeFakeCache(p)
-      }
+      configHash
     })
     fs.writeFileSync(turn.cachePath, 'bytes')
 
@@ -1080,10 +1003,7 @@ test('kv-cache-session: a keyed delete blocks only a root-resolving target, not 
     const other = await session.beginTurn({
       kind: 'custom',
       customKey: 'session-a',
-      configHash,
-      primeIfMissing: async (p: string) => {
-        writeFakeCache(p)
-      }
+      configHash
     })
     fs.writeFileSync(other.cachePath, 'bytes')
     await session.commitTurn(other, { kind: 'static', messageCount: 1, toolBlockCached: false })
@@ -1138,53 +1058,45 @@ test('kv-cache-session: custom keys — nested / uppercase / unicode / absolute 
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    let primeCount = 0
-    const primeIfMissing = async (p: string) => {
-      primeCount++
-      writeFakeCache(p)
-    }
     const commit = { kind: 'static' as const, messageCount: 1, toolBlockCached: false }
 
-    // Nested, uppercase, unicode, and absolute (sanitized to a contained key) all
-    // prime once and reuse — these are shapes that resolve and contain.
+    // Nested, uppercase, unicode, and absolute (sanitized to a contained key)
+    // all resolve and contain: the first turn on each key is cold, and the
+    // second picks up the boundary the first committed.
     for (const key of ['tenant/session', 'MyCache', 'café', '/leading-slash']) {
-      const before = primeCount
       const t1 = await session.beginTurn({
         kind: 'custom',
         customKey: key,
-        configHash,
-        primeIfMissing
+        configHash
       })
-      t.is(primeCount, before + 1, `key ${JSON.stringify(key)} primes`)
+      t.is(t1.savedCount, 0, `key ${JSON.stringify(key)} starts cold`)
+      writeFakeCache(t1.cachePath)
       await session.commitTurn(t1, commit)
       const t2 = await session.beginTurn({
         kind: 'custom',
         customKey: key,
-        configHash,
-        primeIfMissing
+        configHash
       })
-      t.is(primeCount, before + 1, `key ${JSON.stringify(key)} reuses (no re-prime)`)
+      t.is(t2.savedCount, 1, `key ${JSON.stringify(key)} reuses its own committed boundary`)
       await session.commitTurn(t2, commit)
     }
 
-    // Two spellings that resolve to the same file share initializedCaches: the
-    // second spelling reuses rather than re-priming (keyed by resolved path).
-    const before = primeCount
+    // Two spellings that resolve to the same file share the bookkeeping, so the
+    // second spelling starts warm on the first spelling's boundary.
     const a = await session.beginTurn({
       kind: 'custom',
       customKey: 'alias-x',
-      configHash,
-      primeIfMissing
+      configHash
     })
-    t.is(primeCount, before + 1, 'first spelling primes')
+    t.is(a.savedCount, 0, 'first spelling starts cold')
+    writeFakeCache(a.cachePath)
     await session.commitTurn(a, commit)
     const b = await session.beginTurn({
       kind: 'custom',
       customKey: './alias-x',
-      configHash,
-      primeIfMissing
+      configHash
     })
-    t.is(primeCount, before + 1, 'alias "./alias-x" reuses the same cache — no re-prime')
+    t.is(b.savedCount, 1, 'alias "./alias-x" resolves to the same cache')
     await session.commitTurn(b, commit)
   } finally {
     cleanup()
@@ -1192,25 +1104,19 @@ test('kv-cache-session: custom keys — nested / uppercase / unicode / absolute 
 })
 
 test('kv-cache-session: deleteKvCacheState({ all: true }) wipes everything', async (t) => {
-  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  const { fs, mod, utils, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (p: string) => {
-      writeFakeCache(p)
-    }
-
     const t1 = await session.beginTurn({
       kind: 'custom',
       customKey: 'wipe-a',
-      configHash,
-      primeIfMissing
+      configHash
     })
     const t2 = await session.beginTurn({
       kind: 'custom',
       customKey: 'wipe-b',
-      configHash,
-      primeIfMissing
+      configHash
     })
     fs.writeFileSync(t1.cachePath, 'a')
     fs.writeFileSync(t2.cachePath, 'b')
@@ -1248,142 +1154,79 @@ test('kv-cache-session: deleteKvCacheState({ all: true }) wipes everything', asy
   }
 })
 
-test('kv-cache-session: beginTurn throws if prime closure resolves but no cache file is on disk', async (t) => {
-  // Mirrors the existing `verifySaveAndRecord` access-probe at
-  // commit time, applied at prime time. The addon's
-  // `model.run({ saveSessionPath })` swallows save errors silently
-  // and can also be interrupted before save runs — both cases
-  // resolve the prime closure cleanly while leaving no file on
-  // disk. The session must NOT mark such a prime as initialised
-  // because the next existence probe would see no file and
-  // re-prime, but the in-memory init flag would already say
-  // "primed". `verifyPrimedFile` turns this into a propagated error.
-  const { fs, path, mod, cleanup } = await loadSession()
+test('kv-cache-session: deleteKvCacheState({ auto: true }) reclaims auto caches and spares named ones', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
   try {
-    const session = mod.createKvCacheSession('test-model')
-    const configHash = mod.generateConfigHash('sys', [])
+    const autoKey = '7777777777777777'
+    const namedHexKey = '8888888888888888'
+    const autoPath = await utils.getCacheFilePath('model', 'config', autoKey)
+    const namedPath = await utils.getCacheFilePath('model', 'config', namedHexKey)
+    // A 0-byte `.bin` is what an interrupted save leaves: it has a real mtime, so
+    // the idle rule skips it, and it adds nothing to the size total.
+    const emptyKey = '9999999999999999'
+    const emptyPath = await utils.getCacheFilePath('model', 'config', emptyKey)
 
-    let observedPath: string | null = null
-    const primeIfMissing = async (cachePath: string) => {
-      observedPath = cachePath
-      // Resolve cleanly without touching disk — simulates the
-      // addon being interrupted before its save call.
-    }
+    writeFakeCache(autoPath)
+    writeFakeCache(namedPath)
+    fs.writeFileSync(emptyPath, '')
+    await retention.markAutoCacheKey(autoKey)
+    await retention.markAutoCacheKey(emptyKey)
 
-    let caught: unknown = null
-    try {
-      await session.beginTurn({
-        kind: 'custom',
-        customKey: 'prime-no-file',
-        configHash,
-        primeIfMissing
-      })
-    } catch (err) {
-      caught = err
-    }
+    // Freshly written and far under the quota, so neither standing rule would
+    // evict them: reclaiming anyway is what makes this on-demand.
+    await mod.deleteKvCacheState({ auto: true })
 
-    t.ok(observedPath, 'primeIfMissing observed a cache path')
-    t.ok(caught instanceof Error, 'beginTurn rejected because verifyPrimedFile threw')
-    t.ok(
-      caught instanceof Error && caught.message.includes('no cache file was written'),
-      'error message identifies the missing-file failure mode'
-    )
-    t.is(
-      mod.__kvCacheSessionTestHooks.hasInitializedPath(observedPath!),
-      false,
-      'init flag NOT set when verifyPrimedFile rejects'
-    )
-    t.ok(observedPath, 'observedPath must be set before directory check')
-    t.is(
-      fs.existsSync(path.dirname(path.dirname(observedPath!))),
-      false,
-      'failed prime leaves no empty cache-key directory'
-    )
+    t.is(fs.existsSync(autoPath), false, 'auto cache reclaimed')
+    t.is(fs.existsSync(emptyPath), false, 'zero-byte auto cache reclaimed')
+    t.ok(fs.existsSync(namedPath), 'hex-shaped named cache left alone')
   } finally {
     cleanup()
   }
 })
 
-test('kv-cache-session: beginTurn throws and removes the empty file when prime resolves with a zero-byte cache', async (t) => {
-  // The addon ignores `llama_state_save_file`'s return value, so an
-  // out-of-space / fs flap mid-save can leave an empty file on
-  // disk while the prime closure still resolves cleanly. Trusting
-  // that file as a primed cache would later cause the addon's
-  // `loadCache` to skip it (its own `isFileInitialized` checks
-  // size > 0) and silently fall back to re-priming inline — but the
-  // session's `initializedCaches` flag would mistakenly say
-  // "primed". `verifyPrimedFile` removes the empty file and
-  // surfaces the failure to the handler.
-  const { fs, path, mod, utils, cleanup } = await loadSession()
+test('kv-cache-session: deleteKvCacheState({ auto: true }) skips a cache a turn is holding', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
-    const configHash = mod.generateConfigHash('sys', [])
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash: mod.generateConfigHash('sys', []),
+      history: [{ role: 'user', content: 'active' }]
+    })
+    // The turn's own cache file, which the reclaim below must leave alone.
+    writeFakeCache(turn.cachePath)
+    const inactiveKey = 'aaaaaaaaaaaaaaaa'
+    const inactivePath = await utils.getCacheFilePath('other-model', 'config', inactiveKey)
+    writeFakeCache(inactivePath)
+    await retention.markAutoCacheKey(inactiveKey)
 
-    let observedPath: string | null = null
-    const primeIfMissing = async (cachePath: string) => {
-      observedPath = cachePath
-      fs.mkdirSync(path.dirname(cachePath), { recursive: true })
-      fs.writeFileSync(cachePath, '')
-    }
+    await mod.deleteKvCacheState({ auto: true })
 
-    let caught: unknown = null
-    try {
-      await session.beginTurn({
-        kind: 'custom',
-        customKey: 'prime-empty-file',
-        configHash,
-        primeIfMissing
-      })
-    } catch (err) {
-      caught = err
-    }
-
-    t.ok(observedPath, 'primeIfMissing observed a cache path')
-    t.ok(
-      caught instanceof Error && caught.message.includes('cache file is empty'),
-      'error message identifies the empty-file failure mode'
-    )
-    t.ok(observedPath, 'observedPath must be set before file-existence check')
-    t.is(
-      fs.existsSync(observedPath!),
-      false,
-      "empty cache file was removed so the next probe doesn't trust it"
-    )
-    t.is(
-      mod.__kvCacheSessionTestHooks.hasInitializedPath(
-        await utils.getCacheFilePath('test-model', configHash, 'prime-empty-file')
-      ),
-      false,
-      'init flag NOT set on the empty-prime path'
-    )
+    t.ok(fs.existsSync(turn.cachePath), 'in-flight auto cache retained')
+    t.is(fs.existsSync(inactivePath), false, 'inactive auto cache reclaimed')
+    await session.rollback(turn)
   } finally {
     cleanup()
   }
 })
-
 test('kv-cache-session: commitTurn rolls back if the addon did not persist the file', async (t) => {
   // The addon currently swallows save errors silently — a missing
   // file after a save-disk turn means the next turn must NOT slice
   // against a stale saved count. The session's
   // `verifySaveAndRecord` probe turns this into a rollback instead
   // of a phantom commit.
-  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  const { fs, mod, utils, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('sys', [])
-    const primeIfMissing = async (p: string) => {
-      writeFakeCache(p)
-    }
-
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'missing-save',
-      configHash,
-      primeIfMissing
+      configHash
     })
-    // Delete the file after prime — simulate a swallowed addon save
-    // error where the file was removed externally.
-    fs.unlinkSync(turn.cachePath)
+    // No `writeFakeCache` here: the addon's save is what would have created the
+    // file, and a swallowed save error leaves nothing on disk.
+    t.absent(fs.existsSync(turn.cachePath), 'the addon save left no file behind')
 
     await session.commitTurn(turn, { kind: 'static', messageCount: 5, toolBlockCached: false })
 
@@ -1405,7 +1248,7 @@ test('kv-cache-session: commitTurn rolls back if the addon did not persist the f
 })
 
 test('kv-cache-session: auto-rename commit releases the target active-ref when setup fails', async (t) => {
-  const { mod, cleanup, writeFakeCache } = await loadSession()
+  const { mod, cleanup } = await loadSession()
   const bareFs = await import('bare-fs')
   const barePath = await import('bare-path')
   const os = await import('bare-os')
@@ -1414,14 +1257,11 @@ test('kv-cache-session: auto-rename commit releases the target active-ref when s
     const session = mod.createKvCacheSession('leak-model')
     const configHash = mod.generateConfigHash('sys', [])
 
-    // Auto turn: primes and holds the source cache path.
+    // Auto turn: holds the source cache path.
     const turn = await session.beginTurn({
       kind: 'auto',
       configHash,
-      history: [{ role: 'user', content: 'hi' }],
-      primeIfMissing: async (cachePath: string) => {
-        writeFakeCache(cachePath)
-      }
+      history: [{ role: 'user', content: 'hi' }]
     })
 
     // Fail the target directory's mkdir so the commit's target setup throws AFTER
@@ -1467,24 +1307,21 @@ test('kv-cache-session: auto-rename commit releases the target active-ref when s
   }
 })
 
-// The auto path assigns the prime origin independently of the custom path,
-// so its fresh-prime release needs its own pin: file, init flag, and marker.
-test('kv-cache-session: releaseTurn rolls back an auto cache the same turn primed', async (t) => {
-  const { fs, mod, cleanup, cacheRoot, writeFakeCache } = await loadSession()
+// The auto path tracks its origin independently of the custom path, so its
+// release needs its own pin: file, init flag, and marker.
+test('kv-cache-session: releaseTurn rolls back an auto cache the same turn created', async (t) => {
+  const { fs, mod, cleanup, cacheRoot } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
     const turn = await session.beginTurn({
       kind: 'auto',
       configHash,
-      history: [{ role: 'user', content: 'hi' }],
-      primeIfMissing: async (cachePath: string) => {
-        writeFakeCache(cachePath)
-      }
+      history: [{ role: 'user', content: 'hi' }]
     })
     await session.releaseTurn(turn)
 
-    t.is(fs.existsSync(turn.cachePath), false, 'the fresh auto prime is unlinked')
+    t.is(fs.existsSync(turn.cachePath), false, 'the fresh auto cache is unlinked')
     t.absent(
       mod.__kvCacheSessionTestHooks.hasInitializedPath(turn.cachePath),
       'the init flag is cleared with it'
@@ -1500,25 +1337,20 @@ test('kv-cache-session: releaseTurn rolls back an auto cache the same turn prime
   }
 })
 
-// A failed first turn must not leave its own prime behind: releaseTurn on a
-// freshly primed cache takes the destructive path instead.
-test('kv-cache-session: releaseTurn rolls back a cache the same turn primed', async (t) => {
-  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+test('kv-cache-session: releaseTurn rolls back a cache the same turn created', async (t) => {
+  const { fs, mod, utils, cleanup } = await loadSession()
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
     const turn = await session.beginTurn({
       kind: 'custom',
       customKey: 'release-fresh',
-      configHash,
-      primeIfMissing: async (cachePath: string) => {
-        writeFakeCache(cachePath)
-      }
+      configHash
     })
     await session.releaseTurn(turn)
 
     const cachePath = await utils.getCacheFilePath('test-model', configHash, 'release-fresh')
-    t.is(fs.existsSync(cachePath), false, 'the fresh prime is unlinked')
+    t.is(fs.existsSync(cachePath), false, 'nothing is left at the reserved path')
     t.absent(
       mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
       'the init flag is cleared with it'
@@ -1535,25 +1367,18 @@ test('kv-cache-session: releaseTurn preserves the committed cache and admits a w
   try {
     const session = mod.createKvCacheSession('test-model')
     const configHash = mod.generateConfigHash('you are a helpful assistant.', [])
-    let primeCallCount = 0
-    const primeIfMissing = async (cachePath: string) => {
-      primeCallCount++
-      writeFakeCache(cachePath)
-    }
-
     const first = await session.beginTurn({
       kind: 'custom',
       customKey: 'release-a',
-      configHash,
-      primeIfMissing
+      configHash
     })
+    writeFakeCache(first.cachePath)
     await session.commitTurn(first, { kind: 'static', messageCount: 3, toolBlockCached: false })
 
     const second = await session.beginTurn({
       kind: 'custom',
       customKey: 'release-a',
-      configHash,
-      primeIfMissing
+      configHash
     })
     t.is(second.savedCount, 3, 'the second turn starts warm')
     await session.releaseTurn(second)
@@ -1582,12 +1407,293 @@ test('kv-cache-session: releaseTurn preserves the committed cache and admits a w
     const third = await session.beginTurn({
       kind: 'custom',
       customKey: 'release-a',
-      configHash,
-      primeIfMissing
+      configHash
     })
-    t.is(primeCallCount, 1, 'no re-prime — the disk cache is still there')
     t.is(third.savedCount, 3, 'the waiter admits with the committed prefix intact')
     await session.rollback(third)
+  } finally {
+    cleanup()
+  }
+})
+
+// `resetForTest()` clears every in-memory layer while leaving the cache
+// directory untouched — the state a fresh worker process starts from.
+// `hasInitializedPath` after `beginTurn` is what tells a warm turn from a cold
+// one: only a turn that found a `.bin` on disk adopts it that early, a cold
+// turn records nothing until its own save is verified at commit.
+test('kv-cache-session: a committed named-cache boundary survives a worker restart', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-a',
+      configHash
+    })
+    writeFakeCache(first.cachePath)
+    await session.commitTurn(first, { kind: 'static', messageCount: 5, toolBlockCached: true })
+    t.ok(
+      fs.existsSync(mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(first.cachePath)),
+      'commit wrote the boundary sidecar next to the .bin'
+    )
+
+    mod.__kvCacheSessionTestHooks.resetForTest()
+
+    const restarted = mod.createKvCacheSession('test-model')
+    const second = await restarted.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-a',
+      configHash
+    })
+    t.ok(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(second.cachePath),
+      'the on-disk cache is adopted by the restarted session'
+    )
+    t.is(second.savedCount, 5, 'the saved-message boundary is restored from disk')
+    t.is(second.toolBlockCached, true, 'the tool-block flag is restored with it')
+    await restarted.releaseTurn(second)
+  } finally {
+    cleanup()
+  }
+})
+
+// The read runs under the cache-path write lock, and `deleteKvCacheState`
+// takes no locks, so the `.bin` can vanish between the existence probe and
+// the size check. A throw here would escape `beginTurn` with the lock held.
+test('kv-cache-session: reading a sidecar whose .bin vanished yields a cold boundary, not a throw', async (t) => {
+  const { fs, mod, utils, cleanup } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys', [])
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'restart-vanished')
+    fs.writeFileSync(
+      mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(cachePath),
+      JSON.stringify({ messages: 4, toolBlock: false, binSize: 19 })
+    )
+
+    const prefix = await mod.__kvCacheSessionTestHooks.readPrefixSidecarForTest(cachePath)
+    t.is(prefix, null, 'a sidecar with no .bin behind it reads as absent')
+  } finally {
+    cleanup()
+  }
+})
+
+// A crash between the addon's `.bin` save and the sidecar write leaves a
+// boundary that describes the previous, shorter file. The size fingerprint
+// catches it: the restart starts cold instead of slicing too little.
+test('kv-cache-session: a sidecar describing a different-sized .bin is discarded on restart', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-grown',
+      configHash
+    })
+    writeFakeCache(first.cachePath)
+    await session.commitTurn(first, { kind: 'static', messageCount: 5, toolBlockCached: false })
+    fs.writeFileSync(first.cachePath, 'fake-kv-cache-bytes-plus-a-turn-the-sidecar-never-saw')
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(first.cachePath)
+
+    mod.__kvCacheSessionTestHooks.resetForTest()
+    const second = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'restart-grown',
+      configHash
+    })
+    t.ok(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(second.cachePath),
+      'the grown .bin is still trusted and adopted'
+    )
+    t.is(second.savedCount, 0, 'the mismatched boundary is not applied')
+    t.absent(fs.existsSync(sidecarPath), 'the mismatched sidecar was removed')
+  } finally {
+    cleanup()
+  }
+})
+
+// Two rules keep the in-memory boundary and its sidecar from ever having to be
+// reconciled, and each is pinned below:
+//
+//   - a failed sidecar write drops only the file. The in-memory boundary is
+//     what this process keeps slicing against; dropping it would make the very
+//     next turn replay the whole history into a `.bin` that already holds it.
+//   - a live in-memory boundary is never read against a sidecar. Both are
+//     written by the same commit, so the map is never the older copy, and the
+//     restore path leaves the file unread whenever the map has an entry.
+test('kv-cache-session: a failed sidecar write leaves this process warm', async (t) => {
+  const { fs, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'sidecar-write-fails',
+      configHash
+    })
+    writeFakeCache(first.cachePath)
+    // A directory where the sidecar belongs makes the write fail.
+    fs.mkdirSync(mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(first.cachePath))
+
+    await session.commitTurn(first, { kind: 'static', messageCount: 6, toolBlockCached: false })
+    t.is(
+      mod.__kvCacheSessionTestHooks.getSavedCount(first.cachePath),
+      6,
+      'the in-memory boundary survives a failed sidecar write'
+    )
+
+    const second = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'sidecar-write-fails',
+      configHash
+    })
+    t.is(second.savedCount, 6, 'the next turn in this process still slices from the boundary')
+    await session.releaseTurn(second)
+
+    // The boundary was never persisted, so the next process has to start cold.
+    mod.__kvCacheSessionTestHooks.resetForTest()
+    const restarted = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'sidecar-write-fails',
+      configHash
+    })
+    t.ok(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(restarted.cachePath),
+      'the .bin is still adopted after the restart'
+    )
+    t.is(restarted.savedCount, 0, 'but the restart starts from a cold boundary')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: a sidecar never overrides a live in-memory boundary', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys', [])
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'memory-wins')
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(cachePath)
+    writeFakeCache(cachePath)
+    // Valid on its own terms — it describes the `.bin` that is really there —
+    // and still must not be consulted, because the map has this path.
+    fs.writeFileSync(
+      sidecarPath,
+      JSON.stringify({ messages: 2, toolBlock: true, binSize: fs.statSync(cachePath).size })
+    )
+    // A committed auto-rename leaves its target in `cachedPrefixes` with no
+    // init flag, which is how a live entry reaches the restore path at all.
+    mod.__kvCacheSessionTestHooks.setSavedCountForTest(cachePath, 7)
+
+    const turn = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'memory-wins',
+      configHash
+    })
+
+    t.ok(mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath), 'the .bin on disk is adopted')
+    t.is(turn.savedCount, 7, 'the live boundary is used, not the sidecar')
+    t.absent(turn.toolBlockCached, 'and nothing from the sidecar reaches the handle')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: rollback removes the boundary sidecar with the cache file', async (t) => {
+  const { fs, path, mod, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const session = mod.createKvCacheSession('test-model')
+    const configHash = mod.generateConfigHash('sys', [])
+
+    const first = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-rollback',
+      configHash
+    })
+    writeFakeCache(first.cachePath)
+    await session.commitTurn(first, { kind: 'static', messageCount: 4, toolBlockCached: false })
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(first.cachePath)
+
+    const second = await session.beginTurn({
+      kind: 'custom',
+      customKey: 'restart-rollback',
+      configHash
+    })
+    await session.rollback(second)
+    t.is(fs.existsSync(sidecarPath), false, 'rollback unlinked the sidecar')
+    t.is(
+      fs.existsSync(path.dirname(path.dirname(first.cachePath))),
+      false,
+      'the cache-key directory is pruned once the sidecar is gone'
+    )
+
+    mod.__kvCacheSessionTestHooks.resetForTest()
+    const third = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'restart-rollback',
+      configHash
+    })
+    t.absent(
+      mod.__kvCacheSessionTestHooks.hasInitializedPath(third.cachePath),
+      'a restart after rollback has no .bin to adopt'
+    )
+    t.is(third.savedCount, 0, 'and starts from a cold boundary')
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: an unreadable boundary sidecar falls back to a cold boundary', async (t) => {
+  const { fs, mod, utils, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys', [])
+
+    for (const [key, sidecar] of [
+      ['restart-garbage', '{not json'],
+      ['restart-shape', JSON.stringify({ messages: -1, toolBlock: 'yes' })]
+    ] as const) {
+      const cachePath = await utils.getCacheFilePath('test-model', configHash, key)
+      writeFakeCache(cachePath)
+      fs.writeFileSync(
+        mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(cachePath),
+        sidecar
+      )
+
+      const turn = await mod.createKvCacheSession('test-model').beginTurn({
+        kind: 'custom',
+        customKey: key,
+        configHash
+      })
+      t.ok(
+        mod.__kvCacheSessionTestHooks.hasInitializedPath(cachePath),
+        `${key}: the .bin is still trusted and adopted`
+      )
+      t.is(turn.savedCount, 0, `${key}: the bad sidecar is ignored`)
+    }
+  } finally {
+    cleanup()
+  }
+})
+
+test('kv-cache-session: a cold turn discards a sidecar whose cache file is gone', async (t) => {
+  const { fs, mod, utils, cleanup } = await loadSession()
+  try {
+    const configHash = mod.generateConfigHash('sys', [])
+    const cachePath = await utils.getCacheFilePath('test-model', configHash, 'restart-orphan')
+    const sidecarPath = mod.__kvCacheSessionTestHooks.getPrefixSidecarPathForTest(cachePath)
+    fs.writeFileSync(sidecarPath, JSON.stringify({ messages: 9, toolBlock: true }))
+
+    const turn = await mod.createKvCacheSession('test-model').beginTurn({
+      kind: 'custom',
+      customKey: 'restart-orphan',
+      configHash
+    })
+    t.is(turn.savedCount, 0, 'a cold turn starts from a cold boundary')
+    t.is(turn.toolBlockCached, false, 'and without a cached tool block')
+    t.is(fs.existsSync(sidecarPath), false, 'the orphaned sidecar was removed')
   } finally {
     cleanup()
   }

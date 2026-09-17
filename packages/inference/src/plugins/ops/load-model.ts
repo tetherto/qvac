@@ -20,7 +20,8 @@ import {
   ModelFileNotFoundInDirError,
   ModelFileLocateFailedError
 } from '@/errors/index'
-import { getPlugin } from '@/plugins/index'
+import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
+import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { getEngineLogger } from '@/logging/index'
@@ -93,6 +94,26 @@ export async function loadModel(
     }
   }
 
+  // Advisory: every outcome — including a projected insufficiency — continues
+  // to the ordinary load below. Runs after config resolution and path
+  // validation so it sees the same state the real load uses, and before
+  // `createModel()` so it never competes with the native load for device
+  // memory. The outcome is stored on the registry entry for internal use;
+  // it is deliberately not exposed on any public API yet.
+  const fitProbe = await runAdvisoryFitCheck({
+    modelId,
+    modelType: modelType as CanonicalModelType,
+    modelPath,
+    modelConfig,
+    artifacts,
+    isShardedModel
+  })
+
+  // Load the addon's logger before the addon itself runs. Plugins that defer
+  // their logging module do so to keep registration free of native loads, so
+  // this is the first point their addon is genuinely required.
+  await ensureAddonLoggerReady(plugin)
+
   logger.info(`${modelType}: Loading model ${modelId}...`)
   startLogBuffering(modelId)
 
@@ -118,7 +139,8 @@ export async function loadModel(
       path: modelPath,
       config: modelConfig,
       modelType: modelType as CanonicalModelType,
-      name: modelName
+      name: modelName,
+      fitProbe
     })
 
     const loadResult: LoadModelResult =

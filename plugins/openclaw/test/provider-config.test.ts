@@ -23,6 +23,7 @@ import {
   createQvacServeModels,
   createQvacSetupResult,
   ensureApiKeyFile,
+  generateApiKey,
   normalizeApiKey,
   openClawModels,
   registerQvacProvider,
@@ -188,12 +189,24 @@ test('API keys are normalized to a conservative base64url form', () => {
   }
 })
 
+test('generated API keys always satisfy the key validator', () => {
+  // base64url includes `-` and normalizeApiKey rejects a leading one, so an
+  // unguarded draw fails its own validator about once in 64. Enough draws that
+  // a regression here is a certainty rather than a coin flip: an unguarded
+  // generator surviving 4096 of them has probability (63/64)^4096, about 1e-28.
+  for (let index = 0; index < 4096; index += 1) {
+    const key = generateApiKey()
+    assert.equal(key.startsWith('-'), false)
+    assert.equal(normalizeApiKey(key, 'generated QVAC API key'), key)
+  }
+})
+
 test('API key file is generated once, reused, and permission-hardened', () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'qvac-openclaw-state-test-'))
   const keyFile = join(stateDir, 'plugins', 'qvac', 'api-key')
 
   const first = ensureApiKeyFile(keyFile)
-  assert.match(first, /^[A-Za-z0-9_-]{43}$/)
+  assert.match(first, /^[A-Za-z0-9_][A-Za-z0-9_-]{42}$/)
   assert.equal(ensureApiKeyFile(keyFile), first)
   assert.equal(statSync(join(stateDir, 'plugins', 'qvac')).mode & 0o777, 0o700)
   assert.equal(statSync(keyFile).mode & 0o777, 0o600)
@@ -226,7 +239,7 @@ test('re-onboarding regenerates a corrupt key file in place', () => {
   ]) {
     writeFileSync(keyFile, corrupt)
     const regenerated = ensureApiKeyFile(keyFile)
-    assert.match(regenerated, /^[A-Za-z0-9_-]{43}$/)
+    assert.match(regenerated, /^[A-Za-z0-9_][A-Za-z0-9_-]{42}$/)
     assert.equal(readFileSync(keyFile, 'utf8'), regenerated)
     assert.equal(statSync(keyFile).mode & 0o777, 0o600)
     // Stable once healthy again.

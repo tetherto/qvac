@@ -1,6 +1,6 @@
 {
   "name": "@qvac/error",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Base error handling library for QVAC",
   "type": "module",
   "main": "./dist/index.js",

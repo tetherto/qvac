@@ -40,6 +40,19 @@ on:
         description: "Exclude suites (comma-separated)"
         required: false
         type: string
+      rerun-plan:
+        description: >-
+          JSON {family: {platform: [testId]}} of previously failed tests. When set,
+          each matrix leg replaces `filter` with the list recorded for its own
+          platform. Empty = normal run.
+        required: false
+        type: string
+        default: ""
+      include:
+        description: "Exact testIds to run on top of the suite/filter selection (comma-separated)"
+        required: false
+        type: string
+        default: ""
       test-version:
         description: "Git ref to checkout (branch, tag, or SHA). Defaults to trigger ref."
         required: false
@@ -160,7 +173,7 @@ jobs:
           family: ${{ inputs.consumer }}
           platforms: ${{ steps.keys.outputs.platforms }}
           suite: ${{ inputs.suite }}
-          filter: ${{ inputs.filter }}
+          filter: ${{ inputs.rerun-plan != '' && 'rerun of previously failed tests' || inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
           inference-provenance: ${{ inputs.inference-provenance }}
           test-suite-provenance: ${{ inputs.test-suite-provenance }}
@@ -182,6 +195,10 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
       QVAC_TEST_SNAP_BUILD_MODE: ${{ startsWith(matrix.os, 'ubuntu-') && 'destructive' || 'lxd' }}
+      # The Windows GPU runner is the maintained two-GPU host. The macOS and
+      # Ubuntu GPU runners currently provide one eligible GPU, so multi-GPU
+      # tests must skip there instead of submitting a two-way tensor split.
+      QVAC_HAS_MULTI_GPU: ${{ startsWith(matrix.os, 'qvac-win25-x64-gpu') && '1' || '0' }}
     steps:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -206,6 +223,49 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
           bun-version: latest
+
+      # A failed-test rerun carries a different test list per platform, so the
+      # effective filter is resolved inside the matrix leg rather than passed in.
+      - name: Resolve test filter for this platform
+        id: leg-filter
+        shell: node {0}
+        env:
+          RERUN_PLAN: ${{ inputs.rerun-plan }}
+          BASE_FILTER: ${{ inputs.filter }}
+          CONSUMER: ${{ inputs.consumer }}
+          RUNNER_LABEL: ${{ matrix.os }}
+        run: |
+          const fs = require('fs');
+
+          const label = String(process.env.RUNNER_LABEL || '').toLowerCase();
+          let platform = 'linux';
+          if (label.includes('win')) platform = 'windows';
+          else if (label.includes('mac') || label.includes('darwin')) platform = 'macos';
+
+          let filter = process.env.BASE_FILTER || '';
+          const raw = (process.env.RERUN_PLAN || '').trim();
+
+          if (raw) {
+            let plan;
+            try {
+              plan = JSON.parse(raw);
+            } catch (err) {
+              console.log(`::error::Invalid rerun-plan JSON: ${err.message}`);
+              process.exit(1);
+            }
+            const family = process.env.CONSUMER;
+            const ids = plan && plan[family] && plan[family][platform];
+            if (!Array.isArray(ids) || ids.length === 0) {
+              console.log(
+                `::error::rerun-plan has no tests for ${family}/${platform}; this leg should not have started.`
+              );
+              process.exit(1);
+            }
+            filter = ids.join(',');
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `filter=${filter}\n`);
+          console.log(`${platform}: filter=${filter || '(none)'}`);
 
       - name: Configure npm registries
         shell: node {0}
@@ -399,6 +459,35 @@ jobs:
           snap version
           snapcraft --version
 
+      # Preflight: snapcraft's gpu-2404/graphics-core22 part clones github.com
+      # (IPv4-only) from inside the LXD build instance. If the runner drops IPv4
+      # forwarding off the lxdbr0 bridge (Docker's `iptables -P FORWARD DROP` with
+      # no ACCEPT for lxdbr0), that clone hangs ~2 min and dies with exit 128 — and
+      # IPv6-capable mirrors (snap store, archive) keep working, hiding the cause.
+      # Reproduce the exact path cheaply and fail in ~15s with an actionable message.
+      # LXD-only (self-hosted); the github-hosted `destructive` build has no LXD.
+      - name: Preflight — LXD instance IPv4 egress to GitHub
+        if: inputs.consumer == 'snap' && env.QVAC_TEST_SNAP_BUILD_MODE == 'lxd'
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe="qvac-egress-preflight-$$"
+          cleanup() { lxc delete -f "$probe" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          # Don't swallow launch output: under `set -e` a failed launch would exit
+          # with an empty log and never reach the actionable `::error::` below.
+          lxc launch ubuntu:22.04 "$probe"
+          for _ in $(seq 1 20); do
+            if lxc exec "$probe" -- getent hosts github.com >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          if lxc exec "$probe" -- curl -4 -fsS --max-time 15 -o /dev/null https://github.com; then
+            echo "IPv4 egress from an LXD instance to github.com is OK."
+          else
+            echo "::error::LXD build instances cannot reach github.com over IPv4, so snapcraft's gpu-2404/graphics-core22 part will hang cloning it. This is almost always Docker's 'iptables -P FORWARD DROP' with no ACCEPT for the lxdbr0 bridge. Fix on the runner: ensure lxd-docker-forward.service is enabled (qvac-devops ansible: --tags snap-fw) so DOCKER-USER accepts lxdbr0 in+out."
+            exit 1
+          fi
+
       - name: Build first Snap revision
         if: inputs.consumer == 'snap'
         working-directory: ${{ inputs.working-directory }}
@@ -458,7 +547,7 @@ jobs:
         if: inputs.consumer == 'snap'
         shell: node {0}
         env:
-          TEST_FILTER: ${{ inputs.filter }}
+          TEST_FILTER: ${{ steps.leg-filter.outputs.filter }}
         run: |
           const fs = require('fs');
           const filters = (process.env.TEST_FILTER || '')
@@ -574,13 +663,25 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         timeout-minutes: 60
         shell: node {0}
+        env:
+          TEST_FILTER: ${{ steps.leg-filter.outputs.filter }}
+          INCLUDE_TESTS: ${{ inputs.include }}
         run: |
           (async () => {
             const { spawn, spawnSync } = require('child_process');
             const fs = require('fs');
 
-            const filter = '${{ inputs.filter }}';
+            // Read via env: a rerun filter is a long comma-separated test-id list.
+            const filter = process.env.TEST_FILTER || '';
             const filterArgs = filter ? ['--filter=' + filter] : [];
+            const includeTests = process.env.INCLUDE_TESTS || '';
+            // The producer below is spawned with shell: true, so anything but an
+            // exact testId would be a command rather than an argument.
+            if (includeTests && !/^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$/.test(includeTests)) {
+              console.log('::error title=Invalid include value::Expected comma-separated testIds matching [A-Za-z0-9._-]');
+              process.exit(1);
+            }
+            const includeArgs = includeTests ? ['--include=' + includeTests] : [];
             const suite = '${{ inputs.suite }}';
             const suiteArgs = suite ? ['--suite=' + suite] : [];
             const excludeSuite = '${{ inputs.exclude-suite }}';
@@ -644,7 +745,8 @@ jobs:
               '--report-dir=./reports',
               ...filterArgs,
               ...suiteArgs,
-              ...excludeSuiteArgs
+              ...excludeSuiteArgs,
+              ...includeArgs
             ];
             console.log('Producer command: npx ' + producerArgs.join(' '));
 
@@ -875,7 +977,7 @@ jobs:
           platforms: ${{ needs.report-start.outputs.platform-keys }}
           comment-ids: ${{ needs.report-start.outputs.comment-ids }}
           suite: ${{ inputs.suite }}
-          filter: ${{ inputs.filter }}
+          filter: ${{ inputs.rerun-plan != '' && 'rerun of previously failed tests' || inputs.filter }}
           exclude-suite: ${{ inputs.exclude-suite }}
           inference-provenance: ${{ inputs.inference-provenance }}
           test-suite-provenance: ${{ inputs.test-suite-provenance }}

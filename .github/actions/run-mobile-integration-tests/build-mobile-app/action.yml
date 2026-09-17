@@ -243,6 +243,10 @@ runs:
     - name: Setup Android SDK
       if: inputs.platform == 'Android'
       uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+      with:
+        # The action's default list still names the legacy `tools` package, which
+        # sdkmanager no longer serves; the build only needs platform-tools.
+        packages: platform-tools
 
     - name: Generate Android project
       if: inputs.platform == 'Android'

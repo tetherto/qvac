@@ -158,6 +158,14 @@ test('/metrics includes QVAC custom gauges', async (t) => {
     t.ok(rpcPingRequests, 'rpc_requests_total{method="ping"} series is pre-initialised')
     t.ok(rpcPingRequests.endsWith(' 0'), 'rpc_requests_total{method="ping"} starts at 0')
 
+    const capacityRequests = body
+      .split('\n')
+      .find((line) =>
+        line.startsWith('qvac_registry_rpc_requests_total{method="get-storage-capacity"}')
+      )
+    t.ok(capacityRequests, 'capacity request series is pre-initialised')
+    t.ok(capacityRequests.endsWith(' 0'), 'capacity request series starts at 0')
+
     const rpcPingErrors = body
       .split('\n')
       .find((line) => line.startsWith('qvac_registry_rpc_errors_total{method="add-model"}'))

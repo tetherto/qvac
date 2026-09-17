@@ -33,6 +33,58 @@ namespace {
 std::mutex
     g_fitMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+/// Serialises backend registration on its own: the async entry points
+/// register on the JS thread while a worker may be inside a fit.
+std::mutex
+    g_registryMutex; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+/// Attaches the per-device memory projection for the resolved parameters.
+///
+/// Runs one more no-alloc probe, so it costs roughly what the fit cost. A probe
+/// failure leaves `out.projection` empty and never touches `out.status`.
+/// `mparams`/`cparams` must still borrow from live storage when this is called.
+void captureProjection(
+    const std::string& modelPath, const llama_model_params& mparams,
+    const llama_context_params& cparams, uint64_t marginBytes, FitResult& out) {
+  try {
+    std::vector<ggml_backend_dev_t> devs;
+    uint32_t hpNgl = 0;
+    uint32_t hpNctTrain = 0;
+    uint32_t hpNexpert = 0;
+    const common_device_memory_data_vec rows = common_get_device_memory_data(
+        modelPath.c_str(),
+        &mparams,
+        &cparams,
+        devs,
+        hpNgl,
+        hpNctTrain,
+        hpNexpert,
+        GGML_LOG_LEVEL_INFO);
+    // `devs` is the model's device list (`llama_model_get_device`), filled by
+    // the same probe that produced `rows`, so the zip cannot drift. It is not
+    // `nDevices` (`ggml_backend_dev_count`): the CPU device is counted there
+    // but its demand is folded into the trailing host row.
+    if (rows.size() != devs.size() + 1) {
+      return;
+    }
+    out.projection.reserve(rows.size());
+    for (size_t i = 0; i < rows.size(); ++i) {
+      const bool isHost = i == devs.size();
+      const char* name = isHost ? "host" : ggml_backend_dev_name(devs[i]);
+      out.projection.push_back(
+          {name == nullptr ? "" : name,
+           static_cast<uint64_t>(rows[i].total),
+           static_cast<uint64_t>(rows[i].free),
+           marginBytes,
+           static_cast<uint64_t>(rows[i].model),
+           static_cast<uint64_t>(rows[i].context),
+           static_cast<uint64_t>(rows[i].compute)});
+    }
+  } catch (const std::exception&) {
+    out.projection.clear();
+  }
+}
+
 /// Resolves the directory the packaged ggml backends are loaded from.
 ///
 /// The resolved path is handed to `ggml_backend_load_all_from_path`, which
@@ -105,7 +157,7 @@ std::filesystem::path resolveBackendsPath(const std::string& backendsDir) {
 /// open — so freeing here would pull those tables out from under live
 /// inference. Leaving the backends registered costs nothing: ggml's registry
 /// de-duplicates by reg pointer, and every fit needs the same inventory anyway.
-void registerBackends(const std::string& backendsDir) {
+void loadBackends(const std::string& backendsDir) {
   bool loadedFromPath = false;
 
   if (!backendsDir.empty()) {
@@ -190,6 +242,11 @@ void countDevices(size_t& nDevices, size_t& nGpuDevices) {
 
 } // namespace
 
+void registerBackends(const std::string& backendsDir) {
+  const std::lock_guard<std::mutex> registryLock(g_registryMutex);
+  loadBackends(backendsDir);
+}
+
 FitResult runFit(const FitRequest& req) {
   // Held for the whole call — see g_fitMutex. Concurrent callers block rather
   // than corrupt the global logger state the fitter installs.
@@ -243,51 +300,61 @@ FitResult runFit(const FitRequest& req) {
     return out;
   }
 
-  // Validate the placement now that there is a machine to validate it against.
+  const std::vector<BackendDevice> discoveredDevices = discoverBackendDevices();
+  std::vector<ggml_backend_dev_t> eligibleDevices =
+      eligibleBackendDeviceHandles(
+          discoveredDevices, LlamaLoadKind::Completion);
+  const size_t eligibleGpuDevices = eligibleDevices.size() - 1;
+
+  // llama reads main_gpu only under an explicit NONE. An unpinned mode is inert
+  // too: llama defaults split_mode to LAYER and `common_fit_params` only reads
+  // it, never writes it.
+  const bool mainGpuIsUsed = req.hasMainGpu && req.mainGpu >= 0 &&
+                             req.hasSplitMode &&
+                             req.splitMode == LLAMA_SPLIT_MODE_NONE;
+
+  // Past the registry there is no device to select or to reject to CPU, so the
+  // index is an argument error, not a placement.
+  if (mainGpuIsUsed &&
+      static_cast<size_t>(req.mainGpu) >= discoveredDevices.size()) {
+    throw std::invalid_argument(
+        "model-fit: mainGpu " + std::to_string(req.mainGpu) +
+        " is out of range: " + std::to_string(discoveredDevices.size()) +
+        " devices are registered");
+  }
+  const bool rejectedMainGpu =
+      mainGpuIsUsed && !isSupportedGpuOrdinal(
+                           discoveredDevices,
+                           LlamaLoadKind::Completion,
+                           static_cast<size_t>(req.mainGpu));
+  const std::optional<size_t> selectedMainGpu =
+      mainGpuIsUsed && !rejectedMainGpu
+          ? std::optional<size_t>(static_cast<size_t>(req.mainGpu))
+          : std::nullopt;
+
+  // Validate the NONE placement now that there is a machine to validate it
+  // against.
   //
   // Neither field is read by the fitter itself, so a bad placement costs
   // nothing here — it costs the caller later. llama consults them only at load,
   // and only under LLAMA_SPLIT_MODE_NONE, where it requires main_gpu to index
-  // its own device list and returns no model otherwise ("invalid value for
-  // main_gpu"). common_fit_params performs that load internally, so the whole
-  // fit comes back as a bare ERROR/"failed to load model" — a verdict the
-  // caller cannot act on and cannot distinguish from a real fit failure.
-  // Rejecting here turns it back into what it is: a statement about arguments.
-  // binding.cpp cannot do it, since the valid range is unknown until the
-  // backends are registered.
+  // the supported-device list this fit hands it and returns no model otherwise
+  // ("invalid value for main_gpu"). common_fit_params performs that load
+  // internally, so the whole fit comes back as a bare ERROR/"failed to load
+  // model" — a verdict the caller cannot act on and cannot distinguish from a
+  // real fit failure. Rejecting here turns it back into what it is: a statement
+  // about arguments. binding.cpp cannot do it, since the valid range is unknown
+  // until the backends are registered.
   //
-  // Only SPLIT_MODE_NONE is checked because it is the only mode under which
-  // llama reads main_gpu at all. An unpinned split mode is left alone: it goes
-  // in at llama's default, which is precisely the condition under which the
-  // fitter is free to rewrite it, and a fitter that chooses NONE picks a
-  // placement to match.
-  if (req.hasSplitMode && req.splitMode == LLAMA_SPLIT_MODE_NONE) {
-    const bool explicitCpuPlacement = req.hasNGpuLayers &&
-                                      req.nGpuLayers == 0 && req.hasMainGpu &&
-                                      req.mainGpu == -1;
-
-    // NONE means "put the whole model on one GPU". With no GPU registered
-    // there is no such device, and llama rejects every index including the
-    // default 0, except for the exact CPU-only sentinel configuration.
-    if (!explicitCpuPlacement && out.nGpuDevices == 0) {
-      throw std::invalid_argument(
-          "model-fit: splitMode NONE places the whole model on one GPU, but no "
-          "GPU device is registered");
-    }
-
-    // The bound is deliberately loose. llama indexes a list it builds itself —
-    // RPC servers and discrete GPUs, falling back to integrated ones only when
-    // that list would otherwise be empty — which is never longer than the
-    // GPU-class devices ggml registered. Bounding by that count rejects only
-    // what llama could not accept, and leaves the narrower judgement to llama,
-    // which knows its own list.
-    if (!explicitCpuPlacement && req.hasMainGpu &&
-        static_cast<size_t>(req.mainGpu) >= out.nGpuDevices) {
-      throw std::invalid_argument(
-          "model-fit: mainGpu " + std::to_string(req.mainGpu) +
-          " is out of range (" + std::to_string(out.nGpuDevices) +
-          " GPU device(s) registered)");
-    }
+  // NONE places the whole model on one GPU and TENSOR refuses an empty device
+  // list, so neither is satisfiable without one — see `requiresSupportedGpu`.
+  if (requiresSupportedGpu(req, rejectedMainGpu) && eligibleGpuDevices == 0) {
+    throw std::invalid_argument(
+        req.splitMode == LLAMA_SPLIT_MODE_TENSOR
+            ? "model-fit: splitMode TENSOR needs at least one GPU, but no "
+              "supported GPU device is registered"
+            : "model-fit: splitMode NONE places the whole model on one GPU, "
+              "but no supported GPU device is registered");
   }
 
   // `common_fit_params` segfaults on a path it cannot open: gguf_init_from_file
@@ -365,6 +432,17 @@ FitResult runFit(const FitRequest& req) {
   // `common_fit_params` only rewrites fields that still hold their default
   // value, so pin a field only when the caller explicitly requested one.
   applyFitRequest(req, mparams, cparams);
+  // `devices` is never left NULL: NULL selects llama's own default enumeration,
+  // which includes every GPU the allowlist excluded.
+  if (isExplicitCpuPlacement(req) || rejectedMainGpu) {
+    eligibleDevices = {nullptr};
+    mparams.devices = eligibleDevices.data();
+    mparams.main_gpu = -1;
+  } else {
+    // `selectedMainGpu` was validated against the same allowlist above.
+    applyBackendDeviceAllowlist(
+        mparams, eligibleDevices, discoveredDevices, selectedMainGpu);
+  }
 
   // Writable scratch buffers the fit API requires. Sizes are dictated by the
   // library, not the caller.
@@ -382,6 +460,9 @@ FitResult runFit(const FitRequest& req) {
       buftOverrides.data(),
       margins.data(),
       nCtxMin,
+      // prefetch_weights_auto — see the note at the invoker call in
+      // LlamaLoadConfig.cpp. False preserves the pre-10549.0.0 projection.
+      false,
       GGML_LOG_LEVEL_INFO);
 
   out.status = static_cast<int>(status);
@@ -411,6 +492,13 @@ FitResult runFit(const FitRequest& req) {
   out.typeV = static_cast<int32_t>(cparams.type_v);
   out.flashAttnType = static_cast<int32_t>(cparams.flash_attn_type);
 
+  // An nGpuLayers of -1 is llama's default, so it pins nothing.
+  normalizePlanPlacement(
+      out,
+      mparams.devices,
+      req.hasSplitMode,
+      req.hasNGpuLayers && req.nGpuLayers != -1);
+
   // Surface the placement the projection depended on. The array is terminated
   // by a null pattern; anything before that is an override the real load has to
   // apply for the plan to mean what it says.
@@ -426,6 +514,11 @@ FitResult runFit(const FitRequest& req) {
 
   // A fitted 0 means "the trained context", not a usable load plan.
   detail::finalizeFitContext(out, trainedCtx);
+
+  // `out.status`, not the local: finalize above may have downgraded to ERROR.
+  if (out.status != static_cast<int>(COMMON_PARAMS_FIT_STATUS_ERROR)) {
+    captureProjection(req.modelPath, mparams, cparams, margins[0], out);
+  }
 
   return out;
 }
@@ -540,12 +633,30 @@ FitResult runLlamaFit(const LlamaLoadFitRequest& req) {
   out.nCtx = contextParams.n_ctx;
   out.nBatch = contextParams.n_batch;
   out.nUbatch = contextParams.n_ubatch;
+
+  // Before the tensorSplit move below: `modelParams.tensor_split` points into
+  // `execution.tensorSplit`, and the projection probe reads modelParams.
+  // finalizeFitContext runs after this and clears the rows if it downgrades.
+  if (status != COMMON_PARAMS_FIT_STATUS_ERROR) {
+    captureProjection(
+        req.modelPath,
+        modelParams,
+        contextParams,
+        static_cast<uint64_t>(req.marginMiB) * 1024ULL * 1024ULL,
+        out);
+  }
+
   out.tensorSplit = std::move(execution.tensorSplit);
   out.splitMode = static_cast<int32_t>(modelParams.split_mode);
   out.mainGpu = modelParams.main_gpu;
   out.typeK = static_cast<int32_t>(contextParams.type_k);
   out.typeV = static_cast<int32_t>(contextParams.type_v);
   out.flashAttnType = static_cast<int32_t>(contextParams.flash_attn_type);
+  normalizePlanPlacement(
+      out,
+      modelParams.devices,
+      normalized.pinsSplitMode,
+      normalized.pinsGpuLayers);
 
   for (const auto& override : execution.buftOverrides) {
     if (override.pattern == nullptr) {

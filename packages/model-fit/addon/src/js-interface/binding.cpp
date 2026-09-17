@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 
 #include <bare.h>
 // For GGML_TYPE_COUNT: the typeK/typeV bound is taken from the same header the
@@ -17,6 +18,7 @@
 
 #include "fit/FitParams.hpp"
 #include "fit/LlamaLoadConfig.hpp"
+#include "js-interface/PromiseTask.hpp"
 
 namespace model_fit::bindings {
 
@@ -32,6 +34,7 @@ constexpr double UINT32_LIMIT = 4294967295.0;
 constexpr double INT32_LIMIT = 2147483647.0;
 constexpr double INT32_MIN_LIMIT = -2147483648.0;
 constexpr int32_t SPLIT_MODE_NONE = 0;
+constexpr int32_t SPLIT_MODE_ROW = 2;
 
 void requireAllowedProperties(
     js_env_t* env, jsu::Object object,
@@ -185,19 +188,45 @@ js_value_t* fitResultObject(js_env_t* env, const FitResult& result) {
     overrides.set(env, index, entry);
   }
   out.setProperty(env, "buftOverrides", overrides);
+
+  // Byte counts as doubles: every value here is a memory size, far below
+  // Number.MAX_SAFE_INTEGER.
+  auto projection = jsu::Array::create(env);
+  for (size_t index = 0; index < result.projection.size(); ++index) {
+    const FitProjectionRow& row = result.projection[index];
+    auto entry = jsu::Object::create(env);
+    entry.setProperty(env, "name", jsu::String::create(env, row.name.c_str()));
+    entry.setProperty(
+        env,
+        "totalBytes",
+        jsu::Number::create(env, static_cast<double>(row.totalBytes)));
+    entry.setProperty(
+        env,
+        "freeBytes",
+        jsu::Number::create(env, static_cast<double>(row.freeBytes)));
+    entry.setProperty(
+        env,
+        "marginBytes",
+        jsu::Number::create(env, static_cast<double>(row.marginBytes)));
+    entry.setProperty(
+        env,
+        "modelBytes",
+        jsu::Number::create(env, static_cast<double>(row.modelBytes)));
+    entry.setProperty(
+        env,
+        "contextBytes",
+        jsu::Number::create(env, static_cast<double>(row.contextBytes)));
+    entry.setProperty(
+        env,
+        "computeBytes",
+        jsu::Number::create(env, static_cast<double>(row.computeBytes)));
+    projection.set(env, index, entry);
+  }
+  out.setProperty(env, "projection", projection);
   return out;
 }
 
-} // namespace
-
-/// `paramsFit(config)` — synchronous memory-fit preflight. Reads a plain config
-/// object, runs `common_fit_params` (no weights are loaded), and returns the
-/// fitted "load plan" as a JS object. Throwing goes through `JSCATCH`, which
-/// converts C++ exceptions into JS errors.
-inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
-  addon_cpp::JsArgsParser args(env, info);
-  auto config = args.getJsObject(0, "config");
-
+FitRequest parseFitRequest(js_env_t* env, jsu::Object config) {
   FitRequest req;
   req.modelPath =
       config.getProperty<jsu::String>(env, "modelPath").as<std::string>(env);
@@ -246,6 +275,14 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "splitMode")) {
     req.splitMode = static_cast<int32_t>(
         requireBoundedSignedInteger(v->as<double>(env), 0.0, 3.0, "splitMode"));
+    // In the enum domain but not accepted — see `applyFitRequest`. Rejected
+    // here so it never pays for backend registration.
+    if (req.splitMode == SPLIT_MODE_ROW) {
+      throw StatusError(
+          InvalidArgument,
+          "model-fit: 'splitMode' 2 (ROW) is not accepted; use 1 (LAYER) or 3 "
+          "(TENSOR)");
+    }
     req.hasSplitMode = true;
   }
   if (auto v = config.getOptionalProperty<jsu::Number>(env, "mainGpu")) {
@@ -294,14 +331,11 @@ inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
         "model-fit: 'mainGpu' -1 requires 'nGpuLayers' 0 and 'splitMode' NONE");
   }
 
-  const FitResult res = runFit(req);
-  return fitResultObject(env, res);
+  return req;
 }
-JSCATCH
 
-inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
-  addon_cpp::JsArgsParser args(env, info);
-  auto config = args.getJsObject(0, "config");
+LlamaLoadFitRequest parseLlamaLoadFitRequest(
+    js_env_t* env, addon_cpp::JsArgsParser& args, jsu::Object config) {
   static const std::unordered_set<std::string_view> allowedFields = {
       "loadKind", "modelPath", "params", "backendsDir", "marginMiB", "nCtxMin"};
   requireAllowedProperties(env, config, allowedFields);
@@ -393,7 +427,53 @@ inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
         "model-fit: 'nCtxMin' must not exceed concrete 'ctx-size'");
   }
 
+  return request;
+}
+
+} // namespace
+
+/// Synchronous memory-fit preflight; C++ exceptions become JS errors via
+/// `JSCATCH`.
+inline js_value_t* paramsFit(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  const FitRequest req = parseFitRequest(env, args.getJsObject(0, "config"));
+  return fitResultObject(env, runFit(req));
+}
+JSCATCH
+
+/// Same preflight on a worker thread, as a Promise. Argument errors still
+/// throw synchronously.
+inline js_value_t* paramsFitAsync(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  FitRequest req = parseFitRequest(env, args.getJsObject(0, "config"));
+  // Registration stays on the JS thread, as on the synchronous path; only the
+  // fit itself moves to the worker.
+  registerBackends(req.backendsDir);
+  return PromiseTask<FitResult>::run(
+      env, [req = std::move(req)]() { return runFit(req); }, fitResultObject);
+}
+JSCATCH
+
+inline js_value_t* llamaConfigFit(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  const LlamaLoadFitRequest request =
+      parseLlamaLoadFitRequest(env, args, args.getJsObject(0, "config"));
   return fitResultObject(env, runLlamaFit(request));
+}
+JSCATCH
+
+inline js_value_t*
+llamaConfigFitAsync(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  LlamaLoadFitRequest request =
+      parseLlamaLoadFitRequest(env, args, args.getJsObject(0, "config"));
+  if (!preBackendUnsupportedLlamaLoad(request.params).has_value()) {
+    registerBackends(request.backendsDir);
+  }
+  return PromiseTask<FitResult>::run(
+      env,
+      [request = std::move(request)]() { return runLlamaFit(request); },
+      fitResultObject);
 }
 JSCATCH
 
@@ -414,7 +494,9 @@ js_value_t* model_fit_exports(js_env_t* env, js_value_t* exports) {
   }
 
   V("paramsFit", model_fit::bindings::paramsFit)
+  V("paramsFitAsync", model_fit::bindings::paramsFitAsync)
   V("llamaConfigFit", model_fit::bindings::llamaConfigFit)
+  V("llamaConfigFitAsync", model_fit::bindings::llamaConfigFitAsync)
 
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)

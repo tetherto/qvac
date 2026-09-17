@@ -10,28 +10,34 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
 
   const timeToFirstToken = finiteNumber(stats.TTFT)
   const tokensPerSecond = finiteNumber(stats.TPS)
+  const promptTokensPerSecond = finiteNumber(stats.ppTPS)
   const cacheTokens = finiteNumber(stats.CacheTokens)
   const promptTokens = finiteNumber(stats.promptTokens)
   const generatedTokens = finiteNumber(stats.generatedTokens)
   const avgConcurrentSeq = finiteNumber(stats.avgConcurrentSeq)
+  const toolDefinitionsDropped = finiteNumber(stats.toolDefinitionsDropped)
 
   const normalized: CompletionStats = {
     ...(timeToFirstToken !== undefined && { timeToFirstToken }),
     ...(tokensPerSecond !== undefined && { tokensPerSecond }),
+    ...(promptTokensPerSecond !== undefined && { promptTokensPerSecond }),
     ...(cacheTokens !== undefined && { cacheTokens }),
     ...(promptTokens !== undefined && { promptTokens }),
     ...(generatedTokens !== undefined && { generatedTokens }),
     ...(avgConcurrentSeq !== undefined && { avgConcurrentSeq }),
+    ...(toolDefinitionsDropped !== undefined && { toolDefinitionsDropped }),
     ...(stats.backendDevice !== undefined && { backendDevice: stats.backendDevice })
   }
 
   if (
     timeToFirstToken === undefined &&
     tokensPerSecond === undefined &&
+    promptTokensPerSecond === undefined &&
     cacheTokens === undefined &&
     promptTokens === undefined &&
     generatedTokens === undefined &&
     avgConcurrentSeq === undefined &&
+    toolDefinitionsDropped === undefined &&
     stats.backendDevice === undefined
   ) {
     return undefined

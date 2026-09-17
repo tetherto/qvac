@@ -34,6 +34,12 @@ def build_results():
     )
 
 
+def build_streaming_config(model_path, model_type, language):
+    config = build_config(model_path, model_type, language)
+    config.model.streaming = True
+    return config
+
+
 def test_results_use_runtime_addon_version(tmp_path, monkeypatch):
     monkeypatch.setattr(utils, "_get_results_root", lambda: tmp_path)
     config = build_config(
@@ -76,3 +82,54 @@ def test_summary_includes_all_model_results(tmp_path, monkeypatch):
     assert "parakeet-tdt-0.6b-v3.f16.gguf" in summary
     assert "| 5.37 | 2.97 |" in summary
     assert "| 3.21 | 1.23 |" in summary
+
+
+def test_streaming_results_record_first_partial_latency(tmp_path, monkeypatch):
+    monkeypatch.setattr(utils, "_get_results_root", lambda: tmp_path)
+    config = build_streaming_config(
+        "parakeet-unified-en-0.6b.f16.gguf",
+        ModelType.UNIFIED,
+        Language.ENGLISH,
+    )
+
+    utils.save_benchmark_results(
+        config, 2.15, 0.63, build_results(), first_partial={"avg_ms": 421.5, "median_ms": 400.0}
+    )
+
+    result_path = (
+        tmp_path
+        / "parakeet-unified-en-0.6b.f16.gguf"
+        / "fleurs-english-clean-unified-cpu-streaming.md"
+    )
+    text = result_path.read_text()
+    assert "- **Avg time to first partial:** 421.50 ms" in text
+    assert "- **Median time to first partial:** 400.00 ms" in text
+
+
+def test_summary_carries_ttfp_for_streaming_rows_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(utils, "_get_results_root", lambda: tmp_path)
+    streaming_config = build_streaming_config(
+        "parakeet-unified-en-0.6b.f16.gguf",
+        ModelType.UNIFIED,
+        Language.ENGLISH,
+    )
+    batch_config = build_config(
+        "parakeet-tdt-0.6b-v3.f16.gguf",
+        ModelType.TDT,
+        Language.ENGLISH,
+    )
+
+    utils.save_benchmark_results(
+        streaming_config,
+        2.15,
+        0.63,
+        build_results(),
+        first_partial={"avg_ms": 421.5, "median_ms": 400.0},
+    )
+    utils.save_benchmark_results(batch_config, 2.26, 0.77, build_results())
+    utils.generate_summary()
+
+    summary = (tmp_path / "results_summary.md").read_text()
+    assert "| TTFP (ms) |" in summary
+    assert "| streaming | 2.15 | 0.63 | 421.50 |" in summary
+    assert "| batch | 2.26 | 0.77 |  |" in summary

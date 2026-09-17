@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-16`. CosyVoice3 synthesis is faster
+  with no model change: on an AMD Strix Halo the reference-exact path gains
+  1.3-1.4x on Vulkan and 1.6-1.8x on CPU, from flash-attention in the flow
+  DiT and an LM KV cache that no longer re-copies itself each token. Existing
+  CosyVoice3 GGUFs keep working; the engine's new quantized flow / f16 HiFT
+  tiers require re-converted model files.
+
+## [0.9.2] - 2026-09-16
+
+### Fixed
+
+- Mobile platform packages (`@qvac/tts-ggml-android-arm64`, `@qvac/tts-ggml-ios`)
+are no longer `os`-filtered `optionalDependencies` of the meta package. No
+build host ever reports a mobile `os`, so installers could never select them
+during a cross-build and mobile bundles failed verification with missing
+prebuilds. They now publish without install filters; mobile applications
+declare the target's platform package as a direct dependency pinned to the
+exact meta package version.
+
+## [0.9.1] - 2026-09-15
+
+This release repairs native binding resolution for the per-platform prebuild
+layout introduced in 0.9.0. On hosts where the binding was resolved to the
+wrong module, every model load failed; the loader now verifies what it was
+handed instead of trusting it.
+
+## Bug Fixes
+
+### The addon loader no longer exports a non-binding
+
+Since the 0.9.0 per-platform split this package ships no `prebuilds/` of its
+own, so `require.addon()` is expected to miss and the real binding comes from
+the `#host-addon` platform package. Some runtimes answer that call with this
+package's own JavaScript entry — the `TTSGgml` class — rather than failing, and
+`binding.js` returned it verbatim. Consumers then received a module with no
+`createInstance`, the platform package was never consulted even though it was
+installed and loadable, and the first visible symptom was an unrelated
+`this._binding.createInstance is not a function` deep inside a model load, or a
+`logging.module must have a setLogger(callback) function` rejection when a host
+attached an addon logger. `binding.js` now treats anything without a
+`createInstance` function as a miss and falls through to the platform package,
+so a host that has the correct platform package installed loads normally.
+
+When neither source yields the native binding, the failure is now reported at
+the point of loading and names the cause: a missing platform package keeps the
+existing message naming the exact `@qvac/tts-ggml-<host>` package to install,
+and a platform package that resolves to something other than the binding
+raises an error saying so instead of silently degrading.
+
+## Pull Requests
+
+- [#4485](https://github.com/tetherto/qvac/pull/4485) - fix: reject a non-binding from require.addon() and fall back to the platform package
+
+
+## [0.9.0] - 2026-09-11
+
+### Added
+
+- The published linux-x64 prebuild ships the CUDA backend again, next to
+  Vulkan and the CPU variants: with the per-platform prebuild packages the
+  CUDA module no longer pushes one npm tarball over the registry size limit.
+  CUDA stays a runtime-loaded module — it wins the GPU cascade only where the
+  NVIDIA driver and the CUDA 13 runtime libraries (cudart, cuBLAS) resolve at
+  load time; every other host keeps Vulkan or CPU. `npm run build:cuda`
+  builds the same configuration from source.
+
+- Opt-in CUDA builds (`ENABLE_CUDA=ON`) now work on win32-x64 and linux-arm64
+  in addition to linux-x64. The CUDA backend ships as a runtime-loaded module
+  (`.dll` on Windows, `.so` on Linux) next to the addon, so a CUDA-enabled
+  build still loads on hosts without an NVIDIA stack and falls back to Vulkan
+  or CPU. linux-arm64 targets Jetson Orin (8.7), Grace-Hopper (9.0) and
+  GB10 / DGX Spark (12.1) natively, with 8.0 PTX for discrete Ampere+ cards.
+  Published linux-arm64 and win32-x64 prebuilds are unchanged (Vulkan).
+
+### Changed
+
+- Raise the `speech-cpp` floor to 2026-09-10 (one aligned stack across the
+  speech packages) and floor `ggml-speech` at 2026-09-09#1: fixes a Windows
+  CUDA crash on engine unload and a stale backend-capability cache that could
+  abort GPU synthesis after backend reloads, and brings in the fused speech
+  ops and CUDA-graphs decode path. Supertonic reaches 2x+ real-time Vulkan
+  synthesis for q8_0 and f16, runs one-graph duration and text encoders with
+  the CFM loop's CFG batched along time, and keeps the fused graph path on
+  CPU builds without a pointwise BLAS; CPU inference picks up tinyBLAS on
+  x86 Linux and Apple silicon.
+
+- **Per-platform prebuild packages.** `@qvac/tts-ggml` is now a meta package
+  that ships the JavaScript wrapper only; native prebuilds install through
+  `os`/`cpu` filtered `optionalDependencies` (`@qvac/tts-ggml-<platform>-<arch>`,
+  iOS flavours grouped in `@qvac/tts-ggml-ios`), version-locked to the meta
+  package. Breaking for the published file layout:
+  `node_modules/@qvac/tts-ggml/prebuilds` no longer exists in npm installs —
+  use the new `resolveBackendsDir()` export instead of hardcoding that path.
+  Supported installers are npm 7+, pnpm, bun, and Yarn Berry; Yarn v1 and
+  `--omit=optional` installs fail at require time with an error naming the
+  missing platform package. A locally built `prebuilds/` directory keeps
+  taking precedence, so source builds are unaffected.
+
 ## [0.8.1] - 2026-09-01
 
 ### Changed

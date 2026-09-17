@@ -13,7 +13,7 @@ import {
   collectAddonsFromNodeModules,
   InvalidNodeModulesSourceError
 } from '@/commands/verify/node-modules-source'
-import { checkPrebuilds } from '@/commands/verify/prebuilds'
+import { checkPrebuilds, resolvePrebuildLocations } from '@/commands/verify/prebuilds'
 import { checkAbi, resolveBareRuntime, type BareRuntimeResolution } from '@/commands/verify/abi'
 import {
   formatVerifyBundleResult,
@@ -52,6 +52,101 @@ function writePrebuild(packageRoot: string, host: string, filename = 'native.bar
   fs.writeFileSync(path.join(dir, filename), '')
 }
 
+const BUNDLE_MAIN = '/app/entry.js'
+
+const BARE_POSIX_PKG = '/node_modules/bare-posix/package.json'
+const BARE_OS_PKG = '/node_modules/bare-os/package.json'
+
+/** An unrelated addon, linked on every host. */
+function linkedNeighbour(): Record<string, unknown> {
+  return {
+    '/node_modules/bare-os/index.js': { '#package': BARE_OS_PKG, '.': 'linked:bare-os-3.9.3' },
+    [BARE_OS_PKG]: {}
+  }
+}
+
+/** `bare-posix` as bare-pack emits it for several hosts: every branch kept. */
+function multiHostResolutions(): Record<string, unknown> {
+  return {
+    [BUNDLE_MAIN]: {
+      'bare-process': '/node_modules/bare-process/index.js',
+      'bare-os': '/node_modules/bare-os/index.js'
+    },
+    '/node_modules/bare-process/index.js': {
+      '#package': '/node_modules/bare-process/package.json',
+      'bare-posix': {
+        win32: '/node_modules/bare-posix/unsupported.js',
+        android: '/node_modules/bare-posix/unsupported.js',
+        default: '/node_modules/bare-posix/index.js'
+      }
+    },
+    '/node_modules/bare-posix/index.js': {
+      '#package': BARE_POSIX_PKG,
+      './binding': '/node_modules/bare-posix/binding.js'
+    },
+    '/node_modules/bare-posix/binding.js': {
+      '#package': BARE_POSIX_PKG,
+      '.': {
+        darwin: 'linked:bare-posix.1.0.1.framework/bare-posix.1.0.1',
+        linux: 'linked:libbare-posix.1.0.1.so',
+        win32: 'linked:bare-posix-1.0.1.dll',
+        android: 'linked:libbare-posix.1.0.1.so',
+        ios: 'linked:bare-posix.1.0.1.framework/bare-posix.1.0.1'
+      }
+    },
+    '/node_modules/bare-posix/unsupported.js': { '#package': BARE_POSIX_PKG },
+    [BARE_POSIX_PKG]: {},
+    ...linkedNeighbour()
+  }
+}
+
+/** `bare-posix` as bare-pack emits it for one host: conditions resolved eagerly. */
+function singleHostResolutions(options: { linked: boolean }): Record<string, unknown> {
+  const reached = options.linked
+    ? {
+        '/node_modules/bare-posix/index.js': {
+          '#package': BARE_POSIX_PKG,
+          './binding': '/node_modules/bare-posix/binding.js'
+        },
+        '/node_modules/bare-posix/binding.js': {
+          '#package': BARE_POSIX_PKG,
+          '.': 'linked:libbare-posix.1.0.1.so'
+        }
+      }
+    : { '/node_modules/bare-posix/unsupported.js': { '#package': BARE_POSIX_PKG } }
+
+  return {
+    [BUNDLE_MAIN]: {
+      'bare-process': '/node_modules/bare-process/index.js',
+      'bare-os': '/node_modules/bare-os/index.js'
+    },
+    '/node_modules/bare-process/index.js': {
+      '#package': '/node_modules/bare-process/package.json',
+      'bare-posix': options.linked
+        ? '/node_modules/bare-posix/index.js'
+        : '/node_modules/bare-posix/unsupported.js'
+    },
+    ...reached,
+    [BARE_POSIX_PKG]: {},
+    ...linkedNeighbour()
+  }
+}
+
+/** The addon packages the graph fixtures refer to. */
+function writeGraphPackages(projectRoot: string, options: { hosts?: string[] } = {}): void {
+  writePackageJson(projectRoot, 'node_modules/bare-posix', {
+    name: 'bare-posix',
+    version: '1.0.1',
+    addon: true
+  })
+  const bareOs = writePackageJson(projectRoot, 'node_modules/bare-os', {
+    name: 'bare-os',
+    version: '3.9.3',
+    addon: true
+  })
+  for (const host of options.hosts ?? []) writePrebuild(bareOs, host)
+}
+
 function escapeForJsString(s: string): string {
   return s
     .replace(/\\/g, '\\\\')
@@ -64,10 +159,15 @@ function escapeForJsString(s: string): string {
 function writeBareBundle(
   bundlePath: string,
   resolutions: Record<string, unknown>,
-  options: { id?: string; body?: string } = {}
+  options: { id?: string; body?: string; main?: string; imports?: Record<string, unknown> } = {}
 ): void {
   const bundleId = options.id ?? 'test-bundle-id'
-  const header = JSON.stringify({ id: bundleId, resolutions })
+  const header = JSON.stringify({
+    id: bundleId,
+    ...(options.main === undefined ? {} : { main: options.main }),
+    ...(options.imports === undefined ? {} : { imports: options.imports }),
+    resolutions
+  })
   const packed = `${bundleId}\n${header}\n${options.body ?? ''}`
   fs.mkdirSync(path.dirname(bundlePath), { recursive: true })
   fs.writeFileSync(bundlePath, `module.exports = "${escapeForJsString(packed)}"`)
@@ -348,6 +448,243 @@ describe('collectAddonsFromBundle', () => {
       )
     })
   })
+
+  it('reports only the hosts whose conditional resolution reaches the addon', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, multiHostResolutions(), { main: BUNDLE_MAIN })
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['darwin-arm64', 'linux-x64', 'win32-x64', 'android-arm64', 'ios-arm64']
+      })
+      const barePosix = addons.find((a) => a.name === 'bare-posix')
+      assert.deepEqual(barePosix?.linkedHosts, ['darwin-arm64', 'ios-arm64', 'linux-x64'])
+    })
+  })
+
+  it('uses `default` only when no platform branch matched', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, multiHostResolutions(), { main: BUNDLE_MAIN })
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64', 'linux-x64']
+      })
+      assert.deepEqual(addons.find((a) => a.name === 'bare-posix')?.linkedHosts, ['linux-x64'])
+    })
+  })
+
+  it('reports no linked host for an addon a single-host graph resolved away', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, singleHostResolutions({ linked: false }), { main: BUNDLE_MAIN })
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64']
+      })
+      assert.deepEqual(addons.find((a) => a.name === 'bare-posix')?.linkedHosts, [])
+      assert.deepEqual(addons.find((a) => a.name === 'bare-os')?.linkedHosts, ['win32-x64'])
+    })
+  })
+
+  it('reports the host for an addon a single-host graph did link', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, singleHostResolutions({ linked: true }), { main: BUNDLE_MAIN })
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['linux-x64']
+      })
+      assert.deepEqual(addons.find((a) => a.name === 'bare-posix')?.linkedHosts, ['linux-x64'])
+    })
+  })
+
+  it('abstains when no hosts are supplied', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, multiHostResolutions(), { main: BUNDLE_MAIN })
+      const addons = await collectAddonsFromBundle({ bundlePath, projectRoot: dir })
+      assert.ok(addons.every((a) => a.linkedHosts === undefined))
+    })
+  })
+
+  it('abstains when the header carries no main', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, multiHostResolutions())
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64']
+      })
+      assert.ok(addons.every((a) => a.linkedHosts === undefined))
+    })
+  })
+
+  it('abstains when main is absent from the graph', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, multiHostResolutions(), { main: '/app/missing.js' })
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64']
+      })
+      assert.ok(addons.every((a) => a.linkedHosts === undefined))
+    })
+  })
+
+  it('abstains when the graph links no addon at all', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(
+        bundlePath,
+        {
+          [BUNDLE_MAIN]: { 'bare-posix': '/node_modules/bare-posix/index.js' },
+          '/node_modules/bare-posix/index.js': { '#package': BARE_POSIX_PKG },
+          [BARE_POSIX_PKG]: {}
+        },
+        { main: BUNDLE_MAIN }
+      )
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64']
+      })
+      assert.ok(addons.every((a) => a.linkedHosts === undefined))
+    })
+  })
+
+  it('abstains when the requested hosts are not the ones the bundle links', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(
+        bundlePath,
+        {
+          [BUNDLE_MAIN]: { 'bare-os': '/node_modules/bare-os/index.js' },
+          '/node_modules/bare-os/index.js': {
+            '#package': BARE_OS_PKG,
+            '.': { android: 'linked:libbare-os.so', ios: 'linked:bare-os.framework' }
+          },
+          [BARE_OS_PKG]: {}
+        },
+        { main: BUNDLE_MAIN }
+      )
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64']
+      })
+      assert.ok(addons.every((a) => a.linkedHosts === undefined))
+    })
+  })
+
+  it('abstains when a linked module cannot be attributed to a package', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(
+        bundlePath,
+        {
+          [BUNDLE_MAIN]: { 'bare-os': '/node_modules/bare-os/index.js' },
+          '/node_modules/bare-os/index.js': { '.': 'linked:bare-os-3.9.3' },
+          [BARE_OS_PKG]: {}
+        },
+        { main: BUNDLE_MAIN }
+      )
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64']
+      })
+      assert.ok(addons.every((a) => a.linkedHosts === undefined))
+    })
+  })
+
+  it('abstains when the header carries an import map it cannot walk', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, multiHostResolutions(), {
+        main: BUNDLE_MAIN,
+        imports: { '#rpc': '/node_modules/somewhere/rpc.js' }
+      })
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64', 'linux-x64']
+      })
+      assert.ok(addons.every((a) => a.linkedHosts === undefined))
+    })
+  })
+
+  it('abstains when owner paths do not line up with the enumerated packages', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(
+        bundlePath,
+        {
+          [BUNDLE_MAIN]: { 'bare-os': '/node_modules/bare-os/index.js' },
+          '/node_modules/bare-os/index.js': {
+            '#package': '/vendored/bare-os/package.json',
+            '.': 'linked:bare-os-3.9.3'
+          },
+          [BARE_OS_PKG]: {}
+        },
+        { main: BUNDLE_MAIN }
+      )
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64']
+      })
+      assert.ok(addons.length > 0, 'expected the path index to still enumerate the package')
+      assert.ok(addons.every((a) => a.linkedHosts === undefined))
+    })
+  })
+
+  it('keeps a host linked when an undecidable condition guards the addon', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir)
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(
+        bundlePath,
+        {
+          [BUNDLE_MAIN]: { 'bare-os': '/node_modules/bare-os/index.js' },
+          '/node_modules/bare-os/index.js': {
+            '#package': BARE_OS_PKG,
+            './binding': { require: '/node_modules/bare-os/binding.js' }
+          },
+          '/node_modules/bare-os/binding.js': {
+            '#package': BARE_OS_PKG,
+            '.': 'linked:bare-os-3.9.3'
+          },
+          [BARE_OS_PKG]: {}
+        },
+        { main: BUNDLE_MAIN }
+      )
+      const addons = await collectAddonsFromBundle({
+        bundlePath,
+        projectRoot: dir,
+        hosts: ['win32-x64']
+      })
+      assert.deepEqual(addons.find((a) => a.name === 'bare-os')?.linkedHosts, ['win32-x64'])
+    })
+  })
 })
 
 describe('collectAddonsFromNodeModules', () => {
@@ -515,7 +852,331 @@ describe('checkPrebuilds', () => {
       assert.deepEqual(issues.map((i) => i.host).sort(), ['android-arm64', 'ios-arm64-simulator'])
     })
   })
+
+  it('checks only the hosts that link the addon', async () => {
+    await withTempDir(async (dir) => {
+      writePrebuild(dir, 'linux-x64')
+      const issues = await checkPrebuilds({
+        addon: {
+          name: 'bare-posix',
+          version: '1.0.1',
+          packageRoot: dir,
+          packageJsonPath: path.join(dir, 'package.json'),
+          linkedHosts: ['linux-x64']
+        },
+        hosts: ['linux-x64', 'win32-x64', 'android-arm64']
+      })
+      assert.deepEqual(issues, [])
+    })
+  })
+
+  it('still reports a linked host that has no prebuild', async () => {
+    await withTempDir(async (dir) => {
+      const issues = await checkPrebuilds({
+        addon: {
+          name: 'bare-posix',
+          version: '1.0.1',
+          packageRoot: dir,
+          packageJsonPath: path.join(dir, 'package.json'),
+          linkedHosts: ['linux-x64']
+        },
+        hosts: ['linux-x64', 'win32-x64']
+      })
+      assert.deepEqual(
+        issues.map((i) => i.host),
+        ['linux-x64']
+      )
+    })
+  })
+
+  it('checks nothing for an addon the bundle links nowhere', async () => {
+    await withTempDir(async (dir) => {
+      const issues = await checkPrebuilds({
+        addon: {
+          name: 'bare-posix',
+          version: '1.0.1',
+          packageRoot: dir,
+          packageJsonPath: path.join(dir, 'package.json'),
+          linkedHosts: []
+        },
+        hosts: ['win32-x64', 'android-arm64']
+      })
+      assert.deepEqual(issues, [])
+    })
+  })
+
+  it('checks every host when link information is absent', async () => {
+    await withTempDir(async (dir) => {
+      const issues = await checkPrebuilds({
+        addon: {
+          name: 'bare-posix',
+          version: '1.0.1',
+          packageRoot: dir,
+          packageJsonPath: path.join(dir, 'package.json')
+        },
+        hosts: ['win32-x64', 'linux-x64']
+      })
+      assert.deepEqual(
+        issues.map((i) => i.host),
+        ['win32-x64', 'linux-x64']
+      )
+    })
+  })
 })
+
+function writePlatformPackage(
+  projectRoot: string,
+  relPackageDir: string,
+  options: { name: string; addon: string; hosts: string[] }
+): string {
+  const platformRoot = writePackageJson(projectRoot, relPackageDir, {
+    name: options.name,
+    version: '0.9.0'
+  })
+  writeJson(path.join(platformRoot, 'addon', 'package.json'), {
+    name: options.addon,
+    version: '0.9.0',
+    addon: true
+  })
+  for (const host of options.hosts) {
+    writePrebuild(path.join(platformRoot, 'addon'), host)
+  }
+  return platformRoot
+}
+
+function metaAddon(packageRoot: string) {
+  return {
+    name: '@qvac/tts-ggml',
+    version: '0.9.0',
+    packageRoot,
+    packageJsonPath: path.join(packageRoot, 'package.json')
+  }
+}
+
+function ttsHostAddonMap() {
+  return {
+    linux: {
+      x64: ['@qvac/tts-ggml-linux-x64', './addon-unavailable.js'],
+      arm64: ['@qvac/tts-ggml-linux-arm64', './addon-unavailable.js']
+    },
+    darwin: {
+      arm64: ['@qvac/tts-ggml-darwin-arm64', './addon-unavailable.js'],
+      x64: ['@qvac/tts-ggml-darwin-x64', './addon-unavailable.js']
+    },
+    win32: {
+      x64: ['@qvac/tts-ggml-win32-x64', './addon-unavailable.js']
+    },
+    android: {
+      arm64: ['@qvac/tts-ggml-android-arm64', './addon-unavailable.js']
+    },
+    ios: ['@qvac/tts-ggml-ios', './addon-unavailable.js']
+  }
+}
+
+function splitTtsManifest(): Record<string, unknown> {
+  return {
+    name: '@qvac/tts-ggml',
+    version: '0.9.0',
+    addon: true,
+    imports: { '#host-addon': ttsHostAddonMap() }
+  }
+}
+
+describe('checkPrebuilds with per-platform prebuild packages', () => {
+  it('accepts a prebuild shipped by a platform package hoisted next to the meta package', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
+        name: '@qvac/tts-ggml-darwin-arm64',
+        addon: '@qvac/tts-ggml',
+        hosts: ['darwin-arm64']
+      })
+      const issues = await checkPrebuilds({
+        addon: metaAddon(packageRoot),
+        hosts: ['darwin-arm64']
+      })
+      assert.deepEqual(issues, [])
+    })
+  })
+
+  it('accepts a platform package nested under the meta package', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      writePlatformPackage(
+        dir,
+        'node_modules/@qvac/tts-ggml/node_modules/@qvac/tts-ggml-linux-x64',
+        {
+          name: '@qvac/tts-ggml-linux-x64',
+          addon: '@qvac/tts-ggml',
+          hosts: ['linux-x64']
+        }
+      )
+      const issues = await checkPrebuilds({ addon: metaAddon(packageRoot), hosts: ['linux-x64'] })
+      assert.deepEqual(issues, [])
+    })
+  })
+
+  it('finds every iOS host inside the grouped -ios platform package', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      const hosts = ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
+      writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-ios', {
+        name: '@qvac/tts-ggml-ios',
+        addon: '@qvac/tts-ggml',
+        hosts
+      })
+      const issues = await checkPrebuilds({ addon: metaAddon(packageRoot), hosts })
+      assert.deepEqual(issues, [])
+    })
+  })
+
+  it('still reports missing-prebuild for hosts no installed package covers', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
+        name: '@qvac/tts-ggml-darwin-arm64',
+        addon: '@qvac/tts-ggml',
+        hosts: ['darwin-arm64']
+      })
+      writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-win32-x64', {
+        name: '@qvac/tts-ggml-win32-x64',
+        addon: '@qvac/tts-ggml',
+        hosts: []
+      })
+      const issues = await checkPrebuilds({
+        addon: metaAddon(packageRoot),
+        hosts: ['darwin-arm64', 'linux-x64', 'win32-x64']
+      })
+      assert.deepEqual(issues.map((i) => i.host).sort(), ['linux-x64', 'win32-x64'])
+
+      const linux = issues.find((i) => i.host === 'linux-x64')
+      assert.ok(linux)
+      assert.match(linux.message, /"@qvac\/tts-ggml-linux-x64": "0\.9\.0"/)
+
+      const win32 = issues.find((i) => i.host === 'win32-x64')
+      assert.ok(win32)
+      assert.match(win32.message, /tts-ggml-win32-x64[\\/]addon[\\/]prebuilds[\\/]win32-x64/)
+      assert.doesNotMatch(win32.message, /"@qvac\/tts-ggml-win32-x64": "0\.9\.0"/)
+    })
+  })
+
+  it('names the exact platform-package pin when a split addon slice is missing', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      const issues = await checkPrebuilds({
+        addon: metaAddon(packageRoot),
+        hosts: ['android-arm64']
+      })
+      assert.equal(issues.length, 1)
+      assert.match(
+        issues[0]?.message ?? '',
+        /Add this exact dependency to package\.json \(same version as @qvac\/tts-ggml\) and reinstall: "@qvac\/tts-ggml-android-arm64": "0\.9\.0"/
+      )
+    })
+  })
+
+  it('does not invent a platform package when the addon has no #host-addon map', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/llm-llamacpp', {
+        name: '@qvac/llm-llamacpp',
+        version: '0.53.0',
+        addon: true
+      })
+      writePlatformPackage(dir, 'node_modules/@qvac/llm-llamacpp-android-arm64', {
+        name: '@qvac/llm-llamacpp-android-arm64',
+        addon: '@qvac/llm-llamacpp',
+        hosts: ['android-arm64']
+      })
+      const issues = await checkPrebuilds({
+        addon: {
+          name: '@qvac/llm-llamacpp',
+          version: '0.53.0',
+          packageRoot,
+          packageJsonPath: path.join(packageRoot, 'package.json')
+        },
+        hosts: ['android-arm64']
+      })
+      assert.equal(issues.length, 1)
+      assert.doesNotMatch(issues[0]?.message ?? '', /llm-llamacpp-android-arm64/)
+    })
+  })
+
+  it('searches the meta package prebuilds first, then the platform package', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      const platformRoot = writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
+        name: '@qvac/tts-ggml-darwin-arm64',
+        addon: '@qvac/tts-ggml',
+        hosts: ['darwin-arm64']
+      })
+
+      const locations = await resolvePrebuildLocations(metaAddon(packageRoot), 'darwin-arm64')
+      assert.deepEqual(locations, [
+        { hostDir: path.join(packageRoot, 'prebuilds', 'darwin-arm64') },
+        {
+          hostDir: path.join(platformRoot, 'addon', 'prebuilds', 'darwin-arm64'),
+          platformPackage: '@qvac/tts-ggml-darwin-arm64'
+        }
+      ])
+
+      const withoutPlatform = await resolvePrebuildLocations(metaAddon(packageRoot), 'linux-x64')
+      assert.deepEqual(withoutPlatform, [
+        { hostDir: path.join(packageRoot, 'prebuilds', 'linux-x64') }
+      ])
+    })
+  })
+
+  it('follows the meta package symlink into a pnpm virtual store to find its platform package', async () => {
+    await withTempDir(async (dir) => {
+      // pnpm's isolated layout: the project's node_modules/@qvac/tts-ggml is a
+      // symlink into node_modules/.pnpm/<id>/node_modules/@qvac/tts-ggml, and
+      // the addon's own dependencies — the platform package included — are
+      // linked next to it in that store directory, never at the top level.
+      const storeScope = 'node_modules/.pnpm/@qvac+tts-ggml@0.9.0/node_modules/@qvac'
+      const realPackageRoot = writePackageJson(dir, `${storeScope}/tts-ggml`, splitTtsManifest())
+      const platformRoot = writePlatformPackage(
+        dir,
+        'node_modules/.pnpm/@qvac+tts-ggml-darwin-arm64@0.9.0/node_modules/@qvac/tts-ggml-darwin-arm64',
+        {
+          name: '@qvac/tts-ggml-darwin-arm64',
+          addon: '@qvac/tts-ggml',
+          hosts: ['darwin-arm64']
+        }
+      )
+      symlinkDir(platformRoot, path.join(dir, storeScope, 'tts-ggml-darwin-arm64'))
+      const linkedPackageRoot = path.join(dir, 'node_modules', '@qvac', 'tts-ggml')
+      symlinkDir(realPackageRoot, linkedPackageRoot)
+
+      // The node_modules walker hands the verifier the top-level symlink path.
+      const issues = await checkPrebuilds({
+        addon: metaAddon(linkedPackageRoot),
+        hosts: ['darwin-arm64']
+      })
+      assert.deepEqual(issues, [])
+
+      const locations = await resolvePrebuildLocations(metaAddon(linkedPackageRoot), 'darwin-arm64')
+      assert.deepEqual(locations, [
+        { hostDir: path.join(linkedPackageRoot, 'prebuilds', 'darwin-arm64') },
+        {
+          hostDir: path.join(
+            realPackageRoot,
+            '..',
+            'tts-ggml-darwin-arm64',
+            'addon',
+            'prebuilds',
+            'darwin-arm64'
+          ),
+          platformPackage: '@qvac/tts-ggml-darwin-arm64'
+        }
+      ])
+    })
+  })
+})
+
+function symlinkDir(target: string, linkPath: string): void {
+  fs.mkdirSync(path.dirname(linkPath), { recursive: true })
+  fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
+}
 
 describe('resolveBareRuntime', () => {
   it('uses the explicit bareRuntimeVersion when provided', async () => {
@@ -831,6 +1492,36 @@ describe('verifyBundle orchestrator', () => {
     })
   })
 
+  it('passes a bundle whose addon ships its prebuilds in per-platform packages', async () => {
+    await withTempDir(async (dir) => {
+      writePackageJson(dir, 'node_modules/@qvac/tts-ggml', {
+        ...splitTtsManifest(),
+        engines: { bare: '>=1.19.0' }
+      })
+      writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-darwin-arm64', {
+        name: '@qvac/tts-ggml-darwin-arm64',
+        addon: '@qvac/tts-ggml',
+        hosts: ['darwin-arm64']
+      })
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, { '/node_modules/@qvac/tts-ggml/index.js': true })
+
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['darwin-arm64'],
+        bareRuntimeVersion: '1.30.3'
+      })
+      assert.equal(hasErrors(result), false)
+      assert.equal(hasWarnings(result), false)
+      assert.deepEqual(
+        result.addons.map((addon) => addon.name),
+        ['@qvac/tts-ggml'],
+        'only the meta package is an addon; the platform package is not double-counted'
+      )
+    })
+  })
+
   it('fails when node_modules source has an abi mismatch', async () => {
     await withTempDir(async (dir) => {
       const packageRoot = writePackageJson(dir, 'node_modules/bare-os', {
@@ -922,6 +1613,78 @@ describe('verifyBundle orchestrator', () => {
         assert.equal(warning.bundlePath, bundlePath)
       }
       assert.equal(result.addons.length, 0)
+    })
+  })
+
+  it('passes on a single-host bundle that resolved the addon away', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['win32-x64'] })
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, singleHostResolutions({ linked: false }), { main: BUNDLE_MAIN })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['win32-x64']
+      })
+      assert.deepEqual(
+        result.issues.filter((i) => i.code === 'missing-prebuild'),
+        []
+      )
+      assert.equal(hasErrors(result), false)
+    })
+  })
+
+  it('reports the missing prebuild on a host that does link the addon', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['linux-x64'] })
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, singleHostResolutions({ linked: true }), { main: BUNDLE_MAIN })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['linux-x64']
+      })
+      const missing = result.issues.filter((i) => i.code === 'missing-prebuild')
+      assert.equal(missing.length, 1)
+      assert.equal(missing[0]?.code === 'missing-prebuild' && missing[0]?.addon, 'bare-posix@1.0.1')
+      assert.equal(hasErrors(result), true)
+    })
+  })
+
+  it('splits the verdict per host on a multi-host bundle', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['win32-x64', 'linux-x64'] })
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, multiHostResolutions(), { main: BUNDLE_MAIN })
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['win32-x64', 'linux-x64']
+      })
+      const missing = result.issues.filter((i) => i.code === 'missing-prebuild')
+      assert.deepEqual(
+        missing.map((i) => (i.code === 'missing-prebuild' ? `${i.addon}/${i.host}` : '')),
+        ['bare-posix@1.0.1/linux-x64']
+      )
+    })
+  })
+
+  it('keeps every host checked when the bundle header has no main to walk from', async () => {
+    await withTempDir(async (dir) => {
+      writeGraphPackages(dir, { hosts: ['win32-x64', 'linux-x64'] })
+      const bundlePath = path.join(dir, 'worker.bundle.js')
+      writeBareBundle(bundlePath, multiHostResolutions())
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['win32-x64', 'linux-x64']
+      })
+      assert.deepEqual(
+        result.issues
+          .filter((i) => i.code === 'missing-prebuild')
+          .map((i) => (i.code === 'missing-prebuild' ? `${i.addon}/${i.host}` : '')),
+        ['bare-posix@1.0.1/win32-x64', 'bare-posix@1.0.1/linux-x64']
+      )
     })
   })
 })

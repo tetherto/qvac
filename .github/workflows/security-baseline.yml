@@ -87,10 +87,21 @@ jobs:
         run: >-
           node --test
           .github/scripts/test/ci-trust-policy.test.mjs
+          .github/scripts/test/fabric-overlay-policy.test.mjs
           .github/scripts/test/prebuild-status.test.mjs
           .github/scripts/test/publish-gate-policy.test.mjs
           .github/scripts/test/publish-gpr-skip-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
+          .github/scripts/test/await-ts-checks.test.mjs
+          .github/scripts/test/model-cache-sync.test.mjs
+          .github/scripts/test/cache-models-branches.test.mjs
+
+      # Guards the model-cache seeding scheme: a seed writing a key no consumer
+      # asks for is silent otherwise -- the seed saves, and its verify job
+      # asserts that same stale key, so nothing goes red while every PR leg
+      # misses.
+      - name: Validate model cache seed/consumer sync
+        run: node .github/scripts/validate-model-cache-sync.mjs
 
       # Pins which registry the mobile prebuild fallback resolves. The
       # @tetherto/<addon>-mono path is how an unmerged NATIVE change reaches a
@@ -102,15 +113,14 @@ jobs:
           node --test
           .github/scripts/test/mobile-prebuild-registry.test.mjs
 
-      # The co-load inventory drifts when the SDK swaps an addon, not when the
-      # co-load package changes, so this has to run on every PR rather than
-      # behind the co-load label. It only reads files (no npm install), and a
-      # stale inventory makes the co-load gate report on an addon the SDK no
-      # longer ships.
-      - name: Run co-load addon inventory tests
+      # on-pr-test-sdk.yml is pull_request_target, so it and its composite actions
+      # always load from the base branch — no run on this PR exercises an edit to
+      # the failed-test rerun chain. This suite extracts those scripts and runs
+      # them against fixtures, which is the only pre-merge check on them.
+      - name: Run SDK e2e rerun tests
         run: >-
           node --test
-          packages/ggml-coload-smoke/test/addons.unit.test.js
+          .github/scripts/test/sdk-e2e-rerun.test.mjs
 
       # The trust-policy suite asserts on workflow *text*, so it stays green even
       # when an edit destroys a job graph. on-merge-*/on-publish-* never run on a
