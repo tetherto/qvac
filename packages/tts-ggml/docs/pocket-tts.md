@@ -52,10 +52,13 @@ saves a playable WAV. The addon also accepts explicit `files.pocketFlowModel`,
 `streamOutput: true` is requested. `runStream()` explicitly splits sentences;
 `runStreaming()` accepts incremental text. `cancel()` invalidates pending text
 and waits for native completion before another request is admitted.
-A `run()` AbortSignal also stops native work. Invalid reload options or failed
-replacement activation preserve the previously loaded model. Overlapping
-lifecycle operations are rejected; `unload()` permits a later load/reload,
-while `destroy()` is terminal.
+A `run()` AbortSignal also stops native work. Invalid reload options preserve
+the loaded model. A valid `reload()` drains native work and releases the old
+model before loading its replacement, so two model instances never overlap.
+If replacement loading fails, the instance is left unloaded and retains its
+last successful configuration; call `load()` to restore it or `reload()` to
+retry with new options. Overlapping lifecycle operations are rejected;
+`unload()` permits a later load/reload, while `destroy()` is terminal.
 
 When stats are enabled with `opts: { stats: true }`, `firstAudioMs` reports
 the native latency to first audio. For `runStream()` and `runStreaming()`,

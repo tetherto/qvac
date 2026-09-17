@@ -84,7 +84,10 @@ test('Pocket invalid reload preserves configuration; valid reload forwards sampl
   }
   await model.load()
   t.is(params.steps, 1)
+  const original = model.addon
   await t.exception(model.reload({ useGPU: true }))
+  t.is(model.addon, original, 'invalid options retain the loaded engine')
+  t.is(model.getState().weightsLoaded, true)
   t.is(model._buildTtsParams().useGPU, false)
   await model.reload({ outputSampleRate: 44100 })
   t.is(params.outputSampleRate, 44100)
@@ -103,30 +106,110 @@ test('Pocket terminal marker is the only last event in sentence streaming', (t) 
   t.is(events[1].isLast, true)
 })
 
-test('Pocket failed replacement activation preserves the loaded addon and configuration', async (t) => {
+test('Pocket reload releases the old model before allocating its replacement', async (t) => {
   const model = make()
-  let attempts = 0
-  let disposed = 0
-  model._createAddon = () => ({
-    activate: async () => {
-      if (++attempts === 2) throw new Error('activation failed')
-    },
-    cancel: async () => {},
-    destroyInstance: async () => {
-      disposed++
-    }
+  let live = 0
+  let peak = 0
+  let release
+  const gate = new Promise((resolve) => {
+    release = resolve
   })
+  let entered
+  const teardownStarted = new Promise((resolve) => {
+    entered = resolve
+  })
+  const events = []
+  let created = 0
+  model._createAddon = () => {
+    const id = ++created
+    events.push(`create ${id}`)
+    peak = Math.max(peak, ++live)
+    return {
+      activate: async () => {
+        events.push(`activate ${id}`)
+      },
+      cancel: async () => {
+        events.push(`cancel ${id}`)
+      },
+      destroyInstance: async () => {
+        events.push(`destroy ${id}`)
+        if (id === 1) {
+          entered()
+          await gate
+        }
+        live--
+        events.push(`released ${id}`)
+      }
+    }
+  }
   await model.load()
-  const original = model.addon
-  await t.exception(model.reload({ outputSampleRate: 44100 }))
-  t.is(model.addon, original)
-  t.is(model._outputSampleRate, null)
-  t.is(disposed, 1, 'only the failed replacement was disposed')
-  t.is(model.getState().weightsLoaded, true)
+  const reloading = model.reload({ outputSampleRate: 44100 })
+  await teardownStarted
+  t.is(created, 1, 'replacement waits for asynchronous teardown')
+  await t.exception(model.run({ input: 'Wait.' }), /already in progress/)
+  await t.exception(model.reload(), /already in progress/)
+  await t.exception(model.destroy(), /already in progress/)
+  release()
+  await reloading
+  t.is(peak, 1, 'at most one native model instance exists')
+  t.alike(events, [
+    'create 1',
+    'activate 1',
+    'cancel 1',
+    'destroy 1',
+    'released 1',
+    'create 2',
+    'activate 2'
+  ])
+  t.is(model._outputSampleRate, 44100)
+  t.is(model.state.weightsLoaded, true)
   await model.destroy()
+  t.is(live, 0)
 })
 
-test('Pocket keeps the activated replacement if old teardown fails', async (t) => {
+test('Pocket failed replacement leaves an unloaded instance recoverable with the last good config', async (t) => {
+  for (const failure of ['construction', 'activation']) {
+    const model = make({ steps: 4, config: { outputSampleRate: 32000 } })
+    let attempts = 0
+    let disposed = 0
+    let params
+    model._createAddon = (p) => {
+      params = p
+      const id = ++attempts
+      if (id === 2 && failure === 'construction') throw new Error('construction failed')
+      return {
+        activate: async () => {
+          if (id === 2) throw new Error('activation failed')
+        },
+        cancel: async () => {},
+        destroyInstance: async () => {
+          disposed++
+        }
+      }
+    }
+    await model.load()
+    await t.exception(model.reload({ outputSampleRate: 44100, steps: 8 }), /failed/)
+    t.is(model.addon, null)
+    t.is(model._outputSampleRate, 32000)
+    t.is(model._buildTtsParams().steps, 4)
+    t.is(model._buildTtsParams().outputSampleRate, 32000)
+    t.is(
+      disposed,
+      failure === 'construction' ? 1 : 2,
+      'old model and any failed replacement are disposed'
+    )
+    t.is(model.getState().configLoaded, false)
+    t.is(model.getState().weightsLoaded, false)
+    await t.exception(model.run({ input: 'Not loaded.' }), /not loaded/)
+    await model.load()
+    t.is(params.steps, 4)
+    t.is(params.outputSampleRate, 32000)
+    t.is(model.getState().weightsLoaded, true)
+    await model.destroy()
+  }
+})
+
+test('Pocket does not allocate a replacement if old teardown fails', async (t) => {
   const model = make()
   let created = 0
   model._createAddon = () => {
@@ -140,11 +223,12 @@ test('Pocket keeps the activated replacement if old teardown fails', async (t) =
     }
   }
   await model.load()
-  const previous = model.addon
-  await t.exception(model.reload({ outputSampleRate: 44100 }))
-  t.not(model.addon, previous)
-  t.is(model._outputSampleRate, 44100)
-  t.is(model.state.weightsLoaded, true)
+  await t.exception(model.reload({ outputSampleRate: 44100 }), /old teardown failed/)
+  t.is(created, 1)
+  t.is(model.addon, null)
+  t.is(model._outputSampleRate, null)
+  t.is(model.state.configLoaded, false)
+  t.is(model.state.weightsLoaded, false)
   await model.destroy()
 })
 

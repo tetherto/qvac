@@ -291,7 +291,11 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
     engine?: EngineType;
     /** Chatterbox: directory of baked voice-conditioning tensors. */
     voiceDir?: string;
-    /** RNG seed for Chatterbox CFM/SineGen or Supertonic latent generation. */
+    /**
+     * RNG seed for Chatterbox CFM/SineGen, Supertonic latent generation, or
+     * Pocket's portable sampling RNG. Pocket accepts integers from 0 to
+     * 4294967295 (inclusive).
+     */
     seed?: number;
     /**
      * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
@@ -303,10 +307,11 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      */
     nGpuLayers?: number;
     /**
-     * Chatterbox-only cap on the T3 context length (prompt + generated speech
+     * Chatterbox: cap on the T3 context length (prompt + generated speech
      * tokens, 25 tokens ~= 1 second of audio). The KV cache is allocated up
      * front at this length, so the cap directly bounds memory. Pass 0 to use
      * the GGUF's full context; negative values are rejected.
+     * Pocket: FlowLM context capacity; accepts integers from 1 to 8192.
      */
     nCtx?: number;
     /**
@@ -419,6 +424,7 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * defaults (Parler: temperature 1.0, top-k 50; Audio8: temperature 0.7,
      * top-k 50, top-p 0.9). Audio8 filters by top-k/top-p on the raw logits and
      * only then applies the temperature, following its reference.
+     * Pocket: sampling temperature; accepts finite values from 0 to 10.
      */
     temperature?: number;
     topK?: number;

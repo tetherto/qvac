@@ -116,6 +116,24 @@ module.exports = test(
       await model.reload({ outputSampleRate: 44100 })
       const resampled = await run(44100)
       t.ok(Math.abs(resampled.length / 44100 - original.length / 24000) < 1 / 44100)
+      await t.exception(model.reload({ referenceAudio: `${bundle}/missing-reload-test.wav` }))
+      t.is(
+        model.getState().weightsLoaded,
+        false,
+        'failed native activation leaves the model unloaded'
+      )
+      await t.exception(model.run({ input: text }), /not loaded/)
+      await model.load()
+      const restored = await run(44100)
+      t.is(
+        restored.length,
+        resampled.length,
+        'load restores the last successful sample rate and voice'
+      )
+      t.ok(
+        restored.every((v, i) => Math.abs(v - resampled[i]) <= 4),
+        'PCM recovers after failed reload'
+      )
       const empty = await model.run({ input: '   ' })
       await t.exception(empty.await())
       await run(44100)
