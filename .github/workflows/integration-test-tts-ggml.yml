@@ -264,6 +264,28 @@ jobs:
         name: Pin ggml Vulkan to the NVIDIA GPU on Windows
         run: echo "GGML_VK_VISIBLE_DEVICES=1" >> $Env:GITHUB_ENV
 
+      # Deliberately NOT seeded, and deliberately not kept alive either.
+      #
+      # This step already writes a COMPLETE entry: on-merge-tts-ggml.yml calls
+      # this workflow on a push to main (gated on a successful publish), and
+      # same-repo PR lanes take cache-models' trusted-save branch too, so the
+      # post-job save captures both the registry GGUFs and whatever
+      # test/utils/downloadModel.js staged at runtime (lavasr, cosyvoice and its
+      # clone set, mecab-ipadic, the Cangjie TSV, whisper ggml-medium).
+      #
+      # A seed could only stage the registry half -- the tests request the rest
+      # by computed variant/quant/tier, so no staging script can be proven
+      # complete. Writing that subset under this key would give every leg an
+      # exact primary-key hit, actions/cache would skip its save, and the
+      # complete entry would be replaced by a partial one that can never grow
+      # back.
+      #
+      # A keep-alive cron was tried and dropped as well. actions/cache skips the
+      # save on an exact hit, so the first run after the key moves is the only
+      # writer; if that leg's suite dies part-way its partial set is frozen.
+      # Today the five-day prune eventually clears such an entry and the next
+      # publish rebuilds it -- refreshing it every two days would pin it
+      # instead. The prune is the recovery mechanism here, not the problem.
       - name: Cache TTS GGML GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'

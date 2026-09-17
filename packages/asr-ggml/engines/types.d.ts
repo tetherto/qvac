@@ -25,6 +25,12 @@ export type NormalizedAudioStream = AsyncIterable<Float32Array> | Iterable<Float
 export interface StreamingSession {
     response: QvacResponse<ASRStreamOutput>;
     /**
+     * True once input has ended or failed and native teardown has started.
+     * New work may wait for `done` only in this state; genuinely concurrent
+     * work must still be rejected.
+     */
+    readonly closing: boolean;
+    /**
      * Settles when the response settles AND driver teardown has completed.
      * The orchestrator clears its open-session flag on settlement (both
      * paths).

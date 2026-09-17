@@ -16,6 +16,12 @@ on:
     paths:
       - "packages/translation-nmtcpp/**"
       - ".github/workflows/*nmtcpp*.yml"
+      # The code that lays the model set out. project.json is already covered
+      # by packages/translation-nmtcpp/** above; these are not, and a PR
+      # touching only one of them would otherwise change what the lane stages
+      # without running a single nmtcpp test.
+      - ".github/actions/stage-integration-models/**"
+      - ".github/actions/project-model-s3/**"
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:
