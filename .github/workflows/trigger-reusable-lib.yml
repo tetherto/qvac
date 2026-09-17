@@ -14,9 +14,6 @@ on:
       - feature-*
       - tmp-*
     paths:
-      - "packages/dl-base/**"
-      - "packages/dl-filesystem/**"
-      - "packages/dl-hyperdrive/**"
       - "packages/diagnostics/**"
       - "packages/langdetect-text/**"
       - "packages/qvac-ci/**"
@@ -27,9 +24,6 @@ on:
         required: true
         type: choice
         options:
-          - dl-base
-          - dl-filesystem
-          - dl-hyperdrive
           - diagnostics
           - langdetect-text
           - qvac-ci
@@ -62,9 +56,6 @@ jobs:
           # diverged feature/tmp branch matches every lib and over-publishes.
           base: ${{ github.ref_name }}
           filters: |
-            dl-base: packages/dl-base/**
-            dl-filesystem: packages/dl-filesystem/**
-            dl-hyperdrive: packages/dl-hyperdrive/**
             diagnostics: packages/diagnostics/**
             langdetect-text: packages/langdetect-text/**
             qvac-ci: packages/qvac-ci/**
