@@ -268,14 +268,20 @@ npx openclaw config set tools.profile "$OPENCLAW_TOOL_PROFILE" \
   > "$ARTIFACT_DIR/openclaw-config-tool-profile.stdout" \
   2> "$ARTIFACT_DIR/openclaw-config-tool-profile.stderr"
 
-# OpenClaw applies Tool Search to local routes regardless of profile, and its
-# `tool_search`/`tool_describe`/`tool_call` trio is enough on its own to pull
-# the model into tool round-trips instead of answering: run 34453332533 spent
-# two attempts on failed Tool Search calls and timed out on both. Tool-call
-# plumbing is not what this tripwire proves, so opt out.
+# OpenClaw applies Tool Search to local routes regardless of profile.
 npx openclaw config set tools.toolSearch false --strict-json \
   > "$ARTIFACT_DIR/openclaw-config-tool-search.stdout" \
   2> "$ARTIFACT_DIR/openclaw-config-tool-search.stderr"
+
+# Every failed attempt measured on this smoke was the model calling a tool and
+# looping until the deadline, never a wrong answer -- so denying the tools is
+# what removes the nondeterminism, rather than retrying through it. `deny` wins
+# over every other layer and takes wildcards. The plugin's `tools: true` stays
+# on, so the Jinja chat template still renders (use_jinja is set at load time,
+# independent of the request's tool array); only the array is empty.
+npx openclaw config set tools.deny '["*"]' --strict-json \
+  > "$ARTIFACT_DIR/openclaw-config-tool-deny.stdout" \
+  2> "$ARTIFACT_DIR/openclaw-config-tool-deny.stderr"
 
 npx openclaw config validate \
   > "$ARTIFACT_DIR/openclaw-config-validate.stdout" \
