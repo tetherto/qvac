@@ -219,6 +219,23 @@ endif()
 # defaults to --no-undefined-version and rejects a version script that assigns a
 # version to a symbol the output does not define.
 if(UNIX AND NOT APPLE)
+  # The ELF version node symbols.map stamps on every export. Consumers record a
+  # DT_VERNEED on it, which is what stops the host process' own C++ runtime from
+  # satisfying their references first; symbols.map carries the full rationale.
+  # Declared here as well so the name reaches consumers through the package
+  # config, and asserted against the script below so the two cannot drift.
+  set(QVAC_FABRIC_ABI_VERSION "QVAC_FABRIC_ABI_1")
+  # Whether consumers should expect to import their C++ runtime from this
+  # module. True only for the link that embeds libc++; Android links
+  # libc++_shared.so and the ASan build links libc++.so.1, so there the runtime
+  # is shared by other means and a consumer that pinned it here would find
+  # nothing to pin. Published through the package config so the addon template
+  # can tell "fabric does not own the runtime" apart from "fabric is too old".
+  if(QVAC_FABRIC_LIBCXX_ARCHIVE)
+    set(QVAC_FABRIC_OWNS_CXX_RUNTIME ON)
+  else()
+    set(QVAC_FABRIC_OWNS_CXX_RUNTIME OFF)
+  endif()
   set(_fabric_version_script "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map")
   if(QVAC_FABRIC_LIBCXX_ARCHIVE)
     set(_fabric_cxx_runtime_map
@@ -234,6 +251,13 @@ if(UNIX AND NOT APPLE)
         "qvac-fabric: symbols.map has no '# QVAC_FABRIC_LINUX_CXX_RUNTIME' "
         "marker to splice symbols-linux-cxx-runtime.map into. The Linux "
         "runtime must export the C++ ABI; restore the marker.")
+    endif()
+    if(NOT _fabric_symbols MATCHES "(^|\n)${QVAC_FABRIC_ABI_VERSION}[ \t]*\\{")
+      message(FATAL_ERROR
+        "qvac-fabric: symbols.map does not declare the "
+        "'${QVAC_FABRIC_ABI_VERSION}' version node. Consumers pin their C++ "
+        "runtime to fabric through that node; an anonymous node leaves them "
+        "resolving it from the host's libstdc++ instead.")
     endif()
     string(REPLACE
       "# QVAC_FABRIC_LINUX_CXX_RUNTIME" "${_fabric_cxx_runtime_symbols}"

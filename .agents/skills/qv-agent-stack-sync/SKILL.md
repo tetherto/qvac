@@ -1,6 +1,6 @@
 ---
 name: qv-agent-stack-sync
-description: Plan and prepare the QVAC agent-stack release cascade across @qvac/sdk, @qvac/cli, @qvac/ai-sdk-provider, @qvac/opencode-plugin, and @qvac/openclaw-plugin. Use for /qv-agent-stack-sync --plan, --prepare-cascade, or --promote; syncing CLI to a newer SDK; or checking OpenCode/OpenClaw/provider compatibility.
+description: Plan and prepare the QVAC agent-stack release cascade across @qvac/inference, @qvac/sdk, @qvac/cli, @qvac/ai-sdk-provider, @qvac/opencode-plugin, and @qvac/openclaw-plugin. Use for /qv-agent-stack-sync --plan, --prepare-cascade, or --promote; syncing CLI to a newer SDK; or checking OpenCode/OpenClaw/provider compatibility.
 ---
 
 # QVAC Agent Stack Sync
@@ -8,14 +8,15 @@ description: Plan and prepare the QVAC agent-stack release cascade across @qvac/
 Orchestrate the published dependency cascade:
 
 ```text
-@qvac/sdk
-  -> @qvac/cli
-    -> @qvac/ai-sdk-provider
-      -> @qvac/opencode-plugin
-      -> @qvac/openclaw-plugin
+@qvac/inference
+  -> @qvac/sdk
+    -> @qvac/cli
+      -> @qvac/ai-sdk-provider
+        -> @qvac/opencode-plugin
+        -> @qvac/openclaw-plugin
 ```
 
-Goal: know which packages need a release, prepare draft release + backmerge PRs when asked, never auto-publish. SDK releases still run `qv-sdk-lockstep-sync` for sdk-python.
+Goal: know which packages need a release, prepare draft release + backmerge PRs when asked, never auto-publish. SDK releases run `qv-sdk-inference-version` for the `@qvac/inference` range and sdk-python.
 
 ## Modes
 
@@ -34,7 +35,7 @@ Invoke: `/qv-agent-stack-sync` or `/qv-agent-stack-sync --plan`.
 - `.agents/skills/qv-sdk-changelog/SKILL.md`
 - `.agents/skills/qv-sdk-pr-create/SKILL.md`
 - `.agents/skills/qv-sdk-backmerge/SKILL.md`
-- `.agents/skills/qv-sdk-lockstep-sync/SKILL.md` (sdk releases only)
+- `.agents/skills/qv-sdk-inference-version/SKILL.md` (sdk releases only)
 - `docs/architecture/AGENT-INTEGRATIONS.md`
 - `packages/cli/test/AGENT_STACK_E2E.md`
 - Planner: `.agents/skills/_lib/sdk/agent-stack-plan.mjs`
@@ -45,9 +46,11 @@ Invoke: `/qv-agent-stack-sync` or `/qv-agent-stack-sync --plan`.
 
 Recommend with rationale — never silent-bump. Confirm before `--prepare-cascade`.
 
-- `0.x` carets do **not** cross minors (`^0.8.0` ≠ `0.9.0`).
+- `0.x` carets do **not** cross minors (`^0.8.0` ≠ `0.9.0`); tildes never do.
 - **Minor** — outstanding `[bc]`, `[api]`, or `feat:` commits.
 - **Patch** — dep-range alignment, or other non-breaking outstanding commits (e.g. `fix:`).
+- **Shared major.minor** — `@qvac/sdk` sits on `@qvac/inference`'s major and minor, so an engine
+  minor makes the SDK a minor too, whatever its own commits say. Patches move independently.
 
 ## Blockers the plan must surface
 
@@ -93,7 +96,9 @@ Then for each `needs_release` package in dependency order, follow [references/pr
 5. Skip packages marked blocked; report them clearly.
 6. Do **not** merge. Do **not** trigger publish (Dima / human).
 
-SDK releases still chain `qv-sdk-lockstep-sync` + docs Step 8 from `qv-sdk-changelog`.
+`@qvac/inference` is the first hop: it releases from `release-inference-<version>` through
+`publish-inference.yml`, and the SDK release PR points at the engine version already on npm. SDK
+releases chain `qv-sdk-inference-version` + docs Step 8 from `qv-sdk-changelog`.
 
 ### 3. `--promote <slug>`
 
@@ -103,6 +108,18 @@ SDK releases still chain `qv-sdk-lockstep-sync` + docs Step 8 from `qv-sdk-chang
 4. Remind: human merges; human triggers publish; then promote the next upper package.
 
 ## File updates (when preparing releases)
+
+### Inference
+
+- `packages/inference/package.json` — version only; the SDK's range moves in the SDK's own release
+- changelog via `qv-sdk-changelog --package=inference`
+- NOTICE via `qv-notice-generate inference`
+
+### SDK
+
+- `packages/sdk/package.json` — version + `dependencies["@qvac/inference"]` via `qv-sdk-inference-version`, against the engine version already on npm
+- changelog via `qv-sdk-changelog --package=sdk` (engine commits are scanned in), then docs Step 8
+- sdk-python regenerated; `tetherto-qvac-sdk` publishes at the SDK's version
 
 ### CLI
 
@@ -160,6 +177,7 @@ Always end with:
 - [ ] `--plan` run before any mutation
 - [ ] User confirmed versions for `--prepare-cascade`
 - [ ] OpenClaw included in the cascade
+- [ ] `@qvac/inference` released ahead of an SDK release that moves major.minor
 - [ ] Draft release **and** draft backmerge opened together per package
 - [ ] Blocked plugins (e.g. AI SDK mismatch) not force-released
 - [ ] No publish / workflow_dispatch for npm

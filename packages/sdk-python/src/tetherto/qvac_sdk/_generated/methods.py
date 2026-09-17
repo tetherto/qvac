@@ -96,6 +96,8 @@ from . import (
     UnloadModelResponse,
     UpscaleStreamRequest,
     UpscaleStreamResponse,
+    VectorIndexRequest,
+    VectorIndexResponse,
     VideoStreamRequest,
     VideoStreamResponse,
     WorldSceneStreamRequest,
@@ -451,6 +453,13 @@ async def upscale_stream(
         yield UpscaleStreamResponse.model_validate(chunk)
 
 
+async def vector_index(
+    transport: Transport, params: VectorIndexRequest
+) -> VectorIndexResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return VectorIndexResponse.model_validate(await transport.call(payload))
+
+
 async def video_stream(
     transport: Transport, params: VideoStreamRequest
 ) -> AsyncIterator[VideoStreamResponse]:
@@ -519,6 +528,7 @@ __all__ = [
     "translate",
     "unload_model",
     "upscale_stream",
+    "vector_index",
     "video_stream",
     "world_scene_stream",
     "world_step_stream",
