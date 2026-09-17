@@ -1,7 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "dca20a940d85d6741285c888b53bd10da29c0723",
+    "baseline": "dc4c42f715b3e0edf52b77bc4b999165fffb94f9",
+    "reference": "QVAC-25107/unified-cache-aware",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
