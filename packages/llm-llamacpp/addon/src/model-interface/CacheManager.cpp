@@ -7,6 +7,7 @@
 #include <llama.h>
 
 #include "addon/LlmErrors.hpp"
+#include "model-interface/CacheLedger.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ScopeGuard.hpp"
 
@@ -17,6 +18,7 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
+namespace cache = qvac_lib_inference_addon_llama::cache;
 
 CacheManager::CacheManager(
     LlmContext* llmContext, std::function<void(bool)> resetStateCallback)
@@ -134,7 +136,11 @@ bool CacheManager::loadCache() {
 
   auto* ctx = llmContext_->getCtx();
   size_t nTokenCount = 0;
-  SessionMetadata sessionMetadata;
+  // A ledger has at most one entry per context position (media occupies many
+  // positions but one entry). Leave a little headroom for the fixed header.
+  std::vector<llama_token> stateTokens(
+      cache::LEDGER_HEADER_WORDS +
+      cache::LEDGER_ENTRY_WORDS * (static_cast<size_t>(llama_n_ctx(ctx)) + 1));
 
   QLOG_IF(
       Priority::DEBUG,
@@ -154,8 +160,8 @@ bool CacheManager::loadCache() {
           ctx,
           sessionPath_.c_str(),
           llmContext_->getSeqId(),
-          sessionMetadata.data(),
-          sessionMetadata.size(),
+          stateTokens.data(),
+          stateTokens.size(),
           &nTokenCount) == 0) {
     std::string errorMsg = string_format(
         "%s: failed to load session file '%s'\n",
@@ -176,35 +182,43 @@ bool CacheManager::loadCache() {
     if (auto* mem = llama_get_memory(ctx); mem != nullptr) {
       llama_memory_seq_rm(mem, llmContext_->getSeqId(), -1, -1);
     }
+    llmContext_->setNPast(0);
+    llmContext_->setCacheTokens(0);
+    llmContext_->clearCacheReconciliationState();
   });
 
-  if (nTokenCount > 1 && nTokenCount < sessionMetadata.size()) {
-    std::string errorMsg = string_format(
-        "%s: cache file '%s' uses an unsupported metadata layout with %zu "
-        "fields\n",
-        __func__,
-        sessionPath_.c_str(),
-        nTokenCount);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
-  }
-
-  if (nTokenCount < sessionMetadata.size()) {
+  stateTokens.resize(nTokenCount);
+  // Old addon files carried only positional metadata. They are valid state
+  // files but not self-describing, so reject them as a cold miss after
+  // clearing the state tentatively restored by llama.cpp.
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+    llmContext_->clearCacheReconciliationState();
     return false;
   }
-  if (sessionMetadata.nPast() > llama_n_ctx(ctx)) {
+  try {
+    llmContext_->restoreCacheStateTokens(stateTokens);
+  } catch (const std::exception& ex) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: cache file '%s' contains a malformed current-format "
+            "ledger: %s\n",
+            __func__,
+            sessionPath_.c_str(),
+            ex.what()));
+  }
+  if (llmContext_->getNPast() > llama_n_ctx(ctx)) {
     std::string errorMsg = string_format(
         "%s: cache file '%s' contains %zu tokens, which exceeds the current "
         "context size of %d tokens\n",
         __func__,
         sessionPath_.c_str(),
-        static_cast<size_t>(sessionMetadata.nPast()),
+        static_cast<size_t>(llmContext_->getNPast()),
         llama_n_ctx(ctx));
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextLengthExeeded), errorMsg);
   }
-  sessionMetadata.applyTo(*llmContext_);
-
   auto* mem = llama_get_memory(ctx);
   if (mem == nullptr) {
     throw qvac_errors::StatusError(
@@ -218,7 +232,7 @@ bool CacheManager::loadCache() {
 
   const llama_pos restoredNPast =
       llama_memory_seq_pos_max(mem, llmContext_->getSeqId()) + 1;
-  const auto expectedNPast = static_cast<llama_pos>(sessionMetadata.nPast());
+  const auto expectedNPast = llmContext_->getNPast();
   if (restoredNPast != expectedNPast) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -233,8 +247,7 @@ bool CacheManager::loadCache() {
   }
   const llama_pos restoredCacheTokens = static_cast<llama_pos>(
       llama_memory_seq_token_count(mem, llmContext_->getSeqId()));
-  const auto expectedCacheTokens =
-      static_cast<llama_pos>(sessionMetadata.cacheTokens());
+  const auto expectedCacheTokens = llmContext_->getCacheTokens();
   if (restoredCacheTokens != expectedCacheTokens) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -247,7 +260,7 @@ bool CacheManager::loadCache() {
             restoredCacheTokens,
             expectedCacheTokens));
   }
-  llama_memory_seq_rm(mem, -1, sessionMetadata.nPast(), -1);
+  llama_memory_seq_rm(mem, -1, expectedNPast, -1);
   restoredKvGuard.dismiss();
   return true;
 }
@@ -312,14 +325,13 @@ void CacheManager::writeCacheFile(const std::string& path) {
   QLOG_IF(
       Priority::DEBUG,
       string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
-  const SessionMetadata sessionMetadata =
-      SessionMetadata::capture(*llmContext_);
+  const std::vector<llama_token> stateTokens = llmContext_->cacheStateTokens();
   if (llama_state_seq_save_file(
           ctx,
           tmpPath.c_str(),
           llmContext_->getSeqId(),
-          sessionMetadata.data(),
-          sessionMetadata.size()) == 0) {
+          stateTokens.data(),
+          stateTokens.size()) == 0) {
     std::error_code ec;
     std::filesystem::remove(tmpPath, ec);
     throw qvac_errors::StatusError(

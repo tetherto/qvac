@@ -201,14 +201,6 @@ public:
     return context.bitmaps_.entries.size();
   }
 
-  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
-    return context.removeThinkingFromContext_;
-  }
-
-  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
-    return context.compactor_.removeThinkingFromContext();
-  }
-
   static bool hasReasoningBoundary(const MtmdLlmContext& context) {
     return context.rollbackState_.hasReasoningBoundary();
   }

@@ -760,54 +760,28 @@ TEST_F(
   EXPECT_TRUE(containsCaseInsensitive(outputs[1], "GREEN")) << outputs[1];
 }
 
-/// Regression: Qwen3.5 is a hybrid SSM family; on the continuous-batching
-/// path the recurrent boundary snapshot must be taken inside
-/// `TextLlmContext::onPrefillComplete` (not only inside the single-prompt
-/// `evalMessageWithTools` prefill loop). Without the snapshot,
-/// `compactThinkSpan` aborts early for hybrid models and
-/// `remove_thinking_from_context` becomes a silent no-op for batched
-/// requests. This test pins the success path by submitting two reasoning
-/// prompts in parallel with `remove_thinking_from_context = true` and
-/// asserting that at least one slot reports a thinking discard with zero
-/// compaction failures.
-///
-/// Platform gate: follows the same intent as the JS Qwen3.5 guards in
-/// `test/integration/reasoning.test.js` (which skip darwin-x64 and
-/// win32-x64), but is stricter for this C++ test because Linux and
-/// Windows CI runners hit the CPU backend for this addon and the
-/// Qwen3.5-0.8B Q8 checkpoint does not produce a closed
-/// `<think>...</think>` reliably on CPU under greedy decoding: it
-/// drifts into self-referential loops, never emits `</think>`, and
-/// `compactThinkSpan` correctly stays a no-op — which is the right
-/// product behavior but turns this regression check into a flake. The
-/// snapshot path itself is covered cross-platform by the
-/// `ReasoningSnapshotPolicy` and `ReasoningBlockCompactor*` unit tests
-/// in `test_reasoning_block_compactor.cpp`.
+/// Generated reasoning stays resident after generation. Continuous batching
+/// must not run the retired eager compaction path for hybrid models.
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    TwoPromptBatchQwen35HybridDropsThinkBlocks) {
+    TwoPromptBatchQwen35HybridRetainsReasoningLazily) {
 #if !(defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__)))
   GTEST_SKIP() << "Qwen3.5-0.8B closed `</think>` is not deterministic on "
                   "non-Apple-Silicon CI runners (CPU backend); see comment.";
 #endif
   REQUIRE_MODEL(qwen35HybridModel_);
-  // Qwen3.5 thinking traces are long; give each slot enough cache and
-  // generation budget to actually close `</think>` so the compactor fires.
+  // Qwen3.5 thinking traces are long; leave enough room for a complete answer.
   config_["ctx_size"] = "16384";
   config_["n_predict"] = "3072";
   config_["parallel"] = "2";
   auto model = loadModel(qwen35HybridModel_);
 
-  // Mirror the chat shape used by the single-prompt reasoning integration
-  // tests (system + short user prompt). With `temp=0` Qwen3.5 reliably
-  // opens and closes `<think>` for this shape, which is what the compactor
-  // needs to fire.
+  // Mirror the chat shape used by the single-prompt reasoning tests.
   auto makeOptInPrompt = []() {
     LlamaModel::Prompt p;
     p.input = R"([{"role":"system","content":"You are an AI assistant. )"
               R"(Always provide a clear answer after thinking"},)"
               R"({"role":"user","content":"what are you thinking"}])";
-    p.generationParams.remove_thinking_from_context = true;
     return p;
   };
 
@@ -822,16 +796,8 @@ TEST_F(
   const double thinkingDiscards =
       test_common::getStatValue(stats, "thinkingBlockDiscards");
 
-  EXPECT_GE(thinkingDiscards, 1.0)
-      << "scheduler path must take the recurrent boundary snapshot "
-         "so `compactThinkSpan` can fire on the hybrid; got "
-      << thinkingDiscards << " discards. outputs[0]=" << outputs[0]
-      << " outputs[1]=" << outputs[1];
-  // Under the uniform hard-fail contract (PR #2813), a compaction
-  // failure would have thrown `qvac_errors::StatusError` from
-  // `processPromptBatch` and failed the assertions above; reaching
-  // this point means the scheduler's recurrent snapshot / restore /
-  // replay path succeeded on both slots.
+  EXPECT_EQ(thinkingDiscards, 0.0)
+      << "lazy reconciliation must not discard reasoning at generation end";
 }
 
 TEST_F(
@@ -874,7 +840,6 @@ TEST_F(
     p.input =
         std::string("[") + systemMsg + "," + userTurn1 +
         R"(,{"role":"assistant","content":"Paris"},{"role":"user","content":"Before answering, reason in detail for at least 80 sentences, then answer: What is the capital of France?"}])";
-    p.generationParams.remove_thinking_from_context = true;
     return p;
   };
 
@@ -2543,21 +2508,11 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
   fs::remove(cachePath, ec);
 }
 
-/// Regression for PR #2813's MTMD continuous-batching path. Text slots already
-/// funnel `onPrefillComplete` / `onLogitsReady` / `onGenerationFinished`
-/// through the reasoning compactor lifecycle; multimodal slots must do the
-/// same or `remove_thinking_from_context` becomes a silent no-op under
-/// `parallel > 1`. Two media prompts are submitted so the regression covers
-/// multiple MTMD slots coexisting in the scheduler, not just the scheduler path
-/// for a single slot.
-///
-/// Platform gate: mirrors `TwoPromptBatchQwen35HybridDropsThinkBlocks`. Linux
-/// and Windows CI runners do not reliably close Qwen3.5's reasoning span under
-/// greedy CPU decode; with the strict compaction contract that correctly
-/// hard-fails before this test can reach its post-run skip. Keep this
-/// end-to-end closed-span assertion on Apple Silicon, where the fixture is
-/// deterministic enough for the compactor to fire.
-TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdQwen35DropsThinkBlocks) {
+/// Multimodal batch generation follows the same lazy reasoning policy as text:
+/// generated reasoning remains in the resident sequence until a later full
+/// prompt reconciles it away.
+TEST_F(
+    ContinuousBatchingIntegrationTest, BatchMtmdQwen35RetainsReasoningLazily) {
 #if !(defined(__APPLE__) && (defined(__arm64__) || defined(__aarch64__)))
   GTEST_SKIP() << "Qwen3.5 MTMD closed `</think>` is not deterministic on "
                   "non-Apple-Silicon CI runners (CPU backend); see comment.";
@@ -2594,7 +2549,6 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdQwen35DropsThinkBlocks) {
         R"({"role":"user","content":")" +
         question + R"("}])";
     prompt.media.push_back(image);
-    prompt.generationParams.remove_thinking_from_context = true;
     return prompt;
   };
 
@@ -2606,9 +2560,9 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdQwen35DropsThinkBlocks) {
   ASSERT_NO_THROW({ outputs = model->processPromptBatch(prompts); });
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_FALSE(outputs[0].empty())
-      << "first MTMD slot compaction must not break generation";
+      << "first MTMD slot must complete generation";
   EXPECT_FALSE(outputs[1].empty())
-      << "batch MTMD compaction must not break generation";
+      << "second MTMD slot must complete generation";
 
   const auto stats = model->runtimeStats();
   const double discards =
@@ -2618,16 +2572,8 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdQwen35DropsThinkBlocks) {
       ", output[0] (first 200 chars): " + outputs[0].substr(0, 200) +
       ", output[1] (first 200 chars): " + outputs[1].substr(0, 200));
 
-  const bool reasoningClosed =
-      outputs[0].find("</think>") != std::string::npos ||
-      outputs[1].find("</think>") != std::string::npos;
-  if (!reasoningClosed) {
-    GTEST_SKIP() << "Qwen3.5 multimodal batch did not close </think> within "
-                    "n_predict=1024 — discard assertion skipped";
-  }
-  EXPECT_GE(discards, 1.0)
-      << "Qwen3.5 multimodal batch with remove_thinking_from_context=true "
-         "must compact at least one thinking block once </think> lands";
+  EXPECT_EQ(discards, 0.0)
+      << "lazy reconciliation must not discard reasoning at generation end";
 }
 
 /// MTMD + hybrid (Qwen3.5 M-RoPE + recurrent memory) is the hardest cancel

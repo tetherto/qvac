@@ -485,12 +485,7 @@ test(
               'Before answering, reason in detail for at least 20 sentences, then answer: What is the capital of France?'
           }
         ],
-        {
-          cacheKey: sessionName,
-          generationParams: {
-            remove_thinking_from_context: true
-          }
-        }
+        { cacheKey: sessionName }
       )
       const output = await collectResponse(response)
 

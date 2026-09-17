@@ -321,6 +321,37 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRequiredForcesToolCall) {
   EXPECT_FALSE(s.grammar_lazy);
 }
 
+TEST_F(ToolGrammarModelTest, WarmCacheRearmsRequiredToolGrammar) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  const fs::path cacheDir = "warm_required_tool_cache";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  auto model = createModel();
+  LlamaModel::Prompt first = makePrompt(TOOL_PROMPT);
+  first.cacheKey = cacheKey;
+  first.saveCacheToDisk = true;
+  first.generationParams.tool_choice = "required";
+  EXPECT_TRUE(hasToolCallBlock(model->processPrompt(first)));
+
+  // The complete prompt (including tools) is authoritative on every turn.
+  // Reconciliation removes the previous sampled call and the same render
+  // supplies a fresh required grammar without duplicating the tool block.
+  LlamaModel::Prompt warm = makePrompt(TOOL_PROMPT);
+  warm.cacheKey = cacheKey;
+  warm.generationParams.tool_choice = "required";
+  const std::string output = model->processPrompt(warm);
+  EXPECT_TRUE(hasToolCallBlock(output)) << output;
+  EXPECT_EQ(sampling(*model).grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
+  EXPECT_FALSE(sampling(*model).grammar_lazy);
+  EXPECT_GT(test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0);
+
+  fs::remove_all(cacheDir);
+}
+
 // tool_choice "none" follows llama-server: the tool definitions stay in the
 // prompt and only the grammar is switched off. The model may still choose to
 // call a tool in free text, so the contract is "no constraint", not "no call".
@@ -1190,16 +1221,9 @@ TEST_F(ToolGrammarModelTest, MtmdBatchReasoningEOSRecoveryKeepsSlotAlive) {
          "after the close";
 }
 
-// The interaction this PR actually introduced between the two features:
-// EOS substitution seeds the compactor itself (`recordCloseMarkerForReplay` +
-// `requestCloseCapture` at each substitution site) because the substituted
-// close never passes through the `updateReasoningBuffer` handshake that
-// normally trips capture. Get that wrong and `compactThinkSpan` bails at
-// `end < 0` — the discard silently does not happen — or, worse, the replay
-// restores a prefix that opens a `<think>` nothing closes, which only shows up
-// on the *next* request from that cache. So this drives a synthetic close with
-// compaction on, persists the cache, and then reuses it.
-TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
+// A synthetic reasoning close is retained in the resident ledger. Re-sending
+// the complete prompt then reconciles the generated tail before the next turn.
+TEST_F(ToolGrammarModelTest, SyntheticCloseIsLazilyReconciled) {
   if (!hasQwen3Model()) {
     GTEST_SKIP() << qwen3Model_.missingMessage();
   }
@@ -1221,30 +1245,24 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
   LlamaModel::Prompt first = makePrompt(THINKING_TOOL_PROMPT);
   first.cacheKey = cacheKey;
   first.saveCacheToDisk = true;
-  first.generationParams.remove_thinking_from_context = true;
   textContext->forceNextSampledTokenInsideReasoningForTesting(eos);
 
   const std::string output = model->processPrompt(first);
   ASSERT_NE(output.find(THINK_CLOSE_TAG), std::string::npos)
       << "EOS must be replaced by the cached close tag: " << output;
-  EXPECT_GT(
+  EXPECT_EQ(
       test_common::getStatValue(model->runtimeStats(), "thinkingBlockDiscards"),
       0)
-      << "the substituted close must reach the compactor, or the span end "
-         "stays unset and nothing is discarded: "
-      << output;
+      << "generation completion must not eagerly compact reasoning";
   ASSERT_TRUE(fs::exists(cacheKey)) << "the cache must have been persisted";
 
-  // The part a discard assertion alone cannot catch: a compaction that
-  // rewound to an unbalanced prefix leaves a cache whose next turn is broken,
-  // not one that fails now.
+  // Re-sending the full prompt omits the previous generated reasoning and
+  // therefore trims it through ordinary prefix reconciliation.
   LlamaModel::Prompt followUp = makePrompt(THINKING_TOOL_PROMPT);
   followUp.cacheKey = cacheKey;
   followUp.saveCacheToDisk = true;
-  followUp.generationParams.remove_thinking_from_context = true;
   EXPECT_FALSE(model->processPrompt(followUp).empty())
-      << "the cache left behind by a compacted synthetic close must still be "
-         "usable";
+      << "the cache must remain usable after lazy reasoning reconciliation";
 
   fs::remove_all(cacheDir);
 }
@@ -1278,9 +1296,6 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
 // are independent, and each already has coverage, so the combination would
 // pin no behaviour that is unpinned today.
 //
-// `remove_thinking_from_context` is forced off so the cursor assertion reads
-// the cancel rollback rather than end-of-generation compaction, which moves
-// `nPast` for its own reasons.
 TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
   if (!hasQwen3Model()) {
     GTEST_SKIP() << qwen3Model_.missingMessage();
@@ -1301,7 +1316,6 @@ TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
   constexpr int kPiecesBeforeCancel = 8;
   std::atomic<int> pieces{0};
   LlamaModel::Prompt cancelled = makePrompt(THINKING_TOOL_PROMPT);
-  cancelled.generationParams.remove_thinking_from_context = false;
   cancelled.outputCallback = [&](const std::string&) {
     if (pieces.fetch_add(1) == kPiecesBeforeCancel) {
       model->cancel();

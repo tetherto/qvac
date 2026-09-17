@@ -2,6 +2,17 @@
 
 Cache control is managed through `runOptions`. For a single prompt, pass `runOptions` as the second argument to `model.run(prompt, runOptions)`.
 
+Examples that need to add an assistant response back to history use this
+helper:
+
+```js
+async function collectOutput(response) {
+  let output = ''
+  await response.onUpdate((chunk) => { output += chunk }).await()
+  return output
+}
+```
+
 For a batch (`model.run([...])`) there is no top-level second argument — set cache options **per prompt** in `BatchPrompt.runOptions` (`cacheKey`, `saveCacheToDisk`, `prefill`, `generationParams`). Passing a second argument to a batch `run()` throws.
 
 ```js
@@ -42,14 +53,27 @@ await model.run(
 
 ## Continue a conversation
 
-Use the same `cacheKey`. The existing cache is reused — only the new tokens are evaluated.
+Use the same `cacheKey`, but resend the complete conversation and the complete
+tool list on every turn. The addon renders that authoritative history once,
+compares it with the token/media ledger embedded in the same sequence-state
+file, and evaluates only the suffix after the longest common prefix.
 
 ```js
+const history = [{ role: 'user', content: 'What is bitcoin?' }]
+const first = await collectOutput(await model.run(history, { cacheKey: 'session.bin' }))
+history.push({ role: 'assistant', content: first })
+history.push({ role: 'user', content: 'Tell me more' })
 await model.run(
-  [{ role: 'user', content: 'Tell me more' }],
+  history,
   { cacheKey: 'session.bin' }
 )
 ```
+
+Delta-only prompts are no longer supported for cached requests. Edited or
+shortened history is detected and the addon trims or restores the cache at a
+matching prefix before prefilling again. Legacy cache files without a ledger
+are treated as cold misses. A current-format file with a corrupt ledger fails
+to load.
 
 ## Save the cache to disk
 
@@ -71,23 +95,33 @@ Without `saveCacheToDisk`, the cache stays in RAM. It is only written to disk au
 
 ```js
 // Turn 1: saved to disk
-await model.run([{ role: 'user', content: 'Hello' }], { cacheKey: 'a.bin', saveCacheToDisk: true })
+const history = [{ role: 'user', content: 'Hello' }]
+const first = await collectOutput(
+  await model.run(history, { cacheKey: 'a.bin', saveCacheToDisk: true })
+)
+history.push({ role: 'assistant', content: first })
 
 // Turn 2: RAM has turn 1 + 2, but a.bin on disk still only has turn 1
-await model.run([{ role: 'user', content: 'More' }], { cacheKey: 'a.bin' })
+history.push({ role: 'user', content: 'More' })
+const second = await collectOutput(await model.run(history, { cacheKey: 'a.bin' }))
+history.push({ role: 'assistant', content: second })
 
 // Turn 3: a.bin on disk updated with turn 1 + 2 + 3
-await model.run([{ role: 'user', content: 'Continue' }], { cacheKey: 'a.bin', saveCacheToDisk: true })
+history.push({ role: 'user', content: 'Continue' })
+await model.run(history, { cacheKey: 'a.bin', saveCacheToDisk: true })
 ```
 
 ### Started without saving, then saved later
 
 ```js
 // Turn 1: cache in RAM only, no file written
-await model.run([{ role: 'user', content: 'Hello' }], { cacheKey: 'a.bin' })
+const history = [{ role: 'user', content: 'Hello' }]
+const first = await collectOutput(await model.run(history, { cacheKey: 'a.bin' }))
+history.push({ role: 'assistant', content: first })
 
 // Turn 2: saves everything (turn 1 + 2) to disk
-await model.run([{ role: 'user', content: 'More' }], { cacheKey: 'a.bin', saveCacheToDisk: true })
+history.push({ role: 'user', content: 'More' })
+await model.run(history, { cacheKey: 'a.bin', saveCacheToDisk: true })
 ```
 
 ## Switch between cache files
@@ -111,9 +145,12 @@ await model.run([{ role: 'user', content: 'One-off question' }])
 
 If caching was previously active, omitting `cacheKey` auto-saves the active session to disk and clears it.
 
-## Replay with dynamic tools
+## Tools and reasoning
 
-When tools change between turns, omit `cacheKey` and send the full conversation history. This gives the model a fresh context with the new tool set.
+Cached tool-calling requests must resend the complete tool list with the full
+history on every turn. Prompt text and the tool grammar come from the same
+render, so the tool block appears once and `tool_choice` is armed on warm turns.
+Changing the tools naturally causes a prefix divergence and re-prefill.
 
 ```js
 await model.run(
@@ -122,9 +159,19 @@ await model.run(
     ...history,
     { role: 'user', content: 'Calculate 256 * 128' },
     TOOL_CALCULATOR
-  ]
+  ],
+  { cacheKey: 'session.bin', generationParams: { tool_choice: 'required' } }
 )
 ```
+
+Generated reasoning is retained in the live cache immediately after a turn.
+If the next full-history render omits that reasoning, normal prefix
+reconciliation removes it; if the render preserves it, it remains reusable.
+
+> Migration note: this addon contract is intentionally incompatible with SDK
+> versions that still send delta messages/tools or expose
+> `remove_thinking_from_context`. Upgrade the SDK only after its full-history
+> cache migration lands.
 
 ## Save failures
 

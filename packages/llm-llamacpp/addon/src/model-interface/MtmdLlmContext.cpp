@@ -190,12 +190,7 @@ void MtmdLlmContext::initializeCommonState() {
         arch.has_value() &&
         qvac_lib_inference_addon_llama::utils::
             isQwen3ReasoningFamilyArchitecture(arch.value());
-    removeThinkingFromContext_ =
-        arch.has_value() &&
-        qvac_lib_inference_addon_llama::utils::usesThinkingCompactionByDefault(
-            arch.value());
   }
-  setRemoveThinkingFromContext(removeThinkingFromContext_);
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -362,7 +357,11 @@ void MtmdLlmContext::tokenizeChat(
   bool isLastMessageFromUser = false;
   bool addSpecial = false;
 
-  if (current_.pos == 0 && !isCacheLoaded) {
+  if (cacheReconciliationEnabled_) {
+    const auto& lastRole = chatMsgs.back().role;
+    isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
+    addSpecial = true;
+  } else if (current_.pos == 0 && !isCacheLoaded) {
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
     addSpecial = true;
@@ -502,23 +501,15 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools, bool isCacheLoaded,
     bool prefill) {
-  // Clear per-inference recurrent-rollback state at the START of each
-  // inference. A stale snapshot from a previous turn would otherwise
-  // block the new snapshot via `snapshotForRecurrentRollback`'s
-  // `!empty()` early-return.
+  // Clear per-inference rollback state before capturing this request's generic
+  // prefill-entry checkpoint.
   rollbackState_.reset();
   forcedTokens_.clear();
-  // Set BEFORE `tokenizeChat` so `configureReasoningTags` can suppress
-  // the "will hard-fail" preemptive warning for cache-warm requests that
-  // will never enter generation. Also consulted by
-  // `snapshotForRecurrentRollback` to skip the boundary capture on
-  // prefill-only turns.
+  // Set before tokenization because reasoning setup and cache transactions
+  // distinguish generation from prefill-only requests.
   isPrefillOnlyRequest_ = prefill;
 
-  // Drop any stale user-visible perf snapshot from a prior turn so this
-  // inference's `runtimeStats()` read sees either the new snapshot
-  // (captured by `compactThinkSpan` before its potential replay decode)
-  // or a live `llama_perf_context()` value — never a stale one.
+  // Lazy reconciliation performs no post-generation replay.
   userVisiblePerf_.reset();
   lastGeneratedTokenCount_ = 0;
 
@@ -527,10 +518,37 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   tokenizeChat(chatMsgs, tools, chunks, isCacheLoaded);
 
   const mtmd_input_chunks* chunksPtr = chunks.ptr.get();
+  PrefillPlan reconciledPlan;
+  if (cacheReconciliationEnabled_) {
+    PrefillPlan fullPlan;
+    for (size_t i = 0; i < chunks.size(); ++i) {
+      const mtmd_input_chunk* chunk = chunks[i];
+      if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+        size_t count = 0;
+        const llama_token* tokens =
+            mtmd_input_chunk_get_tokens_text(chunk, &count);
+        fullPlan.tokens.insert(fullPlan.tokens.end(), tokens, tokens + count);
+      } else {
+        fullPlan.mediaBarriers.push_back(
+            {.afterTextTokens = fullPlan.tokens.size(),
+             .mediaIndex = i,
+             .nPos = mtmd_input_chunk_get_n_pos(chunk),
+             .nKvTokens =
+                 static_cast<llama_pos>(mtmd_input_chunk_get_n_tokens(chunk))});
+      }
+    }
+    const cache::Ledger fullLedger = ledgerFromChunks(chunks);
+    beginCacheRequest();
+    reconciledPlan = reconcilePrompt(std::move(fullPlan), fullLedger);
+  }
 
   const llama_pos nTokens =
-      static_cast<llama_pos>(mtmd_helper_get_n_tokens(chunksPtr));
-  const llama_pos nPositions = mtmd_helper_get_n_pos(chunksPtr);
+      cacheReconciliationEnabled_
+          ? reconciledPlan.totalKvTokens()
+          : static_cast<llama_pos>(mtmd_helper_get_n_tokens(chunksPtr));
+  const llama_pos nPositions = cacheReconciliationEnabled_
+                                   ? reconciledPlan.totalPositions()
+                                   : mtmd_helper_get_n_pos(chunksPtr);
   const llama_pos ceiling = ctxCeiling();
   if (exceedsContextWindow(nTokens, ceiling, isPrefillOnlyRequest_) ||
       exceedsContextWindow(nPositions, ceiling, isPrefillOnlyRequest_)) {
@@ -582,11 +600,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   if (needsRecurrentSnapshot_) {
     if (!rollbackState_.capturePrefillEntry(
             modelCtx_.lctx, seqId_, current_.pos)) {
-      // Capture failed: cancel will fall back to the no-op
-      // `removeLastNTokens` path. This is cancel-path bookkeeping,
-      // not part of the `remove_thinking_from_context` cleanup
-      // contract, so we degrade to a warning rather than hard-failing
-      // the request.
+      // Capture failed: cancel falls back to best-effort positional cleanup.
       QLOG_IF(
           Priority::WARNING,
           "[MtmdLlm] failed to capture prefill-entry recurrent snapshot; "
@@ -596,9 +610,58 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
 
   llama_pos nPastLocal = current_.pos;
 
+  size_t ledgerEntryIndex = 0;
   for (size_t i = 0; i < nChunks; i++) {
     bool chunkLogitsLast = (i == nChunks - 1 && !prefill);
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
+
+    size_t textTokenCount = 0;
+    const llama_token* textTokens = nullptr;
+    if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+      textTokens = mtmd_input_chunk_get_tokens_text(chunk, &textTokenCount);
+      const size_t skip =
+          cacheReconciliationEnabled_
+              ? std::min(
+                    textTokenCount,
+                    pendingReuseEntries_ > ledgerEntryIndex
+                        ? pendingReuseEntries_ - ledgerEntryIndex
+                        : size_t{0})
+              : 0;
+      ledgerEntryIndex += textTokenCount;
+      if (skip == textTokenCount) {
+        continue;
+      }
+      if (skip > 0) {
+        LlamaBatch textBatch(params_.n_batch, 0, 1);
+        for (size_t offset = skip; offset < textTokenCount;) {
+          textBatch->n_tokens = 0;
+          while (offset < textTokenCount &&
+                 textBatch->n_tokens < params_.n_batch) {
+            const int32_t batchIndex = textBatch->n_tokens++;
+            textBatch->token[batchIndex] = textTokens[offset++];
+            textBatch->pos[batchIndex] = nPastLocal++;
+            textBatch->n_seq_id[batchIndex] = 1;
+            textBatch->seq_id[batchIndex][0] = seqId_;
+            textBatch->logits[batchIndex] = static_cast<int8_t>(
+                chunkLogitsLast && offset == textTokenCount);
+          }
+          if (llama_decode(modelCtx_.lctx, *textBatch) != 0) {
+            throw qvac_errors::StatusError(
+                ADDON_ID,
+                toString(FailedToDecode),
+                "[MtmdLlm] failed to decode reconciled text suffix");
+          }
+        }
+        continue;
+      }
+    } else {
+      const bool reused = cacheReconciliationEnabled_ &&
+                          ledgerEntryIndex < pendingReuseEntries_;
+      ++ledgerEntryIndex;
+      if (reused) {
+        continue;
+      }
+    }
 
     if (stopGeneration_.load()) {
       // A prior chunk may have queued GPU work whose logits are never read on
@@ -706,12 +769,14 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   }
   current_.pos = nPastLocal;
   refreshCurrentCacheTokensFromMemory();
-
-  // Anchor the reasoning boundary for this request. No-op when the
-  // feature is off or this request has no active reasoning channel; see
-  // `recurrentReasoningBoundaryDecision`. Deliberately not gated on
-  // `llama_memory_can_shift` (see the note at the top of this file).
-  snapshotForRecurrentRollback();
+  if (cacheRequestActive_) {
+    residentLedger_ = pendingPromptLedger_;
+    rebuildSamplerFromLedger(residentLedger_);
+    capturePendingCheckpoint();
+    if (prefill) {
+      commitCacheRequest();
+    }
+  }
 
   return {};
 }
@@ -739,6 +804,14 @@ bool MtmdLlmContext::cancelGenerationCleanup(
   // backend work before mutating KV/recurrent state during rollback.
   llama_synchronize(modelCtx_.lctx);
   flushPendingUtf8ToCallback(outputCallback);
+
+  if (cacheRequestActive_) {
+    const bool ok = restorePreRequestCacheState();
+    common_sampler_reset(smpl_.get());
+    generationStopReason_ =
+        stopReasonAfterRequestRollback(generationStopReason_);
+    return ok;
+  }
 
   const bool rollbackOk = rollbackCancelledRequest({
       .labelTag = "[MtmdLlm]",
@@ -991,6 +1064,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       ++current_.pos;
       ++lastGeneratedTokenCount_;
       ++current_.cacheTokens;
+      appendResidentToken(tokenId);
       capturePendingThinkClose();
       flushPendingUtf8ToCallback(outputCallback);
       generationStopReason_ = GenerationStopReason::Eos;
@@ -1024,6 +1098,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     }
     ++current_.pos;
     ++current_.cacheTokens;
+    appendResidentToken(tokenId);
     ++lastGeneratedTokenCount_;
     // Close-marker token (if any was sampled this iteration) is now
     // committed; capture the span end.
@@ -1050,54 +1125,10 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
 
 std::function<void()>
 MtmdLlmContext::applyGenerationParams(const GenerationParams& overrides) {
-  // Hybrid / fully-recurrent models (Qwen3.5, Qwen3-Next, Jamba, ...)
-  // are supported via the snapshot + replay path in `compactThinkSpan`.
-  // Generated pre-reasoning tokens are seeded into the replay buffer, so
-  // templates no longer have to force-open reasoning during prefill, and
-  // close-marker length decides nothing because no structural marker is
-  // replayed.
-  //
-  // Uniform hard-fail contract (PR #2813): when
-  // `remove_thinking_from_context` is on, ANY inability to remove the
-  // reasoning span from cache surfaces as `qvac_errors::StatusError`,
-  // thrown from `compactThinkSpan` after local rollback so both
-  // driver metadata and live KV agree on the recovery cursor:
-  //   - Boundary snapshot capture failure: thrown from
-  //     `ReasoningBlockCompactor::snapshotAtReasoningBoundary`; the
-  //     `snapshotForRecurrentRollback` wrapper here restores the
-  //     pre-prompt checkpoint (or wipes the sequence on restore
-  //     underflow), resets local positional accounting, and re-throws.
-  //   - Restore/replay failure: the compactor best-effort
-  //     wipes the sequence memory and returns `FailedKvWiped`;
-  //     `compactThinkSpan` zeroes positional bookkeeping to match the
-  //     cleared sequence and throws.
-  //
-  // In every case the current turn's answer is NOT delivered; the
-  // caller (single-prompt JS wrapper or the batch scheduler worker-
-  // loop global catch) surfaces the error, and the batch error-
-  // recovery path additionally skips saveCache
-  // (`SaveCachePolicy::Skip`) so the last known-good on-disk cache is
-  // preserved.
   auto restoreSampler = applyGenerationParamsToContext(
       params_, smpl_, modelCtx_.model, overrides);
 
-  const bool savedRemoveThinking = removeThinkingFromContext_;
-  bool toggled = false;
-  if (overrides.remove_thinking_from_context) {
-    setRemoveThinkingFromContext(*overrides.remove_thinking_from_context);
-    toggled = true;
-  }
-
-  if (!toggled) {
-    return restoreSampler;
-  }
-
-  return [this,
-          restoreSampler = std::move(restoreSampler),
-          savedRemoveThinking]() {
-    restoreSampler();
-    setRemoveThinkingFromContext(savedRemoveThinking);
-  };
+  return restoreSampler;
 }
 
 void MtmdLlmContext::stop() { stopGeneration_.store(true); }
@@ -1105,11 +1136,6 @@ void MtmdLlmContext::stop() { stopGeneration_.store(true); }
 void MtmdLlmContext::resetStopFlag() { stopGeneration_.store(false); }
 
 llama_context* MtmdLlmContext::getCtx() { return modelCtx_.lctx; }
-
-void MtmdLlmContext::setRemoveThinkingFromContext(bool value) {
-  removeThinkingFromContext_ = value;
-  compactor_.setRemoveThinkingFromContext(value);
-}
 
 llama_pos MtmdLlmContext::getNPast() const { return current_.pos; }
 
@@ -1222,68 +1248,6 @@ void MtmdLlmContext::setOpenThinkSpan(llama_pos start) {
   compactor_.setOpenSpan(start);
 }
 
-void MtmdLlmContext::snapshotForRecurrentRollback() {
-  // Prefill-only (cache-warm) requests never enter generation and
-  // cannot emit reasoning tokens, so there is no reasoning span to anchor
-  // a boundary for. Skip the boundary capture entirely before consulting
-  // the policy so a cache warm still succeeds on a model whose boundary
-  // capture would only be exercised at decode time.
-  if (isPrefillOnlyRequest_) {
-    return;
-  }
-  const auto decision = recurrentReasoningBoundaryDecision(
-      removeThinkingFromContext_,
-      reasoningEnabled_ && params_.reasoning_budget != 0);
-  if (decision == RecurrentReasoningBoundaryDecision::Disabled) {
-    return;
-  }
-  // The full-state path anchors at the end of prefill on both prefill
-  // drivers, with the decode stopped exactly there, so `current_.pos` IS the
-  // anchor here. A force-open opener stays in the restored prefix and the
-  // seeded close marker balances it. A pure-attention anchor is a bare
-  // position that nothing has to stop at, so it subtracts the opener here
-  // instead.
-  const llama_pos anchorPos =
-      needsRecurrentSnapshot_
-          ? current_.pos
-          : qvac_lib_inference_addon_llama::utils::reasoningBoundaryTokenIndex(
-                current_.pos,
-                thinkingForcedOpen_,
-                reasoningState_.forcedOpenTokenCount);
-  captureReasoningBoundaryAt(anchorPos);
-}
-
-void MtmdLlmContext::captureReasoningBoundaryAt(llama_pos anchorPos) {
-  try {
-    compactor_.snapshotAtReasoningBoundary(
-        modelCtx_.lctx, seqId_, anchorPos, "[MtmdLlm]");
-  } catch (const qvac_errors::StatusError&) {
-    // Boundary capture failed. Under the hard-fail contract, roll
-    // back to the pre-prompt checkpoint (if we still have one) so no
-    // subsequent turn on this driver observes the prompt tokens or
-    // committed image cells, then re-throw. The batch scheduler's
-    // slot cleanup additionally passes `SaveCachePolicy::Skip` so the
-    // last known-good on-disk cache is preserved.
-    restorePrefillEntryOrClearSequence({
-        .ctx = modelCtx_.lctx,
-        .seqId = seqId_,
-        .rollback = rollbackState_,
-        .onRestored =
-            [this](llama_pos restoredPos) {
-              current_ = preRequestUsage_;
-              current_.pos = restoredPos;
-              refreshCurrentCacheTokensFromMemory();
-            },
-        .onCleared = [this]() { current_ = {}; },
-    });
-    rollbackState_.clearPrefillEntry();
-    rollbackState_.clearReasoningBoundary();
-    rollbackState_.clearPostReasoning();
-    compactor_.reset();
-    throw;
-  }
-}
-
 void MtmdLlmContext::capturePendingThinkClose() {
   if (!compactor_.hasPendingCloseCapture()) {
     return;
@@ -1293,42 +1257,6 @@ void MtmdLlmContext::capturePendingThinkClose() {
 
 void MtmdLlmContext::recordPostReasoningTokenIfActive(llama_token tokenId) {
   compactor_.recordPostReasoningToken(tokenId);
-}
-
-void MtmdLlmContext::compactThinkSpan() {
-  // Freeze the user-visible perf counters before the compactor runs
-  // `restore + llama_decode` to replay the post-reasoning tail. Those replay
-  // decodes accumulate into llama's own counters and would otherwise show up
-  // as inflated prompt tokens / TTFT / ppTPS and a short generated-token
-  // count. Every model replays now, so this is no longer recurrent-only.
-  if (compactor_.hasOpenSpan() && !userVisiblePerf_.has_value()) {
-    userVisiblePerf_ = llama_perf_context(modelCtx_.lctx);
-  }
-  const ReasoningBlockCompactor::Outcome outcome =
-      compactor_.compact(modelCtx_.lctx, seqId_, current_.pos, "[MtmdLlm]");
-
-  // Multimodal `cacheTokens` diverges from `pos` under M-RoPE (image
-  // cells > positions), so both compaction paths refresh from llama
-  // memory rather than doing arithmetic. Recurrent compaction currently
-  // only drops generated text (1 cell per position), so the two would
-  // agree today; refreshing keeps the invariant `cacheTokens ==
-  // llama_memory_seq_token_count(seqId_)` regardless of what a future
-  // reasoning span might include (e.g. inline media).
-  handleCompactionOutcome(
-      outcome,
-      {
-          .onCompacted =
-              [this](const ReasoningBlockCompactor::Outcome& result) {
-                current_.pos = result.newPos;
-                refreshCurrentCacheTokensFromMemory();
-              },
-          .onFailedKvWiped =
-              [this]() {
-                current_ = {};
-                rollbackState_.reset();
-                compactor_.reset();
-              },
-      });
 }
 
 void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
@@ -1365,6 +1293,9 @@ void MtmdLlmContext::loadMedia(const std::vector<uint8_t>& media) {
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
   }
+  const std::string mediaId =
+      std::to_string(cache::hashBytes(bmp.data(), bmp.n_bytes()));
+  bmp.set_id(mediaId.c_str());
   bitmaps_.entries.push_back(std::move(bmp));
 }
 
@@ -1401,12 +1332,16 @@ void MtmdLlmContext::loadMedia(const std::string& fname) {
             qvac_errors::general_error::InvalidArgument),
         errorMsg);
   }
+  const std::string mediaId =
+      std::to_string(cache::hashBytes(bmp.data(), bmp.n_bytes()));
+  bmp.set_id(mediaId.c_str());
   bitmaps_.entries.push_back(std::move(bmp));
 }
 
 void MtmdLlmContext::resetState(bool resetStats) {
 
   current_ = {};
+  clearCacheReconciliationState();
 
   // On partial reset (resetStats=false), preserve the block discards and
   // vision-encode accumulators so `runtimeStats()` can read the
@@ -1487,6 +1422,205 @@ llama_pos MtmdLlmContext::ctxCeiling() const {
              : static_cast<llama_pos>(llama_n_ctx(modelCtx_.lctx));
 }
 
+cache::Ledger
+MtmdLlmContext::ledgerFromChunks(const mtmd::input_chunks& chunks) const {
+  cache::Ledger ledger;
+  for (size_t i = 0; i < chunks.size(); ++i) {
+    const mtmd_input_chunk* chunk = chunks[i];
+    if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_TEXT) {
+      size_t count = 0;
+      const llama_token* tokens =
+          mtmd_input_chunk_get_tokens_text(chunk, &count);
+      for (size_t j = 0; j < count; ++j) {
+        ledger.appendToken(tokens[j]);
+      }
+    } else {
+      const char* id = mtmd_input_chunk_get_id(chunk);
+      const std::string identity = id == nullptr ? std::string{} : id;
+      ledger.entries.push_back(
+          {.kind = cache::EntryKind::Media,
+           .identity = static_cast<int64_t>(
+               cache::hashBytes(identity.data(), identity.size())),
+           .positions = mtmd_input_chunk_get_n_pos(chunk),
+           .cacheTokens =
+               static_cast<llama_pos>(mtmd_input_chunk_get_n_tokens(chunk))});
+    }
+  }
+  return ledger;
+}
+
+void MtmdLlmContext::beginCacheRequest() {
+  cacheRequestActive_ = true;
+  cacheRequestRolledBack_ = false;
+  preRequestUsage_ = current_;
+  preRequestCacheUsage_ = current_;
+  preRequestLedger_ = residentLedger_;
+  pendingPromptLedger_.entries.clear();
+  pendingCheckpoint_.reset();
+  preRequestCacheSnapshot_.clear();
+  if (!snapshotRecurrentState(
+          modelCtx_.lctx, seqId_, current_.pos, preRequestCacheSnapshot_)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToSaveSessionFile),
+        "[MtmdLlm] failed to snapshot cache before prompt reconciliation");
+  }
+}
+
+void MtmdLlmContext::rebuildSamplerFromLedger(const cache::Ledger& ledger) {
+  common_sampler_reset(smpl_.get());
+  for (const cache::Entry& entry : ledger.entries) {
+    if (entry.kind == cache::EntryKind::Token) {
+      common_sampler_accept(
+          smpl_.get(), static_cast<llama_token>(entry.identity), false);
+    }
+  }
+}
+
+PrefillPlan MtmdLlmContext::reconcilePrompt(
+    PrefillPlan fullPlan, const cache::Ledger& fullLedger) {
+  pendingPromptLedger_ = fullLedger;
+  const size_t prefix = cache::commonPrefix(residentLedger_, fullLedger);
+  const size_t cachedLength = residentLedger_.entries.size();
+  size_t reuse = prefix;
+  std::string checkpoint = "none";
+
+  if (needsRecurrentSnapshot_ && prefix < cachedLength) {
+    reuse = 0;
+    for (auto it = cacheCheckpoints_.rbegin(); it != cacheCheckpoints_.rend();
+         ++it) {
+      const size_t count = it->ledger.entries.size();
+      if (count <= prefix &&
+          cache::commonPrefix(it->ledger, fullLedger) == count &&
+          restoreRecurrentState(modelCtx_.lctx, seqId_, it->state)) {
+        residentLedger_ = it->ledger;
+        current_ = it->usage;
+        reuse = count;
+        checkpoint = std::to_string(count);
+        break;
+      }
+    }
+    if (reuse == 0) {
+      clearSequenceMemory(modelCtx_.lctx);
+      residentLedger_.entries.clear();
+      current_ = {};
+      checkpoint = "cold";
+    }
+  } else if (!needsRecurrentSnapshot_ && prefix < cachedLength) {
+    const llama_pos reusePos = residentLedger_.positions(prefix);
+    clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
+    residentLedger_.truncate(prefix);
+    current_.pos = reusePos;
+    refreshCurrentCacheTokensFromMemory();
+  }
+
+  for (auto it = cacheCheckpoints_.begin(); it != cacheCheckpoints_.end();) {
+    const size_t count = it->ledger.entries.size();
+    if (count > prefix ||
+        cache::commonPrefix(it->ledger, fullLedger) != count) {
+      it = cacheCheckpoints_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  pendingReuseEntries_ = reuse;
+  rebuildSamplerFromLedger(residentLedger_);
+
+  PrefillPlan suffix;
+  size_t tokenIndex = 0;
+  size_t mediaIndex = 0;
+  for (size_t entryIndex = 0; entryIndex < fullLedger.entries.size();
+       ++entryIndex) {
+    const cache::Entry& entry = fullLedger.entries[entryIndex];
+    if (entry.kind == cache::EntryKind::Token) {
+      if (entryIndex >= reuse) {
+        suffix.tokens.push_back(fullPlan.tokens[tokenIndex]);
+      }
+      ++tokenIndex;
+    } else {
+      const MediaBarrier& barrier = fullPlan.mediaBarriers[mediaIndex++];
+      if (entryIndex >= reuse) {
+        MediaBarrier adjusted = barrier;
+        adjusted.afterTextTokens = suffix.tokens.size();
+        suffix.mediaBarriers.push_back(adjusted);
+      }
+    }
+  }
+
+  QLOG_IF(
+      Priority::DEBUG,
+      string_format(
+          "[MtmdLlm] cache reconcile: cached=%zu rendered=%zu common=%zu "
+          "firstDivergence=%zu checkpoint=%s nPast=%d\n",
+          cachedLength,
+          fullLedger.entries.size(),
+          prefix,
+          prefix,
+          checkpoint.c_str(),
+          current_.pos));
+  return suffix;
+}
+
+void MtmdLlmContext::capturePendingCheckpoint() {
+  if (!needsRecurrentSnapshot_) {
+    return;
+  }
+  CacheCheckpoint checkpoint;
+  checkpoint.ledger = residentLedger_;
+  checkpoint.usage = current_;
+  if (!snapshotRecurrentState(
+          modelCtx_.lctx, seqId_, current_.pos, checkpoint.state)) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToSaveSessionFile),
+        "[MtmdLlm] failed to capture recurrent cache checkpoint");
+  }
+  pendingCheckpoint_ = std::move(checkpoint);
+}
+
+void MtmdLlmContext::commitCacheRequest() {
+  if (!cacheRequestActive_) {
+    return;
+  }
+  if (needsRecurrentSnapshot_ && !preRequestCacheSnapshot_.empty()) {
+    cache::appendProcessCheckpoint(
+        cacheCheckpoints_,
+        CacheCheckpoint{
+            .state = std::move(preRequestCacheSnapshot_),
+            .ledger = preRequestLedger_,
+            .usage = preRequestCacheUsage_});
+  } else {
+    preRequestCacheSnapshot_.clear();
+  }
+  if (pendingCheckpoint_.has_value()) {
+    cache::appendProcessCheckpoint(
+        cacheCheckpoints_, std::move(*pendingCheckpoint_));
+    pendingCheckpoint_.reset();
+  }
+  cacheRequestActive_ = false;
+  cacheRequestRolledBack_ = false;
+}
+
+bool MtmdLlmContext::restorePreRequestCacheState() {
+  bool ok = true;
+  ok = restoreRecurrentState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
+  residentLedger_ = preRequestLedger_;
+  current_ = preRequestCacheUsage_;
+  pendingPromptLedger_.entries.clear();
+  pendingCheckpoint_.reset();
+  preRequestCacheSnapshot_.clear();
+  cacheRequestActive_ = false;
+  cacheRequestRolledBack_ = true;
+  return ok;
+}
+
+void MtmdLlmContext::appendResidentToken(llama_token token) {
+  if (cacheRequestActive_ && token != LLAMA_TOKEN_NULL) {
+    residentLedger_.appendToken(token);
+  }
+}
+
 PrefillPlan MtmdLlmContext::preparePrefill(
     const std::vector<common_chat_msg>& chatMsgs,
     const std::vector<common_chat_tool>& tools,
@@ -1540,6 +1674,12 @@ PrefillPlan MtmdLlmContext::preparePrefill(
               .nKvTokens = static_cast<llama_pos>(
                   mtmd_input_chunk_get_n_tokens(chunk))});
     }
+  }
+
+  if (cacheReconciliationEnabled_) {
+    const cache::Ledger fullLedger = ledgerFromChunks(chunks);
+    beginCacheRequest();
+    plan = reconcilePrompt(std::move(plan), fullLedger);
   }
 
   // The batcher can only request logits on text tokens it feeds, so a
@@ -1660,17 +1800,16 @@ void MtmdLlmContext::onPrefillComplete(
   // Trailing text advances positions and KV cells 1:1; media cells were
   // already accounted by evalMediaSegment.
   advanceTextSpan(currentPos);
-  // Unified boundary snapshot point for recurrent / hybrid
-  // generation requests. Both single-prompt prefill and the continuous
-  // scheduler now route through the same compactor lifecycle; the
-  // capture is idempotent and a no-op when gates are off or this is a
-  // prefill-only cache-warm request.
-  snapshotForRecurrentRollback();
-
+  if (cacheRequestActive_) {
+    residentLedger_ = pendingPromptLedger_;
+    rebuildSamplerFromLedger(residentLedger_);
+    capturePendingCheckpoint();
+    if (isPrefillOnlyRequest_) {
+      commitCacheRequest();
+    }
+  }
   // Reset per-inference reasoning detection state shared by the single-prompt
-  // and continuous-batching paths. Do not clear rollbackState_'s boundary
-  // snapshot here; generation requests may have just captured it above,
-  // and it is consumed by compactThinkSpan().
+  // and continuous-batching paths.
   forcedTokens_.clear();
   reasoningState_.inside_reasoning = false;
   reasoningState_.recent_output_buffer.clear();
@@ -1805,6 +1944,7 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     if (!closeChars.empty() && outputCallback) {
       outputCallback(closeChars);
     }
+    appendResidentToken(tokenId);
     return {.token = tokenId, .finished = false};
   }
 
@@ -1847,6 +1987,9 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     generationStopReason_ = stopReason;
     flushPendingUtf8ToCallback(outputCallback);
   }
+  if (!finished && inlineDecodeBatch == nullptr) {
+    appendResidentToken(tokenId);
+  }
   return {.token = tokenId, .finished = finished, .stopReason = stopReason};
 }
 
@@ -1863,10 +2006,15 @@ bool MtmdLlmContext::onGenerationFinished(
   }
   capturePendingThinkClose();
   onSequenceEnd(outputCallback);
-  if (shouldRollbackInterruptedReasoning()) {
+  const bool emptyGeneration =
+      cacheRequestActive_ &&
+      residentLedger_.entries.size() == pendingPromptLedger_.entries.size();
+  if (emptyGeneration ||
+      (generationStopReason_ != GenerationStopReason::Eos &&
+       generationStopReason_ != GenerationStopReason::Antiprompt)) {
     return cancelGenerationCleanup(outputCallback);
   }
-  compactThinkSpan();
+  commitCacheRequest();
   rollbackState_.clearPrefillEntry();
   // `generationStopReason_` intentionally persists: runtime stats read
   // it after generation returns; it is re-initialized at the next
@@ -1879,7 +2027,7 @@ bool MtmdLlmContext::shouldRollbackInterruptedReasoning() const {
       shouldRollbackInterruptedReasoning(
           generationStopReason_,
           needsRecurrentSnapshot_,
-          removeThinkingFromContext_,
+          false,
           reasoningEnabled_,
           reasoningState_.inside_reasoning,
           compactor_.hasOpenSpan(),
@@ -1895,36 +2043,55 @@ bool MtmdLlmContext::onCancel(
   return cancelGenerationCleanup(outputCallback);
 }
 
-/// Prompt caching on the multimodal batch path round-trips the full four-field
-/// session-metadata contract (`SessionMetadataField` in LlmContext.hpp),
-/// exactly as `CacheManager` does. `cacheTokens` matters on its own here: for
-/// M-RoPE media the KV-cell count diverges from the positional span
-/// (`current_.pos` vs `current_.cacheTokens`). Slots 1 and 3 are retired, and
-/// `SessionMetadata::capture` mirrors the live cursors into them rather than
-/// writing 0, so a build that still slides fails closed instead of evicting
-/// from position 0. The width stays at four so cache files remain compatible.
-static_assert(
-    SESSION_METADATA_FIELD_COUNT == 4,
-    "MTMD cache (de)serialization must persist all four session-metadata "
-    "fields; update the implementation when the contract changes");
+/// Multimodal cache files embed the versioned token/media ledger in the GGSQ
+/// sequence-state file. Media entries retain both their logical position span
+/// and physical KV-cell usage, which diverge for M-RoPE models.
+std::vector<llama_token> MtmdLlmContext::cacheStateTokens() const {
+  return cache::serialize(residentLedger_, current_.pos, current_.cacheTokens);
+}
+
+void MtmdLlmContext::restoreCacheStateTokens(
+    const std::vector<llama_token>& tokens) {
+  const cache::DecodedLedger decoded =
+      cache::deserialize(tokens.data(), tokens.size());
+  residentLedger_ = decoded.ledger;
+  current_ = {.pos = decoded.nPast, .cacheTokens = decoded.cacheTokens};
+  cacheCheckpoints_.clear();
+  pendingCheckpoint_.reset();
+}
+
+void MtmdLlmContext::clearCacheReconciliationState() {
+  residentLedger_.entries.clear();
+  pendingPromptLedger_.entries.clear();
+  preRequestLedger_.entries.clear();
+  preRequestCacheSnapshot_.clear();
+  pendingCheckpoint_.reset();
+  cacheCheckpoints_.clear();
+  pendingReuseEntries_ = 0;
+  cacheRequestActive_ = false;
+  cacheRequestRolledBack_ = false;
+}
+
+bool MtmdLlmContext::rollbackFailedRequest() {
+  return !cacheRequestActive_ || restorePreRequestCacheState();
+}
 
 bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
     return false;
   }
 
-  // Restore the four-field metadata contract (SessionMetadataField order). For
-  // M-RoPE media `cacheTokens` diverges from the positional span, so it must
-  // survive — see the static_assert above. The per-cell llama_kv_cell_ext
-  // (x/y) is restored by the GGSQ sequence-state loader itself.
   size_t tokenCount = 0;
-  SessionMetadata metadata;
+  std::vector<llama_token> stateTokens(
+      cache::LEDGER_HEADER_WORDS +
+      cache::LEDGER_ENTRY_WORDS *
+          (static_cast<size_t>(llama_n_ctx(modelCtx_.lctx)) + 1));
   const auto loadedBytes = llama_state_seq_load_file(
       modelCtx_.lctx,
       cacheKey.c_str(),
       seqId_,
-      metadata.data(),
-      metadata.size(),
+      stateTokens.data(),
+      stateTokens.size(),
       &tokenCount);
   if (loadedBytes == 0) {
     throw qvac_errors::StatusError(
@@ -1948,22 +2115,23 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
           "[MtmdLlm] failed to clear sequence after invalid cache load\n");
     }
     current_ = {};
+    clearCacheReconciliationState();
   });
 
-  // Accepting a partial header would leave `cacheTokens` defaulted to zero (it
-  // diverges from `nPast` under M-RoPE, breaking later cap checks). Require the
-  // full four-field contract; the guard above clears the restored KV on reject,
-  // mirroring `CacheManager::loadCache`.
-  if (!mtmdSessionMetadataIsComplete(tokenCount)) {
+  stateTokens.resize(tokenCount);
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+    clearCacheReconciliationState();
+    return false;
+  }
+  try {
+    restoreCacheStateTokens(stateTokens);
+  } catch (const std::exception& ex) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadSessionFile),
-        "MtmdLlmContext::loadCache: cache '" + cacheKey +
-            "' has incomplete session metadata (" + std::to_string(tokenCount) +
-            " of " + std::to_string(SESSION_METADATA_FIELD_COUNT) + " fields)");
+        "MtmdLlmContext::loadCache: malformed cache ledger in '" + cacheKey +
+            "': " + ex.what());
   }
-
-  metadata.applyTo(*this);
 
   if (getNPast() > llama_n_ctx(modelCtx_.lctx)) {
     throw qvac_errors::StatusError(
@@ -2020,16 +2188,14 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
     return;
   }
 
-  // Persist all four metadata slots in SessionMetadataField order so the
-  // physical KV-cell count that diverges under M-RoPE survives restore.
-  const SessionMetadata metadata = SessionMetadata::capture(*this);
+  const std::vector<llama_token> stateTokens = cacheStateTokens();
   const std::string tmpCacheKey = cacheKey + ".tmp";
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
       tmpCacheKey.c_str(),
       seqId_,
-      metadata.data(),
-      metadata.size());
+      stateTokens.data(),
+      stateTokens.size());
   if (savedBytes == 0) {
     std::error_code ec;
     std::filesystem::remove(tmpCacheKey, ec);
@@ -2041,9 +2207,16 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
 }
 
-void MtmdLlmContext::snapshotPreRequestCursor() { preRequestUsage_ = current_; }
+void MtmdLlmContext::snapshotPreRequestCursor() {
+  if (!cacheRequestActive_) {
+    preRequestUsage_ = current_;
+  }
+}
 
 void MtmdLlmContext::snapshotPreRequestRollbackAnchor() {
+  if (cacheRequestActive_) {
+    return;
+  }
   // Pure-attention MTMD drivers roll back via `removeLastNTokens` in
   // `cancelGenerationCleanup`; no snapshot needed. The single-prompt
   // path takes its own capture after tokenize in
