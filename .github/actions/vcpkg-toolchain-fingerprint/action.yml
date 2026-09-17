@@ -26,9 +26,22 @@ runs:
           probe="$("${CC:-clang}" --version)"
         fi
 
-        # Hash the binary, not `vcpkg version` (not on PATH here on linux) and
-        # not the tree's git rev (VCPKG_ROOT is a checkout on only some hosts,
-        # which split one toolchain across two keys).
+        # The tool's reported version, not the binary bytes and not the tree's
+        # git rev (VCPKG_ROOT is a checkout on only some hosts, which split one
+        # toolchain across two keys). Invoked by absolute path because vcpkg is
+        # not on PATH here on linux.
+        #
+        # The bytes were the first attempt and they split the key the same way:
+        # linux and windows take vcpkg pre-installed from the runner image
+        # (setup-vcpkg reads VCPKG_INSTALLATION_ROOT), and the windows hosts
+        # were imaged at different times, so one vcpkg release differs
+        # byte-for-byte between them. Measured on two runs of cpp-tests-llm at
+        # the same commit: vctools and sdk identical on both, binary hash
+        # f1edbf3a39de350e on qvac-win25-x64 and 37f05505d35081bd on
+        # qvac-win25-x64-2-runner3, so the key moved and windows never hit its
+        # own entry. The version line carries the release date and tool commit,
+        # which is what vcpkg folds into an ABI hash, so it moves with the
+        # toolchain and holds still across hosts running the same release.
         vcpkg_bin="${VCPKG_ROOT:-}/vcpkg"
         if [ ! -x "${vcpkg_bin}" ]; then
           vcpkg_bin="$(command -v vcpkg 2> /dev/null || true)"
@@ -37,13 +50,16 @@ runs:
           echo "::error::vcpkg binary not found (VCPKG_ROOT=${VCPKG_ROOT:-unset}); cache key would be unstable"
           exit 1
         fi
-        if command -v sha256sum > /dev/null 2>&1; then
-          vcpkg_hash="$(sha256sum "${vcpkg_bin}")"
-        else
-          vcpkg_hash="$(shasum -a 256 "${vcpkg_bin}")"
+        # Captured whole, then trimmed: `vcpkg version | head -1` closes the
+        # pipe early and pipefail turns the resulting SIGPIPE into a failure.
+        vcpkg_version_raw="$("${vcpkg_bin}" version)"
+        vcpkg_version="$(printf '%s\n' "${vcpkg_version_raw}" | head -n 1)"
+        if [ -z "${vcpkg_version}" ]; then
+          echo "::error::'${vcpkg_bin} version' printed nothing; cache key would be unstable"
+          exit 1
         fi
         probe="${probe}
-        vcpkg=${vcpkg_hash:0:16}"
+        vcpkg=${vcpkg_version}"
 
         echo "--- toolchain ---"
         echo "${probe}"
@@ -84,7 +100,8 @@ runs:
           exit 1
         }
 
-        # Hash the binary -- see the bash branch.
+        # The tool's reported version, not the binary bytes -- see the bash
+        # branch for the windows hosts that made the bytes unusable.
         $vcpkgBin = Join-Path $env:VCPKG_ROOT 'vcpkg.exe'
         if (-not (Test-Path $vcpkgBin)) {
           $onPath = Get-Command vcpkg -ErrorAction SilentlyContinue
@@ -94,9 +111,13 @@ runs:
           Write-Output "::error::vcpkg binary not found (VCPKG_ROOT=$env:VCPKG_ROOT); cache key would be unstable"
           exit 1
         }
-        $vcpkgHash = (Get-FileHash -Path $vcpkgBin -Algorithm SHA256).Hash.ToLower().Substring(0, 16)
+        $vcpkgVersion = (& $vcpkgBin version | Select-Object -First 1)
+        if ([string]::IsNullOrWhiteSpace($vcpkgVersion)) {
+          Write-Output "::error::'$vcpkgBin version' printed nothing; cache key would be unstable"
+          exit 1
+        }
 
-        $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$vcpkgHash"
+        $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$($vcpkgVersion.Trim())"
         Write-Output "--- toolchain ---"
         Write-Output $probe
 
