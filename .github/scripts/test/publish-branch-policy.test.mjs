@@ -11,7 +11,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const WORKFLOW_DIR = join(root, '.github/workflows')
 
 // Keyed on behaviour, not filename, so a renamed pipeline stays covered.
-const PUBLISH_MARKER = /npm-publish-logic|publish-library-to-(gpr|npm)/
+// Anchored to `uses:` so a workflow that merely names the action in a log or
+// remediation string is not mistaken for a publish pipeline.
+const PUBLISH_MARKER = /uses:.*(npm-publish-logic|publish-library-to-(gpr|npm))/
 
 const ALLOWED = ['release-*']
 
