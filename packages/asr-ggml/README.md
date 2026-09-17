@@ -454,7 +454,7 @@ Notes:
 
 - **GPU is opt-in.** `use_gpu` defaults to `false`; set it in `contextParams`.
 - **Four context keys force a full reload** — `model`, `use_gpu`,
-  `flash_attn`, `gpu_device`. Changing any of them destroys and rebuilds the
+  `flash_attn`, `gpu_device`, `main-gpu`, `main_gpu`. Changing any of them destroys and rebuilds the
   whisper context (seconds, depending on model size). Everything in
   `whisperConfig` is applied in place.
 - `backendsDir` (in `whisperConfig`) overrides where dynamically-loaded ggml
@@ -587,6 +587,25 @@ compiles the CUDA backend.
 
 Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true`.
+
+
+For Whisper GPU selection, set `contextParams['main-gpu']` (or the alias
+`contextParams.main_gpu`) to a raw ggml registry index, an integer string,
+`'dedicated'`, or `'integrated'` (class names are case-insensitive). With GPU
+enabled and no explicit selector, dedicated GPUs are preferred. A class
+selector is strict: if that class is unavailable, execution falls back to CPU.
+An in-range numeric selector preserves its registry identity before backend
+filtering; a CPU, excluded backend, or refused Adreno Vulkan slot falls back to
+CPU without selecting another GPU. An out-of-range index logs a warning and
+uses normal selection. The supported local families are Metal, CUDA, Vulkan,
+and OpenCL; the existing Adreno OpenCL guard still applies.
+
+`main-gpu` does not enable GPU execution by itself. `use_gpu: false` always
+selects CPU. The legacy `contextParams.gpu_device` retains its existing
+Whisper GPU/IGPU-ordinal meaning and Adreno guard. Combining it with either
+new selector spelling, or supplying both new spellings, is rejected.
+
+This selector currently applies to the Whisper engine.
 
 `getBackendInfo()` reports what actually ran — `backendName`, `backendId`
 (see the `BackendId` enum), string `backendDevice`, `backendDescription`,
