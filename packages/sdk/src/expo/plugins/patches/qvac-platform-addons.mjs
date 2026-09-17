@@ -1,20 +1,17 @@
 /**
- * Resolves the inner addon directory of each installed platform package.
+ * Resolves split-addon platform packages from the meta package's `#host-addon`
+ * map. Linker, verify, and the missing-prebuild error all call this file so the
+ * slice name cannot drift from what the addon actually imports.
  *
- * A split addon ships JavaScript in its meta package and its binaries in a
- * per-platform package, under `addon/` — and only that inner directory is
- * marked `addon: true`. `bare-link` walks dependency fields and emits a binary
- * only for a package marked that way, so it reaches the meta (no `prebuilds/`
- * since the split) and never the binaries. Linking the inner directory directly
- * restores the pre-split output, whose name is derived from the meta package
- * name it carries.
- *
- * This file is copied next to the patched link.mjs by withMobileBundle.ts.
+ * This file is copied next to the patched link.mjs by withMobileBundle.ts, and
+ * copied into dist so compiled verify can import it.
  */
 import fs from 'fs'
 import path from 'path'
 
-const HOST_ADDON_IMPORT = '#host-addon'
+export const HOST_ADDON_IMPORT = '#host-addon'
+
+const DEFAULT_ANDROID_CPU = 'arm64'
 
 export function resolvePlatformAddonRoots(projectRoot, addonNames, platform) {
   const roots = []
@@ -29,8 +26,12 @@ function resolvePlatformAddonRoot(projectRoot, metaName, platform) {
   const metaManifest = readManifest(packageDir(projectRoot, metaName))
   if (metaManifest === null) return null
 
-  const platformPackage = platformPackageName(metaManifest.imports?.[HOST_ADDON_IMPORT], platform)
-  if (platformPackage === null || !platformPackage.startsWith(`${metaName}-`)) return null
+  const platformPackage = resolveAddonPlatformPackage(
+    metaName,
+    metaManifest.imports?.[HOST_ADDON_IMPORT],
+    platform
+  )
+  if (platformPackage === null) return null
 
   const addonDir = path.join(packageDir(projectRoot, platformPackage), 'addon')
   const addonManifest = readManifest(addonDir)
@@ -52,9 +53,39 @@ function readManifest(dir) {
   }
 }
 
-function platformPackageName(hostAddon, platform) {
+/**
+ * Package `#host-addon` names for `host`, if that name belongs to `metaName`.
+ * `host` is a Bare host (`android-arm64`, `ios-arm64-simulator`, `darwin-arm64`)
+ * or a mobile build target (`android`, `ios`).
+ */
+export function resolveAddonPlatformPackage(metaName, hostAddon, host) {
+  const name = resolvePlatformPackageName(hostAddon, host)
+  if (name === null || typeof metaName !== 'string') return null
+  if (!name.startsWith(`${metaName}-`)) return null
+  return name
+}
+
+/**
+ * First package name a `#host-addon` map points at for `host`.
+ * Android nests the package under its architecture; iOS is a flat list.
+ * A platform-only `android` target uses arm64, matching the current mobile host.
+ */
+export function resolvePlatformPackageName(hostAddon, host) {
+  if (typeof host !== 'string' || host.length === 0) return null
+
+  const separator = host.indexOf('-')
+  const platform = separator === -1 ? host : host.slice(0, separator)
+  const cpu = separator === -1 ? '' : host.slice(separator + 1)
+
   const branch = readBranch(hostAddon, platform)
-  const candidate = platform === 'android' ? readBranch(branch, 'arm64') : branch
+  const direct = packageName(branch)
+  if (direct !== null) return direct
+
+  const cpuKey = cpu.length > 0 ? cpu : DEFAULT_ANDROID_CPU
+  return packageName(readBranch(branch, cpuKey))
+}
+
+function packageName(candidate) {
   const name = Array.isArray(candidate) ? candidate[0] : candidate
   if (typeof name !== 'string' || name.startsWith('.')) return null
   return name

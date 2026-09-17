@@ -196,7 +196,7 @@
     "lint:fix": "lunte --fix",
     "enforce-inference-peer-dependencies": "bun scripts/enforce-inference-peer-dependencies.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.types.json",
-    "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
+    "postcompile:aliases": "tsc-alias -p tsconfig.alias.json && mkdir -p dist/src/expo/plugins/patches && cp src/expo/plugins/patches/qvac-platform-addons.mjs src/expo/plugins/patches/qvac-platform-addons.mjs.d.ts dist/src/expo/plugins/patches/",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
     "build:pack": "bun run build && bun pm pack --destination dist/",
     "sdk-source:workspace": "bun run ./scripts/link-workspace-inference.ts",
