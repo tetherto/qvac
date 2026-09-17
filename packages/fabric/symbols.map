@@ -26,10 +26,21 @@
 #
 # The name stays out of this file so the links that must not carry it — Android
 # and the Linux ASan build, which share a libc++ shared library and export no
-# C++ ABI — use the file as written. There a DT_VERNEED would guard an export
-# set that does not exist, and Android's loader refuses to dlopen a module
-# carrying versioned imports of this one, so naming it strands every consumer
-# on device.
+# C++ ABI — use the file as written. There the DT_VERNEED a consumer records
+# guards an export set that does not exist, and on Android it costs the load:
+# an addon built against a named node fails its dlopen and bare reports
+# ADDON_NOT_FOUND before any model work.
+#
+# Not because bionic lacks versioning — it has had it since API 23 — but
+# because it resolves a version need through the DT_SONAME of the dependency
+# that declares it, and on device an addon's fabric dependency is not a file at
+# all: the APK stages it under another name, and it resolves only because bare
+# already loaded it. So either bionic finds no dependency matching the verneed
+# and fails the dlopen outright, or it finds no such version there and demotes
+# the requirement to unversioned definitions, which every export here has a
+# version for. Both end in a failed dlopen, and bare discards the dlerror that
+# would say which. What is measured is narrower: naming the node is the only
+# ELF difference, and consumers load without it and not with it.
 #
 # Renaming the node is a hard break — rebuild every consumer in the same
 # release. A consumer built against an unversioned fabric does not fail to load;
