@@ -42,15 +42,66 @@ const plan = fitParams({
 //   nCtx,         // fitted context size
 //   nBatch, nUbatch,
 //   splitMode,    // llama_split_mode — how the model splits across GPUs
-//   mainGpu,      // device holding the model when splitMode is NONE
+//   mainGpu,      // 0 for a GPU plan, -1 for any CPU-only plan
 //   typeK, typeV, // ggml_type of the K/V cache — changes KV memory
 //   flashAttnType,// llama_flash_attn_type — changes KV/compute memory
 //   maxDevices,   // llama_max_devices() — a build-time bound, NOT a detection
 //   nDevices,     // devices actually registered; 0 => ERROR
-//   nGpuDevices,  // of those, GPU/iGPU; 0 => host-only projection
-//   tensorSplit   // number[] offload proportion per device
+//   nGpuDevices,  // raw GPU/iGPU count; may include unsupported families
+//   tensorSplit,  // number[] offload proportion per device
+//   projection    // per-device projected memory (see below); optional
 // }
 ```
+
+`fitParamsAsync(config)` takes the same config and resolves to the same result
+from a worker thread, so the caller's JS loop is not blocked while the fitter
+probes the devices. Validation failures reject. Fits are serialised
+process-wide either way — see below.
+
+```js
+const { fitParamsAsync } = require('@qvac/model-fit')
+
+const plan = await fitParamsAsync({ modelPath: '/abs/path/model.gguf' })
+```
+
+### The memory projection
+
+`projection` explains the verdict in bytes: one row per device the model was
+assigned to, in the order llama.cpp holds them (`llama_model_get_device`, the
+same index `tensorSplit` uses), then a final `"host"` row. Each row carries
+`totalBytes`/`freeBytes` (the raw backend gauge), `marginBytes` (the margin
+the fitter applied to that row, `marginMiB` × 1 MiB) and
+`modelBytes`/`contextBytes`/`computeBytes` (the projected demand at the
+parameters the result reports — on a FAILURE the fitter restores the caller's
+originals, so nothing was resolved). The budget the verdict was judged against
+is `freeBytes - marginBytes`, so headroom on a row is
+`freeBytes - marginBytes - (modelBytes + contextBytes + computeBytes)`; the
+raw `freeBytes` alone reads positive for a `does-not-fit` that missed by less
+than the margin. A `does-not-fit` with numbers shows how far it missed; a
+`fits` shows how much headroom the margin left.
+
+That identity holds on a device with its own memory. On one that shares the
+host pool — Metal on Apple silicon, Vulkan/OpenCL on Adreno and Mali — fabric
+additionally clamps the row to a share of what is left of host memory, so the
+budget is at most `freeBytes - marginBytes` and the headroom above is an upper
+bound. Read a non-negative result on those rows as "the per-device gauge did
+not rule it out", not as free space. The clamp's own inputs are not on the row
+today; treat the verdict, not the arithmetic, as the answer to "does it fit".
+
+The device rows are not `nDevices`. `nDevices` is `ggml_backend_dev_count()`
+and includes the CPU device, whose demand is folded into the `"host"` row, so
+`projection.length - 1` is usually `nDevices - 1`. Match rows by `name`, never
+by position against `nDevices`.
+
+It is present on SUCCESS and FAILURE, and absent in three cases a consumer must
+handle: an ERROR verdict, a result from an older addon or process runner, and a
+failure of the extra no-alloc probe that gathers it. That probe costs roughly
+what the fit itself cost.
+
+`freeBytes` inherits every caveat of the underlying backend gauges
+(per-process accounting on Metal, host-memory assumptions — see the fit
+semantics above), so the rows are "what the fitter believed", not ground truth
+about the machine.
 
 ### Backend registration
 
@@ -130,6 +181,22 @@ different file, or no file, from one launch to the next. It is not required to
 exist: a missing model is the documented `ERROR` / `model-unreadable` outcome
 rather than a thrown error.
 
+It may be a **fit stub** instead of the artefact: a short GGUF carrying the
+hyperparameters and the tensor infos, with the tokenizer tables dropped and no
+data section — tens of KB against gigabytes, with tensor offsets that run past
+its own EOF. It projects the same plan as the full file, single-file or split.
+
+The fit loads with `no_alloc` and no mmap and never reads tensor bytes, so the
+data section can be absent rather than padded out to the artefact length — and
+it should be: a sparse file is fully allocated on NTFS. That needs qvac-fabric
+10549.0.0 or newer, which `@qvac/fabric` 0.13.0 is the first release to carry.
+
+The vocab load still runs, so a stub cannot drop every `tokenizer.*` key. It
+must declare `tokenizer.ggml.model = none`, which takes that load to its early
+return, and keep `{arch}.vocab_size` (derivable from `token_embd.weight`, which
+is `[n_embd, n_vocab]`). BERT-family models also need
+`tokenizer.ggml.token_type_count`.
+
 Numeric fields cross into C++ as `uint32_t`/`int32_t`, where fractions truncate
 and out-of-range values wrap — `marginMiB: -1` would otherwise become a margin
 nothing can satisfy. All must be safe integers within the range of their target
@@ -138,9 +205,39 @@ type, with `nUbatch <= nBatch` and `nCtxMin <= nCtx`.
 `nGpuLayers` is the one **signed** field. `llama.h` defines it as "number of
 layers to store in VRAM, a negative value means all layers", so negatives are
 valid input — `-1` is the llama default and what upstream's `llama-fit-params`
-prints back. Read the same care into the *result*: a negative `nGpuLayers`
-means the fitter never rewrote the field, which is what happens on a host with
-no accelerator. Check `nGpuDevices` before treating it as an offload plan.
+prints back. In a successful result, `nGpuLayers: 0` means the plan uses no GPU
+offload. `nGpuDevices` is raw diagnostic inventory and may include unsupported
+backend families, so it must not be used to interpret the plan.
+
+`mainGpu` is a **raw ggml registry index** — the order `ggml_backend_dev_get`
+enumerates, not a position in llama's GPU list — or `-1` for the CPU sentinel,
+which requires `nGpuLayers: 0` and `splitMode: 0`. llama reads it only under
+split mode NONE; LAYER, TENSOR and an **omitted** `splitMode` all leave it
+inert — llama's default split mode is LAYER and the fitter never rewrites it,
+so omitting the mode is a LAYER projection, not a possible NONE. It is
+validated only when `splitMode` is pinned to `0` (NONE): an index at or past
+`nDevices` **throws** (the bound is only known once the backends are
+registered, so the native side reports it), and an in-range index that is not a
+supported GPU — the CPU entry, or a backend outside the allowlist — is
+**projected CPU-only** rather than rejected. With `splitMode` omitted the whole
+eligible device list is kept whatever `mainGpu` says. A pinned `splitMode` of
+NONE or TENSOR throws on a host with no supported GPU; under NONE only, the CPU
+sentinel and a `mainGpu` target projected CPU-only are exempt. TENSOR has no CPU
+form, so it throws on such a host either way.
+
+`splitMode` accepts `0` (NONE), `1` (LAYER) and `3` (TENSOR). `2` (ROW)
+**throws**: fabric deprecates row split, no supported backend provides the
+split buffers it needs, and the llm/embed addons reject it rather than degrade
+it to `layer`. The raw load path (`split-mode` in a v2 process request) reports
+the same for `row` as `ERROR` / `unsupported-config`; pass `layer` instead. That
+path also rejects `split-mode: tensor` as `unsupported-config` — it accepts only
+`none` and `layer` — while the `FitConfig` path accepts `splitMode: 3`.
+
+In the plan, `mainGpu` is `0` for a GPU plan (the ordinal of the one-device
+list under NONE; inert under LAYER and TENSOR) and `-1` for **any CPU-only
+plan** — one whose device list is empty or that offloads no layer. It never
+echoes the raw input index. A CPU-only plan also reports `nGpuLayers: 0` and
+`splitMode` NONE unless the caller pinned those fields.
 
 These checks are enforced **in the native binding as well as the JS wrapper**,
 because `./binding.js` is a public export and can be called without passing
@@ -154,11 +251,10 @@ every layer to the host, so with default arguments it answers almost anything
 with `SUCCESS` — an unsatisfiable multi-TiB margin still returns `SUCCESS` with
 `nGpuLayers: 0`.
 
-(On a **host-only** machine that fallback does not exist: the host is the only
-device, the margin applies to it, and there is nowhere to move anything, so the
-same call returns `FAILURE`. Do not read a host-only `FAILURE` as "this hardware
-is too small" without checking `nGpuDevices` — it may just be an unmeetable
-margin.)
+(When no supported GPU is available that fallback does not exist: the host is
+the only execution device, the margin applies to it, and there is nowhere to
+move anything, so the same call returns `FAILURE`. Do not read that as "this
+hardware is too small"; it may just be an unmeetable margin on the host.)
 
 **`fits` alone is therefore close to useless as an admission signal.** It means
 "this could run somehow", which wherever a CPU fallback exists is nearly always
@@ -398,7 +494,5 @@ returns a real projection rather than `ERROR`.
 - Narrow llama.cpp LLM path only. Multimodal `mmproj` GPU memory is **not**
   counted by the fitter yet (upstream issue) — projections under-count for
   VLM/OCR models, so treat those as "unknown".
-- The per-device MiB breakdown is only emitted to the log by llama.cpp
-  (`llama_memory_breakdown_print`); it is not exposed as data here. This addon
-  returns the actionable plan (layers / context / split), not the raw byte
-  breakdown.
+- The per-device byte breakdown (`projection`) comes from one extra no-alloc
+  probe after the fit, so a result costs roughly two probes instead of one.

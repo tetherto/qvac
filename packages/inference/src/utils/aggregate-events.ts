@@ -4,7 +4,8 @@ import type {
   CompletionFinal,
   CompletionStats,
   StopReason,
-  ToolCall
+  ToolCall,
+  ToolCallError
 } from '@/schemas/index'
 import { normalizeAssistantCacheContent } from '@/utils/cache-normalize'
 import { attachHandlersToToolCalls, type ToolHandlerMap } from '@/utils/tool-helpers'
@@ -14,6 +15,8 @@ export type AggregatedEvents = {
   thinkingText: string
   stats: CompletionStats | undefined
   toolCalls: ToolCall[]
+  /** Tool-call regions that failed to parse or validate; see `CompletionFinal.toolErrors`. */
+  toolErrors: ToolCallError[]
   rawFullText: string | undefined
   error: CompletionError | undefined
   stopReason: StopReason | undefined
@@ -36,6 +39,7 @@ export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
   let stopReason: StopReason | undefined
   let cancelled = false
   const toolCalls: ToolCall[] = []
+  const toolErrors: ToolCallError[] = []
 
   for (const event of events) {
     if (event.type === 'contentDelta') {
@@ -46,6 +50,8 @@ export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
       stats = event.stats
     } else if (event.type === 'toolCall') {
       toolCalls.push(event.call)
+    } else if (event.type === 'toolError') {
+      toolErrors.push(event.error)
     } else if (event.type === 'completionDone') {
       if ('raw' in event && event.raw) {
         rawFullText = event.raw.fullText
@@ -71,6 +77,7 @@ export function aggregateEvents(events: CompletionEvent[]): AggregatedEvents {
     thinkingText,
     stats,
     toolCalls,
+    toolErrors,
     rawFullText,
     error,
     stopReason,
@@ -86,8 +93,17 @@ export function buildFinalFromEvents(
   error: CompletionError | undefined
   cancelled: boolean
 } {
-  const { contentText, thinkingText, stats, toolCalls, rawFullText, error, stopReason, cancelled } =
-    aggregateEvents(events)
+  const {
+    contentText,
+    thinkingText,
+    stats,
+    toolCalls,
+    toolErrors,
+    rawFullText,
+    error,
+    stopReason,
+    cancelled
+  } = aggregateEvents(events)
 
   const attachedToolCalls = attachHandlersToToolCalls(toolCalls, handlers)
   const fullText = rawFullText ?? contentText
@@ -98,6 +114,7 @@ export function buildFinalFromEvents(
     contentText,
     ...(thinkingText && { thinkingText }),
     toolCalls: attachedToolCalls,
+    ...(toolErrors.length > 0 && { toolErrors }),
     ...(stats && { stats }),
     raw: { fullText },
     ...(cacheableAssistantContent !== undefined && {

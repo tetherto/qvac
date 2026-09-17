@@ -111,7 +111,7 @@ declare class ASRGgml {
      */
     private _resolveDeclaredEngine;
     private _validateWhisperVadModel;
-    private _assertNoOpenSession;
+    private _waitForClosingSessionOrThrow;
 }
 type EngineTypeShape = EngineType;
 type ASRGgmlOptionsShape = ASRGgmlOptions;

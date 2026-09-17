@@ -43,8 +43,8 @@ MiniMax-Music3 is available only in the Linux, macOS, and Windows prebuilds.
 ### Platform packages
 
 `@qvac/audiogen-ggml` is a meta package that ships the JavaScript wrapper
-only. The native prebuild for each host lives in a version-locked platform
-package selected at install time through `os`/`cpu` filtered
+only. The native prebuild for each desktop host lives in a version-locked
+platform package selected at install time through `os`/`cpu` filtered
 `optionalDependencies`:
 
 | Host | Package |
@@ -54,20 +54,38 @@ package selected at install time through `os`/`cpu` filtered
 | darwin-arm64 | `@qvac/audiogen-ggml-darwin-arm64` |
 | darwin-x64 | `@qvac/audiogen-ggml-darwin-x64` |
 | win32-x64 | `@qvac/audiogen-ggml-win32-x64` |
-| android-arm64 | `@qvac/audiogen-ggml-android-arm64` |
-| ios (device + simulators) | `@qvac/audiogen-ggml-ios` |
 
-Do not depend on platform packages directly. Supported installers are npm 7+,
-pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip the
-platform package and fail at require time with an error naming the missing
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time with an error naming the missing
 package; a locally built `prebuilds/` directory in the package root always
 takes precedence. Use `require('@qvac/audiogen-ggml').resolveBackendsDir()`
 to locate the directory holding the host's prebuilt binaries and dynamically
 loaded ggml backends.
 
-The published Linux and Windows prebuilds ship Vulkan. CUDA is opt-in at build
-time on linux-x64, linux-arm64, and win32-x64 via
-`bare-make generate -D ENABLE_CUDA=ON` (needs `nvcc` on the build host). When
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/audiogen-ggml` version:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/audiogen-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/audiogen-ggml-ios` |
+
+```json
+{
+  "dependencies": {
+    "@qvac/audiogen-ggml": "x.y.z",
+    "@qvac/audiogen-ggml-android-arm64": "x.y.z"
+  }
+}
+```
+
+The published linux-x64 prebuild bundles the CUDA backend next to Vulkan; the
+linux-arm64 and Windows prebuilds ship Vulkan, and there CUDA is opt-in at
+build time via `npm run build:cuda` (or `bare-make generate -D ENABLE_CUDA=ON`;
+needs `nvcc` on the build host). When
 CUDA is compiled in, ggml runs in hybrid dynamically-loaded backend mode: the
 CPU-variant, Vulkan, and CUDA backends ship as runtime-loaded modules (`.so` on
 Linux, `.dll` on Windows) beside the addon, and only the CUDA module depends on
