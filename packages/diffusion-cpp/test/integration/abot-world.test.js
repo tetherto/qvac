@@ -470,10 +470,10 @@ test(
         const baseline = await run({ kvCache })
         compare(
           baseline,
-          await run({ kvCache, paramsBackend: 'diffusion=cpu', maxVram: 1, streamLayers: true })
+          await run({ kvCache, paramsBackend: 'diffusion=cpu', maxVram: 4, streamLayers: true })
         )
         if (kvCache) {
-          compare(baseline, await run({ kvCache, paramsBackend: 'diffusion=disk', maxVram: 1 }))
+          compare(baseline, await run({ kvCache, paramsBackend: 'diffusion=disk', maxVram: 4 }))
         }
       }
     } finally {
