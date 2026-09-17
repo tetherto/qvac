@@ -30,7 +30,7 @@ const MOBILE_HOSTS_BY_PLATFORM: Record<MobilePlatform, string[]> = {
   ios: ['ios-arm64', 'ios-arm64-simulator', 'ios-x64-simulator']
 }
 
-/** Resolver copied beside each patched linker; the patch imports it relatively. */
+/** Compiled resolver copied beside each patched linker as this filename. */
 const PLATFORM_ADDON_RESOLVER = 'qvac-platform-addons.mjs'
 
 /** Every mobile host, in platform order. The bundle covers all of them. */
@@ -219,14 +219,20 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string): BareKitL
   }
 
   const patchesDir = path.join(qvacSdkPath, 'src', 'expo', 'plugins', 'patches')
+  const resolver = compiledPlatformAddonResolver(qvacSdkPath)
   if (!fs.existsSync(patchesDir)) {
     console.log(`⚠️ QVAC: patches directory not found (${patchesDir}), skipping linker patch`)
     return { android: null, ios: null }
   }
 
   return {
-    android: copyLinkerPatch(patchesDir, path.join(bareKitPath, 'android'), 'android-link.mjs'),
-    ios: copyLinkerPatch(patchesDir, path.join(bareKitPath, 'ios'), 'ios-link.mjs')
+    android: copyLinkerPatch(
+      patchesDir,
+      resolver,
+      path.join(bareKitPath, 'android'),
+      'android-link.mjs'
+    ),
+    ios: copyLinkerPatch(patchesDir, resolver, path.join(bareKitPath, 'ios'), 'ios-link.mjs')
   }
 }
 
@@ -235,9 +241,13 @@ function patchBareKitLinkers(projectRoot: string, qvacSdkPath: string): BareKitL
  * installed linker path. The resolver has to sit beside the linker: the patch is
  * installed into react-native-bare-kit and imports it relatively.
  */
-function copyLinkerPatch(patchesDir: string, targetDir: string, patchName: string): string | null {
+function copyLinkerPatch(
+  patchesDir: string,
+  resolver: string,
+  targetDir: string,
+  patchName: string
+): string | null {
   const patch = path.join(patchesDir, patchName)
-  const resolver = path.join(patchesDir, PLATFORM_ADDON_RESOLVER)
   if (!fs.existsSync(patch) || !fs.existsSync(resolver)) {
     // Installing the patch without the resolver it imports would break linking
     // outright, so leave the stock linker in place instead.
@@ -250,6 +260,18 @@ function copyLinkerPatch(patchesDir: string, targetDir: string, patchName: strin
   fs.copyFileSync(resolver, path.join(targetDir, PLATFORM_ADDON_RESOLVER))
   console.log(`✅ QVAC: Patched ${path.basename(targetDir)}/link.mjs for manifest-aware linking`)
   return target
+}
+
+function compiledPlatformAddonResolver(qvacSdkPath: string): string {
+  return path.join(
+    qvacSdkPath,
+    'dist',
+    'src',
+    'expo',
+    'plugins',
+    'patches',
+    'qvac-platform-addons.js'
+  )
 }
 
 export {
