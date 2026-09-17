@@ -271,10 +271,15 @@ function(qvac_addon_finalize addon_target)
           "satisfies this package's range.")
       elseif(QVAC_FABRIC_OWNS_CXX_RUNTIME)
         # CMake sets CMAKE_READELF for ELF toolchains; fall back to PATH rather
-        # than skip the check on a host where it did not.
+        # than skip the check on a host where it did not. find_program() skips
+        # its search when the result variable already holds a value, and an
+        # empty one from CMAKE_READELF counts, so the fallback needs a name of
+        # its own or it can only ever report failure.
         set(_qaf_readelf "${CMAKE_READELF}")
         if(NOT _qaf_readelf)
-          find_program(_qaf_readelf NAMES llvm-readelf readelf)
+          find_program(QVAC_ADDON_READELF NAMES llvm-readelf readelf
+            DOC "readelf used to verify addon modules import fabric's C++ runtime")
+          set(_qaf_readelf "${QVAC_ADDON_READELF}")
         endif()
         if(NOT _qaf_readelf)
           message(FATAL_ERROR
