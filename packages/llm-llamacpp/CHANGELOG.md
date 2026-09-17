@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.53.1] - 2026-09-16
+
+### Fixed
+
+- On-disk single-file and sharded models now use the same
+  `common_init_from_params` loading path as `llama-server`. Sharded paths are
+  normalized to the first shard so fabric can discover the complete split set,
+  and `tensor_buft_overrides` is padded before initialization so automatic
+  GPU/CPU placement receives its required writable output buffer. Streamed
+  model loading remains unchanged. Tensor-split architecture support is now
+  validated by fabric instead of a duplicated addon denylist (QVAC-25039).
+
 ## [0.53.0] - 2026-09-15
 
 ### Added
