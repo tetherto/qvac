@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 import path = require("bare-path");
+import fs = require("bare-fs");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import type { FinetuneOptions, GenerationParams } from "./index";
 
@@ -184,6 +185,20 @@ export function mapAddonEvent(
   return { type: type as string, data: rawData, error: rawError };
 }
 
+function resolveBackendsDir(): string | undefined {
+  try {
+    const resolved = require.addon.resolve(".");
+    if (typeof resolved === "string" && resolved.length > 0) {
+      return path.dirname(path.dirname(resolved));
+    }
+  } catch {
+    // No addon resolvable for this host; fall through to the __dirname guess.
+  }
+
+  const fromDirname = path.join(__dirname, "prebuilds");
+  return fs.existsSync(fromDirname) ? fromDirname : undefined;
+}
+
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -203,7 +218,10 @@ export class LlamaInterface {
     }
 
     if (!configurationParams.config.backendsDir) {
-      configurationParams.config.backendsDir = path.join(__dirname, "prebuilds");
+      const backendsDir = resolveBackendsDir();
+      if (backendsDir !== undefined) {
+        configurationParams.config.backendsDir = backendsDir;
+      }
     }
 
     this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);

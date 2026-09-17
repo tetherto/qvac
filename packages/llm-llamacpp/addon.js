@@ -4,6 +4,7 @@ exports.LlamaInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const path = require("bare-path");
+const fs = require("bare-fs");
 // Index-matched to the C++ GenerationStopReason enum (SequenceDriver.hpp).
 const STOP_REASONS = [
     "none",
@@ -69,6 +70,19 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
     }
     return { type: type, data: rawData, error: rawError };
 }
+function resolveBackendsDir() {
+    try {
+        const resolved = require.addon.resolve(".");
+        if (typeof resolved === "string" && resolved.length > 0) {
+            return path.dirname(path.dirname(resolved));
+        }
+    }
+    catch {
+        // No addon resolvable for this host; fall through to the __dirname guess.
+    }
+    const fromDirname = path.join(__dirname, "prebuilds");
+    return fs.existsSync(fromDirname) ? fromDirname : undefined;
+}
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -81,7 +95,10 @@ class LlamaInterface {
             configurationParams.config = {};
         }
         if (!configurationParams.config.backendsDir) {
-            configurationParams.config.backendsDir = path.join(__dirname, "prebuilds");
+            const backendsDir = resolveBackendsDir();
+            if (backendsDir !== undefined) {
+                configurationParams.config.backendsDir = backendsDir;
+            }
         }
         this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
     }
