@@ -341,4 +341,29 @@ TEST_F(NmtGpuSelectionTest, MainGpuDoesNotInheritLegacySelection) {
           backend, true, "vulkan", 1, "test", false, int64_t{99}, true),
       deviceGet(1));
 }
+
+TEST_F(NmtGpuSelectionTest, CpuFallbackWarnsWithEveryRefusedGpuIdentity) {
+  inventory = {
+      {"rocm0", "ROCm", GGML_BACKEND_DEVICE_TYPE_GPU},
+      {"CPU", "CPU", GGML_BACKEND_DEVICE_TYPE_CPU},
+      {"sycl0", "SYCL", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  testing::internal::CaptureStderr();
+  const auto selected = nmtSelectGpuDevice(
+      backend, true, {}, 0, "refused-test", false, {}, false);
+  const std::string warning = testing::internal::GetCapturedStderr();
+  EXPECT_EQ(selected, nullptr);
+  EXPECT_NE(warning.find("no eligible device is available"), std::string::npos);
+  EXPECT_NE(warning.find("rocm0 (ROCm)"), std::string::npos);
+  EXPECT_NE(warning.find("sycl0 (SYCL)"), std::string::npos);
+}
+
+TEST_F(NmtGpuSelectionTest, MainGpuIneligibleTargetNamesRefusedDevice) {
+  inventory = {{"rocm0", "ROCm", GGML_BACKEND_DEVICE_TYPE_GPU}};
+  testing::internal::CaptureStderr();
+  const auto selected = nmtSelectGpuDevice(
+      backend, true, {}, 0, "main-gpu-test", false, int64_t{0}, false);
+  const std::string warning = testing::internal::GetCapturedStderr();
+  EXPECT_EQ(selected, nullptr);
+  EXPECT_NE(warning.find("rocm0 (ROCm)"), std::string::npos);
+}
 } // namespace

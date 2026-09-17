@@ -193,6 +193,43 @@ bool matchesExplicitSelector(
           nameEqualsCi(backend.registryName(registry), selectorLower));
 }
 
+// "name (registry)" identity used in CPU-fallback logs so operators can trace
+// which GPU-type devices the family allowlist refused. Empty inputs collapse to
+// `unnamed` / `unknown-registry` so the string is never blank.
+std::string
+deviceIdentity(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
+  const char* namePtr = backend.deviceName(device);
+  const ggml_backend_reg_t registry = backend.deviceRegistry(device);
+  const char* regPtr =
+      registry != nullptr ? backend.registryName(registry) : nullptr;
+  const std::string name = namePtr != nullptr ? namePtr : "unnamed";
+  const std::string reg = regPtr != nullptr ? regPtr : "unknown-registry";
+  return name + " (" + reg + ")";
+}
+
+// GPU/IGPU-type registry slots whose family is refused by the allowlist
+// (HIP/ROCm, SYCL, MUSA, RPC, unknown). Presented in the CPU-fallback log so
+// callers see whether their unusable request would have succeeded on a
+// different backend family.
+std::vector<std::string>
+refusedGpuIdentities(const NmtBackendInterface& backend) {
+  std::vector<std::string> refused;
+  const size_t devCount = backend.deviceCount();
+  for (size_t i = 0; i < devCount; ++i) {
+    ggml_backend_dev_t devCur = backend.deviceGet(i);
+    if (devCur == nullptr) {
+      continue;
+    }
+    const enum ggml_backend_dev_type type = backend.deviceType(devCur);
+    if ((type == GGML_BACKEND_DEVICE_TYPE_GPU ||
+         type == GGML_BACKEND_DEVICE_TYPE_IGPU) &&
+        deviceFamily(backend, devCur) == NmtGpuFamily::None) {
+      refused.push_back(deviceIdentity(backend, devCur));
+    }
+  }
+  return refused;
+}
+
 // Eligible devices in selection order: dedicated GPUs first, then integrated
 // ones, registry order preserved within each class.
 std::vector<ggml_backend_dev_t>
@@ -291,9 +328,12 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
           return target;
         }
       }
-      QLOG(
-          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-          "main-gpu registry device is ineligible; falling back to CPU");
+      const std::string identity =
+          target != nullptr ? deviceIdentity(backend, target) : "null-device";
+      std::ostringstream oss;
+      oss << "main-gpu registry device " << identity
+          << " is ineligible; falling back to CPU";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
       return nullptr;
     }
     QLOG(
@@ -396,6 +436,17 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
           }
         }
       }
+    }
+    const auto refused = refusedGpuIdentities(backend);
+    if (!refused.empty()) {
+      std::ostringstream oss;
+      oss << "[" << logPrefix
+          << "] GPU execution requested but no eligible device is available; "
+             "falling back to CPU. Refused GPU-type devices:";
+      for (const auto& identity : refused) {
+        oss << " [" << identity << "]";
+      }
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
     return nullptr;
   }
