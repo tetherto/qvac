@@ -27,6 +27,7 @@ import {
   UnsupportedImageContentError
 } from '@/serve/extensions/openai/schemas/common'
 import { sdkToolCallsToOpenaiDeltas } from '@/serve/extensions/openai/adapters/tool-calls'
+import { openaiState } from '@/serve/extensions/openai/state'
 import {
   buildUsage,
   chatCompletionChunk,
@@ -211,7 +212,8 @@ async function runBlocking(
 ): Promise<void> {
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
-    const result = completion({
+    const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
+    const result = completionFn({
       modelId: p.sdkModelId,
       history,
       stream: false,
@@ -262,7 +264,8 @@ async function runStreaming(
 ): Promise<void> {
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
-    const result = completion({
+    const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
+    const result = completionFn({
       modelId: p.sdkModelId,
       history,
       stream: true,

@@ -221,8 +221,10 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         previousResponseId: params.previousResponseId
       }
 
+      const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
+
       if (streaming) {
-        const result = completion({
+        const result = completionFn({
           modelId: params.sdkModelId,
           history: params.history,
           stream: true,
@@ -236,7 +238,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
         await writeStreamingResponse(reply.raw, writerParams, result)
       } else {
-        const result = completion({
+        const result = completionFn({
           modelId: params.sdkModelId,
           history: params.history,
           stream: false,
