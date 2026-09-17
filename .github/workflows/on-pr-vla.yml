@@ -16,6 +16,13 @@ on:
     paths:
       - "packages/vla-ggml/**"
       - ".github/workflows/*-vla.yml"
+      # What decides the model set and how it is laid out. project.json is
+      # already covered by packages/vla-ggml/** above; these are not, and a PR
+      # touching only one of them would otherwise change what the lane stages
+      # without running a single vla test.
+      - ".github/actions/download-vla-groot-parity/**"
+      - ".github/actions/stage-integration-models/**"
+      - ".github/actions/project-model-s3/**"
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:
@@ -278,6 +285,7 @@ jobs:
           workflow-file: on-pr-vla.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-vla-ggml
 
   prebuild:
     permissions:

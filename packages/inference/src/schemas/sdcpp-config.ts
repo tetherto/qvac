@@ -49,6 +49,28 @@ const cacheModeSchema = z.enum([
   'cache-dit'
 ])
 
+function removedBackendOption(key: string, guidance: string) {
+  return (
+    z
+      .custom<never>(() => false, {
+        // Keep unions from replacing the migration error with a fallback error.
+        abort: false,
+        error: (issue) =>
+          `${key} is no longer supported. ` +
+          (issue.input === false ||
+          issue.input === 0 ||
+          issue.input === 'false' ||
+          issue.input === '0'
+            ? 'Remove it; no replacement is needed when it is false.'
+            : guidance)
+      })
+      .optional()
+      .describe(`Removed. ${guidance}`)
+      // JSON Schema cannot infer the custom check's rejection of every value.
+      .meta({ not: {}, deprecated: true })
+  )
+}
+
 export const sdcppConfigSchema = z.object({
   mode: z
     .enum(['diffusion', 'upscale', 'video', 'world'])
@@ -65,7 +87,9 @@ export const sdcppConfigSchema = z.object({
         'The video layout is selected from the auxiliary sources: supplying ' +
         '`embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder ' +
         'via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for ' +
-        'synchronized audio); otherwise the Wan layout is used (UMT5 text encoder ' +
+        'synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + ' +
+        '`audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise ' +
+        'the Wan layout is used (UMT5 text encoder ' +
         'via `t5XxlModelSrc` + VAE). ' +
         'On React Native, loading the video model on-device will likely fail ' +
         'because the video diffusion models currently ' +
@@ -129,8 +153,6 @@ export const sdcppConfigSchema = z.object({
     .enum(['cpu', 'cuda', 'std_default'])
     .optional()
     .describe('Sampler RNG type override. Default: auto (follows `rng`).'),
-  clip_on_cpu: z.boolean().optional().describe('Force CLIP text encoder to run on CPU'),
-  vae_on_cpu: z.boolean().optional().describe('Force VAE decoder to run on CPU'),
   vae_auto_cpu_fallback: z
     .boolean()
     .optional()
@@ -145,7 +167,65 @@ export const sdcppConfigSchema = z.object({
   offload_to_cpu: z
     .boolean()
     .optional()
-    .describe('Keep model weights in CPU memory and offload them during GPU compute'),
+    .describe(
+      'Keep model weights in CPU memory and offload them during GPU compute. ' +
+        "Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module."
+    ),
+  control_net_cpu: removedBackendOption(
+    'control_net_cpu',
+    "Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU."
+  ),
+  clip_on_cpu: removedBackendOption(
+    'clip_on_cpu',
+    "Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, " +
+      "or modelConfig.backend: 'te=cpu' to run its graph on CPU."
+  ),
+  vae_on_cpu: removedBackendOption(
+    'vae_on_cpu',
+    "Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, " +
+      "or modelConfig.backend: 'vae=cpu' to run its graph on CPU."
+  ),
+  backend: z
+    .string()
+    .max(4096)
+    .optional()
+    .describe(
+      'Runtime backend for diffusion and video graphs, globally or per module, ' +
+        "for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'."
+    ),
+  params_backend: z
+    .string()
+    .max(4096)
+    .optional()
+    .describe(
+      'Parameter residency for diffusion and video, independent of graph execution. ' +
+        "'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights " +
+        'from the local model file on demand and releases them after use. Disk is ' +
+        'never selected automatically. With offload_to_cpu enabled, explicit ' +
+        'assignments override CPU residency only for the specified modules.'
+    ),
+  max_vram: z
+    // No .max() on the string arm: a constraint here makes datamodel-codegen
+    // wrap it in a `MaxVram(RootModel[str])`, so Python callers read back a
+    // wrapper instead of a str. backend/params_backend keep their cap because
+    // they are not union members. The addon parses the spec either way.
+    .union([z.number().finite(), z.string()])
+    .optional()
+    .describe(
+      'VRAM budget in GiB for diffusion and video graph-cut execution. Positive ' +
+        'values set a budget; negative values use free VRAM minus the absolute ' +
+        'value as headroom; 0 disables graph cutting. Accepts per-device assignments ' +
+        "such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
+    ),
+  stream_layers: z
+    .boolean()
+    .optional()
+    .describe(
+      'Prefetch and evict diffusion layers from CPU RAM in diffusion and video ' +
+        'mode. Only takes effect with graph cutting enabled by max_vram and CPU ' +
+        'diffusion parameter residency. Does not stream from disk; use ' +
+        "params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
+    ),
   flash_attn: z.boolean().optional().describe('Enable flash attention to reduce memory usage'),
   diffusion_fa: z
     .boolean()
@@ -181,13 +261,13 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'LLM text encoder model — required for FLUX.2 [klein] (Qwen3), ' +
-        'Ideogram 4 (Qwen3-VL), and LTX-2 video (Gemma).'
+        'Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).'
     ),
   vaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'VAE decoder model — required for FLUX.2 [klein], Ideogram 4, and ' +
-        'LTX-2 video (video VAE); optional for SDXL.'
+      'VAE decoder model — required for FLUX.2 [klein], Ideogram 4, ' +
+        'LTX-2 video, and MiniMax-H3 video; optional for SDXL.'
     ),
   highNoiseDiffusionModelSrc: modelSrcInputSchema
     .optional()
@@ -215,9 +295,9 @@ export const sdcppConfigSchema = z.object({
   audioVaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'Audio VAE decoder model — LTX-2 video only. Enables the synchronized ' +
-        '48 kHz audio track muxed into the output AVI; omit for silent video. ' +
-        'Ignored by the Wan layout.'
+      'Audio VAE decoder model — required for MiniMax-H3, optional for LTX-2. ' +
+        'Enables synchronized audio muxed into the output AVI. ' +
+        'Omit for silent LTX-2 video; unsupported by Wan.'
     ),
   embeddingsConnectorsModelSrc: modelSrcInputSchema
     .optional()
@@ -382,7 +462,10 @@ export const sdcppConfigSchema = z.object({
     )
 })
 
-export type SdcppConfig = z.input<typeof sdcppConfigSchema>
+export type SdcppConfig = Omit<
+  z.input<typeof sdcppConfigSchema>,
+  'control_net_cpu' | 'clip_on_cpu' | 'vae_on_cpu'
+>
 
 export const diffusionStatsSchema = z.object({
   modelLoadMs: z
@@ -469,7 +552,7 @@ export const videoStatsSchema = diffusionStatsSchema
       .boolean()
       .optional()
       .describe(
-        'True when the output AVI includes a muxed audio track (LTX-2 loaded ' +
+        'True when the output AVI includes a muxed audio track (MiniMax-H3 or LTX-2 loaded ' +
           'with audioVaeModelSrc), false otherwise.'
       ),
     audioSampleRate: z
@@ -715,8 +798,8 @@ const videoGenerationBaseSchema = z.object({
     .multipleOf(16)
     .optional()
     .describe(
-      'Video width in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 ' +
-        'TI2V-5B additionally require a multiple of 32. LTX-2 is validated ' +
+      'Video width in pixels (must be a multiple of 16). LTX-2, MiniMax-H3 and Wan 2.2 ' +
+        'TI2V-5B additionally require a multiple of 32. LTX-2 and MiniMax-H3 are validated ' +
         'against the loaded model before generation; the TI2V requirement is ' +
         'enforced natively, derived from the loaded GGUF rather than its filename.'
     ),
@@ -727,22 +810,19 @@ const videoGenerationBaseSchema = z.object({
     .multipleOf(16)
     .optional()
     .describe(
-      'Video height in pixels (must be a multiple of 16). LTX-2 and Wan 2.2 ' +
-        'TI2V-5B additionally require a multiple of 32. LTX-2 is validated ' +
+      'Video height in pixels (must be a multiple of 16). LTX-2, MiniMax-H3 and Wan 2.2 ' +
+        'TI2V-5B additionally require a multiple of 32. LTX-2 and MiniMax-H3 are validated ' +
         'against the loaded model before generation; the TI2V requirement is ' +
         'enforced natively, derived from the loaded GGUF rather than its filename.'
     ),
   video_frames: z
     .number()
     .int()
-    .refine((value) => value >= 5 && (value - 1) % 4 === 0, {
-      message: 'video_frames must be an integer >= 5 of the form (4*k + 1)'
-    })
+    .positive()
     .optional()
     .describe(
-      'Frame count for the generated video; must satisfy (4*k + 1), where k>=1. ' +
-        'LTX-2 additionally requires the stricter (8*k + 1) with a max of 257, ' +
-        'validated against the loaded model before generation.'
+      'Frame count validated against the loaded model: Wan uses 4*k+1 (k>=1), ' +
+        'LTX-2 uses 8*k+1 (9–257 frames), and MiniMax-H3 uses 17*k+5 (k>=0).'
     ),
   fps: z
     .number()
@@ -949,7 +1029,7 @@ function refineLtxVideoRequest(
   }
   if (
     data.video_frames !== undefined &&
-    (data.video_frames > 257 || (data.video_frames - 1) % 8 !== 0)
+    (data.video_frames < 9 || data.video_frames > 257 || (data.video_frames - 1) % 8 !== 0)
   ) {
     ctx.addIssue({
       code: 'custom',
@@ -993,6 +1073,64 @@ function refineLtxVideoRequest(
 }
 
 export const ltxVideoRequestSchema = videoRequestSchema.superRefine(refineLtxVideoRequest)
+
+export const wanVideoRequestSchema = videoRequestSchema.superRefine((data, ctx) => {
+  if (
+    data.video_frames !== undefined &&
+    (data.video_frames < 5 || (data.video_frames - 1) % 4 !== 0)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['video_frames'],
+      message: 'Wan video_frames must be an integer >= 5 of the form (4*k + 1).'
+    })
+  }
+})
+
+export const h3VideoRequestSchema = videoRequestSchema.superRefine((data, ctx) => {
+  for (const field of ['width', 'height'] as const) {
+    if (data[field] !== undefined && data[field] % 32 !== 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `MiniMax-H3 ${field} must be a multiple of 32.`
+      })
+    }
+  }
+  if (
+    data.video_frames !== undefined &&
+    (data.video_frames < 5 || (data.video_frames - 5) % 17 !== 0)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['video_frames'],
+      message: 'MiniMax-H3 video_frames must satisfy 17*k+5, where k>=0.'
+    })
+  }
+  for (const [field, value] of [
+    ['mode', 'txt2vid'],
+    ['fps', 24],
+    ['cfg_scale', 1],
+    ['scheduler', 'discrete']
+  ] as const) {
+    if (data[field] !== undefined && data[field] !== value) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `MiniMax-H3 requires ${field} to be ${value}.`
+      })
+    }
+  }
+  for (const field of ['init_image', 'control_frames', 'vace_strength', 'strength'] as const) {
+    if (data[field] !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [field],
+        message: `MiniMax-H3 does not support ${field}.`
+      })
+    }
+  }
+})
 
 const nonLtxVideoMask = {
   lora: true,

@@ -111,7 +111,8 @@ export async function acceptResourceCollectorPackaging(
 ): Promise<ResourceCollectorAcceptanceReport> {
   const addons = await collectAddonsFromBundle({
     bundlePath: options.bundlePath,
-    projectRoot: options.projectRoot
+    projectRoot: options.projectRoot,
+    hosts: options.hosts
   })
   const collectors = new Map(
     addons

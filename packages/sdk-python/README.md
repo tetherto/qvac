@@ -122,7 +122,7 @@ live in `tetherto.qvac_sdk.models`.
 - **Result types**: `CompletionRun` (`.events`, `.final`), `CompletionFinal`,
   `ToolCall`, `TranslateRun`.
 - **Generated method stubs** for every other contract method (`embed`,
-  `transcribe`, `text_to_speech`, `ocr_stream`, `audio_gen_stream`,
+  `transcribe`, `text_to_speech`, `ocr_stream`, `audio_gen_stream`, `audio_edit_stream`,
   `diffusion_stream`, `classify`, `get_model_info`, `download_asset`, …), each
   taking a typed request model.
 - **Request/response models + enums** (`LoadModelRequest`, `ModelType`, …),
@@ -141,7 +141,9 @@ models in `tetherto.qvac_sdk.schemas`, if you prefer the explicit modules.
 Audio generation currently uses the raw `audio_gen_stream` stub rather than an
 ergonomic Python `audio_gen()` wrapper. Build an `AudioGenStreamRequest`, iterate
 the progress and base64 PCM frames, and assemble the output audio. See
-[`examples/audiogen.py`](./examples/audiogen.py).
+[`examples/audiogen.py`](./examples/audiogen.py). Source-driven editing
+(`audio_edit_stream` with an `AudioEditStreamRequest` carrying the ordered
+`flow-edit` / `repaint` operations) streams the same frame shape.
 
 ### Intentional divergences from `@qvac/sdk`
 
