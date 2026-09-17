@@ -265,7 +265,8 @@ void Audio8Model::loadLocked() {
   backendName_ = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_ = backendIdFromName(backendName_);
-  codecOnCoreml_ = engine_->codec_on_coreml();
+  codecSidecarLoaded_ = engine_->codec_on_coreml();
+  codecOnCoreml_ = false;
   const bool wantsGpu = cfg_.nGpuLayers.has_value()
                             ? (*cfg_.nGpuLayers != 0)
                             : cfg_.useGpu.value_or(false);
@@ -347,18 +348,7 @@ Audio8Model::Output Audio8Model::synthesize(const AnyInput& input) {
         std::string("audio8.synthesize: ") + e.what());
   }
   const auto t1 = std::chrono::steady_clock::now();
-
-  sampleRate_ = result.sample_rate;
-  generatedFrames_ = result.frames;
-  totalSamples_ = static_cast<int64_t>(result.pcm.size());
-  codecOnCoreml_ = result.codec_synthesis_backend.rfind("coreml", 0) == 0;
-  audioDurationMs_ = static_cast<double>(result.duration_s) * 1000.0;
-  totalTime_ = std::chrono::duration<double>(t1 - t0).count();
-  realTimeFactor_ =
-      audioDurationMs_ > 0.0 ? (totalTime_ * 1000.0) / audioDurationMs_ : 0.0;
-  tokensPerSecond_ = totalTime_ > 0.0
-                         ? static_cast<double>(generatedFrames_) / totalTime_
-                         : 0.0;
+  recordSynthesisResult(result, std::chrono::duration<double>(t1 - t0).count());
 
   return pcmFloatToInt16(result.pcm);
 }
@@ -387,6 +377,25 @@ std::any Audio8Model::process(const std::any& input) {
   return std::any(synthesize(*anyInput));
 }
 
+bool Audio8Model::codecBackendIsCoreml(const std::string& backend) {
+  return backend.rfind(kCoremlBackendPrefix, 0) == 0;
+}
+
+void Audio8Model::recordSynthesisResult(
+    const tts_cpp::audio8::SynthesisResult& result, double totalSeconds) {
+  sampleRate_ = result.sample_rate;
+  generatedFrames_ = result.frames;
+  totalSamples_ = static_cast<int64_t>(result.pcm.size());
+  codecOnCoreml_ = codecBackendIsCoreml(result.codec_synthesis_backend);
+  audioDurationMs_ = static_cast<double>(result.duration_s) * 1000.0;
+  totalTime_ = totalSeconds;
+  realTimeFactor_ =
+      audioDurationMs_ > 0.0 ? (totalTime_ * 1000.0) / audioDurationMs_ : 0.0;
+  tokensPerSecond_ = totalTime_ > 0.0
+                         ? static_cast<double>(generatedFrames_) / totalTime_
+                         : 0.0;
+}
+
 qvac_lib_inference_addon_cpp::RuntimeStats Audio8Model::runtimeStats() const {
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
   stats.emplace_back("totalTime", totalTime_);
@@ -398,6 +407,8 @@ qvac_lib_inference_addon_cpp::RuntimeStats Audio8Model::runtimeStats() const {
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back(
+      "codecSidecarLoaded", static_cast<int64_t>(codecSidecarLoaded_));
   stats.emplace_back("codecOnCoreml", static_cast<int64_t>(codecOnCoreml_));
   return stats;
 }

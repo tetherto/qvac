@@ -26,7 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   placed next to the Audio8 decoder GGUF (any quant tier) moves the codec's
   synthesis stack -- the largest stage of a CPU synthesis -- onto Apple Core
   ML at `load()`, with a ggml fallback when the sidecar is absent or cannot
-  serve a call. `RuntimeStats` gains `codecOnCoreml` (0/1, per synthesis).
+  serve a call. `RuntimeStats` gains `codecSidecarLoaded` (0/1, whether the
+  sidecar is attached) and `codecOnCoreml` (0/1, whether this synthesis ran
+  the codec on it).
   Export the sidecar with `qvac-fabric-speech.cpp`'s
   `export-audio8-codec-coreml.py`; the language model keeps running on the
   selected ggml backend. `speech-cpp` floor moves from `2026-09-16` to

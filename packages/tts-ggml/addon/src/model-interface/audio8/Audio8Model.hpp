@@ -54,6 +54,12 @@ public:
   std::any process(const std::any& input) override;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
 
+  static constexpr const char* kCoremlBackendPrefix = "coreml";
+  static bool codecBackendIsCoreml(const std::string& backend);
+
+  void recordSynthesisResult(
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds);
+
   void cancel() const override;
 
   void load();
@@ -130,9 +136,7 @@ private:
   int backendId_ = 0;
   std::string backendName_ = "CPU";
   bool gpuUnsupported_ = false;
-  // Sidecar load status until the first synthesis, then where the last
-  // synthesis actually ran its codec (a loaded sidecar that cannot serve a
-  // call falls back to ggml); the LM stays on backendName_ either way.
+  bool codecSidecarLoaded_ = false;
   bool codecOnCoreml_ = false;
 };
 
