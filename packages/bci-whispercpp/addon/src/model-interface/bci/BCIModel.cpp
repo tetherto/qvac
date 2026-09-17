@@ -216,8 +216,19 @@ void BCIModel::load() {
           "selection");
     }
     contextParams.use_gpu = selected.whisperIndex >= 0;
-    if (contextParams.use_gpu)
+    if (contextParams.use_gpu) {
       contextParams.gpu_device = selected.whisperIndex;
+    } else if (!selected.refused.empty()) {
+      std::string message =
+          "GPU execution requested but no eligible device is available; "
+          "falling back to CPU. Refused GPU-type devices:";
+      for (const auto& identity : selected.refused) {
+        message += " [" + identity + "]";
+      }
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          message.c_str());
+    }
   }
 
   // Steer to the Adreno OpenCL device when present (see
