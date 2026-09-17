@@ -135,6 +135,9 @@ private:
 
   int gpuDevice_ = 0;
 
+  NmtMainGpu mainGpu_;
+  bool legacyGpuSelection_ = false;
+
   int opOffloadMinBatch_ = -1;
 
   // Cached at load() time; cleared on unload(). Avoids mutex + ggml traversal

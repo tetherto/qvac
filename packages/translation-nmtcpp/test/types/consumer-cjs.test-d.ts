@@ -143,3 +143,20 @@ addonLogging.releaseLogger();
 
 const loggingSurface: addonLogging.AddonLogging = addonLogging;
 void loggingSurface;
+
+const mainGpuConfig: TranslationNmtcpp.TranslationNmtcppConfig = {
+  modelType: "IndicTrans",
+  "main-gpu": "dedicated",
+};
+const aliasGpuConfig: TranslationNmtcpp.TranslationNmtcppConfig = {
+  modelType: "IndicTrans",
+  main_gpu: "2",
+};
+void mainGpuConfig;
+void aliasGpuConfig;
+const invalidMainGpu: TranslationNmtcpp.TranslationNmtcppConfig = {
+  modelType: "IndicTrans",
+  // @ts-expect-error Unsupported GPU class.
+  "main-gpu": "vulkan",
+};
+void invalidMainGpu;
