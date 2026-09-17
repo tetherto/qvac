@@ -7,6 +7,8 @@
 
 #include "handlers/WorldSessionHandlers.hpp"
 #include "model-interface/WorldSessionModel.hpp"
+#include "utils/EsrganUpscaler.hpp"
+#include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_sd;
 using qvac_errors::StatusError;
@@ -17,6 +19,28 @@ using qvac_errors::StatusError;
 // test_sd_model.cpp.
 
 class WorldSessionModelTest : public ::testing::Test {};
+
+TEST_F(WorldSessionModelTest, StreamingPlacementWarningIsVisibleByDefault) {
+  const auto previousVerbosity = logging::g_verbosityLevel;
+  logging::g_verbosityLevel =
+      qvac_lib_inference_addon_cpp::logger::Priority::ERROR;
+  testing::internal::CaptureStdout();
+  sdLogCallback(
+      SD_LOG_WARN,
+      "stable-diffusion.cpp:7874 - stream_layers has no effect unless "
+      "diffusion params backend is cpu; ignoring\n",
+      nullptr);
+  const auto output = testing::internal::GetCapturedStdout();
+  testing::internal::CaptureStdout();
+  sdLogCallback(SD_LOG_WARN, "ordinary warning", nullptr);
+  sdLogCallback(SD_LOG_INFO, "ordinary info", nullptr);
+  sdLogCallback(SD_LOG_WARN, nullptr, nullptr);
+  const auto filtered = testing::internal::GetCapturedStdout();
+  logging::g_verbosityLevel = previousVerbosity;
+  EXPECT_NE(output.find("[ERROR]"), std::string::npos);
+  EXPECT_NE(output.find("diffusion params backend is cpu"), std::string::npos);
+  EXPECT_TRUE(filtered.empty());
+}
 
 TEST_F(WorldSessionModelTest, ConstructWithEmptyConfigDoesNotThrow) {
   WorldSessionConfig config{};
