@@ -11,11 +11,12 @@
 
 namespace main_gpu {
 
-inline std::string lower(const char *value) {
+inline std::string lower(const char* value) {
   std::string result = value != nullptr ? value : "";
   std::transform(
-      result.begin(), result.end(), result.begin(),
-      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      result.begin(), result.end(), result.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
   return result;
 }
 
@@ -25,11 +26,11 @@ struct GgmlRegistry {
     return ggml_backend_dev_get(index);
   }
   auto type(ggml_backend_dev_t dev) const { return ggml_backend_dev_type(dev); }
-  const char *backend(ggml_backend_dev_t dev) const {
+  const char* backend(ggml_backend_dev_t dev) const {
     const auto reg = ggml_backend_dev_backend_reg(dev);
     return reg != nullptr ? ggml_backend_reg_name(reg) : nullptr;
   }
-  const char *description(ggml_backend_dev_t dev) const {
+  const char* description(ggml_backend_dev_t dev) const {
     return ggml_backend_dev_description(dev);
   }
 };
@@ -37,7 +38,7 @@ struct GgmlRegistry {
 // The registry adapter lets tests exercise the same enumeration and ordinal
 // translation as the loader, including CPU/null slots and backend identities.
 template <typename Registry = GgmlRegistry>
-std::vector<Device> registryDevices(const Registry &registry = {}) {
+std::vector<Device> registryDevices(const Registry& registry = {}) {
   std::vector<Device> devices(registry.count());
   std::vector<bool> adrenoVulkan(devices.size(), false);
   int whisperIndex = 0;
@@ -50,7 +51,7 @@ std::vector<Device> registryDevices(const Registry &registry = {}) {
     if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
         type != GGML_BACKEND_DEVICE_TYPE_IGPU)
       continue;
-    auto &device = devices[i];
+    auto& device = devices[i];
     device.whisperIndex = whisperIndex++;
     device.integrated = type == GGML_BACKEND_DEVICE_TYPE_IGPU;
     const auto backend = lower(registry.backend(dev));

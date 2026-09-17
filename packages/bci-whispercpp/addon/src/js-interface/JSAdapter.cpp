@@ -101,14 +101,12 @@ BCIConfig JSAdapter::loadFromJSObject(Object jsObject, js_env_t* env) {
     loadContextParams(contextParamsObj.value(), env, config);
   }
 
-  auto miscConfigObj =
-      jsObject.getOptionalProperty<Object>(env, "miscConfig");
+  auto miscConfigObj = jsObject.getOptionalProperty<Object>(env, "miscConfig");
   if (miscConfigObj.has_value()) {
     loadMiscParams(miscConfigObj.value(), env, config);
   }
 
-  auto bciConfigObj =
-      jsObject.getOptionalProperty<Object>(env, "bciConfig");
+  auto bciConfigObj = jsObject.getOptionalProperty<Object>(env, "bciConfig");
   if (bciConfigObj.has_value()) {
     loadBCIParams(bciConfigObj.value(), env, config);
   }

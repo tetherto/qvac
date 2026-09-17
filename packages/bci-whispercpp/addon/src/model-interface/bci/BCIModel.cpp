@@ -81,8 +81,7 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
 #endif
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("loading ggml backends from: ") +
-            variantsDir.string());
+        std::string("loading ggml backends from: ") + variantsDir.string());
     ggml_backend_load_all_from_path(variantsDir.string().c_str());
   });
 }
@@ -123,14 +122,16 @@ void BCIModel::loadEmbedderIfNeeded() {
   }
 
   if (neuralProcessor_.loadEmbedderWeights(embedderPath)) {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-         "Loaded BCI embedder weights from: " + embedderPath);
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Loaded BCI embedder weights from: " + embedderPath);
   } else {
     throw qvac_errors::bci_error::makeStatus(
         qvac_errors::bci_error::Code::EmbedderWeightsNotFound,
         "BCI embedder weights not found at: " + embedderPath +
-        ". This file is required for neural signal preprocessing. "
-        "Generate it with: python3 scripts/convert-model.py --checkpoint <ckpt>");
+            ". This file is required for neural signal preprocessing. "
+            "Generate it with: python3 scripts/convert-model.py --checkpoint "
+            "<ckpt>");
   }
 }
 
@@ -194,7 +195,8 @@ int adrenoOpenclGpuDeviceIndex() {
 } // namespace
 
 void BCIModel::load() {
-  if (ctx_) return;
+  if (ctx_)
+    return;
 
 #if defined(__ANDROID__) || defined(__linux__)
   ensureBackendsLoaded(cfg_.backendsDir);
@@ -208,9 +210,10 @@ void BCIModel::load() {
     const auto selected = main_gpu::select(
         main_gpu::registryDevices(), main_gpu::parse(cfg_.whisperContextCfg));
     if (selected.outOfRange) {
-      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-           "main-gpu registry index is out of range; using normal GPU "
-           "selection");
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "main-gpu registry index is out of range; using normal GPU "
+          "selection");
     }
     contextParams.use_gpu = selected.whisperIndex >= 0;
     if (contextParams.use_gpu)
@@ -225,10 +228,9 @@ void BCIModel::load() {
         adrenoOpenclDeviceIndex != contextParams.gpu_device) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          std::string(
-              "Adreno OpenCL GPU device detected; preferring it over "
-              "the default GPU to avoid the Adreno Vulkan compute "
-              "crash (gpu_device ") +
+          std::string("Adreno OpenCL GPU device detected; preferring it over "
+                      "the default GPU to avoid the Adreno Vulkan compute "
+                      "crash (gpu_device ") +
               std::to_string(contextParams.gpu_device) + " -> " +
               std::to_string(adrenoOpenclDeviceIndex) + ")");
       contextParams.gpu_device = adrenoOpenclDeviceIndex;
@@ -243,10 +245,12 @@ void BCIModel::load() {
   }
   const auto modelPath = std::get<std::string>(modelPathIt->second);
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-       "Loading BCI model from: " + modelPath);
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "Loading BCI model from: " + modelPath);
 
-  auto* rawCtx = whisper_init_from_file_with_params(modelPath.c_str(), contextParams);
+  auto* rawCtx =
+      whisper_init_from_file_with_params(modelPath.c_str(), contextParams);
   if (rawCtx == nullptr) {
     throw qvac_errors::bci_error::makeStatus(
         qvac_errors::bci_error::Code::FailedToLoadModel,
@@ -468,10 +472,12 @@ static void onNewSegment(
     [[maybe_unused]] whisper_context* ctx, whisper_state* state, int nNew,
     void* userData) {
   auto* bci = static_cast<BCIModel*>(userData);
-  if (bci == nullptr || state == nullptr) return;
+  if (bci == nullptr || state == nullptr)
+    return;
 
   const int nSegments = whisper_full_n_segments_from_state(state);
-  if (nNew <= 0 || nSegments <= 0) return;
+  if (nNew <= 0 || nSegments <= 0)
+    return;
   const int startIndex = std::max(0, nSegments - nNew);
 
   for (int i = startIndex; i < nSegments; i++) {
@@ -495,16 +501,19 @@ static void onNewSegment(
 }
 
 void BCIModel::warmup() {
-  if (!ctx_) return;
+  if (!ctx_)
+    return;
 
   std::vector<float> silentAudio(K_WARMUP_SAMPLE_COUNT, 0.0F);
   whisper_full_params params = toWhisperFullParams(cfg_);
   params.new_segment_callback = nullptr;
   params.new_segment_callback_user_data = nullptr;
 
-  whisper_full(ctx_.get(), params,
-               silentAudio.data(),
-               static_cast<int>(silentAudio.size()));
+  whisper_full(
+      ctx_.get(),
+      params,
+      silentAudio.data(),
+      static_cast<int>(silentAudio.size()));
 }
 
 int BCIModel::injectNeuralMelAndRunWhisper(
@@ -636,11 +645,10 @@ void BCIModel::process(const Input& rawNeuralData) {
 
 std::any BCIModel::process(const std::any& input) {
   AnyInput modelInput;
-  if (auto* anyInput = std::any_cast<AnyInput>(
-          const_cast<std::any*>(&input))) {
+  if (auto* anyInput = std::any_cast<AnyInput>(const_cast<std::any*>(&input))) {
     modelInput = std::move(*anyInput);
-  } else if (auto* inputVector = std::any_cast<Input>(
-                 const_cast<std::any*>(&input))) {
+  } else if (
+      auto* inputVector = std::any_cast<Input>(const_cast<std::any*>(&input))) {
     modelInput.input = std::move(*inputVector);
   } else {
     throw qvac_errors::StatusError(
@@ -678,9 +686,7 @@ std::any BCIModel::process(const std::any& input) {
   return output_;
 }
 
-void BCIModel::saveLoadParams(const BCIConfig& config) {
-  setConfig(config);
-}
+void BCIModel::saveLoadParams(const BCIConfig& config) { setConfig(config); }
 
 void BCIModel::cancel() const {
   cancelRequested_.store(true, std::memory_order_relaxed);
@@ -707,7 +713,8 @@ void BCIModel::resetContext() { ctx_.reset(); }
 void BCIModel::setConfig(const BCIConfig& config) {
   bool contextChanged = configContextIsChanged(cfg_, config);
   cfg_ = config;
-  if (contextChanged) reload();
+  if (contextChanged)
+    reload();
 }
 
 } // namespace qvac_lib_inference_addon_bci

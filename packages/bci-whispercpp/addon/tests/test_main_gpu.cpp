@@ -61,33 +61,40 @@ TEST(MainGpuSelection, ParsesAliasesAndStrictNumericStrings) {
       Kind::Integrated);
   EXPECT_EQ(main_gpu::parse(Config{{"gpu_device", 1}}).kind, Kind::Automatic);
   for (const Value value :
-       {Value{true}, Value{1.2}, Value{std::monostate{}},
-        Value{std::numeric_limits<double>::infinity()}, Value{2147483648.0},
-        Value{std::string("2junk")}, Value{std::string("+-1")},
-        Value{std::string(" 2")}, Value{std::string("2147483648")}}) {
-    EXPECT_THROW(main_gpu::parse(Config({{"main-gpu", value}})),
-                 std::invalid_argument);
+       {Value{true},
+        Value{1.2},
+        Value{std::monostate{}},
+        Value{std::numeric_limits<double>::infinity()},
+        Value{2147483648.0},
+        Value{std::string("2junk")},
+        Value{std::string("+-1")},
+        Value{std::string(" 2")},
+        Value{std::string("2147483648")}}) {
+    EXPECT_THROW(
+        main_gpu::parse(Config({{"main-gpu", value}})), std::invalid_argument);
   }
-  EXPECT_THROW(main_gpu::parse(Config({{"main-gpu", 0}, {"main_gpu", 0}})),
-               std::invalid_argument);
-  EXPECT_THROW(main_gpu::parse(Config({{"main_gpu", 0}, {"gpu_device", 0}})),
-               std::invalid_argument);
+  EXPECT_THROW(
+      main_gpu::parse(Config({{"main-gpu", 0}, {"main_gpu", 0}})),
+      std::invalid_argument);
+  EXPECT_THROW(
+      main_gpu::parse(Config({{"main_gpu", 0}, {"gpu_device", 0}})),
+      std::invalid_argument);
 }
 } // namespace
 
 namespace {
 struct MockDevice {
   enum ggml_backend_dev_type type;
-  const char *backend;
-  const char *description;
+  const char* backend;
+  const char* description;
 };
 struct MockRegistry {
-  std::vector<const MockDevice *> devices;
+  std::vector<const MockDevice*> devices;
   size_t count() const { return devices.size(); }
-  const MockDevice *get(size_t i) const { return devices[i]; }
-  auto type(const MockDevice *dev) const { return dev->type; }
-  const char *backend(const MockDevice *dev) const { return dev->backend; }
-  const char *description(const MockDevice *dev) const {
+  const MockDevice* get(size_t i) const { return devices[i]; }
+  auto type(const MockDevice* dev) const { return dev->type; }
+  const char* backend(const MockDevice* dev) const { return dev->backend; }
+  const char* description(const MockDevice* dev) const {
     return dev->description;
   }
 };
@@ -109,12 +116,12 @@ TEST(MainGpuRegistry, EnumeratesRawSlotsAndWhisperOrdinalsWithoutRenumbering) {
 }
 
 TEST(MainGpuRegistry, RecognizesPinnedBackendRegistryNames) {
-  for (const char *backend : {"MTL", "Metal", "CUDA", "Vulkan", "OpenCL"}) {
+  for (const char* backend : {"MTL", "Metal", "CUDA", "Vulkan", "OpenCL"}) {
     const MockDevice gpu{GGML_BACKEND_DEVICE_TYPE_GPU, backend, "GPU"};
     const auto devices = main_gpu::registryDevices(MockRegistry{{&gpu}});
     EXPECT_EQ(select(devices, {}).whisperIndex, 0) << backend;
   }
-  for (const char *backend : {"RPC", "ROCm", "SYCL", "CUDAevil", "notmetal"}) {
+  for (const char* backend : {"RPC", "ROCm", "SYCL", "CUDAevil", "notmetal"}) {
     const MockDevice gpu{GGML_BACKEND_DEVICE_TYPE_GPU, backend, "GPU"};
     const auto devices = main_gpu::registryDevices(MockRegistry{{&gpu}});
     EXPECT_EQ(select(devices, {Kind::Index, 0}).whisperIndex, -1) << backend;
@@ -122,8 +129,8 @@ TEST(MainGpuRegistry, RecognizesPinnedBackendRegistryNames) {
 }
 
 TEST(MainGpuRegistry, AdrenoGuardRequiresOpenclBackendAndAdrenoDescription) {
-  const MockDevice vulkan{GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan",
-                          "Adreno 740"};
+  const MockDevice vulkan{
+      GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan", "Adreno 740"};
   const MockDevice opencl{GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL", "Adreno 740"};
   auto devices = main_gpu::registryDevices(MockRegistry{{&vulkan, &opencl}});
   EXPECT_EQ(select(devices, {}).whisperIndex, 1);
