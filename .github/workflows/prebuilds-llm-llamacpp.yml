@@ -49,5 +49,7 @@ jobs:
       ref: ${{ inputs.ref }}
       repository: ${{ inputs.repository }}
       include-vulkan-sdk: true
+      linux-extra-packages: libibverbs-dev
       extra-cmake-defines: ${{ inputs.vk-profiling && '-D VK_PROFILING=ON' || '' }}
+      post-artifact-build-command: bash ../../.github/scripts/validate-rpc-rdma-build.sh
     secrets: inherit
