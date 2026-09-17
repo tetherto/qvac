@@ -139,6 +139,20 @@ class OcrGgml {
                 adds: "langList (non-empty array)",
             });
         }
+        const selectors = ["main-gpu", "main_gpu", "gpuDevice"];
+        if (selectors.filter((key) => this.params[key] !== undefined).length > 1) {
+            throw new TypeError("Use only one of main-gpu, main_gpu, or gpuDevice");
+        }
+        const rawMainGpu = this.params["main-gpu"] !== undefined
+            ? this.params["main-gpu"] : this.params.main_gpu;
+        const mainGpu = typeof rawMainGpu === "string"
+            ? (/^[+-]?\d+$/.test(rawMainGpu) ? Number(rawMainGpu) : rawMainGpu.toLowerCase())
+            : rawMainGpu;
+        if (mainGpu !== undefined && mainGpu !== "dedicated" && mainGpu !== "integrated" &&
+            !(typeof mainGpu === "number" && Number.isInteger(mainGpu) &&
+                mainGpu >= -2147483648 && mainGpu <= 2147483647)) {
+            throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
+        }
         const configurationParams = {
             pathDetector: this.params.pathDetector,
             pathRecognizer: this.params.pathRecognizer,
@@ -157,6 +171,8 @@ class OcrGgml {
             "pipelineType",
             "backendDevice",
             "gpuDevice",
+            "main-gpu",
+            "main_gpu",
         ];
         for (const field of optionalFields) {
             if (this.params[field] !== undefined) {
