@@ -7,7 +7,9 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include "CacheLedger.hpp"
 #include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
@@ -44,14 +46,6 @@ struct GenerationParams {
   // applied to `params_.reasoning_budget` for the duration of the request and
   // restored on completion.
   std::optional<int> reasoning_budget;
-  // Per-request override for post-generation thinking-block KV cache
-  // compaction. Contexts default off except the Qwen3 family, which defaults
-  // on. `false` keeps the reasoning block in cache; `true` enables
-  // compaction. Supported on both pure-attention and recurrent / hybrid-SSM
-  // models. Every model rewinds to the reasoning boundary and replays;
-  // `TextLlmContext::needsRecurrentSnapshot_` documents what differs between
-  // them. Restored at end-of-request.
-  std::optional<bool> remove_thinking_from_context;
   // OpenAI-style tool choice for a request that carries tools: "auto"
   // (default), "none", "required", or the name of one declared function
   // (restricts the call to that function). Consumed at prompt render time,
@@ -59,12 +53,7 @@ struct GenerationParams {
   std::optional<std::string> tool_choice;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /
-  // common_params rebuild). Intentionally excludes
-  // `remove_thinking_from_context` — that toggle lives on `TextLlmContext`, not
-  // on `common_params`, and is applied directly via
-  // `setRemoveThinkingFromContext` on both the single- prompt and batch paths.
-  // Including it here would force a no-op `common_sampler_init` whenever it's
-  // the only override set. `tool_choice` is excluded for the same reason: it
+  // common_params rebuild). `tool_choice` is excluded because it
   // shapes the chat-template render, and the sampler rebuild it needs happens
   // in `tokenizeChat` when the rendered grammar is applied.
   [[nodiscard]] bool hasOverrides() const {
@@ -379,6 +368,27 @@ public:
   virtual void setCacheTokens(llama_pos cacheTokens) { setNPast(cacheTokens); }
 
   /**
+   * Versioned token/media ledger embedded in the same sequence-state file as
+   * KV/recurrent state. Concrete contexts override these methods; the default
+   * preserves source compatibility for lightweight test drivers.
+   */
+  [[nodiscard]] virtual std::vector<llama_token> cacheStateTokens() const {
+    const SessionMetadata metadata = SessionMetadata::capture(*this);
+    return {metadata.tokens.begin(), metadata.tokens.end()};
+  }
+  virtual void restoreCacheStateTokens(const std::vector<llama_token>& tokens) {
+    (void)tokens;
+  }
+  virtual void clearCacheReconciliationState() {}
+  [[nodiscard]] virtual bool rollbackFailedRequest() { return true; }
+  [[nodiscard]] virtual bool shouldPersistAfterFinalize() const { return true; }
+
+  /// Cached requests carry the complete authoritative prompt. The model and
+  /// scheduler set this before rendering so uncached callers retain their
+  /// existing behavior.
+  virtual void setCacheReconciliationEnabled(bool enabled) { (void)enabled; }
+
+  /**
    * Number of `<think>` reasoning blocks compacted out of the KV
    * cache during the most recent generation. 0 for contexts without
    * reasoning channel support.
@@ -414,23 +424,9 @@ public:
   }
 
   /**
-   * Consume the per-inference user-visible `llama_perf_context` snapshot
-   * if one was captured (by any context that may run a replay decode
-   * during thinking-block compaction). Returns
-   * `std::nullopt` when no snapshot was taken, in which case the caller
-   * should fall back to a live `llama_perf_context()` read.
-   *
-   * Snapshot rationale: the recurrent / hybrid thinking-block compactor
-   * replays the post-reasoning tail through `llama_decode`, which
-   * accumulates into `n_p_eval` / `t_p_eval_ms` (and therefore inflates
-   * `promptTokens`, `ppTPS`, and `TTFT`). Those tokens were already
-   * delivered to the caller, so the replay must not be counted as new
-   * user-visible work. Capturing perf just before the replay, and
-   * reporting that snapshot from `runtimeStats()`, preserves accurate
-   * stats while still letting the replay update the cache state.
-   *
-   * Idempotent: returning the snapshot also clears the internal slot so
-   * subsequent calls (until the next inference) see `nullopt`.
+   * Consume an optional per-inference performance snapshot. Lazy reasoning
+   * reconciliation no longer creates one, but the hook remains for compatible
+   * runtime-stat collection and other internal replay operations.
    */
   [[nodiscard]] virtual std::optional<llama_perf_context_data>
   takeUserVisiblePerfSnapshot() {
@@ -443,10 +439,8 @@ public:
    * llama's `n_eval` cannot answer this. It counts decodes whose batch held
    * exactly one token (`llama-context.cpp`: `n_queued_tokens == 1`), so it
    * measures batch shape, not meaning. Generation happens to decode one at a
-   * time, which is why the two used to agree, but reasoning compaction now
-   * replays the kept tokens as a batch and those land in `n_p_eval` instead.
-   * Counting where the tokens are produced keeps the stat honest regardless
-   * of how any later cache work is batched.
+   * time, which is why the two used to agree. Counting where the tokens are
+   * produced keeps the stat honest regardless of later cache maintenance.
    */
   [[nodiscard]] virtual int32_t lastGeneratedTokenCount() const {
     return lastGeneratedTokenCount_;

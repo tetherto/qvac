@@ -94,6 +94,11 @@ async function main () {
 
     // 6. Continuing conversation with cache1.bin
     const messages3 = [
+      ...messages2,
+      {
+        role: 'assistant',
+        content: fullResponse2
+      },
       {
         role: 'user',
         content: 'can you elaborate on the previous topic?'

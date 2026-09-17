@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <deque>
 #include <optional>
 #include <vector>
 
@@ -22,16 +23,6 @@ struct ContextUsage {
   llama_pos pos = 0;
   llama_pos cacheTokens = 0;
 };
-
-/// A multimodal session cache is only safe to restore when its header carries
-/// the full four-field metadata contract (`SessionMetadataField`). The GGSQ
-/// loader restores the sequence KV before this check, so any other count — a
-/// truncated/legacy header (`< 4`) or an unexpected layout (`> 4`) — must be
-/// rejected and the restored KV cleared, never accepted with a defaulted
-/// `cacheTokens`. See `MtmdLlmContext::loadCache`.
-[[nodiscard]] inline bool mtmdSessionMetadataIsComplete(size_t tokenCount) {
-  return tokenCount == SESSION_METADATA_FIELD_COUNT;
-}
 
 /// Multimodal LLM context. Implements both the legacy `LlmContext` API
 /// (driven by the single-prompt path in `LlamaModel`) and the per-sequence
@@ -169,7 +160,16 @@ public:
     renderOverrides_ = std::move(overrides);
   }
 
-  void setRemoveThinkingFromContext(bool value) override;
+  void setCacheReconciliationEnabled(bool enabled) override {
+    cacheReconciliationEnabled_ = enabled;
+  }
+  [[nodiscard]] std::vector<llama_token> cacheStateTokens() const override;
+  void restoreCacheStateTokens(const std::vector<llama_token>& tokens) override;
+  void clearCacheReconciliationState() override;
+  [[nodiscard]] bool rollbackFailedRequest() override;
+  [[nodiscard]] bool shouldPersistAfterFinalize() const override {
+    return !cacheRequestRolledBack_;
+  }
 
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
@@ -324,12 +324,10 @@ private:
   void initializeCommonState();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
-  // Reasoning-block KV-cache compaction helpers. Single-block policy:
-  // at most one `<think>...</think>` block is tracked per inference.
-  // `setOpenThinkSpan` is a no-op once a span has been captured.
+  // Reasoning-channel tracking is retained for output parsing, stop handling,
+  // and rollback. Generated reasoning stays resident until reconciliation.
   void setOpenThinkSpan(llama_pos start);
   void capturePendingThinkClose();
-  void compactThinkSpan();
   [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
   // See TextLlmContext::configureReasoningTags: `fallbackTags` is the
   // model-family reasoning channel, resolved by the caller so the
@@ -346,16 +344,23 @@ private:
   // on pure attention too; it is a no-op only when the feature is off.
   void recordPostReasoningTokenIfActive(llama_token tokenId);
 
-  // Anchor the compaction boundary at `anchorPos`, unwinding to the pre-prompt
-  // checkpoint and rethrowing when the capture fails.
-  void captureReasoningBoundaryAt(llama_pos anchorPos);
-
-  // Anchor the compaction boundary for this request: a full-state snapshot
-  // on memory that cannot erase a partial tail, a bare position on pure
-  // attention. No-op unless compaction is relevant for this request. A
-  // capture failure throws rather than silently preserving reasoning in
-  // cache.
-  void snapshotForRecurrentRollback();
+  struct CacheCheckpoint {
+    qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot state;
+    qvac_lib_inference_addon_llama::cache::Ledger ledger;
+    ContextUsage usage;
+  };
+  void beginCacheRequest();
+  PrefillPlan reconcilePrompt(
+      PrefillPlan fullPlan,
+      const qvac_lib_inference_addon_llama::cache::Ledger& fullLedger);
+  qvac_lib_inference_addon_llama::cache::Ledger
+  ledgerFromChunks(const mtmd::input_chunks& chunks) const;
+  void rebuildSamplerFromLedger(
+      const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
+  void capturePendingCheckpoint();
+  void commitCacheRequest();
+  bool restorePreRequestCacheState();
+  void appendResidentToken(llama_token token);
 
   // Cancel-during-generation cleanup. On recurrent / hybrid memory,
   // restores the reasoning-boundary snapshot to drop any partially decoded
@@ -456,10 +461,18 @@ private:
   // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
   bool isPrefillOnlyRequest_ = false;
 
-  // Per-request toggle for post-generation thinking-block KV compaction.
-  // Default-off, except Qwen3-family models opt in during initialization;
-  // `generationParams` can always override it.
-  bool removeThinkingFromContext_ = false;
+  bool cacheReconciliationEnabled_ = false;
+  bool cacheRequestActive_ = false;
+  bool cacheRequestRolledBack_ = false;
+  qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
+  qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
+  qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
+  ContextUsage preRequestCacheUsage_;
+  qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot
+      preRequestCacheSnapshot_;
+  std::optional<CacheCheckpoint> pendingCheckpoint_;
+  std::deque<CacheCheckpoint> cacheCheckpoints_;
+  size_t pendingReuseEntries_ = 0;
 
   // Shared rollback state for recurrent / hybrid SSM models. Owns the
   // prefill-entry snapshot (cancel during prefill), the reasoning-boundary
@@ -467,18 +480,12 @@ private:
   // post-reasoning token replay buffer. Inactive on pure-attention
   // models.
   qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
-  // Reasoning-block tracker + compactor: owns the `<think>...</think>`
-  // span, close-capture flag, and the pure-attention + recurrent
-  // compaction paths plus their stats counters.
+  // Reasoning-channel tracker. Post-generation compaction is disabled;
+  // complete-prompt reconciliation determines whether reasoning is retained.
   qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
 
-  // Snapshot of `llama_perf_context()` taken at the start of
-  // `compactThinkSpan` — i.e. right after user-visible generation
-  // completes and before any replay decode runs. Consumed by
-  // `runtimeStats()` via `takeUserVisiblePerfSnapshot()` so the replay's
-  // `llama_decode` calls (which accumulate into `n_p_eval` /
-  // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.
-  // Reset at the start of each inference and on `resetState`.
+  // Kept for the existing runtime-stats interface. Lazy reconciliation does
+  // not perform a post-generation replay, so this remains empty.
   std::optional<llama_perf_context_data> userVisiblePerf_;
 
   std::atomic<bool> stopGeneration_ = false;

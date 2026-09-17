@@ -155,9 +155,7 @@ TEST_F(MtmdLlmContextTest, Constructor) {
   EXPECT_TRUE(model->isLoaded());
 }
 
-TEST_F(
-    MtmdLlmContextTest,
-    SequenceDriverOverrideAppliesThinkingCompactionToMtmdContext) {
+TEST_F(MtmdLlmContextTest, ReasoningCompactionIsDisabledForLazyReconciliation) {
   if (!hasValidModel()) {
     GTEST_SKIP() << "Multimodal model or projection file not found";
   }
@@ -169,18 +167,6 @@ TEST_F(
       dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
   ASSERT_NE(driver, nullptr)
       << "multimodal model must expose an MtmdLlmContext driver";
-
-  // Continuous batching receives only a SequenceDriver pointer. This verifies
-  // the virtual call reaches the multimodal override rather than the base
-  // class's no-op implementation, and keeps the compactor in sync.
-  SequenceDriver& batchDriver = *driver;
-  batchDriver.setRemoveThinkingFromContext(true);
-  EXPECT_TRUE(MtmdLlmContextTestPeer::removeThinkingFromContext(*driver));
-  EXPECT_TRUE(MtmdLlmContextTestPeer::compactorRemovesThinking(*driver));
-
-  batchDriver.setRemoveThinkingFromContext(false);
-  EXPECT_FALSE(MtmdLlmContextTestPeer::removeThinkingFromContext(*driver));
-  EXPECT_FALSE(MtmdLlmContextTestPeer::compactorRemovesThinking(*driver));
 }
 
 TEST_F(MtmdLlmContextTest, ProcessWithStringInput) {
@@ -470,10 +456,8 @@ TEST_F(
   prompt.media.push_back(readBinaryFile(imagePath));
   // This test validates that cacheKey keeps generated multimodal memory
   // resident after generation. The fixture's small n_predict can stop Qwen3.5
-  // inside an unfinished reasoning block, which is covered by dedicated
-  // remove_thinking_from_context tests; opt out here so the cache-residency
-  // assertion remains focused on its original contract.
-  prompt.generationParams.remove_thinking_from_context = false;
+  // inside an unfinished reasoning block; transactional rollback is covered by
+  // the dedicated cutoff test below.
 
   std::string output = model->processPrompt(prompt);
   EXPECT_GE(output.length(), 0);
@@ -547,7 +531,6 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
   cutoff.input =
       R"([{"role":"user","content":"Before answering, reason in detail for at least 20 sentences, then answer: What is the capital of France?"}])";
   cutoff.cacheKey = cachePath.string();
-  cutoff.generationParams.remove_thinking_from_context = true;
 
   const std::string cutoffOutput = model->processPrompt(cutoff);
   const auto cutoffStats = model->runtimeStats();
@@ -593,22 +576,10 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
   fs::remove(cachePath);
 }
 
-// Multimodal hybrid (Qwen3.5) compaction. `MtmdLlmContext` shares the
-// `ReasoningBlockCompactor` with `TextLlmContext` but applies its own
-// post-compact bookkeeping (`current_.pos` / `cacheTokens`). This pins the
-// end-to-end multimodal compaction path:
-//   * a reasoning-capable hybrid multimodal model produces a `<think>` block,
-//   * recurrent boundary snapshot + restore + post-reasoning replay
-//     succeeds for the multimodal context,
-//   * `thinkingBlockDiscards` increments. Under the uniform hard-fail
-//     contract (PR #2813) any compaction failure would throw
-//     `qvac_errors::StatusError` from `processPrompt`, so the
-//     `ASSERT_NO_THROW` below is the failure-path guard.
-//
-// Companion JS coverage lives in `gemma4.test.js` (pure-attention
-// multimodal); this is the hybrid-multimodal C++ counterpart called out by
-// the reviewer.
-TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
+// A successful multimodal generation retains reasoning and all other sampled
+// tokens in the resident sequence. A later complete prompt decides whether
+// that reasoning remains reusable.
+TEST_F(MtmdLlmContextTest, Qwen35MultimodalRetainsReasoningLazily) {
   if (!hasValidQwen35Model()) {
     GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
   }
@@ -635,7 +606,7 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
       << "single-prompt context for Qwen3.5 VLM must be MTMD";
 
   const fs::path cachePath =
-      fs::temp_directory_path() / "qvac-qwen35-mtmd-thinking-compaction.bin";
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-lazy-reasoning.bin";
   fs::remove(cachePath);
 
   LlamaModel::Prompt prompt;
@@ -650,12 +621,10 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
   prompt.cacheKey = cachePath.string();
   prompt.saveCacheToDisk = true;
   prompt.media.push_back(readBinaryFile(imagePath));
-  prompt.generationParams.remove_thinking_from_context = true;
 
   std::string output;
   ASSERT_NO_THROW({ output = model->processPrompt(prompt); });
-  EXPECT_GT(output.length(), 0u)
-      << "multimodal compaction must not break generation";
+  EXPECT_GT(output.length(), 0u) << "multimodal generation must complete";
 
   const auto stats = model->runtimeStats();
   const double discards = getStatValue(stats, "thinkingBlockDiscards");
@@ -673,41 +642,28 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalHonoursRemoveThinkingFromContext) {
       ", sequenceCells=" + std::to_string(sequenceCells) +
       ", output (first 200 chars): " + output.substr(0, 200));
 
-  // Under the uniform hard-fail contract, any compaction failure
-  // (snapshot capture, restore underflow, or replay rejection) would
-  // have thrown `qvac_errors::StatusError` from `processPrompt` and
-  // failed the `ASSERT_NO_THROW` above. Reaching this point means the
-  // compaction path completed cleanly.
   ASSERT_NE(output.find("</think>"), std::string::npos)
       << "this test must reach a closed reasoning span; otherwise it does not "
-         "exercise MTMD compaction bookkeeping";
-  EXPECT_GE(discards, 1.0)
-      << "Qwen3.5 multimodal with remove_thinking_from_context=true "
-         "must compact at least one thinking block once </think> lands";
+         "exercise lazy reasoning retention";
+  EXPECT_EQ(discards, 0.0)
+      << "generation completion must not eagerly compact reasoning";
   EXPECT_GT(sequenceCells, 0)
-      << "cacheKey must keep compacted MTMD memory resident for bookkeeping "
-         "assertions";
+      << "cacheKey must keep MTMD memory resident for reconciliation";
   EXPECT_GT(ctx->getNPast(), 0)
-      << "context must not have reset before post-compaction bookkeeping "
-         "assertions";
+      << "context must remain resident after successful generation";
   EXPECT_GT(ctx->getCacheTokens(), 0)
-      << "cache token bookkeeping must remain resident after compaction";
+      << "cache token bookkeeping must remain resident after generation";
   EXPECT_EQ(ctx->getCacheTokens(), sequenceCells)
-      << "MTMD cacheTokens must be refreshed from llama memory after "
-         "compaction";
+      << "MTMD cacheTokens must match live llama memory";
   EXPECT_EQ(ctx->getNPast(), posMax + 1)
-      << "MTMD current_.pos must match the compacted sequence cursor";
+      << "MTMD current_.pos must match the resident sequence cursor";
 
   fs::remove(cachePath);
 }
 
-// Where the boundary lands on the MTMD path. The full-state anchor is the end
-// of prefill, so the forced opener stays in the restored prefix and the seeded
-// close marker balances it on replay. Anchoring earlier would mean stopping
-// the prefill decode mid-prompt, which changes the answer on Vulkan with
-// coopmat2. Text-only, the media round trip is covered by the cached follow-up
-// below.
-TEST_F(MtmdLlmContextTest, Qwen35MtmdAnchorsBoundaryAtEndOfPrefill) {
+// Eager reasoning-boundary snapshots are retired. Cache reconciliation uses
+// generic pre-request and post-prefill checkpoints instead.
+TEST_F(MtmdLlmContextTest, Qwen35MtmdDoesNotCaptureReasoningBoundary) {
   if (!hasValidQwen35Model()) {
     GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
   }
@@ -718,7 +674,6 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdAnchorsBoundaryAtEndOfPrefill) {
   ASSERT_NE(base, nullptr);
   auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
   ASSERT_NE(ctx, nullptr);
-  ctx->setRemoveThinkingFromContext(true);
 
   common_chat_msg msg;
   msg.role = "user";
@@ -727,27 +682,14 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdAnchorsBoundaryAtEndOfPrefill) {
     (void)ctx->evalMessage({msg}, /*isCacheLoaded=*/false, /*prefill=*/false);
   });
 
-  ASSERT_TRUE(MtmdLlmContextTestPeer::hasReasoningBoundary(*ctx))
-      << "prefill must anchor a boundary when compaction is on";
-  EXPECT_EQ(
-      MtmdLlmContextTestPeer::reasoningBoundaryNPast(*ctx), ctx->getNPast())
-      << "the full-state boundary is the end of prefill, so no prefill decode "
-         "is split";
+  EXPECT_FALSE(MtmdLlmContextTestPeer::hasReasoningBoundary(*ctx))
+      << "lazy reasoning must not capture an eager compaction boundary";
 }
 
-// The cached follow-up half of the test above, which is where a leftover
-// opener actually bites. Qwen3.5 is hybrid AND multimodal AND force-open, so
-// its prefill decodes `<think>\n` as the tail of the last text chunk, and the
-// full-state boundary sits after it. The restored prefix therefore opens a
-// reasoning block, and on its own the next turn would resume inside one that
-// nothing closes. The compactor seeds the close marker into the replay instead
-// of splitting the prefill, so the restored span is balanced and the compacted
-// cache is preamble plus answer either way.
-//
-// Two turns on one context, second one reusing the first's cache: the visible
-// reasoning of turn 2 must open before it closes, and the cursor bookkeeping
-// must still agree with live memory afterwards.
-TEST_F(MtmdLlmContextTest, Qwen35MultimodalCachedFollowUpDoesNotResumeInside) {
+// The second request supplies the complete rendered history. Because it omits
+// the first turn's generated reasoning, reconciliation trims that tail before
+// prefill and generation continue.
+TEST_F(MtmdLlmContextTest, Qwen35MultimodalFullHistoryReconcilesReasoning) {
   if (!hasValidQwen35Model()) {
     GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
   }
@@ -781,7 +723,6 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalCachedFollowUpDoesNotResumeInside) {
   first.cacheKey = cachePath.string();
   first.saveCacheToDisk = true;
   first.media.push_back(readBinaryFile(imagePath));
-  first.generationParams.remove_thinking_from_context = true;
 
   std::string firstOutput;
   ASSERT_NO_THROW({ firstOutput = model->processPrompt(first); });
@@ -789,7 +730,8 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalCachedFollowUpDoesNotResumeInside) {
       << "turn 1 must close a reasoning span or this test proves nothing";
   const double firstDiscards =
       getStatValue(model->runtimeStats(), "thinkingBlockDiscards");
-  ASSERT_GE(firstDiscards, 1.0) << "turn 1 must compact its reasoning block";
+  ASSERT_EQ(firstDiscards, 0.0)
+      << "turn 1 reasoning must stay resident until reconciliation";
 
   LlamaModel::Prompt second;
   second.input =
@@ -801,12 +743,11 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalCachedFollowUpDoesNotResumeInside) {
   second.cacheKey = cachePath.string();
   second.saveCacheToDisk = true;
   second.media.push_back(readBinaryFile(imagePath));
-  second.generationParams.remove_thinking_from_context = true;
 
   std::string secondOutput;
   ASSERT_NO_THROW({ secondOutput = model->processPrompt(second); });
   EXPECT_GT(secondOutput.length(), 0u)
-      << "a cached follow-up must still generate after compaction";
+      << "a cached full-history follow-up must generate after reconciliation";
 
   const size_t closeAt = secondOutput.find("</think>");
   if (closeAt != std::string::npos) {
@@ -828,7 +769,7 @@ TEST_F(MtmdLlmContextTest, Qwen35MultimodalCachedFollowUpDoesNotResumeInside) {
   EXPECT_EQ(ctx->getCacheTokens(), sequenceCells)
       << "cacheTokens must still match live memory after a cached follow-up";
   EXPECT_EQ(ctx->getNPast(), llama_memory_seq_pos_max(mem, seqId) + 1)
-      << "the cursor must still match the compacted sequence";
+      << "the cursor must match the reconciled sequence";
 
   fs::remove(cachePath);
 }
@@ -1289,15 +1230,6 @@ TEST(SessionMetadataDowngradeGuard, RetiredSlotsMirrorTheLiveCursors) {
   // This build ignores them: the live accessors still read slots 0 and 2.
   EXPECT_EQ(metadata.nPast(), 128);
   EXPECT_EQ(metadata.cacheTokens(), 160);
-}
-
-TEST(MtmdSessionMetadataGate, AcceptsOnlyTheFullFourFieldContract) {
-  EXPECT_FALSE(mtmdSessionMetadataIsComplete(0));
-  EXPECT_FALSE(mtmdSessionMetadataIsComplete(1));
-  EXPECT_FALSE(mtmdSessionMetadataIsComplete(2));
-  EXPECT_FALSE(mtmdSessionMetadataIsComplete(3));
-  EXPECT_TRUE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT));
-  EXPECT_FALSE(mtmdSessionMetadataIsComplete(SESSION_METADATA_FIELD_COUNT + 1));
 }
 
 TEST_F(MtmdLlmContextTest, RejectMediaMarkerWithoutBuffer) {

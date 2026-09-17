@@ -181,20 +181,14 @@ public:
     return GenerationStopReason::None;
   }
 
-  // Apply the per-request `remove_thinking_from_context` toggle to the
-  // driver. The single-prompt path goes through `applyGenerationParams`
-  // (which restores on scope exit); the batch path uses this setter
-  // directly because each slot has a fresh driver per request, so no
-  // restore is needed. Default no-op for drivers without compaction
-  // support.
-
-  virtual void setRemoveThinkingFromContext(bool value) { (void)value; }
   /// Per-request `json_schema` / `tool_choice` for the chat-template render;
   /// see `LlmContext::setRenderOverrides`. The scheduler sets it before
   /// `preparePrefill`; the driver is destroyed with its slot, so no clear.
   virtual void setRenderOverrides(RenderOverrides overrides) {
     (void)overrides;
   }
+
+  virtual void setCacheReconciliationEnabled(bool enabled) { (void)enabled; }
 
   /// Tokenize the prompt and stage it for prefill (without running
   /// generation). Returns the text tokens still pending decode by the
@@ -299,10 +293,12 @@ public:
   /// Writes a full sequence-state snapshot to disk, so it is expensive
   /// and gated: pure-attention drivers no-op, and single-prompt drivers
   /// keep their own capture site rather than paying this cost twice.
-  /// This is cancel-path bookkeeping, unrelated to the
-  /// `remove_thinking_from_context` hard-fail contract, so overrides
-  /// that fail the capture must log a warning and continue rather than
-  /// throwing (a silent no-op would leak the peak `nPast` back into
-  /// user-visible `CacheTokens` on a subsequent cancel).
+  /// This is generic cancel-path bookkeeping. Overrides that fail the capture
+  /// must log a warning and continue rather than throwing.
   virtual void snapshotPreRequestRollbackAnchor() {}
+
+  /// False after a request was transactionally rolled back. The previous
+  /// cache file already represents that state and must not be overwritten by
+  /// a failed/cancelled slot.
+  [[nodiscard]] virtual bool shouldPersistAfterFinalize() const { return true; }
 };

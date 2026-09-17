@@ -144,7 +144,6 @@ LlamaModel::Prompt makeMtmdRecoveryPrompt() {
   LlamaModel::Prompt recovery;
   recovery.input =
       R"([{"role":"user","content":"Answer with exactly one word: ok"}])";
-  recovery.generationParams.remove_thinking_from_context = false;
   recovery.generationParams.reasoning_budget = 0;
   recovery.generationParams.n_predict = 32;
   return recovery;
@@ -423,7 +422,6 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
   LlmModelContext shared = makeShared(*model);
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, /*seqId=*/0);
-  driver.setRemoveThinkingFromContext(true);
 
   // Pre-request cursor before any prompt is submitted. For a freshly
   // constructed driver this is 0; we capture it explicitly so the
@@ -478,7 +476,6 @@ TEST_F(
   LlmModelContext shared = makeShared(*model);
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, /*seqId=*/0);
-  driver.setRemoveThinkingFromContext(true);
 
   const llama_pos preRequestNPast = driver.getNPast();
 
@@ -605,23 +602,9 @@ TEST_F(
 // User-visible perf snapshot lifecycle on `TextLlmContext`
 // ============================================================================
 //
-// `compactThinkSpan` freezes the perf counters just before any recurrent
-// replay decode runs, so `runtimeStats()` can report the pre-replay
-// (user-visible) values rather than counters inflated by internal cache
-// maintenance. The capture is gated on
-// `needsRecurrentSnapshot_ && compactor_.hasOpenSpan()` because:
-//   * pure-attention compaction does not replay (no inflation to freeze
-//     against — the live read is already correct), and
-//   * capturing for pure-attention races against lazy GPU-side decode
-//     telemetry (the snapshot can lag the live counters by one token
-//     because the final `llama_synchronize()` happens later in
-//     `resetState`).
-// The base `LlmContext::takeUserVisiblePerfSnapshot` returns `nullopt`
-// by default; `TextLlmContext` overrides it to consume the captured
-// snapshot. Hybrid coverage (snapshot actually populated and consumed)
-// lives in the `reasoning.test.js` integration suite — driving a hybrid
-// inference with reasoning content from a unit test would require
-// reproducing a non-trivial chunk of the model harness.
+// Lazy reconciliation performs no post-generation restore/replay decode, so
+// no synthetic performance snapshot should be produced. The base interface
+// remains for ABI-compatible runtime-stat collection.
 
 // Newly constructed driver: no snapshot. Guards the initial state — a
 // stray non-empty snapshot here would leak into the first inference's
@@ -640,16 +623,8 @@ TEST_F(TextLlmContextCancelTest, FreshDriverReportsNoUserVisiblePerfSnapshot) {
       << "Newly constructed driver must report no user-visible perf snapshot";
 }
 
-// Every model replays now, pure attention included, so every compaction runs
-// `restore + llama_decode` over the kept tokens. Those are batch decodes and
-// they land in `n_p_eval` / `t_p_eval_ms`, which would show up to the caller
-// as prompt tokens it never sent. So `compactThinkSpan` must freeze the
-// user-visible prompt counters before replaying, on every memory kind. This
-// test pins that: a pure-attention inference that compacted must leave a
-// snapshot behind.
 TEST_F(
-    TextLlmContextCancelTest,
-    CompactThinkSpanCapturesPerfSnapshotForPureAttention) {
+    TextLlmContextCancelTest, LazyReasoningDoesNotCaptureReplayPerfSnapshot) {
   auto model = loadTextModel(qwen3PureAttentionModelPath());
   if (!model) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
@@ -667,10 +642,8 @@ TEST_F(
   EXPECT_TRUE(evalResult.rollbackOk);
   ASSERT_TRUE(driver.generateResponse([](const std::string&) {}).ok);
 
-  EXPECT_TRUE(driver.takeUserVisiblePerfSnapshot().has_value())
-      << "pure-attention compaction replays through llama_decode now, so the "
-         "prompt-side counters must be frozen before those batch decodes "
-         "inflate them";
+  EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
+      << "lazy reconciliation must not run a post-generation replay decode";
 }
 
 // ============================================================================
@@ -908,7 +881,6 @@ TEST(
     // `reasoningBoundary` capture lifecycle alongside the cancel path,
     // catching regressions where the two snapshots interfere with each
     // other.
-    longPrompt.generationParams.remove_thinking_from_context = true;
     longPrompt.outputCallback = [&](const std::string&) {
       const unsigned seen = callbackCount.fetch_add(1) + 1;
       if (seen >= 2 && !cancelIssued.exchange(true)) {
@@ -959,7 +931,6 @@ TEST(
     // Recovery: subsequent inference must succeed on the cancelled context.
     LlamaModel::Prompt shortPrompt;
     shortPrompt.input = R"([{"role":"user","content":"Hi"}])";
-    shortPrompt.generationParams.remove_thinking_from_context = false;
     EXPECT_NO_THROW({
       std::string output = model->processPrompt(shortPrompt);
       EXPECT_GT(output.length(), 0u);
@@ -1025,7 +996,6 @@ TEST(
       R"([{"role":"user","content":"Start answering, then cancel."}])";
   cancellable.cacheKey = cachePath.string();
   cancellable.saveCacheToDisk = true;
-  cancellable.generationParams.remove_thinking_from_context = true;
   cancellable.outputCallback = [&](const std::string&) {
     if (injectedFailure.exchange(true)) {
       return;
@@ -1049,7 +1019,6 @@ TEST(
 
   LlamaModel::Prompt uncached;
   uncached.input = R"([{"role":"user","content":"Run after failed cancel."}])";
-  uncached.generationParams.remove_thinking_from_context = false;
   ASSERT_NO_THROW(model->processPrompt(uncached));
 
   const std::vector<uint8_t> afterUncachedTransition =
@@ -1149,7 +1118,6 @@ TEST(
   LlamaModel::Prompt uncached;
   uncached.input =
       R"([{"role":"user","content":"Run after failed prefill cancel."}])";
-  uncached.generationParams.remove_thinking_from_context = false;
   ASSERT_NO_THROW(model->processPrompt(uncached));
 
   const std::vector<uint8_t> afterUncachedTransition =
@@ -1248,7 +1216,6 @@ TEST(
   // Recovery: a fresh prefill must succeed on the rolled-back cache.
   LlamaModel::Prompt recovery;
   recovery.input = R"([{"role":"user","content":"Hi"}])";
-  recovery.generationParams.remove_thinking_from_context = false;
   EXPECT_NO_THROW({
     std::string output = model->processPrompt(recovery);
     EXPECT_GT(output.length(), 0u);
@@ -1296,14 +1263,12 @@ TEST(
   failing.input = R"([{"role":"user","content":"This save should fail."}])";
   failing.cacheKey = badCachePath.string();
   failing.saveCacheToDisk = true;
-  failing.generationParams.remove_thinking_from_context = false;
   EXPECT_THROW(model->processPrompt(failing), qvac_errors::StatusError);
   EXPECT_FALSE(fs::exists(badCachePath));
 
   LlamaModel::Prompt uncached;
   uncached.input =
       R"([{"role":"user","content":"Run after explicit save failure."}])";
-  uncached.generationParams.remove_thinking_from_context = false;
   ASSERT_NO_THROW(model->processPrompt(uncached))
       << "explicit save failure must invalidate the active cache session; "
          "otherwise a later prompt without cacheKey retries the stale save";

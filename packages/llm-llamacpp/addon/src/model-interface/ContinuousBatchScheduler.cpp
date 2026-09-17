@@ -414,17 +414,8 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   std::unique_ptr<SequenceDriver> driver = driverFactory_(
       tmpParams, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
 
-  // `applyGenerationParamsToContext` above resolves the sampling/n_predict/
-  // reasoning_budget overrides into `tmpParams` (which the driver copies),
-  // but `remove_thinking_from_context` is a TextLlmContext-level toggle that
-  // sits outside `common_params`. Apply it directly to the slot driver here.
-  // No restore needed: the driver is destroyed when the slot is freed.
-  if (request.overrides.remove_thinking_from_context) {
-    driver->setRemoveThinkingFromContext(
-        *request.overrides.remove_thinking_from_context);
-  }
-
   const bool isCacheLoaded = driver->loadCache(request.cacheKey);
+  driver->setCacheReconciliationEnabled(!request.cacheKey.empty());
 
   ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
 
@@ -616,17 +607,10 @@ void ContinuousBatchScheduler::finalizeFinishedSequences() {
 
 MultiRequestBatcher::PrefillCompleteFn
 ContinuousBatchScheduler::prefillCompleteFn() {
-  // A throw from `onPrefillComplete` (e.g. from the recurrent
-  // boundary-snapshot capture site inside `snapshotForRecurrentRollback`
-  // under the uniform hard-fail contract for
-  // `remove_thinking_from_context`) propagates through
-  // `batcher_.advance` / `batcher_.completeMediaBarrier` and is caught
-  // by the `try` block in `workerLoop`, which then routes the affected
-  // group through `failGroupLocked` -> `cancelSlotLocked(Skip)`. That
-  // keeps saveCache off (last known-good on-disk cache preserved) and
-  // clears the seq KV before the slot is freed. No scheduler code
-  // change is needed here; this comment pins the invariant so a future
-  // refactor doesn't accidentally introduce a swallow-and-continue
+  // A throw from `onPrefillComplete` propagates through the batcher and is
+  // caught by `workerLoop`, which routes the affected group through
+  // `failGroupLocked` -> `cancelSlotLocked(Skip)`. The last known-good cache
+  // remains untouched.
   // path.
   return
       [this](uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount) {
@@ -841,7 +825,7 @@ void ContinuousBatchScheduler::drainFinishedLocked(
     // failGroupLocked (settling the whole group -- one job -- with this
     // error, `SaveCachePolicy::Skip` on its remaining slots) and frees the
     // slot either way; the loop below still clears this seqId's KV.
-    if (rollbackOk) {
+    if (rollbackOk && slot.driver->shouldPersistAfterFinalize()) {
       try {
         saveCacheForSlot(req.seqId, *slots_[req.seqId]);
       } catch (...) {

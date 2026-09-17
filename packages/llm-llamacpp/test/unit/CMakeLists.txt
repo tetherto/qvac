@@ -13,6 +13,7 @@ add_executable(
   test_llama_model.cpp
   test_llama_finetuning_helpers.cpp
   test_cache_management.cpp
+  test_cache_ledger.cpp
   test_text_llm_context.cpp
   test_addon_cpp.cpp
   test_cancel_stale_flag.cpp
@@ -58,7 +59,6 @@ add_executable(
   test_tool_grammar.cpp
   test_cancel_rollback.cpp
   test_job_cancel_registry.cpp
-  test_reasoning_block_compactor.cpp
   test_parse_unsigned.cpp
   test_parallel_ceiling.cpp
   test_finetune_cancel_action.cpp
@@ -178,4 +178,3 @@ add_test(NAME LlamaModelTests COMMAND addon-test)
 set_tests_properties(LlamaModelTests PROPERTIES
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   TIMEOUT 900)  # 15 minutes
-

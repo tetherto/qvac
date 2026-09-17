@@ -1025,6 +1025,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.
   std::string out;
   ResolvedPrompt resolved = resolveChatAndTools(prompt);
+  state_->llmContext_->setCacheReconciliationEnabled(
+      state_->cacheManager_.has_value() &&
+      state_->cacheManager_->wasCacheUsedInLastPrompt());
 
   // Media staged above is consumed by `tokenizeChat`, which drains `bitmaps_`
   // on both its success and its `mtmd_tokenize`-failure paths — but only if it
@@ -1146,7 +1149,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       }
 
       if (generationResult.rollbackOk) {
-        shouldSaveCache = true;
+        shouldSaveCache = state_->llmContext_->shouldPersistAfterFinalize();
         shouldResetAfterInference = resolved.shouldResetAfterInference;
       } else {
         // The driver could not prove the live recurrent state was rolled back
@@ -1158,14 +1161,13 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       }
     }
   } catch (...) {
-    // Once `handleCache()` has activated or loaded a cache session, any thrown
-    // eval / generation failure must leave no active session behind. In
-    // particular, strict `remove_thinking_from_context` compaction failures
-    // throw after local rollback/wipe; keeping the old cacheKey active would
-    // let a later prompt reuse or auto-save that recovery state over the last
-    // known-good on-disk cache. Do not catch policy-validation failures before
-    // admission; explicit save failures below have their own cleanup gate.
-    resetAndInvalidateActiveCache();
+    // Once `handleCache()` has activated or loaded a cache session, restore the
+    // request transaction before deciding whether the session must be dropped.
+    const bool cachedRequest = state_->cacheManager_.has_value() &&
+                               state_->cacheManager_->hasActiveCache();
+    if (!cachedRequest || !state_->llmContext_->rollbackFailedRequest()) {
+      resetAndInvalidateActiveCache();
+    }
     throw;
   }
 

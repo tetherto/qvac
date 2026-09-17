@@ -80,7 +80,6 @@ const generationParams: LlmLlamacpp.GenerationParams = {
   temp: 0.7,
   json_schema: { type: "object" },
   tool_choice: "required",
-  remove_thinking_from_context: true,
 };
 void generationParams;
 

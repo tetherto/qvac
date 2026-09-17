@@ -166,7 +166,6 @@ const GENERATION_PARAM_KEYS: ReadonlySet<string> = new Set([
   "json_schema",
   "tool_choice",
   "reasoning_budget",
-  "remove_thinking_from_context",
 ]);
 
 // Normalizes the per-request `generationParams.json_schema` field. The
@@ -211,15 +210,6 @@ function normalizeGenerationParams(
     if (value !== undefined) params[key] = value;
   }
   const sanitized = params as GenerationParams;
-
-  if (
-    sanitized.remove_thinking_from_context !== undefined &&
-    typeof sanitized.remove_thinking_from_context !== "boolean"
-  ) {
-    throw new TypeError(
-      "generationParams.remove_thinking_from_context must be a boolean when provided",
-    );
-  }
 
   if (
     sanitized.tool_choice !== undefined &&
@@ -1252,84 +1242,6 @@ namespace LlmLlamacpp {
      * value is restored afterwards.
      */
     reasoning_budget?: number;
-    /**
-     * When the model emits a reasoning block during generation (e.g.
-     * `<think>...</think>` for the Qwen3 family, `<|channel>thought ...
-     * <channel|>` for Gemma 4), drop those tokens from the KV cache at
-     * end-of-generation so subsequent turns do not accumulate reasoning
-     * history.
-     *
-     * Defaults to `false` for all models except the Qwen3 reasoning family
-     * (Qwen3, Qwen3.5, and Qwen3.6, including MoE variants), which defaults
-     * to `true`. Set this per-request `generationParams` value to override the
-     * model default. Set to `false` to preserve reasoning tokens in the KV / SSM
-     * cache across turns (e.g. chain-of-thought agents that want the next turn
-     * to attend to prior reasoning, interpretability tooling, or cache-reuse
-     * patterns that depend on the reasoning-inclusive state). Supported on both
-     * text and multimodal contexts. No-op for models without a recognised
-     * reasoning channel.
-     *
-     * Every model kind is handled the same way: the sequence is rewound to a
-     * boundary anchored BEFORE the reasoning span, and the tokens that sit
-     * outside the span, the pre-reasoning preamble and the answer tail, are
-     * replayed through the decoder. Only the anchor's form differs. Recurrent
-     * / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba, Granite-Hybrid, ...)
-     * anchor a full-state snapshot, because the recurrent half cannot be
-     * rewound by dropping cells; pure-attention models anchor a bare position
-     * and rewind with a tail trim.
-     *
-     * No structural reasoning marker is seeded or replayed, so the compacted
-     * cache is preamble plus answer with no `<think>` / `</think>` scaffold
-     * left behind, and close-marker length decides nothing: a marker that
-     * tokenises to several pieces is supported like any other. Chat templates
-     * that force-open the reasoning channel during prefill and templates that
-     * let the model generate the opener are both supported; on the
-     * generated-opener path the sampled pieces that open the block are clipped
-     * out of the replay rather than rebuilt.
-     *
-     * Prefill-only (cache-warm) requests anchor nothing: they never enter
-     * generation and cannot emit reasoning tokens.
-     *
-     * Uniform hard-fail contract: any inability to remove the reasoning
-     * span from cache, whether the boundary anchor, the rewind, or the
-     * replay step, is surfaced to the caller as a `StatusError`. There is no
-     * soft-failure counter: if the feature is
-     * enabled and cache cleanup cannot complete, the final request result is
-     * failed rather than reported as a successful answer with the reasoning span
-     * still resident in cache.
-     *
-     * Streaming caveat: token callbacks (`outputCallback` / batch `onToken`) are
-     * invoked during generation, while reasoning-block compaction runs at
-     * end-of-generation. If compaction fails, streaming callers may already have
-     * received partial or complete text. Treat streamed text as tentative until
-     * the request completes successfully; non-streaming callers receive no
-     * successful returned answer on this failure path.
-     *
-     * Before throwing, the affected sequence is cleaned up so that the
-     * next request on the same context starts from a coherent state:
-     *   * Boundary-anchor failure: nothing has been rewound yet, so the
-     *     driver rolls back to its pre-prompt checkpoint (or clears the
-     *     sequence entirely on restore underflow) and resets positional
-     *     accounting, then rethrows.
-     *   * Rewind or replay failure: compaction rewinds before it replays,
-     *     so live KV has already been written to by this point and a tail
-     *     trim can no longer reach a coherent state. The compactor
-     *     best-effort wipes the sequence and the driver zeroes its
-     *     positional accounting to match, so subsequent turns cannot decode
-     *     into contaminated positions.
-     *
-     * On the continuous-batch path, the scheduler's error-recovery leg
-     * deliberately does NOT persist the failed slot's cache: when the
-     * request was configured with `cacheKey` + `saveCacheToDisk`, the
-     * last known-good on-disk cache is preserved rather than being
-     * overwritten with the post-failure state. The same skip-save rule
-     * applies to graceful cancels of hybrid / recurrent requests when
-     * rollback to the pre-request cursor cannot be completed (recurrent
-     * full-state restore refused, or no pre-request snapshot was captured
-     * yet the driver has advanced past the pre-request cursor). Cancels
-     * that can be rolled back cleanly still persist as usual.
-     */
-    remove_thinking_from_context?: boolean;
   }
 
   export interface RunOptions {
@@ -1343,6 +1255,12 @@ namespace LlmLlamacpp {
      */
     prefill?: boolean;
     generationParams?: GenerationParams;
+    /**
+     * Enables addon-owned prompt caching at this path. Every cached request
+     * must resend the complete authoritative message history and tool list;
+     * delta-only continuations are not supported. The addon renders once and
+     * decodes only the suffix after the longest matching token/media prefix.
+     */
     cacheKey?: string;
     /**
      * When `true` and `cacheKey` is set, the driver persists the sequence's
@@ -1352,9 +1270,8 @@ namespace LlmLlamacpp {
      * The continuous-batch scheduler intentionally SKIPS the save on
      * teardown legs where persistence could corrupt the last known-good
      * on-disk cache:
-     *   - Any batch error-recovery path (e.g. decode failure, per-slot
-     *     failure with `SaveCachePolicy::Skip`, or a
-     *     `remove_thinking_from_context` hard-fail).
+     *   - Any batch error-recovery path (e.g. decode failure or per-slot
+     *     failure with `SaveCachePolicy::Skip`).
      *   - Graceful cancel of a hybrid / recurrent request whose driver
      *     cannot roll live memory back to the pre-request cursor —
      *     either the recurrent full-state restore was refused, or no
@@ -1427,14 +1344,7 @@ namespace LlmLlamacpp {
     CacheTokens: number;
     generatedTokens: number;
     promptTokens: number;
-    /**
-     * Number of `<think>` (or model-equivalent) reasoning blocks dropped
-     * from the KV cache at end-of-generation by the
-     * `remove_thinking_from_context` feature. Per-inference for single
-     * requests; summed across completed slots for batch requests. 0 when
-     * the model has no recognised reasoning channel, when the feature
-     * was disabled per-request, or when no reasoning blocks were emitted.
-     */
+    /** Legacy counter retained for stats-shape compatibility; always 0. */
     thinkingBlockDiscards: number;
     /**
      * Number of prompt renders in this request that provably left the tool

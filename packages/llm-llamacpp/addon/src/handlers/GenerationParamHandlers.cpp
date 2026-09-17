@@ -80,14 +80,6 @@ const GenerationParamHandlerList GENERATION_PARAM_HANDLERS = {
          p.reasoning_budget = parsers::validateReasoningBudgetOverride(*value);
        }
      }},
-    {"remove_thinking_from_context",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       auto value = obj.getOptionalPropertyAs<js::Boolean, bool>(
-           env, "remove_thinking_from_context");
-       if (value.has_value()) {
-         p.remove_thinking_from_context = *value;
-       }
-     }},
 };
 
 void applyGenerationParamHandlers(
