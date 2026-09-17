@@ -228,9 +228,10 @@ void BCIModel::load() {
         adrenoOpenclDeviceIndex != contextParams.gpu_device) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-          std::string("Adreno OpenCL GPU device detected; preferring it over "
-                      "the default GPU to avoid the Adreno Vulkan compute "
-                      "crash (gpu_device ") +
+          std::string(
+              "Adreno OpenCL GPU device detected; preferring it over "
+              "the default GPU to avoid the Adreno Vulkan compute "
+              "crash (gpu_device ") +
               std::to_string(contextParams.gpu_device) + " -> " +
               std::to_string(adrenoOpenclDeviceIndex) + ")");
       contextParams.gpu_device = adrenoOpenclDeviceIndex;
