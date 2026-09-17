@@ -118,6 +118,14 @@ export const transcribeSegmentSchema = z.object({
     .optional()
     .describe(
       'Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.'
+    ),
+  windowStartTimestep: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      "Absolute timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so this is what maps them onto the stream timeline."
     )
 })
 

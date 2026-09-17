@@ -52,7 +52,7 @@ const bciWhisperConfigSchema = z
       .boolean()
       .optional()
       .describe(
-        "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+        "Let the model detect the spoken language instead of forcing `language`. Accepted by the addon's whisperConfig validator."
       ),
     greedy_best_of: z
       .number()
