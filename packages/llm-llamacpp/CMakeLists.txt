@@ -12,6 +12,11 @@ if(VK_PROFILING)
   list(APPEND VCPKG_MANIFEST_FEATURES "vk-profiling")
 endif()
 
+option(RPC_RDMA "Build qvac-fabric RPC with libibverbs/RDMA auto-negotiation support" OFF)
+if(RPC_RDMA)
+  list(APPEND VCPKG_MANIFEST_FEATURES "rpc-rdma")
+endif()
+
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 

@@ -1055,7 +1055,8 @@ namespace LlmLlamacpp {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- `NumericLike` documents the expected form; any string is accepted.
     "main-gpu"?: NumericLike | string;
     /**
-     * How to split the model across GPUs.
+     * How to split the model across devices: local GPUs, plus remote ones
+     * registered with `rpc-servers`.
      *
      * - 'none' (default) — pin the whole model to a single GPU.
      * - 'layer' — pipeline parallelism; each GPU holds a contiguous slice of
@@ -1110,6 +1111,30 @@ namespace LlmLlamacpp {
     "flash-attn"?: "on" | "off" | "auto" | "enabled" | "disabled" | "true" | "false" | "0" | "1";
     /** Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25). */
     "tensor-split"?: string;
+    /**
+     * Comma-separated `host:port` endpoints of remote `ggml-rpc-server`
+     * processes, e.g. `'10.0.0.1:50052,10.0.0.2:50052'`. Their devices join the
+     * local ones and can then be selected with `devices`, letting a single
+     * model run split across several machines.
+     *
+     * Only the machine loading the model needs the model file. Every endpoint
+     * must be reachable at load time — an unreachable one fails the load rather
+     * than being skipped. Endpoints must run a server built from the same
+     * qvac-fabric revision as this addon, since the RPC wire protocol is
+     * versioned and mismatched builds refuse to connect.
+     *
+     * The channel is unauthenticated: use it only on a trusted private network.
+     */
+    "rpc-servers"?: string;
+    /**
+     * Explicit ggml device list, e.g. `'RPC0,RPC1'`. Overrides automatic
+     * placement, including the multi-GPU behaviour of spreading across every
+     * visible device — which is rarely what you want once remote devices are
+     * registered, since the list then mixes local and remote. Names come from
+     * the ggml registry (`RPC0`, `RPC1`, … for remote devices, in the order
+     * given to `rpc-servers`).
+     */
+    devices?: string;
     "cache-type-k"?: string;
     "cache-type-v"?: string;
     /**
