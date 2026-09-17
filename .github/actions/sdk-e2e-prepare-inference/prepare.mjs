@@ -94,7 +94,7 @@ export function resolveManifestSource(dependencySpec) {
 
 function toLocalTarballSpec(tarballPath, platform = process.platform) {
   if (platform === "win32") {
-    return path.win32.resolve(tarballPath).replaceAll("\\", "/");
+    return `file:${path.win32.resolve(tarballPath).replaceAll("\\", "/")}`;
   }
   return pathToFileURL(path.resolve(tarballPath)).href;
 }
