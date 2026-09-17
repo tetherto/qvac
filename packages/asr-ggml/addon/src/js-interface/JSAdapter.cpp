@@ -251,7 +251,8 @@ void JSAdapter::loadMap(
         valueType != js_number && valueType != js_string) {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InvalidArgument,
-          "main-gpu must be an int32 registry index, dedicated, or integrated");
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+          "'integrated'");
     }
     switch (valueType) {
     // addConfigParam throws if the key already exists
