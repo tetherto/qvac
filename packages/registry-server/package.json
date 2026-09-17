@@ -44,6 +44,7 @@
     "validate:models": "node scripts/validate-models-json.js",
     "verify:licenses": "node scripts/verify-model-licenses.js",
     "sync:models": "node scripts/sync-models.js",
+    "fill:fit-blobs": "node scripts/fill-fit-blobs.js",
     "smoke-test": "node scripts/smoke-test-client.js",
     "check:blob-cores": "node scripts/check-blob-cores.js",
     "test:unit": "brittle-node tests/unit/*.test.js",

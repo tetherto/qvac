@@ -10,6 +10,7 @@ export interface QVACBlobBinding {
   blockLength: number
   byteOffset: number
   byteLength: number
+  sha256: string
 }
 
 export interface QVACModelEntry {
@@ -36,6 +37,19 @@ export interface QVACModelEntry {
    * - Numeric values that exceeded the safe integer range are stringified.
    */
   ggufMetadata?: string
+  /**
+   * Points at a weightless description of this artifact: the tensor list an
+   * engine's dry-run fitter reads, with none of the weights.
+   *
+   * - For a GGUF it is a short GGUF holding the tensor list and the settings
+   *   without the tokenizer tables; for a safetensors it is the JSON header.
+   * - Present for GGUF and safetensors artifacts, every shard of a split model
+   *   included; absent for other formats and when it could not be built.
+   * - Written to the writer's active blob core, which is not always the one
+   *   holding the weights; `downloadBlob` takes the binding directly.
+   * - `sha256` covers the description, not the artifact it came from.
+   */
+  fitBlobBinding?: QVACBlobBinding
 }
 
 export interface QVACDownloadedArtifactStream {
