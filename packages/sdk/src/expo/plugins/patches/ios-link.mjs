@@ -5,7 +5,9 @@
  * Otherwise, falls back to linking all installed addons.
  *
  * This file is copied over react-native-bare-kit/ios/link.mjs
- * by withMobileBundle.ts during expo prebuild.
+ * by withMobileBundle.ts during expo prebuild. The resolver it imports is
+ * compiled from qvac-platform-addons.ts and installed beside this file as
+ * qvac-platform-addons.mjs.
  */
 import fs from 'fs'
 import path from 'path'

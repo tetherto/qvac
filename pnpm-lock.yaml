@@ -873,7 +873,7 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       '@qvac/model-fit':
-        specifier: ^0.11.1
+        specifier: ^0.12.0
         version: link:../model-fit
       '@qvac/rag':
         specifier: ^0.8.1
@@ -1415,7 +1415,7 @@ importers:
         specifier: ^2.11.0
         version: 2.13.3
       '@qvac/registry-schema':
-        specifier: ^0.3.0
+        specifier: ^0.4.0
         version: link:shared
       autobase:
         specifier: ^7.18.1
@@ -1524,7 +1524,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/registry-schema':
-        specifier: ^0.3.0
+        specifier: ^0.4.0
         version: link:../shared
       b4a:
         specifier: ^1.6.7
