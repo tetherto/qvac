@@ -370,11 +370,11 @@ run_agent_attempt() {
   fi
 }
 
-# The budget carries model variance, measured at a ~46% per-attempt miss rate.
-# Six is affordable only because the bounded surface made an attempt ~80s wall
-# instead of the old 600s deadline. Every attempt is kept as an artifact so the
-# rate stays measurable rather than assumed.
-OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-6}"
+# One attempt. Retrying was only ever compensating for tool loops, and denying
+# the tools removed those -- so a retry here would hide a real regression rather
+# than absorb variance. Raise it only with evidence that the turn is genuinely
+# nondeterministic again, and say what that evidence is.
+OPENCLAW_AGENT_MAX_ATTEMPTS="${OPENCLAW_AGENT_MAX_ATTEMPTS:-1}"
 agent_ok=0
 agent_failure=""
 

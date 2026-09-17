@@ -20,9 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       attempts:
-        description: "Agent attempts before failing (1 for a single-shot debugging run)"
+        description: "Agent attempts before failing. Raise only to investigate; a green that needed a retry is hiding something."
         required: false
-        default: "6"
+        default: "1"
       tool_profile:
         description: "OpenClaw tools.profile for the run (minimal | coding | messaging | full)"
         required: false
@@ -54,9 +54,10 @@ jobs:
     name: openclaw@latest + @qvac/openclaw-plugin@latest
     runs-on: ubuntu-latest
     # PR runs skip the agent turn, so 15m covers install and setup. Otherwise
-    # the attempt budget has to fit: six attempts at the 300s backstop is 30m,
-    # plus ~6m of setup. Raising `attempts` past 6 on a dispatch needs this
-    # raised too, or the job is killed before the artifact upload.
+    # it is ~6m of setup plus the attempt budget: one attempt at the 300s
+    # backstop is 5m. The headroom is for dispatches that raise `attempts` --
+    # past about eight, raise this too or the job is killed before the artifact
+    # upload.
     timeout-minutes: ${{ github.event_name == 'pull_request' && 15 || 45 }}
     permissions:
       contents: read
@@ -75,7 +76,7 @@ jobs:
           QVAC_MODEL: ${{ env.QVAC_SMOKE_MODEL }}
           QVAC_READY_TIMEOUT_MS: ${{ env.QVAC_READY_TIMEOUT_MS }}
           OPENCLAW_AGENT_TIMEOUT_SECONDS: ${{ env.OPENCLAW_AGENT_TIMEOUT_SECONDS }}
-          OPENCLAW_AGENT_MAX_ATTEMPTS: ${{ inputs.attempts || '6' }}
+          OPENCLAW_AGENT_MAX_ATTEMPTS: ${{ inputs.attempts || '1' }}
           OPENCLAW_TOOL_PROFILE: ${{ inputs.tool_profile || 'minimal' }}
           # Blank falls through to the script's default, so scheduled runs are
           # unaffected. The script must therefore treat empty as unset.
@@ -118,8 +119,8 @@ jobs:
               `- Artifact: \`openclaw-upstream-compat\``,
               `- Triage: read \`prompt-surface.md\` **first** — it reports the advertised tool count and prompt size. A count above the ceiling means upstream widened \`tools.profile\`, which is the failure this tripwire exists to catch.`,
               `- Then diff \`versions.md\` against the last passing run's artifact. If no package version moved, this is not upstream drift — look at \`openclaw-agent.stderr\` (turn count, \`failover decision\` lines), \`sessions/\`, and \`qvac-serve.stdout\`/\`qvac-serve.stderr\`.`,
-              `- Possible causes, in the order worth checking: a widened tool surface (see above); a version bump visible in \`versions.md\`; a wedged \`qvac serve\` that stops answering mid-run; or model nondeterminism — the smoke drives a 0.8b model and retries before failing, so check every \`openclaw-agent.attempt-*.stdout\`.`,
-              `- To reproduce cheaply, dispatch this workflow with \`attempts: 1\`; \`tool_profile\` switches the surface back to \`coding\` if you need the pre-#4112 regime.`,
+              `- Possible causes, in the order worth checking: a widened tool surface (see above); a version bump visible in \`versions.md\`; a wedged \`qvac serve\` that stops answering mid-run; or the agent turn itself — read \`openclaw-agent.attempt-1.stdout\`, and \`toolSummary\` in particular: a tool call means the deny stopped taking effect.`,
+              `- To reproduce, dispatch this workflow; \`agent_prompt\` and \`tool_profile\` vary the turn without a code change, and \`tool_profile: coding\` restores the pre-#4112 tool surface.`,
             ].join('\n');
 
             const issues = await github.paginate(github.rest.issues.listForRepo, {
