@@ -131,7 +131,7 @@ macro(qvac_addon_use_fabric)
 endmacro()
 
 # ---------------------------------------------------------------------------
-# qvac_addon_import_fabric_cxx_runtime(<target>)
+# qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)
 #
 # Linux only: link <target> without a C++ standard library of its own, so it
 # imports libc++ / libc++abi from @qvac/fabric instead.
@@ -168,12 +168,13 @@ endmacro()
 # platform that ended up with two C++ runtimes in one process. Full rationale
 # and the alternatives considered: arch/qips/linux-fabric-libcxx-ownership.md.
 # ---------------------------------------------------------------------------
-function(qvac_addon_import_fabric_cxx_runtime target)
+function(qvac_addon_import_fabric_cxx_runtime target fabric_target)
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(${target} PRIVATE -nostdlib++)
-    # Marks the target as owing its C++ runtime to fabric, so qvac_addon_finalize
-    # knows to assert that it actually got it.
-    set_property(TARGET ${target} PROPERTY QVAC_ADDON_IMPORTS_FABRIC_CXX ON)
+    # Records the module the runtime has to come from, so qvac_addon_finalize can
+    # assert the result against that exact binary.
+    set_property(TARGET ${target} PROPERTY
+      QVAC_ADDON_FABRIC_CXX_MODULE ${fabric_target}_module)
   endif()
 endfunction()
 
@@ -215,7 +216,7 @@ endfunction()
 function(qvac_addon_link_fabric addon_target fabric_target)
   target_link_libraries(${addon_target} PRIVATE qvac-fabric::headers)
   target_link_libraries(${addon_target}_module PRIVATE ${fabric_target}_module)
-  qvac_addon_import_fabric_cxx_runtime(${addon_target}_module)
+  qvac_addon_import_fabric_cxx_runtime(${addon_target}_module ${fabric_target})
 endfunction()
 
 # ---------------------------------------------------------------------------
@@ -257,47 +258,42 @@ function(qvac_addon_finalize addon_target)
     # A module that dropped its own C++ runtime must have actually inherited
     # fabric's. Both halves of getting that wrong are silent, so it is checked on
     # the built ELF rather than trusted to the link line.
-    get_property(_qaf_imports_fabric_cxx TARGET ${addon_target}_module
-      PROPERTY QVAC_ADDON_IMPORTS_FABRIC_CXX)
-    if(_qaf_imports_fabric_cxx)
-      if(NOT DEFINED QVAC_FABRIC_OWNS_CXX_RUNTIME)
-        message(FATAL_ERROR
-          "qvac-addon: the installed @qvac/fabric predates "
-          "QVAC_FABRIC_OWNS_CXX_RUNTIME, so it exports its C++ runtime with no "
-          "ELF version node and ${addon_target} would resolve that runtime from "
-          "the host process instead, silently, at both build and load time. "
-          "Update @qvac/fabric. A workspace build that reaches this has usually "
-          "fallen back to a registry fabric because the local version no longer "
-          "satisfies this package's range.")
-      elseif(QVAC_FABRIC_OWNS_CXX_RUNTIME)
-        # CMake sets CMAKE_READELF for ELF toolchains; fall back to PATH rather
-        # than skip the check on a host where it did not. find_program() skips
-        # its search when the result variable already holds a value, and an
-        # empty one from CMAKE_READELF counts, so the fallback needs a name of
-        # its own or it can only ever report failure.
-        set(_qaf_readelf "${CMAKE_READELF}")
-        if(NOT _qaf_readelf)
-          find_program(QVAC_ADDON_READELF NAMES llvm-readelf readelf
-            DOC "readelf used to verify addon modules import fabric's C++ runtime")
-          set(_qaf_readelf "${QVAC_ADDON_READELF}")
-        endif()
-        if(NOT _qaf_readelf)
-          message(FATAL_ERROR
-            "qvac-addon: no readelf found (CMAKE_READELF unset, nothing on "
-            "PATH). It verifies that ${addon_target} imports fabric's C++ "
-            "runtime, which nothing else detects; install binutils or llvm.")
-        endif()
-        add_custom_command(TARGET ${addon_target}_module POST_BUILD
-          COMMAND ${CMAKE_COMMAND}
-            -D "READELF=${_qaf_readelf}"
-            -D "MODULE=$<TARGET_FILE:${addon_target}_module>"
-            -D "VERSION=${QVAC_FABRIC_ABI_VERSION}"
-            -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/assert-fabric-cxx-runtime.cmake"
-          VERBATIM
-          COMMENT "qvac-addon: verifying ${addon_target} imports fabric's C++ runtime")
+    get_property(_qaf_fabric_cxx_module TARGET ${addon_target}_module
+      PROPERTY QVAC_ADDON_FABRIC_CXX_MODULE)
+    if(_qaf_fabric_cxx_module)
+      # CMake sets CMAKE_READELF for ELF toolchains; fall back to PATH rather
+      # than skip the check on a host where it did not. find_program() skips
+      # its search when the result variable already holds a value, and an empty
+      # one from CMAKE_READELF counts, so the fallback needs a name of its own
+      # or it can only ever report failure.
+      set(_qaf_readelf "${CMAKE_READELF}")
+      if(NOT _qaf_readelf)
+        find_program(QVAC_ADDON_READELF NAMES llvm-readelf readelf
+          DOC "readelf used to verify addon modules import fabric's C++ runtime")
+        set(_qaf_readelf "${QVAC_ADDON_READELF}")
       endif()
-      # Otherwise fabric links a shared libc++ in this configuration (Android,
-      # the ASan build) and exports no runtime, so there is no node to pin to.
+      if(NOT _qaf_readelf)
+        message(FATAL_ERROR
+          "qvac-addon: no readelf found (CMAKE_READELF unset, nothing on "
+          "PATH). It verifies that ${addon_target} imports fabric's C++ "
+          "runtime, which nothing else detects; install binutils or llvm.")
+      endif()
+      # What to require of the module -- and whether to require anything, since
+      # a fabric that shares libc++ through a shared library exports no runtime
+      # to pin to -- is read out of fabric's own binary by the script, not out
+      # of QVAC_FABRIC_OWNS_CXX_RUNTIME / QVAC_FABRIC_ABI_VERSION in its
+      # package config. Those describe the platform whose prebuild leg wrote
+      # the config last: it installs to a platform-shared share/ path that every
+      # leg produces and the artifact merge collapses to one file. The module on
+      # this target's link line is per-platform and cannot be the wrong one.
+      add_custom_command(TARGET ${addon_target}_module POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+          -D "READELF=${_qaf_readelf}"
+          -D "MODULE=$<TARGET_FILE:${addon_target}_module>"
+          -D "FABRIC=$<TARGET_FILE:${_qaf_fabric_cxx_module}>"
+          -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/assert-fabric-cxx-runtime.cmake"
+        VERBATIM
+        COMMENT "qvac-addon: verifying ${addon_target} imports fabric's C++ runtime")
     endif()
   endif()
 
@@ -450,7 +446,7 @@ endfunction()
 #     libc++ could not catch an exception fabric threw).
 # ---------------------------------------------------------------------------
 function(qvac_addon_stage_fabric_for_test test_target fabric_target)
-  qvac_addon_import_fabric_cxx_runtime(${test_target})
+  qvac_addon_import_fabric_cxx_runtime(${test_target} ${fabric_target})
 
   if((ANDROID OR UNIX) AND NOT APPLE)
     target_compile_definitions(${test_target} PRIVATE GGML_BACKEND_DL)
