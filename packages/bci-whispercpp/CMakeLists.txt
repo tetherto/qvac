@@ -179,6 +179,7 @@ if(BUILD_TESTING)
   add_executable(
       test-bci-core
       ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
+      ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
   )
 
   target_include_directories(test-bci-core PRIVATE

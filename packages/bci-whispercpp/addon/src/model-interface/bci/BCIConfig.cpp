@@ -1,4 +1,5 @@
 #include "BCIConfig.hpp"
+#include "model-interface/MainGpuSelection.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -285,8 +286,16 @@ whisper_full_params toWhisperFullParams(BCIConfig& bciConfig) {
 whisper_context_params toWhisperContextParams(const BCIConfig& bciConfig) {
   whisper_context_params params = whisper_context_default_params();
 
+  try {
+    (void)main_gpu::parse(bciConfig.whisperContextCfg);
+  } catch (const std::invalid_argument &error) {
+    throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
+                                   error.what());
+  }
   const auto& handlers = getWhisperContextHandlers();
   for (const auto& [key, value] : bciConfig.whisperContextCfg) {
+    if (main_gpu::isSelectorKey(key))
+      continue;
     auto it = handlers.find(key);
     if (it == handlers.end()) {
       throw qvac_errors::StatusError(

@@ -18,6 +18,7 @@
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "model-interface/BCITypes.hpp"
+#include "model-interface/WhisperGpuSelection.hpp"
 
 namespace qvac_lib_inference_addon_bci {
 
@@ -201,9 +202,24 @@ void BCIModel::load() {
 
   whisper_context_params contextParams = toWhisperContextParams(cfg_);
 
+  // Resolve the raw registry identity before translating to Whisper's
+  // GPU/IGPU ordinal. An excluded explicit target falls back only to CPU.
+  if (contextParams.use_gpu && !cfg_.whisperContextCfg.contains("gpu_device")) {
+    const auto selected = main_gpu::select(
+        main_gpu::registryDevices(), main_gpu::parse(cfg_.whisperContextCfg));
+    if (selected.outOfRange) {
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+           "main-gpu registry index is out of range; using normal GPU "
+           "selection");
+    }
+    contextParams.use_gpu = selected.whisperIndex >= 0;
+    if (contextParams.use_gpu)
+      contextParams.gpu_device = selected.whisperIndex;
+  }
+
   // Steer to the Adreno OpenCL device when present (see
   // adrenoOpenclGpuDeviceIndex) to avoid the Adreno Vulkan compute crash.
-  if (contextParams.use_gpu) {
+  if (contextParams.use_gpu && cfg_.whisperContextCfg.contains("gpu_device")) {
     const int adrenoOpenclDeviceIndex = adrenoOpenclGpuDeviceIndex();
     if (adrenoOpenclDeviceIndex >= 0 &&
         adrenoOpenclDeviceIndex != contextParams.gpu_device) {
@@ -673,7 +689,7 @@ void BCIModel::cancel() const {
 bool BCIModel::configContextIsChanged(
     const BCIConfig& oldCfg, const BCIConfig& newCfg) {
   const std::vector<std::string> contextKeys = {
-      "model", "use_gpu", "flash_attn", "gpu_device"};
+      "model", "use_gpu", "flash_attn", "gpu_device", "main-gpu", "main_gpu"};
   return std::ranges::any_of(contextKeys, [&](const std::string& key) {
     const auto oldIt = oldCfg.whisperContextCfg.find(key);
     const auto newIt = newCfg.whisperContextCfg.find(key);
