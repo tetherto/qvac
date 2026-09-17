@@ -1,5 +1,42 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- A fit stub is documented and covered as an accepted `modelPath`, single-file
+  and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
+  tokenizer tables and no data section, which the registry serves in place of
+  the artefact. It projects the same plan as the full file, and needs no padding
+  out to the artefact length. Two fabric behaviours make that work and both are
+  covered — 10549.0.0 skips the file-bounds check under no_alloc, and the vocab
+  load it does *not* skip is satisfied by `tokenizer.ggml.model = none` plus a
+  surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
+  that reports failure as an absent projection rather than an error, is asserted
+  on the same files. No API change.
+
+## [0.12.0] - 2026-09-16
+
+This release adds a non-blocking way to run the memory-fit preflight. Callers that run the fit in the same process as their inference — the mobile advisory check today — no longer stall their JS loop for the duration of the probe.
+
+### New APIs
+
+#### `fitParamsAsync(config)`
+
+Takes the same config as `fitParams` and resolves to the same result, but runs `common_fit_params` on a worker thread. Validation failures reject instead of throwing. Backend registration still happens on the calling thread before the fit is queued, so the ggml registry sees the same ordering as the synchronous path, and fits remain serialised process-wide.
+
+```js
+const { fitParamsAsync } = require('@qvac/model-fit')
+
+const plan = await fitParamsAsync({ modelPath: '/abs/path/model.gguf' })
+```
+
+`llamaConfigFitAsync` on the private binding gives the load-config fitter used by the process runner and `@qvac/inference` the same worker-thread shape.
+
+### Pull Requests
+
+- [#4495](https://github.com/tetherto/qvac/pull/4495) - QVAC-25156 feat[api]: add fitParamsAsync to @qvac/model-fit
+
 ## [0.11.1] - 2026-09-16
 
 ### Changed
