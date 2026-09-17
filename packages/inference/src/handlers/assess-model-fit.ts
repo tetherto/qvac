@@ -1,5 +1,12 @@
 import os from 'bare-os'
-import type { AssessModelFitRequest, AssessModelFitResponse } from '@/schemas/assess-model-fit'
+import type {
+  AssessModelFitRequest,
+  AssessModelFitResponse,
+  ModelFitWorkload,
+  NativeProbeFit
+} from '@/schemas/assess-model-fit'
+import { ModelType, type CanonicalModelType } from '@/schemas/index'
+import { projectFitFromStub } from '@/resources/model-fit/fit-stub/project-fit-from-stub'
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
 import { assessModelFitFromResources } from '@/resources/model-fit/assess'
@@ -9,12 +16,16 @@ import type { ModelFitPlatform } from '@/resources/model-fit/types'
 /**
  * Runs a pre-download fit assessment worker-side.
  *
- * This lives on the worker because that is where the two things it needs
- * already are: the resource collector for a fresh memory sample, and the
- * runtime's own platform/arch pair. No model bytes are read and nothing is
- * loaded.
+ * This lives on the worker because that is where the three things it needs
+ * already are: the resource collector for a fresh memory sample, the runtime's
+ * own platform/arch pair, and the registry client. No weights are read and
+ * nothing is loaded — a single candidate additionally has the registry's
+ * weightless description fetched, tens of KB, so the engine's own fitter can
+ * answer instead of the coefficients modelling it.
  */
-export function handleAssessModelFit(request: AssessModelFitRequest): AssessModelFitResponse {
+export async function handleAssessModelFit(
+  request: AssessModelFitRequest
+): Promise<AssessModelFitResponse> {
   const platform = detectPlatform()
 
   const result = assessModelFitFromResources({
@@ -22,10 +33,50 @@ export function handleAssessModelFit(request: AssessModelFitRequest): AssessMode
     execution: request.execution,
     resources: readResources(),
     platform,
-    calibration: platform ? getPlatformCalibration(platform) : undefined
+    calibration: platform ? getPlatformCalibration(platform) : undefined,
+    nativeFit: await resolveNativeFit(request)
   })
 
   return { type: 'assessModelFit', ...result }
+}
+
+/**
+ * The engine fitter's verdict for a single candidate, read from the registry's
+ * fit stub.
+ *
+ * Only for a one-candidate request: the probe measures one model against the
+ * whole machine, which cannot be aggregated across a set. Everything else — no
+ * stub published, an offline caller, an engine with no fit path — resolves to
+ * `undefined` and the modelled assessment stands.
+ */
+async function resolveNativeFit(
+  request: AssessModelFitRequest
+): Promise<NativeProbeFit | undefined> {
+  if (request.models.length !== 1) return undefined
+
+  const candidate = request.models[0]
+  if (!candidate) return undefined
+
+  const modelType = fitModelType(candidate.workload)
+  if (!modelType) return undefined
+
+  const outcome = await projectFitFromStub({
+    model: candidate.model,
+    modelType,
+    modelConfig: fitModelConfig(candidate.workload)
+  })
+
+  return outcome.status === 'projected' ? outcome.fit : undefined
+}
+
+/** The engine whose fitter covers a workload, where one does. */
+function fitModelType(workload: ModelFitWorkload): CanonicalModelType | undefined {
+  return workload.kind === 'llm' ? ModelType.llamacppCompletion : undefined
+}
+
+/** The intended load, in the spelling the llama.cpp config uses. */
+function fitModelConfig(workload: ModelFitWorkload): Record<string, unknown> {
+  return workload.kind === 'llm' ? { ctx_size: workload.contextTokens } : {}
 }
 
 function readResources(): SystemResources {

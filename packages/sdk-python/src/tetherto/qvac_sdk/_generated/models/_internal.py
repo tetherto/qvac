@@ -30,6 +30,20 @@ class AssessModelFitRequestModelsItemModel(GeneratedBaseModel):
             description="Expected SHA-256 checksum of the model file.",
         ),
     ]
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
 
 
 class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
@@ -41,6 +55,20 @@ class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
             description="Expected SHA-256 checksum of the model file.",
         ),
     ]
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
 
 
 class AssessModelFitRequestModelsItemWorkloadLlm(GeneratedBaseModel):
@@ -144,6 +172,7 @@ class AssessModelFitResponseExecution(Enum):
 class AssessModelFitResponseEvidence(Enum):
     calibration = "calibration"
     computed_only = "computed-only"
+    native_fit = "native-fit"
 
 
 class AssessModelFitResponseBudget(GeneratedBaseModel):
@@ -201,6 +230,7 @@ class AssessModelFitResponseModelsItemVerdict(Enum):
 class AssessModelFitResponseModelsItemEvidence(Enum):
     calibration = "calibration"
     computed_only = "computed-only"
+    native_fit = "native-fit"
 
 
 class AssessModelFitResponseModelsItemEstimate(GeneratedBaseModel):
@@ -18095,7 +18125,7 @@ class OcrStreamResponseBlocksItem(GeneratedBaseModel):
         extra="forbid",
     )
     text: str
-    bbox: tuple[float, float, float, float] | None = None
+    bbox: list[Any] | None = None
     confidence: float | None = None
 
 

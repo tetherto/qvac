@@ -305,6 +305,14 @@
                   "sha256Checksum": {
                     "type": "string",
                     "description": "Expected SHA-256 checksum of the model file."
+                  },
+                  "registryPath": {
+                    "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+                    "type": "string"
+                  },
+                  "registrySource": {
+                    "description": "Registry source identifier, e.g. `huggingface`.",
+                    "type": "string"
                   }
                 },
                 "required": ["name", "sha256Checksum"],
@@ -324,6 +332,14 @@
                     "sha256Checksum": {
                       "type": "string",
                       "description": "Expected SHA-256 checksum of the model file."
+                    },
+                    "registryPath": {
+                      "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+                      "type": "string"
+                    },
+                    "registrySource": {
+                      "description": "Registry source identifier, e.g. `huggingface`.",
+                      "type": "string"
                     }
                   },
                   "required": ["name", "sha256Checksum"],
@@ -431,7 +447,7 @@
         "evidence": {
           "description": "The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.",
           "type": "string",
-          "enum": ["calibration", "computed-only"],
+          "enum": ["calibration", "computed-only", "native-fit"],
           "title": "AssessModelFitResponseEvidence"
         },
         "budget": {
@@ -505,7 +521,7 @@
               "evidence": {
                 "description": "What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
                 "type": "string",
-                "enum": ["calibration", "computed-only"],
+                "enum": ["calibration", "computed-only", "native-fit"],
                 "title": "AssessModelFitResponseModelsItemEvidence"
               },
               "estimate": {
@@ -2044,7 +2060,20 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "type": ["string", "number", "boolean", "null"]
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
                                 }
                               }
                             },
@@ -3013,7 +3042,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -3619,7 +3661,20 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "type": ["string", "number", "boolean", "null"]
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         }
                       },
@@ -14533,7 +14588,14 @@
                     },
                     "max_vram": {
                       "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-                      "type": ["number", "string"]
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     },
                     "stream_layers": {
                       "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -17906,10 +17968,7 @@
                   {
                     "type": "number"
                   }
-                ],
-                "items": false,
-                "minItems": 4,
-                "maxItems": 4
+                ]
               },
               "confidence": {
                 "type": "number"
