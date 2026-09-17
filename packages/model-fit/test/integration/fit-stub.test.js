@@ -18,7 +18,7 @@ const fs = require('bare-fs')
 const process = require('bare-process')
 const { fitParams, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
-const { fixtureDir, fixturePath, kvValue, readGguf, writeFitStub, writeSplit } = require('./gguf')
+const { fixturePath, kvValue, readGguf, writeFitStub, writeSplit } = require('./gguf')
 
 const SPLIT_COUNT = 2
 
@@ -38,17 +38,13 @@ async function ensureFixtures() {
 
   const fullPath = process.env.FIT_MODEL_PATH || (await ensureModelPath())
 
-  // The fixtures are written beside the downloaded model, and downloading is
-  // what creates that directory. FIT_MODEL_PATH skips the download, so on a
-  // fresh checkout the directory is not there — this file is the first to write
-  // into it rather than only read from it.
-  fs.mkdirSync(fixtureDir(), { recursive: true })
-
   fixtures = {
     fullPath,
-    stubPath: writeFitStub(fullPath, fixturePath('fit-stub.gguf')),
-    fullSplit: writeSplit(fullPath, fixturePath('split-full'), { splitCount: SPLIT_COUNT }),
-    stubSplit: writeSplit(fullPath, fixturePath('split-stub'), {
+    stubPath: writeFitStub(fullPath, fixturePath(fullPath, 'fit-stub.gguf')),
+    fullSplit: writeSplit(fullPath, fixturePath(fullPath, 'split-full'), {
+      splitCount: SPLIT_COUNT
+    }),
+    stubSplit: writeSplit(fullPath, fixturePath(fullPath, 'split-stub'), {
       splitCount: SPLIT_COUNT,
       stub: true
     })

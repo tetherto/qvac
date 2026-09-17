@@ -408,18 +408,21 @@ function allKvs(meta) {
   return meta.kvs.map((raw) => ({ raw }))
 }
 
-/** Directory the fixtures are written to, beside the downloaded test model. */
-function fixtureDir() {
-  return path.resolve(__dirname, '../model')
+/**
+ * Directory the fixtures are written to: beside the model itself. Derived from
+ * the model path rather than `__dirname`, which on a mobile device points into
+ * the read-only packed bundle.
+ */
+function fixtureDir(modelPath) {
+  return path.dirname(modelPath)
 }
 
-/** Absolute path of a fixture beside the downloaded test model. */
-function fixturePath(name) {
-  return path.join(fixtureDir(), name)
+/** Absolute path of a fixture beside the given model. */
+function fixturePath(modelPath, name) {
+  return path.join(fixtureDir(modelPath), name)
 }
 
 module.exports = {
-  fixtureDir,
   fixturePath,
   kvValue,
   readGguf,
