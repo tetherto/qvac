@@ -371,6 +371,7 @@ if(BUILD_TESTING)
   # outside the bare module link.
   add_executable(
     tts_ggml_tests
+      addon/tests/backend_env.cpp
       addon/tests/test_audio8_config.cpp
       addon/tests/test_backend_utils.cpp
       addon/tests/test_chatterbox_config.cpp
@@ -401,6 +402,12 @@ if(BUILD_TESTING)
       GTest::gmock_main
       tts-cpp::tts-cpp
   )
+  # Standalone tests do not receive the JS addon's packaged backendsDir.
+  # Hybrid ggml builds keep even the CPU backend in runtime-loaded modules.
+  target_compile_definitions(tts_ggml_tests PRIVATE
+    QVAC_TTS_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
+  )
+
   if(ENABLE_COVERAGE)
     # LLVM source-based coverage (clang).  Same flag set parakeet uses.
     target_compile_options(tts_ggml_tests PRIVATE
