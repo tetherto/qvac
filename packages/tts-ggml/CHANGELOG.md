@@ -31,8 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the codec on it).
   Export the sidecar with `qvac-fabric-speech.cpp`'s
   `export-audio8-codec-coreml.py`; the language model keeps running on the
-  selected ggml backend. `speech-cpp` floor moves from `2026-09-16` to
-  `2026-09-16#1` (a port-only revision of the same source pin).
+  selected ggml backend. `speech-cpp` floor moves from `2026-09-18` to
+  `2026-09-21`, which also retires a failing sidecar after its first call so
+  later syntheses go straight to ggml.
 
 ### Changed
 
