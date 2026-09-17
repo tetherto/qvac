@@ -13,8 +13,26 @@ description: >-
 # Must run AFTER setup-vcpkg, which writes VCPKG_BINARY_SOURCES itself and would
 # otherwise win.
 #
-# The host layer outlives the job and vcpkg identifies archives by ABI hash with
-# no signature, so untrusted events get `read` there. See .github/AGENTS.md.
+# The two events get OPPOSITE halves of the host layer, and neither gets both:
+#
+#   untrusted -> `read`   consume what is there, never add to it.
+#   trusted   -> `write`  populate it for the PR legs, never build from it.
+#
+# `write` rather than `readwrite` on the trusted side is what keeps each
+# actions/cache entry scoped to its own package. The host path has no package
+# component -- that is the design, and the cross-addon qvac-fabric reuse is the
+# win -- so a trusted run that READ it would restore another addon's archives
+# into its workspace and upload them under this package's key. Every PR leg would
+# then download the union of every addon built on that host.
+#
+# It also makes eviction recovery hold by construction instead of by copying:
+# with the host layer unreadable, a trusted run whose keyed entry is gone has
+# nothing to restore from, so it compiles, and the save recreates the entry from
+# a real build. That is why the sync in the callers only runs workspace -> host.
+#
+# And it closes the promotion path: archives in the shared directory cannot reach
+# the repo-global cache, because no run that writes that cache ever reads them.
+# See .github/AGENTS.md.
 
 inputs:
   workdir:
@@ -43,9 +61,11 @@ runs:
         fi
 
         # Host layer is shared; workspace layer is job-local until the caller's
-        # actions/cache saves it, and that save is gated there.
+        # actions/cache saves it, and that save is gated there. `write` not
+        # `readwrite` on the trusted side -- see the header for why a trusted run
+        # must never build from the shared directory.
         mode="read"
-        if [ "${INPUT_TRUSTED}" = "true" ]; then mode="readwrite"; fi
+        if [ "${INPUT_TRUSTED}" = "true" ]; then mode="write"; fi
 
         persistent="false"
         host_dir=""
@@ -91,8 +111,9 @@ runs:
 
         mkdir -p "${cache_dir}"
 
-        # vcpkg reads sources in order and writes every writable one, so a
-        # build populates both layers.
+        # vcpkg reads the readable sources in order and writes every writable
+        # one, so a trusted build compiles against the workspace layer alone and
+        # still populates both.
         sources="clear"
         if [ -n "${host_dir}" ]; then
           sources="${sources};files,${host_dir},${mode}"
@@ -118,7 +139,8 @@ runs:
           exit 1
         }
 
-        $mode = if ($env:INPUT_TRUSTED -eq 'true') { 'readwrite' } else { 'read' }
+        # `write` not `readwrite` when trusted -- see the header.
+        $mode = if ($env:INPUT_TRUSTED -eq 'true') { 'write' } else { 'read' }
 
         $persistent = 'false'
         $hostDir = ''

@@ -219,10 +219,20 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:cpp:build
 
-      # Both ways: vcpkg only writes archives it compiles, so whichever layer
-      # serves a restore leaves the other empty. Temp-then-mv because other
-      # instances read this dir concurrently; umask 000 because 1777 on the root
-      # is not inherited by vcpkg's bucket dirs.
+      # Workspace -> host ONLY. vcpkg already wrote this run's compiled archives
+      # to the host layer (it is `write` there for trusted events); this adds the
+      # ones that came from the keyed entry rather than from a compile, so a
+      # trusted run warms a cold host even when it builds nothing.
+      #
+      # The host -> workspace direction is deliberately absent. The host path has
+      # no package component, so copying it in would put every addon's archives
+      # into this package's entry and every PR leg would download the union.
+      # Nothing is lost by dropping it: a trusted run cannot read the host layer,
+      # so if its keyed entry is gone it compiles and the save recreates the
+      # entry from that build.
+      #
+      # Temp-then-mv because other instances read this dir concurrently; umask
+      # 000 because 1777 on the root is not inherited by vcpkg's bucket dirs.
       - name: Sync the host and workspace vcpkg caches
         if: >-
           env.VCPKG_CACHE_PERSISTENT == 'true' &&
@@ -254,7 +264,6 @@ jobs:
               rm -f "$tmp" 2>/dev/null
             done
           }
-          sync_dir "${host_dir}" "${ws_dir}"
           sync_dir "${ws_dir}" "${host_dir}"
 
           echo "sync: host=$(find "${host_dir}" -type f 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -type f 2>/dev/null | wc -l)"
