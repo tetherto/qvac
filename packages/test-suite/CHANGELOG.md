@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Mobile consumer manifests now declare the build target's prebuild package for
+  every split native addon the consumer installs, selected from the platform
+  being built: an Android build gets `@qvac/<addon>-android-arm64`, an iOS build
+  gets `@qvac/<addon>-ios`, and neither downloads the other's binaries. These
+  packages are cross-built, so no install host ever matches their platform and
+  `optionalDependencies` can never select them; they have to be direct
+  dependencies. The addon and its prebuild package are pinned to the same exact
+  version. An addon the consumer pins itself (to a range, a `file:` path, or a
+  different version), an addon that already ships a local `prebuilds/` directory
+  for the target, and a pre-split addon version are all left untouched.
+
 ## [0.11.2]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/test-suite/v/0.11.2
