@@ -53,7 +53,8 @@ template <typename ConfigMap> Selector parse(const ConfigMap& config) {
           return c >= '0' && c <= '9';
         })) {
       throw std::invalid_argument(
-          "main-gpu must be an int32 registry index, dedicated, or integrated");
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+          "'integrated'");
     }
     if (*begin == '+')
       ++begin;
@@ -61,7 +62,8 @@ template <typename ConfigMap> Selector parse(const ConfigMap& config) {
     if (result.ec == std::errc{} && result.ptr == end)
       return {Kind::Index, index};
     throw std::invalid_argument(
-        "main-gpu must be an int32 registry index, dedicated, or integrated");
+        "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+        "'integrated'");
   }
   double number = std::numeric_limits<double>::quiet_NaN();
   if (const auto* value = std::get_if<int>(&it->second))
@@ -74,7 +76,8 @@ template <typename ConfigMap> Selector parse(const ConfigMap& config) {
     return {Kind::Index, static_cast<int>(number)};
   }
   throw std::invalid_argument(
-      "main-gpu must be an int32 registry index, dedicated, or integrated");
+      "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+      "'integrated'");
 }
 
 // Keep every registry slot, including CPU and excluded backends. Whisper's

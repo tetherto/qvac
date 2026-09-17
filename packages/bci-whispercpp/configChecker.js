@@ -98,6 +98,6 @@ function validateMainGpu(contextParams) {
         !Number.isInteger(number) ||
         number < -2147483648 ||
         number > 2147483647) {
-        throw new Error("main-gpu must be an int32 registry index, dedicated, or integrated");
+        throw new Error("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
     }
 }

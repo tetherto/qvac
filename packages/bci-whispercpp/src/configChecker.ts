@@ -128,7 +128,7 @@ function validateMainGpu(contextParams: Record<string, unknown>): void {
     number > 2147483647
   ) {
     throw new Error(
-      "main-gpu must be an int32 registry index, dedicated, or integrated",
+      "main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'",
     );
   }
 }
