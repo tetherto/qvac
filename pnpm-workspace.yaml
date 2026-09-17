@@ -30,3 +30,6 @@ allowBuilds:
   esbuild: true
   nx: true
   unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - '@qvac/model-fit@0.11.1'
