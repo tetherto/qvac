@@ -296,16 +296,18 @@ class ASRGgml {
         }));
     }
     async run(audio) {
-        this._assertNoOpenSession("concurrent run() during an open streaming session");
-        const runFn = () => this._driver.run(this._driver.normalizeAudio(audio));
+        const runFn = async () => {
+            await this._waitForClosingSessionOrThrow("concurrent run() during an open streaming session");
+            return await this._driver.run(this._driver.normalizeAudio(audio));
+        };
         if (this.exclusiveRun) {
             return await this._inferenceQueue.run(runFn, "onSettle");
         }
         return await runFn();
     }
     async runStreaming(audio, opts = {}) {
-        this._assertNoOpenSession("concurrent runStreaming() during an open streaming session");
         const startFn = async () => {
+            await this._waitForClosingSessionOrThrow("concurrent runStreaming() during an open streaming session");
             const session = await this._driver.createStreamingSession(this._driver.normalizeAudio(audio), opts);
             this._openSession = session;
             void session.done.then(() => {
@@ -368,13 +370,19 @@ class ASRGgml {
             });
         }
     }
-    _assertNoOpenSession(adds) {
-        if (this._openSession) {
+    async _waitForClosingSessionOrThrow(adds) {
+        const session = this._openSession;
+        if (!session)
+            return;
+        if (!session.closing) {
             throw new error_1.QvacErrorAddonASRGgml({
                 code: error_1.ERR_CODES.STREAMING_SESSION_ACTIVE,
                 adds,
             });
         }
+        await session.done;
+        if (this._openSession === session)
+            this._openSession = null;
     }
 }
 // The namespace merge preserves the package's established `export =` API and
