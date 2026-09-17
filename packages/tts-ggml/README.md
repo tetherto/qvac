@@ -119,8 +119,9 @@ npm install @qvac/tts-ggml
 Requires [Bare](https://github.com/holepunchto/bare) `>=1.19.0`.
 
 `@qvac/tts-ggml` is a meta package that ships the JavaScript wrapper only.
-The native prebuild for each host lives in a version-locked platform package
-selected at install time through `os`/`cpu` filtered `optionalDependencies`:
+The native prebuild for each desktop host lives in a version-locked platform
+package selected at install time through `os`/`cpu` filtered
+`optionalDependencies`:
 
 | Host | Package |
 | --- | --- |
@@ -129,18 +130,35 @@ selected at install time through `os`/`cpu` filtered `optionalDependencies`:
 | darwin-arm64 | `@qvac/tts-ggml-darwin-arm64` |
 | darwin-x64 | `@qvac/tts-ggml-darwin-x64` |
 | win32-x64 | `@qvac/tts-ggml-win32-x64` |
-| android-arm64 | `@qvac/tts-ggml-android-arm64` |
-| ios (device + simulators) | `@qvac/tts-ggml-ios` |
 
-Do not depend on platform packages directly. Supported installers are npm 7+,
-pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip the
-platform package and fail at require time with an error naming the missing
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time with an error naming the missing
 package; a locally built `prebuilds/` directory in the package root always
 takes precedence. Use `require('@qvac/tts-ggml').resolveBackendsDir()` to
 locate the directory holding the host's prebuilt binaries and dynamically
 loaded ggml backends. Unsupported targets must
 [build from source](#build-from-source); installation does not automatically
 compile a local addon.
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/tts-ggml` version:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/tts-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/tts-ggml-ios` |
+
+```json
+{
+  "dependencies": {
+    "@qvac/tts-ggml": "x.y.z",
+    "@qvac/tts-ggml-android-arm64": "x.y.z"
+  }
+}
+```
 
 ## Model files
 

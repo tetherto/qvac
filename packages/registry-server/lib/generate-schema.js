@@ -45,7 +45,12 @@ module.exports = function generateQVACRegistrySchema(schema) {
       { name: 'deprecatedAt', type: 'string', required: false },
       { name: 'replacedBy', type: 'string', required: false },
       { name: 'deprecationReason', type: 'string', required: false },
-      { name: 'ggufMetadata', type: 'string', required: false }
+      { name: 'ggufMetadata', type: 'string', required: false },
+      {
+        name: 'fitBlobBinding',
+        type: `@${QVAC_MAIN_REGISTRY}/model-blob-binding`,
+        required: false
+      }
     ]
   })
 
