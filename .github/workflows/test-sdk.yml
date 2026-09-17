@@ -466,6 +466,7 @@ jobs:
     env:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+      GITHUB_TOKEN: ${{ github.token }}
       NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
     steps:
       - id: checkout
@@ -500,8 +501,8 @@ jobs:
           if (process.env.NPM_TOKEN) {
             lines.push(`//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`);
           }
-          if (process.env.PAT_TOKEN) {
-            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.PAT_TOKEN}`);
+          if (process.env.GITHUB_TOKEN) {
+            lines.push(`//npm.pkg.github.com/:_authToken=${process.env.GITHUB_TOKEN}`);
           }
           fs.writeFileSync(process.env.NPM_CONFIG_USERCONFIG, `${lines.join('\n')}\n`);
 
