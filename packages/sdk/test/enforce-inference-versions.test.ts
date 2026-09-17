@@ -4,6 +4,7 @@ import {
   checkAddonRanges,
   checkSharedMajorMinor,
   collectVersionFailures,
+  isLocalSpec,
   type Manifest
 } from '../scripts/enforce-inference-versions'
 
@@ -24,6 +25,48 @@ function inferenceManifest(addons: Record<string, string> = {}): Manifest {
     devDependencies: { ...addons }
   }
 }
+
+// Every spec the release and e2e tooling can write in place of a published
+// range. The tarball forms come from
+// .github/actions/sdk-e2e-prepare-inference/prepare.mjs, which writes a file:
+// URL everywhere except win32 and a bare drive path there.
+const localSpecs = [
+  'file:../inference',
+  'link:../inference',
+  'npm:@tetherto/inference-mono@1.2.3',
+  'file:///Users/runner/work/_temp/sdk-e2e-inference/1-1/qvac-inference-0.19.1.tgz',
+  'C:/actions-runner-2/_work/_temp/sdk-e2e-inference/1-1/qvac-inference-0.19.1.tgz',
+  'C:\\actions-runner-2\\_work\\_temp\\qvac-inference-0.19.1.tgz',
+  '/tmp/sdk-e2e/inference/qvac-inference-0.19.1.tgz',
+  './.sdk-e2e/inference/qvac-inference-0.19.1.tgz',
+  '../inference/qvac-inference-0.19.1.tgz'
+]
+
+// Ranges the check must keep reading. Skipping one would let a real version
+// drift through unreported.
+const publishedRanges = [
+  '^0.19.0',
+  '~0.19.0',
+  '^1.19.0',
+  '0.19.0',
+  '^0.19.x',
+  '>=0.19.0 <0.20.0',
+  '*'
+]
+
+describe('isLocalSpec', () => {
+  for (const spec of localSpecs) {
+    it(`treats "${spec}" as local`, () => {
+      assert.equal(isLocalSpec(spec), true)
+    })
+  }
+
+  for (const range of publishedRanges) {
+    it(`leaves "${range}" for the major.minor check`, () => {
+      assert.equal(isLocalSpec(range), false)
+    })
+  }
+})
 
 describe('checkSharedMajorMinor', () => {
   it('accepts a range on the SDK major.minor', () => {
@@ -70,11 +113,7 @@ describe('checkSharedMajorMinor', () => {
     })
   }
 
-  for (const spec of [
-    'file:../inference',
-    'link:../inference',
-    'npm:@tetherto/inference-mono@1.2.3'
-  ]) {
+  for (const spec of localSpecs) {
     it(`skips "${spec}", which names no published version`, () => {
       assert.deepEqual(checkSharedMajorMinor(sdkManifest('0.19.0', spec)), [])
     })

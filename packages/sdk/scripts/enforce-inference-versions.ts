@@ -69,6 +69,31 @@ export function checkAddonRanges(inferencePkg: Manifest, sdkPkg: Manifest) {
   ]
 }
 
+// Every spec that names something other than a published version. Mirrors
+// isLocalPathSpec in packages/sdk/e2e/scripts/build-local-inference.mjs, and a
+// published range never starts this way: semver has no leading drive letter,
+// slash or dot.
+//
+// `file:`/`link:` are the workspace link used for development and the pod checks
+// (`sdk-source:workspace` writes `file:../inference`), and `npm:` is the alias
+// the GPR dev build pins.
+//
+// The rest are the local tarball the e2e runs pin, which arrives in two shapes
+// from .github/actions/sdk-e2e-prepare-inference/prepare.mjs: a `file:` URL
+// everywhere except win32, and a bare drive path
+// (`C:/.../qvac-inference-0.19.1.tgz`) there. A leading `/` or `.` covers the
+// absolute and relative paths older revisions of that script wrote.
+export function isLocalSpec(spec: string) {
+  return (
+    spec.startsWith('file:') ||
+    spec.startsWith('link:') ||
+    spec.startsWith('npm:') ||
+    spec.startsWith('/') ||
+    spec.startsWith('.') ||
+    /^[a-zA-Z]:[\\/]/.test(spec)
+  )
+}
+
 export function checkSharedMajorMinor(sdkPkg: Manifest) {
   const rawVersion = sdkPkg.version
   const rawRange = sdkPkg.dependencies?.[dependency]
@@ -76,15 +101,8 @@ export function checkSharedMajorMinor(sdkPkg: Manifest) {
   if (rawVersion === undefined) return [`${sdkManifest} declares no version.`]
   if (rawRange === undefined) return [`${sdkManifest} declares no ${dependency} dependency.`]
 
-  // Specs that point somewhere other than the published package: the workspace
-  // link used for development and the pod checks (`sdk-source:workspace` writes
-  // `file:../inference`), and the npm alias the GPR dev build pins. They carry no
-  // major.minor to compare, so there is nothing to check.
-  const localPrefixes = ['file:', 'link:', 'npm:']
-  const localSpec = localPrefixes.find(function (prefix) {
-    return rawRange.startsWith(prefix)
-  })
-  if (localSpec !== undefined) {
+  // These carry no major.minor to compare, so there is nothing to check.
+  if (isLocalSpec(rawRange)) {
     console.log(
       `${dependency} points at "${rawRange}", not a published version; skipping the major.minor check.`
     )
