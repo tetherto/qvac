@@ -10,16 +10,19 @@ import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transf
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
 
 /**
- * Keys `@qvac/model-fit` reads as load evidence, in the spelling the SDK's own
- * completion/embedding transforms emit. The package canonicalizes `_` to `-`,
- * so `ctx_size` and `ctx-size` reach the same native setting.
+ * Keys forwarded to model-fit, in the spelling the SDK's completion and
+ * embedding transforms emit. model-fit canonicalizes `_` to `-`, so `ctx_size`
+ * and `ctx-size` reach the same native setting.
  *
- * This mirrors `SUPPORTED_LOAD_KEYS` in the package's `LlamaLoadConfig.cpp`
- * intersected with what the two transforms can produce. It is a duplicated
- * policy for the duration of the experiment: a key added to a load config
- * without being classified here must not silently change the question the
- * fitter answers, so `partitionParams` refuses the request instead.
+ * A key belongs here when it could change a load's device-memory footprint.
+ *
+ * model-fit answers unsupported for a key it does not recognize, and the
+ * advisory then reports unknown for every load that sets it. A key added here
+ * stays in that state until model-fit learns it.
  */
+// NOTE: adding a key here needs a follow-up in model-fit to recognize it and
+// account for it in the projection. Until that lands, every load setting the
+// key gets no fit verdict.
 const FIT_LOAD_KEYS: Record<LlamaLoadKind, readonly string[]> = {
   completion: [
     'device',
@@ -29,7 +32,6 @@ const FIT_LOAD_KEYS: Record<LlamaLoadKind, readonly string[]> = {
     'parallel',
     'cache-type-k',
     'cache-type-v',
-    // Alters KV/compute memory; `model-fit` reads it as evidence.
     'flash-attn',
     'main-gpu',
     'split-mode',
@@ -47,11 +49,10 @@ const FIT_LOAD_KEYS: Record<LlamaLoadKind, readonly string[]> = {
 }
 
 /**
- * Keys that reach the addon but cannot move a load's memory footprint —
- * sampling, generation, logging, and JS-side presentation settings. They are
- * dropped rather than forwarded: `@qvac/model-fit` rejects everything outside
- * its own allowlist, and a key it deliberately ignores must not turn a
- * supported load into `unsupported-config`.
+ * Keys withheld from model-fit — sampling, generation, logging, CPU scheduling
+ * and JS-side presentation settings. A key belongs here when it cannot change
+ * a load's device-memory footprint, so withholding it leaves the verdict
+ * intact.
  */
 const NON_FIT_KEYS: Record<LlamaLoadKind, readonly string[]> = {
   completion: [
@@ -134,8 +135,7 @@ function partitionParams(
       continue
     }
     if (dropped.has(key)) continue
-    // Neither fit evidence nor a known non-memory setting: this load carries a
-    // setting the SDK cannot classify, so it must not be answered for.
+    // In neither list, so its effect on the projection is unknown.
     return { detail: `unclassified load setting: ${key}` }
   }
 
