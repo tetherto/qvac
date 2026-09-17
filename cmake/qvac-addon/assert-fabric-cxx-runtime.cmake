@@ -48,7 +48,28 @@ function(read_dyn_syms path out_lines)
   # Semicolons would be read as list separators; symbol lines contain none.
   string(REPLACE ";" "," _syms "${_syms}")
   string(REPLACE "\n" ";" _syms "${_syms}")
-  set(${out_lines} "${_syms}" PARENT_SCOPE)
+  # Keep the numbered symbol entries and drop the table header. Both files read
+  # here are dynamic objects that certainly have entries, so parsing none means
+  # the output was not understood -- a readelf variant printing another format,
+  # or a wrapper on PATH printing something else entirely -- and every question
+  # below would answer itself the permissive way: fabric would look like it
+  # exports no runtime, and the module like it imports nothing unpinned.
+  set(_entries "")
+  foreach(_line IN LISTS _syms)
+    if(_line MATCHES "^[ \t]*[0-9]+:")
+      list(APPEND _entries "${_line}")
+    endif()
+  endforeach()
+  if(NOT _entries)
+    message(FATAL_ERROR
+      "assert-fabric-cxx-runtime: '${READELF} --dyn-syms' returned no symbol "
+      "entries for\n${path}\n"
+      "so this check cannot see what that file imports or exports. It is the "
+      "only detector for a module that resolved its C++ runtime from the host "
+      "process, so it fails rather than pass on an unread file. Point READELF "
+      "at binutils readelf or llvm-readelf.")
+  endif()
+  set(${out_lines} "${_entries}" PARENT_SCOPE)
 endfunction()
 
 # Whether fabric is the process' one C++ runtime shows up in its exports: the
