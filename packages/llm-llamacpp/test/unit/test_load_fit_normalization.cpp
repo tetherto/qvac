@@ -336,22 +336,45 @@ protected:
       selection.devices.push_back(
           {.name = names[index],
            .handle = reinterpret_cast<ggml_backend_dev_t>(&handles[index]),
-           .sourceGpuIndex = index});
+           .sourceGpuIndex = index,
+           .isRpc = names[index].rfind("RPC", 0) == 0});
     }
     return selection;
   }
 
+  // rpcRegistrations, when given, records every string 'rpc-servers'/'rpc'
+  // resolved to, in call order. Left null in tests with no RPC config: the
+  // registrar becomes a harmless no-op, matching how those tests never
+  // reference RPC-related config keys.
   static lfn::NormalizationDependencies backend(
       lfn::SelectedBackend selected,
-      std::vector<std::string> splitDevices = {"mock-device"}) {
+      std::vector<std::string> splitDevices = {"mock-device"},
+      std::vector<std::string>* rpcRegistrations = nullptr,
+      std::optional<std::vector<std::string>> registeredRpcDevices =
+          std::nullopt) {
     const auto devices = splitSelection(splitDevices);
+    if (!registeredRpcDevices.has_value()) {
+      registeredRpcDevices.emplace();
+      std::ranges::copy_if(
+          splitDevices,
+          std::back_inserter(*registeredRpcDevices),
+          [](const std::string& name) { return name.rfind("RPC", 0) == 0; });
+    }
     return {
         .resolveBackend = [selected](
                               backend_selection::BackendType,
                               const std::optional<backend_selection::MainGpu>&,
                               const ModelMetaData&,
                               bool) { return selected; },
-        .splitDevices = [devices]() { return devices; }};
+        .splitDevices = [devices]() { return devices; },
+        .registerRpcDevices =
+            [rpcRegistrations,
+             registeredRpcDevices](const std::string& servers) {
+              if (rpcRegistrations != nullptr) {
+                rpcRegistrations->push_back(servers);
+              }
+              return *registeredRpcDevices;
+            }};
   }
 
   static lfn::ConfigMap baseConfig() {
@@ -1888,4 +1911,414 @@ TEST_F(LoadFitNormalizationTest, InvalidChatTemplateRemainsInvalid) {
           {},
           backend({.type = backend_selection::CPU, .name = "none"}))),
       qvac_errors::StatusError);
+}
+
+// QVAC-24112: RPC distributed inference.
+
+TEST_F(LoadFitNormalizationTest, TensorSplitModeIsAcceptedAndForwarded) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, DuplicateRpcAliasesRemainInvalidArgument) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052";
+  config["rpc"] = "127.0.0.1:50053";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "both 'rpc-servers' and 'rpc' present must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "more than one of 'rpc-servers', 'rpc_servers', 'rpc'"));
+  }
+}
+
+TEST_F(
+    LoadFitNormalizationTest, DuplicateDeviceListAliasesRemainInvalidArgument) {
+  auto config = baseConfig();
+  config["devices"] = "none";
+  config["device-list"] = "none";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, RpcServersReachesTheRegistrarAndIsErased) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052,127.0.0.1:50053";
+  std::vector<std::string> registrations;
+  // Erasure is exercised implicitly: a surviving 'rpc-servers' key would be
+  // forwarded by the passthrough loop as '--rpc-servers', an argument
+  // llama.cpp does not recognize, and the call below would throw.
+  static_cast<void>(lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "none"},
+          {},
+          &registrations)));
+  EXPECT_THAT(
+      registrations, ::testing::ElementsAre("127.0.0.1:50052,127.0.0.1:50053"));
+}
+
+TEST_F(LoadFitNormalizationTest, RpcDeviceCountIsLeftToFabric) {
+  auto config = baseConfig();
+  const std::string endpoints =
+      "127.0.0.1:50052,127.0.0.1:50053,127.0.0.1:50054,"
+      "127.0.0.1:50055";
+  config["rpc-servers"] = endpoints;
+  config["split-mode"] = "tensor";
+  config["tensor-split"] = "1,1,1,1";
+  std::vector<std::string> registrations;
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "none"},
+          {"mock-device-0", "mock-device-1", "mock-device-2", "mock-device-3"},
+          &registrations));
+
+  EXPECT_THAT(registrations, ::testing::ElementsAre(endpoints));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+  ASSERT_GE(result.fitSnapshot.tensorSplit.size(), 4U);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[0], 1.F);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[1], 1.F);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[2], 1.F);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[3], 1.F);
+}
+
+TEST_F(LoadFitNormalizationTest, RpcAliasesAreRelativeToTheCurrentServerList) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052";
+  config["devices"] = "RPC0";
+  config["split-mode"] = "layer";
+
+  // "none" is accepted by fabric's device parser without a real backend. It
+  // stands in for a process-global name such as RPC4, proving that the public
+  // RPC0 alias is translated through the current registration result.
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::CPU, .name = "none"},
+          {"none"},
+          nullptr,
+          std::vector<std::string>{"none"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+}
+
+TEST_F(
+    LoadFitNormalizationTest,
+    ExplicitRpcOnlyPlacementExcludesLocalOpenClFromKvPolicy) {
+  auto config = baseConfig();
+  config["devices"] = "none";
+  config["split-mode"] = "layer";
+  config["cache-type-k"] = "q8_0";
+  config["cache-type-v"] = "q8_0";
+
+  auto dependencies = backend(
+      {.type = backend_selection::GPU, .name = "local-opencl"},
+      {"none", "local-opencl"});
+  auto selection = splitSelection({"none", "local-opencl"});
+  selection.devices[0].isRpc = true;
+  selection.devices[1].isOpenCl = true;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  // The excluded local device remains the projector fallback, but its OpenCL
+  // and Adreno traits must not constrain the RPC-only model placement.
+  EXPECT_EQ(result.params.mmproj_backend, "local-opencl");
+  EXPECT_FALSE(result.adrenoVersion.has_value());
+  EXPECT_EQ(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+TEST_F(
+    LoadFitNormalizationTest, ExplicitDevicesCannotBypassWorkloadRestrictions) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["devices"] = "none";
+  config["split-mode"] = "layer";
+
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "none"}, {"none"});
+  auto selection = splitSelection({"none"});
+  selection.devices[0].isOpenCl = true;
+  selection.devices[0].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies));
+    FAIL() << "explicit devices must not bypass workload restrictions";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("explicitly selected devices are not supported"));
+  }
+}
+
+TEST_F(
+    LoadFitNormalizationTest,
+    ExplicitDevicesOwnTensorSplitCardinalityOnGpuHeadNode) {
+  auto config = baseConfig();
+  config["devices"] = "none";
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1";
+
+  // "none" is Fabric's parser sentinel and lets this unit test exercise the
+  // real --device handler without a registered GPU. Automatic discovery still
+  // reports two GPUs, but the explicit list is the final placement set and
+  // therefore owns tensor-split cardinality.
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "local"},
+          {"none", "local-1"}));
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.F);
+}
+
+TEST_F(
+    LoadFitNormalizationTest,
+    ExplicitDevicesRejectMismatchedTensorSplitCardinality) {
+  auto config = baseConfig();
+  config["devices"] = "none";
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,2";
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "local"},
+            {"none", "local-1"})));
+    FAIL() << "tensor-split must match the explicit device list";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "tensor-split has 2 values, but devices selects 1 explicit "
+            "device(s)"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, StaleRpcDevicesAreExcludedFromAutomaticSplit) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052";
+  config["split-mode"] = "layer";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "local"},
+          {"RPC0", "RPC4", "local"},
+          nullptr,
+          std::vector<std::string>{"RPC4"}));
+
+  ASSERT_EQ(result.params.devices.size(), 3U);
+  EXPECT_NE(result.params.devices[0], nullptr);
+  EXPECT_NE(result.params.devices[1], nullptr);
+  EXPECT_EQ(result.params.devices[2], nullptr);
+}
+
+// The CPU-only-head-node case a code review caught: a machine with no local
+// GPU that asked for 'rpc-servers' but not 'devices' used to silently fall
+// back to single-device local CPU inference, generating correct output while
+// quietly ignoring the RPC config entirely. It must fail instead.
+TEST_F(LoadFitNormalizationTest, RpcHeadlessNodeThrowsWithoutExplicitDevices) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052,127.0.0.1:50053";
+  config["split-mode"] = "layer";
+  std::vector<std::string> registrations;
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::CPU, .name = "none"},
+            {},
+            &registrations)));
+    FAIL() << "rpc-servers with no local GPU and no explicit devices must "
+              "throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("no local GPU was found"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("'devices'"));
+  }
+  // The registrar still ran (and connected) before selection decided there
+  // was nowhere local to fall back to; only the *decision* is the bug.
+  EXPECT_THAT(
+      registrations, ::testing::ElementsAre("127.0.0.1:50052,127.0.0.1:50053"));
+}
+
+// Same headless machine, but the caller named devices explicitly: must not
+// throw, and must keep the requested split-mode instead of taking the
+// no-GPU-found degrade path meant for a machine that never had RPC involved.
+TEST_F(LoadFitNormalizationTest, RpcHeadlessNodeHonorsExplicitDevices) {
+  auto config = baseConfig();
+  config["rpc-servers"] = "127.0.0.1:50052,127.0.0.1:50053";
+  // "none" is parse_device_list's single magic value that resolves without a
+  // real device present (arg.cpp) - the only device string usable in a
+  // mock-only unit test. RpcHeadlessNodeThrowsWithoutExplicitDevices above
+  // covers the case this exists to unblock: a real name like "RPC0,RPC1".
+  config["devices"] = "none";
+  config["split-mode"] = "layer";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::CPU, .name = "none"},
+          {"none"},
+          nullptr,
+          std::vector<std::string>{"none"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+}
+
+TEST_F(
+    LoadFitNormalizationTest, RpcServersWithCpuDeviceThrowsBeforeRegistering) {
+  auto config = baseConfig();
+  config["device"] = "cpu";
+  config["rpc-servers"] = "127.0.0.1:50052,127.0.0.1:50053";
+  config["devices"] = "none";
+  std::vector<std::string> registrations;
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::CPU, .name = "none"},
+            {},
+            &registrations)));
+    FAIL() << "rpc-servers with device:cpu must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("'rpc-servers' requires"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("device: 'gpu'"));
+  }
+  EXPECT_TRUE(registrations.empty());
+}
+
+TEST(MobileMultiDeviceConfigTest, AllowsRpcWithExplicitDevices) {
+  lfn::ConfigMap config{
+      {"rpc-servers", "127.0.0.1:50052,127.0.0.1:50053"},
+      {"devices", "RPC0,RPC1"},
+      {"tensor-split", "1,1"}};
+
+  EXPECT_NO_THROW(
+      lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER));
+  EXPECT_NO_THROW(
+      lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_TENSOR));
+}
+
+TEST(MobileMultiDeviceConfigTest, AllowsFourRpcDevicesForTensorParallelism) {
+  lfn::ConfigMap config{
+      {"rpc-servers", "host-a:50052,host-b:50052,host-c:50052,host-d:50052"},
+      {"devices", "RPC0,RPC1,RPC2,RPC3"},
+      {"tensor-split", "1,1,1,1"}};
+
+  EXPECT_NO_THROW(
+      lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_TENSOR));
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsRpcWithoutExplicitDevices) {
+  lfn::ConfigMap config{{"rpc-servers", "127.0.0.1:50052"}};
+
+  try {
+    lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER);
+    FAIL() << "mobile RPC without devices must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("requires a non-empty"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("devices"));
+  }
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsRpcWithEmptyDevices) {
+  lfn::ConfigMap config{{"rpc-servers", "127.0.0.1:50052"}, {"devices", ""}};
+
+  EXPECT_THROW(
+      lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER),
+      qvac_errors::StatusError);
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsDevicesWithoutRpc) {
+  lfn::ConfigMap config{{"devices", "RPC0"}};
+
+  try {
+    lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_NONE);
+    FAIL() << "mobile devices without rpc-servers must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("only supported on mobile"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("rpc-servers"));
+  }
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsLocalOnlySplitMode) {
+  lfn::ConfigMap config{{"tensor-split", "1,1"}};
+
+  try {
+    lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER);
+    FAIL() << "mobile local-only split config must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("without rpc-servers"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("single-GPU device"));
+  }
+}
+
+TEST(MobileMultiDeviceConfigTest, RejectsMainGpuWithRpc) {
+  lfn::ConfigMap config{
+      {"rpc-servers", "127.0.0.1:50052"},
+      {"devices", "RPC0"},
+      {"main-gpu", "0"}};
+
+  try {
+    lfn::validateMobileMultiDeviceConfig(config, LLAMA_SPLIT_MODE_LAYER);
+    FAIL() << "mobile RPC with main-gpu must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("main-gpu"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("set devices"));
+  }
 }
