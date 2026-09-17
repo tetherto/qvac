@@ -83,10 +83,19 @@ using BackendResolver = std::function<SelectedBackend(
     const std::optional<backend_selection::MainGpu>&, const ModelMetaData&,
     bool)>;
 
+// Registers the comma-separated 'host:port' endpoints as ggml RPC devices and
+// returns their process-global ggml device names in endpoint/device order.
+// Throws qvac_errors::StatusError (InvalidArgument) on an empty list, a
+// missing RPC backend, or an endpoint that cannot be reached.
+using RpcDeviceRegistrar =
+    std::function<std::vector<std::string>(const std::string&)>;
+
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
-  /// Authoritative eligible device set for every multi-GPU split mode.
+  /// Authoritative eligible device set for explicit placement and every
+  /// multi-GPU split mode.
   std::function<backend_selection::SplitDeviceSelection()> splitDevices;
+  RpcDeviceRegistrar registerRpcDevices;
 };
 
 struct NormalizedLoad {
@@ -108,6 +117,9 @@ void tuneLoadConfigMap(
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
     bool isTensorSplit = false);
+
+void validateMobileMultiDeviceConfig(
+    const ConfigMap& configFilemap, llama_split_mode splitMode);
 
 NormalizedLoad normalizeLoadForFit(
     const std::string& modelPath, ConfigMap configFilemap,

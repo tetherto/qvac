@@ -12,19 +12,52 @@ When `device` is `'cpu'`, all GPU-related parameters (`split-mode`, `tensor-spli
 
 ### `split-mode`
 
-Controls how the model is distributed across GPUs.
+Controls how the model is distributed across devices: local GPUs, plus remote
+ones registered with `rpc-servers`.
 
 | Value    | Behavior |
 |----------|----------|
 | `'none'` | **Default.** Pin the entire model to a single GPU selected by `main-gpu` (or auto-detected). No multi-GPU. |
-| `'layer'`| **Pipeline parallelism.** Each transformer layer is assigned to a GPU. Layers flow sequentially through GPUs. Best for large batch or long-context workloads where layer count exceeds single-GPU VRAM. |
-| `'tensor'`| **EXPERIMENTAL tensor parallelism** via qvac-fabric's meta device — weights *and* KV cache are split across the eligible devices the addon pins. Desktop only. Requires flash attention, disables auto-fit, and is unavailable for some architectures. **See [tensor parallelism](#tensor-parallelism) below.** |
+| `'layer'`| **Layer split.** Each transformer layer is assigned to a device. The scheduler may additionally overlap micro-batches between devices — see [pipeline parallelism](#pipeline-parallelism) — but only when every participating device supports async compute and events. Best for large batch or long-context workloads where layer count exceeds single-GPU VRAM. |
+| `'tensor'`| **Tensor parallelism.** Each weight is sharded across devices and all-reduces are inserted, so every device works on the same tokens simultaneously. Requires a supported architecture, flash attention enabled, and a non-quantized KV cache — the load **fails** if any is unmet. Communication is far more frequent than layer split, so it wants a fast interconnect. |
 
 Accepts both `split-mode` (hyphen) and `split_mode` (underscore). Providing both throws an error. Case-insensitive (`'LAYER'` works).
 
 `'row'` — llama.cpp's legacy split-buffer tensor parallelism — is **not** accepted: the load is rejected with `InvalidArgument` and the error directs callers to `'layer'` or `'tensor'`. It was removed because only the SYCL backend provides the split buffers it needs and SYCL is outside this package's backend allowlist, so a `'row'` request could never take effect and silently ran as `'layer'`.
 
-#### Tensor parallelism
+### Pipeline parallelism
+
+Under `split-mode: 'layer'`, devices can either take turns (a relay — one busy
+at a time) or overlap micro-batches so a later stage works on one ubatch while
+an earlier stage starts the next. The overlap is what produces a throughput win.
+
+It engages only when **all** of these hold, and is otherwise disabled **with no
+warning** — only the enabled path logs, as `pipeline parallelism enabled`:
+
+- `split-mode` is exactly `'layer'`
+- more than one device participates
+- `gpu_layers` exceeds the model's total layer count
+- KV offload is on and no per-tensor overrides are set
+- every non-CPU, non-ACCEL device reports async compute and events
+
+Give it work to overlap: the batch size must exceed the ubatch size, and the
+prompt must be long enough to produce several ubatches. A short prompt has
+nothing to pipeline even when the feature is on.
+
+To confirm it actually engaged, set `verbosity: '3'` and watch the native log
+for `pipeline parallelism enabled`. Do not infer it from throughput alone.
+
+For non-RDMA or higher-latency links, start with `split-mode: 'layer'` plus
+continuous batching (`parallel >= 2`). Tensor parallelism communicates far more
+often and is much more sensitive to link speed; layer/pipeline mode with
+multiple in-flight requests is usually the better first configuration on
+USB/TCP, Thunderbolt networking, or standard Ethernet.
+
+### Why `'row'` is never accepted
+
+`'row'` requires a "split buffer" that slices each weight tensor across GPUs, exposed by a backend as `ggml_backend_split_buffer_type`. **Only the SYCL backend provides it** — CUDA dropped split buffers and moved tensor parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR`. Vulkan, Metal and OpenCL never provided it.
+
+That separate mode is what `split-mode: 'tensor'` now exposes, so tensor parallelism **is** available — it simply does not go through `'row'`.
 
 `split-mode: 'tensor'` selects `LLAMA_SPLIT_MODE_TENSOR`, which distributes the model through qvac-fabric's meta-device abstraction. It needs no backend-specific buffer type, so it is available on every shipped backend. Three constraints apply:
 
@@ -113,9 +146,112 @@ Accepts both `main-gpu` (hyphen) and `main_gpu` (underscore). Providing both thr
 
 Note the index is against the **raw** registry, not the filtered list. This is deliberate: it is the same index space qvac-fabric and the other addons use, so a given integer means the same device everywhere regardless of which backends the allowlist happens to admit on that host.
 
+## Distributed inference across machines (`rpc-servers`)
+
+The devices a model is split across need not be local. `rpc-servers` attaches
+remote GPUs exposed by `ggml-rpc-server` processes, letting one model run across
+several machines — for a model too large for any single box, or to add
+throughput. Every `split-mode` above applies unchanged to remote devices.
+
+```js
+const model = new LlmLlamacpp({
+  files: { model: [modelPath] },
+  config: {
+    device: 'gpu',
+    'rpc-servers': '10.0.0.1:50052,10.0.0.2:50052',
+    devices: 'RPC0,RPC1',
+    'split-mode': 'layer',
+    'tensor-split': '1,1',
+    gpu_layers: '999'
+  }
+})
+```
+
+On each worker machine, prefer the managed `@qvac/ggml-rpc-server` package so
+the binary version, readiness check, logs, and shutdown are owned by QVAC:
+
+```js
+const { startRpcServer } = require('@qvac/ggml-rpc-server')
+
+const server = await startRpcServer({
+  host: '10.0.0.1',
+  port: 50052,
+  device: 'MTL0',
+  allowNonLoopbackHost: true
+})
+
+console.log(server.url)
+```
+
+The raw native tool is still useful for local debugging:
+
+```bash
+ggml-rpc-server -H 0.0.0.0 -p 50052 -d MTL0   # -d takes a ggml device name
+```
+
+### `devices`
+
+Remote devices are named `RPC0`, `RPC1`, … in the order given to `rpc-servers`.
+
+Set `devices` to name exactly which ones take part. Without it, split modes
+distribute across *every* visible device — sensible for local multi-GPU, but
+rarely what you want here, because the registry then mixes local and remote.
+The addon forwards the endpoint list, device list, split mode, and split weights
+without imposing a device-count limit. Fabric determines which device counts a
+parallel mode supports.
+
+Automatic backend selection never considers RPC devices on its own — it can't
+reason about whether a remote device is reachable or suitable the way it can
+for local hardware. **On a machine with no local GPU, `rpc-servers` without
+`devices` fails the load** rather than silently running the model on the local
+CPU. Set `devices` in that case (e.g. `'RPC0,RPC1'`).
+
+### Requirements and caveats
+
+- **Matching builds.** The RPC wire protocol is versioned. Client and every
+  server must be built from the same qvac-fabric revision; mismatched builds
+  refuse to connect.
+- **RDMA-capable builds.** RDMA uses qvac-fabric's `GGML_RPC_RDMA` path and
+  auto-negotiates over the existing RPC endpoint when both sides support it.
+  Build both `@qvac/llm-llamacpp` and `@qvac/ggml-rpc-server` with the
+  `rpc-rdma` vcpkg feature; a server-only RDMA build still falls back to TCP
+  with a TCP-only client.
+- **Model file.** Needed only on the machine loading it. Weights are pushed to
+  the remote devices.
+- **Reachability at load.** Every endpoint must be reachable when the model
+  loads. An unreachable one fails the load naming that endpoint rather than
+  being skipped — connection attempts time out after ~5s.
+- **Unauthenticated.** The channel has no authentication or encryption. Use it
+  only on a trusted private network. The managed server defaults to loopback and
+  requires `allowNonLoopbackHost: true` before binding a LAN-reachable host.
+- **One server per pipeline stage.** A server handles one client connection
+  serially, so devices behind the same server process are not pipelined against
+  each other.
+- **Mobile support.** Physical ARM64 Android and iOS devices can run the managed
+  `@qvac/ggml-rpc-server` TCP worker and can use `@qvac/llm-llamacpp` as an RPC
+  client. Mobile clients must set `devices` explicitly when `rpc-servers` is
+  configured. Distributed `split-mode` and `tensor-split` settings are allowed;
+  local-only multi-GPU settings and `main-gpu` remain rejected. Keep mobile RPC
+  traffic on a controlled wired or trusted private transport.
+
+### Verifying it actually distributed
+
+A run that produces correct text is *not* evidence the model was distributed —
+if remote devices are dropped, the load quietly falls back to local execution
+and still generates fine. Set `verbosity: '3'` and check the native log for
+per-layer placement:
+
+```
+load_tensors: layer   0 assigned to device RPC0
+load_tensors: layer   9 assigned to device RPC1
+```
+
 ## How the parameters interact
 
 ```
+rpc-servers ──> Remote devices registered FIRST, so the steps below see them
+  │              alongside local ones (RPC0, RPC1, ... in the order given)
+  ▼
 device ─── 'cpu' ──> All GPU params ignored, CPU inference
   │
   └── 'gpu' ──> Backend selection runs (considers main-gpu)
@@ -124,6 +260,10 @@ device ─── 'cpu' ──> All GPU params ignored, CPU inference
                   │   split-mode, tensor-split, main-gpu all cleared
                   │
                   └── GPU found
+                        │
+                        ├── devices = 'RPC0,RPC1' (any split-mode)
+                        │   Passed through verbatim as --device; the two
+                        │   branches below do not apply
                         │
                         ├── split-mode = 'none' (default)
                         │   Model pinned to single chosen GPU via --device
@@ -150,6 +290,8 @@ The path taken depends on the split mode, and the two are genuinely different co
 - **`split-mode: 'layer'` or `'tensor'`**: `chooseBackend()` is not used at all. The eligible device list is built first, and everything is derived from it: placement, the device handles, the OpenCL/Metal/Adreno traits and the device count. `main-gpu` is ignored.
 
 In both cases, only devices whose backend family is in the allowlist are considered. If nothing survives, a warning names the rejected device and registry identities, and the load falls back to CPU with `split-mode` reset to `'none'` and `tensor-split` erased.
+
+- **`devices` set** (any split-mode): the list is passed through verbatim as `--device`, and the split-device selection rules below do not apply. This is the most predictable way to constrain which RPC devices take part.
 
 ### Why the device list is pinned in split modes
 
