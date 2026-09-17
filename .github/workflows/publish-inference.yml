@@ -1,0 +1,217 @@
+name: Build and Publish QVAC Inference (inference)
+
+# Releases @qvac/inference to npm from a release-inference-<x.y.z> branch.
+#
+# @qvac/sdk's version shares the engine's major and minor (enforced by the SDK's
+# `enforce-inference-versions` lint step). Moving both to a new major.minor is two
+# releases in order: this workflow, then publish-sdk.yml with the SDK's
+# @qvac/inference range set to the version published here. That order is what lets
+# the range resolve from npm while the SDK release is under review.
+#
+# Dev builds for both packages come from publish-sdk.yml, where a shared run id
+# lets the SDK mono build pin the inference mono build from the same run.
+#
+# Tag only, no GitHub Release, per create-release-tag.yml: the Releases page is
+# for the SDK, whose release notes carry the engine's notes for the version it
+# depends on.
+
+on:
+  push:
+    branches:
+      - release-inference-*
+    paths:
+      - "packages/inference/**"
+
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        required: false
+        default: ""
+        type: string
+
+env:
+  WORKDIR: packages/inference
+
+permissions:
+  contents: read
+
+jobs:
+  fork-approval:
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+
+  authorize:
+    needs: [fork-approval]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout authorize-pr (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  release-merge-guard:
+    name: Release Merge Guard
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-inference-')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: ./.github/actions/release-merge-guard
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          base-ref: ${{ github.ref_name }}
+          base-sha: ${{ github.event.before }}
+          head-sha: ${{ github.sha }}
+          package-slug: inference
+          package-json-path: packages/inference/package.json
+          changelog-path: packages/inference/CHANGELOG.md
+
+  build:
+    needs:
+      - fork-approval
+      - authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Configure scoped registry for @tetherto and @qvac packages
+        shell: bash
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          cat > .npmrc <<NPMRC
+          registry=https://registry.npmjs.org/
+          @qvac:registry=https://registry.npmjs.org/
+          @tetherto:registry=https://npm.pkg.github.com/
+          //npm.pkg.github.com/:_authToken=${GIT_PAT}
+          NPMRC
+
+          cat > bunfig.toml <<BUNFIG
+          [install]
+          registry = "https://registry.npmjs.org/"
+
+          [install.scopes]
+          "@tetherto" = { token = "${GIT_PAT}", url = "https://npm.pkg.github.com" }
+          BUNFIG
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: bun install
+
+      # Compile + alias resolution. format / lint / typecheck / tests are the
+      # PR gate's job (pr-checks-sdk-pod), the same split publish-sdk.yml uses
+      # for the engine's dev build.
+      - name: Build
+        working-directory: ${{ env.WORKDIR }}
+        run: bun run build
+
+      - name: Upload inference dist artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: dist-inference
+          path: ${{ env.WORKDIR }}/dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-npm:
+    name: Publish @qvac/inference to NPM
+    needs:
+      - fork-approval
+      - build
+      - release-merge-guard
+    if: needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'
+    runs-on: ubuntu-latest
+    environment: npm
+    outputs:
+      published_version: ${{ steps.publish.outputs.npm_published_version }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    env:
+      # prepare runs tsc; publish the prebuilt dist only.
+      NPM_CONFIG_IGNORE_SCRIPTS: "true"
+    steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        run: |
+          tag="${{ inputs.npm_tag }}"
+          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download inference dist artifact
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: dist-inference
+          path: ${{ env.WORKDIR }}/dist/
+
+      - name: Determine dist-tag
+        id: dist-tag
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        with:
+          workdir: ${{ env.WORKDIR }}
+          tag: ${{ inputs.npm_tag }}
+
+      - name: Publish to NPM Package Registry
+        id: publish
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
+        with:
+          tag: ${{ steps.dist-tag.outputs.tag }}
+          workdir: ${{ env.WORKDIR }}
+
+  create-tag:
+    needs: [publish-npm]
+    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-release-tag.yml
+    with:
+      repo_name: "inference"
+      published_version: ${{ needs.publish-npm.outputs.published_version }}
