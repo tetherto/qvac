@@ -18,11 +18,11 @@ struct Selector {
   int index = 0;
 };
 
-inline bool isSelectorKey(const std::string &key) {
+inline bool isSelectorKey(const std::string& key) {
   return key == "main-gpu" || key == "main_gpu";
 }
 
-template <typename ConfigMap> Selector parse(const ConfigMap &config) {
+template <typename ConfigMap> Selector parse(const ConfigMap& config) {
   const auto canonical = config.find("main-gpu");
   const auto alias = config.find("main_gpu");
   if (canonical != config.end() && alias != config.end()) {
@@ -34,7 +34,7 @@ template <typename ConfigMap> Selector parse(const ConfigMap &config) {
   if (config.contains("gpu_device")) {
     throw std::invalid_argument("main-gpu cannot be combined with gpu_device");
   }
-  if (const auto *text = std::get_if<std::string>(&it->second)) {
+  if (const auto* text = std::get_if<std::string>(&it->second)) {
     std::string name = *text;
     std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
       return static_cast<char>(std::tolower(c));
@@ -44,9 +44,9 @@ template <typename ConfigMap> Selector parse(const ConfigMap &config) {
     if (name == "integrated")
       return {Kind::Integrated};
     int index = 0;
-    const char *begin = text->data();
-    const char *end = begin + text->size();
-    const char *digits = begin;
+    const char* begin = text->data();
+    const char* end = begin + text->size();
+    const char* digits = begin;
     if (digits != end && (*digits == '+' || *digits == '-'))
       ++digits;
     if (digits == end || !std::all_of(digits, end, [](unsigned char c) {
@@ -64,9 +64,9 @@ template <typename ConfigMap> Selector parse(const ConfigMap &config) {
         "main-gpu must be an int32 registry index, dedicated, or integrated");
   }
   double number = std::numeric_limits<double>::quiet_NaN();
-  if (const auto *value = std::get_if<int>(&it->second))
+  if (const auto* value = std::get_if<int>(&it->second))
     number = *value;
-  if (const auto *value = std::get_if<double>(&it->second))
+  if (const auto* value = std::get_if<double>(&it->second))
     number = *value;
   if (std::isfinite(number) && number >= std::numeric_limits<int>::min() &&
       std::floor(number) == number &&
@@ -90,13 +90,13 @@ struct Selection {
   bool outOfRange = false;
 };
 
-inline Selection select(const std::vector<Device> &registry,
-                        Selector selector) {
+inline Selection
+select(const std::vector<Device>& registry, Selector selector) {
   bool outOfRange = false;
   if (selector.kind == Kind::Index) {
     if (selector.index >= 0 &&
         static_cast<size_t>(selector.index) < registry.size()) {
-      const auto &selected = registry[selector.index];
+      const auto& selected = registry[selector.index];
       return {selected.eligible ? selected.whisperIndex : -1};
     }
     outOfRange = true;
@@ -109,7 +109,7 @@ inline Selection select(const std::vector<Device> &registry,
       continue;
     // Retain the validated Adreno OpenCL preference within the requested class.
     for (bool adreno : {true, false}) {
-      for (const auto &device : registry) {
+      for (const auto& device : registry) {
         if (device.eligible && device.integrated == integrated &&
             device.adrenoOpencl == adreno) {
           return {device.whisperIndex, outOfRange};

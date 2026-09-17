@@ -319,9 +319,10 @@ void WhisperModel::load() {
       const auto selected = main_gpu::select(
           main_gpu::registryDevices(), main_gpu::parse(cfg_.whisperContextCfg));
       if (selected.outOfRange) {
-        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-             "main-gpu registry index is out of range; using normal GPU "
-             "selection");
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "main-gpu registry index is out of range; using normal GPU "
+            "selection");
       }
       contextParams.use_gpu = selected.whisperIndex >= 0;
       if (contextParams.use_gpu)
@@ -341,10 +342,9 @@ void WhisperModel::load() {
           adrenoOpenclDeviceIndex != contextParams.gpu_device) {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-            std::string(
-                "Adreno OpenCL GPU device detected; preferring it over "
-                "the default GPU to avoid the Adreno Vulkan compute "
-                "crash (gpu_device ") +
+            std::string("Adreno OpenCL GPU device detected; preferring it over "
+                        "the default GPU to avoid the Adreno Vulkan compute "
+                        "crash (gpu_device ") +
                 std::to_string(contextParams.gpu_device) + " -> " +
                 std::to_string(adrenoOpenclDeviceIndex) + ")");
         contextParams.gpu_device = adrenoOpenclDeviceIndex;
