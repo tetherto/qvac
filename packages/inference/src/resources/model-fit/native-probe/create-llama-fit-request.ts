@@ -35,7 +35,23 @@ const FIT_LOAD_KEYS: Record<LlamaLoadKind, readonly string[]> = {
     'flash-attn',
     'main-gpu',
     'split-mode',
-    'tensor-split'
+    'tensor-split',
+    'batch-size',
+    'ubatch-size',
+    'cpu-moe',
+    'n-cpu-moe',
+    'n-cpu-ffn',
+    'override-tensor',
+    'moe-cache-mib',
+    'kv-offload',
+    'no-kv-offload',
+    'prefetch-weights',
+    'tensor-read-lazy',
+    'fit',
+    'fit-target',
+    'fit-ctx',
+    'image-max-tokens',
+    'image-min-tokens'
   ],
   embedding: [
     'device',
@@ -72,7 +88,11 @@ const NON_FIT_KEYS: Record<LlamaLoadKind, readonly string[]> = {
     'image_tile_mode',
     'image_no_upscale',
     'mmproj-use-gpu',
-    'openclCacheDir'
+    'openclCacheDir',
+    'threads',
+    'threads-batch',
+    'cpu-mask',
+    'cpu-mask-batch'
   ],
   embedding: ['pooling', 'attention', 'embd_normalize', 'verbosity', 'openclCacheDir']
 }
