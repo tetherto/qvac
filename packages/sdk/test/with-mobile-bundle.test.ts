@@ -2,7 +2,11 @@ import test from 'brittle'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolvePlatformAddonRoots } from '@/expo/plugins/patches/qvac-platform-addons.mjs'
+import {
+  resolveAddonPlatformPackage,
+  resolvePlatformAddonRoots,
+  resolvePlatformPackageName
+} from '@/expo/plugins/patches/qvac-platform-addons'
 import {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
@@ -32,24 +36,56 @@ test('resolvePlatformAddonRoots: finds the inner addon of the installed platform
   const fixtureDir = mkdtempSync(join(tmpdir(), 'qvac-platform-addon-'))
   t.teardown(() => rmSync(fixtureDir, { recursive: true, force: true }))
   writeSplitAddon(fixtureDir, '@qvac/tts-ggml', '0.9.2')
-  writeFatAddon(fixtureDir, '@qvac/asr-ggml', '0.3.3')
+  writeSplitAddon(fixtureDir, '@qvac/asr-ggml', '0.5.2')
+  writeFatAddon(fixtureDir, '@qvac/llm-llamacpp', '0.53.0')
 
   const android = resolvePlatformAddonRoots(
     fixtureDir,
-    ['@qvac/tts-ggml', '@qvac/asr-ggml'],
+    ['@qvac/tts-ggml', '@qvac/asr-ggml', '@qvac/llm-llamacpp'],
     'android'
   )
 
-  t.is(android.length, 1, 'only the split addon needs linking from its platform package')
+  t.is(android.length, 2, 'only split addons need linking from their platform packages')
   t.is(android[0].pkg.name, '@qvac/tts-ggml', 'the inner addon carries the meta package name')
   t.is(android[0].pkg.version, '0.9.2')
   t.ok(
     android[0].dir.endsWith(join('@qvac', 'tts-ggml-android-arm64', 'addon')),
-    'resolves the android slice'
+    'resolves the tts android slice'
+  )
+  t.is(android[1].pkg.name, '@qvac/asr-ggml')
+  t.ok(
+    android[1].dir.endsWith(join('@qvac', 'asr-ggml-android-arm64', 'addon')),
+    'resolves the asr android slice'
   )
 
-  const ios = resolvePlatformAddonRoots(fixtureDir, ['@qvac/tts-ggml'], 'ios')
-  t.ok(ios[0].dir.endsWith(join('@qvac', 'tts-ggml-ios', 'addon')), 'resolves the ios slice')
+  const ios = resolvePlatformAddonRoots(fixtureDir, ['@qvac/tts-ggml', '@qvac/asr-ggml'], 'ios')
+  t.ok(ios[0].dir.endsWith(join('@qvac', 'tts-ggml-ios', 'addon')), 'resolves the tts ios slice')
+  t.ok(ios[1].dir.endsWith(join('@qvac', 'asr-ggml-ios', 'addon')), 'resolves the asr ios slice')
+})
+
+test('resolvePlatformPackageName: reads slice names from #host-addon for hosts and build targets', (t) => {
+  const hostAddon = hostAddonMap('@qvac/tts-ggml')
+  t.is(resolvePlatformPackageName(hostAddon, 'android'), '@qvac/tts-ggml-android-arm64')
+  t.is(resolvePlatformPackageName(hostAddon, 'android-arm64'), '@qvac/tts-ggml-android-arm64')
+  t.is(resolvePlatformPackageName(hostAddon, 'ios'), '@qvac/tts-ggml-ios')
+  t.is(resolvePlatformPackageName(hostAddon, 'ios-arm64'), '@qvac/tts-ggml-ios')
+  t.is(resolvePlatformPackageName(hostAddon, 'ios-arm64-simulator'), '@qvac/tts-ggml-ios')
+  t.is(resolvePlatformPackageName(hostAddon, 'darwin-arm64'), '@qvac/tts-ggml-darwin-arm64')
+  t.is(resolvePlatformPackageName(hostAddon, 'linux-x64'), '@qvac/tts-ggml-linux-x64')
+  t.is(
+    resolvePlatformPackageName(hostAddonMap('@qvac/asr-ggml'), 'android-arm64'),
+    '@qvac/asr-ggml-android-arm64'
+  )
+  t.is(
+    resolvePlatformPackageName(hostAddonMap('@qvac/audiogen-ggml'), 'ios'),
+    '@qvac/audiogen-ggml-ios'
+  )
+  t.is(
+    resolveAddonPlatformPackage('@qvac/tts-ggml', hostAddon, 'android-arm64'),
+    '@qvac/tts-ggml-android-arm64'
+  )
+  t.is(resolveAddonPlatformPackage('@qvac/other', hostAddon, 'android-arm64'), null)
+  t.is(resolvePlatformPackageName(undefined, 'android-arm64'), null)
 })
 
 test('resolvePlatformAddonRoots: skips an addon whose platform package is absent', (t) => {
@@ -82,9 +118,13 @@ test('patchBareKitLinkers: returns paths for patched platforms', (t) => {
   mkdirSync(join(bareKitPath, 'android'), { recursive: true })
   mkdirSync(join(bareKitPath, 'ios'), { recursive: true })
   mkdirSync(patchesDir, { recursive: true })
+  mkdirSync(join(sdkPath, 'dist', 'src', 'expo', 'plugins', 'patches'), { recursive: true })
   writeFileSync(join(patchesDir, 'android-link.mjs'), 'android patch')
   writeFileSync(join(patchesDir, 'ios-link.mjs'), 'ios patch')
-  writeFileSync(join(patchesDir, 'qvac-platform-addons.mjs'), 'resolver')
+  writeFileSync(
+    join(sdkPath, 'dist', 'src', 'expo', 'plugins', 'patches', 'qvac-platform-addons.js'),
+    'resolver'
+  )
 
   const linkerPaths = patchBareKitLinkers(projectRoot, sdkPath)
 
@@ -93,11 +133,11 @@ test('patchBareKitLinkers: returns paths for patched platforms', (t) => {
   t.ok(existsSync(iosTarget), 'copies the iOS linker patch')
   t.ok(
     existsSync(join(bareKitPath, 'android', 'qvac-platform-addons.mjs')),
-    'copies the resolver the Android patch imports'
+    'copies the compiled resolver the Android patch imports'
   )
   t.ok(
     existsSync(join(bareKitPath, 'ios', 'qvac-platform-addons.mjs')),
-    'copies the resolver the iOS patch imports'
+    'copies the compiled resolver the iOS patch imports'
   )
 })
 
@@ -159,6 +199,14 @@ test('runIOSAddonLinker: rejects when the linker fails', async (t) => {
 
 function hostAddonMap(metaName: string) {
   return {
+    linux: {
+      x64: [`${metaName}-linux-x64`, './addon-unavailable.js'],
+      arm64: [`${metaName}-linux-arm64`, './addon-unavailable.js']
+    },
+    darwin: {
+      arm64: [`${metaName}-darwin-arm64`, './addon-unavailable.js'],
+      x64: [`${metaName}-darwin-x64`, './addon-unavailable.js']
+    },
     android: { arm64: [`${metaName}-android-arm64`, './addon-unavailable.js'] },
     ios: [`${metaName}-ios`, './addon-unavailable.js'],
     default: './addon-unavailable.js'
