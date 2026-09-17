@@ -687,15 +687,17 @@ void TranslationModel::
         if (begin != end && *begin == '+') {
           ++begin;
           if (begin == end || *begin < '0' || *begin > '9') {
-            throw std::invalid_argument("main-gpu must be a signed 32-bit "
-                                        "integer, dedicated or integrated");
+            throw std::invalid_argument(
+                "main-gpu must be a signed 32-bit "
+                "integer, dedicated or integrated");
           }
         }
         int32_t index = 0;
         const auto parsed = std::from_chars(begin, end, index);
         if (parsed.ec != std::errc{} || parsed.ptr != end) {
-          throw std::invalid_argument("main-gpu must be a signed 32-bit "
-                                      "integer, dedicated or integrated");
+          throw std::invalid_argument(
+              "main-gpu must be a signed 32-bit "
+              "integer, dedicated or integrated");
         }
         mainGpu = static_cast<int64_t>(index);
       }
@@ -707,8 +709,9 @@ void TranslationModel::
               : std::get<double>(selector->second);
       if (!std::isfinite(value) || value < -2147483648.0 || value > maxIndex ||
           std::floor(value) != value) {
-        throw std::invalid_argument("main-gpu must be a signed 32-bit integer, "
-                                    "dedicated or integrated");
+        throw std::invalid_argument(
+            "main-gpu must be a signed 32-bit integer, "
+            "dedicated or integrated");
       }
       mainGpu = static_cast<int64_t>(value);
     }
