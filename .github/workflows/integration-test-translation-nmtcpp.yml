@@ -132,7 +132,7 @@ jobs:
         if: ${{ !inputs.prebuild_package }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: prebuilds
+          name: prebuilds-translation-nmtcpp
           path: ${{ runner.temp }}/prebuilds-staging
 
       - name: Move prebuilds from staging to workspace (Unix)
@@ -226,33 +226,28 @@ jobs:
         with:
           package: translation-nmtcpp
           paths: packages/translation-nmtcpp/model
-          hash-files-glob: .github/workflows/integration-test-translation-nmtcpp.yml
+          # Keyed on the file that DEFINES the model set and that the download
+          # below resolves from, so a dated S3 bump moves the key. Same input the
+          # nx lane and the seed use.
+          hash-files-glob: packages/translation-nmtcpp/project.json
 
-      - name: Download Bergamot models from S3
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        working-directory: packages/translation-nmtcpp
-        shell: bash
-        run: |
-          echo "Downloading Bergamot models from S3..."
-          mkdir -p model/bergamot
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enit/2026-04-28/" model/bergamot/enit --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-esen/2026-04-28/" model/bergamot/esen --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-fren/2025-12-18/" model/bergamot/fren --recursive
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/bergamot/bergamot-enes/2025-12-18/" model/bergamot/enes --recursive
-          echo ""
-          echo "Bergamot model directories:"
-          ls -la model/bergamot/
+      # Resolved from packages/translation-nmtcpp/project.json, the same
+      # definition integration-test-nx.yml uses. One model set, one cache key
+      # input, three consumers: this lane, the nx lane and the seed.
+      - name: Resolve the S3 model set
+        id: model-s3
+        uses: ./.github/actions/project-model-s3
+        with:
+          package: translation-nmtcpp
 
-      - name: Download IndicTrans model from S3
-        if: steps.model-cache.outputs.cache-hit != 'true'
-        working-directory: packages/translation-nmtcpp
-        shell: bash
-        run: |
-          echo "Downloading IndicTrans en-indic model from S3..."
-          mkdir -p model/indictrans
-          aws s3 cp "s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/ggml/indictrans2/q4_0/ggml-indictrans2-en-indic-dist-200M/2026-01-01/ggml-indictrans2-en-indic-dist-200M-q4_0.bin" model/indictrans/
-          echo "IndicTrans model files:"
-          ls -la model/indictrans/
+      - name: Download NMT models from S3
+        uses: ./.github/actions/stage-integration-models
+        with:
+          workdir: packages/translation-nmtcpp
+          s3-manifest: ${{ steps.model-s3.outputs.manifest }}
+          cache-hit: ${{ steps.model-cache.outputs.cache-hit }}
+          aws-role: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          bucket: ${{ secrets.MODEL_S3_BUCKET }}
 
       - name: Run integration test (Linux/macOS)
         if: ${{ matrix.platform != 'win32' }}

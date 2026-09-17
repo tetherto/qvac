@@ -9,10 +9,17 @@ from __future__ import annotations
 from .models import (
     AssessModelFitRequest,
     AssessModelFitResponse,
+    AudioEditStreamRequest,
+    AudioEditStreamResponse,
+    AudioGenEditOperation,
     AudioGenEngine,
+    AudioGenRepaintMode,
     AudioGenStreamRequest,
     AudioGenStreamResponse,
     AudioGenTaskType,
+    AudioGenTrack,
+    AudioUnderstandRequest,
+    AudioUnderstandResponse,
     BatchCompletionStreamRequest,
     BatchCompletionStreamResponse,
     BciTranscribeRequest,
@@ -92,6 +99,7 @@ from .models import (
     UnloadModelResponse,
     UpscaleStreamRequest,
     UpscaleStreamResponse,
+    VectorIndexStorage,
     Verbosity,
     VideoStreamRequest,
     VideoStreamResponse,
@@ -107,14 +115,23 @@ from .models.loadModel import Request as LoadModelRequest
 from .models.rag import Request as RagRequest
 from .models.rag import Response as RagResponse
 from .models.translate import Request as TranslateRequest
+from .models.vectorIndex import Request as VectorIndexRequest
+from .models.vectorIndex import Response as VectorIndexResponse
 
 __all__ = [
     "AssessModelFitRequest",
     "AssessModelFitResponse",
+    "AudioEditStreamRequest",
+    "AudioEditStreamResponse",
+    "AudioGenEditOperation",
     "AudioGenEngine",
+    "AudioGenRepaintMode",
     "AudioGenStreamRequest",
     "AudioGenStreamResponse",
     "AudioGenTaskType",
+    "AudioGenTrack",
+    "AudioUnderstandRequest",
+    "AudioUnderstandResponse",
     "BatchCompletionStreamRequest",
     "BatchCompletionStreamResponse",
     "BciTranscribeRequest",
@@ -201,6 +218,9 @@ __all__ = [
     "UnloadModelResponse",
     "UpscaleStreamRequest",
     "UpscaleStreamResponse",
+    "VectorIndexRequest",
+    "VectorIndexResponse",
+    "VectorIndexStorage",
     "Verbosity",
     "VideoStreamRequest",
     "VideoStreamResponse",

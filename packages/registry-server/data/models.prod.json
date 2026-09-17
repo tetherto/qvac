@@ -213,7 +213,7 @@
   {
     "source": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Qwen3 1.7B instruct model",
     "quantization": "q4",
     "params": "1.7B",
     "licenseId": "Apache-2.0",

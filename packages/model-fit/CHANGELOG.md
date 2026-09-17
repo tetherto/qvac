@@ -2,6 +2,77 @@
 
 ## [Unreleased]
 
+### Added
+
+- A fit stub is documented and covered as an accepted `modelPath`, single-file
+  and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
+  tokenizer tables and no data section, which the registry serves in place of
+  the artefact. It projects the same plan as the full file, and needs no padding
+  out to the artefact length. Two fabric behaviours make that work and both are
+  covered — 10549.0.0 skips the file-bounds check under no_alloc, and the vocab
+  load it does *not* skip is satisfied by `tokenizer.ggml.model = none` plus a
+  surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
+  that reports failure as an absent projection rather than an error, is asserted
+  on the same files. No API change.
+
+## [0.12.0] - 2026-09-16
+
+This release adds a non-blocking way to run the memory-fit preflight. Callers that run the fit in the same process as their inference — the mobile advisory check today — no longer stall their JS loop for the duration of the probe.
+
+### New APIs
+
+#### `fitParamsAsync(config)`
+
+Takes the same config as `fitParams` and resolves to the same result, but runs `common_fit_params` on a worker thread. Validation failures reject instead of throwing. Backend registration still happens on the calling thread before the fit is queued, so the ggml registry sees the same ordering as the synchronous path, and fits remain serialised process-wide.
+
+```js
+const { fitParamsAsync } = require('@qvac/model-fit')
+
+const plan = await fitParamsAsync({ modelPath: '/abs/path/model.gguf' })
+```
+
+`llamaConfigFitAsync` on the private binding gives the load-config fitter used by the process runner and `@qvac/inference` the same worker-thread shape.
+
+### Pull Requests
+
+- [#4495](https://github.com/tetherto/qvac/pull/4495) - QVAC-25156 feat[api]: add fitParamsAsync to @qvac/model-fit
+
+## [0.11.1] - 2026-09-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.11.x` line pick this up without a range change of their own.
+
+### Fixed
+
+- On Linux, a llama load setting that only fabric can reject — an unknown
+  `cache-type-k`, say — now surfaces as an invalid argument naming the setting
+  and carrying fabric's message. It previously escaped the fitter's handler
+  entirely: the addon and `qvac__fabric@0.bare` each statically linked their own
+  libc++, so each had its own `std::exception` typeinfo, and RTTI matches
+  typeinfo by address, so `parseGenericConfig`'s `catch (const std::exception&)`
+  never matched a throw that came from inside fabric. Fabric now owns the one
+  C++ runtime in the process and this addon imports it
+  (`qvac_addon_import_fabric_cxx_runtime`). The unit suite covers the boundary
+  directly, and distinguishes a `catch` that matched by type from one that only
+  caught `...`. See `arch/qips/linux-fabric-libcxx-ownership.md`
+  ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
+## [0.11.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own.
+- The fitter projects memory for models it does not itself run, so 10549.1.0 matters to it only where the projection must agree with the loader — and the MoE expert-cache fixes change what the loader tolerates at large context.
+
+### Added
+
+- `fit()` results now carry a per-device memory projection, and `@qvac/model-fit/process` gains the matching surface ([#4174](https://github.com/tetherto/qvac/pull/4174)). Landed after `0.10.0` with no version bump of its own, so this release is what publishes it.
+
+### Breaking
+
+- GPU devices are filtered to the supported backends and `split-mode: 'row'` is dropped ([#4330](https://github.com/tetherto/qvac/pull/4330)). A caller passing `'row'` no longer receives a degraded-to-`'layer'` projection; the value is rejected. This matches `@qvac/llm-llamacpp` and `@qvac/embed-llamacpp`, which made the same change, so the fitter and the loaders agree on what is accepted. Landed after `0.10.0` with no version bump of its own.
+
 ### Fixed
 
 - `flash-attn` is now recognised as enabled on every spelling qvac-fabric

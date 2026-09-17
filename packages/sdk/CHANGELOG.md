@@ -77,7 +77,7 @@ iOS `sample.memory.processAvailableBytes` is sourced from `bare-os` `availableMe
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.19.0
 
-QVAC SDK 0.19.0 is the first release after `@qvac/inference` became the in-process engine. You can assess whether a model will fit before downloading it, walk an ABot-World session, generate MiniMax music, and transcribe with Parakeet Unified. Delegated DHT inference is gone, `no_mmap` is `load_mode`, and batch translations return an array instead of a newline-joined string. `@qvac/bare-sdk` is no longer part of the lockstep pipeline.
+QVAC SDK 0.19.0 is the first release after `@qvac/inference` became the in-process engine. You can assess whether a model will fit before downloading it, generate MiniMax music, and transcribe with Parakeet Unified. Delegated DHT inference is gone, `no_mmap` is `load_mode`, and batch translations return an array instead of a newline-joined string. `@qvac/bare-sdk` is no longer part of the lockstep pipeline.
 
 ## Breaking Changes
 
@@ -218,34 +218,6 @@ result.budget?.availableBytes // headroom before the policy reserve
 ```
 
 On a discrete GPU, `basis` is `device-memory` (Linux VRAM) or `device-budget` (Windows DXGI). Integrated GPUs stay on `system-memory` because they allocate from RAM. Multi-GPU machines require `likely-fits` on the smallest usable card and `likely-too-large` on the largest; in between the verdict is `unknown`. VM display adapters are not counted as GPUs. The reserve is 20% of `budget.availableBytes`, capped at 2 GiB on desktop and 1 GiB on mobile. iOS uses per-process memory and may return `unknown` when that metric is missing. Catalog resource profiles (`getModelResourceProfile`) back the estimator; an unknown checksum is `undefined`, not a guess.
-
-### ABot-World Sessions
-
-Load a world-mode diffusion model, create a scene once, then step it. Frames stream as they decode.
-
-```typescript
-const modelId = await loadModel({
-  modelSrc: ABOT_WORLD_0_5B_Q8_0,
-  modelType: 'sdcpp-generation',
-  modelConfig: {
-    mode: 'world',
-    taehvModelSrc: ABOT_WORLD_0_5B_LF_VAE,
-    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
-    vaeModelSrc: ABOT_WORLD_0_5B_LF_VAE_F16,
-    world: { kvCache: true, frameJpegQuality: 85 }
-  }
-})
-
-const { stats } = worldCreateScene({ modelId, prompt, image })
-await stats
-
-const { frameStream } = worldStep({ modelId, keys: ['W', 'L'] })
-for await (const frame of frameStream) {
-  render(frame)
-}
-```
-
-Pass `returnPack: true` on create to keep the scene bytes for a later reload.
 
 ### MiniMax Music Generation
 
