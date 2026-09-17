@@ -26,7 +26,14 @@ function maxMetric (log, name) {
   return max
 }
 
-function renderReport ({ profile, maxTools, promptTokens, ceiling }) {
+// With every tool denied, serve logs no `tools=` at all. That is the healthy
+// state here and must not read the same as a missing log.
+function describeTools (maxTools, sawRequest) {
+  if (maxTools !== undefined) return String(maxTools)
+  return sawRequest ? '0 (none advertised)' : 'unknown'
+}
+
+function renderReport ({ profile, maxTools, promptTokens, ceiling, sawRequest }) {
   return [
     '',
     '## Prompt surface',
@@ -34,7 +41,7 @@ function renderReport ({ profile, maxTools, promptTokens, ceiling }) {
     '| Measure | Value |',
     '| --- | --- |',
     `| \`tools.profile\` | \`${profile}\` |`,
-    `| Advertised tools (max observed) | ${maxTools ?? 'unknown'} |`,
+    `| Advertised tools (max observed) | ${describeTools(maxTools, sawRequest)} |`,
     `| Prompt tokens (max observed) | ${promptTokens ?? 'unknown'} |`,
     `| Tool ceiling | ${ceiling} |`,
     ''
@@ -47,10 +54,11 @@ function renderReport ({ profile, maxTools, promptTokens, ceiling }) {
 function inspectPromptSurface (log, profile, ceiling) {
   const maxTools = maxMetric(log, 'tools')
   const promptTokens = maxMetric(log, 'prompt')
-  const report = renderReport({ profile, maxTools, promptTokens, ceiling })
+  const sawRequest = /\bchat model=/.test(String(log))
+  const report = renderReport({ profile, maxTools, promptTokens, ceiling, sawRequest })
 
-  // Unmeasured, not bounded: reporting 0 would claim a ceiling was respected
-  // when no request was ever logged.
+  // No count with no request logged is unmeasured, not bounded: reporting 0
+  // would claim a ceiling was respected that was never tested.
   if (maxTools === undefined) {
     return { ok: true, maxTools, promptTokens, report }
   }
@@ -66,7 +74,7 @@ function inspectPromptSurface (log, profile, ceiling) {
   return { ok: true, maxTools, promptTokens, report }
 }
 
-module.exports = { inspectPromptSurface, maxMetric, renderReport }
+module.exports = { inspectPromptSurface, maxMetric, renderReport, describeTools }
 
 if (require.main === module) {
   const { readFileSync, writeFileSync } = require('node:fs')

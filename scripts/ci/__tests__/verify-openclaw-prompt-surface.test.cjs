@@ -45,6 +45,17 @@ test('a count exactly at the ceiling passes', () => {
   assert.equal(result.ok, true)
 })
 
+// With every tool denied there is no `tools=` to read, which is the healthy
+// state and must not read the same as a lost log.
+test('reports zero tools when requests ran but advertised none', () => {
+  const log = '→ POST /v1/chat/completions\n  chat model=m messages=2 stream=true\n  streaming done tokens=3 finish=stop prompt=179\n'
+  const result = inspectPromptSurface(log, 'minimal', 8)
+  assert.equal(result.ok, true)
+  assert.equal(result.maxTools, undefined)
+  assert.equal(result.promptTokens, 179)
+  assert.match(result.report, /Advertised tools \(max observed\) \| 0 \(none advertised\)/)
+})
+
 // Reporting 0 would claim a ceiling was respected when nothing was measured.
 test('an unmeasured surface is reported as unknown, not as zero', () => {
   const result = inspectPromptSurface('', 'minimal', 8)
