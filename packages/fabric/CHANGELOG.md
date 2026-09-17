@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.16.1] - 2026-09-17
+
+### Fixed
+
+- The Android build exports an anonymous ELF version node again, as it did
+  through 0.15.0. 0.16.0 named the node for every ELF target, which left every
+  consumer unable to load on Android: the addon fails its `dlopen` and `bare`
+  reports `ADDON_NOT_FOUND: Cannot find addon '.'` from the addon's
+  `binding.js`, before any model work. Desktop was unaffected.
+
+  The name exists so a consumer records a `DT_VERNEED` that the host's
+  `libstdc++` cannot satisfy, which is what keeps it from answering for the C++
+  ABI this module exports. Only the Linux link that embeds libc++ exports that
+  ABI — Android links `libc++_shared.so` and the ASan build links
+  `libc++.so.1` — so the name now follows the same condition as the ABI block
+  it protects, and `symbols.map` ships the node anonymous. The export surface
+  and its `local: *;` narrowing are unchanged on every platform.
+
+  Consumers must be rebuilt to pick this up: an Android binary built against
+  0.16.0 carries versioned imports of `QVAC_FABRIC_ABI_1` and keeps failing to
+  load. Linux binaries built against 0.16.0 are unaffected and keep working,
+  since the node and its name are unchanged there.
+
 ## [0.16.0] - 2026-09-16
 
 ### Changed
