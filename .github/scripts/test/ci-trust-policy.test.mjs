@@ -1443,6 +1443,112 @@ test('fork-ci: fork-approval caller grants statuses: write (reusable cannot elev
   }
 })
 
+test('ggml-rpc-server keeps Device Farm runs on demand', () => {
+  const path = '.github/workflows/on-pr-ggml-rpc-server.yml'
+  const source = read(path)
+  const mobile = eachJob(source).find((job) => job.name === 'mobile')
+  assert.equal(
+    mobile,
+    undefined,
+    `${path}: must not call Device Farm from the PR workflow`,
+  )
+  assert.doesNotMatch(
+    source,
+    /run_mobile/,
+    `${path}: must not route the legacy run-mobile-addon-tests label`,
+  )
+})
+
+test('ggml-rpc-server TypeScript checks run on PR head without privileged cache access', () => {
+  const pr = read('.github/workflows/on-pr-ggml-rpc-server.yml')
+  const prHead = read('.github/workflows/on-pr-ggml-rpc-server-ts.yml')
+  const sanity = eachJob(pr).find((job) => job.name === 'sanity-checks')
+  const awaitJob = jobBlock(pr, 'await-ts-checks')
+  const prebuild = jobBlock(pr, 'prebuild')
+  const guard = jobBlock(pr, 'merge-guard')
+
+  assert.match(prHead, /\n\s+pull_request:/)
+  assert.match(
+    prHead,
+    /ggml-rpc-server-pr-head-ts-checks:[\s\S]*?uses:\s*\.\/\.github\/workflows\/reusable-ts-checks\.yml/,
+  )
+  assert.match(prHead, /workdir:\s*packages\/ggml-rpc-server/)
+  assert.match(prHead, /vcpkg-overlays\/ports\/qvac-fabric\/\*\*/)
+
+  assert.match(
+    awaitJob,
+    /uses:\s*\.\/\.github\/workflows\/reusable-await-ts-checks\.yml/,
+  )
+  assert.match(
+    awaitJob,
+    /check_name:\s*'ggml-rpc-server-pr-head-ts-checks \/ ts-checks'/,
+  )
+
+  assert.equal(sanity, undefined, 'RPC sanity checks moved out of pull_request_target')
+  assert.doesNotMatch(
+    pr,
+    /uses:\s*\.\/\.github\/actions\/sanity-checks/,
+    'RPC sanity checks must not run as a local PR-controlled action from pull_request_target',
+  )
+  assert.match(prebuild, /\bawait-ts-checks\b/)
+  assert.match(guard, /\bawait-ts-checks\b/)
+  assert.match(
+    guard,
+    /sanity-checks-status:[\s\S]*?needs\.await-ts-checks\.result == 'success'/,
+  )
+})
+
+test('RPC RDMA validation covers client and server without replacing release artifacts', () => {
+  const reusable = read('.github/workflows/reusable-prebuilds.yml')
+  const uploadIndex = reusable.indexOf(
+    'name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}',
+  )
+  const validationIndex = reusable.indexOf('name: Run post-artifact validation build')
+  assert.notEqual(uploadIndex, -1, 'reusable prebuild uploads the release artifact')
+  assert.ok(
+    validationIndex > uploadIndex,
+    'the optional validation rebuild must run only after the release artifact is captured',
+  )
+
+  for (const path of [
+    '.github/workflows/prebuilds-ggml-rpc-server.yml',
+    '.github/workflows/prebuilds-llm-llamacpp.yml',
+  ]) {
+    const workflow = read(path)
+    assert.match(workflow, /linux-extra-packages:\s*libibverbs-dev/)
+    assert.match(
+      workflow,
+      /post-artifact-build-command:\s*bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
+    )
+  }
+
+  const mobile = read('.github/workflows/integration-mobile-test-ggml-rpc-server.yml')
+  assert.match(
+    mobile,
+    /prebuild-artifact-prefix:\s*prebuild-ggml-rpc-server-/,
+  )
+
+  const release = read('.github/workflows/on-merge-ggml-rpc-server.yml')
+  assert.equal(
+    [...release.matchAll(/name:\s*prebuilds-ggml-rpc-server/g)].length,
+    2,
+    'both RPC release publishers download the package-derived merged artifact',
+  )
+})
+
+test('managed RPC lifecycle overlay is a syntactically valid git patch', () => {
+  const patch = join(
+    root,
+    'vcpkg-overlays/ports/qvac-fabric/managed-rpc-server-lifecycle.patch',
+  )
+  const result = spawnSync('git', ['apply', '--numstat', patch], {
+    encoding: 'utf8',
+    cwd: root,
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /ggml\/src\/ggml-rpc\/ggml-rpc\.cpp/)
+})
+
 function jobDependsOnAuthorize(job) {
   if (job.text.includes('authorize.outputs.allowed')) return true
   return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text)
