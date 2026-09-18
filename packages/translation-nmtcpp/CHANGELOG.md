@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Reject malformed model tensor headers during loading instead of crashing on a corrupt or untrusted model. Loading a legitimate model is unaffected.
+- Reject malformed model files during loading instead of crashing on a corrupt or untrusted model. Loading a legitimate model is unaffected.
 
 ## [0.16.3] - 2026-09-18
 
