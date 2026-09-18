@@ -12,15 +12,15 @@ const LLM_BASE = {
   modelSrc: 'model.gguf'
 }
 
-test('llmConfigBaseSchema: accepts valid split-mode values', (t) => {
+test('llmConfigBaseSchema: accepts supported split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'none' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'layer' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'row' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'tensor' }).success, true)
 })
 
 test('llmConfigBaseSchema: rejects invalid split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'column' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'row' }).success, false)
 })
 
 test('llmConfigBaseSchema: accepts valid flash-attn values', (t) => {
@@ -178,7 +178,7 @@ test('loadModelSrcRequestSchema: accepts split-mode for LLM', (t) => {
     type: 'loadModel',
     modelType: ModelType.llamacppCompletion,
     modelSrc: 'model.gguf',
-    modelConfig: { 'split-mode': 'row', 'tensor-split': '3,1', 'main-gpu': 0 }
+    modelConfig: { 'split-mode': 'layer', 'tensor-split': '3,1', 'main-gpu': 0 }
   })
   t.is(result.success, true)
 })

@@ -100,6 +100,18 @@ TEST_F(ModelFullLoadingTest, Sharded_LoadsSuccessfully) {
   EXPECT_TRUE(model.isLoaded());
 }
 
+TEST_F(ModelFullLoadingTest, Sharded_LoadFromLaterShardUsesFirstShard) {
+  REQUIRE_MODEL(shardedModel_);
+  ASSERT_GE(shardedModel_.shards.gguf_files.size(), 2U);
+
+  LlamaModel model = loadModel(shardedModel_.shards.gguf_files[1]);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(
+      model.getCommonParams().model.path, shardedModel_.shards.gguf_files[0]);
+}
+
 TEST_F(ModelFullLoadingTest, StreamingShards_LoadsSuccessfully) {
   REQUIRE_MODEL(shardedModel_);
   LlamaModel model = loadModel(shardedModel_.path);

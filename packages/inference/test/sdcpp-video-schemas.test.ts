@@ -1,6 +1,8 @@
 import test from 'brittle'
 import {
   diffusionRequestSchema,
+  h3VideoRequestSchema,
+  wanVideoRequestSchema,
   ltxVideoRequestSchema,
   nonLtxVideoRequestSchema,
   sdcppConfigSchema,
@@ -18,6 +20,99 @@ type BrittleT = {
 }
 
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUg=='
+
+test('video schemas: H3 envelopes and loaded-family frame rules', (t) => {
+  const base = {
+    modelId: 'h3',
+    mode: 'txt2vid' as const,
+    prompt: 'Steam rises from an espresso cup.'
+  }
+  for (const video_frames of [5, 22, 39, 73, 124]) {
+    t.ok(videoRequestSchema.safeParse({ ...base, video_frames }).success)
+    t.ok(videoStreamRequestSchema.safeParse({ ...base, type: 'videoStream', video_frames }).success)
+    t.ok(h3VideoRequestSchema.safeParse({ ...base, video_frames }).success)
+  }
+  for (const video_frames of [0, -1, 1.5]) {
+    t.is(videoRequestSchema.safeParse({ ...base, video_frames }).success, false)
+    t.is(
+      videoStreamRequestSchema.safeParse({ ...base, type: 'videoStream', video_frames }).success,
+      false
+    )
+  }
+  for (const video_frames of [1, 6, 17, 121]) {
+    t.is(h3VideoRequestSchema.safeParse({ ...base, video_frames }).success, false)
+  }
+  for (const video_frames of [1, 6, 22, 124]) {
+    t.is(wanVideoRequestSchema.safeParse({ ...base, video_frames }).success, false)
+  }
+  for (const video_frames of [1, 5, 22, 124, 265]) {
+    t.is(ltxVideoRequestSchema.safeParse({ ...base, video_frames }).success, false)
+  }
+  t.ok(wanVideoRequestSchema.safeParse({ ...base, video_frames: 5 }).success)
+  t.ok(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 9 }).success)
+  t.ok(ltxVideoRequestSchema.safeParse({ ...base, video_frames: 257 }).success)
+  t.alike(h3VideoRequestSchema.parse(base), base, 'native generation defaults remain omitted')
+})
+
+test('H3 schema: validates fixed controls and unsupported conditioning', (t) => {
+  const base = {
+    modelId: 'h3',
+    mode: 'txt2vid' as const,
+    prompt: 'Steam rises from an espresso cup.'
+  }
+  t.ok(
+    h3VideoRequestSchema.safeParse({
+      ...base,
+      width: 960,
+      height: 544,
+      fps: 24,
+      cfg_scale: 1,
+      scheduler: 'discrete',
+      steps: 8
+    }).success
+  )
+  for (const params of [
+    { width: 944 },
+    { height: 528 },
+    { fps: 16 },
+    { cfg_scale: 0 },
+    { scheduler: 'simple' },
+    { mode: 'img2vid', init_image: PNG_B64 },
+    { control_frames: [PNG_B64] },
+    { vace_strength: 0 },
+    { strength: 0 }
+  ]) {
+    t.is(
+      h3VideoRequestSchema.safeParse({ ...base, ...params }).success,
+      false,
+      JSON.stringify(params)
+    )
+  }
+})
+
+test('sdcpp config: preserves H3 backend and memory controls', (t) => {
+  const config = {
+    mode: 'video',
+    backend: 'cuda0',
+    params_backend: 'cpu',
+    max_vram: 'cuda0=6,vulkan0=2',
+    stream_layers: false
+  }
+  t.alike(sdcppConfigSchema.parse(config), config)
+  t.is(sdcppConfigSchema.parse({ max_vram: 0 }).max_vram, 0)
+  for (const config of [
+    { backend: 0 },
+    { params_backend: false },
+    { max_vram: true },
+    { stream_layers: 'false' }
+  ]) {
+    t.is(sdcppConfigSchema.safeParse(config).success, false)
+  }
+  const defaults = sdcppConfigSchema.parse({ mode: 'video' })
+  for (const field of ['backend', 'params_backend', 'max_vram', 'stream_layers'] as const) {
+    t.is(defaults[field], undefined)
+  }
+})
 
 test("sdcppConfigSchema: accepts mode: 'video' and highNoiseDiffusionModelSrc", (t: BrittleT) => {
   const result = sdcppConfigSchema.safeParse({
@@ -123,9 +218,7 @@ test('videoRequestSchema: accepts temporal_tiling and LTX-shaped dims/frames', (
     modelId: 'model-1',
     mode: 'txt2vid',
     prompt: 'a claymation cat playing jazz',
-    // LTX dims (multiples of 32) and frames (8*k + 1) are a subset of the
-    // permissive wire checks (multiples of 16, 4*k + 1); the server validates
-    // the exact LTX rules after resolving the loaded model's layout.
+    // The server validates family-specific rules against the loaded model.
     width: 512,
     height: 320,
     video_frames: 121,
@@ -398,7 +491,7 @@ test('videoRequestSchema: accepts optional requestId', (t: BrittleT) => {
 
 test('videoRequestSchema: validates video_frames, fps, moe_boundary, and base64 inputs', (t: BrittleT) => {
   t.is(
-    videoRequestSchema.safeParse({
+    wanVideoRequestSchema.safeParse({
       modelId: 'model-1',
       mode: 'txt2vid',
       prompt: 'a fox',

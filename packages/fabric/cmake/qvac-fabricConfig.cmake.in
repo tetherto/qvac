@@ -2,4 +2,18 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/qvac-fabricTargets.cmake")
 
+# The ELF version node this build stamped on its exports, empty on platforms
+# that use no version script. A consumer linking the module with -nostdlib++
+# must end up with a DT_VERNEED on this version for every C++ runtime symbol it
+# imports; without one, the dynamic linker satisfies them from whichever C++
+# runtime the host process loaded first, and typed catches across the fabric
+# boundary stop matching. See arch/qips/linux-fabric-libcxx-ownership.md.
+set(QVAC_FABRIC_ABI_VERSION "@QVAC_FABRIC_ABI_VERSION@")
+
+# Whether this build embeds and exports the C++ runtime for its consumers to
+# import. OFF where a shared libc++ provides it instead (Android, the ASan
+# build) and on the non-ELF platforms. Always defined, so a consumer can tell
+# that apart from an older fabric whose config predates these variables.
+set(QVAC_FABRIC_OWNS_CXX_RUNTIME "@QVAC_FABRIC_OWNS_CXX_RUNTIME@")
+
 check_required_components(qvac-fabric)

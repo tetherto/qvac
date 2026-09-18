@@ -1,0 +1,62 @@
+name: Read a package's S3 model set
+description: |
+  Emits the `modelS3` block from `packages/<package>/project.json` as JSON, for
+  feeding to `stage-integration-models`.
+
+  Exists so the per-addon lanes and the on-merge seeds resolve their S3 model
+  set from the SAME definition the nx lane uses, instead of a second hardcoded
+  `aws s3 cp` list. Two definitions of one model set is how a dated path gets
+  bumped in one place, leaves the other's cache key unmoved, and serves stale
+  models to a lane that skips its download on a cache hit.
+
+  This reads config, it does not define the model set -- project.json does.
+
+  NOTE: this reads the CHECKED-OUT tree. Under a pull_request_target lane that
+  is PR-head code, the same exposure the repo-local composites already have
+  (see .github/actions/cache-models/action.yml). integration-test-nx.yml reads
+  options.ci from a trusted base ref instead; the per-addon lanes being retired
+  do not, and this does not change that either way.
+
+inputs:
+  package:
+    description: Package directory name under `packages/` (e.g. `vla-ggml`).
+    required: true
+
+outputs:
+  manifest:
+    description: The modelS3 array as a JSON string; `[]` when the package declares none.
+    value: ${{ steps.read.outputs.manifest }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read modelS3 from project.json
+      id: read
+      shell: bash
+      env:
+        PKG: ${{ inputs.package }}
+      run: |
+        set -euo pipefail
+        manifest=$(node -e '
+          const fs = require("node:fs")
+          const file = `packages/${process.env.PKG}/project.json`
+          let doc
+          try {
+            doc = JSON.parse(fs.readFileSync(file, "utf8"))
+          } catch (err) {
+            console.error(`cannot read ${file}: ${err.message}`)
+            process.exit(1)
+          }
+          const ci = doc?.targets?.["test:integration"]?.options?.ci
+          const s3 = ci?.modelS3
+          if (s3 !== undefined && !Array.isArray(s3)) {
+            console.error(`${file}: targets["test:integration"].options.ci.modelS3 is not an array`)
+            process.exit(1)
+          }
+          process.stdout.write(JSON.stringify(s3 ?? []))
+        ')
+        echo "manifest<<__EOF__" >> "$GITHUB_OUTPUT"
+        echo "$manifest" >> "$GITHUB_OUTPUT"
+        echo "__EOF__" >> "$GITHUB_OUTPUT"
+        count=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).length))' "$manifest")
+        echo "$PKG: $count S3 entr(y|ies) from project.json"
