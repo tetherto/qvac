@@ -34,19 +34,23 @@ function run(sequence, { timeoutTicks = 1000 } = {}) {
   })
 }
 
-test('classifyConclusion: success passes, real failures fail, the rest wait', () => {
+test('classifyConclusion: success and skipped pass, real failures fail, the rest wait', () => {
   assert.equal(classifyConclusion('success'), 'pass')
+  assert.equal(classifyConclusion('skipped'), 'pass')
   assert.equal(classifyConclusion('failure'), 'fail')
   assert.equal(classifyConclusion('timed_out'), 'fail')
   assert.equal(classifyConclusion('action_required'), 'fail')
   assert.equal(classifyConclusion('cancelled'), 'wait')
-  assert.equal(classifyConclusion('skipped'), 'wait')
   assert.equal(classifyConclusion('neutral'), 'wait')
   assert.equal(classifyConclusion('stale'), 'wait')
 })
 
 test('success on first poll -> 0', async () => {
   assert.equal(await run([done('success')]), 0)
+})
+
+test('skipped package check -> 0', async () => {
+  assert.equal(await run([done('skipped')]), 0)
 })
 
 test('failure -> 1', async () => {

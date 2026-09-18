@@ -10,6 +10,11 @@
 //            producer uses cancel-in-progress), so keep polling for the fresh one.
 export function classifyConclusion(conclusion) {
   if (conclusion === 'success') return 'pass'
+  // The consolidated producer creates one static job per package and marks
+  // packages outside its nx matrix as skipped. That is a completed decision,
+  // not a superseded run. cancel-in-progress uses `cancelled`, which remains a
+  // wait state for the replacement run.
+  if (conclusion === 'skipped') return 'pass'
   if (conclusion === 'failure' || conclusion === 'timed_out' || conclusion === 'action_required') {
     return 'fail'
   }
@@ -49,7 +54,7 @@ export async function pollForCheck({ checkName, fetchChecks, now, sleep, pollInt
         log(`::error title=Await PR-head TypeScript checks failed::${checkName} completed with conclusion: ${check.conclusion}`)
         return 1
       }
-      // 'wait': cancelled / skipped / neutral / stale - a superseding run is expected.
+      // 'wait': cancelled / neutral / stale, so a superseding run is expected.
     }
 
     if (now() >= deadline) {
