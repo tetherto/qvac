@@ -338,13 +338,9 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
   // and this function agree on the same physical device — historical
   // drift between the two has caused scheduler crashes (R2-C1, R4-C2).
   // See nmt_utils.hpp for the contract.
-  dev = nmtSelectGpuDevice(
-      params.use_gpu,
-      params.gpu_backend,
-      params.gpu_device,
-      "nmt_backend_init_gpu",
-      params.main_gpu,
-      params.legacy_gpu_selection);
+  dev = nmtSelectGpuDevice(params.use_gpu, params.gpu_backend,
+                           params.gpu_device, "nmt_backend_init_gpu",
+                           params.main_gpu, params.legacy_gpu_selection);
 
   if (dev == nullptr) {
     QLOG(

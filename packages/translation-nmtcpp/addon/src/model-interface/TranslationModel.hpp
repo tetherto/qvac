@@ -99,9 +99,7 @@ public:
   void cancel() const override;
 
 #ifdef QVAC_TRANSLATION_NMTCPP_TESTING
-  [[nodiscard]] const NmtMainGpu& mainGpuForTesting() const {
-    return mainGpu_;
-  }
+  [[nodiscard]] const NmtMainGpu &mainGpuForTesting() const { return mainGpu_; }
 
   [[nodiscard]] bool legacyGpuSelectionForTesting() const {
     return legacyGpuSelection_;
