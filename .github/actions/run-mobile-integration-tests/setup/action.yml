@@ -351,6 +351,11 @@ runs:
               echo "Check the package and version exist at https://github.com/orgs/tetherto/packages?tab=packages&q=$SPEC_NAME"
               echo "Dev builds are named @tetherto/<addon>-mono@<version>-tmp.runid-<run id>;"
               echo "the version is produced by the On Merge Trigger run for your branch."
+              echo "For an addon, only a release-* push starts that run; pushing any"
+              echo "other branch does not. Dispatch it on the branch first:"
+              echo "  gh workflow run on-merge-<workflow-slug>.yml --repo tetherto/qvac --ref <branch>"
+              echo "The slug is not always the package name (vla-ggml -> on-merge-vla.yml);"
+              echo "see docs/ci/MOBILE-ON-DEMAND.md."
               ;;
             *)
               echo "Please check that it exists at https://www.npmjs.com/package/$SPEC_NAME"

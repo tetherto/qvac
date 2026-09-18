@@ -3,10 +3,7 @@ name: On Merge Trigger (TTS GGML)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/tts-ggml/**"
       - ".github/workflows/*tts-ggml*.yml"

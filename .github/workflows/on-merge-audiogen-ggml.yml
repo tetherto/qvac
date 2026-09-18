@@ -3,10 +3,7 @@ name: On Merge Trigger (AudioGen GGML)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/audiogen-ggml/**"
       - ".github/workflows/*audiogen-ggml*.yml"
