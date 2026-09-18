@@ -151,7 +151,7 @@ Completion models: `modelConfig['split-mode']` is `'none'`, `'layer'` or `'tenso
 Embedding models: `modelConfig.splitMode` is `'none'` or `'layer'`. `'row'` is rejected.
 `'tensor'` on completion models is unaffected.
 
-On embeddings, `'row'` was documented as tensor parallelism. That llama.cpp row split never took effect here (SYCL-only; it ran as `'layer'`), and embeddings have no `'tensor'` replacement. Use `'layer'`.
+On embeddings, `'row'` did not do tensor parallelism; it already behaved as `'layer'`. Embeddings have no `'tensor'` mode. Use `'layer'`.
 
 **BEFORE:**
 
@@ -179,7 +179,7 @@ modelConfig: { splitMode: 'layer' }
 
 PR: [#4357](https://github.com/tetherto/qvac/pull/4357)
 
-Parakeet `modelConfig.language` must match `/^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$/`. Values that used to load now fail at `loadModel` — for example `zh-Hans-CN`, or a language name rather than a code. Whisper `language` is unchanged.
+Parakeet `modelConfig.language` must be `auto`, a short code (`en`, `hi`), or `code-region` (`en-US`, `hi-IN`). `zh-Hans-CN` and names like `english` now fail at `loadModel`. Whisper `language` is unchanged.
 
 **BEFORE:**
 
