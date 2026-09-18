@@ -262,6 +262,28 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
     const gate = jobBlock(read(carrier), 'post-build-gate')
     assert.ok(gate, 'post-build-gate exists')
 
+    // The consolidated gate serves five packages under two policies, so the rule
+    // cannot be "publish-gpr is absent from the step". It is per package: this
+    // slug must not opt in. asr-ggml, bci-whispercpp and tts-ggml do opt in,
+    // matching what their own on-merge-<pkg>.yml intends on main.
+    if (carrier === CONSOLIDATED) {
+      assert.match(
+        gate,
+        /needs\.publish-npm\.result/,
+        'the gate must still open for a real npm release',
+      )
+      const ci =
+        JSON.parse(read(`packages/${slug}/project.json`)).targets?.['on-merge']?.options?.ci ?? {}
+      assert.notEqual(
+        ci.postIntegrationOnGpr,
+        true,
+        `${slug} must not set postIntegrationOnGpr: a GPR dev publish must not ` +
+          're-run its integration tests, they already ran on the PR and ' +
+          'merge-guard gated on them (#4175).',
+      )
+      return
+    }
+
     // Only the shell `if` test decides; an `echo` naming publish-gpr is
     // deliberate diagnostics, so the assertion must look at the gating
     // expression rather than at any mention in the step.

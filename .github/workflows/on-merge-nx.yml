@@ -649,23 +649,26 @@ jobs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
       rows: ${{ steps.gate.outputs.rows }}
     steps:
-      # Keyed on publish-npm only: a GPR dev publish must not reopen this gate
-      # (#4175). publish-gpr-skip-policy.test.mjs guards it.
-      #
-      # `rows` carries the selected packages so the static post-publish mobile
-      # jobs below can scope themselves without re-deriving the set.
+      # Per package: #4175 keyed ocr-ggml and translation-nmtcpp on publish-npm
+      # alone; the other three open on either publish via postIntegrationOnGpr.
       - id: gate
         shell: bash
         env:
+          NPM_RESULT: ${{ needs.publish-npm.result }}
+          GPR_RESULT: ${{ needs.publish-gpr.result }}
           ROWS: ${{ needs.detect.outputs.post-integration-rows }}
         run: |
           set -euo pipefail
-          should="false"
-          rows="[]"
-          if [ "${{ needs.publish-npm.result }}" = "success" ]; then
-            should="true"
+          if [ "$NPM_RESULT" = "success" ]; then
             rows="$ROWS"
+          elif [ "$GPR_RESULT" = "success" ]; then
+            rows=$(echo "$ROWS" | jq -c '[.[] | select(.postIntegrationOnGpr == true)]')
+          else
+            rows="[]"
           fi
+          should="false"
+          [ "$(echo "$rows" | jq 'length')" -gt 0 ] && should="true"
+          echo "npm=$NPM_RESULT gpr=$GPR_RESULT selected=$rows"
           echo "rows=$rows" >> "$GITHUB_OUTPUT"
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
