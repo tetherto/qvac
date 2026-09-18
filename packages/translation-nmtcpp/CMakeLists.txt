@@ -102,6 +102,21 @@ endif()
 # once per process); sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE.
 qvac_addon_use_fabric()
 
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the
+# weight-header parsers, which compile without the .bare module + fabric
+# runtime so they keep full ASan + LSan. Headers still come from fabric.
+# See docs/architecture/ADDON-FUZZING.md.
+if(BUILD_FUZZING AND NOT BUILD_TESTING)
+  enable_testing()
+  add_subdirectory(test/fuzz)
+  return()
+endif()
+
+# The production .bare module is skipped in the combined tests+fuzz configure
+# (BUILD_TESTING + BUILD_FUZZING): that build only wants the two test
+# executables, and keeping the shipped module out of the tree means the
+# FuzzTest toolchain never instruments it.
+if(NOT BUILD_FUZZING)
 add_bare_module(translation-nmtcpp EXPORTS)
 
 target_sources(
@@ -114,6 +129,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_tokenization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_state_backend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_loader.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_loader_parse.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_graph_decoder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_graph_encoder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_beam_search.cpp
@@ -210,10 +226,18 @@ if(USE_BERGAMOT)
 endif()
 
 qvac_addon_finalize(${translation-nmtcpp} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+endif()
+
+if(BUILD_TESTING OR BUILD_FUZZING)
+  enable_testing()
+endif()
 
 if(BUILD_TESTING)
-  enable_testing()
   add_subdirectory(addon/tests)
+endif()
+
+if(BUILD_FUZZING)
+  add_subdirectory(test/fuzz)
 endif()
 
 

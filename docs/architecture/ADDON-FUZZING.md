@@ -8,6 +8,9 @@ across the addon fleet.
 Status: **Phase 0 implemented for `classification-ggml`** (template fuzz
 helper + a `FUZZ_TEST` per `preprocessToTensor` branch, each seeded so both
 branches are reachable in bounded mode), including bounded Linux CI coverage.
+**Phase 1 model-header spike implemented for `translation-nmtcpp`** (bounded
+FuzzTest over `nmtReadTensorDims` / `nmtReadBoundedString` / `nmtReadCount`,
+seeded with the `n_dims=8` stack-overflow case from #4590).
 Fleet rollout, corpus/dictionary scale-up, scheduled continuous fuzzing, and
 optional OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
@@ -575,6 +578,12 @@ addons at once.
   reserve `LINK_FABRIC` for header loaders that actually call ggml/gguf. Factor
   shared parsing helpers so one target covers multiple consumers where the code
   is genuinely shared.
+  **`translation-nmtcpp` weight-header parsers: done.** `nmtReadTensorDims` /
+  `nmtReadBoundedString` / `nmtReadCount` / `nmtIsValidTensorType` are compiled
+  without `LINK_FABRIC` (full ASan + LSan). Seeds include the `n_dims=8` stack
+  smash from #4590 so bounded CI actually reaches the reject path. Linux C++ CI
+  runs `npm run fuzz` after the coverage harvest so the fuzz reconfigure cannot
+  wipe `lcov.info`.
 - **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
   NMT text parsers, the whisper/parakeet/tts audio buffer math, and the config
   JSON parsers — each landing with (or after) that addon's template migration.
