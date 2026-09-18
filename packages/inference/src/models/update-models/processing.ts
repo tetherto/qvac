@@ -42,10 +42,7 @@ export function processRegistryModel(model: QVACModelEntry): ProcessedModel | nu
   const blobBlockLength = blobBinding?.blockLength ?? 0
   const blobByteOffset = blobBinding?.byteOffset ?? 0
   const expectedSize = blobBinding?.byteLength ?? 0
-  // The sha256 lives on blobBinding at runtime (per the hyperschema),
-  // even though the TS types define it on QVACModelEntry. Try blobBinding first.
-  const sha256Checksum =
-    (blobBinding as unknown as Record<string, string>)?.['sha256'] || model.sha256 || ''
+  const sha256Checksum = blobBinding?.sha256 || model.sha256 || ''
 
   const addon = getAddonFromEngine(engine)
 
@@ -76,12 +73,7 @@ export function processRegistryModel(model: QVACModelEntry): ProcessedModel | nu
   // The registry only extracts GGUF metadata for the first shard, so the facts
   // ride along on that entry and survive `groupShardedModels`, which keeps the
   // first shard as the grouped model.
-  //
-  // Read through a cast: the field is in the hyperschema and reaches clients
-  // untouched, but `QVACModelEntry` only declares it from
-  // @qvac/registry-client 0.7.0 on. Drop the cast once the dep is bumped.
-  const ggufMetadata = (model as unknown as Record<string, string | undefined>)['ggufMetadata']
-  const ggufFacts = extractGgufFacts(parseGgufMetadata(ggufMetadata))
+  const ggufFacts = extractGgufFacts(parseGgufMetadata(model.ggufMetadata))
   if (ggufFacts) result.ggufFacts = ggufFacts
 
   return result

@@ -36,6 +36,9 @@ outputs:
   carveouts:
     description: 'JSON array of affected package short-names whose options.ci is flagged carveOut:true (routed to their own bespoke reusable by the caller, not the generic matrix job)'
     value: ${{ steps.compute.outputs.carveouts }}
+  allrows:
+    description: 'Same rows as `matrix`, carve-outs included. For lanes that are orthogonal to carve-out routing (the TS-check producer): carveOut picks which workflow drives a package''s native jobs, not whether it has TS checks.'
+    value: ${{ steps.compute.outputs.allrows }}
 
 runs:
   using: composite
@@ -92,9 +95,10 @@ runs:
         # previous_filename too: a rename reports only its destination under
         # .filename, so taking that alone selects the new package and misses the
         # one the file left.
+        raw="${RUNNER_TEMP}/nx-changed-files.raw"
         gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
-          --jq '.[] | .filename, (.previous_filename // empty)' > "${RUNNER_TEMP}/nx-changed-files.txt"
-        count=$(wc -l < "${RUNNER_TEMP}/nx-changed-files.txt")
+          --jq '.[] | .filename, (.previous_filename // empty)' > "$raw"
+        count=$(wc -l < "$raw")
         if [ "$count" -eq 0 ]; then
           echo "::error::the API reported no changed paths for PR ${PR_NUMBER}"
           exit 1
@@ -106,7 +110,33 @@ runs:
           echo "::error::hit the 3000-file API cap for PR ${PR_NUMBER}; the path list is truncated"
           exit 1
         fi
-        echo "Changed paths: $count"
+
+        # A package the PR adds is not on this trusted checkout, and nx marks
+        # every project affected rather than skip one it cannot resolve. Drop
+        # its paths: with no options.ci here it could never build a row anyway.
+        # "|| true" because grep exits 1 when it prints nothing, which is normal
+        # for a diff touching no package, or one that is entirely a new package.
+
+        # "packages/foo/bar.js" -> "foo"
+        touched_packages=$(grep '^packages/' "$raw" | cut -d/ -f2 | sort -u || true)
+
+        absent_packages=""
+        for pkg in $touched_packages; do
+          if [ ! -d "packages/$pkg" ]; then
+            absent_packages="$absent_packages $pkg"
+          fi
+        done
+
+        filtered="${RUNNER_TEMP}/nx-changed-files.txt"
+        cp "$raw" "$filtered"
+        for pkg in $absent_packages; do
+          grep -v "^packages/$pkg/" "$filtered" > "$filtered.tmp" || true
+          mv "$filtered.tmp" "$filtered"
+          echo "::notice::packages/$pkg is not on the trusted ref yet, so its paths are ignored for affected selection. Land its project.json on the base branch first."
+        done
+
+        kept=$(wc -l < "$filtered")
+        echo "Changed paths: $count (using $kept after dropping packages absent from the trusted ref)"
     - id: compute
       shell: bash
       env:
@@ -218,6 +248,10 @@ runs:
           echo "::error::envSecretName must be GITHUB_TOKEN or QASE_API_TOKEN, got: $BAD_SECRETS"
           exit 1
         fi
+
+        # Emitted before the partition, while $ROWS still holds every row, for
+        # lanes that must cover carved-out packages too.
+        echo "allrows=$ROWS" >> "$GITHUB_OUTPUT"
 
         # Partition: carveOut rows go to the caller's bespoke reusable, so keep
         # them out of the generic matrix and surface just their package names.
