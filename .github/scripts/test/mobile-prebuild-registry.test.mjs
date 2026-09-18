@@ -1055,30 +1055,25 @@ test('the bare-log flush reports Appium\'s real error, not a type error', () => 
   )
 })
 
-// `@<bundle>:documents/...` is the iOS container form; Android needs the
-// UiAutomator2 forms. Using the iOS one everywhere meant every Android run
-// logged "Cannot access the container of '<bundle>:documents' application" and
-// the app-side log — the only place a failing runner says why — was never
-// captured there.
-test('the bare-log pull uses platform-appropriate device paths', () => {
+// iOS reads the app-side log fine. Android cannot with the Device Farm artifact:
+// adb hits "Permission denied" on the app's private data dir and run-as is
+// refused with "package not debuggable" on a release-signed APK — both observed
+// on real runs. So Android tries only the world-readable external path and
+// otherwise states plainly that the log is unavailable, rather than burning
+// several doomed pulls per run and reporting a confusing error.
+test('the bare-log pull is platform-appropriate and explains the Android gap', () => {
   const template = read(
     '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/wdio.template.js',
   )
 
-  assert.match(
-    template,
-    /global\.bareLogCandidates = function \(isAndroid, bundleId\)/,
-    'candidate paths must be derived per platform',
-  )
-  // iOS keeps the container form that is known to work (observed: flush ok).
+  assert.match(template, /global\.bareLogCandidates = function \(isAndroid, bundleId\)/)
+  // iOS keeps the container form that works.
   assert.match(template, /return \['@' \+ bundleId \+ ':documents\/bare_console\.log'\]/)
-  // Android gets the forms perf-extract.js already pulls files with.
-  assert.match(template, /'@' \+ bundleId \+ '\/files\/bare_console\.log'/)
-  assert.match(template, /'\/data\/data\/' \+ bundleId \+ '\/files\/bare_console\.log'/)
-  // A failure must still report the reason, not a type error.
-  assert.match(template, /tried ' \+ candidates\.length \+ ' path\(s\)/)
-  // adb cannot read the app sandbox (observed: "failed to stat remote object:
-  // Permission denied"), so run-as is the last resort, as in perf-extract.js.
-  assert.match(template, /command: 'run-as'/)
-  assert.match(template, /'cat', 'files\/bare_console\.log'/)
+  // Android: exactly one candidate, the adb-readable external path.
+  assert.match(template, /return \['\/sdcard\/Android\/data\/' \+ bundleId \+ '\/files\/bare_console\.log'\]/)
+  // No run-as: it cannot work on a release-signed APK.
+  assert.doesNotMatch(template, /command: 'run-as'/)
+  // The Android branch must say why rather than just failing.
+  assert.match(template, /unavailable on Android/)
+  assert.match(template, /run-as refuses on a release-signed APK/)
 })

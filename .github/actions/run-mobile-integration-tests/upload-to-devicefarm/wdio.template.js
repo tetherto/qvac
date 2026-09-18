@@ -90,30 +90,34 @@ exports.config = {
     // runs on crash paths where the WDIO command queue may have a pending
     // command stuck behind a long timeout (e.g. waitForDisplayed 60s on an
     // element that will never appear). Raw HTTP bypasses the queue.
-    // `@<bundle>:documents/...` is the iOS (XCUITest) container form. On Android
-    // it can never resolve — every Android run logged
-    //   Cannot access the container of 'io.tether.test.qvac:documents' application
-    // so the app-side log was silently unavailable there, which is what makes an
-    // Android mobile failure untriageable (logcat carries no bare output).
-    // Android needs the UiAutomator2 forms; these mirror the candidate list
-    // perf-extract.js already pulls perf-report.json with successfully.
+    // Where the app-side log can be read from, per platform.
+    //
+    // iOS: the XCUITest container form works (observed: "flush ok").
+    //
+    // Android: it cannot be read at all with the Device Farm artifact. The app
+    // writes bare_console.log into its private data dir, and on a release-signed
+    // APK both routes out are closed:
+    //   adb pull /data/user/0/<pkg>/files/bare_console.log
+    //     -> failed to stat remote object: Permission denied
+    //   run-as <pkg> cat files/bare_console.log
+    //     -> run-as: package not debuggable: <pkg>
+    // Both observed on real Device Farm runs. So try only the world-readable
+    // external-files path — which an app CAN be changed to write to, and which
+    // adb can read without run-as — and otherwise say plainly that the log is
+    // unavailable rather than burning five doomed pulls per run.
+    //
+    // This is why an Android mobile failure cannot be triaged from its
+    // artifacts today: logcat carries no bare output either. Making the app
+    // write its console log to the external files dir would close the gap.
     global.bareLogCandidates = function (isAndroid, bundleId) {
       if (!isAndroid) return ['@' + bundleId + ':documents/bare_console.log'];
-      return [
-        '@' + bundleId + '/files/bare_console.log',
-        '/sdcard/Android/data/' + bundleId + '/files/bare_console.log',
-        '/storage/emulated/0/Android/data/' + bundleId + '/files/bare_console.log',
-        '/data/data/' + bundleId + '/files/bare_console.log',
-        '/data/user/0/' + bundleId + '/files/bare_console.log',
-      ];
+      return ['/sdcard/Android/data/' + bundleId + '/files/bare_console.log'];
     };
 
     global.flushBareLog = async function (reason) {
       if ('__ENABLE_FLUSH_BARE_LOG__' !== 'true') return;
-      var candidates = global.bareLogCandidates(
-        (capabilities.platformName || '').toLowerCase() === 'android',
-        BUNDLE_ID
-      );
+      var isAndroid = (capabilities.platformName || '').toLowerCase() === 'android';
+      var candidates = global.bareLogCandidates(isAndroid, BUNDLE_ID);
       var lastError = null;
       for (var ci = 0; ci < candidates.length; ci++) {
         try {
@@ -123,36 +127,18 @@ exports.config = {
           lastError = e;
         }
       }
-
-      // adb cannot read another app's sandbox: the private-data candidate ends
-      // in `failed to stat remote object: Permission denied`. `run-as` is how
-      // perf-extract.js reaches the same directory, so fall back to it before
-      // giving up. Uses the WDIO command queue rather than the raw-HTTP pull
-      // above, so it only runs on the normal end-of-run path.
-      if ((capabilities.platformName || '').toLowerCase() === 'android') {
-        try {
-          var raw = await browser.execute('mobile: shell', {
-            command: 'run-as',
-            args: [BUNDLE_ID, 'cat', 'files/bare_console.log'],
-          });
-          var out = typeof raw === 'string' ? raw : (raw && raw.stdout) || '';
-          if (out && out.length) {
-            var dir = process.env.DEVICEFARM_LOG_DIR || '.';
-            require('fs').writeFileSync(dir + '/bare_console.log', out);
-            console.log(
-              '[bare-log] ' + reason + ' flush ok (' + out.length + ' bytes) via run-as'
-            );
-            return;
-          }
-        } catch (e) {
-          lastError = e;
-        }
+      if (isAndroid) {
+        console.log(
+          '[bare-log] ' + reason + ' unavailable on Android: the app writes it to its private ' +
+          'data dir, which adb cannot read and run-as refuses on a release-signed APK. ' +
+          'Use an iOS run to read app-side output. Last error: ' +
+          (lastError ? lastError.message : 'none')
+        );
+        return;
       }
-
       console.log(
         '[bare-log] ' + reason + ' flush failed: ' +
-        (lastError ? lastError.message : 'no candidate path') +
-        ' (tried ' + candidates.length + ' path(s) + run-as)'
+        (lastError ? lastError.message : 'no candidate path')
       );
     };
 
