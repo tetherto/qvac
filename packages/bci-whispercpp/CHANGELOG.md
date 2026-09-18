@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `contextParams.main-gpu` (alias `main_gpu`) to select a GPU by registry
+  index or by `integrated` / `dedicated` class when `use_gpu` is enabled.
+  Unavailable or refused devices fall back to CPU; out-of-range indices warn
+  and use automatic selection. Cannot be combined with `gpu_device`.
+
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
