@@ -17,6 +17,7 @@ const fs = require('fs')
 const path = require('path')
 
 const DEFAULT_ASSETS_DIR = path.resolve(__dirname, '../test/mobile/testAssets')
+const DEFAULT_TEST_GROUPS = path.resolve(__dirname, '../test/mobile/test-groups.json')
 const IOS_BUNDLE_ID = 'io.tether.test.qvac'
 
 // `test` is the test-groups.json function name the composite bakes into each
@@ -26,14 +27,44 @@ const MODEL_SHARDS = [
   { test: 'runGrootTest', name: 'groot-q5_vf16.gguf', urlsFile: 'groot-urls.json' }
 ]
 
-// The static set of mobile runner names — the drift oracle. buildManifest below
-// only bakes shards whose presigned URL already exists, and pi05 is deferred on
-// mobile, so a grep that matches a KNOWN runner but no manifest key is a legit
-// "URL not staged yet -> network fallback". A grep that matches NO known runner
-// at all is a test-groups <-> model-map drift and must fail closed. Emitted as a
-// single-quoted JS array literal so it stays safe inside the `node -e "…"` arg.
-function knownRunnersLiteral() {
-  return '[' + MODEL_SHARDS.map((s) => `'${s.test}'`).join(',') + ']'
+// The set of mobile runner names — the drift oracle. buildManifest below only
+// bakes shards whose presigned URL already exists, and several runners need no
+// model at all, so a grep that matches a KNOWN runner but no manifest key is a
+// legit "URL not staged yet -> network fallback". A grep that matches NO known
+// runner at all is a test-groups <-> model-map drift and must fail closed.
+//
+// Read from test-groups.json, which is the actual runner list, NOT from
+// MODEL_SHARDS, which is only the subset that has a model to stage. Deriving it
+// from MODEL_SHARDS made every model-less runner look like drift:
+// `-f tests=runEsmNamedExportsTest` failed on device with "matched no known
+// runner" even though it is a scheduled runner, and the mobile-deferred
+// runPi05Test the comment above calls out would have done the same.
+function readKnownRunners(testGroupsPath = DEFAULT_TEST_GROUPS) {
+  const names = new Set(MODEL_SHARDS.map((s) => s.test))
+  let groups
+  try {
+    groups = JSON.parse(fs.readFileSync(testGroupsPath, 'utf8'))
+  } catch (_) {
+    // Missing or unreadable: fall back to the model list rather than emitting an
+    // empty oracle, which would fail every grep closed.
+    return [...names]
+  }
+  const walk = (node) => {
+    if (typeof node === 'string') {
+      if (/^[A-Za-z_$][\w$]*$/.test(node)) names.add(node)
+      return
+    }
+    if (Array.isArray(node)) return node.forEach(walk)
+    if (node && typeof node === 'object') return Object.values(node).forEach(walk)
+  }
+  walk(groups)
+  return [...names].sort()
+}
+
+// Emitted as a single-quoted JS array literal so it stays safe inside the
+// `node -e "…"` arg. Runner names are identifiers, asserted above.
+function knownRunnersLiteral(testGroupsPath = DEFAULT_TEST_GROUPS) {
+  return '[' + readKnownRunners(testGroupsPath).map((n) => `'${n}'`).join(',') + ']'
 }
 
 // Build the { <testFn>: [{ name, url }] } manifest from the bundled *-urls.json.
@@ -220,4 +251,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { MODEL_SHARDS, buildManifest, buildScript, formatYamlBlock, IOS_BUNDLE_ID }
+module.exports = { MODEL_SHARDS, buildManifest, buildScript, formatYamlBlock, readKnownRunners, IOS_BUNDLE_ID }
