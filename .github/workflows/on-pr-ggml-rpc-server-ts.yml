@@ -1,0 +1,31 @@
+name: GGML RPC Server TypeScript Checks
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - "packages/ggml-rpc-server/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
+      - ".github/workflows/*ggml-rpc-server*.yml"
+      - ".github/workflows/reusable-ts-checks.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ggml-rpc-server-pr-head-ts-checks:
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/ggml-rpc-server

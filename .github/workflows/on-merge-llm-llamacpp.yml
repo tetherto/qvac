@@ -9,7 +9,7 @@ on:
       - tmp-*
     paths:
       - "packages/llm-llamacpp/**"
-      - ".github/workflows/*llamacpp-llm*.yml"
+      - ".github/workflows/*llm-llamacpp*.yml"
 
   workflow_dispatch:
     inputs:
