@@ -7,8 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Native Pocket TTS with converted FlowLM/Mimi bundles, prepared voices or
+  reference-WAV conditioning, and native audio streaming through the addon
+  run, runStream and runStreaming APIs. Supports explicit flow-sampling steps;
+  four steps are recommended for the observed one-step speech artifact.
+
 ### Changed
 
+- Release the loaded Pocket model before activating its replacement on reload,
+  avoiding two live model allocations. Failed activation leaves the instance
+  unloaded with its last successful configuration available for `load()`.
+- Expose optional firstAudioMs stats and chunkIndex/isLast output metadata;
+  preserve first-audio latency during streaming aggregation.
+- Require ggml-speech 2026-09-15 for the Pocket CPU planner fixes.
+  The speech-cpp 2026-09-16 floor also includes the Pocket EOS-tail fixes.
+- Resolve Pocket CPU memory planning through the dynamically loaded backend,
+  fixing unresolved `ggml_graph_plan` imports in Linux and Android prebuilds.
 - Raise the `speech-cpp` floor to `2026-09-16`. CosyVoice3 synthesis is faster
   with no model change: on an AMD Strix Halo the reference-exact path gains
   1.3-1.4x on Vulkan and 1.6-1.8x on CPU, from flash-attention in the flow
