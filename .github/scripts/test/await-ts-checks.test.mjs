@@ -4,7 +4,6 @@ import assert from 'node:assert/strict'
 import { classifyConclusion, pollForCheck } from '../await-ts-checks/lib.mjs'
 
 const NAME = 'llm-pr-head-ts-checks / ts-checks'
-const PARENT_NAME = NAME.split(' / ')[0]
 
 const done = (conclusion) => [{ name: NAME, status: 'completed', conclusion }]
 const running = () => [{ name: NAME, status: 'in_progress', conclusion: null }]
@@ -35,33 +34,19 @@ function run(sequence, { timeoutTicks = 1000 } = {}) {
   })
 }
 
-test('classifyConclusion: success and skipped pass, real failures fail, the rest wait', () => {
+test('classifyConclusion: success passes, real failures fail, the rest wait', () => {
   assert.equal(classifyConclusion('success'), 'pass')
-  assert.equal(classifyConclusion('skipped'), 'pass')
   assert.equal(classifyConclusion('failure'), 'fail')
   assert.equal(classifyConclusion('timed_out'), 'fail')
   assert.equal(classifyConclusion('action_required'), 'fail')
   assert.equal(classifyConclusion('cancelled'), 'wait')
+  assert.equal(classifyConclusion('skipped'), 'wait')
   assert.equal(classifyConclusion('neutral'), 'wait')
   assert.equal(classifyConclusion('stale'), 'wait')
 })
 
 test('success on first poll -> 0', async () => {
   assert.equal(await run([done('success')]), 0)
-})
-
-test('skipped package check -> 0', async () => {
-  assert.equal(await run([done('skipped')]), 0)
-})
-
-test('skipped reusable-workflow parent check -> 0', async () => {
-  const skippedParent = [{ name: PARENT_NAME, status: 'completed', conclusion: 'skipped' }]
-  assert.equal(await run([skippedParent]), 0)
-})
-
-test('successful parent does not replace the required child check', async () => {
-  const successfulParent = [{ name: PARENT_NAME, status: 'completed', conclusion: 'success' }]
-  assert.equal(await run([successfulParent], { timeoutTicks: 3 }), 1)
 })
 
 test('failure -> 1', async () => {
