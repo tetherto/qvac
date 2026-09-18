@@ -169,8 +169,9 @@ the bullet emits with no continuation lines.
 For **every** SDK pod package, after the raw files exist:
 
 ```bash
+DIR=$(node -e "console.log(require('./scripts/sdk/package-paths.cjs').getPackageDir('<slug>'))")
 LAST=$(git tag --list "<slug>-v*" --sort=-v:refname | head -1)
-git diff "$LAST" HEAD -- packages/<pkg>/package.json
+git diff "$LAST" HEAD -- "$DIR/package.json"
 ```
 
 Diff this package's public surface the same way: `exports`, serve/HTTP routes,
@@ -214,17 +215,15 @@ committed-file format check would later reject. Every SDK pod package uses prett
 (`[inference] format`, `[sdk] format`, …) loads holepunch; `--no-config` or a
 different parser (quote style, trailing commas) is the usual red we hit.
 
-`bunx prettier` from a worktree **without** `node_modules` fails with
-`Cannot find package 'prettier-config-holepunch'` and then either skips the
-check or formats with a fallback that CI will reject. Install first, then check
-the same way CI does:
+`bunx prettier` fails with `Cannot find package 'prettier-config-holepunch'`
+when that package is not resolvable, then either skips or formats with a
+fallback CI rejects. **Never `--no-config`.** Do not `bun install` in a package
+whose range names an unpublished lockstep dep (e.g. sdk waiting on inference) —
+run `bunx` from a sibling that already has `node_modules`.
 
 ```bash
-cd packages/<package>
-# if this worktree has no node_modules:
-bun install
-bunx prettier --check "changelog/<version>/**/*.md" "CHANGELOG.md"
-# or, matching CI: bun run format
+DIR=$(node -e "console.log(require('./scripts/sdk/package-paths.cjs').getPackageDir('<name>'))")
+bunx prettier --check "$DIR/changelog/<version>/**/*.md" "$DIR/CHANGELOG.md"
 ```
 
 Scope those globs to **this package**. Do not run `changelog/**/*.md` from the
@@ -447,9 +446,9 @@ These have gone red on more than one SDK-pod changelog PR. Fix them before
 push, and keep this list to things that are cheap to prevent:
 
 - **Prettier is holepunch, not stock.** `.prettierrc` is `"prettier-config-holepunch"`.
-  Never `--no-config`. Never `bunx prettier` until `packages/<pkg>/node_modules`
-  (or a linked install) can resolve that package. Quote style and trailing commas
-  on `CHANGELOG_LLM.md` are the usual fail.
+  Never `--no-config`. Resolve holepunch from a package that can install; do not
+  `bun install` against an unpublished lockstep dep. Quote style and trailing
+  commas on `CHANGELOG_LLM.md` are the usual fail.
 - **Lockstep: pass the floor.** Never run the generator unflagged for `sdk` /
   `inference`. Same `--base-commit` on both. When that floor is a patch, union
   the Step 2 main-only window. SDK is the consumer set; inference is the engine
@@ -481,9 +480,9 @@ Before completing:
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
 - [ ] CHANGELOG_LLM.md authored from `changelog/<version>/` after the published-tag audit (this package's name on the title/NPM line)
-- [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (`bun install` in `packages/<pkg>` if needed; never `--no-config`)
+- [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `bun install` against unpublished lockstep deps)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
-- [ ] Published-tag audit done: last `<slug>-v*` vs HEAD public surface matches `api.md` / `breaking.md` / `models.md`
+- [ ] Published-tag audit done: last `<slug>-v*` vs HEAD public surface under `getPackageDir(<slug>)` matches `api.md` / `breaking.md` / `models.md`
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
