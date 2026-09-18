@@ -410,6 +410,7 @@ if(BUILD_TESTING)
     # whisper suite
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_whisper_lifecycle.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/AddonCppTest.cpp
     # parakeet suite
     ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_core.cpp

@@ -1208,7 +1208,7 @@ struct GpuSelectionMockRegistry {
 
 TEST_F(
     WhisperModelTest,
-    MainGpuModelLoadPathSelectsRawRegistryIndexAndClassSelectors) {
+    MainGpuResolutionUsesModelConfigForRawIndexAndClassSelectors) {
   const GpuSelectionMockDevice cpu{GGML_BACKEND_DEVICE_TYPE_CPU, "CPU", "CPU"};
   const GpuSelectionMockDevice dedicated{
       GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA", "NVIDIA", "cuda0"};
@@ -1240,7 +1240,7 @@ TEST_F(
   EXPECT_EQ(selected.gpuDevice, 1);
 }
 
-TEST_F(WhisperModelTest, MainGpuModelLoadPathWarnsForCpuOnlyRegistry) {
+TEST_F(WhisperModelTest, MainGpuResolutionRequestsWarningForCpuOnlyRegistry) {
   const GpuSelectionMockDevice cpu{GGML_BACKEND_DEVICE_TYPE_CPU, "CPU", "CPU"};
   const GpuSelectionMockRegistry registry{{nullptr, &cpu}};
 
@@ -1255,7 +1255,7 @@ TEST_F(WhisperModelTest, MainGpuModelLoadPathWarnsForCpuOnlyRegistry) {
   EXPECT_TRUE(selected.refused.empty());
 }
 
-TEST_F(WhisperModelTest, MainGpuSelectorContextChangeTransitionsTriggerReload) {
+TEST_F(WhisperModelTest, MainGpuSelectorContextChangeDetection) {
   auto base = createTestConfig();
   base.whisperContextCfg["use_gpu"] = true;
 
@@ -1278,6 +1278,13 @@ TEST_F(WhisperModelTest, MainGpuSelectorContextChangeTransitionsTriggerReload) {
   auto aliasAdded = base;
   aliasAdded.whisperContextCfg["main_gpu"] = 1.0;
   EXPECT_TRUE(WhisperModel::configContextIsChangedForTesting(base, aliasAdded));
+
+  auto aliasChanged = aliasAdded;
+  aliasChanged.whisperContextCfg["main_gpu"] = 2.0;
+  EXPECT_TRUE(
+      WhisperModel::configContextIsChangedForTesting(aliasAdded, aliasChanged));
+  EXPECT_FALSE(WhisperModel::configContextIsChangedForTesting(
+      aliasChanged, aliasChanged));
 
   auto aliasRemoved = aliasAdded;
   aliasRemoved.whisperContextCfg.erase("main_gpu");
