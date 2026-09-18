@@ -1,11 +1,11 @@
-name: On Merge vcpkg Cache (LLM)
+name: On Merge vcpkg Cache (Model Fit)
 
-# cpp-tests-llm.yml only writes its vcpkg cache on a trusted event, and its
+# cpp-tests-model-fit.yml only writes its vcpkg cache on a trusted event, and its
 # only other caller is pull_request_target -- so without this, nothing populates
 # the cache and every PR leg stays cold. Paths mirror the cache key's inputs; the
 # cron recovers from eviction before the server prunes it (see the schedule).
 #
-# This dispatches cpp-tests-llm.yml rather than calling it with `uses:`. A
+# This dispatches cpp-tests-model-fit.yml rather than calling it with `uses:`. A
 # `uses:` call fails at startup with no jobs and no error text, because the
 # callee's test job declares `environment: release` and the release environment
 # has custom_branch_policies with no policies defined -- which blocks a job in a
@@ -21,19 +21,16 @@ on:
     branches:
       - main
     paths:
-      - "packages/llm-llamacpp/vcpkg.json"
-      - "packages/llm-llamacpp/vcpkg-configuration.json"
+      - "packages/model-fit/vcpkg.json"
+      - "packages/model-fit/vcpkg-configuration.json"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
       # The rest of the key lives here: the version segment in the cpp-tests
       # workflow, and the toolchain digest the action computes. Without these a
       # key change merges without warming anything and every PR leg stays cold
       # until the cron.
-      - ".github/workflows/cpp-tests-llm.yml"
+      - ".github/workflows/cpp-tests-model-fit.yml"
       - ".github/actions/vcpkg-toolchain-fingerprint/**"
-      # This job also writes the unit-test model cache, whose key hashes this
-      # script. Without it that entry never refreshes when the model set changes.
-      - "packages/llm-llamacpp/scripts/download-unit-test-models.js"
   schedule:
     # Every 2 days, not weekly. The self-hosted cache server prunes an entry when
     # it has gone CACHE_CLEANUP_OLDER_THAN_DAYS=5 days without an upload AND
@@ -51,12 +48,12 @@ on:
     #
     # Hours are staggered across the five dispatchers so they do not contend for
     # a runner. These only dispatch a workflow, so the cadence is close to free.
-    - cron: "17 4 */2 * *"
+    - cron: "47 5 */2 * *"
   workflow_dispatch:
 
 # Never cancel: a cancelled dispatch leaves the cache unrefreshed.
 concurrency:
-  group: on-merge-vcpkg-cache-llm-${{ github.ref }}
+  group: on-merge-vcpkg-cache-model-fit-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -68,15 +65,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dispatch cpp-tests-llm
+      - name: Dispatch cpp-tests-model-fit
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          gh workflow run "cpp-tests-llm.yml" \
+          gh workflow run "cpp-tests-model-fit.yml" \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$TARGET_REF" \
-            -f "workdir=packages/llm-llamacpp"
-          echo "dispatched cpp-tests-llm.yml on $TARGET_REF"
+            -f "ref=$TARGET_REF" \
+            -f "workdir=packages/model-fit"
+          echo "dispatched cpp-tests-model-fit.yml on $TARGET_REF"
