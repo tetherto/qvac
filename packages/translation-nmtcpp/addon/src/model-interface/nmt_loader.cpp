@@ -22,13 +22,13 @@
 #include "ggml-backend.h"
 #include "ggml-cpp.h"
 #include "ggml.h"
+#include "inference-addon-cpp/Logger.hpp"
 #include "nmt.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_loader.hpp"
 #include "nmt_state_backend.hpp"
 #include "nmt_tokenization.hpp"
 #include "nmt_utils.hpp"
-#include "inference-addon-cpp/Logger.hpp"
 
 static std::string format(const char* fmt, ...) {
   va_list ap;
@@ -200,7 +200,12 @@ static buft_list_t make_buft_list(const nmt_context_params& params) {
   // recurring source of scheduler crashes (R2-C1, R4-C2); the shared helper
   // is the structural fix per QVAC-17790 round-8 R8-D1.
   ggml_backend_dev_t selected_dev = nmtSelectGpuDevice(
-      params.use_gpu, params.gpu_backend, params.gpu_device, "make_buft_list");
+      params.use_gpu,
+      params.gpu_backend,
+      params.gpu_device,
+      "make_buft_list",
+      params.main_gpu,
+      params.legacy_gpu_selection);
   if (selected_dev != nullptr) {
     ggml_backend_buffer_type_t buft =
         ggml_backend_dev_buffer_type(selected_dev);

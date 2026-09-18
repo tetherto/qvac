@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added the `main-gpu` / `main_gpu` config selector for choosing a raw ggml
+  registry index or a `dedicated` / `integrated` GPU class. The selector rejects
+  conflicts with legacy `gpu_backend` / `gpu_device` keys; ineligible raw-index
+  targets fall back to CPU, out-of-range indices return to automatic selection,
+  and class selectors fall back to CPU when no matching eligible GPU exists.
+  
 ## [0.16.4] - 2026-09-18
 
 ### Fixed

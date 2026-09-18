@@ -1,5 +1,8 @@
 #include "TranslationModel.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <charconv>
 #include <climits>
 #include <cmath>
 #include <filesystem>
@@ -7,12 +10,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
-#include <inference-addon-cpp/Errors.hpp>
+
 #include <ggml-backend.h>
+#include <inference-addon-cpp/Errors.hpp>
 
-
-#include "nmt_utils.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "nmt_utils.hpp"
 
 namespace qvac_lib_inference_addon_nmt {
 
@@ -255,6 +258,8 @@ void TranslationModel::
   params.use_gpu = useGpu_;
   params.gpu_backend = gpuBackend_;
   params.gpu_device = gpuDevice_;
+  params.main_gpu = mainGpu_;
+  params.legacy_gpu_selection = legacyGpuSelection_;
   params.op_offload_min_batch = opOffloadMinBatch_;
 
   std::ostringstream oss;
@@ -648,6 +653,78 @@ void TranslationModel::
         std::unordered_map<
             std::string, std::variant<double, int64_t, std::string>>
             config) {
+  const auto canonical = config.find("main-gpu");
+  const auto alias = config.find("main_gpu");
+  if (canonical != config.end() && alias != config.end()) {
+    throw std::invalid_argument("Use only one of main-gpu and main_gpu");
+  }
+  NmtMainGpu mainGpu;
+  const auto selector = canonical != config.end() ? canonical : alias;
+  if (selector != config.end()) {
+    for (const auto* legacy :
+         {"gpu_backend",
+          "gpuBackend",
+          "gpubackend",
+          "gpu_device",
+          "gpuDevice",
+          "gpudevice"}) {
+      if (config.contains(legacy)) {
+        throw std::invalid_argument(
+            "main-gpu cannot be combined with legacy GPU selectors");
+      }
+    }
+    if (const auto* asString = std::get_if<std::string>(&selector->second)) {
+      std::string normalized = *asString;
+      std::ranges::transform(
+          normalized, normalized.begin(), [](unsigned char chr) {
+            return static_cast<char>(std::tolower(chr));
+          });
+      if (normalized == "dedicated" || normalized == "integrated") {
+        mainGpu = normalized;
+      } else {
+        const char* begin = normalized.data();
+        const char* end = begin + normalized.size();
+        if (begin != end && *begin == '+') {
+          ++begin;
+          if (begin == end || *begin < '0' || *begin > '9') {
+            throw std::invalid_argument(
+                "main-gpu must be a 32-bit integer registry index, "
+                "'dedicated', or 'integrated'");
+          }
+        }
+        int32_t index = 0;
+        const auto parsed = std::from_chars(begin, end, index);
+        if (parsed.ec != std::errc{} || parsed.ptr != end) {
+          throw std::invalid_argument(
+              "main-gpu must be a 32-bit integer registry index, "
+              "'dedicated', or 'integrated'");
+        }
+        mainGpu = static_cast<int64_t>(index);
+      }
+    } else {
+      constexpr double maxIndex = 2147483647.0;
+      const double value =
+          std::holds_alternative<int64_t>(selector->second)
+              ? static_cast<double>(std::get<int64_t>(selector->second))
+              : std::get<double>(selector->second);
+      if (!std::isfinite(value) || value < -2147483648.0 || value > maxIndex ||
+          std::floor(value) != value) {
+        throw std::invalid_argument(
+            "main-gpu must be a 32-bit integer registry index, "
+            "'dedicated', or 'integrated'");
+      }
+      mainGpu = static_cast<int64_t>(value);
+    }
+  }
+  if (selector != config.end()) {
+    gpuBackend_.clear();
+    gpuDevice_ = 0;
+    mainGpu_ = std::move(mainGpu);
+    legacyGpuSelection_ = false;
+  } else {
+    mainGpu_ = std::monostate{};
+    legacyGpuSelection_ = false;
+  }
   config_ = std::move(config);
 
   // use_gpu is lifted out of the generic map because it must be applied
@@ -756,6 +833,7 @@ void TranslationModel::
 void TranslationModel::setUseGpu(bool useGpu) { useGpu_ = useGpu; }
 
 void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
+  mainGpu_ = std::monostate{};
   // Tight allowlist — every valid ggml device name substring fits in
   // [a-zA-Z0-9_-]. Rejecting other printable chars (quotes, equals, spaces,
   // etc.) prevents log-line spoofing in messages that embed the value.
@@ -782,6 +860,8 @@ void TranslationModel::setGpuBackend(const std::string& gpuBackend) {
 }
 
 void TranslationModel::setGpuDevice(int gpuDevice) {
+  mainGpu_ = std::monostate{};
+  legacyGpuSelection_ = true;
   if (gpuDevice < 0) {
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
