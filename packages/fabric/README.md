@@ -21,9 +21,9 @@ consumer guide.
   `llama.h`, `llama-cpp.h`, `common/*.h`, `mtmd/*.h` under `include/llama/`.
 - **CMake config** (`prebuilds/share/qvac-fabric/`) — `find_package(qvac-fabric)`
   exposes `qvac-fabric::headers` for compile-time includes
-- **ggml compute backends** — on **Linux and Android**, separate shared libraries
+- **ggml compute backends** — on **Linux, Android, and Windows**, separate shared libraries
   ship under `prebuilds/<platform>/qvac__fabric/` and are loaded at runtime via
-  `ggml_backend_load_all_from_path()`. On **macOS, Windows, and iOS** the backends
+  `ggml_backend_load_all_from_path()`. On **macOS and iOS** the backends
   are linked statically inside `qvac__fabric.bare` and self-register on load.
   On **linux-x64** this includes the ROCm/HIP backend (`libqvac-ggml-hip.so`,
   gfx1151) alongside Vulkan; the DL loader skips it on non-AMD hosts.
@@ -40,7 +40,7 @@ consumer guide.
 ┌───────────────────────────▼────────────────────────────────┐
 │  qvac__fabric@0.bare  (this package)                        │
 │  libllama · libcommon · libmtmd · libggml-base              │
-│  + ggml backends (.so on Linux/Android; static elsewhere)   │
+│  + ggml backend modules (.so/.dll; static on Apple)         │
 │  exports llama_* / LLAMA_* / ggml_* / gguf_* / mtmd_* /     │
 │          common_* / json_schema_to_grammar                  │
 └───────────────────────────┬────────────────────────────────┘
@@ -89,6 +89,6 @@ with a real one under the same ABI hash. Other platforms need nothing extra; the
 |----------|---------|----------|
 | Linux | `x64-linux`, `arm64-linux` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` (x64 also ships ROCm/HIP) |
 | macOS | `arm64-osx` | static (CPU, Metal) inside `.bare` |
-| Windows | (default MSVC) | static inside `.bare` |
+| Windows | (default MSVC) | dynamic `.dll` under `prebuilds/<platform>/qvac__fabric/` |
 | Android | `arm64-android` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` |
 | iOS | `arm64-ios` | static inside `.bare` |
