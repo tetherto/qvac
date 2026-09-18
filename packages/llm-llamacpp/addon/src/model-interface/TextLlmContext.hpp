@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <deque>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -8,12 +9,11 @@
 #include <llama.h>
 
 #include "../utils/ChatTemplateUtils.hpp"
-#include "../utils/ReasoningRollbackState.hpp"
 #include "../utils/ReasoningUtils.hpp"
 #include "../utils/RecurrentStateSnapshot.hpp"
+#include "../utils/RequestRollbackState.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
-#include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
 #include "common/common.h"
 #include "inference-addon-cpp/Logger.hpp"
@@ -116,9 +116,6 @@ public:
    */
   void setNPast(llama_pos nPast) override;
 
-  [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
-  void resetThinkingBlockDiscards() override;
-
   [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
   void resetToolDefinitionsDropped() override;
 
@@ -130,10 +127,16 @@ public:
     return generationStopReason_;
   }
 
-  [[nodiscard]] std::optional<llama_perf_context_data>
-  takeUserVisiblePerfSnapshot() override;
-
-  void setRemoveThinkingFromContext(bool value) override;
+  void setCacheReconciliationEnabled(bool enabled) override {
+    cacheReconciliationEnabled_ = enabled;
+  }
+  [[nodiscard]] std::vector<llama_token> cacheStateTokens() const override;
+  void restoreCacheStateTokens(const std::vector<llama_token>& tokens) override;
+  void clearCacheReconciliationState() override;
+  [[nodiscard]] bool rollbackFailedRequest() override;
+  [[nodiscard]] bool shouldPersistAfterFinalize() const override {
+    return !cacheRequestRolledBack_;
+  }
 
   /**
    * The reset state method. It resets the context.
@@ -186,19 +189,8 @@ public:
   void snapshotPreRequestCursor() override;
   void snapshotPreRequestRollbackAnchor() override;
 
-  // Testing seams: expose the owned `ReasoningBlockCompactor` and the
-  // otherwise-private `compactThinkSpan()` entry point so driver-level
-  // unit tests can install an `IReasoningRewindOps` override and drive
-  // the end-of-generation compaction step directly. Production code
-  // MUST NOT use these — production compaction fires from within
-  // `onGenerationFinished` / the scheduler's slot cleanup.
-  [[nodiscard]] qvac_lib_inference_addon_llama::ReasoningBlockCompactor&
-  compactorForTesting() noexcept {
-    return compactor_;
-  }
-  void compactThinkSpanForTesting() { compactThinkSpan(); }
   void seedPrefillEntryRollbackForTesting(llama_pos nPast) noexcept {
-    rollbackState_.seedPrefillEntryForTesting(nPast);
+    requestRollback_.seedForTesting(nPast);
   }
   void forcePrefillEntryRestoreFailureForTesting(bool value) noexcept {
     forcePrefillEntryRestoreFailureForTesting_ = value;
@@ -213,6 +205,12 @@ public:
   void
   forceNextSampledTokenInsideReasoningForTesting(llama_token token) noexcept {
     forcedNextSampledTokenForTesting_ = token;
+  }
+  /// Makes the next synthetic reasoning-recovery decode fail before it reaches
+  /// llama.cpp. Used to verify that the request transaction rolls back instead
+  /// of committing a partially injected close sequence.
+  void forceReasoningRecoveryDecodeFailureForTesting() noexcept {
+    forceReasoningRecoveryDecodeFailureForTesting_ = true;
   }
   /// Forces this context's tools-dropped count, so a test can give a slot a
   /// known value without needing a chat template that actually rejects tool
@@ -273,13 +271,9 @@ private:
   void initializeOwnedThreadpools();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
-  // Reasoning-block KV-cache compaction helpers. Single-block policy:
-  // at most one `<think>...</think>` block is tracked per inference.
-  // `setOpenThinkSpan` is a no-op once a span has been captured.
-  void setOpenThinkSpan(llama_pos start);
-  void capturePendingThinkClose();
-  void compactThinkSpan();
-  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
+  // Reasoning-channel tracking is retained for output parsing and stop
+  // handling. Generated reasoning stays resident until the next complete
+  // prompt is reconciled against the cache ledger.
   [[nodiscard]] bool rollbackCurrentRequest(
       const std::function<void(const std::string&)>& outputCallback);
   // `fallbackTags` is the model-family reasoning channel, resolved by the
@@ -287,41 +281,22 @@ private:
   // reasoning-budget markers from the same value.
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-      const std::string& forcedOpenText,
       const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
           fallbackTags);
 
-  // Delegates to `rollbackState_.recordPostReasoningToken` while the
-  // post-reasoning capture phase is active, which starts once the close
-  // marker is committed. Every model kind anchors a boundary, so this runs
-  // on pure attention too; it is a no-op only when the feature is off.
-  void recordPostReasoningTokenIfActive(llama_token tokenId);
-
-  // Token index in the prefill stream where the decode must stop so the
-  // full-state snapshot is taken before a force-open template's `<think>`
-  // opener. The sentinel `-1` means no stop: the feature is off, the
-  // reasoning channel is inactive, this is a prefill-only request, or the
-  // model is pure attention, whose anchor is an absolute position that needs
-  // no decode stop. A generated-opener template has nothing in the prompt to
-  // stop before, so its boundary is the end of prefill and `compact()` clips
-  // the sampled opener pieces out of the replay instead.
-  [[nodiscard]] llama_pos
-  computeRecurrentSnapshotBoundary(llama_pos prefillLen) const;
-
-  // Anchors the compaction boundary at the current `nPast_`: a full-state
-  // snapshot on recurrent / hybrid, a bare position on pure attention. No-op
-  // unless compaction is relevant for this request. Under the uniform
-  // hard-fail contract for `remove_thinking_from_context`, a capture failure
-  // propagates as `qvac_errors::StatusError`; the wrapper restores its
-  // pre-prompt
-  // checkpoint via `restorePrefillEntry`, resets local positional
-  // accounting, and re-throws so no saveCache path can persist a cache
-  // whose header no longer matches live memory.
-  void snapshotForRecurrentRollback();
-
-  /// Boundary capture plus the hard-fail rollback that guards it, split out
-  /// of `snapshotForRecurrentRollback` so the unwind path stays readable.
-  void captureReasoningBoundaryAt(llama_pos anchorPos);
+  struct CacheCheckpoint {
+    qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot state;
+    qvac_lib_inference_addon_llama::cache::Ledger ledger;
+  };
+  void beginCacheRequest();
+  std::vector<llama_token> reconcilePrompt(
+      const std::vector<llama_token>& fullPrompt, bool isPrefillOnlyRequest);
+  void rebuildSamplerFromLedger(
+      const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
+  void capturePendingCheckpoint();
+  void commitCacheRequest();
+  bool restorePreRequestCacheState();
+  void appendResidentToken(llama_token token);
 
   common_init_result_ptr llamaInit_;
   LlmModelContext modelCtx_;
@@ -351,6 +326,7 @@ private:
   llama_pos perSeqCtxCeiling_ = -1;
   bool forcePrefillEntryRestoreFailureForTesting_ = false;
   llama_token forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
+  bool forceReasoningRecoveryDecodeFailureForTesting_ = false;
   // Snapshot of `nPast_` at `evalMessageWithTools` entry. Restored by
   // `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;
@@ -369,8 +345,7 @@ private:
   // True only for architectures in the Qwen3 reasoning family (qwen3,
   // qwen3moe, qwen35, qwen35moe). Gates the EOS-inside-reasoning
   // recovery (close-marker substitution + newline injection), which is
-  // a Qwen3-specific workaround. Detection / span tracking / KV
-  // compaction stay family-agnostic via `reasoningEnabled_`.
+  // a Qwen3-specific workaround.
   bool isQwen3ReasoningFamily_ = false;
 
   // EOS-inside-reasoning recovery: the recovery substitutes `</think>\n\n` so
@@ -400,53 +375,29 @@ private:
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
 
-  // Per-request toggle for post-generation thinking-block KV compaction.
-  // Default-off, except Qwen3-family models opt in during initialization;
-  // `generationParams` can always override it.
-  bool removeThinkingFromContext_ = false;
+  bool cacheReconciliationEnabled_ = false;
+  bool cacheRequestActive_ = false;
+  bool cacheRequestRolledBack_ = false;
+  qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
+  qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
+  qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
+  qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot
+      preRequestCacheSnapshot_;
+  std::optional<CacheCheckpoint> pendingCheckpoint_;
+  std::deque<CacheCheckpoint> cacheCheckpoints_;
 
   // True when this context's model is recurrent, hybrid, or DeepSeek V4.
-  // (`llama_model_is_recurrent || llama_model_is_hybrid`) — Mamba /
-  // RWKV pure-recurrent and hybrid SSM + attention families (Qwen3.5,
-  // Qwen3-Next, Jamba, Granite-Hybrid, LFM2, Nemotron-H, Kimi-Linear).
-  // For these we use the snapshot + replay path: snapshot the full
-  // DeepSeek V4 has the same checkpoint requirement despite not reporting
-  // either predicate. We snapshot the full sequence state at the reasoning
-  // boundary, restore at end-of-generation,
-  // then batched-replay the captured post-reasoning tokens. Pure-attention
-  // models replay too; they anchor a position instead of a state payload,
-  // because rewinding positionally indexed cells is a tail trim.
+  // These models require full-state snapshots for request rollback and
+  // divergent-history checkpoints because arbitrary tail removal is unsafe.
   bool needsRecurrentSnapshot_ = false;
 
-  // Tracks whether the currently-prepared prefill is a cache-warm
-  // (prefill-only) request. Captured in `preparePrefill` from the
-  // scheduler / single-prompt caller and consulted by the recurrent
-  // reasoning snapshot path: prefill-only requests never enter
-  // generation and cannot emit reasoning tokens, so there is no
-  // reasoning boundary to anchor. Prevents cache-warm calls from
-  // failing on models whose boundary capture would only be exercised
-  // at generation time.
+  // Tracks whether the current request is prefill-only so the cache
+  // transaction can commit immediately after successful prefill.
   bool isPrefillOnlyRequest_ = false;
 
-  // Shared rollback state for recurrent / hybrid SSM models. Owns the
-  // prefill-entry snapshot (cancel during prefill), the reasoning-boundary
-  // snapshot (compaction + cancel during generation), and the
-  // post-reasoning token replay buffer. Populated on every model now; on
-  // pure attention the boundary is a position rather than a state payload.
-  qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
-  // Reasoning-block tracker + compactor: owns the `<think>...</think>`
-  // span, close-capture flag, and the pure-attention + recurrent
-  // compaction paths plus their stats counters.
-  qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
-
-  // Snapshot of `llama_perf_context()` taken at the start of
-  // `compactThinkSpan` — i.e. right after user-visible generation
-  // completes and before any replay decode runs. Consumed by
-  // `runtimeStats()` via `takeUserVisiblePerfSnapshot()` so the replay's
-  // `llama_decode` calls (which accumulate into `n_p_eval` /
-  // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.
-  // Reset at the start of each inference and on `resetState`.
-  std::optional<llama_perf_context_data> userVisiblePerf_;
+  // Generic request-entry snapshot for cancellation on memory that cannot
+  // remove an arbitrary decoded tail.
+  qvac_lib_inference_addon_llama::utils::RequestRollbackState requestRollback_;
 
   std::atomic<bool> stopGeneration_ = false;
 };

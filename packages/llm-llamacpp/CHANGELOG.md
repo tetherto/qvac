@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.54.0] - 2026-09-18
+
+### Breaking
+
+- Cached requests now use addon-owned full-prompt reconciliation. Every request
+  with `cacheKey` must resend the complete message history and complete tool
+  list. The addon persists a versioned token/media ledger in the sequence-state
+  file, reuses the longest matching prefix, and treats pre-ledger cache files as
+  cold misses. Generated reasoning is retained until the next authoritative
+  render omits it; `generationParams.remove_thinking_from_context` has therefore
+  been removed from the addon API, together with the obsolete
+  `RuntimeStats.thinkingBlockDiscards` counter. Current SDK releases still send
+  delta prompts/tools and still expose that option, so they are intentionally
+  incompatible with this addon until the SDK migration lands.
+
 ## [0.53.1] - 2026-09-16
 
 ### Fixed

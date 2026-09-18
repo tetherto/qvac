@@ -889,15 +889,12 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       {"CacheTokens", stats.cacheTokens},
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
-      // Both from `observed`, not the aggregate: the aggregate is
+      // This comes from `observed`, not the aggregate: the aggregate is
       // `group->stats = stats_`, a copy of the scheduler-wide accumulator, so
       // under overlapping top-level `run()` calls it reports a peer's figures
       // as this job's. `toolDefinitionsDropped` cannot tolerate that at all —
       // it answers "did *my* render lose its tools", which is what the SDK
-      // consumes in place of a heuristic (QVAC-23460) — and
-      // `thinkingBlockDiscards` moves with it rather than leaving two adjacent
-      // stats on different attribution rules.
-      {"thinkingBlockDiscards", observed.thinkingBlockDiscards},
+      // consumes in place of a heuristic (QVAC-23460).
       {"toolDefinitionsDropped", observed.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted, matching
       // batchRuntimeStatsLocked: concurrent prompts share the one
@@ -1017,7 +1014,6 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   }
 
   // Reset per-inference counters so they don't leak across runs.
-  state_->llmContext_->resetThinkingBlockDiscards();
   state_->llmContext_->resetToolDefinitionsDropped();
   state_->llmContext_->resetVisionEncodeMs();
 
@@ -1025,6 +1021,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
   // resolveChatAndTools in prompt-marker order; see computeMediaLoadOrder.
   std::string out;
   ResolvedPrompt resolved = resolveChatAndTools(prompt);
+  state_->llmContext_->setCacheReconciliationEnabled(
+      state_->cacheManager_.has_value() &&
+      state_->cacheManager_->wasCacheUsedInLastPrompt());
 
   // Media staged above is consumed by `tokenizeChat`, which drains `bitmaps_`
   // on both its success and its `mtmd_tokenize`-failure paths — but only if it
@@ -1146,7 +1145,7 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       }
 
       if (generationResult.rollbackOk) {
-        shouldSaveCache = true;
+        shouldSaveCache = state_->llmContext_->shouldPersistAfterFinalize();
         shouldResetAfterInference = resolved.shouldResetAfterInference;
       } else {
         // The driver could not prove the live recurrent state was rolled back
@@ -1158,14 +1157,13 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       }
     }
   } catch (...) {
-    // Once `handleCache()` has activated or loaded a cache session, any thrown
-    // eval / generation failure must leave no active session behind. In
-    // particular, strict `remove_thinking_from_context` compaction failures
-    // throw after local rollback/wipe; keeping the old cacheKey active would
-    // let a later prompt reuse or auto-save that recovery state over the last
-    // known-good on-disk cache. Do not catch policy-validation failures before
-    // admission; explicit save failures below have their own cleanup gate.
-    resetAndInvalidateActiveCache();
+    // Once `handleCache()` has activated or loaded a cache session, restore the
+    // request transaction before deciding whether the session must be dropped.
+    const bool cachedRequest = state_->cacheManager_.has_value() &&
+                               state_->cacheManager_->hasActiveCache();
+    if (!cachedRequest || !state_->llmContext_->rollbackFailedRequest()) {
+      resetAndInvalidateActiveCache();
+    }
     throw;
   }
 
@@ -1400,10 +1398,8 @@ LlamaModel::batchRuntimeStatsLocked() const {
   // in-flight batches without LlamaModel having to cache state.
   const batching::RuntimeStatsSnapshot stats =
       state_->batchScheduler_->runtimeStats();
-  // TTFT comes from the scheduler's prefill-step timer rather than
-  // `llama_perf_context().t_p_eval_ms`, which would include the
-  // replay decode run by `compactThinkSpan` in
-  // `onGenerationFinished`. No `llama_perf_context_reset` here: this
+  // TTFT comes from the scheduler's prefill-step timer. No
+  // `llama_perf_context_reset` here: this
   // runs under a shared stateMtx_ concurrently with in-flight batch
   // jobs, and the scheduler releases its own mutex around llama_decode,
   // so writing the context's non-atomic perf counters from this path
@@ -1417,7 +1413,6 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"CacheTokens", stats.cacheTokens},
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
-      {"thinkingBlockDiscards", stats.thinkingBlockDiscards},
       {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted in batch mode: multiple
       // prompts share the one per-context accumulator (reset per prompt), so a
@@ -1428,25 +1423,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
 
 qvac_lib_inference_addon_cpp::RuntimeStats
 LlamaModel::singleRuntimeStatsLocked() const {
-  // Compaction replays the kept tokens through `llama_decode` after
-  // generation ends. Those are batch decodes, so they land in `n_p_eval` /
-  // `t_p_eval_ms` and would otherwise show up as prompt tokens the caller
-  // never sent. The snapshot taken at the start of `compactThinkSpan` is the
-  // user-visible cutoff for those prompt-side counters.
-  //
-  // The generation-side counters are read live instead: the snapshot is taken
-  // before the request is fully wound down, so it can miss the final decode.
-  // `generatedTokens` is counted at the commit site so it is unaffected, but
-  // `t_eval_ms` is not exact here. A replay of exactly one token (forced-open
-  // template that ended right after `</think>`) decodes with
-  // `n_queued_tokens == 1` and so lands in `t_eval_ms`, understating TPS for
-  // that request. Reading the snapshot instead would drop the final decode
-  // from every request, which is the wider error of the two.
   auto perfData = llama_perf_context(state_->llmContext_->getCtx());
-  if (auto snapshot = state_->llmContext_->takeUserVisiblePerfSnapshot()) {
-    perfData.n_p_eval = snapshot->n_p_eval;
-    perfData.t_p_eval_ms = snapshot->t_p_eval_ms;
-  }
   constexpr double kMillisInSecond = 1000.0;
   const bool wasPrefill =
       state_->lastRun_.load(std::memory_order_relaxed).wasPrefill;
@@ -1476,8 +1453,6 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getCacheTokens())},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
-      {"thinkingBlockDiscards",
-       static_cast<int64_t>(state_->llmContext_->getThinkingBlockDiscards())},
       {"toolDefinitionsDropped",
        static_cast<int64_t>(state_->llmContext_->getToolDefinitionsDropped())},
       // Why the generation stopped, as the numeric GenerationStopReason

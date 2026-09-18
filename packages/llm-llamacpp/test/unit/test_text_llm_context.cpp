@@ -11,6 +11,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "common/chat.h"
+#include "model-interface/CacheLedger.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
@@ -229,18 +230,17 @@ TEST_F(TextLlmContextTest, LoadCacheRejectsRestoredTokenCountMetadataMismatch) {
 
   const fs::path cachePath = uniqueTextCachePath("bad-cachetokens-seq-cache");
   const std::string cachePathString = cachePath.string();
-  const llama_token metadata[SESSION_METADATA_FIELD_COUNT] = {
-      static_cast<llama_token>(nPast),
-      static_cast<llama_token>(1),
-      static_cast<llama_token>(nPast + 1),
-      static_cast<llama_token>(1)};
+  namespace cache = qvac_lib_inference_addon_llama::cache;
+  const std::vector<llama_token> fakePrompt(static_cast<size_t>(nPast + 1), 1);
+  const std::vector<llama_token> metadata =
+      cache::serialize(cache::fromTokens(fakePrompt), nPast + 1, nPast + 1);
   ASSERT_GT(
       llama_state_seq_save_file(
           model->getContext(),
           cachePathString.c_str(),
           0,
-          metadata,
-          SESSION_METADATA_FIELD_COUNT),
+          metadata.data(),
+          metadata.size()),
       0u);
 
   model->reset();

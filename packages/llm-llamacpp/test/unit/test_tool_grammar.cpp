@@ -59,6 +59,15 @@ constexpr const char* THINKING_TOOL_PROMPT =
     R"("days":{"type":"integer"}},"required":["city"]}},)"
     R"({"role":"user","content":"What is the weather in Paris for the next 3 days? Use the tool."}])";
 
+constexpr const char* THINKING_TOOL_FOLLOWUP_PROMPT =
+    R"([{"role":"system","content":"You are a helpful assistant."},)"
+    R"({"type":"function","name":"get_weather","description":"Get the weather for a city",)"
+    R"("parameters":{"type":"object","properties":{"city":{"type":"string"},)"
+    R"("days":{"type":"integer"}},"required":["city"]}},)"
+    R"({"role":"user","content":"What is the weather in Paris for the next 3 days? Use the tool."},)"
+    R"({"role":"assistant","content":"I can check that with the weather tool."},)"
+    R"({"role":"user","content":"Please check Paris now."}])";
+
 constexpr const char* THINKING_PLAIN_PROMPT =
     R"([{"role":"system","content":"You are a helpful assistant."},)"
     R"({"role":"user","content":"Name one colour of the rainbow."}])";
@@ -74,6 +83,34 @@ constexpr const char* THINK_CLOSE_TAG = "</think>";
 
 bool hasToolCallBlock(const std::string& text) {
   return text.find("<tool_call>") != std::string::npos;
+}
+
+std::string jsonEscape(const std::string& value) {
+  std::string escaped;
+  escaped.reserve(value.size());
+  for (const unsigned char ch : value) {
+    switch (ch) {
+    case '\\':
+      escaped += "\\\\";
+      break;
+    case '"':
+      escaped += "\\\"";
+      break;
+    case '\n':
+      escaped += "\\n";
+      break;
+    case '\r':
+      escaped += "\\r";
+      break;
+    case '\t':
+      escaped += "\\t";
+      break;
+    default:
+      escaped += static_cast<char>(ch);
+      break;
+    }
+  }
+  return escaped;
 }
 
 /// The first `<tool_call>` block, so a name assertion reads only the call and
@@ -321,6 +358,110 @@ TEST_F(ToolGrammarModelTest, ToolChoiceRequiredForcesToolCall) {
   EXPECT_FALSE(s.grammar_lazy);
 }
 
+TEST_F(ToolGrammarModelTest, WarmCacheRearmsRequiredToolGrammar) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  const fs::path cacheDir = "warm_required_tool_cache";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  auto model = createModel();
+  LlamaModel::Prompt first = makePrompt(TOOL_PROMPT);
+  first.cacheKey = cacheKey;
+  first.saveCacheToDisk = true;
+  first.generationParams.tool_choice = "required";
+  EXPECT_TRUE(hasToolCallBlock(model->processPrompt(first)));
+
+  // The complete prompt (including tools) is authoritative on every turn.
+  // Reconciliation removes the previous sampled call and the same render
+  // supplies a fresh required grammar without duplicating the tool block.
+  LlamaModel::Prompt warm = makePrompt(TOOL_PROMPT);
+  warm.cacheKey = cacheKey;
+  warm.generationParams.tool_choice = "required";
+  const std::string output = model->processPrompt(warm);
+  EXPECT_TRUE(hasToolCallBlock(output)) << output;
+  EXPECT_EQ(sampling(*model).grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
+  EXPECT_FALSE(sampling(*model).grammar_lazy);
+  EXPECT_GT(test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0);
+
+  fs::remove_all(cacheDir);
+}
+
+TEST_F(
+    ToolGrammarModelTest,
+    BatchWarmFullHistoryRearmsRequiredToolGrammarPerSlot) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["parallel"] = "3";
+  config_["ctx_size"] = "12288";
+  config_["n_predict"] = "96";
+  auto model = createModel();
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr);
+
+  const fs::path cacheDir =
+      fs::temp_directory_path() /
+      ("batch-warm-tool-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()));
+  fs::create_directories(cacheDir);
+
+  const std::string prefix =
+      R"([{"role":"system","content":"You are a reliable home-automation assistant. /no_think"},{"type":"function","name":"set_thermostat","description":"Set a room thermostat","parameters":{"type":"object","properties":{"room":{"type":"string"},"temperature":{"type":"integer"}},"required":["room","temperature"]}})";
+  std::vector<std::string> firstUsers;
+  std::vector<LlamaModel::Prompt> firstPrompts;
+  for (size_t user = 0; user < 3; ++user) {
+    firstUsers.push_back(
+        "Set room user-" + std::to_string(user) +
+        " to 20 degrees using the tool.");
+    LlamaModel::Prompt prompt;
+    prompt.input = prefix + R"(,{"role":"user","content":")" +
+                   firstUsers.back() + R"("}])";
+    prompt.cacheKey =
+        (cacheDir / ("user-" + std::to_string(user) + ".bin")).string();
+    prompt.saveCacheToDisk = true;
+    prompt.generationParams.tool_choice = "required";
+    prompt.generationParams.reasoning_budget = 0;
+    firstPrompts.push_back(std::move(prompt));
+  }
+
+  const auto firstOutputs = model->processPromptBatch(firstPrompts);
+  ASSERT_EQ(firstOutputs.size(), 3u);
+  for (size_t user = 0; user < firstOutputs.size(); ++user) {
+    ASSERT_TRUE(hasToolCallBlock(firstOutputs[user]))
+        << "cold request for user " << user
+        << " did not produce a required tool call: " << firstOutputs[user];
+  }
+
+  std::vector<LlamaModel::Prompt> warmPrompts;
+  for (size_t user = 0; user < 3; ++user) {
+    LlamaModel::Prompt prompt;
+    prompt.input =
+        prefix + R"(,{"role":"user","content":")" + firstUsers[user] +
+        R"("},{"role":"assistant","content":")" +
+        jsonEscape(firstOutputs[user]) +
+        R"("},{"role":"tool","content":"{\"ok\":true}"},{"role":"user","content":"Set the same room to 21 degrees using the tool."}])";
+    prompt.cacheKey =
+        (cacheDir / ("user-" + std::to_string(user) + ".bin")).string();
+    prompt.saveCacheToDisk = true;
+    prompt.generationParams.tool_choice = "required";
+    prompt.generationParams.reasoning_budget = 0;
+    warmPrompts.push_back(std::move(prompt));
+  }
+
+  const auto warmOutputs = model->processPromptBatch(warmPrompts);
+  ASSERT_EQ(warmOutputs.size(), 3u);
+  for (size_t user = 0; user < warmOutputs.size(); ++user) {
+    EXPECT_TRUE(hasToolCallBlock(warmOutputs[user]))
+        << "warm request for user " << user
+        << " lost its required tool grammar: " << warmOutputs[user];
+  }
+
+  fs::remove_all(cacheDir);
+}
+
 // tool_choice "none" follows llama-server: the tool definitions stay in the
 // prompt and only the grammar is switched off. The model may still choose to
 // call a tool in free text, so the contract is "no constraint", not "no call".
@@ -536,7 +677,7 @@ TEST_F(
   // above depends on the substituted close reaching the *sampler* — the
   // visible recovery happens either way — so a purely post-hoc test would
   // pass on the very bug this exists for. And the state cannot be read after
-  // the request either: end-of-generation compaction resets the sampler.
+  // the request either: end-of-generation cleanup resets the sampler.
   //
   // `common_sampler_reasoning_budget_force` returns true only from
   // REASONING_BUDGET_COUNTING (fabric common/reasoning-budget.cpp:289-308),
@@ -609,6 +750,71 @@ TEST_F(
       << "the grammar admits only the declared argument shape, whose one "
          "required property is `city`: "
       << call;
+}
+
+// A synthetic reasoning close is part of the request transaction. If its
+// decode fails, the visible request must fail and both the live sequence and
+// last known-good cache file must remain at their pre-request state.
+TEST_F(
+    ToolGrammarModelTest,
+    ReasoningRecoveryDecodeFailureRollsBackWithoutSaving) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["reasoning-budget"] = "64";
+  config_["n_predict"] = "128";
+
+  const fs::path cacheDir = "reasoning_recovery_failure_cache";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  auto model = createModel();
+  auto* textContext =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(textContext, nullptr);
+
+  LlamaModel::Prompt primer = makePrompt(THINKING_TOOL_PROMPT);
+  primer.prefill = true;
+  primer.cacheKey = cacheKey;
+  primer.saveCacheToDisk = true;
+  EXPECT_TRUE(model->processPrompt(primer).empty());
+  ASSERT_TRUE(fs::exists(cacheKey));
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_pos primerNPast = llama_memory_seq_pos_max(mem, 0) + 1;
+  ASSERT_GT(primerNPast, 0);
+  const auto cacheBytes = readBinaryFile(cacheKey);
+  const auto cacheTime =
+      fs::last_write_time(cacheKey) - std::chrono::seconds(10);
+  fs::last_write_time(cacheKey, cacheTime);
+
+  const llama_token eos =
+      llama_vocab_eos(llama_model_get_vocab(textContext->getModel()));
+  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
+  textContext->forceNextSampledTokenInsideReasoningForTesting(eos);
+  textContext->forceReasoningRecoveryDecodeFailureForTesting();
+
+  LlamaModel::Prompt failed = makePrompt(THINKING_TOOL_FOLLOWUP_PROMPT);
+  failed.cacheKey = cacheKey;
+  failed.saveCacheToDisk = true;
+  try {
+    (void)model->processPrompt(failed);
+    FAIL() << "reasoning-recovery decode failure did not fail the request";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(error.codeString().find("FailedToDecode"), std::string::npos)
+        << error.codeString();
+  }
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, primerNPast)
+      << "failed reasoning recovery did not restore the live cache cursor";
+  EXPECT_EQ(readBinaryFile(cacheKey), cacheBytes)
+      << "failed reasoning recovery replaced the cache bytes";
+  EXPECT_EQ(fs::last_write_time(cacheKey), cacheTime)
+      << "failed reasoning recovery rewrote the cache file";
+
+  fs::remove_all(cacheDir);
 }
 
 // `onLogitsReady` reaches the substitution through its own inline branch when
@@ -1190,16 +1396,9 @@ TEST_F(ToolGrammarModelTest, MtmdBatchReasoningEOSRecoveryKeepsSlotAlive) {
          "after the close";
 }
 
-// The interaction this PR actually introduced between the two features:
-// EOS substitution seeds the compactor itself (`recordCloseMarkerForReplay` +
-// `requestCloseCapture` at each substitution site) because the substituted
-// close never passes through the `updateReasoningBuffer` handshake that
-// normally trips capture. Get that wrong and `compactThinkSpan` bails at
-// `end < 0` — the discard silently does not happen — or, worse, the replay
-// restores a prefix that opens a `<think>` nothing closes, which only shows up
-// on the *next* request from that cache. So this drives a synthetic close with
-// compaction on, persists the cache, and then reuses it.
-TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
+// A synthetic reasoning close is retained in the resident ledger. Re-sending
+// the complete prompt then reconciles the generated tail before the next turn.
+TEST_F(ToolGrammarModelTest, SyntheticCloseIsLazilyReconciled) {
   if (!hasQwen3Model()) {
     GTEST_SKIP() << qwen3Model_.missingMessage();
   }
@@ -1221,30 +1420,21 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
   LlamaModel::Prompt first = makePrompt(THINKING_TOOL_PROMPT);
   first.cacheKey = cacheKey;
   first.saveCacheToDisk = true;
-  first.generationParams.remove_thinking_from_context = true;
   textContext->forceNextSampledTokenInsideReasoningForTesting(eos);
 
   const std::string output = model->processPrompt(first);
   ASSERT_NE(output.find(THINK_CLOSE_TAG), std::string::npos)
       << "EOS must be replaced by the cached close tag: " << output;
-  EXPECT_GT(
-      test_common::getStatValue(model->runtimeStats(), "thinkingBlockDiscards"),
-      0)
-      << "the substituted close must reach the compactor, or the span end "
-         "stays unset and nothing is discarded: "
-      << output;
   ASSERT_TRUE(fs::exists(cacheKey)) << "the cache must have been persisted";
 
-  // The part a discard assertion alone cannot catch: a compaction that
-  // rewound to an unbalanced prefix leaves a cache whose next turn is broken,
-  // not one that fails now.
+  // Re-sending the full prompt omits the previous generated reasoning and
+  // therefore trims it through ordinary prefix reconciliation.
   LlamaModel::Prompt followUp = makePrompt(THINKING_TOOL_PROMPT);
   followUp.cacheKey = cacheKey;
   followUp.saveCacheToDisk = true;
-  followUp.generationParams.remove_thinking_from_context = true;
-  EXPECT_FALSE(model->processPrompt(followUp).empty())
-      << "the cache left behind by a compacted synthetic close must still be "
-         "usable";
+  EXPECT_NO_THROW({ (void)model->processPrompt(followUp); })
+      << "the cache must remain usable after lazy reasoning reconciliation";
+  EXPECT_TRUE(fs::exists(cacheKey));
 
   fs::remove_all(cacheDir);
 }
@@ -1278,9 +1468,6 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseCompactsAndLeavesAReusableCache) {
 // are independent, and each already has coverage, so the combination would
 // pin no behaviour that is unpinned today.
 //
-// `remove_thinking_from_context` is forced off so the cursor assertion reads
-// the cancel rollback rather than end-of-generation compaction, which moves
-// `nPast` for its own reasons.
 TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
   if (!hasQwen3Model()) {
     GTEST_SKIP() << qwen3Model_.missingMessage();
@@ -1301,7 +1488,6 @@ TEST_F(ToolGrammarModelTest, CancelWithLiveToolGrammarLeavesNextRequestClean) {
   constexpr int kPiecesBeforeCancel = 8;
   std::atomic<int> pieces{0};
   LlamaModel::Prompt cancelled = makePrompt(THINKING_TOOL_PROMPT);
-  cancelled.generationParams.remove_thinking_from_context = false;
   cancelled.outputCallback = [&](const std::string&) {
     if (pieces.fetch_add(1) == kPiecesBeforeCancel) {
       model->cancel();

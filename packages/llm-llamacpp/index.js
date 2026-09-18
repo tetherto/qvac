@@ -97,7 +97,6 @@ const GENERATION_PARAM_KEYS = new Set([
     "json_schema",
     "tool_choice",
     "reasoning_budget",
-    "remove_thinking_from_context",
 ]);
 // Normalizes the per-request `generationParams.json_schema` field. The
 // addon binding expects a string; callers commonly pass a plain object
@@ -136,10 +135,6 @@ function normalizeGenerationParams(generationParams) {
             params[key] = value;
     }
     const sanitized = params;
-    if (sanitized.remove_thinking_from_context !== undefined &&
-        typeof sanitized.remove_thinking_from_context !== "boolean") {
-        throw new TypeError("generationParams.remove_thinking_from_context must be a boolean when provided");
-    }
     if (sanitized.tool_choice !== undefined &&
         (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)) {
         throw new TypeError('generationParams.tool_choice must be "auto", "none", "required" or a declared function name');

@@ -200,20 +200,4 @@ public:
   static size_t loadedMediaCount(const MtmdLlmContext& context) {
     return context.bitmaps_.entries.size();
   }
-
-  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
-    return context.removeThinkingFromContext_;
-  }
-
-  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
-    return context.compactor_.removeThinkingFromContext();
-  }
-
-  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
-    return context.rollbackState_.hasReasoningBoundary();
-  }
-
-  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
-    return context.rollbackState_.reasoningBoundaryNPast();
-  }
 };

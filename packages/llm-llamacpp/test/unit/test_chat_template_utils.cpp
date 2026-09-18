@@ -123,17 +123,6 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureQwen3Family) {
   }
 }
 
-TEST_F(ChatTemplateUtilsTest, DefaultsThinkingCompactionToQwen3FamilyOnly) {
-  for (std::string_view arch :
-       {"qwen3", "qwen3moe", "qwen35", "qwen35moe", "qwen36", "qwen36moe"}) {
-    EXPECT_TRUE(usesThinkingCompactionByDefault(arch)) << "arch=" << arch;
-  }
-
-  EXPECT_FALSE(usesThinkingCompactionByDefault("deepseek4"));
-  EXPECT_FALSE(usesThinkingCompactionByDefault("gemma4"));
-  EXPECT_FALSE(usesThinkingCompactionByDefault("llama"));
-}
-
 TEST_F(ChatTemplateUtilsTest, IdentifiesDeepSeekV4Architecture) {
   EXPECT_TRUE(isDeepSeekV4Architecture("deepseek4"));
   EXPECT_TRUE(isDeepSeekV4Architecture("DeepSeek4"));
@@ -172,7 +161,7 @@ TEST_F(ChatTemplateUtilsTest, SelectReasoningTagsForArchitectureRejectsOthers) {
 
 // `selectReasoningTagSource` is the single source of truth for the
 // "template-first, family-fallback" policy used by
-// `remove_thinking_from_context` detection. The tests below pin the
+// reasoning-channel detection. The tests below pin the
 // preference order so future refactors cannot silently drift back to
 // hardcoded family detection.
 TEST_F(ChatTemplateUtilsTest, SelectReasoningTagSourcePrefersTemplate) {
