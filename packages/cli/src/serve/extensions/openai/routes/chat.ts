@@ -6,6 +6,7 @@ import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import {
   drainCompletion,
+  formatToolErrors,
   type OpenAiFinishReason
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { requireModel } from '@/serve/core/plugins/require-model'
@@ -22,9 +23,11 @@ import {
 import { resolveToolDialect } from '@/serve/lib/tool-dialect'
 import {
   InvalidResponseFormatError,
+  InvalidToolChoiceError,
   UnsupportedImageContentError
 } from '@/serve/extensions/openai/schemas/common'
 import { sdkToolCallsToOpenaiDeltas } from '@/serve/extensions/openai/adapters/tool-calls'
+import { openaiState } from '@/serve/extensions/openai/state'
 import {
   buildUsage,
   chatCompletionChunk,
@@ -58,6 +61,9 @@ async function prepare(
   } catch (err) {
     if (err instanceof InvalidResponseFormatError) {
       throw new HttpError(400, 'invalid_response_format', err.message)
+    }
+    if (err instanceof InvalidToolChoiceError) {
+      throw new HttpError(400, 'invalid_tool_choice', err.message)
     }
     if (err instanceof UnsupportedImageContentError) {
       throw new HttpError(400, 'unsupported_image_content', err.message)
@@ -121,8 +127,8 @@ function formatStats(stats: CompletionStats | undefined): string {
 const descriptions = {
   completion: `
 OpenAI-compatible chat completion. Accepts a chat-style \`messages\` array,
-optional \`tools\` for function-calling, and an optional \`response_format\`
-(\`text\` / \`json_object\` / \`json_schema\`).
+optional \`tools\` for function-calling, an optional \`tool_choice\`, and an
+optional \`response_format\` (\`text\` / \`json_object\` / \`json_schema\`).
 
 **Streaming**: pass \`stream: true\` to receive Server-Sent Events. The stream
 ends with \`data: [DONE]\\n\\n\` (OpenAI compatibility).
@@ -131,6 +137,17 @@ ends with \`data: [DONE]\\n\\n\` (OpenAI compatibility).
 \`response_format: { type: 'json_object' | 'json_schema' }\` is rejected with
 \`invalid_response_format\`. A \`tools\` request for a model loaded without
 \`config.tools: true\` is rejected with \`tools_not_enabled\`.
+
+**\`tool_choice\`**: \`"auto"\` (default), \`"none"\`, \`"required"\`, or
+\`{ type: 'function', function: { name } }\` to force one tool. \`required\` and
+a named tool constrain generation with the chat template's tool grammar. Both
+need a matching entry in \`tools\`; anything else — including a bare tool name
+in place of the object form — is rejected with \`invalid_tool_choice\`.
+
+**Unparseable tool calls**: a tool call the model emits but that fails to parse
+or validate is dropped, so the response carries \`finish_reason: "stop"\` and no
+\`tool_calls\`. The server log records the count and error codes
+(\`toolerrors=N (PARSE_ERROR)\`); OpenAI has no response field for them.
 
 **Ignored params** (warned, not rejected): \`logit_bias\`, \`n\`, \`user\`,
 \`seed\`, \`logprobs\`, \`top_logprobs\`, \`frequency_penalty\`,
@@ -195,7 +212,8 @@ async function runBlocking(
 ): Promise<void> {
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
-    const result = completion({
+    const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
+    const result = completionFn({
       modelId: p.sdkModelId,
       history,
       stream: false,
@@ -211,11 +229,12 @@ async function runBlocking(
     })
     req.bindCancel(result.requestId)
 
-    const { text, thinking, toolCalls, stats, completionTokens, finishReason } =
+    const { text, thinking, toolCalls, toolErrors, stats, completionTokens, finishReason } =
       await drainCompletion(result)
 
     req.server.qvac.logger.info(
-      `  completion done tokens=${completionTokens} finish=${finishReason}${formatStats(stats)}`
+      `  completion done tokens=${completionTokens} finish=${finishReason}` +
+        `${formatStats(stats)}${formatToolErrors(toolErrors)}`
     )
 
     reply.send(
@@ -245,7 +264,8 @@ async function runStreaming(
 ): Promise<void> {
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
-    const result = completion({
+    const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
+    const result = completionFn({
       modelId: p.sdkModelId,
       history,
       stream: true,
@@ -275,7 +295,7 @@ async function runStreaming(
 
     sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
 
-    const { toolCalls, stats, completionTokens, finishReason } = await drainCompletion(
+    const { toolCalls, toolErrors, stats, completionTokens, finishReason } = await drainCompletion(
       result,
       (token) => sendSSE(raw, chunk({ content: token }, null)),
       (token) => sendSSE(raw, chunk({ reasoning_content: token }, null))
@@ -283,7 +303,8 @@ async function runStreaming(
     const hasToolCalls = toolCalls.length > 0
 
     req.server.qvac.logger.info(
-      `  streaming done tokens=${completionTokens} finish=${finishReason}${formatStats(stats)}`
+      `  streaming done tokens=${completionTokens} finish=${finishReason}` +
+        `${formatStats(stats)}${formatToolErrors(toolErrors)}`
     )
 
     if (hasToolCalls) {
