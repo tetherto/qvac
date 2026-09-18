@@ -116,19 +116,38 @@ template <typename T> static void read_safe(nmt_model_loader* loader, T& dest) {
   BYTESWAP_VALUE(dest);
 }
 
-bool nmt_read_tensor_dims(
-    nmt_model_loader* loader,
-    int32_t n_dims,
-    int32_t (&ne)[NMT_MAX_TENSOR_DIMS],
+bool nmtReadTensorDims(
+    nmt_model_loader* loader, int32_t nDims, int32_t (&ne)[NMT_MAX_TENSOR_DIMS],
     int32_t& nelements) {
-  if (n_dims < 1 || n_dims > NMT_MAX_TENSOR_DIMS) {
+  if (nDims < 1 || nDims > NMT_MAX_TENSOR_DIMS) {
     return false;
   }
-  nelements = 1;
-  for (int i = 0; i < n_dims; ++i) {
+  int64_t product = 1;
+  for (int i = 0; i < nDims; ++i) {
     read_safe(loader, ne[i]);
-    nelements *= ne[i];
+    if (ne[i] < 1) {
+      return false;
+    }
+    product *= ne[i];
+    if (product > INT32_MAX) {
+      return false;
+    }
   }
+  nelements = static_cast<int32_t>(product);
+  return true;
+}
+
+bool nmtReadTensorName(
+    nmt_model_loader* loader, int32_t length, std::string& name) {
+  if (length < 0 || length > NMT_MAX_TENSOR_NAME_LENGTH) {
+    return false;
+  }
+  std::vector<char> buffer(length);
+  if (loader->read(loader->context, buffer.data(), buffer.size()) !=
+      buffer.size()) {
+    return false;
+  }
+  name.assign(buffer.data(), buffer.size());
   return true;
 }
 
@@ -866,21 +885,14 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
 
       int32_t nelements = 1;
       int32_t ne[NMT_MAX_TENSOR_DIMS] = {1, 1, 1, 1};
-      if (!nmt_read_tensor_dims(loader, n_dims, ne, nelements)) {
-        return false;
-      }
-
-      if (length < 0 || length > NMT_MAX_TENSOR_NAME_LENGTH) {
+      if (!nmtReadTensorDims(loader, n_dims, ne, nelements)) {
         return false;
       }
 
       std::string name;
-      std::vector<char> tmp(length);
-      if (loader->read(loader->context, tmp.data(), tmp.size()) !=
-          tmp.size()) {
+      if (!nmtReadTensorName(loader, length, name)) {
         return false;
       }
-      name.assign(tmp.data(), tmp.size());
 
       if (model.tensors.find(name) == model.tensors.end()) {
         return false;
@@ -895,9 +907,7 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       }
 
       if (tensor->ne[0] != ne[0] || tensor->ne[1] != ne[1] ||
-          tensor->ne[2] != ne[2]) {
-        // __func__, name.data(), (int) tensor->ne[0], (int) tensor->ne[1],
-        // (int) tensor->ne[2], ne[0], ne[1], ne[2]);
+          tensor->ne[2] != ne[2] || tensor->ne[3] != ne[3]) {
         return false;
       }
 
