@@ -52,3 +52,22 @@ No per-platform package @qvac/tts-ggml-linux-x64 is installed alongside it eithe
 ```
 
 ---
+
+## Accept tool_choice on the serve OpenAI routes
+
+PR: [#4524](https://github.com/tetherto/qvac/pull/4524)
+
+`POST /v1/chat/completions` and `POST /v1/responses` accept `tool_choice`: `"auto"` | `"none"` | `"required"` | a named-tool object. Chat uses `{ type: "function", function: { name } }`; Responses flattens to `{ type: "function", name }`. A demanding choice with no matching tool returns `400 invalid_tool_choice`. Parse failures are dropped from the OpenAI response and logged as `toolError` events.
+
+```bash
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "my-llm",
+    "messages": [{"role": "user", "content": "What is the weather in London?"}],
+    "tools": [{ "type": "function", "function": { "name": "get_weather" } }],
+    "tool_choice": "required"
+  }'
+```
+
+---
