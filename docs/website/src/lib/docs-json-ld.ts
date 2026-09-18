@@ -41,6 +41,17 @@ type DocsPageLike = {
   };
 };
 
+/**
+ * Resolves a docs path (slug array) to the page that backs it, or `undefined`
+ * when nothing is served there.
+ *
+ * Injected rather than imported so this module stays free of
+ * `fumadocs-mdx:collections/server` — a virtual module resolved by the
+ * Fumadocs bundler plugin, which the test runner does not load. Callers in
+ * the app pass a `source.getPage`-backed lookup; tests pass a plain map.
+ */
+export type DocsPageLookup = (slugs: string[]) => DocsPageLike | undefined;
+
 type JsonLdBlock = Record<string, unknown>;
 
 function getDocsSchemaType(page: DocsPageLike): SchemaType {
@@ -57,11 +68,36 @@ function getLastModifiedISO(page: DocsPageLike): string | undefined {
 /**
  * Build `BreadcrumbList` for non-home pages.
  *
- * Names come from raw slugs (no dictionary / Fumadocs lookup yet). Intermediate
- * items include an `item` URL; the final item (current page) omits it so search
- * engines treat the tail as the active page.
+ * The trail is resolved against the page tree, not derived from the URL
+ * structure: a path segment becomes a `ListItem` only when a real page backs
+ * it. Content folders that ship no `index.mdx` (e.g. `ai-capabilities/`) are
+ * therefore collapsed out of the trail entirely.
+ *
+ * Collapsing drops the whole `ListItem` rather than just its `item` URL,
+ * because Google requires `item` on every entry except the last: "If the
+ * breadcrumb is the last item in the breadcrumb trail, `item` is not
+ * required." An interior entry without a URL is invalid, so there is no
+ * "keep the level, omit the dead link" middle ground. Collapsing is also what
+ * Google recommends outright — breadcrumbs "should represent a typical user
+ * path to a page, instead of mirroring the URL structure" — and a `ListItem`
+ * for the top-level path is explicitly not required.
+ *
+ * `position` is assigned from the emitted count, so it stays contiguous from
+ * 1 after a level is collapsed. The list never falls below the two-item
+ * minimum: the `Docs` root and the current page are always emitted.
+ *
+ * Names come from each resolved page's `title`, so the trail reads in the
+ * same human wording as the sidebar ("AI Capabilities", not
+ * `ai-capabilities`). The final item omits `item` so search engines treat the
+ * tail as the active page.
+ *
+ * @see https://developers.google.com/search/docs/appearance/structured-data/breadcrumb
  */
-function buildBreadcrumbList(slugs: string[]): JsonLdBlock {
+function buildBreadcrumbList(
+  page: DocsPageLike,
+  slugs: string[],
+  lookupPage: DocsPageLookup,
+): JsonLdBlock {
   const items: JsonLdBlock[] = [
     {
       '@type': 'ListItem',
@@ -71,21 +107,23 @@ function buildBreadcrumbList(slugs: string[]): JsonLdBlock {
     },
   ];
 
-  let accumulatedPath = '';
   for (let i = 0; i < slugs.length - 1; i++) {
-    accumulatedPath += `/${encodeURIComponent(slugs[i])}`;
+    const trail = slugs.slice(0, i + 1);
+    const ancestor = lookupPage(trail);
+    // No page at this path — an index-less folder. Skip the level.
+    if (!ancestor) continue;
     items.push({
       '@type': 'ListItem',
-      position: i + 2,
-      name: slugs[i],
-      item: `${DOCS_SITE_ORIGIN}${accumulatedPath}/`,
+      position: items.length + 1,
+      name: ancestor.data.title ?? slugs[i],
+      item: buildCanonicalDocsUrl(trail),
     });
   }
 
   items.push({
     '@type': 'ListItem',
-    position: slugs.length + 1,
-    name: slugs[slugs.length - 1],
+    position: items.length + 1,
+    name: page.data.title ?? slugs[slugs.length - 1],
   });
 
   return {
@@ -151,19 +189,33 @@ function buildMainPageBlock(page: DocsPageLike, slugs: string[]): JsonLdBlock {
   };
 }
 
-function buildPageBlocks(page: DocsPageLike, slugs: string[]): JsonLdBlock[] {
-  return [buildMainPageBlock(page, slugs), buildBreadcrumbList(slugs)];
+function buildPageBlocks(
+  page: DocsPageLike,
+  slugs: string[],
+  lookupPage: DocsPageLookup,
+): JsonLdBlock[] {
+  return [
+    buildMainPageBlock(page, slugs),
+    buildBreadcrumbList(page, slugs, lookupPage),
+  ];
 }
 
 /**
  * Returns the JSON-LD blocks to render for `page`, or `null` when no
  * structured data should be emitted (archived version bundles).
+ *
+ * `lookupPage` resolves breadcrumb ancestors against the page tree; see
+ * `DocsPageLookup`. It is required so a missing lookup cannot silently
+ * degrade every trail to a two-item stub.
  */
 export function buildDocsJsonLd(
   page: DocsPageLike,
   slugs: string[],
   isHomePage: boolean,
+  lookupPage: DocsPageLookup,
 ): JsonLdBlock[] | null {
   if (isArchivedVersionSlug(slugs)) return null;
-  return isHomePage ? buildHomeBlocks() : buildPageBlocks(page, slugs);
+  return isHomePage
+    ? buildHomeBlocks()
+    : buildPageBlocks(page, slugs, lookupPage);
 }
