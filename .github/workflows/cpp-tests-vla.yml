@@ -422,6 +422,16 @@ jobs:
             echo "Multi-embodiment sweep validated $sweep_rows embodiment row(s)"
           fi
 
+      - name: Build fuzz targets
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:run
+
       - name: Archive Test Results
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0

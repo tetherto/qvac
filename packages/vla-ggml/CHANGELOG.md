@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.27.4] - 2026-09-18
+
+### Added
+
+- Bounded FuzzTest coverage for `safetensors_lite`, the custom length-prefixed
+  header parser used by the π₀.₅ / GR00T parity tests. Linux C++ CI runs the
+  suite after unit tests. No public addon API changes.
+
+### Fixed
+
+- Cap the safetensors header length at 16 MiB so a corrupt length field cannot
+  allocate before JSON parsing.
+
 ## [0.27.3] - 2026-09-18
 
 ### Changed
