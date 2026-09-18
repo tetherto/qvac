@@ -661,24 +661,29 @@ void TranslationModel::
   NmtMainGpu mainGpu;
   const auto selector = canonical != config.end() ? canonical : alias;
   if (selector != config.end()) {
-    for (const auto *legacy : {"gpu_backend", "gpuBackend", "gpubackend",
-                               "gpu_device", "gpuDevice", "gpudevice"}) {
+    for (const auto* legacy :
+         {"gpu_backend",
+          "gpuBackend",
+          "gpubackend",
+          "gpu_device",
+          "gpuDevice",
+          "gpudevice"}) {
       if (config.contains(legacy)) {
         throw std::invalid_argument(
             "main-gpu cannot be combined with legacy GPU selectors");
       }
     }
-    if (const auto *asString = std::get_if<std::string>(&selector->second)) {
+    if (const auto* asString = std::get_if<std::string>(&selector->second)) {
       std::string normalized = *asString;
-      std::ranges::transform(normalized, normalized.begin(),
-                             [](unsigned char chr) {
-                               return static_cast<char>(std::tolower(chr));
-                             });
+      std::ranges::transform(
+          normalized, normalized.begin(), [](unsigned char chr) {
+            return static_cast<char>(std::tolower(chr));
+          });
       if (normalized == "dedicated" || normalized == "integrated") {
         mainGpu = normalized;
       } else {
-        const char *begin = normalized.data();
-        const char *end = begin + normalized.size();
+        const char* begin = normalized.data();
+        const char* end = begin + normalized.size();
         if (begin != end && *begin == '+') {
           ++begin;
           if (begin == end || *begin < '0' || *begin > '9') {

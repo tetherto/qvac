@@ -62,16 +62,13 @@ struct NmtBackendInterface {
 // or nullptr if no eligible device was found (including when a device matched
 // but its buffer type was null — a WARNING is emitted in that case). Callers
 // do NOT need to re-check the buffer type of a non-null return value.
-ggml_backend_dev_t nmtSelectGpuDevice(bool useGpu,
-                                      const std::string &gpuBackend,
-                                      int gpuDevice, const char *logPrefix,
-                                      const NmtMainGpu &mainGpu = {},
-                                      bool legacyGpuSelection = false);
+ggml_backend_dev_t nmtSelectGpuDevice(
+    bool useGpu, const std::string& gpuBackend, int gpuDevice,
+    const char* logPrefix, const NmtMainGpu& mainGpu = {},
+    bool legacyGpuSelection = false);
 
-ggml_backend_dev_t nmtSelectGpuDevice(const NmtBackendInterface &backend,
-                                      bool useGpu,
-                                      const std::string &gpuBackend,
-                                      int gpuDevice, const char *logPrefix,
-                                      bool allowDefaultOpenCl = false,
-                                      const NmtMainGpu &mainGpu = {},
-                                      bool legacyGpuSelection = false);
+ggml_backend_dev_t nmtSelectGpuDevice(
+    const NmtBackendInterface& backend, bool useGpu,
+    const std::string& gpuBackend, int gpuDevice, const char* logPrefix,
+    bool allowDefaultOpenCl = false, const NmtMainGpu& mainGpu = {},
+    bool legacyGpuSelection = false);

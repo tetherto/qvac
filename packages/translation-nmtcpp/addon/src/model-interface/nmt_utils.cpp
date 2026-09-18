@@ -196,11 +196,11 @@ bool matchesExplicitSelector(
 // "name (registry)" identity used in CPU-fallback logs so operators can trace
 // which GPU-type devices the family allowlist refused. Empty inputs collapse to
 // `unnamed` / `unknown-registry` so the string is never blank.
-std::string deviceIdentity(const NmtBackendInterface &backend,
-                           ggml_backend_dev_t device) {
-  const char *namePtr = backend.deviceName(device);
+std::string
+deviceIdentity(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
+  const char* namePtr = backend.deviceName(device);
   const ggml_backend_reg_t registry = backend.deviceRegistry(device);
-  const char *regPtr =
+  const char* regPtr =
       registry != nullptr ? backend.registryName(registry) : nullptr;
   const std::string name = namePtr != nullptr ? namePtr : "unnamed";
   const std::string reg = regPtr != nullptr ? regPtr : "unknown-registry";
@@ -212,7 +212,7 @@ std::string deviceIdentity(const NmtBackendInterface &backend,
 // callers see whether their unusable request would have succeeded on a
 // different backend family.
 std::vector<std::string>
-refusedGpuIdentities(const NmtBackendInterface &backend) {
+refusedGpuIdentities(const NmtBackendInterface& backend) {
   std::vector<std::string> refused;
   const size_t devCount = backend.deviceCount();
   for (size_t i = 0; i < devCount; ++i) {
@@ -280,8 +280,8 @@ ggml_backend_dev_t selectNth(
 
 ggml_backend_dev_t
 nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
-    bool useGpu, const std::string &gpuBackend, int gpuDevice,
-    const char *logPrefix, const NmtMainGpu &mainGpu, bool legacyGpuSelection) {
+    bool useGpu, const std::string& gpuBackend, int gpuDevice,
+    const char* logPrefix, const NmtMainGpu& mainGpu, bool legacyGpuSelection) {
   const NmtBackendInterface backend{
       .deviceCount = ggml_backend_dev_count,
       .deviceGet = ggml_backend_dev_get,
@@ -295,20 +295,27 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
 #else
   constexpr bool allowDefaultOpenCl = false;
 #endif
-  return nmtSelectGpuDevice(backend, useGpu, gpuBackend, gpuDevice, logPrefix,
-                            allowDefaultOpenCl, mainGpu, legacyGpuSelection);
+  return nmtSelectGpuDevice(
+      backend,
+      useGpu,
+      gpuBackend,
+      gpuDevice,
+      logPrefix,
+      allowDefaultOpenCl,
+      mainGpu,
+      legacyGpuSelection);
 }
 
 ggml_backend_dev_t
 nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
-    const NmtBackendInterface &backend, bool useGpu,
-    const std::string &gpuBackend, int gpuDevice, const char *logPrefix,
-    bool allowDefaultOpenCl, const NmtMainGpu &mainGpu,
+    const NmtBackendInterface& backend, bool useGpu,
+    const std::string& gpuBackend, int gpuDevice, const char* logPrefix,
+    bool allowDefaultOpenCl, const NmtMainGpu& mainGpu,
     bool legacyGpuSelection) {
   if (!useGpu) {
     return nullptr;
   }
-  if (const auto *index = std::get_if<int64_t>(&mainGpu)) {
+  if (const auto* index = std::get_if<int64_t>(&mainGpu)) {
     if (*index >= 0 && static_cast<uint64_t>(*index) < backend.deviceCount()) {
       const auto target = backend.deviceGet(static_cast<size_t>(*index));
       // Resolve before eligibility filtering: an unsupported raw index must
@@ -329,8 +336,9 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
       return nullptr;
     }
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-         "main-gpu registry index is out of range; using automatic selection");
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "main-gpu registry index is out of range; using automatic selection");
   }
   const bool hasMainGpu = !std::holds_alternative<std::monostate>(mainGpu);
   // A canonical selector must not inherit a stale legacy filter from an
@@ -348,7 +356,7 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   ggml_backend_dev_t dev = nullptr;
   std::vector<ggml_backend_dev_t> eligible = eligibleDevices(backend);
 
-  if (const auto *preference = std::get_if<std::string>(&mainGpu)) {
+  if (const auto* preference = std::get_if<std::string>(&mainGpu)) {
     const auto wanted = *preference == "integrated"
                             ? GGML_BACKEND_DEVICE_TYPE_IGPU
                             : GGML_BACKEND_DEVICE_TYPE_GPU;
@@ -435,7 +443,7 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       oss << "[" << logPrefix
           << "] GPU execution requested but no eligible device is available; "
              "falling back to CPU. Refused GPU-type devices:";
-      for (const auto &identity : refused) {
+      for (const auto& identity : refused) {
         oss << " [" << identity << "]";
       }
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
