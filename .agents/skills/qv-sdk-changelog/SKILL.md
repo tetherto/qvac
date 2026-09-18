@@ -87,7 +87,9 @@ with no changelog line unless those PRs are unioned in.
 **Standalone minor** (cli, plugins, anything not lockstep with another package):
 `--base-commit` is the previous `.0`. That range still includes main-only work
 in the patch window, and it will also re-list the patch. Accept the overlap or
-drop PR numbers already in `changelog/<patch>/`.
+drop PR numbers already in `changelog/<patch>/`. `--base-commit` can still sit
+*after* commits that never reached the last **published** tag. The published-tag
+audit after generate is what catches that, for every package.
 
 **Lockstep `sdk` + `inference`:** both packages use the **same** `--base-commit`
 / `--base-version` — the last lockstep display floor. When that floor is a
@@ -143,7 +145,15 @@ The script automatically excludes:
 For `[mod]` PRs, the script extracts the `Added`/`Updated`/`Removed` model lists
 from the PR body and renders them as **indented continuation lines beneath the
 bullet** in `CHANGELOG.md` (each section on its own line — never inline as one
-giant row). The same filtered lists are written to `models.md`.
+giant row). It also writes `models.md`.
+
+`CHANGELOG.md` inline lines may stay at `MAX_INLINE_MODELS` (5) plus
+`(and N more)`. **`models.md` is the full added/removed set** — never truncated.
+PR bodies are often incomplete; if the published-tag audit disagrees, replace
+`models.md` from the export/constant diff, not from the PR body.
+
+If this package's public API *is* those exported constants, removed names are
+breaking: they go in `breaking.md` even when the PR was only `[mod]`.
 
 The extractor applies two policies (in this order):
 
@@ -169,12 +179,23 @@ After both filters, each section is trimmed to `MAX_INLINE_MODELS` (currently
 If after filtering a section is empty, it's omitted. If all sections are empty
 the bullet emits with no continuation lines.
 
-When writing the human-readable `CHANGELOG_LLM.md` (Step 4), apply the same
-"no informational value" rule manually: skip backmerges, automated bumps, and any
-entry whose subject would just repeat what a previous release already said. For
-the Models section, mirror the script's policy — keep it concise in the body
-(highlight the most notable adds/removes) and defer the full constant list to
-the `### Added` / `### Removed` blocks at the bottom.
+### After generate: published-tag audit (mandatory)
+
+`git log <base>..HEAD` is the generate range. It is not the consumer delta.
+
+For **every** SDK pod package, after the raw files exist:
+
+1. Resolve the last published tag on upstream: `<slug>-v*` (highest already
+   shipped). That tag is the audit base, not `--base-commit`.
+2. Diff that tag vs `HEAD` for this package's public surface: package
+   `exports`, serve/HTTP routes, exported constants/catalog.
+3. Every user-facing add, remove, or rename in that diff must appear in
+   `api.md`, `breaking.md`, and/or `models.md`. Hand-add. Do not re-run the
+   generator over those edits; `--update-root-changelog` only.
+4. New public exports under an older umbrella PR still need their own `api.md`
+   example.
+
+Fail-stop until the notes match the tree.
 
 ### Step 4: Generate CHANGELOG_LLM.md (mandatory)
 
@@ -185,9 +206,21 @@ After raw changelog files exist, generate the human-readable version at
 
 See [references/changelog-llm-format.md](references/changelog-llm-format.md) for the format guide.
 
-After writing the file, re-run the raw generator (or rebuild the root aggregate) so
-`packages/<package>/CHANGELOG.md` picks up the new `CHANGELOG_LLM.md` (the aggregator
-prefers it over `CHANGELOG.md`). Easiest way: re-run the script from Step 3 — it's idempotent.
+Apply the same "no informational value" rule: skip backmerges, automated bumps,
+and any entry whose subject would just repeat what a previous release already
+said. Models body stays concise; the full constant lists live in `models.md`
+and in the LLM `### Added` / `### Removed` blocks.
+
+After writing the file, rebuild the root aggregate so
+`packages/<package>/CHANGELOG.md` picks up `CHANGELOG_LLM.md` (the aggregator
+prefers it over `CHANGELOG.md`):
+
+```bash
+node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name> --update-root-changelog
+```
+
+Do **not** re-run a full generate after the published-tag hand edits — that
+overwrites `api.md` / `breaking.md` / `models.md`.
 
 **Format the generated markdown (mandatory).** `CHANGELOG_LLM.md` is authored by
 hand here, so it is the file most likely to carry markdown formatting issues that a
@@ -206,9 +239,12 @@ the same way CI does:
 cd packages/<package>
 # if this worktree has no node_modules:
 bun install
-bunx prettier --check "changelog/**/*.md" "CHANGELOG.md"
+bunx prettier --check "changelog/<version>/**/*.md" "CHANGELOG.md"
 # or, matching CI: bun run format
 ```
+
+Scope those globs to **this package**. Do not run `changelog/**/*.md` from the
+repo root or another package cwd — that walks every historical version folder.
 
 If it reports problems, fix them — `bunx prettier --write` on the same paths, or
 `bun run format:fix` — and re-run the check until it passes clean. Do this before
@@ -263,6 +299,11 @@ its NOTICE file reflects any dependency changes in the release:
 source .env
 node .agents/skills/qv-notice-generate/scripts/generate-notice.js <package-name>
 ```
+
+If JS `npm install` fails (unpublished lockstep dep, registry miss), **do not
+commit** a NOTICE whose JS section is empty. Restore the JS block from `HEAD`
+and keep any successful model-scan additions. Models-only packages still update
+model attributions against the last published NOTICE.
 
 Do NOT commit the announcement post (gitignored) and let the user review the rest
 before committing.
@@ -438,6 +479,11 @@ push, and keep this list to things that are cheap to prevent:
   contributor fork. `git push` with no remote follows `origin`.
 - **Do not skip SDK Pod Checks.** Workspace red vs published red is a real
   signal; `[skip-sdk-pod-checks]` is not the changelog fix.
+- **Notes vs last published tag, not only `git log`.** After generate, audit
+  exports / routes / constants against `<slug>-v*` (highest shipped). `git log`
+  `<base>..HEAD` misses work that is already an ancestor of `--base-commit`.
+- **NOTICE JS wipe.** A failed `npm install` must not replace the JS section
+  with zero deps. Restore JS from `HEAD`; keep successful model-scan adds.
 
 ## Quality Checklist
 
@@ -455,7 +501,9 @@ Before completing:
 - [ ] CHANGELOG_LLM.md generated (mandatory) and follows format guide
 - [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (`bun install` in `packages/<pkg>` if needed; never `--no-config`)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
-- [ ] NOTICE file updated for the target package
+- [ ] Published-tag audit done: last `<slug>-v*` vs HEAD public surface matches `api.md` / `breaking.md` / `models.md`
+- [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
+- [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
 - [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` (and `public/_redirects` on **minor** releases — the managed latest-series alias block) as committable docs changes (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
