@@ -34,6 +34,16 @@ on:
         required: false
         default: "packages/vla-ggml"
 
+# The group is spelled out rather than using github.workflow, which in a called
+# workflow resolves to the CALLER's name -- that would collide with the caller's
+# own group and with the on-merge cache workflow's. Not keyed on github.ref alone
+# either: under pull_request_target that is the base branch, so every in-flight PR
+# would share one group. PR number keeps them independent; github.ref serialises
+# the events that write the cache.
+concurrency:
+  group: cpp-tests-vla-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   runner_names:
     permissions:
@@ -76,8 +86,6 @@ jobs:
 
     env:
       WORKDIR: ${{ inputs.workdir }}
-      # Keep vcpkg cache under the package directory in a monorepo
-      VCPKG_BINARY_SOURCES: ${{ format('clear;files,{0}/{1}/vcpkg/cache,readwrite', github.workspace, inputs.workdir) }}
       GIT_TERMINAL_PROMPT: "0"
 
     steps:
@@ -174,6 +182,16 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
+      # Resolves to a host-wide directory on self-hosted runners (shared by every
+      # runner instance on the box, survives the workspace wipe) and to the
+      # workspace on GitHub-hosted ones, where actions/cache below carries it.
+      # Must come after setup-vcpkg, which writes VCPKG_BINARY_SOURCES itself.
+      - name: Point vcpkg at its binary cache
+        uses: ./.github/actions/vcpkg-binary-cache-dir
+        with:
+          workdir: ${{ env.WORKDIR }}
+          trusted: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) }}
+
       - name: Cleanup vcpkg
         shell: bash
         run: |
@@ -187,31 +205,32 @@ jobs:
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - name: Create vcpkg cache location (package-local)
-        shell: bash
-        run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
+      # Exports TOOLCHAIN_FINGERPRINT for the cache key below. Must run before
+      # both cache steps. See the action for why the key cannot omit it.
+      - name: Fingerprint the toolchain
+        uses: ./.github/actions/vcpkg-toolchain-fingerprint
 
-      - name: Get vcpkg cache (package-local)
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      # Restore only. The save sits below the build because a run that
+      # restores from the host layer compiles nothing, and would otherwise
+      # save an EMPTY entry over the shared key, making every other host
+      # rebuild. Seen as `Sent 208 of 208` on a warm windows box.
+      - name: Get vcpkg cache (restore)
+        id: vcpkg-cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          # NOTE: don't include workspace-root 'vcpkg/ports/**' here — the
-          # microsoft/vcpkg clone (pinned to 2025.12.12 above) drops ~4000
-          # port directories into the workspace root, and hashing them on
-          # NTFS exceeds the 120s template-eval cap on qvac-win25-x64.
-          # The pinned microsoft/vcpkg branch is effectively a constant,
-          # so it doesn't need to participate in the cache key.
+          # Deliberately no workspace-root 'vcpkg/ports/**': hashing the
+          # microsoft/vcpkg port tree on NTFS exceeded the 120s template-eval
+          # cap on qvac-win25-x64, and the pinned clone is a constant anyway.
           key: >-
-            cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
+            cpp-tests-v6-vla-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
               hashFiles(
                 format('{0}/vcpkg.json', inputs.workdir),
                 format('{0}/vcpkg-configuration.json', inputs.workdir),
-                format('{0}/vcpkg/ports/**', inputs.workdir),
-                'vcpkg.json',
-                'vcpkg-configuration.json'
+                'vcpkg-overlays/triplets/**',
+                'vcpkg-overlays/toolchains/**'
               )
-            }}
-          path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+            }}-${{ env.TOOLCHAIN_FINGERPRINT }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
@@ -242,6 +261,68 @@ jobs:
       # every milestone (the older v1/v2/v3 fixtures were the pre-migration DROID
       # dims). Developers can run the same tests against the unquantized
       # groot.gguf locally for tighter f32 parity.
+      # Workspace -> host ONLY. vcpkg already wrote this run's compiled archives
+      # to the host layer (it is `write` there for trusted events); this adds the
+      # ones that came from the keyed entry rather than from a compile, so a
+      # trusted run warms a cold host even when it builds nothing.
+      #
+      # The host -> workspace direction is deliberately absent. The host path has
+      # no package component, so copying it in would put every addon's archives
+      # into this package's entry and every PR leg would download the union.
+      # Nothing is lost by dropping it: a trusted run cannot read the host layer,
+      # so if its keyed entry is gone it compiles and the save recreates the
+      # entry from that build.
+      #
+      # Temp-then-mv because other instances read this dir concurrently; umask
+      # 000 because 1777 on the root is not inherited by vcpkg's bucket dirs.
+      - name: Sync the host and workspace vcpkg caches
+        if: >-
+          env.VCPKG_CACHE_PERSISTENT == 'true' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository)
+        shell: bash
+        run: |
+          set +e
+          host_dir=$(echo "${VCPKG_BINARY_SOURCES}" | tr ';' '\n' | grep '^files,' | head -n 1 | cut -d, -f2)
+          ws_dir="${VCPKG_CACHE_DIR}"
+          # Windows hands these over with backslashes, which this shell cannot
+          # traverse; cygpath is present in the runner's Git bash.
+          if command -v cygpath > /dev/null 2>&1; then
+            host_dir=$(cygpath -u "${host_dir}" 2>/dev/null || echo "${host_dir}")
+            ws_dir=$(cygpath -u "${ws_dir}" 2>/dev/null || echo "${ws_dir}")
+          fi
+          echo "sync: host=${host_dir} workspace=${ws_dir}"
+          [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || { echo "sync: no host dir"; exit 0; }
+          [ "${host_dir}" = "${ws_dir}" ] && exit 0
+          mkdir -p "${ws_dir}"
+          umask 000
+
+          sync_dir() {
+            find "$1" -type f 2>/dev/null | while read -r f; do
+              out="$2/${f#$1/}"
+              [ -f "$out" ] && continue
+              mkdir -p "$(dirname "$out")" 2>/dev/null
+              tmp="$out.tmp.$$"
+              cp "$f" "$tmp" 2>/dev/null && mv -f "$tmp" "$out" 2>/dev/null
+              rm -f "$tmp" 2>/dev/null
+            done
+          }
+          sync_dir "${ws_dir}" "${host_dir}"
+
+          echo "sync: host=$(find "${host_dir}" -type f 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -type f 2>/dev/null | wc -l)"
+          exit 0
+
+      # Only trusted events may write the shared cache (see .github/AGENTS.md),
+      # and only when there are archives to write: hashFiles is empty for an
+      # empty directory.
+      - name: Save vcpkg cache (trusted contexts)
+        if: >-
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) &&
+          hashFiles(format('{0}/vcpkg/cache/**', env.WORKDIR)) != ''
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+
       - name: Configure AWS credentials via OIDC (GR00T parity)
         if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0

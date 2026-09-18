@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LlamaInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
+const fs = require("bare-fs");
 const path = require("bare-path");
 // Index-matched to the C++ GenerationStopReason enum (SequenceDriver.hpp).
 const STOP_REASONS = [
@@ -69,6 +70,26 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
     }
     return { type: type, data: rawData, error: rawError };
 }
+// The ggml compute backends ship with the @qvac/fabric dependency
+// (prebuilds/<host>/qvac__fabric). We deliberately do not copy them into this
+// addon to avoid duplicating tens of MB per fabric consumer. On desktop,
+// resolve the single @qvac/fabric install and load the backends from there. On
+// mobile the package tree isn't resolvable at runtime (the worklet runs from a
+// packed bundle), so fall back to this addon's own prebuilds, where the mobile
+// packaging stages the backends. The native side appends BACKENDS_SUBDIR
+// ("<host>/qvac__fabric") to whichever root we return.
+function resolveBackendsDir() {
+    try {
+        const fabricPkg = require.resolve("@qvac/fabric/package");
+        const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
+        if (fs.existsSync(fabricPrebuilds))
+            return fabricPrebuilds;
+    }
+    catch {
+        // Mobile worklets cannot resolve the @qvac/fabric package tree.
+    }
+    return path.join(__dirname, "prebuilds");
+}
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -81,7 +102,7 @@ class LlamaInterface {
             configurationParams.config = {};
         }
         if (!configurationParams.config.backendsDir) {
-            configurationParams.config.backendsDir = path.join(__dirname, "prebuilds");
+            configurationParams.config.backendsDir = resolveBackendsDir();
         }
         this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
     }
