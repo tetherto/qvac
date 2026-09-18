@@ -8,6 +8,9 @@ across the addon fleet.
 Status: **Phase 0 implemented for `classification-ggml`** (template fuzz
 helper + a `FUZZ_TEST` per `preprocessToTensor` branch, each seeded so both
 branches are reachable in bounded mode), including bounded Linux CI coverage.
+**Phase 1 image spike implemented for `ocr-ggml`** (bounded FuzzTest over
+`decodeOrWrapImage`, with overflow guards on encoded length and raw
+width × height × bpp).
 Fleet rollout, corpus/dictionary scale-up, scheduled continuous fuzzing, and
 optional OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
@@ -575,6 +578,8 @@ addons at once.
   reserve `LINK_FABRIC` for header loaders that actually call ggml/gguf. Factor
   shared parsing helpers so one target covers multiple consumers where the code
   is genuinely shared.
+  **`ocr-ggml` decodeOrWrapImage: done.** OpenCV only, no `LINK_FABRIC`
+  (full ASan + LSan). Linux C++ CI runs `npm run fuzz` via `cpp-tests-ocr.yml`.
 - **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
   NMT text parsers, the whisper/parakeet/tts audio buffer math, and the config
   JSON parsers — each landing with (or after) that addon's template migration.
