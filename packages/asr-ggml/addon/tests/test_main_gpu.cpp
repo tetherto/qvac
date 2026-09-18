@@ -138,6 +138,8 @@ TEST(MainGpuRegistry, AdrenoGuardRequiresOpenclBackendAndAdrenoDescription) {
   const MockDevice opencl{GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL", "Adreno 740"};
   auto devices = main_gpu::registryDevices(MockRegistry{{&vulkan, &opencl}});
   EXPECT_EQ(select(devices, {}).whisperIndex, 1);
+  EXPECT_EQ(select(devices, {Kind::Integrated}).whisperIndex, 1);
+  EXPECT_EQ(select(devices, {Kind::Dedicated}).whisperIndex, -1);
   EXPECT_EQ(select(devices, {Kind::Index, 0}).whisperIndex, -1);
   EXPECT_EQ(select(devices, {Kind::Index, 1}).whisperIndex, 1);
 

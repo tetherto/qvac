@@ -20,6 +20,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   one engine stack. The pinned engine adds an optional Apple-only Core ML
   sidecar for the Sortformer diarization encoder; the prebuilds keep it
   disabled, so published behavior is unchanged.
+- Add Whisper `contextParams["main-gpu"]` / `contextParams.main_gpu` selection
+  for raw ggml registry indices plus `dedicated` and `integrated` classes.
+  The selector is mutually exclusive with `gpu_device`, does not enable GPU by
+  itself, falls back to CPU with a warning when no eligible GPU backend is
+  available, and normalizes Adreno OpenCL as integrated.
 
 ## [0.5.3] - 2026-09-17
 

@@ -311,22 +311,26 @@ void WhisperModel::load() {
 #endif
 
     whisper_context_params contextParams = toWhisperContextParams(cfg_);
+    bool reportMissingGpuFallback = false;
 
     // Resolve the raw registry identity before translating to Whisper's
     // GPU/IGPU ordinal. An excluded explicit target falls back only to CPU.
     if (contextParams.use_gpu &&
         !cfg_.whisperContextCfg.contains("gpu_device")) {
-      const auto selected = main_gpu::select(
-          main_gpu::registryDevices(), main_gpu::parse(cfg_.whisperContextCfg));
+      const auto selected = main_gpu::resolveWhisperLoadSelection(
+          contextParams.use_gpu,
+          contextParams.gpu_device,
+          false,
+          cfg_.whisperContextCfg);
       if (selected.outOfRange) {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
             "main-gpu registry index is out of range; using normal GPU "
             "selection");
       }
-      contextParams.use_gpu = selected.whisperIndex >= 0;
+      contextParams.use_gpu = selected.useGpu;
       if (contextParams.use_gpu) {
-        contextParams.gpu_device = selected.whisperIndex;
+        contextParams.gpu_device = selected.gpuDevice;
       } else if (!selected.refused.empty()) {
         std::string message =
             "GPU execution requested but no eligible device is available; "
@@ -337,6 +341,8 @@ void WhisperModel::load() {
         QLOG(
             qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
             message.c_str());
+      } else {
+        reportMissingGpuFallback = selected.warnMissingGpuFallback;
       }
     }
 
@@ -390,7 +396,9 @@ void WhisperModel::load() {
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Whisper model loaded successfully");
 
-    captureActiveBackendInfo(contextParams.use_gpu, contextParams.gpu_device);
+    captureActiveBackendInfo(
+        contextParams.use_gpu || reportMissingGpuFallback,
+        contextParams.gpu_device);
 
     // Warm up the model on first load to avoid first-segment delay
     if (!is_warmed_up_) {

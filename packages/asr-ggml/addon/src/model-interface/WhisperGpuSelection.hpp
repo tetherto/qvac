@@ -69,9 +69,12 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
       continue;
     auto& device = devices[i];
     device.whisperIndex = whisperIndex++;
-    device.integrated = type == GGML_BACKEND_DEVICE_TYPE_IGPU;
     const auto backend = lower(registry.backend(dev));
     const auto description = lower(registry.description(dev));
+    const bool adreno = description.find("adreno") != std::string::npos;
+    device.adrenoOpencl = backend == "opencl" && adreno;
+    device.integrated =
+        type == GGML_BACKEND_DEVICE_TYPE_IGPU || device.adrenoOpencl;
     // Families provided by the pinned ggml-speech port features. Metal
     // registers as MTL; retain Metal as a compatibility spelling. Every other
     // family (HIP/ROCm, SYCL, MUSA, RPC, unknown) is refused with its identity
@@ -79,8 +82,6 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
     device.eligible = backend == "mtl" || backend == "metal" ||
                       backend == "cuda" || backend == "vulkan" ||
                       backend == "opencl";
-    const bool adreno = description.find("adreno") != std::string::npos;
-    device.adrenoOpencl = backend == "opencl" && adreno;
     hasAdrenoOpencl = hasAdrenoOpencl || device.adrenoOpencl;
     adrenoVulkan[i] = backend == "vulkan" && adreno;
     device.identity = deviceIdentity(registry, dev);
@@ -94,6 +95,50 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
     }
   }
   return devices;
+}
+
+struct WhisperLoadSelection {
+  bool useGpu = false;
+  int gpuDevice = 0;
+  bool outOfRange = false;
+  bool warnMissingGpuFallback = false;
+  std::vector<std::string> refused;
+};
+
+template <typename ConfigMap, typename Registry>
+WhisperLoadSelection resolveWhisperLoadSelection(
+    bool useGpu,
+    int gpuDevice,
+    bool hasLegacyGpuDevice,
+    const ConfigMap& config,
+    const Registry& registry) {
+  if (!useGpu || hasLegacyGpuDevice) {
+    return {useGpu, gpuDevice};
+  }
+
+  const auto selected = select(registryDevices(registry), parse(config));
+  WhisperLoadSelection resolved{
+      selected.whisperIndex >= 0,
+      gpuDevice,
+      selected.outOfRange,
+      false,
+      selected.refused};
+  if (resolved.useGpu) {
+    resolved.gpuDevice = selected.whisperIndex;
+  } else {
+    resolved.warnMissingGpuFallback = resolved.refused.empty();
+  }
+  return resolved;
+}
+
+template <typename ConfigMap>
+WhisperLoadSelection resolveWhisperLoadSelection(
+    bool useGpu,
+    int gpuDevice,
+    bool hasLegacyGpuDevice,
+    const ConfigMap& config) {
+  return resolveWhisperLoadSelection(
+      useGpu, gpuDevice, hasLegacyGpuDevice, config, GgmlRegistry{});
 }
 
 } // namespace main_gpu
