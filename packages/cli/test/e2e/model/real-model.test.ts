@@ -324,11 +324,13 @@ describe('chat completions (tools / structured output)', () => {
   // puts `tool_choice` through the SDK's strict generationParams schema and its
   // tools refinement. reasoning_budget is off because the eager `required`
   // grammar admits an unbounded <think> prefix that can eat the whole budget
-  // before a call is emitted.
+  // before a call is emitted. The prompt differs from the case above on
+  // purpose: an identical one reuses a kv-cache prefix rendered with thinking
+  // on, and flipping reasoning_budget under it corrupts the continuation.
   it('honours tool_choice required end to end', async () => {
     const res = await post('/v1/chat/completions', {
       model: E2E.llm,
-      messages: [{ role: 'user', content: 'What is the weather in Paris?' }],
+      messages: [{ role: 'user', content: 'Tell me the current conditions in Oslo.' }],
       max_tokens: 128,
       reasoning_budget: false,
       tool_choice: 'required',
