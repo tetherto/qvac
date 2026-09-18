@@ -145,6 +145,65 @@ safeTest(
   }
 )
 
+safeTest(
+  'mtmd context: MTP cancellation persists a target-only cache',
+  { timeout: 600_000 },
+  async (t) => {
+    const [, dirPath] = await ensureModel({ modelName: MODEL.name })
+    const cachePath = path.join(dirPath, 'mtp-mtmd-cache-cancel-target-only.bin')
+    t.teardown(() => cleanupIntegrationCacheFiles(mtpCacheFiles(cachePath)))
+
+    const addon = await loadMtmdMtp(t, { n_predict: '256' })
+    await collectResponse(
+      await addon.run(TEXT_PROMPT, {
+        cacheKey: cachePath,
+        saveCacheToDisk: true,
+        generationParams: { predict: 2 }
+      })
+    )
+    t.ok(fs.existsSync(`${cachePath}.mtp-draft`), 'seed run persisted the MTP draft cache')
+    t.ok(fs.existsSync(`${cachePath}.mtp-state`), 'seed run persisted the MTP driver state')
+
+    const interrupted = await addon.run(
+      [
+        { role: 'system', content: 'You are a helpful assistant.' },
+        { role: 'user', content: 'Write a detailed story about an otter crossing an ocean.' }
+      ],
+      { cacheKey: cachePath, saveCacheToDisk: true }
+    )
+    let resolveFirstUpdate
+    const firstUpdate = new Promise((resolve) => {
+      resolveFirstUpdate = resolve
+    })
+    interrupted.onUpdate(resolveFirstUpdate)
+    const interruptedDone = interrupted.await().catch((err) => {
+      if (!/cancel|aborted|stopp?ed/i.test(err?.message || '')) throw err
+    })
+    await Promise.race([
+      firstUpdate,
+      interruptedDone.then(() => {
+        throw new Error('generation completed before cancellation could run')
+      })
+    ])
+    await addon.cancel()
+    await interruptedDone
+
+    t.ok(fs.statSync(cachePath).size > 0, 'cancellation preserved the target cache')
+    t.absent(fs.existsSync(`${cachePath}.mtp-draft`), 'cancellation removed the stale draft cache')
+    t.absent(fs.existsSync(`${cachePath}.mtp-state`), 'cancellation removed the stale driver state')
+    await addon.unload()
+
+    const reader = await loadMtmdMtp(t, { n_predict: '8' })
+    const response = await reader.run(TEXT_PROMPT, {
+      cacheKey: cachePath,
+      saveCacheToDisk: false
+    })
+    const output = await collectResponse(response)
+    t.ok(output.length > 0, 'fresh mtmd addon used the target-only cache')
+    t.is(response.stats.draftTotal, 0, 'target-only cache disables MTP for the restored session')
+  }
+)
+
 safeTest('mtmd context: one-token MTP text turn commits to KV', { timeout: 600_000 }, async (t) => {
   const cachePath = path.join(os.tmpdir(), `qvac-mtp-mtmd-one-token-${Date.now()}.bin`)
   t.teardown(() => cleanupIntegrationCacheFiles(mtpCacheFiles(cachePath)))

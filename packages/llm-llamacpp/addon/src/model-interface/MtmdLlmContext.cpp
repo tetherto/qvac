@@ -2368,18 +2368,20 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
   const std::string tmpDraftCacheKey = draftCacheKey + ".tmp";
   const std::string stateCacheKey = mtpDriverStateCachePath(cacheKey);
   const std::string tmpStateCacheKey = stateCacheKey + ".tmp";
-  const bool saveMtpState = ctxDraft_ && spec_;
+  bool saveMtpState = ctxDraft_ && spec_;
   std::vector<uint8_t> driverState;
   uint64_t generation = 0;
   if (saveMtpState) {
     if (!common_speculative_get_state(spec_.get(), seqId_, driverState)) {
-      throw qvac_errors::StatusError(
-          ADDON_ID,
-          toString(UnableToSaveSessionFile),
-          "MtmdLlmContext::saveCache: MTP driver state is unavailable");
+      saveMtpState = false;
+      QLOG_IF(
+          Priority::WARNING,
+          "[MtmdLlm] MTP driver state is unavailable; saving target-only "
+          "cache\n");
+    } else {
+      generation = makeMtpCacheGeneration();
+      metadata.setMtpGeneration(generation);
     }
-    generation = makeMtpCacheGeneration();
-    metadata.setMtpGeneration(generation);
   }
   ScopeGuard tmpFileGuard([&]() noexcept {
     std::error_code ec;
