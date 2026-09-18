@@ -214,6 +214,27 @@ If in doubt, run once **without** a filter and open the Device Farm run's
 `bare_console.log` / the "Run → tests" legend on the job summary — it enumerates
 the `run*` names that executed, which you can then narrow with `tests`.
 
+### Where the logs are when a run fails
+
+`test-results.json` only records the harness assertion, which is the same for
+every failure. The reason is in the app's own output:
+
+| what | Android | iOS |
+|---|---|---|
+| JS / bare runtime, TAP, the failure | `logcat_full.txt`, `bare` tag | `bare_console.log` |
+| **native C++ / engine** | `logcat_full.txt`, `bare` tag, `[C++ TEST]` prefix | `bare_console.log`, `[C++ TEST]` prefix |
+
+```bash
+gh run download <run-id> --repo tetherto/qvac --dir ./logs
+grep -aE "E bare|I bare" logs/**/*logcat_full.txt   # Android: test + native
+grep -a "\[C++ TEST\]"    logs/**/*bare_console.log  # iOS: native
+```
+
+Use `logcat_full.txt`, **not** the smaller `Logcat.logcat`, and grep the `bare`
+tag rather than TAP markers — the runtime prints through logcat, so `ok 1` never
+appears as a raw line. There is no `bare_console.log` on Android by construction
+(private app data, unreadable by adb on a release-signed APK).
+
 ### Which build gets tested
 
 A manual run does **not** compile the native addon — it installs a **prebuilt**
