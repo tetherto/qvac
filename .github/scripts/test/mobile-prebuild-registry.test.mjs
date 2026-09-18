@@ -1077,4 +1077,8 @@ test('the bare-log pull uses platform-appropriate device paths', () => {
   assert.match(template, /'\/data\/data\/' \+ bundleId \+ '\/files\/bare_console\.log'/)
   // A failure must still report the reason, not a type error.
   assert.match(template, /tried ' \+ candidates\.length \+ ' path\(s\)/)
+  // adb cannot read the app sandbox (observed: "failed to stat remote object:
+  // Permission denied"), so run-as is the last resort, as in perf-extract.js.
+  assert.match(template, /command: 'run-as'/)
+  assert.match(template, /'cat', 'files\/bare_console\.log'/)
 })
