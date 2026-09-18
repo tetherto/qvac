@@ -366,7 +366,9 @@ jobs:
       workdir: ${{ matrix.workdir }}
       include-rocm-sdk: ${{ matrix.includeRocmSdk == true }}
       # Without this the lint lane compiles against the released @qvac/fabric.
-      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
+      # Scoped like cpp-tests-nx: llm-llamacpp takes fabric through vcpkg, has
+      # no node_modules/@qvac/fabric, and the overlay hard-fails there.
+      fabric-overlay-artifact: ${{ (needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && contains(fromJSON(needs.matrix.outputs.fabricconsumers), matrix.package)) && 'fabric-prebuilds' || '' }}
 
   # main #4396 moved TS checks out of the privileged workflow: on-pr-<pkg>-ts.yml
   # runs them on pull_request against PR head, and this only awaits the result.
