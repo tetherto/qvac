@@ -18,6 +18,7 @@ import {
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { bciTranscribe, bciTranscribeStream } from '@/plugins/ops/bci-transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildBciWhispercppArgs } from '@/plugins/builtin/bci-whispercpp-transcription/args'
 import { resolveBciConfig } from '@/plugins/builtin/bci-whispercpp-transcription/resolve-config'
 
@@ -102,7 +103,9 @@ export const bciPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats, diagnostics } = result.value
-          yield attachModelExecutionMs(
+          // The field is what reaches an RPC client; the symbol is what the
+          // profiling layer reads to set `event.backend`, as audiogen does.
+          const terminal = attachModelExecutionMs(
             {
               type: 'bciTranscribe' as const,
               text: '',
@@ -112,6 +115,7 @@ export const bciPlugin = definePlugin({
             },
             modelExecutionMs
           )
+          yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
         } finally {
           await stream.return?.(undefined as never)
         }
