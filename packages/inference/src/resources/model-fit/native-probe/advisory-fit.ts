@@ -139,7 +139,7 @@ async function defaultResidentModelBytes(): Promise<number> {
 
 /**
  * Also lazy: the desktop supervisor pulls the Bare process launcher, and a
- * disabled check must not load it. Mobile uses in-process `fitParams` instead
+ * disabled check must not load it. Mobile uses in-process `fitParamsAsync` instead
  * of spawn (`bare-runtime/spawn` stays deferred from the mobile pack).
  */
 async function resolveRunFit(

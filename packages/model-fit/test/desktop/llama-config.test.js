@@ -40,11 +40,15 @@ function runRunner(input) {
   })
 }
 
-function runDirectBinding(config, loadKind = 'completion') {
+function runDirectBinding(config, loadKind = 'completion', mode = 'sync') {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [path.join(__dirname, 'direct-binding-runner.js'), JSON.stringify({ loadKind, ...config })],
+      [
+        path.join(__dirname, 'direct-binding-runner.js'),
+        JSON.stringify({ loadKind, ...config }),
+        mode
+      ],
       { stdio: ['ignore', 'overlapped', 'overlapped'] }
     )
     let stdout = ''
@@ -117,7 +121,7 @@ test('top-level API does not export raw llama fitting', (t) => {
     t.pass('native-only export check skipped before prebuild availability')
     return
   }
-  t.alike(Object.keys(publicIndex).sort(), ['FIT_STATUS', 'fitParams'])
+  t.alike(Object.keys(publicIndex).sort(), ['FIT_STATUS', 'fitParams', 'fitParamsAsync'])
 })
 
 test('the public binding does not export raw llama fitting either', (t) => {
@@ -134,7 +138,7 @@ test('the public binding does not export raw llama fitting either', (t) => {
     t.pass('native surface check skipped before prebuild availability')
     return
   }
-  t.alike(Object.keys(require('../../binding.js')).sort(), ['paramsFit'])
+  t.alike(Object.keys(require('../../binding.js')).sort(), ['paramsFit', 'paramsFitAsync'])
   t.ok(typeof require('../../binding-internal.js').llamaConfigFit === 'function')
 })
 
@@ -498,5 +502,32 @@ test(
     t.is(response.status, 'completed')
     t.is(response.result.status, 2)
     t.ok(['model-unreadable', 'no-backend-device'].includes(response.result.reason))
+  }
+)
+
+test(
+  'direct binding async entry point settles like the synchronous one',
+  { skip: !HAS_NATIVE_PREBUILD },
+  async (t) => {
+    const invalid = await runDirectBinding({ ...config, unknown: true }, 'completion', 'async')
+    t.is(invalid.signal, null)
+    t.is(invalid.code, 0)
+    const rejected = JSON.parse(invalid.stdout)
+    t.is(rejected.ok, false)
+    t.ok(rejected.message.includes('unknown'))
+
+    // Missing model: the cheapest path to a full verdict.
+    const [sync, async] = await Promise.all([
+      runDirectBinding(config),
+      runDirectBinding(config, 'completion', 'async')
+    ])
+    const syncResult = JSON.parse(sync.stdout)
+    const asyncResult = JSON.parse(async.stdout)
+    t.is(syncResult.ok, true)
+    t.is(asyncResult.ok, true)
+    t.is(asyncResult.result.status, syncResult.result.status)
+    t.is(asyncResult.result.reason, syncResult.result.reason)
+    t.ok(['model-unreadable', 'no-backend-device'].includes(asyncResult.result.reason))
+    t.alike(Object.keys(asyncResult.result).sort(), Object.keys(syncResult.result).sort())
   }
 )

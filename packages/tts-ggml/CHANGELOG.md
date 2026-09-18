@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-16`. CosyVoice3 synthesis is faster
+  with no model change: on an AMD Strix Halo the reference-exact path gains
+  1.3-1.4x on Vulkan and 1.6-1.8x on CPU, from flash-attention in the flow
+  DiT and an LM KV cache that no longer re-copies itself each token. Existing
+  CosyVoice3 GGUFs keep working; the engine's new quantized flow / f16 HiFT
+  tiers require re-converted model files.
+
+## [0.9.2] - 2026-09-16
+
+### Fixed
+
+- Mobile platform packages (`@qvac/tts-ggml-android-arm64`, `@qvac/tts-ggml-ios`)
+are no longer `os`-filtered `optionalDependencies` of the meta package. No
+build host ever reports a mobile `os`, so installers could never select them
+during a cross-build and mobile bundles failed verification with missing
+prebuilds. They now publish without install filters; mobile applications
+declare the target's platform package as a direct dependency pinned to the
+exact meta package version.
+
 ## [0.9.1] - 2026-09-15
 
 This release repairs native binding resolution for the per-platform prebuild

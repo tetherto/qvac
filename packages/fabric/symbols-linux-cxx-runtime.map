@@ -15,6 +15,15 @@
 # qvac_addon_import_fabric_cxx_runtime in cmake/qvac-addon/qvac-addon.cmake and
 # arch/qips/linux-fabric-libcxx-ownership.md.
 #
+# Exporting the set is necessary but not sufficient, so this file is only half
+# the mechanism. bare's executable links GNU libstdc++.so.6, which puts a second
+# complete C++ runtime in the process' global lookup scope — searched ahead of a
+# dlopen'd module's own DT_NEEDED chain — so an addon linked with -nostdlib++
+# resolved these names from libstdc++ and never reached this module at all. What
+# binds them here is the named version node in symbols.map, which records a
+# DT_VERNEED in each consumer that libstdc++ cannot satisfy. Keep the two
+# together: this export set is inert without that node.
+#
 # This is only spliced in when the module actually embeds libc++. The other ELF
 # configurations get their uniqueness from a libc++ shared library instead, and
 # define none of these symbols themselves: Android links libc++_shared.so, and

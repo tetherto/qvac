@@ -198,10 +198,13 @@ export const whisperConfigSchema = z.object({
 
 export type WhisperConfig = z.infer<typeof whisperConfigSchema>
 
+const PARAKEET_LANGUAGE_PATTERN = /^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$/
+
 // === Parakeet (NVIDIA NeMo GGML) engine config ===
 //
 // Backed by the ggml-based qvac-parakeet.cpp engine. A single GGUF
-// checkpoint covers every variant (TDT, CTC, EOU, Sortformer); the
+// checkpoint covers every variant (TDT, RNN-T, CTC, EOU, Nemotron,
+// Sortformer); the
 // addon auto-detects the model type from `parakeet.model.type` GGUF
 // metadata, so callers no longer pass a `modelType` discriminator and
 // only ever supply a single `modelSrc` at `loadModel` time.
@@ -237,7 +240,9 @@ export const parakeetRuntimeConfigSchema = z.object({
     .int()
     .positive()
     .optional()
-    .describe('Streaming chunk cadence in ms. Default 2000.'),
+    .describe(
+      'Streaming chunk cadence in ms. Defaults to 320 for Nemotron and 2000 for existing models. Nemotron supports 80, 160, 320, 560, or 1120.'
+    ),
   streamingHistoryMs: z
     .number()
     .int()
@@ -252,7 +257,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'CTC/TDT-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.'
+      'CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.'
     ),
   streamingLeftContextMs: z
     .number()
@@ -268,9 +273,10 @@ export const parakeetRuntimeConfigSchema = z.object({
     .describe('ASR encoder right-lookahead window in ms; omit to keep the model default (2000).'),
   language: z
     .string()
+    .regex(PARAKEET_LANGUAGE_PATTERN)
     .optional()
     .describe(
-      'Multilingual CTC language id (e.g. `hi`, `ta`); required for Indic Conformer GGUFs, ignored on monolingual CTC.'
+      'Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.'
     ),
 
   // === AOSC (Audio-Online Speaker Cache; v2.1+ Sortformer only) =========

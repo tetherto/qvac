@@ -291,13 +291,16 @@ export class WhisperDriver implements AsrDriver {
 
     this._pendingJobId = null;
     const response = this.ctx.job.start() as QvacResponse<ASRStreamOutput>;
+    let closing = false;
     const finalized = response.await().finally(() => {
       addon.finishStreaming();
     });
     void finalized.catch(() => {});
     response.await = () => finalized;
 
-    void this._pumpStreamingAudio(audio).catch((error: unknown) => {
+    void this._pumpStreamingAudio(audio, () => {
+      closing = true;
+    }).catch((error: unknown) => {
       this._pendingJobId = null;
       this.ctx.job.fail(error as Error);
     });
@@ -308,6 +311,9 @@ export class WhisperDriver implements AsrDriver {
         () => {},
         () => {},
       ),
+      get closing(): boolean {
+        return closing;
+      },
     });
   }
 
@@ -348,13 +354,17 @@ export class WhisperDriver implements AsrDriver {
     await addon.append({ type: END_OF_INPUT });
   }
 
-  async _pumpStreamingAudio(audio: NormalizedAudioStream): Promise<void> {
+  async _pumpStreamingAudio(
+    audio: NormalizedAudioStream,
+    markClosing: () => void,
+  ): Promise<void> {
     this.ctx.logger.debug("Start handling streaming audio");
     const addon = this._requiredAddon();
     for await (const chunk of audio) {
       addon.appendStreamingAudio({ type: "audio", input: bytesOf(chunk) });
     }
     this.ctx.logger.debug("Ending streaming session");
+    markClosing();
     addon.endStreaming();
   }
 
