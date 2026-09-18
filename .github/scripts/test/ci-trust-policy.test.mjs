@@ -2362,6 +2362,34 @@ const TRUSTED_CACHE_EXEMPT = new Set([
 // passes a presence check while carrying `|| github.event_name ==
 // 'pull_request_target'` alongside them, which is exactly the hole this test
 // exists to close. So assert the untrusted ones are absent too.
+// A trusted event is not a trusted run: workflow_dispatch runs on any branch,
+// and `Checkout code` honours inputs.ref where that input exists, so a dispatch
+// on main pointed at refs/pull/<N>/head would build untrusted code under main's
+// cache key (QVAC-25269).
+const DISPATCH_BRANCH_GUARD =
+  "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
+const DISPATCH_REF_GUARD = "(inputs.ref == '' || inputs.ref == github.ref_name)";
+
+// Only a `ref` workflow_dispatch input can redirect the checkout of a run the
+// gate has already called trusted; a workflow_call `ref` cannot.
+function hasRefDispatchInput(path) {
+  const source = withoutComments(read(path));
+  const start = source.indexOf("\n  workflow_dispatch:");
+  if (start === -1) return false;
+  const rest = source.slice(start + 1);
+  const end = rest.search(/\n  [a-z_]+:/);
+  return /\n      ref:/.test(end === -1 ? rest : rest.slice(0, end));
+}
+
+function missingTrustGuards(path, step) {
+  const missing = [];
+  if (!step.includes(DISPATCH_BRANCH_GUARD)) missing.push("the default branch");
+  if (hasRefDispatchInput(path) && !step.includes(DISPATCH_REF_GUARD)) {
+    missing.push("its own ref");
+  }
+  return missing;
+}
+
 const UNTRUSTED_CACHE_EVENTS = [
   "pull_request",
   "pull_request_target",
@@ -2413,6 +2441,12 @@ test("cache policy: cpp-tests cache writes are gated on trusted events", () => {
         `${path}: a cache write step admits untrusted ${forbidden.join(", ")}`,
       );
     }
+    const unpinned = missingTrustGuards(path, step);
+    if (unpinned.length) {
+      offenders.push(
+        `${path}: a cache write step is not pinned to ${unpinned.join(" and ")}`,
+      );
+    }
   };
   const seen = new Set();
   for (const { path, step, index } of eachCppTestsCacheStep({
@@ -2428,6 +2462,13 @@ test("cache policy: cpp-tests cache writes are gated on trusted events", () => {
     includeExempt: true,
   })) {
     if (seen.has(`${path}#${index}`)) continue;
+    check(path, step);
+  }
+  // The third gate site: the action decides read vs write mode from `trusted`.
+  for (const { path, step } of eachCppTestsCacheStep({
+    match: /uses: \.\/\.github\/actions\/vcpkg-binary-cache-dir/,
+    includeExempt: true,
+  })) {
     check(path, step);
   }
   assert.deepEqual(offenders, []);
@@ -2455,6 +2496,12 @@ test("cache policy: the host-cache sync step is gated on trusted events", () => 
     if (missing.length) {
       offenders.push(
         `${path}: the host-cache sync step does not gate on ${missing.join(", ")}`,
+      );
+    }
+    const unpinned = missingTrustGuards(path, step);
+    if (unpinned.length) {
+      offenders.push(
+        `${path}: the host-cache sync step is not pinned to ${unpinned.join(" and ")}`,
       );
     }
   }
