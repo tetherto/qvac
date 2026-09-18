@@ -221,48 +221,6 @@ void tryEmplaceDevice(
 }
 } // namespace
 
-BackendType
-backend_selection::preferredBackendTypeFromString(const std::string& device) {
-  if (device == "gpu") {
-    return BackendType::GPU;
-  }
-  if (device == "cpu") {
-    return BackendType::CPU;
-  }
-  throw qvac_errors::StatusError(
-      qvac_errors::general_error::InvalidArgument,
-      "preferredDeviceFromString: wrong device specified, must be 'gpu' or "
-      "'cpu'.\n");
-}
-
-std::optional<MainGpu>
-backend_selection::parseMainGpu(const std::string& mainGpuStr) {
-  if (mainGpuStr.empty()) {
-    return std::nullopt;
-  }
-
-  // Try to parse as integer first
-  try {
-    int deviceIndex = std::stoi(mainGpuStr);
-    return MainGpu(deviceIndex);
-  } catch (const std::exception&) {
-    // Not an integer, try enum values
-    std::string lowerStr = mainGpuStr;
-    std::ranges::transform(lowerStr, lowerStr.begin(), tolower);
-
-    if (lowerStr == "integrated") {
-      return MainGpu(MainGpuType::Integrated);
-    }
-    if (lowerStr == "dedicated") {
-      return MainGpu(MainGpuType::Dedicated);
-    }
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument,
-        "main-gpu must be an integer device index, 'integrated', or "
-        "'dedicated'");
-  }
-}
-
 std::optional<MainGpu> backend_selection::tryMainGpuFromMap(
     std::unordered_map<std::string, std::string>& configFilemap) {
   auto hIt = configFilemap.find("main-gpu");
