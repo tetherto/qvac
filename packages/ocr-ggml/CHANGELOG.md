@@ -4,6 +4,15 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add `main-gpu` (alias `main_gpu`) to select a GPU by raw registry index or
+  `dedicated` / `integrated` class when a GPU backend is requested. Unavailable
+  classes and refused devices fall back to CPU; out-of-range indices warn and
+  use automatic selection. Cannot be combined with `gpuDevice`.
+
 ## [0.24.2] - 2026-09-17
 
 ### Changed

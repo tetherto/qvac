@@ -23,7 +23,10 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <span>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -122,7 +125,28 @@ getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
   return path.as<std::string>(env);
 }
 
-// Validate direct native callers before narrowing integers or loading models.
+bool isMainGpuRegistryIndex(double value) {
+  return std::isfinite(value) && std::trunc(value) == value &&
+         value >= std::numeric_limits<int>::min() &&
+         value <= std::numeric_limits<int>::max();
+}
+
+std::optional<int> parseMainGpuRegistryIndex(const std::string& value) {
+  const size_t start =
+      !value.empty() && (value[0] == '+' || value[0] == '-') ? 1 : 0;
+  if (value.size() <= start ||
+      !std::all_of(value.begin() + start, value.end(), [](unsigned char ch) {
+        return ch >= '0' && ch <= '9';
+      })) {
+    return std::nullopt;
+  }
+  try {
+    return std::stoi(value);
+  } catch (const std::out_of_range&) {
+    return std::nullopt;
+  }
+}
+
 void applyMainGpu(
     js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
     OcrConfig& config) {
@@ -142,9 +166,7 @@ void applyMainGpu(
   auto* raw = hasCanonical ? canonical : alias;
   if (js::is<js::Number>(env, raw)) {
     const double value = js::Number::fromValue(raw).as<double>(env);
-    if (std::isfinite(value) && std::trunc(value) == value &&
-        value >= std::numeric_limits<int>::min() &&
-        value <= std::numeric_limits<int>::max()) {
+    if (isMainGpuRegistryIndex(value)) {
       config.mainGpu = static_cast<int>(value);
       return;
     }
@@ -158,18 +180,9 @@ void applyMainGpu(
                                             : MainGpuClass::INTEGRATED;
       return;
     }
-    const size_t start =
-        !value.empty() && (value[0] == '+' || value[0] == '-') ? 1 : 0;
-    if (value.size() > start &&
-        std::all_of(value.begin() + start, value.end(), [](unsigned char ch) {
-          return ch >= '0' && ch <= '9';
-        })) {
-      try {
-        config.mainGpu = std::stoi(value);
-        return;
-      } catch (const std::exception&) {
-        // Overflow falls through to the same invalid-argument error.
-      }
+    if (const auto index = parseMainGpuRegistryIndex(value)) {
+      config.mainGpu = *index;
+      return;
     }
   }
   throw StatusError{

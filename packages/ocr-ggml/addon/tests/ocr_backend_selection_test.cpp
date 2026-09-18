@@ -21,16 +21,16 @@ struct ggml_backend_device {
 struct ggml_context {};
 
 namespace {
-std::vector<ggml_backend_device> devices;
-ggml_context context;
-ggml_tensor tensor;
+std::vector<ggml_backend_device> g_devices;
+ggml_context g_context;
+ggml_tensor g_tensor;
 using namespace qvac_lib_infer_ocr_ggml;
 using namespace qvac_lib_infer_ocr_ggml::ocr_backend_selection;
 
 class OcrBackendSelectionTest : public testing::Test {
 protected:
   void SetUp() override {
-    devices = {
+    g_devices = {
         {"ROCm0", "AMD", GGML_BACKEND_DEVICE_TYPE_GPU, {"ROCm"}},
         {"Vulkan0", "Intel", GGML_BACKEND_DEVICE_TYPE_IGPU, {"Vulkan"}},
         {"CPU", "CPU", GGML_BACKEND_DEVICE_TYPE_CPU, {"CPU"}},
@@ -49,16 +49,16 @@ protected:
 } // namespace
 
 extern "C" {
-size_t ggml_backend_dev_count() { return devices.size(); }
+size_t ggml_backend_dev_count() { return g_devices.size(); }
 ggml_backend_dev_t ggml_backend_dev_get(size_t index) {
-  return &devices.at(index);
+  return &g_devices.at(index);
 }
 ggml_backend_dev_t ggml_backend_dev_by_type(enum ggml_backend_dev_type type) {
   const auto it =
-      std::find_if(devices.begin(), devices.end(), [type](const auto& d) {
+      std::find_if(g_devices.begin(), g_devices.end(), [type](const auto& d) {
         return d.type == type;
       });
-  return it == devices.end() ? nullptr : &*it;
+  return it == g_devices.end() ? nullptr : &*it;
 }
 const char* ggml_backend_dev_name(ggml_backend_dev_t dev) { return dev->name; }
 const char* ggml_backend_dev_description(ggml_backend_dev_t dev) {
@@ -75,16 +75,16 @@ bool ggml_backend_dev_supports_op(ggml_backend_dev_t dev, const ggml_tensor*) {
   return dev->supportsOps;
 }
 size_t ggml_tensor_overhead() { return sizeof(ggml_tensor); }
-ggml_context* ggml_init(ggml_init_params) { return &context; }
+ggml_context* ggml_init(ggml_init_params) { return &g_context; }
 void ggml_free(ggml_context*) {}
 ggml_tensor* ggml_new_tensor_4d(
     ggml_context*, enum ggml_type, int64_t, int64_t, int64_t, int64_t) {
-  return &tensor;
+  return &g_tensor;
 }
 ggml_tensor* ggml_pool_2d(
     ggml_context*, ggml_tensor*, enum ggml_op_pool, int, int, int, int, float,
     float) {
-  return &tensor;
+  return &g_tensor;
 }
 }
 
@@ -111,9 +111,9 @@ TEST_F(OcrBackendSelectionTest, RawIndexNeverShiftsAfterBackendFiltering) {
 TEST_F(OcrBackendSelectionTest, ExplicitClassIsStrict) {
   EXPECT_EQ(select(MainGpuClass::DEDICATED).deviceIndex, 3);
   EXPECT_EQ(select(MainGpuClass::INTEGRATED).deviceIndex, 1);
-  devices[3].type = GGML_BACKEND_DEVICE_TYPE_IGPU;
+  g_devices[3].type = GGML_BACKEND_DEVICE_TYPE_IGPU;
   EXPECT_TRUE(select(MainGpuClass::DEDICATED).selectedIsCpu());
-  devices[1].type = devices[3].type = GGML_BACKEND_DEVICE_TYPE_GPU;
+  g_devices[1].type = g_devices[3].type = GGML_BACKEND_DEVICE_TYPE_GPU;
   EXPECT_TRUE(
       select(MainGpuClass::INTEGRATED).selectedIsCpu()); // Adreno is excluded
 }
@@ -132,7 +132,7 @@ TEST_F(OcrBackendSelectionTest, SafetyGuardsApplyToRawIndicesAndClasses) {
   EXPECT_EQ(
       select(5, BackendDevice::OPENCL).deviceIndex,
       5); // sound OpenCL path
-  devices[3].supportsOps = false;
+  g_devices[3].supportsOps = false;
   EXPECT_TRUE(select(3).selectedIsCpu());
   EXPECT_TRUE(select(MainGpuClass::DEDICATED).selectedIsCpu());
   EXPECT_NE(select(3).fallbackReason.find("OCR vision ops"), std::string::npos);
@@ -162,7 +162,7 @@ TEST_F(OcrBackendSelectionTest, CpuRemainsExplicitAndConflictingSelectorsFail) {
 TEST_F(
     OcrBackendSelectionTest,
     CpuFallbackNamesOtherGpuDevicesForUnmatchedRequest) {
-  devices = {
+  g_devices = {
       {"ROCm0", "AMD MI250", GGML_BACKEND_DEVICE_TYPE_GPU, {"ROCm"}},
       {"SYCL0", "Intel Arc A770", GGML_BACKEND_DEVICE_TYPE_GPU, {"SYCL"}},
       {"MTL0", "Apple", GGML_BACKEND_DEVICE_TYPE_IGPU, {"Metal"}},

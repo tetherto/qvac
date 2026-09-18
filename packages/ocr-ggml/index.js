@@ -11,6 +11,7 @@ const ocr_ggml_1 = require("./ocr-ggml");
 const error_1 = require("./lib/error");
 Object.defineProperty(exports, "QvacErrorAddonOcrGgml", { enumerable: true, get: function () { return error_1.QvacErrorAddonOcrGgml; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_1.ERR_CODES; } });
+const main_gpu_1 = require("./lib/main-gpu");
 const DOCTR_INTERNAL_LANG_LIST = ["en"];
 /**
  * Native language-validation failure messages (see the EasyOCR pipeline's
@@ -150,7 +151,7 @@ class OcrGgml {
             : rawMainGpu;
         if (mainGpu !== undefined && mainGpu !== "dedicated" && mainGpu !== "integrated" &&
             !(typeof mainGpu === "number" && Number.isInteger(mainGpu) &&
-                mainGpu >= -2147483648 && mainGpu <= 2147483647)) {
+                mainGpu >= main_gpu_1.MIN_MAIN_GPU_INDEX && mainGpu <= main_gpu_1.MAX_MAIN_GPU_INDEX)) {
             throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
         }
         const configurationParams = {

@@ -18,6 +18,7 @@ import {
   type OcrGgmlRunOptions,
 } from "./ocr-ggml";
 import { QvacErrorAddonOcrGgml, ERR_CODES, errorMessage } from "./lib/error";
+import { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } from "./lib/main-gpu";
 
 /**
  * OCR pipeline backing the addon.
@@ -345,7 +346,7 @@ export class OcrGgml {
     if (
       mainGpu !== undefined && mainGpu !== "dedicated" && mainGpu !== "integrated" &&
       !(typeof mainGpu === "number" && Number.isInteger(mainGpu) &&
-        mainGpu >= -2147483648 && mainGpu <= 2147483647)
+        mainGpu >= MIN_MAIN_GPU_INDEX && mainGpu <= MAX_MAIN_GPU_INDEX)
     ) {
       throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
     }

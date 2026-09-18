@@ -3,6 +3,7 @@
 const test = require('brittle')
 const OcrGgml = require('../..').OcrGgml
 const { ERR_CODES, QvacErrorAddonOcrGgml } = require('../..')
+const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('../../lib/main-gpu')
 
 async function captureRejection(fn) {
   try {
@@ -326,7 +327,22 @@ test('OcrGgml.load forwards shared selectors and preserves legacy GPU indices', 
     const values =
       key === 'gpuDevice'
         ? [0, 2]
-        : [0, 2, -1, '0', '+2', '-1', 'dedicated', 'integrated', 'DEDICATED', 'Integrated']
+        : [
+            0,
+            2,
+            -1,
+            '0',
+            '+2',
+            '-1',
+            'dedicated',
+            'integrated',
+            'DEDICATED',
+            'Integrated',
+            MIN_MAIN_GPU_INDEX,
+            MAX_MAIN_GPU_INDEX,
+            String(MIN_MAIN_GPU_INDEX),
+            String(MAX_MAIN_GPU_INDEX)
+          ]
     for (const value of values) {
       let forwarded
       const ocr = new OcrGgml({
@@ -361,13 +377,14 @@ test('OcrGgml.load rejects invalid or conflicting shared selectors before loadin
     '1junk',
     ' 1',
     '1.5',
-    '2147483648',
+    String(MAX_MAIN_GPU_INDEX + 1),
+    String(MIN_MAIN_GPU_INDEX - 1),
     'gpu',
     '',
     {},
     [],
-    2147483648,
-    -2147483649
+    MAX_MAIN_GPU_INDEX + 1,
+    MIN_MAIN_GPU_INDEX - 1
   ]
   const cases = [
     ...['main-gpu', 'main_gpu'].flatMap((key) => invalid.map((value) => ({ [key]: value }))),
