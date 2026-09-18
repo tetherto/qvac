@@ -1,4 +1,5 @@
 import test from 'brittle'
+import crypto from 'bare-crypto'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
@@ -19,7 +20,18 @@ const REF: FitStubRef = {
 
 const STUB_BYTES = Buffer.from('GGUF' + 'x'.repeat(28))
 
-const BINDING: FitBlobBinding = { sha256: 'b'.repeat(64), byteLength: STUB_BYTES.length }
+function sha256(bytes: Buffer): string {
+  return crypto.createHash('sha-256').update(bytes).digest('hex')
+}
+
+const BINDING: FitBlobBinding = {
+  coreKey: 'c'.repeat(64),
+  blockOffset: 0,
+  blockLength: 1,
+  byteOffset: 0,
+  byteLength: STUB_BYTES.length,
+  sha256: sha256(STUB_BYTES)
+}
 
 const ENTRY: FitStubEntry = { fitBlobBinding: BINDING }
 
@@ -65,7 +77,7 @@ test('an entry without a fit blob is not an error', async function (t) {
   if (res.status === 'unavailable') t.is(res.reason, 'no-fit-blob')
 })
 
-test('a fit stub is fetched and named by its own digest', async function (t) {
+test('a fit stub is fetched into its own directory and named by its digest', async function (t) {
   const cacheDir = tempDir()
   const downloader = writesStub()
 
@@ -78,28 +90,24 @@ test('a fit stub is fetched and named by its own digest', async function (t) {
   t.is(res.status, 'ready')
   if (res.status !== 'ready') return
 
-  t.is(res.path, path.join(cacheDir, `${BINDING.sha256}.gguf`), 'keyed by the blob digest')
+  t.is(path.basename(res.path), `${BINDING.sha256}.gguf`, 'named by the blob digest')
+  t.is(path.dirname(path.dirname(res.path)), cacheDir, 'staged one directory below the root')
   t.is(res.bytes, STUB_BYTES.length)
-  t.is(res.cached, false)
   t.alike(fs.readFileSync(res.path), STUB_BYTES, 'the bytes landed')
-  t.absent(fs.existsSync(`${res.path}.part`), 'no partial file is left behind')
+  t.alike(downloader.calls, [res.path], 'downloaded straight to the returned path')
 })
 
-test('a stub already in the cache is not downloaded again', async function (t) {
+// Two assessments of the same model must never share a file that one of them
+// is about to remove.
+test('two fetches of the same stub do not share a path', async function (t) {
   const cacheDir = tempDir()
-  const downloader = writesStub()
-  const options = {
-    cacheDir,
-    getEntry: async () => ENTRY,
-    downloadBlob: downloader.downloadBlob
-  }
+  const options = { cacheDir, getEntry: async () => ENTRY, downloadBlob: writesStub().downloadBlob }
 
-  await fetchFitStub(REF, options)
-  const second = await fetchFitStub(REF, options)
+  const [a, b] = await Promise.all([fetchFitStub(REF, options), fetchFitStub(REF, options)])
 
-  t.is(second.status, 'ready')
-  if (second.status === 'ready') t.is(second.cached, true)
-  t.is(downloader.calls.length, 1, 'the blob was fetched once')
+  t.is(a.status, 'ready')
+  t.is(b.status, 'ready')
+  if (a.status === 'ready' && b.status === 'ready') t.not(a.path, b.path)
 })
 
 test('a failed download reports rather than throwing, and leaves nothing behind', async function (t) {
@@ -119,11 +127,9 @@ test('a failed download reports rather than throwing, and leaves nothing behind'
     t.is(res.reason, 'download-failed')
     t.ok(res.message?.includes('peer went away'), 'the cause is carried')
   }
-  t.alike(fs.readdirSync(cacheDir), [], 'the cache is left clean')
+  t.alike(fs.readdirSync(cacheDir), [], 'the staging directory is gone')
 })
 
-// The size check is what stops a truncated fetch being cached and then trusted
-// by the `cached` branch on every later call.
 test('a stub that does not match the recorded length is rejected', async function (t) {
   const cacheDir = tempDir()
 
@@ -139,4 +145,23 @@ test('a stub that does not match the recorded length is rejected', async functio
     t.ok(res.message?.includes('the record says'), 'the mismatch is named')
   }
   t.alike(fs.readdirSync(cacheDir), [], 'the short stub is not kept')
+})
+
+// Right length, wrong bytes: only the digest the record binds can tell.
+test('a stub that does not match the recorded digest is rejected', async function (t) {
+  const cacheDir = tempDir()
+  const corrupt = Buffer.from('GGUF' + 'y'.repeat(28))
+
+  const res = await fetchFitStub(REF, {
+    cacheDir,
+    getEntry: async () => ENTRY,
+    downloadBlob: writesStub(corrupt).downloadBlob
+  })
+
+  t.is(res.status, 'unavailable')
+  if (res.status === 'unavailable') {
+    t.is(res.reason, 'download-failed')
+    t.ok(res.message?.includes('hashes to'), 'the digest mismatch is named')
+  }
+  t.alike(fs.readdirSync(cacheDir), [], 'the corrupt stub is not kept')
 })

@@ -4,6 +4,7 @@ import type { AbortSignal } from 'bare-abort-controller'
 import type { QVACBlobBinding } from '@qvac/registry-client'
 
 import { getCacheDir } from '@/utils/cache/paths'
+import { calculateFileChecksum } from '@/utils/checksum'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
 
@@ -32,18 +33,11 @@ export type FitStubUnavailableReason =
   | 'download-failed'
 
 export type FitStubOutcome =
-  | { status: 'ready'; path: string; bytes: number; cached: boolean }
+  /** `path` is the caller's to remove once the fitter has read it. */
+  | { status: 'ready'; path: string; bytes: number }
   | { status: 'unavailable'; reason: FitStubUnavailableReason; message?: string }
 
-/**
- * The part of a registry blob binding this module reads. The record's own
- * binding, which carries the core coordinates as well, is what reaches the
- * download.
- */
-export interface FitBlobBinding {
-  sha256: string
-  byteLength: number
-}
+export type FitBlobBinding = QVACBlobBinding
 
 export interface FitStubEntry {
   fitBlobBinding?: FitBlobBinding | undefined
@@ -55,6 +49,7 @@ export interface FitStubEntry {
  */
 export interface FitStubOptions {
   signal?: AbortSignal
+  /** Where stubs are staged. Defaults to `fit-stubs` under the QVAC cache root. */
   cacheDir?: string
   logger?: Logger
   getEntry?: (registryPath: string, registrySource: string) => Promise<FitStubEntry | null>
@@ -88,12 +83,17 @@ async function defaultDownloadBlob(
 ): Promise<unknown> {
   const { getRegistryClient } = await import('@/runtime/registry-client')
   const client = await getRegistryClient()
-  return client.downloadBlob(binding as QVACBlobBinding, {
+  return client.downloadBlob(binding, {
     outputFile,
     timeout: FIT_STUB_DOWNLOAD_TIMEOUT_MS,
     maxRetries: 1,
     ...(signal !== undefined && { signal })
   })
+}
+
+/** Removes a fetched stub and the directory it was staged in. Never throws. */
+export async function removeStub(stubPath: string): Promise<void> {
+  await fsPromises.rm(path.dirname(stubPath), { recursive: true, force: true }).catch(() => {})
 }
 
 function unavailable(reason: FitStubUnavailableReason, message?: string): FitStubOutcome {
@@ -103,11 +103,14 @@ function unavailable(reason: FitStubUnavailableReason, message?: string): FitStu
 }
 
 /**
- * Fetches the fit stub for one artifact into the cache and returns its path.
+ * Fetches the fit stub for one artifact into its own staging directory and
+ * returns its path. The stub is a per-call payload, not a cache: the caller
+ * removes it once the fitter has read it, so nothing accumulates under the
+ * QVAC root and no cleanup path has to know about it.
  *
  * Never throws: a missing entry, an entry without a description, and a failed
- * download are all `unavailable`, because a pre-download assessment has to
- * survive an offline caller and an older registry record.
+ * or corrupt download are all `unavailable`, because a pre-download assessment
+ * has to survive an offline caller and an older registry record.
  *
  * Only the artifact named by `ref` is fetched. A split model's shards each
  * carry their own binding, and the fitter needs the whole set laid out under
@@ -130,39 +133,46 @@ export async function fetchFitStub(
     const binding = entry.fitBlobBinding
     if (binding === undefined || binding === null) return unavailable('no-fit-blob')
 
-    // Keyed by the description's own digest, so a re-ingested artifact lands on
-    // a different path instead of reading a stale stub.
-    const dir = options.cacheDir ?? getCacheDir('fit-stubs')
+    // One directory per fetch, so two assessments of the same model never share
+    // a file that one of them is about to remove.
+    const root = options.cacheDir ?? getCacheDir('fit-stubs')
+    await fsPromises.mkdir(root, { recursive: true })
+    const dir = await fsPromises.mkdtemp(path.join(root, 'stub-'))
     const dest = path.join(dir, `${binding.sha256}.gguf`)
 
-    if (fs.existsSync(dest) && fs.statSync(dest).size === binding.byteLength) {
-      return { status: 'ready', path: dest, bytes: binding.byteLength, cached: true }
-    }
-
-    await fsPromises.mkdir(dir, { recursive: true })
-
-    // Downloaded aside and renamed, so an interrupted fetch cannot leave a
-    // truncated stub that the size check above would later accept.
-    const part = `${dest}.part`
     const downloadBlob = options.downloadBlob ?? defaultDownloadBlob
+    let verified = false
     try {
-      await downloadBlob(binding, part, options.signal)
-      const bytes = fs.statSync(part).size
+      await downloadBlob(binding, dest, options.signal)
+
+      const bytes = fs.statSync(dest).size
       if (bytes !== binding.byteLength) {
-        await fsPromises.rm(part, { force: true })
         return unavailable(
           'download-failed',
           `fit stub for ${ref.name} is ${bytes} bytes, the record says ${binding.byteLength}`
         )
       }
-      await fsPromises.rename(part, dest)
-      return { status: 'ready', path: dest, bytes, cached: false }
+
+      // The record binds the description by digest; a stub that reads back
+      // differently is not the description the fitter should answer for.
+      const digest = await calculateFileChecksum(dest)
+      if (digest.toLowerCase() !== binding.sha256.toLowerCase()) {
+        return unavailable(
+          'download-failed',
+          `fit stub for ${ref.name} hashes to ${digest}, the record says ${binding.sha256}`
+        )
+      }
+
+      verified = true
+      return { status: 'ready', path: dest, bytes }
     } catch (error) {
-      await fsPromises.rm(part, { force: true }).catch(() => {})
       return unavailable(
         'download-failed',
         error instanceof Error ? `${error.name}: ${error.message}` : String(error)
       )
+    } finally {
+      // A short, corrupt or half-written stub must not outlive the call.
+      if (!verified) await removeStub(dest)
     }
   } catch (error) {
     logger.debug(

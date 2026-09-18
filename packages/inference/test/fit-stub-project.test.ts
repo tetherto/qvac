@@ -1,4 +1,5 @@
 import test from 'brittle'
+import crypto from 'bare-crypto'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
@@ -18,7 +19,14 @@ const REF: FitStubRef = {
 }
 
 const STUB_BYTES = Buffer.from('GGUF' + 'x'.repeat(28))
-const BINDING: FitBlobBinding = { sha256: 'b'.repeat(64), byteLength: STUB_BYTES.length }
+const BINDING: FitBlobBinding = {
+  coreKey: 'c'.repeat(64),
+  blockOffset: 0,
+  blockLength: 1,
+  byteOffset: 0,
+  byteLength: STUB_BYTES.length,
+  sha256: crypto.createHash('sha-256').update(STUB_BYTES).digest('hex')
+}
 
 const FIT_PLAN: FitLlamaResult = {
   status: 0,
@@ -96,9 +104,11 @@ test('a projection runs the fitter against the downloaded stub', async function 
   t.is(res.status, 'projected')
   if (res.status !== 'projected') return
 
-  t.is(res.stubPath, path.join(cacheDir, `${BINDING.sha256}.gguf`))
+  t.is(path.basename(res.stubPath), `${BINDING.sha256}.gguf`)
   t.alike(seen, [res.stubPath], 'the fitter was pointed at the stub, not at any artifact')
   t.is(res.fit.verdict, 'fit')
+  t.absent(fs.existsSync(res.stubPath), 'the stub is removed once the fitter has read it')
+  t.alike(fs.readdirSync(cacheDir), [], 'nothing is left under the staging root')
 })
 
 // No stub is a normal outcome — an older record, or an offline caller — and it

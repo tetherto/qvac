@@ -1,6 +1,7 @@
 import type { CanonicalModelType } from '@/schemas/index'
 import {
   fetchFitStub,
+  removeStub,
   type FitStubOptions,
   type FitStubRef,
   type FitStubUnavailableReason
@@ -19,6 +20,7 @@ export interface StubFitInput {
 }
 
 export type StubFitOutcome =
+  /** `stubPath` is where the fitter read the stub; the file is gone by the time this returns. */
   | { status: 'projected'; stubPath: string; fit: AdvisoryFitOutcome }
   | { status: 'no-stub'; reason: FitStubUnavailableReason; message?: string }
 
@@ -47,18 +49,24 @@ export async function projectFitFromStub(
       : { status: 'no-stub', reason: stub.reason, message: stub.message }
   }
 
-  const fit = await runAdvisoryFitCheck(
-    {
-      modelId: input.model.name,
-      modelType: input.modelType,
-      modelPath: stub.path,
-      modelConfig: input.modelConfig,
-      // One stub is one artifact: `fetchFitStub` does not assemble a shard set,
-      // so nothing here may claim the fitter is looking at a split model.
-      isShardedModel: false
-    },
-    options.fit
-  )
+  try {
+    const fit = await runAdvisoryFitCheck(
+      {
+        modelId: input.model.name,
+        modelType: input.modelType,
+        modelPath: stub.path,
+        modelConfig: input.modelConfig,
+        // One stub is one artifact: `fetchFitStub` does not assemble a shard set,
+        // so nothing here may claim the fitter is looking at a split model.
+        isShardedModel: false
+      },
+      options.fit
+    )
 
-  return { status: 'projected', stubPath: stub.path, fit }
+    return { status: 'projected', stubPath: stub.path, fit }
+  } finally {
+    // The stub is a per-call payload. Nothing else knows the path, so nothing
+    // else could remove it.
+    await removeStub(stub.path)
+  }
 }
