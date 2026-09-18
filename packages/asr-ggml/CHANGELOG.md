@@ -26,7 +26,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-09-17`, keeping the speech packages on
+- Raise the `speech-cpp` floor to `2026-09-18#1`, keeping the speech packages on
   one engine stack. The pinned engine adds cache-aware streaming for the
   Unified RNN-T model, on top of the optional Apple-only Core ML sidecar for
   the Sortformer diarization encoder that the prebuilds keep disabled.
