@@ -408,14 +408,24 @@ function allKvs(meta) {
   return meta.kvs.map((raw) => ({ raw }))
 }
 
-/** Directory the fixtures are written to, beside the downloaded test model. */
-function fixtureDir() {
-  return path.resolve(__dirname, '../model')
+/**
+ * Directory the fixtures are written to, beside the downloaded test model.
+ *
+ * `baseDir` is the directory the model actually landed in. Pass it: on a device
+ * this file is loaded out of the read-only app bundle, so re-deriving the
+ * location from `__dirname` points inside the bundle and creating it fails with
+ *   FileError: ENOENT: no such file or directory, stat "/app.bundle"
+ * even though the model itself downloaded fine. Deriving the fixtures from the
+ * model's own path makes "beside the model" true by construction on both.
+ * Defaults to the checkout layout so a desktop caller needs no argument.
+ */
+function fixtureDir(baseDir) {
+  return baseDir || path.resolve(__dirname, '../model')
 }
 
 /** Absolute path of a fixture beside the downloaded test model. */
-function fixturePath(name) {
-  return path.join(fixtureDir(), name)
+function fixturePath(name, baseDir) {
+  return path.join(fixtureDir(baseDir), name)
 }
 
 module.exports = {
