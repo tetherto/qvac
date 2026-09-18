@@ -55,7 +55,7 @@ gh workflow run integration-mobile-test-$ADDON.yml --repo tetherto/qvac --ref "$
   -f devices_custom="Google Pixel 9" \
   -f device_model_operator=EQUALS \
   -f tests=<runnerName> \
-  -f prebuild_run_id="$RUN_ID"
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
 ```
 
 Then check the build job's setup step printed the run and commit you meant:
@@ -72,7 +72,7 @@ Verified: prebuilds come from run <id> — artifact 'prebuilds-<pkg>', …, head
 | `Run <id> has no 'prebuilds-<pkg>' … That run built prebuilds for: …` | that run did not build your addon (nx only builds affected ones) |
 | `Run <id> is still '<status>'` | the prebuild job has not uploaded yet — wait, same run id |
 | `prebuild_run_id and a pinned package are mutually exclusive` | clear whichever of the two you did not mean |
-| `[prestage] FATAL: tests grep /<x>/ matched no known runner` | the runner exists but the addon's `scripts/generate-prestage-block.js` model map has drifted — pick a name present in both |
+| `[prestage] FATAL: tests grep /<x>/ matched no known runner` | the name is in neither the addon's `test-groups.json` nor its `integration.auto.cjs` — a typo; take one from the lists above |
 
 ### Inputs
 
@@ -307,6 +307,11 @@ RUN_ID=$(for rid in $(gh api "repos/tetherto/qvac/actions/runs?head_sha=$SHA&per
     --jq ".artifacts[]|select(.name==\"prebuilds-$PKG\" and .expired==false)|.name" \
     2>/dev/null | grep -q . && { echo "$rid"; break; }
 done)
+
+# An empty RUN_ID would dispatch the "unchanged" path and quietly resolve
+# @qvac/<addon>@latest — the published-release-goes-green failure this whole
+# route exists to close. Stop instead.
+[ -n "$RUN_ID" ] || { echo "no run for $SHA carries prebuilds-$PKG (is the 'prebuilds' label on the PR?)" >&2; exit 1; }
 echo "$RUN_ID"
 ```
 
