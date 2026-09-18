@@ -349,6 +349,7 @@ Audio8Model::Output Audio8Model::synthesize(const AnyInput& input) {
   }
   const auto t1 = std::chrono::steady_clock::now();
   recordSynthesisResult(result, std::chrono::duration<double>(t1 - t0).count());
+  codecSidecarLoaded_ = engine->codec_on_coreml();
 
   return pcmFloatToInt16(result.pcm);
 }
