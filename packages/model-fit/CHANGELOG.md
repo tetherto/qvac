@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.3] - 2026-09-18
+
+### Added
+
+- Bounded FuzzTest coverage for `parseInteger` and `canonicalKey`. Linux C++
+  CI runs the suite after unit tests. The parsers compile without
+  `@qvac/fabric`, so ASan and LeakSanitizer stay at full strength. No public
+  addon API changes.
+
+
 ## [Unreleased]
 
 ### Added

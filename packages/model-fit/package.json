@@ -1,7 +1,7 @@
 {
   "name": "@qvac/model-fit",
-  "version": "0.12.2",
-  "description": "Memory-fit preflight addon for QVAC — wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
+  "version": "0.12.3",
+  "description": "Memory-fit preflight addon for QVAC \u2014 wraps llama.cpp's common_fit_params to project whether a GGUF model fits available device memory before loading it",
   "addon": true,
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
@@ -19,7 +19,7 @@
     "test": "npm run build:ts && npm run test:process && npm run test:node && npm run test:integration:suite",
     "test:unit": "npm run build:ts && npm run test:process && npm run test:node",
     "test:node": "node --test test/node/process-path.test.cjs",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build",
     "test:cpp:run": "ctest --test-dir build --output-on-failure",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "test:process": "bare test/desktop/process.test.js && bare test/desktop/llama-config.test.js",
@@ -31,7 +31,13 @@
     "test:types": "npm run typecheck && npm run test:types:consumer && npm run check:generated",
     "test:types:consumer": "tsc -p tsconfig.dts.json",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy model-fit prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy model-fit prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy model-fit prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
-    "test:dts": "npm run test:types"
+    "test:dts": "npm run test:types",
+    "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target model-fit-config-parse-fuzz",
+    "fuzz:build:continuous": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=ON && bare-make build --target model-fit-config-parse-fuzz",
+    "fuzz:run": "npm run test:scripts && node scripts/run-cpp-fuzz.js",
+    "fuzz": "npm run fuzz:build && npm run fuzz:run",
+    "fuzz:continuous": "npm run fuzz:build:continuous && node scripts/run-cpp-fuzz.js --continuous",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-fuzz.test.js"
   },
   "files": [
     "binding.js",
