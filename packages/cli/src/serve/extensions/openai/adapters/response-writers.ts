@@ -1,7 +1,10 @@
 import type { ServerResponse } from 'node:http'
 import type { CompletionRun, Tool } from '@qvac/sdk'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
-import { drainCompletion } from '@/serve/extensions/openai/adapters/completion-result'
+import {
+  drainCompletion,
+  formatToolErrors
+} from '@/serve/extensions/openai/adapters/completion-result'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
 import type { GenerationParams, ResponseFormat } from '@/serve/extensions/openai/schemas/common'
 import {
@@ -50,7 +53,8 @@ export async function writeBlockingResponse(
   p: ResponsesHandlerParams,
   result: CompletionRun
 ): Promise<Record<string, unknown>> {
-  const { text, toolCalls, stats, stopReason, completionTokens } = await drainCompletion(result)
+  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } =
+    await drainCompletion(result)
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -82,7 +86,9 @@ export async function writeBlockingResponse(
     p.ctx.responsesStore.put(rec)
   }
 
-  p.ctx.logger.info(`  responses done id=${p.rid} stored=${p.storeEnabled}`)
+  p.ctx.logger.info(
+    `  responses done id=${p.rid} stored=${p.storeEnabled}${formatToolErrors(toolErrors)}`
+  )
 
   if (!res.headersSent) {
     const payload = JSON.stringify(responseObject)
@@ -130,7 +136,7 @@ export async function writeStreamingResponse(
     response_id: p.rid
   })
 
-  const { toolCalls, stats, stopReason, completionTokens } = await drainCompletion(
+  const { toolCalls, toolErrors, stats, stopReason, completionTokens } = await drainCompletion(
     result,
     (token) => {
       fullText += token
@@ -263,6 +269,8 @@ export async function writeStreamingResponse(
     responseObject['status'] === 'incomplete' ? 'response.incomplete' : 'response.completed'
   sendSSE(res, { type: terminalType, response: responseObject })
   endSSE(res, { sentinel: false })
-  p.ctx.logger.info(`  responses stream done id=${p.rid} stored=${p.storeEnabled}`)
+  p.ctx.logger.info(
+    `  responses stream done id=${p.rid} stored=${p.storeEnabled}${formatToolErrors(toolErrors)}`
+  )
   return responseObject
 }

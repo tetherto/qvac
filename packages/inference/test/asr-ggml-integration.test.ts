@@ -201,7 +201,10 @@ test('ASR event adapters preserve the public engine event contract', (t) => {
     }),
     {
       speaking: true,
-      probability: 0.87
+      probability: 0.87,
+      // The detector is carried through so callers can tell whisper's silero
+      // VAD from parakeet's energy hint.
+      source: 'silero'
     }
   )
   t.alike(
