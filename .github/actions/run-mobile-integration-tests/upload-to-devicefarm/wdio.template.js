@@ -90,11 +90,50 @@ exports.config = {
     // runs on crash paths where the WDIO command queue may have a pending
     // command stuck behind a long timeout (e.g. waitForDisplayed 60s on an
     // element that will never appear). Raw HTTP bypasses the queue.
+    // `@<bundle>:documents/...` is the iOS (XCUITest) container form. On Android
+    // it can never resolve — every Android run logged
+    //   Cannot access the container of 'io.tether.test.qvac:documents' application
+    // so the app-side log was silently unavailable there, which is what makes an
+    // Android mobile failure untriageable (logcat carries no bare output).
+    // Android needs the UiAutomator2 forms; these mirror the candidate list
+    // perf-extract.js already pulls perf-report.json with successfully.
+    global.bareLogCandidates = function (isAndroid, bundleId) {
+      if (!isAndroid) return ['@' + bundleId + ':documents/bare_console.log'];
+      return [
+        '@' + bundleId + '/files/bare_console.log',
+        '/sdcard/Android/data/' + bundleId + '/files/bare_console.log',
+        '/storage/emulated/0/Android/data/' + bundleId + '/files/bare_console.log',
+        '/data/data/' + bundleId + '/files/bare_console.log',
+        '/data/user/0/' + bundleId + '/files/bare_console.log',
+      ];
+    };
+
     global.flushBareLog = async function (reason) {
       if ('__ENABLE_FLUSH_BARE_LOG__' !== 'true') return;
-      try {
+      var candidates = global.bareLogCandidates(
+        (capabilities.platformName || '').toLowerCase() === 'android',
+        BUNDLE_ID
+      );
+      var lastError = null;
+      for (var ci = 0; ci < candidates.length; ci++) {
+        try {
+          await global.pullBareLog(reason, candidates[ci]);
+          return;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      console.log(
+        '[bare-log] ' + reason + ' flush failed: ' +
+        (lastError ? lastError.message : 'no candidate path') +
+        ' (tried ' + candidates.length + ' path(s))'
+      );
+    };
+
+    global.pullBareLog = async function (reason, devicePath) {
+      {
         var http = require('http');
-        var body = JSON.stringify({ path: '@' + BUNDLE_ID + ':documents/bare_console.log' });
+        var body = JSON.stringify({ path: devicePath });
         var b64 = await new Promise(function (resolve, reject) {
           var req = http.request({
             hostname: '127.0.0.1', port: 4723,
@@ -124,9 +163,9 @@ exports.config = {
         var text = Buffer.from(b64, 'base64').toString();
         var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
         require('fs').writeFileSync(logDir + '/bare_console.log', text);
-        console.log('[bare-log] ' + reason + ' flush ok (' + text.length + ' bytes)');
-      } catch (e) {
-        console.log('[bare-log] ' + reason + ' flush failed: ' + e.message);
+        console.log(
+          '[bare-log] ' + reason + ' flush ok (' + text.length + ' bytes) from ' + devicePath
+        );
       }
     };
 

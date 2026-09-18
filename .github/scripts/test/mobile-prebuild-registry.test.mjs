@@ -1054,3 +1054,27 @@ test('the bare-log flush reports Appium\'s real error, not a type error', () => 
     'the type check must precede the Buffer.from it protects',
   )
 })
+
+// `@<bundle>:documents/...` is the iOS container form; Android needs the
+// UiAutomator2 forms. Using the iOS one everywhere meant every Android run
+// logged "Cannot access the container of '<bundle>:documents' application" and
+// the app-side log — the only place a failing runner says why — was never
+// captured there.
+test('the bare-log pull uses platform-appropriate device paths', () => {
+  const template = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/wdio.template.js',
+  )
+
+  assert.match(
+    template,
+    /global\.bareLogCandidates = function \(isAndroid, bundleId\)/,
+    'candidate paths must be derived per platform',
+  )
+  // iOS keeps the container form that is known to work (observed: flush ok).
+  assert.match(template, /return \['@' \+ bundleId \+ ':documents\/bare_console\.log'\]/)
+  // Android gets the forms perf-extract.js already pulls files with.
+  assert.match(template, /'@' \+ bundleId \+ '\/files\/bare_console\.log'/)
+  assert.match(template, /'\/data\/data\/' \+ bundleId \+ '\/files\/bare_console\.log'/)
+  // A failure must still report the reason, not a type error.
+  assert.match(template, /tried ' \+ candidates\.length \+ ' path\(s\)/)
+})
