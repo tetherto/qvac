@@ -210,9 +210,9 @@ jobs:
           workdir: ${{ env.PKG_DIR }}
 
   # Tag the published version (no GitHub Release; SDK-only releases policy).
-  # Earlier releases used a bare "v<version>" tag, which claims the repo-wide
-  # tag namespace; the prefixed scheme every other package uses is namespaced
-  # per package. Tags from before this change keep their old names.
+  # Releases up to 0.13.1 claimed a bare "v<version>" tag in the repo-wide
+  # namespace and keep those names. create-release-tag.yml no longer accepts
+  # a name override (QVAC-24632), so every package tags as <package>-v<version>.
   create-tag:
     needs: [publish-npm]
     if: |
