@@ -148,5 +148,6 @@ console.log(`\n${label} wrote packages/sdk/package.json`);
 console.log(`${label} next steps:`);
 console.log(`  1. confirm ${dependency}@${engineVersion} is published on npm`);
 console.log("  2. regenerate sdk-python so SDK_VERSION follows (packages/sdk-python/scripts/generate.py)");
-console.log("  3. run `bun run enforce-inference-versions` in packages/sdk");
-console.log("  4. review staged changes and commit");
+console.log("  3. repin packages/sdk-kotlin (its version + @qvac/sdk range) to the new version and regenerate (packages/sdk-kotlin/scripts/generate-contract.py)");
+console.log("  4. run `bun run enforce-inference-versions` in packages/sdk");
+console.log("  5. review staged changes and commit");

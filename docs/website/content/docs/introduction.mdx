@@ -7,12 +7,12 @@ schemaType: TechArticle
 
 ## Overview
 
-Install the JS/TS or Python clients in your project. Then, load models and use them to perform AI inference locally.
+Install the JS/TS, Python, or Kotlin client in your project. Then, load models and use them to perform AI inference locally.
 
 The SDK has two layers:
 
 - **Worker** — the runtime that actually runs the models. Today the worker ships as the `@qvac/sdk` npm package.
-- **Clients** — per-language APIs that drive the worker. Two clients ship today: JS/TS (`@qvac/sdk` on npm) and Python (`tetherto-qvac-sdk` on PyPI). Same worker, same generated contract, same capabilities.
+- **Clients** — per-language APIs that drive the worker. JS/TS (`@qvac/sdk`), Python (`tetherto-qvac-sdk`), and Kotlin (`io.tether:qvac-sdk-kotlin`) use the same generated contract. Android can embed the worker through capability-specific AARs.
 
 Pick the client that matches your stack:
 
@@ -22,6 +22,9 @@ Pick the client that matches your stack:
   </Card>
   <Card href="/python-sdk" title="Python SDK">
     Python client — `tetherto-qvac-sdk` on PyPI. Asyncio-native; ships a synchronous notebook facade.
+  </Card>
+  <Card href="/kotlin-sdk" title="Kotlin SDK">
+    Kotlin Multiplatform client plus self-contained Android AARs. Coroutine-native and Android service-ready.
   </Card>
 </Cards>
 
@@ -38,9 +41,9 @@ The SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabilit
 
 ### Key features
 
-- **Cross-platform:** portable code across Linux, macOS, and Windows (JS/TS on Node.js / [Bare runtime](https://bare.pears.com), Python on CPython); Android and iOS via [Expo](https://expo.dev) (TS only).
+- **Cross-platform:** portable code across Linux, macOS, and Windows (JS/TS on Node.js / [Bare runtime](https://bare.pears.com), Python on CPython, Kotlin on JVM); Android via Expo or a native Kotlin AAR, and iOS via Expo. Kotlin/Native targets expose the client and accept an application-provided transport.
 - **Pluggable**: build lean apps by including only what you need, and extend the SDK with custom plugins.
-- **Type-safe:** typed APIs in both JavaScript and Python (Pydantic models generated from the same contract).
+- **Type-safe:** typed APIs in JavaScript, Python (Pydantic), and Kotlin (serialization models and typed builders generated from the same contract).
 - **Unified interface:** multiple AI tasks, one client package per language.
 
 ## Functionalities
@@ -93,7 +96,7 @@ Before you can use a model, you need to load it from some location into memory. 
 3. When you are done with a model, unload it to release computer resources.
 4. Finally, close the SDK instance.
 
-The concrete API names differ by client — in JS/TS it is `loadModel()` / `completion()` / `unloadModel()` / `close()` (see [API reference](/reference/api)); in Python it is `load_model` / `completion` / `unload_model` and the `Client()` context manager (see [Python SDK](/python-sdk)).
+The concrete API names differ by client. JS/TS uses `loadModel()` / `completion()` / `unloadModel()` / `close()`, Python uses `load_model` / `completion` / `unload_model`, and Kotlin uses `client.models.load(...)` / `client.completion.run(...)` / `client.models.unload(...)` / `client.close()`.
 
 ## Models
 
@@ -140,6 +143,9 @@ For more on loading models in JS/TS, see [`loadModel()` at `@qvac/sdk` API refer
   </Card>
   <Card href="/python-sdk#api-reference" title="Python API surface">
     `tetherto-qvac-sdk` re-exports the same contract as an asyncio-native Python surface.
+  </Card>
+  <Card href="/kotlin-sdk#api-surface" title="Kotlin API surface">
+    Coroutine-native high-level wrappers plus the complete generated worker contract.
   </Card>
 </Cards>
 
