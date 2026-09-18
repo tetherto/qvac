@@ -289,8 +289,8 @@ private:
     qvac_lib_inference_addon_llama::cache::Ledger ledger;
   };
   void beginCacheRequest();
-  std::vector<llama_token>
-  reconcilePrompt(const std::vector<llama_token>& fullPrompt);
+  std::vector<llama_token> reconcilePrompt(
+      const std::vector<llama_token>& fullPrompt, bool isPrefillOnlyRequest);
   void rebuildSamplerFromLedger(
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
   void capturePendingCheckpoint();
