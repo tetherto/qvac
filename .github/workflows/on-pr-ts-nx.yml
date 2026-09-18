@@ -23,9 +23,11 @@ on:
     branches: [main, release-*, feature-*, tmp-*]
     # Must be a superset of on-pr-nx's own trigger: if on-pr-nx can run, and it
     # can select any package, then this workflow has to run too. Narrowing this
-    # to a package subset is what caused the original bug.
+    # to a package subset is what caused the original bug. Keep the list
+    # contiguous: ts-check-names.test.mjs stops at the first non-entry line.
     paths:
       - "packages/**"
+      - "cmake/qvac-addon/**"
       - ".github/workflows/on-pr-ts-nx.yml"
       - ".github/workflows/reusable-ts-checks.yml"
 

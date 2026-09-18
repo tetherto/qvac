@@ -116,3 +116,24 @@ def test_js_client_api_capabilities_have_python_equivalents():
     }
     missing = {js: py for js, py in js_to_python.items() if not hasattr(qvac, py)}
     assert not missing, f"JS client/api capabilities missing from qvac: {missing}"
+
+
+def test_asr_backend_ids_decode_backend_id_without_hardcoding():
+    # stats.backend_id is a bare number on the wire; this is the vocabulary that
+    # decodes it, mirroring the TS SDK's ASR_BACKEND_IDS.
+    import json
+    from pathlib import Path
+
+    from tetherto.qvac_sdk import ASR_BACKEND_IDS
+
+    assert "ASR_BACKEND_IDS" in qvac.__all__
+    assert ASR_BACKEND_IDS["CUDA"] == 2
+    assert ASR_BACKEND_IDS["CPU"] == 0
+
+    contract = (
+        Path(__file__).resolve().parents[2]
+        / "sdk"
+        / "contract"
+        / "numeric-constants.json"
+    )
+    assert ASR_BACKEND_IDS == json.loads(contract.read_text())["ASR_BACKEND_IDS"]
