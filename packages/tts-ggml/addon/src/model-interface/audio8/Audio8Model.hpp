@@ -11,10 +11,7 @@
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/audio8/Audio8Config.hpp"
-
-namespace tts_cpp::audio8 {
-class Engine;
-}
+#include "tts-cpp/audio8/engine.h"
 
 namespace qvac::ttsggml::audio8 {
 
