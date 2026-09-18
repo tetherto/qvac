@@ -55,7 +55,7 @@ function jobBlock(source, jobName) {
 // The `if:` value, flattened to one line. Accepts BOTH block-scalar styles:
 // `>`/`>-`/`>+` and `|`/`|-`/`|+`. Handling only `>-` made a `|-` job fall
 // through to the inline branch and return the scalar indicator itself ("|-")
-// as the condition — on-merge-decoder-audio.yml uses `if: |-` today.
+// as the condition, which on-merge-decoder-audio.yml hit before consolidation.
 function condition(jobText) {
   if (!jobText) return ''
   const folded = jobText.match(/^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|\n)*)/m)
@@ -72,8 +72,8 @@ function condition(jobText) {
 //
 //   needs: [a, b]     inline array
 //   needs:\n  - a     block sequence  (may be interleaved with comments)
-//   needs: a          plain scalar    — on-merge-vla.yml and
-//                                       on-merge-classification-ggml.yml use it
+//   needs: a          plain scalar    — used by the per-package on-merge
+//                                       workflows before consolidation
 //
 // Returns null (not []) when a `needs:` key exists but nothing parses out, so
 // callers can fail loudly instead of treating a parser failure as a clean bill
