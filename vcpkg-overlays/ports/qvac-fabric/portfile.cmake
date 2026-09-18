@@ -2,9 +2,7 @@ vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-fabric-llm.cpp
   REF fix/mtp-state-persistence
-  SHA512 cb1fd88f7eecd631ae5e284e2ec2a02d51bfa58ea9cad8c0a068b2b09c9077c97c4797082a74d69a74b2fb1d8600ac90a2a6a6d691e4f13bc9e4cc70a90caa07
-  PATCHES
-    mtp-state-position.patch
+  SHA512 50b8de14d1b7e56885671e12f49066ddeb6ff5ad4944ab6573ed5a7b24f584bf823db1d7a3c66d85986f49f6060b2f72753c06d7ab11e8003bc746ec49116eda
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
