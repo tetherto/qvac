@@ -521,6 +521,19 @@ test('a truncated artifact listing fails loudly rather than guessing', async () 
   })
 })
 
+test('created_at breaks the tie when it disagrees with id order', async () => {
+  const api = fakeApi({
+    artifactPages: [
+      [
+        { name: 'prebuilds-llm-llamacpp', expired: false, id: 999, created_at: '2026-01-01T00:00:00Z' },
+        { name: 'prebuilds-llm-llamacpp', expired: false, id: 111, created_at: '2026-06-01T00:00:00Z' },
+      ],
+    ],
+  })
+  const resolved = await resolvePrebuildRun({ env: baseEnv(), request: api.request })
+  assert.equal(resolved.artifactId, 111, 'the later created_at wins over the larger id')
+})
+
 test('the resolved artifact ID is surfaced so the download cannot pick another row', async () => {
   // A re-run leaves the earlier attempt's artifacts under the same run id, so a
   // run can hold two live rows with the same name.
@@ -534,7 +547,10 @@ test('the resolved artifact ID is surfaced so the download cannot pick another r
   })
 
   const resolved = await resolvePrebuildRun({ env: baseEnv(), request: api.request })
-  assert.equal(resolved.artifactId, 111, 'the validated row is the one handed to the download')
+  // The NEWEST row, not the first listed: the API lists id-ascending, so
+  // first-match would pin the pre-re-run binary while the provenance line
+  // printed the same head_sha either way.
+  assert.equal(resolved.artifactId, 222, 'the newest matching row wins')
 })
 
 test('the artifact listing is paginated, so the bundle is found past page 1', async () => {

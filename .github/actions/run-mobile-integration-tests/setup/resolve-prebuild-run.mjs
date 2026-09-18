@@ -49,8 +49,23 @@ export function platformPrebuildDirs(platform) {
 export function selectArtifact(artifacts, candidates) {
   const rows = Array.isArray(artifacts) ? artifacts : []
 
+  // A re-run leaves the earlier attempt's artifacts under the same run id, so a
+  // run can hold two live rows with the same name. Take the NEWEST: first-match
+  // would freeze whichever the API happened to list first (id-ascending in
+  // practice, i.e. the pre-re-run binary) while the provenance line printed the
+  // same head_sha either way — a stale .bare on the device, and a log that looks
+  // right. created_at breaks the tie when ids are not comparable.
+  const newest = (a, b) => {
+    const at = Date.parse(a?.created_at ?? '')
+    const bt = Date.parse(b?.created_at ?? '')
+    if (Number.isFinite(at) && Number.isFinite(bt) && at !== bt) return at > bt ? a : b
+    return (Number(a?.id) || 0) >= (Number(b?.id) || 0) ? a : b
+  }
+
   for (const name of candidates) {
-    const live = rows.find((row) => row?.name === name && row?.expired !== true)
+    const live = rows
+      .filter((row) => row?.name === name && row?.expired !== true)
+      .reduce((best, row) => (best ? newest(best, row) : row), null)
     if (live) return { name, id: live.id ?? null, expired: false }
   }
   for (const name of candidates) {

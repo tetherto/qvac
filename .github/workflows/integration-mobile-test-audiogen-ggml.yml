@@ -271,6 +271,11 @@ jobs:
           REQUESTED: ${{ inputs.prebuild_run_id }}
           RESOLVED: ${{ steps.setup.outputs.prebuild-source-run-id }}
         run: |
+          # The resolver trims its input and emits the trimmed id, so compare
+          # trimmed values: a run id pasted with a stray space would otherwise
+          # install correctly and then fail here, after the build was paid for.
+          REQUESTED="${REQUESTED#"${REQUESTED%%[![:space:]]*}"}"
+          REQUESTED="${REQUESTED%"${REQUESTED##*[![:space:]]}"}"
           if [ "$RESOLVED" = "$REQUESTED" ]; then
             echo "prebuilds came from run $RESOLVED, as requested"
             exit 0

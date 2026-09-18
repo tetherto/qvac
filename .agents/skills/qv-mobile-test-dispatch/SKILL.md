@@ -77,6 +77,9 @@ for rid in $(gh api "repos/tetherto/qvac/actions/runs?head_sha=$SHA&per_page=100
     --jq ".artifacts[]|select(.name==\"prebuilds-$PKG\" and .expired==false)|.name" \
     2>/dev/null | grep -q . && { echo "$rid"; break; }
 done
+
+# An empty result must not be dispatched: prebuild_run_id="" is the unchanged
+# path and quietly resolves @latest, which is the failure this route closes.
 ```
 
 Nothing printed means either the label is missing, or — on the nx path — that run
@@ -99,11 +102,12 @@ jq -r '(.android//{})|[..|strings]|unique|.[]' packages/<PKG>/test/mobile/test-g
 grep -oE '\brun[A-Z][A-Za-z0-9_]*' packages/<PKG>/test/mobile/integration.auto.cjs | sort -u
 ```
 
-**Known trap:** a name valid in `test-groups.json` can still be rejected
-on-device by the model pre-stage step, which keeps its own `MODEL_SHARDS` list in
-`packages/<PKG>/scripts/generate-prestage-block.js`. When the two drift you get
-`[prestage] FATAL: tests grep /<name>/ matched no known runner`. Confirmed for
-`vla-ggml` / `runEsmNamedExportsTest`. If you hit it, pick a name present in both.
+If a name is rejected on device with
+`[prestage] FATAL: tests grep /<name>/ matched no known runner`, it is in neither
+the addon's `test-groups.json` nor its `integration.auto.cjs` — i.e. a typo. Take
+a name from the commands above. (That FATAL used to fire for *valid* runners too,
+because the prestage generator kept its own list; `readKnownRunners()` now reads
+`test-groups.json` directly.)
 
 ## Step 4 — dispatch
 
