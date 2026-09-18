@@ -63,7 +63,10 @@ def test_normalize_strips_think_blocks_and_unclosed_tail():
 # ---- run handles ----------------------------------------------------------------
 
 
-async def test_completion_aggregates_content_thinking_and_stats():
+@pytest.mark.parametrize("draft_accepted,draft_total", [(6, 9), (0, 0)])
+async def test_completion_aggregates_content_thinking_and_stats(
+    draft_accepted, draft_total
+):
     transport = FakeTransport(
         stream_items=[
             _chunk([_delta(0, "Hel"), _delta(1, "lo")]),
@@ -73,7 +76,11 @@ async def test_completion_aggregates_content_thinking_and_stats():
                     {
                         "type": "completionStats",
                         "seq": 3,
-                        "stats": {"generatedTokens": 5},
+                        "stats": {
+                            "generatedTokens": 5,
+                            "draftAccepted": draft_accepted,
+                            "draftTotal": draft_total,
+                        },
                     },
                     _done(
                         4,
@@ -101,6 +108,8 @@ async def test_completion_aggregates_content_thinking_and_stats():
     assert final.content_text == "Hello"
     assert final.thinking_text == " world"
     assert final.stats.generated_tokens == 5
+    assert final.stats.draft_accepted == draft_accepted
+    assert final.stats.draft_total == draft_total
     assert final.raw_full_text == "<think> world</think>Hello"
     # Cache string strips the think block out of the raw text.
     assert final.cacheable_assistant_content == "Hello"

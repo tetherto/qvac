@@ -9,6 +9,8 @@ export interface LlmStats {
   promptTokens?: number
   generatedTokens?: number
   avgConcurrentSeq?: number
+  draftAccepted?: number
+  draftTotal?: number
   // Renders in this request that provably left the supplied tool definitions
   // out; 0 when no tools were sent.
   toolDefinitionsDropped?: number
