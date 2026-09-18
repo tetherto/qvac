@@ -108,6 +108,7 @@
           "nameTransform": "rename-prefix",
           "repoName": "asr-ggml",
           "testGateMode": "post-publish-integration",
+          "postIntegrationOnGpr": true,
           "slicePlatformPackages": true
         }
       }

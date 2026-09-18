@@ -1028,6 +1028,7 @@
           "nameTransform": "rename-prefix",
           "repoName": "tts-ggml",
           "testGateMode": "post-publish-integration",
+          "postIntegrationOnGpr": true,
           "slicePlatformPackages": true
         }
       }
