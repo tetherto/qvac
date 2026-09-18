@@ -59,7 +59,7 @@ jobs:
         working-directory: packages/tts-ggml
         run: |
           set -euo pipefail
-          native_bare=$(node -e "const fs=require('fs'),p=require('path');const bin=fs.realpathSync(process.argv[1]);console.log(require(p.resolve(p.dirname(bin),'..'))(bin))" "$(command -v bare)")
+          native_bare=$(node -e "const bin=require('fs').realpathSync(process.argv[1]);console.log(require('module').createRequire(bin)('bare-runtime')(bin))" "$(command -v bare)")
           file "$native_bare"
           export LD_LIBRARY_PATH="$RUNNER_TEMP/gdb/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
           gdb --version
