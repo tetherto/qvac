@@ -65,7 +65,7 @@ const VAD_PARAM_KEYS = [
   "samples_overlap",
 ];
 
-const CONTEXT_PARAM_KEYS = ["model", "use_gpu", "flash_attn", "gpu_device"];
+const CONTEXT_PARAM_KEYS = ["model", "use_gpu", "flash_attn", "gpu_device", "main-gpu", "main_gpu"];
 const MISC_PARAM_KEYS = ["caption_enabled", "seed"];
 const MAX_SUPPRESS_REGEX_LENGTH = 512;
 const SAFE_SUPPRESS_REGEX = /^[^()]*$/;
@@ -76,6 +76,7 @@ export function checkConfig(configObject: WhisperConfigurationParams): void {
   validateWhisperConfigKeys(configObject.whisperConfig);
   validateVadParamsKeys(configObject.whisperConfig.vadParams);
   validateContextParamsKeys(configObject.contextParams);
+  validateMainGpu(configObject.contextParams);
   validateSuppressRegex(configObject.whisperConfig.suppress_regex);
 }
 
@@ -136,6 +137,37 @@ function validateSuppressRegex(pattern: unknown): void {
   if (!SAFE_SUPPRESS_REGEX.test(pattern)) {
     throw new Error(
       "suppress_regex must not contain grouping constructs (parentheses) to prevent catastrophic backtracking",
+    );
+  }
+}
+
+/** Shared main-gpu contract; registry bounds are resolved by the native loader. */
+function validateMainGpu(contextParams: Record<string, unknown>): void {
+  const hasCanonical = Object.hasOwn(contextParams, "main-gpu");
+  const hasAlias = Object.hasOwn(contextParams, "main_gpu");
+  if (hasCanonical && hasAlias) {
+    throw new Error("Use only one of main-gpu and main_gpu");
+  }
+  if (!hasCanonical && !hasAlias) return;
+  if (Object.hasOwn(contextParams, "gpu_device")) {
+    throw new Error("main-gpu cannot be combined with gpu_device");
+  }
+  const value = contextParams[hasCanonical ? "main-gpu" : "main_gpu"];
+  if (typeof value === "string" && /^(dedicated|integrated)$/i.test(value)) {
+    return;
+  }
+  const number =
+    typeof value === "string" && /^[+-]?\d+$/.test(value)
+      ? Number(value)
+      : value;
+  if (
+    typeof number !== "number" ||
+    !Number.isInteger(number) ||
+    number < -2147483648 ||
+    number > 2147483647
+  ) {
+    throw new Error(
+      "main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'",
     );
   }
 }

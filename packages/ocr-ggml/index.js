@@ -11,6 +11,7 @@ const ocr_ggml_1 = require("./ocr-ggml");
 const error_1 = require("./lib/error");
 Object.defineProperty(exports, "QvacErrorAddonOcrGgml", { enumerable: true, get: function () { return error_1.QvacErrorAddonOcrGgml; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_1.ERR_CODES; } });
+const main_gpu_1 = require("./lib/main-gpu");
 const DOCTR_INTERNAL_LANG_LIST = ["en"];
 /**
  * Native language-validation failure messages (see the EasyOCR pipeline's
@@ -139,6 +140,20 @@ class OcrGgml {
                 adds: "langList (non-empty array)",
             });
         }
+        const selectors = ["main-gpu", "main_gpu", "gpuDevice"];
+        if (selectors.filter((key) => this.params[key] !== undefined).length > 1) {
+            throw new TypeError("Use only one of main-gpu, main_gpu, or gpuDevice");
+        }
+        const rawMainGpu = this.params["main-gpu"] !== undefined
+            ? this.params["main-gpu"] : this.params.main_gpu;
+        const mainGpu = typeof rawMainGpu === "string"
+            ? (/^[+-]?\d+$/.test(rawMainGpu) ? Number(rawMainGpu) : rawMainGpu.toLowerCase())
+            : rawMainGpu;
+        if (mainGpu !== undefined && mainGpu !== "dedicated" && mainGpu !== "integrated" &&
+            !(typeof mainGpu === "number" && Number.isInteger(mainGpu) &&
+                mainGpu >= main_gpu_1.MIN_MAIN_GPU_INDEX && mainGpu <= main_gpu_1.MAX_MAIN_GPU_INDEX)) {
+            throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
+        }
         const configurationParams = {
             pathDetector: this.params.pathDetector,
             pathRecognizer: this.params.pathRecognizer,
@@ -157,6 +172,8 @@ class OcrGgml {
             "pipelineType",
             "backendDevice",
             "gpuDevice",
+            "main-gpu",
+            "main_gpu",
         ];
         for (const field of optionalFields) {
             if (this.params[field] !== undefined) {
