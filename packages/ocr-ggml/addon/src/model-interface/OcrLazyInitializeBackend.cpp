@@ -196,7 +196,7 @@ void OcrLazyInitializeBackend::decrementRefCount() {
     g_refCount--;
     // Unlike llm-llamacpp (which calls llama_backend_free when count reaches
     // zero), GGML dynamically-loaded backends have no process-scoped teardown
-    // API. The .so files stay resident for the process lifetime, so g_initialized
+    // API. The modules stay resident for the process lifetime, so g_initialized
     // is intentionally left set.
   }
 }

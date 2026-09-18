@@ -7,6 +7,11 @@ on:
         description: Package directory to run the PR-head TypeScript checks in
         required: true
         type: string
+      run_checks:
+        description: Run package checks instead of publishing an unaffected-package success
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -16,31 +21,42 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Package is not affected
+        if: ${{ inputs.run_checks == false }}
+        run: echo "No TypeScript checks are needed for ${{ inputs.workdir }}."
+
       - name: Checkout code
+        if: ${{ inputs.run_checks }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           persist-credentials: false
 
       - name: Set up Node.js
+        if: ${{ inputs.run_checks }}
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
 
       - name: Install dependencies
+        if: ${{ inputs.run_checks }}
         working-directory: ${{ inputs.workdir }}
         run: npm install --ignore-scripts --package-lock=false --registry=https://registry.npmjs.org/
 
       - name: Type declaration check
+        if: ${{ inputs.run_checks }}
         working-directory: ${{ inputs.workdir }}
         run: npm run test:dts
 
       - name: Run lint
+        if: ${{ inputs.run_checks }}
         working-directory: ${{ inputs.workdir }}
         run: npm run lint
 
       - name: Install Bare
+        if: ${{ inputs.run_checks }}
         run: npm install --global --force bare --registry=https://registry.npmjs.org/
 
       - name: Run unit tests
+        if: ${{ inputs.run_checks }}
         working-directory: ${{ inputs.workdir }}
         run: npm run test:unit --if-present
