@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conflicts with legacy `gpu_backend` / `gpu_device` keys; ineligible raw-index
   targets fall back to CPU, out-of-range indices return to automatic selection,
   and class selectors fall back to CPU when no matching eligible GPU exists.
+  
+## [0.16.4] - 2026-09-18
+
+### Fixed
+
+- Reject malformed model files during loading instead of crashing on a corrupt or untrusted model. Loading a legitimate model is unaffected.
 
 ## [0.16.3] - 2026-09-18
 

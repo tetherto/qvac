@@ -74,8 +74,12 @@ struct BackendSelection {
 // reason. When unset, selection prefers a discrete GPU
 // (`GGML_BACKEND_DEVICE_TYPE_GPU`) and otherwise the first integrated GPU. The
 // option is ignored for `BackendDevice::CPU`.
+// `mainGpu` selects a raw registry index or strict class before filtering.
+// Excluded in-range targets fall back to CPU; out-of-range indices warn and
+// use default selection. Cannot be combined with `gpuDevice`.
 BackendSelection selectBackendDevice(
-    BackendDevice requested, std::optional<int> gpuDevice = std::nullopt);
+    BackendDevice requested, std::optional<int> gpuDevice = std::nullopt,
+    std::optional<MainGpu> mainGpu = std::nullopt);
 
 // True if the backend name contains "vulkan" (case-insensitive). Exposed for
 // unit testing / reuse.
