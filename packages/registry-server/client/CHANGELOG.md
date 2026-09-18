@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0]
+
+Release Date: 2026-09-18
+
+### ✨ Features
+
+- `QVACModelEntry` exposes the optional `fitBlobBinding`, a pointer to a weightless description of the artifact — the tensor list without the weights — addressed with `downloadBlob` like the model itself. It is written to the writer's active blob core, which is not always the one holding the weights. (see PR [#4445](https://github.com/tetherto/qvac/pull/4445))
+
+### 🔧 Changed
+
+- `QVACBlobBinding` declares `sha256`, which the schema has always carried and the typing omitted. Code constructing a binding rather than reading one has to supply it.
+- Bump `@qvac/registry-schema` from `^0.3.0` to `^0.4.0`.
+
 ## [0.6.1]
 
 Release Date: 2026-06-26
