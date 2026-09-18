@@ -101,6 +101,7 @@ Infer first, ask only if uncertain:
 - `[bc]`: removed/changed existing public API signatures
 - `[mod]`: changes to model constant definitions
 - ASK only if change scope is ambiguous
+- **Release changelog PRs** (base `release-*`, diff is notes / NOTICE / version / generated docs): title is `chore:` (optional `[mod]`). Do not copy `[bc]` / `[api]` from the notes into the title. Body API / Models / Breaking still copy `changelog/<this version>/`.
 
 **Testing section:**
 - If test files modified → "Unit tests added/updated for X"
@@ -278,7 +279,7 @@ Before outputting the PR description, verify:
 - [ ] "What problem" describes user impact, not implementation
 - [ ] "How it solves" is high-level approach, not line-by-line
 - [ ] Unused sections are deleted
-- [ ] `[bc]` tag has BEFORE/AFTER code examples
+- [ ] `[bc]` tag has BEFORE/AFTER code examples (feature PRs). Release changelog PRs: no `[bc]` on the title; Breaking section copies `breaking.md` when that file exists
 - [ ] `[api]` tag has usage example
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff

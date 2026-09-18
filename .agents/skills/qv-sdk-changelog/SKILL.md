@@ -70,67 +70,50 @@ The script fetches from `upstream` first, falling back to `origin`.
 
 The generator enforces both checks and exits non-zero on failure.
 
-Run `git tag --list "<package>-v*" --sort=-v:refname` to check for existing version tags.
+**Nested worktrees:** `unset GIT_DIR GIT_WORK_TREE` before any git or changelog
+command, or the generator runs against the parent repo.
 
-- If tags exist: the script auto-detects the release type from `package.json` version:
-  - **Minor/major release** (version ends in `.0`, e.g. `0.9.0`): uses the latest `.0` tag as base (e.g. `sdk-v0.8.0`), skipping patch tags
-  - **Patch release** (version ends in non-zero patch, e.g. `0.8.4`): uses the absolute latest tag as base (e.g. `sdk-v0.8.3`)
-- If no tags: ask the user for `--base-commit` and `--base-version` (migration scenario)
+**Pick `--base-commit`, then pass it.** Do not run the generator unflagged and
+hope auto-detect is right.
 
-**Why this matters:** patches ship on a `release-<pkg>-*` branch and backmerge
-into main. The generator's range is `git log <base>..HEAD`. A commit that landed
-on **main** while that patch branch was open, and was never on the patch branch,
-is already an ancestor of the backmerge, so it is invisible to that range. It
-also never appeared in the patch notes. The next minor then ships the code
-with no changelog line unless those PRs are unioned in.
-
-**Standalone minor** (cli, plugins, anything not lockstep with another package):
-`--base-commit` is the previous `.0`. That range still includes main-only work
-in the patch window, and it will also re-list the patch. Accept the overlap or
-drop PR numbers already in `changelog/<patch>/`. `--base-commit` can still sit
-*after* commits that never reached the last **published** tag. The published-tag
-audit after generate is what catches that, for every package.
-
-**Lockstep `sdk` + `inference`:** both packages use the **same** `--base-commit`
-/ `--base-version` — the last lockstep display floor. When that floor is a
-`.0`, generate is enough. When it is a **patch**, the notes are:
-
-1. Generator output from the patch backmerge (work after the floor).
-2. Plus main-only work between the previous lockstep `.0` backmerge and that
-   patch backmerge: first-parent merges touching `packages/inference` or
-   `packages/sdk`, minus `[skiplog]`, minus PR numbers already in
-   `packages/sdk/changelog/<patch>/CHANGELOG.md`.
-
-Hand-add (2) to **both** lockstep changelogs (`CHANGELOG.md`, `CHANGELOG_LLM.md`,
-and `breaking.md` / `models.md` / `api.md` when the PR tag requires them). Do
-not re-run the generator over the hand edits; `--update-root-changelog` only.
+- **Lockstep `sdk` + `inference`:** always pass `--base-commit` / `--base-version`
+  — the last lockstep ship's backmerge on main, same floor on both packages.
+  Never tag auto-detect: `inference-v*` is often not an ancestor of `main`, and
+  a minor auto-detects the previous `.0` (repeats already-shipped patch notes).
+  When that floor is a `.0`, generate is enough. When it is a **patch**, generate
+  from the patch backmerge, then union main-only work from the previous lockstep
+  `.0` backmerge → that patch backmerge: first-parent merges touching
+  `packages/inference` or `packages/sdk`, minus `[skiplog]`, minus PR numbers
+  already in `packages/sdk/changelog/<patch>/CHANGELOG.md`. Hand-add to both
+  changelogs (`CHANGELOG.md` and `breaking.md` / `models.md` / `api.md` when the
+  PR tag requires them). `--update-root-changelog` only after that.
 
 ```bash
 git log --first-parent --format='%s' <prev-lockstep-.0-backmerge>..<patch-backmerge>
 # keep subjects whose merge diff touches packages/inference or packages/sdk
 ```
 
-**`inference-v*` / historical `sdk-v*` tags are often not ancestors of `main`.**
-Inference tags used to live on `release-sdk-*`; after split-publish they live on
-`release-inference-*`. Auto-detected tags then fail `merge-base --is-ancestor`.
-Pass `--base-commit=<sha> --base-version=<x.y.z>` instead of relying on the tag.
+- **Standalone** (cli, plugins, anything not lockstep): omit the flags. The
+  generator auto-detects (minor → previous `.0`, patch → previous tag). A
+  previous `.0` still includes main-only work in the patch window; drop PR
+  numbers already in `changelog/<patch>/` if they re-list. If no tags exist,
+  ask for `--base-commit` and `--base-version`.
 
-**Nested worktrees:** unset stale `GIT_DIR` / `GIT_WORK_TREE` from a parent Cursor
-session before any git or changelog command (`unset GIT_DIR GIT_WORK_TREE`).
-Otherwise the generator runs against the parent repo.
+`--base-commit` is only the generate range. The published-tag audit after
+generate is the consumer delta, for every package.
 
 ### Step 3: Generate Raw Changelog
 
-All SDK pod packages use the same command:
-
-```bash
-node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name>
-```
-
-With migration flags:
+Lockstep (`sdk` / `inference`) always passes the floor from Step 2:
 
 ```bash
 node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name> --base-commit=<sha> --base-version=<version>
+```
+
+Standalone packages can omit the flags (auto-detect):
+
+```bash
+node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name>
 ```
 
 The script automatically excludes:
@@ -185,30 +168,31 @@ the bullet emits with no continuation lines.
 
 For **every** SDK pod package, after the raw files exist:
 
-1. Resolve the last published tag on upstream: `<slug>-v*` (highest already
-   shipped). That tag is the audit base, not `--base-commit`.
-2. Diff that tag vs `HEAD` for this package's public surface: package
-   `exports`, serve/HTTP routes, exported constants/catalog.
-3. Every user-facing add, remove, or rename in that diff must appear in
-   `api.md`, `breaking.md`, and/or `models.md`. Hand-add. Do not re-run the
-   generator over those edits; `--update-root-changelog` only.
-4. New public exports under an older umbrella PR still need their own `api.md`
-   example.
+```bash
+LAST=$(git tag --list "<slug>-v*" --sort=-v:refname | head -1)
+git diff "$LAST" HEAD -- packages/<pkg>/package.json
+```
 
-Fail-stop until the notes match the tree.
+Diff this package's public surface the same way: `exports`, serve/HTTP routes,
+exported constants/catalog. Every user-facing add, remove, or rename in that
+diff must appear in `api.md`, `breaking.md`, and/or `models.md`. Hand-add.
+`--update-root-changelog` only — do not re-run a full generate. New public
+exports under an older umbrella PR still get their own `api.md` example.
+
+Fail-stop until the notes match the tree. Then write `CHANGELOG_LLM.md`.
 
 ### Step 4: Generate CHANGELOG_LLM.md (mandatory)
 
 Always run this step. Do not ask the user — it's part of the skill.
 
-After raw changelog files exist, generate the human-readable version at
-`packages/<package>/changelog/<version>/CHANGELOG_LLM.md`.
+Author `CHANGELOG_LLM.md` from `changelog/<version>/` **after** the published-tag
+audit, not from `git log`. Title and NPM line are this package (`@qvac/<pkg>`),
+not always sdk.
 
-See [references/changelog-llm-format.md](references/changelog-llm-format.md) for the format guide.
+See [references/changelog-llm-format.md](references/changelog-llm-format.md).
 
-Apply the same "no informational value" rule: skip backmerges, automated bumps,
-and any entry whose subject would just repeat what a previous release already
-said. Models body stays concise; the full constant lists live in `models.md`
+Skip backmerges, automated bumps, and entries that only repeat a previous
+release. Models body stays concise; the full constant lists live in `models.md`
 and in the LLM `### Added` / `### Removed` blocks.
 
 After writing the file, rebuild the root aggregate so
@@ -282,9 +266,8 @@ Layout:
 - `:qvac: SDK <version> :rocket: NPM Public release` header.
 - NPM, GitHub release, and full-changelog tree links.
 - `:warning: Breaking Changes` section with link to `breaking.md` — emitted
-  only when `breaking.md` exists in the version folder (i.e. at least one PR
-  carries the `[bc]` tag). Detected by file presence, not by parsing
-  CHANGELOG.md.
+  when `breaking.md` exists (including hand-added catalog-as-API removals).
+  File presence, not `[bc]` tags and not CHANGELOG.md.
 - Footer: `Thanks to everyone on QVAC team :green_heart: :qvac: :green_heart:`.
 
 If the post needs hand-tuning (e.g. a custom note for a specific release),
@@ -413,8 +396,8 @@ See `docs/website/docs-workflow.md` for the full pipeline reference.
 | Flag                            | Required | Description                                                        |
 | ------------------------------- | -------- | ------------------------------------------------------------------ |
 | `--package`                     | Yes      | Package name (e.g., `sdk`)                                         |
-| `--base-commit`                 | No       | Initial commit SHA for migration (overrides tag lookup)            |
-| `--base-version`                | No       | Version label for base commit (display only)                       |
+| `--base-commit`                 | Lockstep | Generate-range start. Required for `sdk`/`inference`; overrides tag auto-detect |
+| `--base-version`                | Lockstep | Display label for that floor                                       |
 | `--release-type`                | No       | `minor` or `patch` (auto-detected from package.json version)       |
 | `--dry-run`                     | No       | Preview output without writing files                               |
 | `--update-root-changelog`       | No       | Rebuild only the root aggregate `packages/<pkg>/CHANGELOG.md`      |
@@ -426,9 +409,9 @@ See `docs/website/docs-workflow.md` for the full pipeline reference.
 Generates changelog files in `packages/<package>/changelog/<version>/`:
 
 - `CHANGELOG.md` - Main changelog
-- `breaking.md` - Breaking changes detail (if `[bc]` PRs)
-- `api.md` - API changes detail (if `[api]` PRs)
-- `models.md` - Model changes (if `[mod]` PRs)
+- `breaking.md` - Breaking changes (`[bc]` PRs and catalog-as-API removals)
+- `api.md` - API changes (`[api]` PRs and published-tag export/route diffs)
+- `models.md` - Model changes (full set; `[mod]` PRs and constant diffs)
 - `CHANGELOG_LLM.md` - Human-readable version (always generated, see Step 4)
 - `announcement-post.txt` - Slack copy-paste post (always generated, see Step 5,
   **gitignored** — never commit)
@@ -467,11 +450,10 @@ push, and keep this list to things that are cheap to prevent:
   Never `--no-config`. Never `bunx prettier` until `packages/<pkg>/node_modules`
   (or a linked install) can resolve that package. Quote style and trailing commas
   on `CHANGELOG_LLM.md` are the usual fail.
-- **Lockstep display floor is not the whole range.** Same `--base-commit` on
-  `sdk` and `inference` so already-shipped notes are not repeated. When that
-  floor is a patch, union in the Step 2 main-only window (previous lockstep
-  `.0` backmerge → patch backmerge, minus skiplog, minus the patch notes).
-  SDK is the consumer set; inference is the engine slice.
+- **Lockstep: pass the floor.** Never run the generator unflagged for `sdk` /
+  `inference`. Same `--base-commit` on both. When that floor is a patch, union
+  the Step 2 main-only window. SDK is the consumer set; inference is the engine
+  slice.
 - **`inference-v*` is often not on `main`.** Use the backmerge SHA, not the tag.
 - **Nested worktrees inherit `GIT_DIR`.** `unset GIT_DIR GIT_WORK_TREE` before
   generate/commit/cherry-pick, or you operate on the parent repo.
@@ -493,12 +475,12 @@ Before completing:
 - [ ] Working head (if branched for the release PR) is `chore/<pkg>-<x.y.z>-changelog`, not `release-*`
 - [ ] Clone is not shallow (`git rev-parse --is-shallow-repository` → `false`)
 - [ ] Base reference resolved (tag or `--base-commit`) and is an ancestor of `HEAD`
-- [ ] For lockstep `sdk` + `inference` at the same major.minor: both used the **same** `--base-commit` / `--base-version` (last lockstep display floor); SDK changelog includes the engine slice
-- [ ] When that floor is a patch: main-only window unioned in (previous lockstep `.0` backmerge → patch backmerge, minus skiplog, minus the patch notes) on both changelogs
+- [ ] For lockstep `sdk` + `inference`: both generated with the **same** `--base-commit` / `--base-version` (last lockstep display floor); never unflagged auto-detect; SDK changelog includes the engine slice
+- [ ] When that floor is a patch: main-only window unioned in on both changelogs
 - [ ] `GIT_DIR` / `GIT_WORK_TREE` unset (or pointed at this worktree) so generate/git did not run in a parent repo
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
-- [ ] CHANGELOG_LLM.md generated (mandatory) and follows format guide
+- [ ] CHANGELOG_LLM.md authored from `changelog/<version>/` after the published-tag audit (this package's name on the title/NPM line)
 - [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (`bun install` in `packages/<pkg>` if needed; never `--no-config`)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] Published-tag audit done: last `<slug>-v*` vs HEAD public surface matches `api.md` / `breaking.md` / `models.md`
