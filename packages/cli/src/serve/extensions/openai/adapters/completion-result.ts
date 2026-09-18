@@ -1,4 +1,4 @@
-import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
+import type { CompletionRun, CompletionStats, ToolCall, ToolCallError } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 
 export type OpenAiFinishReason = 'stop' | 'length' | 'tool_calls'
@@ -8,6 +8,13 @@ export interface DrainedCompletion {
   /** Concatenated `thinkingDelta` text; empty when the SDK captured no reasoning. */
   thinking: string
   toolCalls: ToolCall[]
+  /**
+   * Tool-call regions the addon emitted but could not parse or validate. OpenAI
+   * has no field for these, so routes log them rather than returning them --
+   * without that line an empty `stop` response looks like the model simply
+   * chose not to call a tool.
+   */
+  toolErrors: ToolCallError[]
   stats: CompletionStats | undefined
   /**
    * Terminal reason from the SDK `completionDone` event (`eos` / `length` /
@@ -46,6 +53,7 @@ export async function drainCompletion(
   let text = ''
   let thinking = ''
   const toolCalls: ToolCall[] = []
+  const toolErrors: ToolCallError[] = []
   let stats: CompletionStats | undefined
   let stopReason: string | undefined
 
@@ -58,6 +66,8 @@ export async function drainCompletion(
       onThinking?.(event.text)
     } else if (event.type === 'toolCall') {
       toolCalls.push(event.call)
+    } else if (event.type === 'toolError') {
+      toolErrors.push(event.error)
     } else if (event.type === 'completionStats') {
       stats = event.stats
     } else if (event.type === 'completionDone') {
@@ -78,7 +88,29 @@ export async function drainCompletion(
   const finishReason: OpenAiFinishReason =
     toolCalls.length > 0 ? 'tool_calls' : stopReason === 'length' ? 'length' : 'stop'
 
-  return { text, thinking, toolCalls, stats, stopReason, completionTokens, finishReason }
+  return {
+    text,
+    thinking,
+    toolCalls,
+    toolErrors,
+    stats,
+    stopReason,
+    completionTokens,
+    finishReason
+  }
+}
+
+/**
+ * Render drained tool-call failures for the request log: a count plus each
+ * distinct error code, e.g. ` toolerrors=2 (PARSE_ERROR)`. Empty string when
+ * the run produced none, so it appends cleanly to an existing log line.
+ */
+export function formatToolErrors(toolErrors: ToolCallError[]): string {
+  if (toolErrors.length === 0) {
+    return ''
+  }
+  const codes = [...new Set(toolErrors.map((err) => err.code))].join(',')
+  return ` toolerrors=${toolErrors.length} (${codes})`
 }
 
 /**
