@@ -33,6 +33,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gdb mesa-vulkan-drivers libvulkan1 libgomp1 libomp5
+          software_icd=$(find /usr/share/vulkan/icd.d -name '*lvp*.json' -print -quit)
+          test -n "$software_icd"
+          echo "VK_DRIVER_FILES=$software_icd" >> "$GITHUB_ENV"
+          echo "GGML_VK_VISIBLE_DEVICES=0" >> "$GITHUB_ENV"
       - name: Install tooling
         working-directory: packages/tts-ggml
         run: |
