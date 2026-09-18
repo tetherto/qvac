@@ -1,0 +1,130 @@
+name: "vcpkg toolchain fingerprint"
+description: >-
+  Hash the toolchain that will build this job's vcpkg packages and export it as
+  TOOLCHAIN_FINGERPRINT, for folding into the vcpkg binary cache key.
+
+# vcpkg keys every cached package by an ABI hash over the compiler and the
+# vcpkg tree, and neither is pinned. A cache key that does not move with them
+# restores an entry whose archives all miss, then rebuilds -- and an exact
+# primary-key hit suppresses the save, so the dead entry never heals.
+#
+# Evidence is on the QVAC-24711 PR, which stays linkable after logs expire.
+
+runs:
+  using: composite
+  steps:
+    - if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [ "${RUNNER_OS}" = "macOS" ]; then
+          # xcrun, not PATH: the homebrew llvm here is moved aside later.
+          probe="$(xcrun clang --version)
+        sdk=$(xcrun --show-sdk-build-version)"
+        else
+          probe="$("${CC:-clang}" --version)"
+        fi
+
+        # The tool's reported version, not the binary bytes and not the tree's
+        # git rev (VCPKG_ROOT is a checkout on only some hosts, which split one
+        # toolchain across two keys). Invoked by absolute path because vcpkg is
+        # not on PATH here on linux.
+        #
+        # The bytes were the first attempt and they split the key the same way:
+        # linux and windows take vcpkg pre-installed from the runner image
+        # (setup-vcpkg reads VCPKG_INSTALLATION_ROOT), and the windows hosts
+        # were imaged at different times, so one vcpkg release differs
+        # byte-for-byte between them. Measured on two runs of cpp-tests-llm at
+        # the same commit: vctools and sdk identical on both, binary hash
+        # f1edbf3a39de350e on qvac-win25-x64 and 37f05505d35081bd on
+        # qvac-win25-x64-2-runner3, so the key moved and windows never hit its
+        # own entry. The version line carries the release date and tool commit,
+        # which is what vcpkg folds into an ABI hash, so it moves with the
+        # toolchain and holds still across hosts running the same release.
+        vcpkg_bin="${VCPKG_ROOT:-}/vcpkg"
+        if [ ! -x "${vcpkg_bin}" ]; then
+          vcpkg_bin="$(command -v vcpkg 2> /dev/null || true)"
+        fi
+        if [ -z "${vcpkg_bin}" ] || [ ! -x "${vcpkg_bin}" ]; then
+          echo "::error::vcpkg binary not found (VCPKG_ROOT=${VCPKG_ROOT:-unset}); cache key would be unstable"
+          exit 1
+        fi
+        # Captured whole, then trimmed: `vcpkg version | head -1` closes the
+        # pipe early and pipefail turns the resulting SIGPIPE into a failure.
+        vcpkg_version_raw="$("${vcpkg_bin}" version)"
+        vcpkg_version="$(printf '%s\n' "${vcpkg_version_raw}" | head -n 1)"
+        if [ -z "${vcpkg_version}" ]; then
+          echo "::error::'${vcpkg_bin} version' printed nothing; cache key would be unstable"
+          exit 1
+        fi
+        probe="${probe}
+        vcpkg=${vcpkg_version}"
+
+        echo "--- toolchain ---"
+        echo "${probe}"
+
+        if command -v sha256sum > /dev/null 2>&1; then
+          digest="$(printf '%s' "${probe}" | sha256sum)"
+        else
+          digest="$(printf '%s' "${probe}" | shasum -a 256)"
+        fi
+
+        echo "TOOLCHAIN_FINGERPRINT=${digest:0:16}" >> "${GITHUB_ENV}"
+        echo "toolchain fingerprint: ${digest:0:16}"
+
+    - if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        if (-not (Test-Path $vswhere)) {
+          Write-Output "::error::vswhere not found at $vswhere"
+          exit 1
+        }
+
+        $vsPath = & $vswhere -latest -products * -property installationPath
+        $toolsFile = Join-Path $vsPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+        $toolsVersion = (Get-Content $toolsFile -Raw).Trim()
+
+        # Version-aware: 10.0.9.0 must not sort above 10.0.26100.0.
+        $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Include'
+        $sdkVersion = (Get-ChildItem $sdkRoot -Directory |
+          Where-Object { $_.Name -as [version] } |
+          Sort-Object { [version]$_.Name } |
+          Select-Object -Last 1).Name
+
+        if ([string]::IsNullOrWhiteSpace($toolsVersion) -or [string]::IsNullOrWhiteSpace($sdkVersion)) {
+          Write-Output "::error::could not fingerprint the toolchain"
+          exit 1
+        }
+
+        # The tool's reported version, not the binary bytes -- see the bash
+        # branch for the windows hosts that made the bytes unusable.
+        $vcpkgBin = Join-Path $env:VCPKG_ROOT 'vcpkg.exe'
+        if (-not (Test-Path $vcpkgBin)) {
+          $onPath = Get-Command vcpkg -ErrorAction SilentlyContinue
+          if ($onPath) { $vcpkgBin = $onPath.Source }
+        }
+        if (-not (Test-Path $vcpkgBin)) {
+          Write-Output "::error::vcpkg binary not found (VCPKG_ROOT=$env:VCPKG_ROOT); cache key would be unstable"
+          exit 1
+        }
+        $vcpkgVersion = (& $vcpkgBin version | Select-Object -First 1)
+        if ([string]::IsNullOrWhiteSpace($vcpkgVersion)) {
+          Write-Output "::error::'$vcpkgBin version' printed nothing; cache key would be unstable"
+          exit 1
+        }
+
+        $probe = "vctools=$toolsVersion sdk=$sdkVersion vcpkg=$($vcpkgVersion.Trim())"
+        Write-Output "--- toolchain ---"
+        Write-Output $probe
+
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($probe)
+        $digest = -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') })
+        $fingerprint = $digest.Substring(0, 16)
+
+        echo "TOOLCHAIN_FINGERPRINT=$fingerprint" >> $env:GITHUB_ENV
+        Write-Output "toolchain fingerprint: $fingerprint"

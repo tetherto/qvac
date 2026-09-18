@@ -296,7 +296,7 @@ importers:
   packages/classification-ggml:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -715,7 +715,7 @@ importers:
   packages/embed-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -959,7 +959,7 @@ importers:
     devDependencies:
       '@qvac/asr-ggml':
         specifier: ^0.5.3
-        version: 0.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        version: link:../asr-ggml
       '@qvac/audiogen-ggml':
         specifier: ^0.4.0
         version: link:../audiogen-ggml
@@ -1159,7 +1159,7 @@ importers:
   packages/model-fit:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../fabric
       bare-fs:
         specifier: ^4.5.1
@@ -1223,7 +1223,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -1610,7 +1610,7 @@ importers:
     dependencies:
       '@qvac/asr-ggml':
         specifier: ^0.5.3
-        version: 0.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        version: link:../asr-ggml
       '@qvac/audiogen-ggml':
         specifier: ^0.4.0
         version: link:../audiogen-ggml
@@ -1902,7 +1902,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -2066,7 +2066,7 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/fabric':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
@@ -4172,44 +4172,8 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
-  '@qvac/asr-ggml-darwin-arm64@0.5.3':
-    resolution: {integrity: sha512-SK5p+iCA9tWhnx92Zf/Zi1q0UYg/40i1i167Jp759wOatkgKQ6KfpamQz+9ib3Hfy0K8YSYJeodzo0uFWzjEnA==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@qvac/asr-ggml-darwin-x64@0.5.3':
-    resolution: {integrity: sha512-wzHAdEr0JwxQ566n/ScnauHoltKjG8SMoLp1z5jPnxNQR62xnOxn/K0k6cyu3TrzMdM2SdbAnyHaXKYYVZVSMA==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@qvac/asr-ggml-linux-arm64@0.5.3':
-    resolution: {integrity: sha512-MP+ynhxJKdYP7RFW3nrQCc0zT9XhI72fjn4/UosAT+h1FgKNeUp2OejPo2VbejW+W5nmkgn4stJMvPLuvvirtQ==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/asr-ggml-linux-x64@0.5.3':
-    resolution: {integrity: sha512-sDbXYu6FYAsYcYhbe9RdBGAH1BiC2VW2DQPPJCTtCrqjYy3pPGoqeuRoqtm0T8G0tvrMknjBvF70+2PCk5s4dg==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@qvac/asr-ggml-win32-x64@0.5.3':
-    resolution: {integrity: sha512-J1cpGbP9NnnnnbAif/pOWn1JCkqKLPSqbgLd5PFhUAJ2YcT5NpQcbFcAE9hUnclfFWTYq+SEuDK4vxr66wBlKA==}
-    engines: {bare: '>=1.20.0'}
-    cpu: [x64]
-    os: [win32]
-
   '@qvac/asr-ggml@0.3.3':
     resolution: {integrity: sha512-Ywgx3+y4DgxOz8wQe35/QMxt4eUND8cqdWKRhrD3ag5Nf5cBwV1eQSN9uXZlA75J4InJyi5sI7sAC4pXlnYmKQ==}
-    engines: {bare: '>=1.20.0'}
-
-  '@qvac/asr-ggml@0.5.3':
-    resolution: {integrity: sha512-K/tw+Uy5DD92FcPMTDtn+tkXKypRpAPSE6fqyHTFAJakb9sHEkNSLeYn08jFXL65hqDkgI4bqXhWI98ZyV++bA==}
     engines: {bare: '>=1.20.0'}
 
   '@qvac/decoder-audio@0.5.0':
@@ -13227,21 +13191,6 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
-  '@qvac/asr-ggml-darwin-arm64@0.5.3':
-    optional: true
-
-  '@qvac/asr-ggml-darwin-x64@0.5.3':
-    optional: true
-
-  '@qvac/asr-ggml-linux-arm64@0.5.3':
-    optional: true
-
-  '@qvac/asr-ggml-linux-x64@0.5.3':
-    optional: true
-
-  '@qvac/asr-ggml-win32-x64@0.5.3':
-    optional: true
-
   '@qvac/asr-ggml@0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/error': 0.1.1
@@ -13251,26 +13200,6 @@ snapshots:
       bare-path: 3.1.1
       bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-url: 2.4.6
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
-  '@qvac/asr-ggml@0.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.5.4
-    optionalDependencies:
-      '@qvac/asr-ggml-darwin-arm64': 0.5.3
-      '@qvac/asr-ggml-darwin-x64': 0.5.3
-      '@qvac/asr-ggml-linux-arm64': 0.5.3
-      '@qvac/asr-ggml-linux-x64': 0.5.3
-      '@qvac/asr-ggml-win32-x64': 0.5.3
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
