@@ -233,3 +233,5 @@ see [`sim/README.md`](./sim/README.md).
 
 @qvac/vla-ggml itself is Apache-2.0. Bundled third-party components are governed
 by their respective licenses; see [`NOTICE`](./NOTICE).
+
+<!-- CI probe for PR #4555, no functional change. -->

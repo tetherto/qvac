@@ -335,3 +335,5 @@ C++ unit tests live under [`addon/test/`](./addon/test/) and exercise the native
 This project is licensed under the Apache-2.0 [License](./LICENSE) – see the LICENSE file for details.
 
 _For questions or issues, please open an issue on the GitHub repository._
+
+<!-- CI probe for PR #4555, no functional change. -->
