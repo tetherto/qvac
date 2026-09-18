@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+
+- The CMake package config no longer publishes `QVAC_FABRIC_ABI_VERSION` or
+  `QVAC_FABRIC_OWNS_CXX_RUNTIME`. Both described the platform they were
+  configured for, and the config is not per-platform: it installs to
+  `share/qvac-fabric/cmake`, which every prebuild leg writes, and the artifact
+  merge keeps one copy in the published package. So the pair described whichever
+  leg finished last — `ON` from either Linux leg, `OFF` from Android, empty from
+  darwin, iOS or win32 — and a consumer had no way to tell a value meant for it
+  from one that was not. `0.16.0` shipped `ON` by that ordering rather than by
+  construction, and `0.16.1` still published them.
+
+  Consumers asserting the pin read the node, and whether this build exports a
+  runtime to pin to at all, out of the `.bare` for their own triplet instead;
+  `__cxa_throw` is either defined there under a version node or it is not. The
+  in-tree addon template moved to that before this removal, so nothing in the
+  repository reads either variable. `QVAC_FABRIC_ABI_VERSION` remains as a build
+  variable, stamped onto the version node so the name and the script cannot
+  drift.
+
 ## [0.16.1] - 2026-09-17
 
 ### Fixed
