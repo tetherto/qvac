@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Security: `nmt_model_load` rejects a crafted GGML weight header instead of overflowing the fixed `ne[4]` dimension array. An unchecked, file-controlled `n_dims > 4` overwrote adjacent stack memory and crashed the native process (`STATUS_ACCESS_VIOLATION`) when an untrusted model was loaded via `TranslationNmtcpp.load()`. Dimension counts are now bounded to `[1, 4]`, the tensor-name `length` is bounded before allocation, and each header read must return the requested byte count. Loading a legitimate model is unaffected.
+- Reject malformed model tensor headers during loading instead of crashing on a corrupt or untrusted model. Loading a legitimate model is unaffected.
 
 ## [0.16.3] - 2026-09-18
 
