@@ -25,6 +25,8 @@ export interface OpenAIState {
   transcribeOverride?: (
     opts: Parameters<typeof sdk.transcribe>[0]
   ) => Promise<string | sdk.TranscribeSegment[]> & { requestId: string }
+  /** Test seam — overrides `completion()` from `@qvac/sdk` when set. */
+  completionOverride?: typeof sdk.completion
   /** Test seam — overrides `video()` from `@qvac/sdk` when set. */
   videoOverride?: typeof sdk.video
   /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */
