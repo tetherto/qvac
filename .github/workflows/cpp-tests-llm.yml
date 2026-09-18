@@ -87,7 +87,7 @@ jobs:
         working-directory: .
         if: runner.environment != 'github-hosted'
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -100,7 +100,7 @@ jobs:
 
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@4a377a2e6474914559de747f60dc426d2b834bbc
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -142,13 +142,13 @@ jobs:
       # rebuild. Seen as `Sent 208 of 208` on a warm windows box.
       - name: Get vcpkg cache (restore)
         id: vcpkg-cache
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           key: cpp-tests-v6-llm-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{ hashFiles(format('{0}/vcpkg.json', inputs.workdir), format('{0}/vcpkg-configuration.json', inputs.workdir), 'vcpkg-overlays/triplets/**', 'vcpkg-overlays/toolchains/**') }}-${{ env.TOOLCHAIN_FINGERPRINT }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: lts/*
 
@@ -166,7 +166,7 @@ jobs:
 
       - name: Overlay PR @qvac/fabric prebuilds
         if: ${{ inputs.fabric-overlay-artifact != '' }}
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@f74adc06b42f6dedea3cf893586ab902d8574839
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
@@ -275,7 +275,7 @@ jobs:
         if: >-
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) &&
           hashFiles(format('{0}/vcpkg/cache/**', env.WORKDIR)) != ''
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
           path: ${{ env.WORKDIR }}/vcpkg/cache
@@ -320,7 +320,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: ${{ always() && !cancelled() && matrix.os == 'ubuntu-24.04' }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: cpp-coverage-report-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
           path: |

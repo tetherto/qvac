@@ -75,7 +75,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout matrix + generated artifacts
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
@@ -104,7 +104,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout package.json + benchmark matrix
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
@@ -118,7 +118,7 @@ jobs:
           node -e "const pkg=require('./packages/llm-llamacpp/package.json');const m=require('./packages/llm-llamacpp/test/integration/_benchmark-matrix.js');require('fs').writeFileSync('run-meta/run-meta.json',JSON.stringify({addonVersion:'@qvac/llm-llamacpp@'+pkg.version,expectedShards:m.matrix().map(m.mobileShardKey)})+'\n')"
           cat run-meta/run-meta.json
       - name: Upload run-meta
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: benchmark-run-meta-${{ github.run_number }}
           path: run-meta/
@@ -168,12 +168,12 @@ jobs:
         if: runner.environment != 'github-hosted'
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.context.outputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: lts/*
 
@@ -235,7 +235,7 @@ jobs:
       # mobile view); this job just uploads the raw sweep results.
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: llm-param-sweep-desktop-${{ github.run_number }}
           path: packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/
@@ -319,7 +319,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout aggregator
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
@@ -328,7 +328,7 @@ jobs:
             packages/llm-llamacpp/package.json
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: lts/*
 
@@ -458,7 +458,7 @@ jobs:
       - name: Upload consolidated report
         id: upload
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: qwen35-benchmark-findings-${{ github.run_number }}
           path: benchmark-artifacts/

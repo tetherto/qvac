@@ -44,7 +44,7 @@ jobs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
       - name: Checkout authorize-pr (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/actions/authorize-pr
@@ -66,11 +66,11 @@ jobs:
       any: ${{ steps.filter.outputs.pkg-any }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # 4.0.3
         id: filter
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -154,7 +154,7 @@ jobs:
     name: sanity-checks (${{ matrix.package }})
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -189,7 +189,7 @@ jobs:
       # Trusted base-branch checkout of only the prebuild-status scripts (never
       # PR head code), so verification logic is a single, unit-tested source.
       - name: Checkout prebuild-status scripts (default branch)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts/prebuild-status

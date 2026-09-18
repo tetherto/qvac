@@ -198,7 +198,7 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
       - name: Checkout (base) for reuse actions
         if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
       - name: Detect native changes
         id: detect
         if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
@@ -316,7 +316,7 @@ jobs:
         # Fast fail: this is just apt + toolchain env (< 5m); a stall is a
         # github-hosted apt-lock hang, so bound it instead of hanging the job.
         timeout-minutes: 20
-        uses: tetherto/qvac/.github/actions/setup-build-host@7671af404baf8de85fa61cf3e1908da1f0a8fcaf
+        uses: tetherto/qvac/.github/actions/setup-build-host@6e8d3c306a462a58589396cda428d65e015f0d8b
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -324,7 +324,7 @@ jobs:
 
       - name: Setup LLVM (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+        uses: tetherto/qvac/.github/actions/setup-llvm@4a377a2e6474914559de747f60dc426d2b834bbc
 
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -333,19 +333,19 @@ jobs:
         if: runner.environment != 'github-hosted'
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup AWS + Windows CLI
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@4a377a2e6474914559de747f60dc426d2b834bbc
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@4a377a2e6474914559de747f60dc426d2b834bbc
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -373,7 +373,7 @@ jobs:
           }
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@4a377a2e6474914559de747f60dc426d2b834bbc
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
@@ -447,7 +447,7 @@ jobs:
 
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Overlay PR @qvac/fabric prebuilds
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@f74adc06b42f6dedea3cf893586ab902d8574839
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
@@ -457,7 +457,7 @@ jobs:
 
       - if: ${{ inputs.setup-rust-toolchain }}
         name: Setup Rust toolchain
-        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@1225268a5953ea733a30dad7d3d9581073fb03da
+        uses: tetherto/qvac/.github/actions/setup-rust-prebuild@4a377a2e6474914559de747f60dc426d2b834bbc
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
@@ -587,7 +587,7 @@ jobs:
       # Export-leak findings stay warnings during rollout (enforce-exports
       # defaults to false) until every ggml addon ships a symbols.map.
       - name: Verify prebuild symbols
-        uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@980912224ed17173caead9904e4fd02c939727a9
+        uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@4a377a2e6474914559de747f60dc426d2b834bbc
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
@@ -669,7 +669,7 @@ jobs:
 
       # Name carries the package, so two packages in one run never collide.
       # Content stays FLAT (<platform>-<arch>/) as the runtime + tarball require.
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
@@ -685,7 +685,7 @@ jobs:
     steps:
       - name: Checkout reuse action (for marker save)
         if: inputs.reuse-workflow-file != '' && (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           sparse-checkout: .github/actions/prebuild-artifact-save
           sparse-checkout-cone-mode: false
@@ -716,7 +716,7 @@ jobs:
           merge-multiple: true
 
       - name: Upload merged artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: prebuilds-${{ steps.pkg.outputs.name }}
           path: prebuilds
