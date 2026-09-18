@@ -55,7 +55,9 @@ jobs:
       - id: filter
         shell: bash
         env:
-          M: ${{ steps.compute.outputs.matrix }}
+          # allrows, not matrix: carved-out packages still need their TS check
+          # produced here, because on-pr-<pkg>.yml awaits it.
+          M: ${{ steps.compute.outputs.allrows }}
         run: |
           set -euo pipefail
           tspackages=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true) | .package] | unique')
