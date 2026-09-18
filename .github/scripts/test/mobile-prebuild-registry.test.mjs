@@ -1022,3 +1022,35 @@ test('the setup action exposes the run id it installed from', () => {
     'prebuild-source-run-id must surface the resolver output',
   )
 })
+
+// Appium's pull_file returns `value` as a base64 string on success and as an
+// error object on failure. Handing the object to Buffer.from threw "The first
+// argument must be of type string...", which replaced Appium's real reason —
+// observed on every Android Device Farm run, pass or fail, while iOS logged
+// "flush ok". The app-side log is the only place a failing runner says why it
+// failed, so masking that error makes every Android failure untriageable.
+test('the bare-log flush reports Appium\'s real error, not a type error', () => {
+  const template = read(
+    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/wdio.template.js',
+  )
+  const flush = template.slice(
+    template.indexOf('global.flushBareLog'),
+    template.indexOf('global.isAndroid'),
+  )
+
+  assert.match(
+    flush,
+    /typeof b64 !== 'string'/,
+    'the payload must be type-checked before Buffer.from',
+  )
+  assert.match(
+    flush,
+    /pull_file returned no base64 payload/,
+    'the thrown message must name the real failure',
+  )
+  // The guard has to come first, or Buffer.from still throws the type error.
+  assert.ok(
+    flush.indexOf("typeof b64 !== 'string'") < flush.indexOf("Buffer.from(b64"),
+    'the type check must precede the Buffer.from it protects',
+  )
+})

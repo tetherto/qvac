@@ -112,6 +112,15 @@ exports.config = {
           req.write(body);
           req.end();
         });
+        // Appium returns `value` as a base64 STRING on success and as an error
+        // OBJECT ({error, message, stacktrace}) on failure. Feeding the object
+        // to Buffer.from threw "The first argument must be of type string...",
+        // which replaced Appium's real reason with a type error and made every
+        // Android run report an unexplained flush failure.
+        if (typeof b64 !== 'string') {
+          var why = (b64 && (b64.message || b64.error)) || JSON.stringify(b64);
+          throw new Error('pull_file returned no base64 payload — ' + why);
+        }
         var text = Buffer.from(b64, 'base64').toString();
         var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
         require('fs').writeFileSync(logDir + '/bare_console.log', text);
