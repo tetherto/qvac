@@ -42,6 +42,7 @@ import { multiGpuTests } from './multi-gpu-tests.js'
 import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
+import { fitStubTests } from './fit-stub-tests.js'
 import { snapStorageTests } from './snap-storage-tests.js'
 import { systemResourcesTests } from './system-resources-tests.js'
 
@@ -372,6 +373,9 @@ export const tests = [
 
   // Custom plugin system tests (custom-echo-plugin, error paths)
   ...pluginTests,
+
+  // Header-only sparse stub vs full-file fit parity (custom-fit-stub-plugin)
+  ...fitStubTests,
 
   // Strict Snap storage-path conformance
   ...snapStorageTests,
