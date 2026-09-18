@@ -1237,9 +1237,10 @@ void ContinuousBatchScheduler::cancelSlotLocked(
   }
   const Request* req = batcher_.requestAt(seqId);
   if (slots_[seqId]->driver) {
-    // Best-effort driver teardown on a cancelled slot. onCancel finalizes (and
-    // mutates) the slot's KV and saveCacheForSlot persists it, so contain both
-    // in one try: a throw here would otherwise escape this noexcept function
+    // Best-effort driver teardown on a cancelled slot. onCancel restores the
+    // slot's pre-request KV state; saveCacheForSlot runs only when the driver
+    // says finalization committed a persistable result. Contain both in one
+    // try: a throw here would otherwise escape this noexcept function
     // (it runs from the noexcept StepUnlockGuard destructor) and std::terminate
     // the process, and a failed finalize must skip the save rather than persist
     // inconsistent state. The cleanup tail below (notifyDone/freeSlot) runs
@@ -1269,11 +1270,12 @@ void ContinuousBatchScheduler::cancelSlotLocked(
       if (req != nullptr) {
         accumulateSlotRuntimeStats(*slots_[seqId], *req);
       }
-      // Skip save on rollback failure regardless of policy: persisting
-      // driver state whose live memory may not match `getNPast()` would
-      // let a cancelled request's peak state leak into the on-disk
-      // cache and survive across reloads.
-      if (savePolicy == SaveCachePolicy::Save && rollbackOk) {
+      // Skip save on rollback failure regardless of policy. A successful
+      // rollback is also not a commit: `shouldPersistAfterFinalize()` preserves
+      // the previous cache file instead of needlessly rewriting the restored
+      // state. Together these gates prevent cancelled work from touching disk.
+      if (savePolicy == SaveCachePolicy::Save && rollbackOk &&
+          slots_[seqId]->driver->shouldPersistAfterFinalize()) {
         saveCacheForSlot(seqId, *slots_[seqId]);
       }
     } catch (const std::exception& e) {
@@ -1606,15 +1608,11 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
   // reports its terminal reason; a cancelled/prefill-only slot reports None.
   std::optional<GenerationStopReason> stopReason;
   if (slot.driver) {
-    // `onCancel` has already rolled `nPast` back to the admission cursor
-    // and, on the graceful-cancel leg, `saveCacheForSlot` persists that
-    // state — so `CacheTokens` matches the live driver cursor and what
-    // is on disk. On the error-recovery leg (`SaveCachePolicy::Skip`,
-    // driven from `failGroupLocked`) the save is intentionally skipped
-    // to preserve the last known-good cache, but the live driver cursor
-    // is still the honest report for that batch: the request is
-    // logically rolled back to the admission cursor. Work performed is
-    // reported via `promptTokens` / `generatedTokens`.
+    // `onCancel` has already rolled `nPast` back to the admission cursor, so
+    // `CacheTokens` matches the restored live driver cursor and the unchanged
+    // last known-good file. Both graceful cancellation and error recovery skip
+    // persistence after rollback. Work performed is still reported via
+    // `promptTokens` / `generatedTokens`.
     nPast = static_cast<int64_t>(slot.driver->getNPast());
     toolsDropped =
         static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());

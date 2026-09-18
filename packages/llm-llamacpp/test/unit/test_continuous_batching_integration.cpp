@@ -791,7 +791,6 @@ TEST_F(
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_FALSE(outputs[0].empty());
   EXPECT_FALSE(outputs[1].empty());
-
 }
 
 TEST_F(
@@ -1557,9 +1556,9 @@ TEST_F(
 }
 
 /// The finalize window in `drainFinishedLocked` also drops the mutex because
-/// `onGenerationFinished` may restore a full recurrent snapshot. Unlike the decode window it
-/// holds a reference into `slots_` across the unlock, so the usual
-/// reconcile-on-every-reacquisition would run `onCancel` on a driver
+/// `onGenerationFinished` may restore a full recurrent snapshot. Unlike the
+/// decode window it holds a reference into `slots_` across the unlock, so the
+/// usual reconcile-on-every-reacquisition would run `onCancel` on a driver
 /// mid-finalize and free the slot the drain loop is still using: the slot
 /// keeps its `admissionId` until `freeSlot`, and `extractFinished` only
 /// removed it from the batcher, so it still passes `slotOwnedByLocked`.
@@ -1889,12 +1888,17 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchGenerationStopsAtPerSlotWindow) {
       << "the slot must stop at its per-slot window, not grow past it";
 }
 
+namespace {
+std::vector<uint8_t> readFileBytes(const fs::path& path);
+} // namespace
+
 /// Cancel = "request never happened": `onCancel` rolls the driver's
 /// `nPast` back to the admission cursor (the warm baseline loaded from
-/// `cacheKey`), and `saveCacheForSlot` persists that rolled-back state.
-/// `CacheTokens` in the batch runtime stats must equal the warm baseline
-/// — not the transient peak reached mid-generation, and not zero from
-/// an over-rollback that wiped the baseline.
+/// `cacheKey`). The restored state remains usable in memory, but a rolled-back
+/// request must not rewrite the last known-good cache file. `CacheTokens` in
+/// the batch runtime stats must equal the warm baseline — not the transient
+/// peak reached mid-generation, and not zero from an over-rollback that wiped
+/// the baseline.
 ///
 /// The scheduler resets its stats snapshot at admission whenever the
 /// queue is idle, so each `processPromptBatch` call reports CacheTokens
@@ -1904,7 +1908,8 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchGenerationStopsAtPerSlotWindow) {
 /// than the baseline (no peak leak) and (b) match the primer's value
 /// within a tiny tolerance (rollback lands exactly on the warm baseline).
 TEST_F(
-    ContinuousBatchingIntegrationTest, BatchCancelRestoresCacheToWarmBaseline) {
+    ContinuousBatchingIntegrationTest,
+    BatchCancelRestoresMemoryWithoutOverwritingWarmCache) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "32";
   auto model = loadModel();
@@ -1912,7 +1917,16 @@ TEST_F(
   const fs::path cachePath = fs::temp_directory_path() /
                              ("batch-cancel-warm-" + uniqueTestId() + ".bin");
 
-  auto primer = makePrompt("Remember these facts: the sky is blue.");
+  const std::string primerInput = "Remember these facts: the sky is blue.";
+  const std::string continuationInput =
+      R"([{"role":"user","content":"Remember these facts: the sky is blue."},{"role":"assistant","content":"I will remember that the sky is blue."},{"role":"user","content":"Say two short sentences about the sky."}])";
+  const auto makeContinuation = [&continuationInput]() {
+    LlamaModel::Prompt prompt;
+    prompt.input = continuationInput;
+    return prompt;
+  };
+
+  auto primer = makePrompt(primerInput);
   primer.prefill = true;
   primer.cacheKey = cachePath.string();
   primer.saveCacheToDisk = true;
@@ -1923,7 +1937,7 @@ TEST_F(
       test_common::getStatValue(model->runtimeStats(), "CacheTokens");
   ASSERT_GT(primeCacheTokens, 0.0) << "prefill did not populate CacheTokens";
 
-  auto baseline = makePrompt("Say two short sentences about the sky.");
+  auto baseline = makeContinuation();
   baseline.cacheKey = cachePath.string();
   std::vector<LlamaModel::Prompt> baselineBatch{std::move(baseline)};
   auto baselineOutputs = model->processPromptBatch(baselineBatch);
@@ -1935,9 +1949,17 @@ TEST_F(
       << "baseline batch did not grow past the warm baseline; test setup is "
          "not exercising the peak-vs-rollback distinction";
 
+  // Give an accidental rewrite an unmistakably different timestamp even on
+  // filesystems with coarse timestamp resolution.
+  const auto preservedCacheBytes = readFileBytes(cachePath);
+  const auto preservedCacheTime =
+      fs::last_write_time(cachePath) - std::chrono::seconds(10);
+  fs::last_write_time(cachePath, preservedCacheTime);
+
   std::atomic<bool> cancelIssued = false;
-  auto cancelPrompt = makePrompt("Say two short sentences about the sky.");
+  auto cancelPrompt = makeContinuation();
   cancelPrompt.cacheKey = cachePath.string();
+  cancelPrompt.saveCacheToDisk = true;
   cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
     bool expected = false;
     if (cancelIssued.compare_exchange_strong(expected, true)) {
@@ -1964,6 +1986,11 @@ TEST_F(
       << " but warm baseline was " << primeCacheTokens
       << "; rollback did not restore the admission cursor";
 
+  EXPECT_EQ(readFileBytes(cachePath), preservedCacheBytes)
+      << "a rolled-back request replaced the last known-good cache bytes";
+  EXPECT_EQ(fs::last_write_time(cachePath), preservedCacheTime)
+      << "a rolled-back request rewrote the last known-good cache file";
+
   fs::remove(cachePath);
 }
 
@@ -1982,10 +2009,11 @@ std::vector<uint8_t> readFileBytes(const fs::path& path) {
 
 /// Error-recovery cancel must not save a cache from an unhealthy driver
 /// state. When a decode fails mid-batch, `failGroupLocked` tears each
-/// affected slot down through `cancelSlotLocked(SaveCachePolicy::Skip)`;
-/// the graceful-cancel path (user-issued `cancel()`) still passes the
-/// default `Save`. This test forces the decode-error path by injecting a
-/// failing `decodeFunc_` while a batch is in flight against a primed
+/// affected slot down through `cancelSlotLocked(SaveCachePolicy::Skip)`.
+/// Graceful cancellation may still carry the default `Save` policy, but the
+/// rolled-back driver's commit decision vetoes persistence. This test forces
+/// the decode-error path by injecting a failing `decodeFunc_` while a batch is
+/// in flight against a primed
 /// `cacheKey`, then asserts the on-disk cache is preserved.
 ///
 /// The strong invariant is "saveCache did not run", not "bytes are
@@ -2003,10 +2031,9 @@ std::vector<uint8_t> readFileBytes(const fs::path& path) {
 /// (e.g. hybrid-recurrent rollback failure) is subsequently
 /// serialized on top of the warm baseline.
 ///
-/// The `cancelSlotLocked(SaveCachePolicy::Save)` graceful contract is
-/// already covered by `BatchCancelRestoresCacheToWarmBaseline`: it
-/// primes a cache, cancels via `model->cancel()`, and asserts the
-/// rolled-back state was persisted.
+/// The graceful-cancel contract is covered by
+/// `BatchCancelRestoresMemoryWithoutOverwritingWarmCache`: it primes a cache,
+/// cancels via `model->cancel()`, and asserts the cache remains untouched.
 TEST_F(
     ContinuousBatchingIntegrationTest,
     BatchDecodeErrorDoesNotOverwritePrimedCache) {
