@@ -1076,6 +1076,7 @@ test('the bare-log pull is platform-appropriate and explains the Android gap', (
   // The Android branch must say why, and point at where the output actually is:
   // the bare runtime logs to logcat, so logcat_full.txt carries the reason.
   assert.match(template, /no bare_console\.log on Android/)
-  assert.match(template, /run-as refuses on a release-signed APK/)
+  // Match on facts, not on how the comment happens to wrap.
+  assert.match(template, /release-signed APK/)
   assert.match(template, /logcat_full\.txt under the `bare` tag/)
 })

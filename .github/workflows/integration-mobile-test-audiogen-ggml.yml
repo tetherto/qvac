@@ -262,18 +262,16 @@ jobs:
       # `prebuild-run-id` input, and GitHub only WARNS on an unknown input, so
       # the run would quietly install @qvac/audiogen-ggml@latest instead of the
       # binaries you asked for. Turn that into a failure.
-      # always(): when the input is ignored the setup step fails first, with a
-      # bare "Artifact not found for name: prebuilds-audiogen-ggml" that says
-      # nothing about the cause. Run regardless so the reason is stated.
+      # always(): when the input is ignored the setup step fails first with a
+      # message that says nothing about the cause. Run regardless so it is stated.
       - name: Assert the requested prebuild run id was honoured
         if: always() && inputs.prebuild_run_id != ''
         env:
           REQUESTED: ${{ inputs.prebuild_run_id }}
           RESOLVED: ${{ steps.setup.outputs.prebuild-source-run-id }}
         run: |
-          # The resolver trims its input and emits the trimmed id, so compare
-          # trimmed values: a run id pasted with a stray space would otherwise
-          # install correctly and then fail here, after the build was paid for.
+          # The resolver emits a trimmed id, so compare trimmed: a stray pasted
+          # space would otherwise fail here after the build was paid for.
           REQUESTED="${REQUESTED#"${REQUESTED%%[![:space:]]*}"}"
           REQUESTED="${REQUESTED%"${REQUESTED##*[![:space:]]}"}"
           if [ "$RESOLVED" = "$REQUESTED" ]; then
@@ -281,13 +279,11 @@ jobs:
             exit 0
           fi
           echo "::error::prebuild_run_id=$REQUESTED was requested but the prebuilds did not come from it (resolved '$RESOLVED')."
-          echo "If the log shows \"Unexpected input(s) 'prebuild-run-id'\", that is the cause:"
-          echo "this addon loads its composite actions from the default branch (the supply-chain"
-          echo "guard on its release environment), so it only supports prebuild_run_id once that"
-          echo "support is on the default branch. Note @qvac/audiogen-ggml publishes no prebuilds,"
-          echo "so the @latest fallback cannot work either. Use the GPR route until then:"
+          echo "If the log shows \"Unexpected input(s) 'prebuild-run-id'\": this addon loads its"
+          echo "composite actions from the default branch, so it only supports prebuild_run_id"
+          echo "once that support is on the default branch. @qvac/audiogen-ggml publishes no"
+          echo "prebuilds, so @latest cannot work either — use the GPR route until then:"
           echo "  -f package_spec=@tetherto/audiogen-ggml-mono@<dev version>"
-          echo "Otherwise the resolver error above explains why the run id was not usable."
           echo "See docs/ci/MOBILE-ON-DEMAND.md."
           exit 1
 

@@ -15,7 +15,13 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const { MODEL_SHARDS, buildManifest, buildScript, formatYamlBlock, readKnownRunners } = require('../generate-prestage-block')
+const {
+  MODEL_SHARDS,
+  buildManifest,
+  buildScript,
+  formatYamlBlock,
+  readKnownRunners
+} = require('../generate-prestage-block')
 
 function withAssetsDir(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vla-prestage-'))

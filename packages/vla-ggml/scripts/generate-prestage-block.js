@@ -27,26 +27,20 @@ const MODEL_SHARDS = [
   { test: 'runGrootTest', name: 'groot-q5_vf16.gguf', urlsFile: 'groot-urls.json' }
 ]
 
-// The set of mobile runner names — the drift oracle. buildManifest below only
-// bakes shards whose presigned URL already exists, and several runners need no
-// model at all, so a grep that matches a KNOWN runner but no manifest key is a
-// legit "URL not staged yet -> network fallback". A grep that matches NO known
-// runner at all is a test-groups <-> model-map drift and must fail closed.
+// The set of mobile runner names — the drift oracle. A grep matching a KNOWN
+// runner with no manifest key is a legit "no URL staged -> network fallback";
+// one matching NO known runner is drift and must fail closed.
 //
-// Read from test-groups.json, which is the actual runner list, NOT from
-// MODEL_SHARDS, which is only the subset that has a model to stage. Deriving it
-// from MODEL_SHARDS made every model-less runner look like drift:
-// `-f tests=runEsmNamedExportsTest` failed on device with "matched no known
-// runner" even though it is a scheduled runner, and the mobile-deferred
-// runPi05Test the comment above calls out would have done the same.
+// Read from test-groups.json, the actual runner list, NOT from MODEL_SHARDS,
+// which is only the subset that has a model. Deriving it from MODEL_SHARDS made
+// every model-less runner look like drift and fail on device.
 function readKnownRunners(testGroupsPath = DEFAULT_TEST_GROUPS) {
   const names = new Set(MODEL_SHARDS.map((s) => s.test))
   let groups
   try {
     groups = JSON.parse(fs.readFileSync(testGroupsPath, 'utf8'))
   } catch (_) {
-    // Missing or unreadable: fall back to the model list rather than emitting an
-    // empty oracle, which would fail every grep closed.
+    // Fall back to the model list: an empty oracle would fail every grep closed.
     return [...names]
   }
   const walk = (node) => {
@@ -61,10 +55,15 @@ function readKnownRunners(testGroupsPath = DEFAULT_TEST_GROUPS) {
   return [...names].sort()
 }
 
-// Emitted as a single-quoted JS array literal so it stays safe inside the
-// `node -e "…"` arg. Runner names are identifiers, asserted above.
+// Single-quoted JS array literal so it stays safe inside the `node -e "…"` arg.
 function knownRunnersLiteral(testGroupsPath = DEFAULT_TEST_GROUPS) {
-  return '[' + readKnownRunners(testGroupsPath).map((n) => `'${n}'`).join(',') + ']'
+  return (
+    '[' +
+    readKnownRunners(testGroupsPath)
+      .map((n) => `'${n}'`)
+      .join(',') +
+    ']'
+  )
 }
 
 // Build the { <testFn>: [{ name, url }] } manifest from the bundled *-urls.json.
@@ -251,4 +250,11 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { MODEL_SHARDS, buildManifest, buildScript, formatYamlBlock, readKnownRunners, IOS_BUNDLE_ID }
+module.exports = {
+  MODEL_SHARDS,
+  buildManifest,
+  buildScript,
+  formatYamlBlock,
+  readKnownRunners,
+  IOS_BUNDLE_ID
+}
