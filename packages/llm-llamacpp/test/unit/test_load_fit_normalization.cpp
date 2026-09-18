@@ -37,6 +37,26 @@ void expectOnlyMappedFieldChanges(
   EXPECT_EQ(toggledSnapshot, expectedSnapshot);
 }
 
+bool hasRegisteredNonCpuDevice(const char* name) {
+  ggml_backend_load_all();
+  ggml_backend_dev_t device = ggml_backend_dev_by_name(name);
+  return device != nullptr &&
+         ggml_backend_dev_type(device) != GGML_BACKEND_DEVICE_TYPE_CPU;
+}
+
+std::string registeredDeviceNames() {
+  ggml_backend_load_all();
+  std::string names;
+  for (size_t index = 0; index < ggml_backend_dev_count(); ++index) {
+    ggml_backend_dev_t device = ggml_backend_dev_get(index);
+    if (!names.empty()) {
+      names += ", ";
+    }
+    names += ggml_backend_dev_name(device);
+  }
+  return names.empty() ? "none" : names;
+}
+
 } // namespace
 
 TEST(LoadFitSnapshotTest, CapturesEveryFitAffectingCommonParam) {
@@ -1036,6 +1056,12 @@ TEST_F(
 // Adreno-<800 one-bit BitNet load proves the split filter did not run.
 TEST_F(
     LoadFitNormalizationTest, SplitModeNoneLeavesAdrenoPolicyToChooseBackend) {
+  // Unlike split modes that pin device handles, 'none' asks fabric to resolve
+  // the selected device by name against the live backend registry.
+  if (!hasRegisteredNonCpuDevice("vulkan0")) {
+    GTEST_SKIP() << "no registered non-CPU device named vulkan0; registered: "
+                 << registeredDeviceNames();
+  }
   test_common::MockModelMetaData bitnet{true, "bitnet"};
   auto config = baseConfig();
   config["split-mode"] = "none";
