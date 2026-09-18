@@ -1,6 +1,7 @@
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import type { AbortSignal } from 'bare-abort-controller'
+import type { QVACBlobBinding } from '@qvac/registry-client'
 
 import { getCacheDir } from '@/utils/cache/paths'
 import { getEngineLogger } from '@/logging/index'
@@ -34,7 +35,11 @@ export type FitStubOutcome =
   | { status: 'ready'; path: string; bytes: number; cached: boolean }
   | { status: 'unavailable'; reason: FitStubUnavailableReason; message?: string }
 
-/** A blob the registry can hand back. Structural, to avoid a client import. */
+/**
+ * The part of a registry blob binding this module reads. The record's own
+ * binding, which carries the core coordinates as well, is what reaches the
+ * download.
+ */
 export interface FitBlobBinding {
   sha256: string
   byteLength: number
@@ -67,24 +72,13 @@ export interface FitStubOptions {
  */
 const FIT_STUB_DOWNLOAD_TIMEOUT_MS = 10_000
 
-// Read structurally: a published client older than the field returns a record
-// without it, which is the ordinary `no-fit-blob` case rather than a type error.
-function toFitStubEntry(entry: object): FitStubEntry {
-  const binding: unknown = (entry as { fitBlobBinding?: unknown }).fitBlobBinding
-  if (typeof binding !== 'object' || binding === null) return {}
-  const { sha256, byteLength } = binding as { sha256?: unknown; byteLength?: unknown }
-  if (typeof sha256 !== 'string' || typeof byteLength !== 'number') return {}
-  return { fitBlobBinding: binding as FitBlobBinding }
-}
-
 async function defaultGetEntry(
   registryPath: string,
   registrySource: string
 ): Promise<FitStubEntry | null> {
   const { getRegistryClient } = await import('@/runtime/registry-client')
   const client = await getRegistryClient()
-  const entry: object | null = await client.getModel(registryPath, registrySource)
-  return entry === null ? null : toFitStubEntry(entry)
+  return client.getModel(registryPath, registrySource)
 }
 
 async function defaultDownloadBlob(
@@ -94,17 +88,12 @@ async function defaultDownloadBlob(
 ): Promise<unknown> {
   const { getRegistryClient } = await import('@/runtime/registry-client')
   const client = await getRegistryClient()
-  // `binding` is the record's own object, so it carries the core coordinates
-  // `downloadBlob` needs beyond the two fields typed here.
-  return client.downloadBlob(
-    binding as never,
-    {
-      outputFile,
-      timeout: FIT_STUB_DOWNLOAD_TIMEOUT_MS,
-      maxRetries: 1,
-      ...(signal !== undefined && { signal })
-    } as never
-  )
+  return client.downloadBlob(binding as QVACBlobBinding, {
+    outputFile,
+    timeout: FIT_STUB_DOWNLOAD_TIMEOUT_MS,
+    maxRetries: 1,
+    ...(signal !== undefined && { signal })
+  })
 }
 
 function unavailable(reason: FitStubUnavailableReason, message?: string): FitStubOutcome {

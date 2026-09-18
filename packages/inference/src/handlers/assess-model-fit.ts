@@ -2,15 +2,16 @@ import os from 'bare-os'
 import type {
   AssessModelFitRequest,
   AssessModelFitResponse,
-  ModelFitWorkload,
+  ModelFitCandidate,
   NativeProbeFit
 } from '@/schemas/assess-model-fit'
 import { ModelType, type CanonicalModelType } from '@/schemas/index'
 import { projectFitFromStub } from '@/resources/model-fit/fit-stub/project-fit-from-stub'
 import { resolveModelConfig } from '@/runtime/state'
+import { getModelResourceProfile } from '@/models/registry/resource-profiles'
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
-import { assessModelFitFromResources } from '@/resources/model-fit/assess'
+import { assessModelFitFromResources, type ProfileResolver } from '@/resources/model-fit/assess'
 import { getPlatformCalibration } from '@/resources/model-fit/calibration/index'
 import type { ModelFitPlatform } from '@/resources/model-fit/types'
 
@@ -58,34 +59,51 @@ async function resolveNativeFit(
   const candidate = request.models[0]
   if (!candidate) return undefined
 
-  const modelType = fitModelType(candidate.workload)
-  if (!modelType) return undefined
+  const load = fitLoad(candidate)
+  if (!load) return undefined
 
-  const outcome = await projectFitFromStub({
-    model: candidate.model,
-    modelType,
-    modelConfig: fitModelConfig(candidate.workload)
-  })
+  const outcome = await projectFitFromStub({ model: candidate.model, ...load })
 
   return outcome.status === 'projected' ? outcome.fit : undefined
 }
 
-/** The engine whose fitter covers a workload, where one does. */
-function fitModelType(workload: ModelFitWorkload): CanonicalModelType | undefined {
-  return workload.kind === 'llm' ? ModelType.llamacppCompletion : undefined
+export interface FitLoad {
+  modelType: CanonicalModelType
+  modelConfig: Record<string, unknown>
 }
 
 /**
- * The load `loadModel` would run for this workload: the caller's context on
- * top of the same device defaults a real load resolves. The fitter answers
- * `unsupported-config` for a load with no `device`, so the bare workload alone
- * would never reach a verdict.
+ * The load `loadModel` would run for this candidate, or `undefined` where no
+ * fitter covers it.
+ *
+ * The engine comes from the catalog profile, not from the workload: `llm` names
+ * a token-context workload and covers embedding models too, which the
+ * completion fitter refuses for asking more context than they declare. The
+ * config carries the same device defaults a real load resolves — the fitter
+ * answers `unsupported-config` for a load with no `device`. An embedding load
+ * has no context setting; the fitter reads the window the model declares.
  */
-export function fitModelConfig(workload: ModelFitWorkload): Record<string, unknown> {
-  if (workload.kind !== 'llm') return {}
-  return resolveModelConfig<Record<string, unknown>>(ModelType.llamacppCompletion, {
-    ctx_size: workload.contextTokens
-  })
+export function fitLoad(
+  candidate: ModelFitCandidate,
+  resolveProfile: ProfileResolver = getModelResourceProfile
+): FitLoad | undefined {
+  if (candidate.workload.kind !== 'llm') return undefined
+
+  // A model outside the catalog is taken as a completion model, the common
+  // case for an `llm` workload.
+  const engine =
+    resolveProfile(candidate.model.sha256Checksum)?.engine ?? ModelType.llamacppCompletion
+
+  if (engine === ModelType.llamacppEmbedding) {
+    return { modelType: engine, modelConfig: resolveModelConfig(engine, {}) }
+  }
+  if (engine === ModelType.llamacppCompletion) {
+    return {
+      modelType: engine,
+      modelConfig: resolveModelConfig(engine, { ctx_size: candidate.workload.contextTokens })
+    }
+  }
+  return undefined
 }
 
 function readResources(): SystemResources {

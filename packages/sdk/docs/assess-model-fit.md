@@ -49,6 +49,10 @@ one budget, so a set of candidates keeps the calibrated estimate that can be
 aggregated. A model with no published description, and an offline caller, fall
 back the same way.
 
+The fitter follows the catalog's engine, not the workload: a completion model
+is fitted at `contextTokens`, an embedding model as an embedding load at the
+context window it declares.
+
 The floor omits everything that only a real load can tell you — engine
 overhead, compute buffers, a completion's working peak — and all of those are
 non-negative, so it never overstates the cost. That makes it valid on every
