@@ -4,7 +4,7 @@ on:
     inputs:
       platform:
         type: choice
-        options: [linux, windows]
+        options: [linux, windows, software]
         default: linux
 permissions:
   contents: read
@@ -16,7 +16,7 @@ jobs:
   diagnose:
     if: inputs.platform != 'windows'
     needs: runner_names
-    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+    runs-on: ${{ inputs.platform == 'software' && 'ubuntu-24.04' || needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
     timeout-minutes: 35
     environment: release
     env:
@@ -28,6 +28,11 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: lts/*
+      - name: Install software Vulkan and debugger
+        if: inputs.platform == 'software'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdb mesa-vulkan-drivers libvulkan1 libgomp1 libomp5
       - name: Install tooling
         working-directory: packages/tts-ggml
         run: |
