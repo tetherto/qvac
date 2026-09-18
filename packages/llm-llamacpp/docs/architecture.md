@@ -69,7 +69,7 @@
 
 **Dependencies:**
 - inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler, runJob/activate/loadWeights/cancel/cancelJob/activeJobs/destroyInstance)
-- @qvac/fabric (^0.13.0): Shared llama.cpp/ggml/mtmd inference engine
+- @qvac/fabric (^0.16.1): Shared llama.cpp/ggml/mtmd inference engine
 - @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + serialized admission)
 - @qvac/logging: `QvacLogger` wrapper
 - bare-process: runtime/process integration used by the JS package surface
