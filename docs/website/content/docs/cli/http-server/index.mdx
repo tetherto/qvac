@@ -540,6 +540,10 @@ Both forms need a matching entry in `tools`: a demanding `tool_choice` with no
 tool name in place of the object form is rejected the same way — use the object
 form to target one tool.
 
+`auto`, `none` and `required` are reserved: a tool carrying one of those names
+cannot be targeted through `tool_choice` and the request returns
+`400 invalid_tool_choice`. Rename the tool to target it.
+
 A tool call the model emits that fails to parse or validate is dropped, so the
 response comes back with `finish_reason: "stop"` and no `tool_calls`. The server
 log records what happened (`toolerrors=1 (PARSE_ERROR)`) — the OpenAI response

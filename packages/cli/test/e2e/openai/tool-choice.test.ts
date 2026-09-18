@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { CompletionRun, ToolCall, ToolCallError } from '@qvac/sdk'
 import { createServer } from '../helpers/server.js'
 import { openaiState } from '@/serve/extensions/openai/state'
-import { JSON_HEADERS, assertStatusAndError } from '../helpers/http.js'
+import { JSON_HEADERS, assertStatusAndError, collectSSE } from '../helpers/http.js'
 
 const CHAT_TOOLS = [
   {
@@ -25,8 +25,9 @@ const RESPONSES_TOOLS = [
   }
 ]
 
-// tools is on, so a rejection here is the tool_choice check and never the
-// load-flag gate that `tools-flag.test.ts` covers.
+// tools is on because the success cases below need it. Ordering already keeps
+// the two gates apart: `toSdkChatArgs` throws before `assertToolsEnabled` runs,
+// on both routes, so `invalid_tool_choice` wins either way.
 const CONFIG = {
   serve: {
     models: {
@@ -176,6 +177,13 @@ function stubRun(opts: { text?: string; toolCalls?: ToolCall[]; toolErrors?: Too
 interface SeenRequest {
   tools?: { name: string }[]
   generationParams?: { tool_choice?: string }
+}
+
+interface ChatChunk {
+  choices?: {
+    delta?: { tool_calls?: { function?: { name?: string } }[] }
+    finish_reason?: string | null
+  }[]
 }
 
 const WEATHER_CALL: ToolCall = {
@@ -355,6 +363,130 @@ describe('serve: tool_choice success path', () => {
 
       assert.equal(res.statusCode, 200, res.payload)
       assert.equal(seen[0]?.generationParams?.tool_choice, 'get_weather')
+    }
+  )
+
+  // The mode string and the object form take different branches through
+  // extractToolChoice, so the object-form case above does not cover this.
+  it(
+    'responses: required reaches the SDK and the call renders as a function_call item',
+    { timeout: 15000 },
+    async (t) => {
+      const app = await server(t)
+      await app.ready()
+      const seen: SeenRequest[] = []
+      openaiState(app.qvac).completionOverride = (params) => {
+        seen.push(params as SeenRequest)
+        return stubRun({ toolCalls: [WEATHER_CALL] })
+      }
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/responses',
+        headers: JSON_HEADERS,
+        payload: {
+          model: 'test-llm',
+          input: 'What is the weather in Lagos?',
+          tools: RESPONSES_TOOLS,
+          tool_choice: 'required'
+        }
+      })
+
+      assert.equal(res.statusCode, 200, res.payload)
+      assert.equal(seen[0]?.generationParams?.tool_choice, 'required')
+
+      const body = res.json<{ output: { type: string; name?: string }[] }>()
+      const call = body.output.find((item) => item.type === 'function_call')
+      assert.ok(call, `no function_call item in ${res.payload}`)
+      assert.equal(call.name, 'get_weather')
+    }
+  )
+})
+
+// runStreaming and the streaming branch of the responses route each build their
+// own argument object for completionFn, so the blocking cases above say nothing
+// about them -- and streaming is how agent clients call these routes.
+describe('serve: tool_choice on the streaming path', () => {
+  it(
+    'chat: required reaches the SDK and the tool call arrives as deltas',
+    { timeout: 15000 },
+    async (t) => {
+      const app = await server(t)
+      await app.ready()
+      const seen: SeenRequest[] = []
+      openaiState(app.qvac).completionOverride = (params) => {
+        seen.push(params as SeenRequest)
+        return stubRun({ toolCalls: [WEATHER_CALL] })
+      }
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/chat/completions',
+        headers: JSON_HEADERS,
+        payload: {
+          model: 'test-llm',
+          messages: [{ role: 'user', content: 'What is the weather in Lagos?' }],
+          tools: CHAT_TOOLS,
+          tool_choice: 'required',
+          stream: true
+        }
+      })
+
+      assert.equal(res.statusCode, 200, res.payload)
+      assert.equal(seen[0]?.generationParams?.tool_choice, 'required')
+
+      const events = collectSSE(res.payload)
+      const chunks = events
+        .map((e) => e.data)
+        .filter((d): d is ChatChunk => d !== '[DONE]' && typeof d === 'object' && d !== null)
+      const withCalls = chunks.find((c) => c.choices?.[0]?.delta?.tool_calls !== undefined)
+      assert.ok(withCalls, `no tool_calls delta in ${res.payload}`)
+      assert.equal(withCalls.choices?.[0]?.delta?.tool_calls?.[0]?.function?.name, 'get_weather')
+      assert.ok(
+        chunks.some((c) => c.choices?.[0]?.finish_reason === 'tool_calls'),
+        `no tool_calls finish_reason in ${res.payload}`
+      )
+    }
+  )
+
+  it(
+    'responses: required reaches the SDK on the streaming branch',
+    { timeout: 15000 },
+    async (t) => {
+      const app = await server(t)
+      await app.ready()
+      const seen: SeenRequest[] = []
+      openaiState(app.qvac).completionOverride = (params) => {
+        seen.push(params as SeenRequest)
+        return stubRun({ toolCalls: [WEATHER_CALL] })
+      }
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/responses',
+        headers: JSON_HEADERS,
+        payload: {
+          model: 'test-llm',
+          input: 'What is the weather in Lagos?',
+          tools: RESPONSES_TOOLS,
+          tool_choice: 'required',
+          stream: true
+        }
+      })
+
+      assert.equal(res.statusCode, 200, res.payload)
+      assert.equal(seen[0]?.generationParams?.tool_choice, 'required')
+
+      // Responses names its events in the JSON payload, not an SSE `event:` line.
+      const types = collectSSE(res.payload)
+        .map((e) => e.data)
+        .filter((d): d is { type: string } => typeof d === 'object' && d !== null)
+        .map((d) => d.type)
+      assert.ok(types.includes('response.completed'), `no response.completed in ${res.payload}`)
+      assert.ok(
+        types.includes('response.function_call_arguments.done'),
+        `tool call did not stream in ${res.payload}`
+      )
     }
   )
 })

@@ -277,6 +277,16 @@ function toolChoiceToSdk(raw: unknown): string {
       '"tool_choice" must carry a non-empty function name ("function.name" or "name").'
     )
   }
+  // The SDK encodes mode and target in one string, so a tool actually named
+  // `auto`/`none`/`required` would read back as the mode and quietly invert the
+  // request -- targeting `none` would disable tool calling. The object form is
+  // unambiguous here and nowhere downstream, so the collision is caught here.
+  if (TOOL_CHOICE_MODES.has(name)) {
+    throw new InvalidToolChoiceError(
+      `"tool_choice" cannot target a tool named ${JSON.stringify(name)}: the name is reserved ` +
+        `for the "auto" / "none" / "required" modes. Rename the tool to target it.`
+    )
+  }
   return name
 }
 

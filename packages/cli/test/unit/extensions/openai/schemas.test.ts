@@ -1270,6 +1270,36 @@ describe('extractToolChoice', () => {
   it('rejects an array', () => {
     assert.throws(() => extractToolChoice({ tool_choice: [] }, tools), InvalidToolChoiceError)
   })
+
+  // Collapsing to the bare name would read back as the mode and invert the
+  // request: targeting a tool called `none` would switch tool calling off.
+  it('rejects targeting a tool whose name collides with a mode', () => {
+    const reserved = ['auto', 'none', 'required']
+    for (const name of reserved) {
+      const declared = [
+        { type: 'function' as const, name, description: '', parameters: emptyParams }
+      ]
+      assert.throws(
+        () =>
+          extractToolChoice({ tool_choice: { type: 'function', function: { name } } }, declared),
+        InvalidToolChoiceError,
+        `chat object form naming ${name}`
+      )
+      assert.throws(
+        () => extractToolChoice({ tool_choice: { type: 'function', name } }, declared),
+        InvalidToolChoiceError,
+        `responses object form naming ${name}`
+      )
+    }
+  })
+
+  it('still reads the bare mode strings as modes', () => {
+    const declared = [
+      { type: 'function' as const, name: 'none', description: '', parameters: emptyParams }
+    ]
+    assert.equal(extractToolChoice({ tool_choice: 'none' }, declared), 'none')
+    assert.equal(extractToolChoice({ tool_choice: 'required' }, declared), 'required')
+  })
 })
 
 describe('withToolChoice', () => {

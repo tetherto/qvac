@@ -320,6 +320,35 @@ describe('chat completions (tools / structured output)', () => {
     assert.ok(['stop', 'tool_calls', 'length'].includes(body.choices[0].finish_reason))
   })
 
+  // The stubbed serve tests assert what we hand `completion()`; only a real run
+  // puts `tool_choice` through the SDK's strict generationParams schema and its
+  // tools refinement. reasoning_budget is off because the eager `required`
+  // grammar admits an unbounded <think> prefix that can eat the whole budget
+  // before a call is emitted.
+  it('honours tool_choice required end to end', async () => {
+    const res = await post('/v1/chat/completions', {
+      model: E2E.llm,
+      messages: [{ role: 'user', content: 'What is the weather in Paris?' }],
+      max_tokens: 128,
+      reasoning_budget: false,
+      tool_choice: 'required',
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'get_weather',
+            description: 'Get weather',
+            parameters: { type: 'object', properties: { city: { type: 'string' } } }
+          }
+        }
+      ]
+    })
+    assert.equal(res.statusCode, 200, res.payload)
+    const body = res.json() as any
+    assert.equal(body.choices[0].finish_reason, 'tool_calls', res.payload)
+    assert.equal(body.choices[0].message.tool_calls[0].function.name, 'get_weather')
+  })
+
   // A follow-up turn replays a prior assistant tool call as history. The server
   // re-renders it in the model's own dialect (resolved via getLoadedModelInfo);
   // rendering it in a foreign dialect made the model emit a malformed tool frame
