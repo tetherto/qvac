@@ -2362,32 +2362,29 @@ const TRUSTED_CACHE_EXEMPT = new Set([
 // passes a presence check while carrying `|| github.event_name ==
 // 'pull_request_target'` alongside them, which is exactly the hole this test
 // exists to close. So assert the untrusted ones are absent too.
-// A trusted event is not a trusted run: workflow_dispatch runs on any branch,
-// and `Checkout code` honours inputs.ref where that input exists, so a dispatch
-// on main pointed at refs/pull/<N>/head would build untrusted code under main's
-// cache key (QVAC-25269).
-const DISPATCH_BRANCH_GUARD =
-  "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-const DISPATCH_REF_GUARD = "(inputs.ref == '' || inputs.ref == github.ref_name)";
+// A trusted event is not a trusted run. `Checkout code` takes both a
+// `repository` and a `ref` redirect, and neither is safer for arriving as a
+// workflow_call input: on-pr-nx.yml fills both from its own workflow_dispatch
+// inputs and forwards them through cpp-tests-nx.yml to every leaf. Inside a
+// called workflow github.event_name and github.ref are the caller's, so a
+// dispatch on the default branch satisfies the branch clause while the checkout
+// builds a foreign tree (QVAC-25269).
+const TRUST_GUARDS = [
+  [
+    "the default branch",
+    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+  ],
+  ["its own ref", "(inputs.ref == '' || inputs.ref == github.ref_name)"],
+  [
+    "its own repository",
+    "(inputs.repository == '' || inputs.repository == github.repository)",
+  ],
+];
 
-// Only a `ref` workflow_dispatch input can redirect the checkout of a run the
-// gate has already called trusted; a workflow_call `ref` cannot.
-function hasRefDispatchInput(path) {
-  const source = withoutComments(read(path));
-  const start = source.indexOf("\n  workflow_dispatch:");
-  if (start === -1) return false;
-  const rest = source.slice(start + 1);
-  const end = rest.search(/\n  [a-z_]+:/);
-  return /\n      ref:/.test(end === -1 ? rest : rest.slice(0, end));
-}
-
-function missingTrustGuards(path, step) {
-  const missing = [];
-  if (!step.includes(DISPATCH_BRANCH_GUARD)) missing.push("the default branch");
-  if (hasRefDispatchInput(path) && !step.includes(DISPATCH_REF_GUARD)) {
-    missing.push("its own ref");
-  }
-  return missing;
+function missingTrustGuards(step) {
+  return TRUST_GUARDS.filter(([, guard]) => !step.includes(guard)).map(
+    ([label]) => label,
+  );
 }
 
 const UNTRUSTED_CACHE_EVENTS = [
@@ -2441,10 +2438,10 @@ test("cache policy: cpp-tests cache writes are gated on trusted events", () => {
         `${path}: a cache write step admits untrusted ${forbidden.join(", ")}`,
       );
     }
-    const unpinned = missingTrustGuards(path, step);
+    const unpinned = missingTrustGuards(step);
     if (unpinned.length) {
       offenders.push(
-        `${path}: a cache write step is not pinned to ${unpinned.join(" and ")}`,
+        `${path}: a cache write step is not pinned to ${unpinned.join(", ")}`,
       );
     }
   };
@@ -2498,10 +2495,10 @@ test("cache policy: the host-cache sync step is gated on trusted events", () => 
         `${path}: the host-cache sync step does not gate on ${missing.join(", ")}`,
       );
     }
-    const unpinned = missingTrustGuards(path, step);
+    const unpinned = missingTrustGuards(step);
     if (unpinned.length) {
       offenders.push(
-        `${path}: the host-cache sync step is not pinned to ${unpinned.join(" and ")}`,
+        `${path}: the host-cache sync step is not pinned to ${unpinned.join(", ")}`,
       );
     }
   }
