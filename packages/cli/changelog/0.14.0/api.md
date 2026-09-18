@@ -1,5 +1,35 @@
 # 🔌 API Changes v0.14.0
 
+## Expose KV-cache reclaim over serve
+
+PR: [#4249](https://github.com/tetherto/qvac/pull/4249)
+
+```bash
+curl -X DELETE http://localhost:11434/qvac/v1/kv_cache
+```
+
+```json
+{ "object": "kv_cache.reclaim", "deleted": true }
+```
+
+---
+
+## Integrate MiniMax-H3 video generation across inference and SDK
+
+PR: [#4351](https://github.com/tetherto/qvac/pull/4351)
+
+`POST /v1/videos` accepts MiniMax-H3 fields on the OpenAI-shaped video job (H3 text-encoder / video VAE / audio VAE sources via `serve.models`). Poll `GET /v1/videos/{id}` then fetch bytes from `GET /v1/videos/{id}/content`.
+
+---
+
+## Close the SDK gaps against @qvac/tts-ggml 0.8.x
+
+PR: [#4414](https://github.com/tetherto/qvac/pull/4414)
+
+`POST /v1/audio/speech` passes through the TTS load options that 0.8.x exposed (CosyVoice3, Chatterbox, Supertonic, Parler).
+
+---
+
 ## Update @qvac/tts-ggml to 0.9.1
 
 PR: [#4428](https://github.com/tetherto/qvac/pull/4428)
