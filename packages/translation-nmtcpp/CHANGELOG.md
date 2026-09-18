@@ -5,11 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.16.4] - 2026-09-18
 
 ### Fixed
 
-- Security: `nmt_model_load` now rejects a crafted GGML weight header instead of writing past the fixed `ne[4]` dimension array. `n_dims` is read straight from the model file and was used as the loop bound with no range check, so a `.bin` with `n_dims > 4` overwrote adjacent stack memory and crashed the native process (`STATUS_ACCESS_VIOLATION`) when loaded through the public `TranslationNmtcpp.load()` API with an untrusted or unverified model. Dimension counts are now bounded to `[1, 4]`, the tensor-name `length` is bounded before allocation, and each header read must return the requested byte count. Loading a legitimate model is unaffected.
+- Security: `nmt_model_load` rejects a crafted GGML weight header instead of overflowing the fixed `ne[4]` dimension array. An unchecked, file-controlled `n_dims > 4` overwrote adjacent stack memory and crashed the native process (`STATUS_ACCESS_VIOLATION`) when an untrusted model was loaded via `TranslationNmtcpp.load()`. Dimension counts are now bounded to `[1, 4]`, the tensor-name `length` is bounded before allocation, and each header read must return the requested byte count. Loading a legitimate model is unaffected.
 
 ## [0.16.3] - 2026-09-18
 
