@@ -1,6 +1,11 @@
 name: TTS CI crash diagnosis
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        type: choice
+        options: [linux, windows]
+        default: linux
 permissions:
   contents: read
   packages: read
@@ -9,6 +14,7 @@ jobs:
   runner_names:
     uses: ./.github/workflows/reusable-runner-names.yml
   diagnose:
+    if: inputs.platform != 'windows'
     needs: runner_names
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
     timeout-minutes: 35
@@ -71,3 +77,60 @@ jobs:
             echo "Native revision: $variant"
             gdb --batch -ex 'set pagination off' -ex 'set print thread-events off' -ex run -ex 'bt 30' -ex 'info sharedlibrary' --args "$native_bare" scripts/diagnose-cosyvoice.cjs
           done
+  diagnose-windows:
+    if: inputs.platform == 'windows'
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.win_2025_x64_gpu }}
+    timeout-minutes: 35
+    environment: release
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TTS_CPP_GPU_BACKEND: vulkan
+      GGML_VK_VISIBLE_DEVICES: '1'
+      VULKAN_SDK: 'C:\VulkanSDK'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: lts/*
+      - name: Install tooling
+        working-directory: packages/tts-ggml
+        run: |
+          npm.cmd install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm.cmd install -g --force bare
+          exit $LASTEXITCODE
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: prebuild-tts-ggml-win32-x64
+          path: current-prebuild
+          run-id: 35210879527
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: prebuild-tts-ggml-win32-x64
+          path: previous-prebuild
+          run-id: 35091070742
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ./.github/actions/cache-models
+        with:
+          package: tts-ggml
+          paths: packages/tts-ggml/models
+          hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
+          enable-cross-os: 'true'
+      - name: Stage CosyVoice models
+        working-directory: packages/tts-ggml
+        run: bare scripts/diagnose-cosyvoice.cjs download
+      - name: Compare native revisions
+        working-directory: packages/tts-ggml
+        shell: pwsh
+        run: |
+          foreach ($variant in @('current', 'previous')) {
+            if (Test-Path prebuilds/win32-x64) { Remove-Item -Recurse -Force prebuilds/win32-x64 }
+            New-Item -ItemType Directory -Force prebuilds | Out-Null
+            Copy-Item -Recurse -Force "../../$variant-prebuild/*" prebuilds/
+            Write-Output "Native revision: $variant"
+            bare scripts/diagnose-cosyvoice.cjs
+            Write-Output "Native result: $variant exit=$LASTEXITCODE"
+          }
+          exit 0
