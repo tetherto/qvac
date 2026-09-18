@@ -1,12 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FFmpegDecoder = void 0;
+exports.FFmpegDecoder = exports.VIDEO_LIMITS = exports.VIDEO_DEFAULTS = exports.VideoFrameDecoder = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const QvacLogger = require("@qvac/logging");
 const ffmpeg = require("bare-ffmpeg");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const error_1 = require("./utils/error");
+var video_1 = require("./video");
+Object.defineProperty(exports, "VideoFrameDecoder", { enumerable: true, get: function () { return video_1.VideoFrameDecoder; } });
+Object.defineProperty(exports, "VIDEO_DEFAULTS", { enumerable: true, get: function () { return video_1.VIDEO_DEFAULTS; } });
+Object.defineProperty(exports, "VIDEO_LIMITS", { enumerable: true, get: function () { return video_1.VIDEO_LIMITS; } });
 /**
  * FFmpeg-based audio decoder (single-threaded)
  */

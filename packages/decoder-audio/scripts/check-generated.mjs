@@ -3,6 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sourceRoot = path.join(packageRoot, 'src')
@@ -62,8 +63,13 @@ for (const outputPath of generatedOutputs) {
   fs.rmSync(path.join(packageRoot, outputPath), { force: true })
 }
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-const buildResult = run(npmCommand, ['run', 'build:ts'], { stdio: 'inherit' })
+// Invoke the local compiler directly: npm.cmd cannot be spawned without a shell.
+const require = createRequire(import.meta.url)
+const buildResult = run(
+  process.execPath,
+  [require.resolve('typescript/bin/tsc'), '-p', 'tsconfig.build.json'],
+  { stdio: 'inherit' }
+)
 if (buildResult.status !== 0) process.exit(buildResult.status ?? 1)
 
 const statusResult = run('git', [
