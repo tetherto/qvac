@@ -9,9 +9,9 @@
 #include <llama.h>
 
 #include "../utils/ChatTemplateUtils.hpp"
-#include "../utils/RequestRollbackState.hpp"
 #include "../utils/ReasoningUtils.hpp"
 #include "../utils/RecurrentStateSnapshot.hpp"
+#include "../utils/RequestRollbackState.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
@@ -206,6 +206,12 @@ public:
   forceNextSampledTokenInsideReasoningForTesting(llama_token token) noexcept {
     forcedNextSampledTokenForTesting_ = token;
   }
+  /// Makes the next synthetic reasoning-recovery decode fail before it reaches
+  /// llama.cpp. Used to verify that the request transaction rolls back instead
+  /// of committing a partially injected close sequence.
+  void forceReasoningRecoveryDecodeFailureForTesting() noexcept {
+    forceReasoningRecoveryDecodeFailureForTesting_ = true;
+  }
   /// Forces this context's tools-dropped count, so a test can give a slot a
   /// known value without needing a chat template that actually rejects tool
   /// definitions — unreachable through the addon's config, since fabric
@@ -320,6 +326,7 @@ private:
   llama_pos perSeqCtxCeiling_ = -1;
   bool forcePrefillEntryRestoreFailureForTesting_ = false;
   llama_token forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
+  bool forceReasoningRecoveryDecodeFailureForTesting_ = false;
   // Snapshot of `nPast_` at `evalMessageWithTools` entry. Restored by
   // `onCancel` to roll back to the pre-request cursor.
   llama_pos preRequestNPast_ = 0;

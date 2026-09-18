@@ -1636,12 +1636,6 @@ bool TextLlmContext::handleReasoningEOS(
   tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
   reasoningState_.inside_reasoning = false;
 
-  // Stream closing tag to user
-  std::string completeChars = utf8Buffer_.addToken(tokenStr);
-  if (!completeChars.empty()) {
-    emitOutputPiece(outputCallback, completeChars);
-  }
-
   // Same reason as the batch path in `onLogitsReady`: the substituted close
   // tag has to reach fabric's reasoning-budget matcher, or it stays in
   // COUNTING and `grammar_should_apply` keeps a lazy tool grammar disarmed
@@ -1649,13 +1643,10 @@ bool TextLlmContext::handleReasoningEOS(
   // what makes the grammar sampler provably not fed this token; see the
   // batch path for why the lazy flag alone is not enough.
   //
-  // Deliberately BEFORE the decode below, which can fail and return early.
-  // The close tag has already been streamed to the caller by then, so on that
-  // error path the caller would otherwise see a closed reasoning block while
-  // the matcher still believed it was inside one — and the mismatch outlives
-  // the failed decode, because this function's `true` return means "handled",
-  // not "finished", so generation continues. The accept needs nothing from
-  // the decode.
+  // Deliberately before the decode below so a successfully injected close
+  // advances the reasoning-budget matcher before sampling resumes. A failed
+  // decode throws and rolls back the whole cached request; the next prompt
+  // rebuilds sampler history from the restored resident ledger.
   if (params_.sampling.grammar_lazy &&
       reasoningBudgetSamplerBuilt(params_.sampling)) {
     common_sampler_accept(smpl_.get(), tokenId, true);
@@ -1664,15 +1655,25 @@ bool TextLlmContext::handleReasoningEOS(
   // Decode closing tag
   common_batch_clear(batch);
   common_batch_add(batch, tokenId, nPast, {seqId_}, true);
-  if (llama_decode(modelCtx_.lctx, batch) != 0) {
-    QLOG_IF(
-        Priority::ERROR,
-        "[TextLlm] Failed to decode closing tag during replacement\n");
-    return true;
+  const bool forceCloseDecodeFailure =
+      std::exchange(forceReasoningRecoveryDecodeFailureForTesting_, false);
+  if (forceCloseDecodeFailure || llama_decode(modelCtx_.lctx, batch) != 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        "[TextLlm] failed to decode reasoning close tag");
   }
   ++nPast;
   appendResidentToken(tokenId);
   ++lastGeneratedTokenCount_;
+
+  // Publish the synthetic close only after it is resident in KV. If decode
+  // fails, the request rolls back without exposing output that was never
+  // committed to the model context.
+  std::string completeChars = utf8Buffer_.addToken(tokenStr);
+  if (!completeChars.empty()) {
+    emitOutputPiece(outputCallback, completeChars);
+  }
 
   // KNOWN LIMITATION, pre-existing and narrower than it was: the trailing
   // newlines injected below are still streamed and decoded without any
@@ -1696,12 +1697,14 @@ bool TextLlmContext::handleReasoningEOS(
       common_batch_add(
           batch, reasoningState_.cached_newline_token, nPast, {seqId_}, true);
 
-      if (llama_decode(modelCtx_.lctx, batch) != 0) {
-        QLOG_IF(
-            Priority::ERROR,
-            "[TextLlm] Failed to decode newline token during forced "
-            "injection\n");
-        break;
+      const bool forceNewlineDecodeFailure =
+          std::exchange(forceReasoningRecoveryDecodeFailureForTesting_, false);
+      if (forceNewlineDecodeFailure ||
+          llama_decode(modelCtx_.lctx, batch) != 0) {
+        throw qvac_errors::StatusError(
+            ADDON_ID,
+            toString(FailedToDecode),
+            "[TextLlm] failed to decode reasoning recovery newline");
       }
       ++nPast;
       appendResidentToken(reasoningState_.cached_newline_token);

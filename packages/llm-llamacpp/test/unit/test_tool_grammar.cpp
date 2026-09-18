@@ -59,6 +59,15 @@ constexpr const char* THINKING_TOOL_PROMPT =
     R"("days":{"type":"integer"}},"required":["city"]}},)"
     R"({"role":"user","content":"What is the weather in Paris for the next 3 days? Use the tool."}])";
 
+constexpr const char* THINKING_TOOL_FOLLOWUP_PROMPT =
+    R"([{"role":"system","content":"You are a helpful assistant."},)"
+    R"({"type":"function","name":"get_weather","description":"Get the weather for a city",)"
+    R"("parameters":{"type":"object","properties":{"city":{"type":"string"},)"
+    R"("days":{"type":"integer"}},"required":["city"]}},)"
+    R"({"role":"user","content":"What is the weather in Paris for the next 3 days? Use the tool."},)"
+    R"({"role":"assistant","content":"I can check that with the weather tool."},)"
+    R"({"role":"user","content":"Please check Paris now."}])";
+
 constexpr const char* THINKING_PLAIN_PROMPT =
     R"([{"role":"system","content":"You are a helpful assistant."},)"
     R"({"role":"user","content":"Name one colour of the rainbow."}])";
@@ -640,6 +649,71 @@ TEST_F(
       << "the grammar admits only the declared argument shape, whose one "
          "required property is `city`: "
       << call;
+}
+
+// A synthetic reasoning close is part of the request transaction. If its
+// decode fails, the visible request must fail and both the live sequence and
+// last known-good cache file must remain at their pre-request state.
+TEST_F(
+    ToolGrammarModelTest,
+    ReasoningRecoveryDecodeFailureRollsBackWithoutSaving) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["reasoning-budget"] = "64";
+  config_["n_predict"] = "128";
+
+  const fs::path cacheDir = "reasoning_recovery_failure_cache";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  auto model = createModel();
+  auto* textContext =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(textContext, nullptr);
+
+  LlamaModel::Prompt primer = makePrompt(THINKING_TOOL_PROMPT);
+  primer.prefill = true;
+  primer.cacheKey = cacheKey;
+  primer.saveCacheToDisk = true;
+  EXPECT_TRUE(model->processPrompt(primer).empty());
+  ASSERT_TRUE(fs::exists(cacheKey));
+
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  const llama_pos primerNPast = llama_memory_seq_pos_max(mem, 0) + 1;
+  ASSERT_GT(primerNPast, 0);
+  const auto cacheBytes = readBinaryFile(cacheKey);
+  const auto cacheTime =
+      fs::last_write_time(cacheKey) - std::chrono::seconds(10);
+  fs::last_write_time(cacheKey, cacheTime);
+
+  const llama_token eos =
+      llama_vocab_eos(llama_model_get_vocab(textContext->getModel()));
+  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
+  textContext->forceNextSampledTokenInsideReasoningForTesting(eos);
+  textContext->forceReasoningRecoveryDecodeFailureForTesting();
+
+  LlamaModel::Prompt failed = makePrompt(THINKING_TOOL_FOLLOWUP_PROMPT);
+  failed.cacheKey = cacheKey;
+  failed.saveCacheToDisk = true;
+  try {
+    (void)model->processPrompt(failed);
+    FAIL() << "reasoning-recovery decode failure did not fail the request";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(error.codeString().find("FailedToDecode"), std::string::npos)
+        << error.codeString();
+  }
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, primerNPast)
+      << "failed reasoning recovery did not restore the live cache cursor";
+  EXPECT_EQ(readBinaryFile(cacheKey), cacheBytes)
+      << "failed reasoning recovery replaced the cache bytes";
+  EXPECT_EQ(fs::last_write_time(cacheKey), cacheTime)
+      << "failed reasoning recovery rewrote the cache file";
+
+  fs::remove_all(cacheDir);
 }
 
 // `onLogitsReady` reaches the substitution through its own inline branch when
