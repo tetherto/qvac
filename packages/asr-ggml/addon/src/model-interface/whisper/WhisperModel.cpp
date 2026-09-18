@@ -318,12 +318,15 @@ void WhisperModel::load() {
     if (contextParams.use_gpu &&
         !cfg_.whisperContextCfg.contains("gpu_device")) {
       const auto selected = main_gpu::resolveWhisperLoadSelection(
-          contextParams.use_gpu, contextParams.gpu_device, false,
+          contextParams.use_gpu,
+          contextParams.gpu_device,
+          false,
           cfg_.whisperContextCfg);
       if (selected.outOfRange) {
-        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-             "main-gpu registry index is out of range; using normal GPU "
-             "selection");
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "main-gpu registry index is out of range; using normal GPU "
+            "selection");
       }
       contextParams.use_gpu = selected.useGpu;
       if (contextParams.use_gpu) {
@@ -332,11 +335,12 @@ void WhisperModel::load() {
         std::string message =
             "GPU execution requested but no eligible device is available; "
             "falling back to CPU. Refused GPU-type devices:";
-        for (const auto &identity : selected.refused) {
+        for (const auto& identity : selected.refused) {
           message += " [" + identity + "]";
         }
-        QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
-             message.c_str());
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            message.c_str());
       } else {
         reportMissingGpuFallback = selected.warnMissingGpuFallback;
       }
@@ -392,8 +396,9 @@ void WhisperModel::load() {
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Whisper model loaded successfully");
 
-    captureActiveBackendInfo(contextParams.use_gpu || reportMissingGpuFallback,
-                             contextParams.gpu_device);
+    captureActiveBackendInfo(
+        contextParams.use_gpu || reportMissingGpuFallback,
+        contextParams.gpu_device);
 
     // Warm up the model on first load to avoid first-segment delay
     if (!is_warmed_up_) {

@@ -152,17 +152,19 @@ public:
 
 #ifdef QVAC_ASR_GGML_TESTING
   template <typename Registry>
-  main_gpu::WhisperLoadSelection
-  resolveMainGpuSelectionForTesting(bool useGpu, int gpuDevice,
-                                    bool hasLegacyGpuDevice,
-                                    const Registry &registry) const {
+  main_gpu::WhisperLoadSelection resolveMainGpuSelectionForTesting(
+      bool useGpu, int gpuDevice, bool hasLegacyGpuDevice,
+      const Registry& registry) const {
     return main_gpu::resolveWhisperLoadSelection(
-        useGpu, gpuDevice, hasLegacyGpuDevice, cfg_.whisperContextCfg,
+        useGpu,
+        gpuDevice,
+        hasLegacyGpuDevice,
+        cfg_.whisperContextCfg,
         registry);
   }
 
-  static bool configContextIsChangedForTesting(const WhisperConfig &oldCfg,
-                                               const WhisperConfig &newCfg) {
+  static bool configContextIsChangedForTesting(
+      const WhisperConfig& oldCfg, const WhisperConfig& newCfg) {
     return configContextIsChanged(oldCfg, newCfg);
   }
 #endif

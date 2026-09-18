@@ -1184,35 +1184,36 @@ TEST_F(WhisperModelTest, SetConfigUpdatesInternalConfig) {
 namespace {
 struct GpuSelectionMockDevice {
   enum ggml_backend_dev_type type;
-  const char *backend;
-  const char *description;
-  const char *name = nullptr;
+  const char* backend;
+  const char* description;
+  const char* name = nullptr;
 };
 
 struct GpuSelectionMockRegistry {
-  std::vector<const GpuSelectionMockDevice *> devices;
+  std::vector<const GpuSelectionMockDevice*> devices;
   size_t count() const { return devices.size(); }
-  const GpuSelectionMockDevice *get(size_t i) const { return devices[i]; }
-  auto type(const GpuSelectionMockDevice *dev) const { return dev->type; }
-  const char *backend(const GpuSelectionMockDevice *dev) const {
+  const GpuSelectionMockDevice* get(size_t i) const { return devices[i]; }
+  auto type(const GpuSelectionMockDevice* dev) const { return dev->type; }
+  const char* backend(const GpuSelectionMockDevice* dev) const {
     return dev->backend;
   }
-  const char *description(const GpuSelectionMockDevice *dev) const {
+  const char* description(const GpuSelectionMockDevice* dev) const {
     return dev->description;
   }
-  const char *name(const GpuSelectionMockDevice *dev) const {
+  const char* name(const GpuSelectionMockDevice* dev) const {
     return dev->name != nullptr ? dev->name : dev->description;
   }
 };
 } // namespace
 
-TEST_F(WhisperModelTest,
-       MainGpuModelLoadPathSelectsRawRegistryIndexAndClassSelectors) {
+TEST_F(
+    WhisperModelTest,
+    MainGpuModelLoadPathSelectsRawRegistryIndexAndClassSelectors) {
   const GpuSelectionMockDevice cpu{GGML_BACKEND_DEVICE_TYPE_CPU, "CPU", "CPU"};
-  const GpuSelectionMockDevice dedicated{GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA",
-                                         "NVIDIA", "cuda0"};
-  const GpuSelectionMockDevice integrated{GGML_BACKEND_DEVICE_TYPE_IGPU,
-                                          "Vulkan", "Intel", "vulkan0"};
+  const GpuSelectionMockDevice dedicated{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA", "NVIDIA", "cuda0"};
+  const GpuSelectionMockDevice integrated{
+      GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan", "Intel", "vulkan0"};
   const GpuSelectionMockRegistry registry{{&cpu, &dedicated, &integrated}};
 
   auto config = createTestConfig();
@@ -1226,15 +1227,15 @@ TEST_F(WhisperModelTest,
 
   config.whisperContextCfg["main-gpu"] = std::string("dedicated");
   WhisperModel dedicatedModel(config);
-  selected = dedicatedModel.resolveMainGpuSelectionForTesting(true, 0, false,
-                                                              registry);
+  selected = dedicatedModel.resolveMainGpuSelectionForTesting(
+      true, 0, false, registry);
   EXPECT_TRUE(selected.useGpu);
   EXPECT_EQ(selected.gpuDevice, 0);
 
   config.whisperContextCfg["main-gpu"] = std::string("integrated");
   WhisperModel integratedModel(config);
-  selected = integratedModel.resolveMainGpuSelectionForTesting(true, 0, false,
-                                                               registry);
+  selected = integratedModel.resolveMainGpuSelectionForTesting(
+      true, 0, false, registry);
   EXPECT_TRUE(selected.useGpu);
   EXPECT_EQ(selected.gpuDevice, 1);
 }
