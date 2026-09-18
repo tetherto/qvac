@@ -1,0 +1,151 @@
+---
+title: Kotlin SDK
+description: Build local AI apps with Kotlin coroutines and self-contained Android runtimes.
+schemaType: TechArticle
+---
+
+The Kotlin SDK drives the same QVAC 0.19.1 worker contract as the JS/TS and
+Python clients. It provides Kotlin data classes, `Flow` streams, structured
+completion runs, and an isolated Android service host.
+
+## Install
+
+Use the Multiplatform client when the application supplies or resolves a
+worker transport:
+
+```kotlin
+implementation("io.tether:qvac-sdk-kotlin:0.19.1")
+```
+
+Android applications normally choose one embedded runtime:
+
+| Artifact | Capabilities |
+| --- | --- |
+| `io.tether:qvac-sdk-android:0.19.1` | all current SDK addons/capabilities |
+| `io.tether:qvac-sdk-android-assistant:0.19.1` | chat and transcription |
+| `io.tether:qvac-sdk-android-llm:0.19.1` | completion and embeddings |
+| `io.tether:qvac-sdk-android-speech:0.19.1` | Whisper, Parakeet and BCI transcription, translation, and TTS |
+| `io.tether:qvac-sdk-android-vision:0.19.1` | multimodal completion, OCR, and classification |
+| `io.tether:qvac-sdk-android-media:0.19.1` | audio, image, video, world generation, and upscaling |
+| `io.tether:qvac-sdk-android-robotics:0.19.1` | VLA inference |
+
+All artifacts use the `io.tether.qvac.sdk` namespace. A profile's capability
+manifest is checked before each request; a missing addon produces
+`UnsupportedCapabilityException`. Inspect it with `client.runtimeProfile`.
+
+## Connect
+
+```kotlin
+val transport = AndroidServiceTransport.connect(applicationContext)
+val client = QvacClient(transport)
+
+try {
+    println(client.heartbeat())
+} finally {
+    client.close()
+}
+```
+
+The service runs in the app's private `:qvac_worker` process. Desktop JVM uses
+`JvmBareRpcTransport.connectResolved()`. Its loopback worker authenticates with
+a random per-launch `QVAC_IPC_AUTH_TOKEN` before Bare-RPC frames are accepted.
+Kotlin/Native targets are not published until they have tested worker hosts.
+
+## Completion and multimodal input
+
+```kotlin
+val run = client.completion.run(
+    modelId = modelId,
+    history = listOf(
+        QvacMessage.system("Be concise."),
+        QvacMessage.user(
+            "What is in this image?",
+            attachments = listOf(QvacAttachment("/data/user/0/app/files/photo.jpg")),
+        ),
+    ),
+)
+
+run.tokens.collect(::print)
+val answer = run.final.await()
+println("${answer.stopReason}: ${answer.stats?.tokensPerSecond} tok/s")
+```
+
+Generation defaults to `predict = -1`, so chat does not stop at an arbitrary
+token count. A run exposes `events`, `tokens`, `toolCallEvents`, accumulated
+text, thinking text, tool calls, statistics, stop reason, and `cancel()`.
+
+## Tool handlers
+
+```kotlin
+val weather = QvacTool(
+    name = "weather",
+    description = "Read local weather",
+    parameters = mapOf(
+        "city" to QvacToolParameter(QvacToolParameterType.STRING),
+    ),
+    required = setOf("city"),
+    handler = { args -> JsonPrimitive("Sunny in ${args.getValue("city")}") },
+)
+
+val run = client.completion.orchestrate(
+    modelId = modelId,
+    history = listOf(QvacMessage.user("Do I need an umbrella in Rome?")),
+    tools = listOf(weather),
+)
+println(run.text())
+```
+
+## Capability examples
+
+```kotlin
+val transcript = client.speech.transcribe(
+    modelId = whisperModelId,
+    audio = QvacDataInput.FilePath("/data/user/0/app/files/sample.wav"),
+)
+
+val speech = client.speech.synthesize(ttsModelId, "Hello from QVAC")
+val page = client.vision.ocr(ocrModelId, QvacDataInput.FilePath("/data/user/0/app/files/page.png"))
+val classes = client.vision.classify(classifierModelId, imageBase64)
+val vector = client.embeddings.embed(embeddingModelId, "private local AI")
+val translation = client.translation.run(nmtModelId, "hello", modelType = "nmt")
+
+val imageRun = client.media.diffusion(diffusionModelId, "a small red robot")
+val imageBase64 = imageRun.final.await().data.first()
+
+val hparams = client.vla.hparams(vlaModelId).hparams
+val actions = client.vla.run(
+    modelId = vlaModelId,
+    images = listOf(frontCamera, wristCamera),
+    imgWidth = hparams.visionImageSize,
+    imgHeight = hparams.visionImageSize,
+    state = qvacVlaPadState(robotState, hparams.maxStateDim),
+    tokens = instructionTokens,
+    mask = instructionMask,
+).actions
+```
+
+`client.media` also wraps audio generation, video/world generation, and
+upscaling. `client.bci` handles buffered and duplex neural transcription;
+`client.vla` handles VLA hparams, inference, and embodiment switching.
+The Android Feature Lab sample exercises completion, multimodal vision, OCR,
+transcription, TTS, embeddings, translation, and classification with small
+models suitable for a Pixel 8a.
+
+## API surface
+
+| Kotlin entry point | Purpose |
+| --- | --- |
+| `client.models` | registry, download, load, unload, and progress |
+| `client.completion` | completion runs and tool orchestration |
+| `client.speech` | transcription and TTS results |
+| `client.vision` | OCR and classification results |
+| `client.translation` | streaming translation run and cancellation |
+| `client.embeddings` | single and batch embeddings |
+| `client.media` | audio, diffusion, video, and upscale runs |
+| `client.bci` | buffered and duplex BCI transcription |
+| `client.vla` | VLA preprocessing, hparams, inference, and embodiment switching |
+| generated client methods | typed operation for every contract method |
+| `client.raw` | JSON call, stream, and duplex escape hatch |
+
+The generated layer in `io.tether.qvac.sdk.generated` contains every request,
+response, model constant, error code, and call shape in the shared contract.

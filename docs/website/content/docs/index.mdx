@@ -5,7 +5,7 @@ ogImage: /og-home.png
 ---
 
 import { MessagesSquare, Hash, Languages, Mic, Music, Speech, Volume2, ScanText, Image as ImageIcon, Video, Rotate3d, GalleryHorizontal, FlaskConical, ScanSearch, Shapes, Eye, Brain, DoorOpen, Server, MonitorPlay } from 'lucide-react'
-import { SiPython, SiTypescript } from '@icons-pack/react-simple-icons'
+import { SiKotlin, SiPython, SiTypescript } from '@icons-pack/react-simple-icons'
 
 ## Why QVAC?
 
@@ -108,7 +108,7 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   System overview diagram
 </object>
 
-_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. Two clients share that interface — JS/TS (`@qvac/sdk`, running on Node.js, [Bare](https://bare.pears.com), and [Expo](https://expo.dev)) and Python (`tetherto-qvac-sdk`, asyncio-native) — and both call into the same underlying runtime, so capabilities and behavior are identical either way.
+_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. Three clients share that interface — JS/TS (`@qvac/sdk`, running on Node.js, [Bare](https://bare.pears.com), and [Expo](https://expo.dev)), Python (`tetherto-qvac-sdk`, asyncio-native), and Kotlin (`io.tether:qvac-sdk-kotlin`, plus an Android runtime artifact) — and all call into the same underlying runtime, so capabilities and behavior are identical.
 
 Additionally, QVAC provides a CLI with development tools and an HTTP server that wraps QVAC and exposes an [**OpenAI-compatible API**](https://platform.openai.com/docs/api-reference). _You can use the HTTP server as a local model provider to connect any AI tool, harness, or system._
 
@@ -127,6 +127,9 @@ Choose how you want to start with QVAC:
   </Card>
   <Card href="/python-sdk" icon={<SiPython className="text-[var(--color-fd-primary)]" size={20} />} title="Python SDK">
     Install `tetherto-qvac-sdk`, run the quickstart, and drive the same worker from Python.
+  </Card>
+  <Card href="/kotlin-sdk" icon={<SiKotlin className="text-[var(--color-fd-primary)]" size={20} />} title="Kotlin SDK">
+    Add the KMP client or an embedded Android profile and use coroutine-native APIs.
   </Card>
   <Card href="https://qvac.tether.io/products/workbench/" icon={<MonitorPlay className="text-[var(--color-fd-primary)]" />} title="See QVAC in practice">
     Try QV.AC, our flagship desktop and mobile assistant app built with QVAC.
