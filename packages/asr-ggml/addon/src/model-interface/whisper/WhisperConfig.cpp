@@ -73,9 +73,9 @@ toWhisperContextParams(const WhisperConfig& whisperConfig) {
   whisper_context_params contextParams = whisper_context_default_params();
   try {
     (void)main_gpu::parse(whisperConfig.whisperContextCfg);
-  } catch (const std::invalid_argument& error) {
-    throw qvac_errors::StatusError(
-        qvac_errors::general_error::InvalidArgument, error.what());
+  } catch (const std::invalid_argument &error) {
+    throw qvac_errors::StatusError(qvac_errors::general_error::InvalidArgument,
+                                   error.what());
   }
   // GPU is opt-in: callers must explicitly set use_gpu=true.
   // Leaving it at the upstream default (true) causes a SIGSEGV at process exit
