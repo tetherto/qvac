@@ -24,6 +24,36 @@ if(SD_CUDA)
   if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE AND NOT DEFINED ENV{CUDAHOSTCXX})
     set(ENV{CUDAHOSTCXX} "clang++")
   endif()
+
+  # FindCUDAToolkit does not reliably infer the target-layout include
+  # directory from nvcc on CUDA 13+ installations. Resolve the toolkit root
+  # before CMake-vcpkg configures the manifest so the final addon link uses
+  # the same toolkit that built the CUDA-enabled ggml dependency.
+  find_program(SD_CUDA_NVCC NAMES nvcc
+    HINTS /usr/local/cuda/bin /usr/local/cuda-13.3/bin /usr/local/cuda-12.8/bin)
+  if(NOT SD_CUDA_NVCC)
+    message(FATAL_ERROR "SD_CUDA=ON requires nvcc to be available on PATH or under /usr/local/cuda")
+  endif()
+  get_filename_component(SD_CUDA_BIN_DIR "${SD_CUDA_NVCC}" DIRECTORY)
+  get_filename_component(SD_CUDA_TOOLKIT_ROOT "${SD_CUDA_BIN_DIR}" DIRECTORY)
+  set(CUDAToolkit_ROOT "${SD_CUDA_TOOLKIT_ROOT}" CACHE PATH
+      "CUDA toolkit root used by diffusion-cpp" FORCE)
+
+  # CUDA 13 packages headers below targets/<platform>/include. CMake can
+  # identify nvcc but still miss that include location when CUDA is not an
+  # enabled project language (as is the case for this C++ addon). Seed both
+  # variables consumed by FindCUDAToolkit before ggml's exported config calls
+  # find_dependency(CUDAToolkit).
+  find_path(SD_CUDA_INCLUDE_DIR cuda_runtime.h
+    HINTS
+      "${SD_CUDA_TOOLKIT_ROOT}/targets/x86_64-linux/include"
+      "${SD_CUDA_TOOLKIT_ROOT}/include"
+    REQUIRED)
+  get_filename_component(SD_CUDA_TARGET_DIR "${SD_CUDA_INCLUDE_DIR}" DIRECTORY)
+  set(CUDAToolkit_TARGET_DIR "${SD_CUDA_TARGET_DIR}" CACHE PATH
+      "CUDA target directory used by diffusion-cpp" FORCE)
+  set(CUDAToolkit_INCLUDE_DIRECTORIES "${SD_CUDA_INCLUDE_DIR}" CACHE PATH
+      "CUDA target include directories used by diffusion-cpp" FORCE)
 endif()
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
