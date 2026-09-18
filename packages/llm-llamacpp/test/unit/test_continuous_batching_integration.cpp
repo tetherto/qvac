@@ -2489,19 +2489,21 @@ TEST_F(ContinuousBatchingIntegrationTest, BatchMtmdMRopeCacheRoundTrip) {
     EXPECT_EQ(magic, static_cast<std::uint32_t>(LLAMA_STATE_SEQ_MAGIC));
   }
 
-  // Reload pass: a fresh model loads the cached image context, then we ask a
-  // follow-up that can ONLY be answered from the cached image -- no image is
-  // re-supplied on this turn. A non-empty reply is not enough: a corrupt
-  // M-RoPE KV (wrong per-cell kv_cell_ext x/y positions) still reloads and
-  // still generates, just garbage. So we assert the answer actually names the
-  // elephant in the fixture, proving the restored image context is
-  // semantically intact -- not merely present. If only the text context were
-  // restored (image KV missing), the model has nothing to describe and cannot
-  // produce "elephant".
+  // Reload pass: a fresh model loads the cached image context, then receives
+  // the complete authoritative history and the same image payload before the
+  // follow-up. The stable media identity lets reconciliation reuse the image
+  // prefix from disk and decode only the new text suffix. A non-empty reply is
+  // not enough: corrupt M-RoPE KV (wrong per-cell kv_cell_ext x/y positions)
+  // still reloads and generates, just garbage. Assert that the answer names
+  // the elephant to prove the restored image context is semantically intact.
   auto reloadModel = makeModel();
   ASSERT_TRUE(reloadModel->isLoaded());
-  auto followup =
-      makePrompt("What animal was in the image? Answer with one word.");
+  LlamaModel::Prompt followup;
+  followup.input =
+      R"([{"role":"user","type":"media","content":""},)"
+      R"({"role":"user","content":"What is in this image?"},)"
+      R"({"role":"user","content":"What animal was in the image? Answer with one word."}])";
+  followup.media.push_back(image);
   followup.cacheKey = cachePath.string();
   std::vector<LlamaModel::Prompt> followupPrompts;
   followupPrompts.push_back(std::move(followup));

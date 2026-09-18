@@ -757,6 +757,48 @@ TEST_F(MtmdLlmContextTest, ProcessWithSessionCache) {
   });
 }
 
+// Repeating the exact authoritative prompt trims the previously generated
+// tail back to the prompt boundary. Generation must still decode one prompt
+// token again so llama.cpp has fresh logits; otherwise the second request can
+// return empty output or ask llama.cpp for a nonexistent logits row.
+TEST_F(MtmdLlmContextTest, ExactCachedMultimodalPromptRefreshesLogits) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    FAIL() << "Multimodal test image not found";
+  }
+
+  auto model = createModel();
+  ASSERT_NE(model, nullptr) << "Model failed to load";
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-mtmd-exact-prompt-cache.bin";
+  fs::remove(cachePath);
+
+  auto makePrompt = [&]() {
+    LlamaModel::Prompt prompt;
+    prompt.input =
+        R"([{"role": "user", "type": "media", "content": ""},)"
+        R"( {"role": "user", "content": "Describe this image briefly."}])";
+    prompt.cacheKey = cachePath.string();
+    prompt.saveCacheToDisk = true;
+    prompt.media.push_back(readBinaryFile(imagePath));
+    return prompt;
+  };
+
+  const std::string firstOutput = model->processPrompt(makePrompt());
+  ASSERT_FALSE(firstOutput.empty());
+
+  std::string repeatedOutput;
+  ASSERT_NO_THROW({ repeatedOutput = model->processPrompt(makePrompt()); });
+  EXPECT_FALSE(repeatedOutput.empty())
+      << "an exact warm multimodal prompt must refresh logits before sampling";
+
+  fs::remove(cachePath);
+}
+
 /// `llama_state_seq_load_file` restores the sequence's KV before `loadCache`
 /// validates it. A throw after the restore must roll those cells back: the
 /// scheduler installs its per-slot cleanup guard only once `loadCache` returns,

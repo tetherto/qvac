@@ -85,6 +85,34 @@ bool hasToolCallBlock(const std::string& text) {
   return text.find("<tool_call>") != std::string::npos;
 }
 
+std::string jsonEscape(const std::string& value) {
+  std::string escaped;
+  escaped.reserve(value.size());
+  for (const unsigned char ch : value) {
+    switch (ch) {
+    case '\\':
+      escaped += "\\\\";
+      break;
+    case '"':
+      escaped += "\\\"";
+      break;
+    case '\n':
+      escaped += "\\n";
+      break;
+    case '\r':
+      escaped += "\\r";
+      break;
+    case '\t':
+      escaped += "\\t";
+      break;
+    default:
+      escaped += static_cast<char>(ch);
+      break;
+    }
+  }
+  return escaped;
+}
+
 /// The first `<tool_call>` block, so a name assertion reads only the call and
 /// not any prose around it. Empty when the output carries no call.
 std::string firstToolCallBlock(const std::string& text) {
@@ -357,6 +385,79 @@ TEST_F(ToolGrammarModelTest, WarmCacheRearmsRequiredToolGrammar) {
   EXPECT_EQ(sampling(*model).grammar.type, COMMON_GRAMMAR_TYPE_TOOL_CALLS);
   EXPECT_FALSE(sampling(*model).grammar_lazy);
   EXPECT_GT(test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0);
+
+  fs::remove_all(cacheDir);
+}
+
+TEST_F(
+    ToolGrammarModelTest,
+    BatchWarmFullHistoryRearmsRequiredToolGrammarPerSlot) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["parallel"] = "3";
+  config_["ctx_size"] = "12288";
+  config_["n_predict"] = "96";
+  auto model = createModel();
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr);
+
+  const fs::path cacheDir =
+      fs::temp_directory_path() /
+      ("batch-warm-tool-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()));
+  fs::create_directories(cacheDir);
+
+  const std::string prefix =
+      R"([{"role":"system","content":"You are a reliable home-automation assistant. /no_think"},{"type":"function","name":"set_thermostat","description":"Set a room thermostat","parameters":{"type":"object","properties":{"room":{"type":"string"},"temperature":{"type":"integer"}},"required":["room","temperature"]}})";
+  std::vector<std::string> firstUsers;
+  std::vector<LlamaModel::Prompt> firstPrompts;
+  for (size_t user = 0; user < 3; ++user) {
+    firstUsers.push_back(
+        "Set room user-" + std::to_string(user) +
+        " to 20 degrees using the tool.");
+    LlamaModel::Prompt prompt;
+    prompt.input = prefix + R"(,{"role":"user","content":")" +
+                   firstUsers.back() + R"("}])";
+    prompt.cacheKey =
+        (cacheDir / ("user-" + std::to_string(user) + ".bin")).string();
+    prompt.saveCacheToDisk = true;
+    prompt.generationParams.tool_choice = "required";
+    prompt.generationParams.reasoning_budget = 0;
+    firstPrompts.push_back(std::move(prompt));
+  }
+
+  const auto firstOutputs = model->processPromptBatch(firstPrompts);
+  ASSERT_EQ(firstOutputs.size(), 3u);
+  for (size_t user = 0; user < firstOutputs.size(); ++user) {
+    ASSERT_TRUE(hasToolCallBlock(firstOutputs[user]))
+        << "cold request for user " << user
+        << " did not produce a required tool call: " << firstOutputs[user];
+  }
+
+  std::vector<LlamaModel::Prompt> warmPrompts;
+  for (size_t user = 0; user < 3; ++user) {
+    LlamaModel::Prompt prompt;
+    prompt.input =
+        prefix + R"(,{"role":"user","content":")" + firstUsers[user] +
+        R"("},{"role":"assistant","content":")" +
+        jsonEscape(firstOutputs[user]) +
+        R"("},{"role":"tool","content":"{\"ok\":true}"},{"role":"user","content":"Set the same room to 21 degrees using the tool."}])";
+    prompt.cacheKey =
+        (cacheDir / ("user-" + std::to_string(user) + ".bin")).string();
+    prompt.saveCacheToDisk = true;
+    prompt.generationParams.tool_choice = "required";
+    prompt.generationParams.reasoning_budget = 0;
+    warmPrompts.push_back(std::move(prompt));
+  }
+
+  const auto warmOutputs = model->processPromptBatch(warmPrompts);
+  ASSERT_EQ(warmOutputs.size(), 3u);
+  for (size_t user = 0; user < warmOutputs.size(); ++user) {
+    EXPECT_TRUE(hasToolCallBlock(warmOutputs[user]))
+        << "warm request for user " << user
+        << " lost its required tool grammar: " << warmOutputs[user];
+  }
 
   fs::remove_all(cacheDir);
 }

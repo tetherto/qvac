@@ -676,7 +676,7 @@ PrefillPlan TextLlmContext::preparePrefill(
 
   if (cacheReconciliationEnabled_) {
     beginCacheRequest();
-    inputTokens = reconcilePrompt(inputTokens);
+    inputTokens = reconcilePrompt(inputTokens, isPrefillOnlyRequest);
   }
 
   const size_t nTokens = inputTokens.size();
@@ -1253,21 +1253,30 @@ void TextLlmContext::rebuildSamplerFromLedger(const cache::Ledger& ledger) {
   }
 }
 
-std::vector<llama_token>
-TextLlmContext::reconcilePrompt(const std::vector<llama_token>& fullPrompt) {
+std::vector<llama_token> TextLlmContext::reconcilePrompt(
+    const std::vector<llama_token>& fullPrompt, bool isPrefillOnlyRequest) {
   pendingPromptLedger_ = cache::fromTokens(fullPrompt);
   const size_t prefix =
       cache::commonPrefix(residentLedger_, pendingPromptLedger_);
   const size_t cachedLength = residentLedger_.entries.size();
-  size_t reuse = prefix;
+  // A fully reused prompt has no decode step and therefore produces no fresh
+  // logits for generation. Match llama-server's cache-prompt behavior by
+  // backing up one token so the final prompt token is decoded again. A
+  // prefill-only request needs no logits and can reuse the complete prompt.
+  size_t reuseTarget = prefix;
+  if (!isPrefillOnlyRequest && reuseTarget == fullPrompt.size() &&
+      reuseTarget > 0) {
+    --reuseTarget;
+  }
+  size_t reuse = reuseTarget;
   std::string checkpoint = "none";
 
-  if (needsRecurrentSnapshot_ && prefix < cachedLength) {
+  if (needsRecurrentSnapshot_ && reuseTarget < cachedLength) {
     reuse = 0;
     for (auto it = cacheCheckpoints_.rbegin(); it != cacheCheckpoints_.rend();
          ++it) {
       const size_t checkpointSize = it->ledger.entries.size();
-      if (checkpointSize <= prefix &&
+      if (checkpointSize <= reuseTarget &&
           cache::commonPrefix(it->ledger, pendingPromptLedger_) ==
               checkpointSize &&
           restoreRecurrentState(modelCtx_.lctx, seqId_, it->state)) {
@@ -1284,10 +1293,10 @@ TextLlmContext::reconcilePrompt(const std::vector<llama_token>& fullPrompt) {
       nPast_ = 0;
       checkpoint = "cold";
     }
-  } else if (!needsRecurrentSnapshot_ && prefix < cachedLength) {
-    const llama_pos reusePos = residentLedger_.positions(prefix);
+  } else if (!needsRecurrentSnapshot_ && reuseTarget < cachedLength) {
+    const llama_pos reusePos = residentLedger_.positions(reuseTarget);
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
-    residentLedger_.truncate(prefix);
+    residentLedger_.truncate(reuseTarget);
     nPast_ = reusePos;
   }
 
@@ -1308,12 +1317,13 @@ TextLlmContext::reconcilePrompt(const std::vector<llama_token>& fullPrompt) {
       Priority::DEBUG,
       string_format(
           "[TextLlm] cache reconcile: cached=%zu rendered=%zu common=%zu "
-          "firstDivergence=%zu checkpoint=%s nPast=%d\n",
+          "firstDivergence=%zu checkpoint=%s reuse=%zu nPast=%d\n",
           cachedLength,
           pendingPromptLedger_.entries.size(),
           prefix,
           prefix,
           checkpoint.c_str(),
+          reuse,
           nPast_));
 
   return std::vector<llama_token>(fullPrompt.begin() + reuse, fullPrompt.end());

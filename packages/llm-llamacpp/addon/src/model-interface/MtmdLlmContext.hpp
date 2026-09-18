@@ -333,7 +333,8 @@ private:
   void beginCacheRequest();
   PrefillPlan reconcilePrompt(
       PrefillPlan fullPlan,
-      const qvac_lib_inference_addon_llama::cache::Ledger& fullLedger);
+      const qvac_lib_inference_addon_llama::cache::Ledger& fullLedger,
+      bool isPrefillOnlyRequest);
   qvac_lib_inference_addon_llama::cache::Ledger
   ledgerFromChunks(const mtmd::input_chunks& chunks) const;
   void rebuildSamplerFromLedger(

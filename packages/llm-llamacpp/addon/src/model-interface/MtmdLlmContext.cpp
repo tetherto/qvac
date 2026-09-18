@@ -533,7 +533,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     }
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
     beginCacheRequest();
-    reconciledPlan = reconcilePrompt(std::move(fullPlan), fullLedger);
+    reconciledPlan = reconcilePrompt(std::move(fullPlan), fullLedger, prefill);
   }
 
   const llama_pos nTokens =
@@ -1361,19 +1361,34 @@ void MtmdLlmContext::rebuildSamplerFromLedger(const cache::Ledger& ledger) {
 }
 
 PrefillPlan MtmdLlmContext::reconcilePrompt(
-    PrefillPlan fullPlan, const cache::Ledger& fullLedger) {
+    PrefillPlan fullPlan, const cache::Ledger& fullLedger,
+    bool isPrefillOnlyRequest) {
   pendingPromptLedger_ = fullLedger;
   const size_t prefix = cache::commonPrefix(residentLedger_, fullLedger);
   const size_t cachedLength = residentLedger_.entries.size();
-  size_t reuse = prefix;
+  // Generation requires logits from the final prompt token. When the whole
+  // authoritative prompt matches the resident ledger, back reuse up to the
+  // last text entry so the scheduler decodes that token again. Chat prompts
+  // end in text; the search is defensive for malformed/custom templates.
+  size_t reuseTarget = prefix;
+  if (!isPrefillOnlyRequest && reuseTarget == fullLedger.entries.size()) {
+    while (reuseTarget > 0 && fullLedger.entries[reuseTarget - 1].kind !=
+                                  cache::EntryKind::Token) {
+      --reuseTarget;
+    }
+    if (reuseTarget > 0) {
+      --reuseTarget;
+    }
+  }
+  size_t reuse = reuseTarget;
   std::string checkpoint = "none";
 
-  if (needsRecurrentSnapshot_ && prefix < cachedLength) {
+  if (needsRecurrentSnapshot_ && reuseTarget < cachedLength) {
     reuse = 0;
     for (auto it = cacheCheckpoints_.rbegin(); it != cacheCheckpoints_.rend();
          ++it) {
       const size_t count = it->ledger.entries.size();
-      if (count <= prefix &&
+      if (count <= reuseTarget &&
           cache::commonPrefix(it->ledger, fullLedger) == count &&
           restoreRecurrentState(modelCtx_.lctx, seqId_, it->state)) {
         residentLedger_ = it->ledger;
@@ -1389,10 +1404,10 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
       current_ = {};
       checkpoint = "cold";
     }
-  } else if (!needsRecurrentSnapshot_ && prefix < cachedLength) {
-    const llama_pos reusePos = residentLedger_.positions(prefix);
+  } else if (!needsRecurrentSnapshot_ && reuseTarget < cachedLength) {
+    const llama_pos reusePos = residentLedger_.positions(reuseTarget);
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
-    residentLedger_.truncate(prefix);
+    residentLedger_.truncate(reuseTarget);
     current_.pos = reusePos;
     refreshCurrentCacheTokensFromMemory();
   }
@@ -1435,12 +1450,13 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
       Priority::DEBUG,
       string_format(
           "[MtmdLlm] cache reconcile: cached=%zu rendered=%zu common=%zu "
-          "firstDivergence=%zu checkpoint=%s nPast=%d\n",
+          "firstDivergence=%zu checkpoint=%s reuse=%zu nPast=%d\n",
           cachedLength,
           fullLedger.entries.size(),
           prefix,
           prefix,
           checkpoint.c_str(),
+          reuse,
           current_.pos));
   return suffix;
 }
@@ -1562,7 +1578,7 @@ PrefillPlan MtmdLlmContext::preparePrefill(
   if (cacheReconciliationEnabled_) {
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
     beginCacheRequest();
-    plan = reconcilePrompt(std::move(plan), fullLedger);
+    plan = reconcilePrompt(std::move(plan), fullLedger, isPrefillOnlyRequest);
   }
 
   // The batcher can only request logits on text tokens it feeds, so a
