@@ -58,8 +58,13 @@ export const modelFitModelRefSchema = modelRegistryEntrySchema
     registryPath: z
       .string()
       .optional()
-      .describe('Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.'),
-    registrySource: z.string().optional().describe('Registry source identifier, e.g. `huggingface`.')
+      .describe(
+        'Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.'
+      ),
+    registrySource: z
+      .string()
+      .optional()
+      .describe('Registry source identifier, e.g. `huggingface`.')
   })
 
 /**

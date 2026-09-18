@@ -2094,6 +2094,33 @@ test('assess: the engine fitter outranks the coefficients that model it', (t) =>
   t.is(result.models[0]?.estimatorVersion, 'native-probe-v1')
   t.absent(result.estimate, 'the fitter reports no byte range to publish')
   t.ok(result.budget, 'the memory sample is still reported')
+  t.alike(
+    result.reasons,
+    ['the engine fitter read the registry description of this model'],
+    'nothing from the estimator path is reported alongside the verdict'
+  )
+  t.alike(result.assumptions, [], 'the fitter made its own placement')
+})
+
+// The modelled path had no memory sample and would have said so. Under a native
+// verdict that explanation is false, and it must not travel with `likely-fits`.
+test("assess: a native verdict does not carry the estimator's unknown reasons", (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: undefined,
+    calibration: undefined,
+    resolveProfile: () => profile(),
+    nativeFit: NATIVE_FIT
+  })
+
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.evidence, 'native-fit')
+  t.absent(
+    result.reasons.find((line) => line.includes('unknown')),
+    'no "combined verdict is unknown" under a fit'
+  )
 })
 
 // A host with plenty of memory would estimate `likely-fits`; the fitter saw the

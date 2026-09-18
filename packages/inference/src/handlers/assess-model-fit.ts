@@ -7,6 +7,7 @@ import type {
 } from '@/schemas/assess-model-fit'
 import { ModelType, type CanonicalModelType } from '@/schemas/index'
 import { projectFitFromStub } from '@/resources/model-fit/fit-stub/project-fit-from-stub'
+import { resolveModelConfig } from '@/runtime/state'
 import type { SystemResources } from '@/schemas/system-resources'
 import { getResourceCollector } from '@/resources/instance'
 import { assessModelFitFromResources } from '@/resources/model-fit/assess'
@@ -74,9 +75,17 @@ function fitModelType(workload: ModelFitWorkload): CanonicalModelType | undefine
   return workload.kind === 'llm' ? ModelType.llamacppCompletion : undefined
 }
 
-/** The intended load, in the spelling the llama.cpp config uses. */
-function fitModelConfig(workload: ModelFitWorkload): Record<string, unknown> {
-  return workload.kind === 'llm' ? { ctx_size: workload.contextTokens } : {}
+/**
+ * The load `loadModel` would run for this workload: the caller's context on
+ * top of the same device defaults a real load resolves. The fitter answers
+ * `unsupported-config` for a load with no `device`, so the bare workload alone
+ * would never reach a verdict.
+ */
+export function fitModelConfig(workload: ModelFitWorkload): Record<string, unknown> {
+  if (workload.kind !== 'llm') return {}
+  return resolveModelConfig<Record<string, unknown>>(ModelType.llamacppCompletion, {
+    ctx_size: workload.contextTokens
+  })
 }
 
 function readResources(): SystemResources {

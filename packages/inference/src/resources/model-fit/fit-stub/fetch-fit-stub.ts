@@ -60,13 +60,31 @@ export interface FitStubOptions {
   ) => Promise<unknown>
 }
 
+/**
+ * Bounds one blob fetch. The client's own defaults (30s, three attempts, a
+ * peer wait between them) suit a weights download; this sits on a call that
+ * used to return in milliseconds, so an unreachable registry costs seconds.
+ */
+const FIT_STUB_DOWNLOAD_TIMEOUT_MS = 10_000
+
+// Read structurally: a published client older than the field returns a record
+// without it, which is the ordinary `no-fit-blob` case rather than a type error.
+function toFitStubEntry(entry: object): FitStubEntry {
+  const binding: unknown = (entry as { fitBlobBinding?: unknown }).fitBlobBinding
+  if (typeof binding !== 'object' || binding === null) return {}
+  const { sha256, byteLength } = binding as { sha256?: unknown; byteLength?: unknown }
+  if (typeof sha256 !== 'string' || typeof byteLength !== 'number') return {}
+  return { fitBlobBinding: binding as FitBlobBinding }
+}
+
 async function defaultGetEntry(
   registryPath: string,
   registrySource: string
 ): Promise<FitStubEntry | null> {
   const { getRegistryClient } = await import('@/runtime/registry-client')
   const client = await getRegistryClient()
-  return client.getModel(registryPath, registrySource)
+  const entry: object | null = await client.getModel(registryPath, registrySource)
+  return entry === null ? null : toFitStubEntry(entry)
 }
 
 async function defaultDownloadBlob(
@@ -76,14 +94,23 @@ async function defaultDownloadBlob(
 ): Promise<unknown> {
   const { getRegistryClient } = await import('@/runtime/registry-client')
   const client = await getRegistryClient()
-  return client.downloadBlob(binding as never, {
-    outputFile,
-    ...(signal !== undefined && { signal })
-  } as never)
+  // `binding` is the record's own object, so it carries the core coordinates
+  // `downloadBlob` needs beyond the two fields typed here.
+  return client.downloadBlob(
+    binding as never,
+    {
+      outputFile,
+      timeout: FIT_STUB_DOWNLOAD_TIMEOUT_MS,
+      maxRetries: 1,
+      ...(signal !== undefined && { signal })
+    } as never
+  )
 }
 
 function unavailable(reason: FitStubUnavailableReason, message?: string): FitStubOutcome {
-  return message === undefined ? { status: 'unavailable', reason } : { status: 'unavailable', reason, message }
+  return message === undefined
+    ? { status: 'unavailable', reason }
+    : { status: 'unavailable', reason, message }
 }
 
 /**

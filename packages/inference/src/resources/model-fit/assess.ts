@@ -302,7 +302,8 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
 
   // The engine's own fitter, where it reached a verdict, replaces the modelled
   // one: it read this model's tensor list and measured this machine, which is
-  // what the coefficients above approximate.
+  // what the coefficients above approximate. The estimator's reasons and
+  // assumptions describe the path not taken, so none of them are reported.
   const native = nativeModelResult(options.nativeFit, modelResults)
   if (native) {
     return {
@@ -312,8 +313,8 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
       evidence: 'native-fit',
       ...(budget && { budget }),
       models: [native],
-      reasons: [...reasons, 'the engine fitter read the registry description of this model'],
-      assumptions
+      reasons: ['the engine fitter read the registry description of this model'],
+      assumptions: []
     }
   }
 
@@ -358,7 +359,8 @@ function nativeModelResult(
     verdict: nativeFit.verdict === 'fit' ? 'likely-fits' : 'likely-too-large',
     evidence: 'native-fit',
     estimatorVersion: nativeFit.estimatorVersion,
-    reasons: nativeFit.message === undefined ? [nativeFit.reason] : [nativeFit.reason, nativeFit.message]
+    reasons:
+      nativeFit.message === undefined ? [nativeFit.reason] : [nativeFit.reason, nativeFit.message]
   }
 }
 
