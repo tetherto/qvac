@@ -107,6 +107,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Merge'),
   },
   {
+    name: 'Assess model fit',
+    url: '/models/assess-model-fit',
+    type: 'page',
+    icon: resolveIcon('MemoryStick'),
+  },
+  {
     type: 'separator',
     name: 'AI capabilities',
   },
@@ -158,13 +164,12 @@ export const customTree: Node[] = [
     type: 'page',
     icon: resolveIcon('Video'),
   },
-  // Unpublished until v0.20 — see docs/website/content/_unpublished/ai-capabilities/world-simulation.mdx
-  // {
-  //   name: 'World simulation',
-  //   url: '/ai-capabilities/world-simulation',
-  //   type: 'page',
-  //   icon: resolveIcon('Rotate3d'),
-  // },
+  {
+    name: 'World simulation',
+    url: '/ai-capabilities/world-simulation',
+    type: 'page',
+    icon: resolveIcon('Rotate3d'),
+  },
   {
     name: 'Music generation',
     url: '/ai-capabilities/music-generation',
