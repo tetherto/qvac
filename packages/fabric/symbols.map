@@ -1,6 +1,7 @@
-# One named version node for the whole export surface. The name is an ABI tag,
-# not this package's version, and it is what pins a consumer to the C++ runtime
-# below.
+# One version node for the whole export surface. It is anonymous here and named
+# by the version-script block in CMakeLists.txt on the one link that embeds
+# libc++ and therefore exports the C++ ABI below. The name is an ABI tag, not
+# this package's version, and it is what pins a consumer to that runtime.
 #
 # Without it, -nostdlib++ does not give an addon *this* module's runtime. bare's
 # executable links GNU libstdc++.so.6, so libstdc++ sits in the process' global
@@ -23,11 +24,33 @@
 # C++ ABI block must stay inside this global list ahead of `local: *;` to keep
 # its precedence over the catch-all.
 #
+# The name stays out of this file so the links that must not carry it — Android
+# and the Linux ASan build, which share a libc++ shared library and export no
+# C++ ABI — use the file as written. There the DT_VERNEED a consumer records
+# guards an export set that does not exist, and on Android it costs the load:
+# an addon built against a named node fails its dlopen and bare reports
+# ADDON_NOT_FOUND before any model work.
+#
+# Not because bionic lacks versioning — it has had it since API 23 — but
+# because it resolves a version need through the DT_SONAME of the dependency
+# that declares it, and on device an addon's fabric dependency is not a file at
+# all: the APK stages it under another name, and it resolves only because bare
+# already loaded it. So either bionic finds no dependency matching the verneed
+# and fails the dlopen outright, or it finds no such version there and demotes
+# the requirement to unversioned definitions, which every export here has a
+# version for. Both end in a failed dlopen, and bare discards the dlerror that
+# would say which. What is measured is narrower: naming the node is the only
+# ELF difference, and consumers load without it and not with it.
+#
 # Renaming the node is a hard break — rebuild every consumer in the same
 # release. A consumer built against an unversioned fabric does not fail to load;
 # it silently goes back to resolving the runtime from libstdc++, which is worse
 # than before because this module's internals no longer follow it there.
-QVAC_FABRIC_ABI_1 {
+#
+# The marker below is where CMakeLists.txt splices the name in; keep the two
+# lines adjacent and unindented.
+# QVAC_FABRIC_ABI_NODE
+{
   global:
     # Bare / Node-API runtime entry points (required for the .bare module).
     bare_*;
