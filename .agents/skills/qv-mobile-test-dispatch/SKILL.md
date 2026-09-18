@@ -156,18 +156,50 @@ fails the run with the reason rather than falling back to `@latest`.
 | `decoder-audio` | no native prebuild of its own (rides `bare-ffmpeg` from npm). `package` has no effect; use `ref`. |
 | `inference-addon-cpp` | compiles its own prebuilds in-run from the dispatched `ref`, so no prebuild input is needed or offered |
 
-## Reading a failure
+## Reading a failure — where the logs are
 
-The Device Farm artifacts only show the harness assertion (`app.test.js`), which
-is the same for every failure. The reason lives in the app's own output, and
-where that is depends on the platform:
+The `console-logs-*` artifact on the run is where everything lands. The
+`test-results.json` in it only records the harness assertion
+(`expect(received).toBe(expected)` at `app.test.js`), which is identical for
+every failure and never says why. The real reason is in the app's own output,
+and the file differs per platform.
 
-- **Android** — `logcat_full.txt`, under the **`bare`** tag. Grep for
-  `E bare` / `I bare`; TAP lines and the real error are there, e.g.
-  `E bare: Test 'runFitStubTest' failed: AddonError: ADDON_NOT_FOUND ... dlopen fail`.
-  Note `Logcat.logcat` is a smaller, different file — use `logcat_full.txt`.
-- **iOS** — `bare_console.log`, pulled from the app container.
+| what | Android | iOS |
+|---|---|---|
+| JS / bare runtime, TAP lines, the failure | `logcat_full.txt`, `bare` tag | `bare_console.log` |
+| **native C++ / engine output** | `logcat_full.txt`, `bare` tag, `[C++ TEST]` prefix | `bare_console.log`, `[C++ TEST]` prefix |
+| app shell | `logcat_full.txt`, `ReactNativeJS` tag | `bare_console.log` |
+| device/OS noise | `logcat_full.txt` (most of it) | `iOS_appium.log` |
 
-There is no `bare_console.log` on Android: the app writes it into its private
-data dir, which adb cannot read and `run-as` refuses on a release-signed APK.
-That is expected, not a failure — logcat is the Android channel.
+```bash
+gh run download <run-id> --repo tetherto/qvac --dir ./logs
+
+# Android — the bare runtime carries BOTH the JS and the C++ output
+grep -aE "E bare|I bare" logs/**/*logcat_full.txt | head -40      # test + errors
+grep -a "\[C++ TEST\]"    logs/**/*logcat_full.txt | head -40      # native/engine
+
+# iOS — same two, one file
+grep -aE "error|not ok"  logs/**/*bare_console.log | head -40
+grep -a "\[C++ TEST\]"   logs/**/*bare_console.log | head -40
+```
+
+Traps that cost real time:
+
+- **Use `logcat_full.txt`, not `Logcat.logcat`.** They are different files;
+  the latter is a smaller capture and does not carry the bare output.
+- **Grep the `bare` tag, not TAP markers or the package name.** The runtime
+  prints through logcat, so `TAP version`/`ok 1` never appear as raw lines.
+- Native C++ lines are prefixed `[C++ TEST] [INFO]: [Llama.cpp] ...` on both
+  platforms — the engine logs through the same channel, not a separate tag.
+- There is **no `bare_console.log` on Android**, by construction: the app writes
+  it into its private data dir, which adb cannot read and `run-as` refuses on a
+  release-signed APK. That is expected — logcat is the Android channel.
+
+A real example, the whole reason a run went red, invisible in `test-results.json`:
+
+```
+E bare: Test 'runFitStubTest' failed: AddonError: ADDON_NOT_FOUND:
+        Cannot find addon '.' from @qvac/model-fit/binding.js
+        Candidates: - linked:libqvac__model-fit.0.12.0.so
+        [cause]: Error: dlopen fail
+```
