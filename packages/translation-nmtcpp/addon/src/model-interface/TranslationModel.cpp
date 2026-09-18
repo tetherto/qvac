@@ -721,6 +721,9 @@ void TranslationModel::
     gpuDevice_ = 0;
     mainGpu_ = std::move(mainGpu);
     legacyGpuSelection_ = false;
+  } else {
+    mainGpu_ = std::monostate{};
+    legacyGpuSelection_ = false;
   }
   config_ = std::move(config);
 

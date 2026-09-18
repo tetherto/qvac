@@ -92,3 +92,25 @@ TEST(NmtMainGpuConfigTest, ValidatesNativeConfigBeforeLoading) {
         std::invalid_argument);
   }
 }
+
+TEST(NmtMainGpuConfigTest, ReplacementConfigWithoutSelectorClearsMainGpu) {
+  qvac_lib_inference_addon_nmt::TranslationModel model;
+
+  model.setConfig({{"use_gpu", int64_t{1}},
+                   {"main-gpu", std::string{"dedicated"}}});
+  ASSERT_TRUE(std::holds_alternative<std::string>(model.mainGpuForTesting()));
+  EXPECT_FALSE(model.legacyGpuSelectionForTesting());
+
+  model.setConfig({{"use_gpu", int64_t{1}}});
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(model.mainGpuForTesting()));
+  EXPECT_FALSE(model.legacyGpuSelectionForTesting());
+
+  model.setConfig({{"use_gpu", int64_t{1}},
+                   {"main-gpu", std::string{"dedicated"}}});
+  ASSERT_TRUE(std::holds_alternative<std::string>(model.mainGpuForTesting()));
+
+  model.setConfig({{"use_gpu", int64_t{1}}, {"gpu_device", int64_t{1}}});
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(model.mainGpuForTesting()));
+  EXPECT_TRUE(model.legacyGpuSelectionForTesting());
+  EXPECT_EQ(model.gpuDeviceForTesting(), 1);
+}

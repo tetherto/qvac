@@ -98,6 +98,18 @@ public:
 
   void cancel() const override;
 
+#ifdef QVAC_TRANSLATION_NMTCPP_TESTING
+  [[nodiscard]] const NmtMainGpu& mainGpuForTesting() const {
+    return mainGpu_;
+  }
+
+  [[nodiscard]] bool legacyGpuSelectionForTesting() const {
+    return legacyGpuSelection_;
+  }
+
+  [[nodiscard]] int gpuDeviceForTesting() const { return gpuDevice_; }
+#endif
+
 private:
   BackendType detectBackendType(const std::string& modelPath);
 
