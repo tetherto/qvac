@@ -123,10 +123,36 @@ exports.config = {
           lastError = e;
         }
       }
+
+      // adb cannot read another app's sandbox: the private-data candidate ends
+      // in `failed to stat remote object: Permission denied`. `run-as` is how
+      // perf-extract.js reaches the same directory, so fall back to it before
+      // giving up. Uses the WDIO command queue rather than the raw-HTTP pull
+      // above, so it only runs on the normal end-of-run path.
+      if ((capabilities.platformName || '').toLowerCase() === 'android') {
+        try {
+          var raw = await browser.execute('mobile: shell', {
+            command: 'run-as',
+            args: [BUNDLE_ID, 'cat', 'files/bare_console.log'],
+          });
+          var out = typeof raw === 'string' ? raw : (raw && raw.stdout) || '';
+          if (out && out.length) {
+            var dir = process.env.DEVICEFARM_LOG_DIR || '.';
+            require('fs').writeFileSync(dir + '/bare_console.log', out);
+            console.log(
+              '[bare-log] ' + reason + ' flush ok (' + out.length + ' bytes) via run-as'
+            );
+            return;
+          }
+        } catch (e) {
+          lastError = e;
+        }
+      }
+
       console.log(
         '[bare-log] ' + reason + ' flush failed: ' +
         (lastError ? lastError.message : 'no candidate path') +
-        ' (tried ' + candidates.length + ' path(s))'
+        ' (tried ' + candidates.length + ' path(s) + run-as)'
       );
     };
 
