@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.16.1] - 2026-09-17
+
+### Fixed
+
+- The Android build exports an anonymous ELF version node again, as it did
+  through 0.15.0. 0.16.0 named the node for every ELF target, which left every
+  consumer unable to load on Android: the addon fails its `dlopen` and `bare`
+  reports `ADDON_NOT_FOUND: Cannot find addon '.'` from the addon's
+  `binding.js`, before any model work. Desktop was unaffected.
+
+  The name exists so a consumer records a `DT_VERNEED` that the host's
+  `libstdc++` cannot satisfy, which is what keeps it from answering for the C++
+  ABI this module exports. Only the Linux link that embeds libc++ exports that
+  ABI — Android links `libc++_shared.so` and the ASan build links
+  `libc++.so.1` — so on Android the `DT_VERNEED` guarded an export set that
+  does not exist and only cost the load. The name now follows the same
+  condition as the ABI block it protects, and `symbols.map` ships the node
+  anonymous. The export surface and its `local: *;` narrowing are unchanged on
+  every platform.
+
+  Not a gap in bionic's symbol versioning, which has been there since API 23.
+  It resolves a version need through the `DT_SONAME` of the dependency that
+  declares it, and on device an addon's fabric dependency is not a file at all:
+  the APK stages it under another name, and the dependency resolves only
+  because `bare` has already loaded it. Either bionic finds no dependency
+  matching the `verneed` and fails the `dlopen`, or it finds no such version
+  there and demotes the requirement to unversioned definitions, which every
+  export carries a version for under a named node. Both end in a failed
+  `dlopen`, and `bare` discards the `dlerror` that would distinguish them, so
+  what is established is narrower: the node's name is the only ELF difference
+  between a consumer that loads and one that does not.
+
+  Consumers must be rebuilt to pick this up: an Android binary built against
+  0.16.0 carries versioned imports of `QVAC_FABRIC_ABI_1` and keeps failing to
+  load. Linux binaries built against 0.16.0 are unaffected and keep working,
+  since the node and its name are unchanged there.
+
 ## [0.16.0] - 2026-09-16
 
 ### Changed
