@@ -11,23 +11,32 @@ import { getEngineLogger } from '@/logging/index'
 import { TranscriptionFailedError } from '@/errors/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
+import { buildAsrBackendDiagnostics } from '@/utils/asr-diagnostics'
+import type { InferenceBackendDiagnostics } from '@/schemas/index'
 import { toTranscribeSegment, type AsrAddonSegment } from '@/utils/transcribe-metadata'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
 
 interface BciAddonResponse {
   iterate(): AsyncIterable<AsrAddonSegment[] | AsrAddonSegment>
+  /**
+   * The stats `BCIModel.cpp` actually emits. It reports no `audioDurationMs`,
+   * `realTimeFactor`, `encoderMs`, `decoderMs` or `melSpecMs` — those belong to
+   * the asr-ggml engines, and declaring them here promised a shape the addon
+   * never produces.
+   */
   stats?: {
     tokensPerSecond?: number
     totalTokens?: number
     totalSegments?: number
-    audioDurationMs?: number
-    realTimeFactor?: number
+    totalTime?: number
+    totalWallMs?: number
+    processCalls?: number
     whisperEncodeMs?: number
     whisperDecodeMs?: number
-    encoderMs?: number
-    decoderMs?: number
-    melSpecMs?: number
+    whisperSampleMs?: number
+    whisperBatchdMs?: number
+    whisperPromptMs?: number
     backendDevice?: number
     backendId?: number
     gpuMemTotalMb?: number
@@ -72,7 +81,11 @@ async function runBci(model: BciTranscribableModel, input: NeuralInput): Promise
   }
 }
 
-type BciTranscribeReturn = { modelExecutionMs: number; stats?: TranscribeStats }
+type BciTranscribeReturn = {
+  modelExecutionMs: number
+  stats?: TranscribeStats
+  diagnostics?: InferenceBackendDiagnostics
+}
 
 export function bciTranscribe(
   params: BciTranscribeParams & { metadata: true },
@@ -145,12 +158,6 @@ export async function* bciTranscribe(
   const modelExecutionMs = nowMs() - modelStart
 
   const stats: TranscribeStats = {
-    ...(response.stats?.audioDurationMs !== undefined && {
-      audioDuration: response.stats.audioDurationMs
-    }),
-    ...(response.stats?.realTimeFactor !== undefined && {
-      realTimeFactor: response.stats.realTimeFactor
-    }),
     ...(response.stats?.tokensPerSecond !== undefined && {
       tokensPerSecond: response.stats.tokensPerSecond
     }),
@@ -166,14 +173,19 @@ export async function* bciTranscribe(
     ...(response.stats?.whisperDecodeMs !== undefined && {
       whisperDecodeTime: response.stats.whisperDecodeMs
     }),
-    ...(response.stats?.encoderMs !== undefined && {
-      encoderTime: response.stats.encoderMs
+    ...(response.stats?.whisperSampleMs !== undefined && {
+      whisperSampleMs: response.stats.whisperSampleMs
     }),
-    ...(response.stats?.decoderMs !== undefined && {
-      decoderTime: response.stats.decoderMs
+    ...(response.stats?.whisperBatchdMs !== undefined && {
+      whisperBatchdMs: response.stats.whisperBatchdMs
     }),
-    ...(response.stats?.melSpecMs !== undefined && {
-      melSpecTime: response.stats.melSpecMs
+    ...(response.stats?.whisperPromptMs !== undefined && {
+      whisperPromptMs: response.stats.whisperPromptMs
+    }),
+    ...(response.stats?.totalTime !== undefined && { totalTime: response.stats.totalTime }),
+    ...(response.stats?.totalWallMs !== undefined && { totalWallMs: response.stats.totalWallMs }),
+    ...(response.stats?.processCalls !== undefined && {
+      processCalls: response.stats.processCalls
     }),
     ...(response.stats?.backendDevice !== undefined && {
       backendDevice: response.stats.backendDevice
@@ -189,7 +201,11 @@ export async function* bciTranscribe(
     })
   }
 
-  return buildStreamResult(modelExecutionMs, stats)
+  const diagnostics = buildAsrBackendDiagnostics(stats)
+  return {
+    ...buildStreamResult(modelExecutionMs, stats),
+    ...(diagnostics && { diagnostics })
+  }
 }
 
 export function bciTranscribeStream(

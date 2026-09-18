@@ -16,6 +16,8 @@ export interface AsrAddonSegment {
   isEndOfTurn?: boolean
   /** Parakeet: the segment begins a new SentencePiece word. */
   startsWord?: boolean
+  /** BCI delta streaming: absolute timestep at which the owning window began. */
+  windowStartTimestep?: number
 }
 
 /**
@@ -33,7 +35,10 @@ export function toTranscribeSegment(chunk: AsrAddonSegment): TranscribeSegment {
     append: chunk.toAppend ?? false,
     id: chunk.id ?? 0,
     ...(chunk.isEndOfTurn !== undefined && { isEndOfTurn: chunk.isEndOfTurn }),
-    ...(chunk.startsWord !== undefined && { startsWord: chunk.startsWord })
+    ...(chunk.startsWord !== undefined && { startsWord: chunk.startsWord }),
+    ...(chunk.windowStartTimestep !== undefined && {
+      windowStartTimestep: chunk.windowStartTimestep
+    })
   }
 }
 
