@@ -81,6 +81,8 @@ std::vector<Device> registryDevices(const Registry& registry = {}) {
                       backend == "opencl";
     const bool adreno = description.find("adreno") != std::string::npos;
     device.adrenoOpencl = backend == "opencl" && adreno;
+    // OpenCL reports Adreno as GPU, although the physical device is integrated.
+    device.integrated = device.integrated || device.adrenoOpencl;
     hasAdrenoOpencl = hasAdrenoOpencl || device.adrenoOpencl;
     adrenoVulkan[i] = backend == "vulkan" && adreno;
     device.identity = deviceIdentity(registry, dev);

@@ -138,6 +138,8 @@ void BCIModel::loadEmbedderIfNeeded() {
 namespace {
 constexpr int K_NO_GPU_DEVICE = -1;
 
+void logSilentCpuFallbackWarning();
+
 std::string toLowerCopy(std::string value) {
   std::transform(
       value.begin(), value.end(), value.begin(), [](unsigned char c) {
@@ -207,8 +209,9 @@ void BCIModel::load() {
   // Resolve the raw registry identity before translating to Whisper's
   // GPU/IGPU ordinal. An excluded explicit target falls back only to CPU.
   if (contextParams.use_gpu && !cfg_.whisperContextCfg.contains("gpu_device")) {
-    const auto selected = main_gpu::select(
-        main_gpu::registryDevices(), main_gpu::parse(cfg_.whisperContextCfg));
+    const auto devices = main_gpu::registryDevices();
+    const auto selected =
+        main_gpu::select(devices, main_gpu::parse(cfg_.whisperContextCfg));
     if (selected.outOfRange) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
@@ -228,6 +231,13 @@ void BCIModel::load() {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
           message.c_str());
+    } else if (std::ranges::none_of(devices, [](const auto& device) {
+                 return device.whisperIndex >= 0;
+               })) {
+      // Selection clears use_gpu, so backend reporting cannot recover the
+      // original request. Keep the existing diagnostic for an empty GPU
+      // registry.
+      logSilentCpuFallbackWarning();
     }
   }
 
