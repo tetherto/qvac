@@ -2,7 +2,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.8.0
 
-QVAC AI SDK Provider 0.8.0 follows `@qvac/cli` 0.14.0. Diffusion VAE constants are named from the VAE type tag. The catalog picks up AfriSLM translation weights and Parakeet 0.6B, and drops 118 exports that were in 0.7.0.
+QVAC AI SDK Provider 0.8.0 follows `@qvac/cli` 0.14.0. Diffusion VAE constants are named from the VAE type tag. The catalog picks up AfriSLM translation weights and Nemotron Parakeet 0.6B, and drops 118 exports that were in 0.7.0.
 
 Managed mode needs `@qvac/cli@^0.14.0`. Publish after CLI 0.14.0 is on npm. External mode is unchanged.
 
@@ -102,9 +102,6 @@ OCR_CRAFT
 OCR_DOCTR
 OCR_DOCTR_1
 OCR_LATIN
-PARAKEET_0_6B_F16
-PARAKEET_0_6B_Q4_0
-PARAKEET_0_6B_Q8_0
 PARAKEET_CTC_0_6B_F16
 PARAKEET_CTC_0_6B_Q4_0
 PARAKEET_CTC_0_6B_Q8_0
@@ -114,6 +111,9 @@ PARAKEET_EOU_120M_V1_Q8_0
 PARAKEET_INDIC_CONFORMER_CTC_F16
 PARAKEET_INDIC_CONFORMER_CTC_Q4_0
 PARAKEET_INDIC_CONFORMER_CTC_Q8_0
+PARAKEET_NEMOTRON_0_6B_F16
+PARAKEET_NEMOTRON_0_6B_Q4_0
+PARAKEET_NEMOTRON_0_6B_Q8_0
 PARAKEET_SORTFORMER_4SPK_V1_F16
 PARAKEET_SORTFORMER_4SPK_V1_Q4_0
 PARAKEET_SORTFORMER_4SPK_V1_Q8_0
