@@ -20,6 +20,7 @@ import {
 import { ModelLoadFailedError, LegacyParakeetModelDeprecatedError } from '@/errors/index'
 import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
+import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildParakeetEngineConfig } from '@/plugins/builtin/asr-ggml/config'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
@@ -116,7 +117,9 @@ export const parakeetPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats, diagnostics } = result.value
-          yield attachModelExecutionMs(
+          // The field is what reaches an RPC client; the symbol is what the
+          // profiling layer reads to set `event.backend`, as audiogen does.
+          const terminal = attachModelExecutionMs(
             {
               type: 'transcribe' as const,
               text: '',
@@ -126,6 +129,7 @@ export const parakeetPlugin = definePlugin({
             },
             modelExecutionMs
           )
+          yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
         } finally {
           await stream.return?.(undefined as never)
         }
@@ -200,7 +204,9 @@ export const parakeetPlugin = definePlugin({
           }
 
           const { modelExecutionMs, stats, diagnostics } = result.value
-          yield attachModelExecutionMs(
+          // The field is what reaches an RPC client; the symbol is what the
+          // profiling layer reads to set `event.backend`, as audiogen does.
+          const terminal = attachModelExecutionMs(
             {
               type: 'transcribeStream' as const,
               text: '',
@@ -210,6 +216,7 @@ export const parakeetPlugin = definePlugin({
             },
             modelExecutionMs
           )
+          yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
         } finally {
           await iterator.return?.(undefined as never)
         }

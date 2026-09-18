@@ -229,8 +229,7 @@ test('assertMetadataSupported: passes for whisper engine', (t) => {
 
 // The parakeet engine emits per-segment metadata natively: its output
 // serializer sends text/start/end/id/toAppend/isEndOfTurn/startsWord for every
-// segment and `timestampsEnabled` defaults to true. The guard used to reject it
-// on the premise that only whisper did.
+// segment and `timestampsEnabled` defaults to true.
 test('assertMetadataSupported: passes for parakeet engine', (t) => {
   t.execution(() => {
     assertMetadataSupported('m', ModelType.parakeetTranscription, true)
