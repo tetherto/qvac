@@ -43,7 +43,8 @@ export async function pollForCheck({ checkName, fetchChecks, now, sleep, pollInt
       continue
     }
 
-    const check = (checkRuns ?? []).find(({ name }) => name === checkName)
+    const checks = checkRuns ?? []
+    const check = checks.find(({ name }) => name === checkName)
     if (check && check.status === 'completed') {
       const verdict = classifyConclusion(check.conclusion)
       if (verdict === 'pass') {
@@ -55,6 +56,20 @@ export async function pollForCheck({ checkName, fetchChecks, now, sleep, pollInt
         return 1
       }
       // 'wait': cancelled / neutral / stale, so a superseding run is expected.
+    }
+
+    // A skipped reusable-workflow job publishes only its parent job id, while a
+    // job that runs publishes "<parent> / <reusable job>". Accept the parent
+    // only when GitHub completed it as skipped. Any other parent conclusion
+    // still waits for the exact child check and therefore fails closed.
+    const separator = checkName.lastIndexOf(' / ')
+    if (!check && separator !== -1) {
+      const parentName = checkName.slice(0, separator)
+      const parent = checks.find(({ name }) => name === parentName)
+      if (parent?.status === 'completed' && parent.conclusion === 'skipped') {
+        log(`${parentName} was skipped by the producer matrix.`)
+        return 0
+      }
     }
 
     if (now() >= deadline) {
