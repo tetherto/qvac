@@ -19550,7 +19550,7 @@ class TranscribeResponseVad(GeneratedBaseModel):
     source: Annotated[
         TranscribeResponseVadSource | None,
         Field(
-            description="Detector behind the event: `'silero'` for the whisper engine's VAD model, `'energy'` for parakeet's energy hint. Absent on legacy wire frames that predate the field.",
+            description="Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
             title="TranscribeResponseVadSource",
         ),
     ] = None
@@ -19914,7 +19914,7 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
     source: Annotated[
         TranscribeStreamResponseVadSource | None,
         Field(
-            description="Detector behind the event: `'silero'` for the whisper engine's VAD model, `'energy'` for parakeet's energy hint. Absent on legacy wire frames that predate the field.",
+            description="Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
             title="TranscribeStreamResponseVadSource",
         ),
     ] = None

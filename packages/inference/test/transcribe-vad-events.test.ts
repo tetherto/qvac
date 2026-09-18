@@ -254,6 +254,6 @@ test('toVadStateEvent: carries the detector source', (t) => {
   t.is(
     toVadStateEvent({ type: 'vad', speaking: false, score: 0.1, source: 'energy' }).source,
     'energy',
-    "parakeet's energy VAD is identified"
+    "the addon's reserved 'energy' value is passed through unchanged"
   )
 })

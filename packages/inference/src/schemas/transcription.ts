@@ -1,6 +1,10 @@
 import { z } from 'zod'
+import type ASRGgml from '@qvac/asr-ggml'
 import type Buffer from 'bare-buffer'
-import { inferenceBackendDiagnosticsSchema } from '@/schemas/system-resources'
+import {
+  inferenceBackendDiagnosticsSchema,
+  type InferenceBackendDiagnostics
+} from '@/schemas/system-resources'
 
 export const audioInputSchema = z.discriminatedUnion('type', [
   z.object({
@@ -83,12 +87,21 @@ export const transcribeStatsSchema = z.object({
 })
 
 /**
- * Compute backends the ASR engines report through `stats.backendId`, mirroring
- * the addon's `BackendId` enum. Exported so callers can decode the number
- * instead of hardcoding it.
+ * The addon's own `BackendId` members, as a key→value record. A type-only
+ * import, so the schema never loads the addon at runtime.
+ */
+type AddonBackendIds = {
+  readonly [K in keyof typeof ASRGgml.BackendId]: (typeof ASRGgml.BackendId)[K]
+}
+
+/**
+ * Compute backends the ASR engines report through `stats.backendId`, as the
+ * addon's `BackendId` enum defines them. Exported so callers can decode the
+ * number instead of hardcoding it.
  *
- * Numeric, so it is deliberately not in the generated-constants registry:
- * that mechanism emits string enums only.
+ * Kept as a literal because it feeds the contract, and checked against the
+ * addon's enum by `satisfies`: a backend the addon adds or removes is a compile
+ * error here rather than a silently short vocabulary.
  */
 export const ASR_BACKEND_IDS = Object.freeze({
   CPU: 0,
@@ -97,7 +110,7 @@ export const ASR_BACKEND_IDS = Object.freeze({
   Vulkan: 3,
   OpenCL: 4,
   Other: 99
-} as const)
+} as const satisfies AddonBackendIds)
 
 export type AsrBackendId = (typeof ASR_BACKEND_IDS)[keyof typeof ASR_BACKEND_IDS]
 
@@ -136,7 +149,7 @@ export const vadStateEventSchema = z.object({
     .enum(['silero', 'energy'])
     .optional()
     .describe(
-      "Detector behind the event: `'silero'` for the whisper engine's VAD model, `'energy'` for parakeet's energy hint. Absent on legacy wire frames that predate the field."
+      "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events."
     )
 })
 
@@ -285,6 +298,8 @@ export type TranscribeStreamClientParams = {
 
 export interface TranscribeStreamSession {
   stats: Promise<TranscribeStats | undefined>
+  /** Backend selection detail for the session, settled from the same terminal frame as `stats`. */
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
@@ -293,6 +308,8 @@ export interface TranscribeStreamSession {
 
 export interface TranscribeStreamMetadataSession {
   stats: Promise<TranscribeStats | undefined>
+  /** Backend selection detail for the session, settled from the same terminal frame as `stats`. */
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
@@ -312,6 +329,8 @@ export type TranscribeStreamEvent =
 
 export interface TranscribeStreamConversationSession {
   stats: Promise<TranscribeStats | undefined>
+  /** Backend selection detail for the session, settled from the same terminal frame as `stats`. */
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
