@@ -90,26 +90,11 @@ exports.config = {
     // runs on crash paths where the WDIO command queue may have a pending
     // command stuck behind a long timeout (e.g. waitForDisplayed 60s on an
     // element that will never appear). Raw HTTP bypasses the queue.
-    // Where the app-side log can be read from, per platform.
-    //
-    // iOS: the XCUITest container form works (observed: "flush ok").
-    //
-    // Android: it cannot be read at all with the Device Farm artifact. The app
-    // writes bare_console.log into its private data dir, and on a release-signed
-    // APK both routes out are closed:
-    //   adb pull /data/user/0/<pkg>/files/bare_console.log
-    //     -> failed to stat remote object: Permission denied
-    //   run-as <pkg> cat files/bare_console.log
-    //     -> run-as: package not debuggable: <pkg>
-    // Both observed on real Device Farm runs. So try only the world-readable
-    // external-files path — which an app CAN be changed to write to, and which
-    // adb can read without run-as — and otherwise say plainly that this file is
-    // unavailable rather than burning five doomed pulls per run.
-    //
-    // Android is NOT losing its app-side output: the bare runtime logs to
-    // logcat under the `bare` tag, so logcat_full.txt carries the TAP lines and
-    // the failure reason (e.g. "E bare: Test 'x' failed: AddonError ...").
-    // bare_console.log is simply the iOS channel for the same thing.
+    // iOS reads bare_console.log from the app container. Android cannot: the app
+    // writes it to its private data dir, which adb cannot read and run-as
+    // refuses on a release-signed APK. Android's app output is in logcat under
+    // the `bare` tag instead, so this is not a gap. The one candidate below is
+    // the world-readable path an app could be changed to write to.
     global.bareLogCandidates = function (isAndroid, bundleId) {
       if (!isAndroid) return ['@' + bundleId + ':documents/bare_console.log'];
       return ['/sdcard/Android/data/' + bundleId + '/files/bare_console.log'];
@@ -130,9 +115,8 @@ exports.config = {
       }
       if (isAndroid) {
         console.log(
-          '[bare-log] ' + reason + ': no bare_console.log on Android (the app writes it to its ' +
-          'private data dir, which adb cannot read and run-as refuses on a release-signed APK). ' +
-          'App-side output is in logcat_full.txt under the `bare` tag. Last error: ' +
+          '[bare-log] ' + reason + ': no bare_console.log on Android; app-side output is in ' +
+          'logcat_full.txt under the `bare` tag. Last error: ' +
           (lastError ? lastError.message : 'none')
         );
         return;
@@ -164,11 +148,9 @@ exports.config = {
           req.write(body);
           req.end();
         });
-        // Appium returns `value` as a base64 STRING on success and as an error
-        // OBJECT ({error, message, stacktrace}) on failure. Feeding the object
-        // to Buffer.from threw "The first argument must be of type string...",
-        // which replaced Appium's real reason with a type error and made every
-        // Android run report an unexplained flush failure.
+        // Appium returns a base64 string on success, an error object on failure.
+        // Passing the object to Buffer.from threw a type error that replaced
+        // Appium's real reason.
         if (typeof b64 !== 'string') {
           var why = (b64 && (b64.message || b64.error)) || JSON.stringify(b64);
           throw new Error('pull_file returned no base64 payload — ' + why);

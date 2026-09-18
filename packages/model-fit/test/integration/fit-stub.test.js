@@ -44,18 +44,18 @@ async function ensureFixtures() {
   // fresh checkout the directory is not there — this file is the first to write
   // into it rather than only read from it.
   //
-  // Take the directory from the model path rather than re-deriving it: on a
-  // device this file runs from the read-only app bundle, where the derived
-  // location resolves inside the bundle and mkdirSync fails with
-  // `ENOENT: ... stat "/app.bundle"` while the model's own directory is
-  // perfectly writable (it was just downloaded into).
+  // Take it from the model path rather than re-deriving it: on a device this
+  // file runs from the read-only app bundle, so the derived location resolves
+  // inside the bundle and mkdirSync fails.
   const baseDir = path.dirname(fullPath)
   fs.mkdirSync(fixtureDir(baseDir), { recursive: true })
 
   fixtures = {
     fullPath,
     stubPath: writeFitStub(fullPath, fixturePath('fit-stub.gguf', baseDir)),
-    fullSplit: writeSplit(fullPath, fixturePath('split-full', baseDir), { splitCount: SPLIT_COUNT }),
+    fullSplit: writeSplit(fullPath, fixturePath('split-full', baseDir), {
+      splitCount: SPLIT_COUNT
+    }),
     stubSplit: writeSplit(fullPath, fixturePath('split-stub', baseDir), {
       splitCount: SPLIT_COUNT,
       stub: true
