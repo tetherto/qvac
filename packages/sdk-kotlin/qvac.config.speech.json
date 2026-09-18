@@ -1,0 +1,9 @@
+{
+  "plugins": [
+    "@qvac/sdk/whispercpp-transcription/plugin",
+    "@qvac/sdk/bci-whispercpp-transcription/plugin",
+    "@qvac/sdk/parakeet-transcription/plugin",
+    "@qvac/sdk/nmtcpp-translation/plugin",
+    "@qvac/sdk/tts-ggml/plugin"
+  ]
+}
