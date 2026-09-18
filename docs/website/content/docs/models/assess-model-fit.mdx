@@ -11,7 +11,7 @@ schemaType: HowTo
 It is **advisory**. It never downloads weights or loads a model, and it does not block [`loadModel()`](/reference/api#loadmodel), reserve memory, pick a model for you, or make any claim about speed.
 
 <Callout type="info">
-Only catalog model constants can be assessed.
+Only catalog model constants get a verdict.
 </Callout>
 
 ## Functions
@@ -37,14 +37,16 @@ assessModelFit({
 The candidates, at least one. They are assessed together, against a single budget.
 
 - `model` — a catalog model constant. Only its name and checksum are read; the byte totals and transformer facts come from the resource profile that checksum resolves to.
-- `workload` — what you intend to run on it: `{ kind: "llm", contextTokens }` for completion and embedding models, `{ kind: "audio", windowMs, streaming }` for speech-to-text.
+- `workload` — what you intend to run on it: `{ kind: "llm", contextTokens }` for completion and embedding models, `{ kind: "audio", windowMs, streaming }` for speech-to-text, with an optional `batch` for concurrent windows per call.
 - `artifacts` — optional. Extra catalog constants the same load also requires, such as a VAD or a pivot model. Their bytes are added to this candidate.
 
 ### `execution`
 
 Either `sequential` or `concurrent`:
 - `sequential`: counts every model as resident but adds only the largest single working peak.
-- `concurrent`: adds every peak; It describes what you intend to do so the numbers match your plan — the SDK does not schedule, serialize, or reserve anything on the strength of it.
+- `concurrent`: adds every peak.
+
+The mode describes what you intend to do so the numbers match your plan — the SDK does not schedule, serialize, or reserve anything on the strength of it.
 
 Defaults to `sequential`.
 
@@ -104,6 +106,8 @@ Every `unknown` names its cause here — on the model when the cause is that mod
 `calibration` evidence — and with it any `likely-fits` — exists only where coefficients have been measured on real hardware and validated against a held-out model. Today that is LLM workloads (`llamacpp-completion`, `llamacpp-embedding`) on desktop, except `win32-arm64`. Where a GPU would run the model, the platform also needs a fixture measured on that placement.
 
 Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers Android, iOS, `win32-arm64`, audio workloads, and every engine with no estimator yet.
+
+The per-platform calibration matrix, which changes with every release, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
 
 ## Example
 
