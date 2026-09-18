@@ -44,7 +44,7 @@ BitNet models require special backend handling on Adreno GPUs. When a BitNet mod
 
 **Dependencies:**
 - inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler)
-- qvac-fabric-llm.cpp (≥9840.1.1): Inference engine
+- @qvac/fabric (^0.16.1): Shared llama.cpp/ggml/mtmd inference engine. Installed from npm; it carries the prebuilt runtime in its own tarball, so it must be present before `bare-make generate`/`build` and must not be pruned at runtime
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 ## Installation

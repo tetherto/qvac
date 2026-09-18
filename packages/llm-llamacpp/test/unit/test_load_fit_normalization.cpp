@@ -37,26 +37,6 @@ void expectOnlyMappedFieldChanges(
   EXPECT_EQ(toggledSnapshot, expectedSnapshot);
 }
 
-bool hasRegisteredNonCpuDevice(const char* name) {
-  ggml_backend_load_all();
-  ggml_backend_dev_t device = ggml_backend_dev_by_name(name);
-  return device != nullptr &&
-         ggml_backend_dev_type(device) != GGML_BACKEND_DEVICE_TYPE_CPU;
-}
-
-std::string registeredDeviceNames() {
-  ggml_backend_load_all();
-  std::string names;
-  for (size_t index = 0; index < ggml_backend_dev_count(); ++index) {
-    ggml_backend_dev_t device = ggml_backend_dev_get(index);
-    if (!names.empty()) {
-      names += ", ";
-    }
-    names += ggml_backend_dev_name(device);
-  }
-  return names.empty() ? "none" : names;
-}
-
 } // namespace
 
 TEST(LoadFitSnapshotTest, CapturesEveryFitAffectingCommonParam) {
@@ -1054,19 +1034,18 @@ TEST_F(
 
 // split-mode 'none' resolves through chooseBackend, so a GPU result on an
 // Adreno-<800 one-bit BitNet load proves the split filter did not run.
+//
+// The backend must be named "none": this branch forwards `--device <name>` to
+// qvac-fabric's parser, which rejects any name absent from the live ggml
+// registry. The Adreno-740 split participant below would be dropped to CPU if
+// the filter ran.
 TEST_F(
     LoadFitNormalizationTest, SplitModeNoneLeavesAdrenoPolicyToChooseBackend) {
-  // Unlike split modes that pin device handles, 'none' asks fabric to resolve
-  // the selected device by name against the live backend registry.
-  if (!hasRegisteredNonCpuDevice("vulkan0")) {
-    GTEST_SKIP() << "no registered non-CPU device named vulkan0; registered: "
-                 << registeredDeviceNames();
-  }
   test_common::MockModelMetaData bitnet{true, "bitnet"};
   auto config = baseConfig();
   config["split-mode"] = "none";
   auto dependencies = backend(
-      {.type = backend_selection::GPU, .name = "vulkan0", .adrenoVersion = 740},
+      {.type = backend_selection::GPU, .name = "none", .adrenoVersion = 740},
       {});
   auto selection = splitSelection({"vulkan0"});
   selection.devices[0].adrenoVersion = 740;
@@ -1077,7 +1056,7 @@ TEST_F(
 
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.runtimeBackendDevice, 1);
-  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.params.mmproj_backend, "none");
   EXPECT_EQ(result.adrenoVersion, 740);
 }
 

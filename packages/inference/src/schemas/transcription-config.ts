@@ -50,7 +50,12 @@ const contextParamsSchema = z
 
 const miscConfigSchema = z
   .object({
-    caption_enabled: z.boolean().optional().describe('Format output segments as captions.')
+    caption_enabled: z.boolean().optional().describe('Format output segments as captions.'),
+    seed: z
+      .number()
+      .int()
+      .optional()
+      .describe('RNG seed applied to the whisper context; `-1` picks a random seed.')
   })
   .optional()
 
@@ -152,7 +157,7 @@ export const whisperConfigSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+      "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own."
     ),
   suppress_blank: z
     .boolean()
@@ -185,6 +190,21 @@ export const whisperConfigSchema = z.object({
     .int()
     .optional()
     .describe('Beam size for beam-search decoding; `-1` = default.'),
+  max_initial_ts: z
+    .number()
+    .optional()
+    .describe('Maximum initial timestamp the decoder may emit, as a fraction of the window.'),
+  no_speech_thold: z
+    .number()
+    .optional()
+    .describe('No-speech probability above which a segment is treated as silence.'),
+  seed: z.number().int().optional().describe('Decoding RNG seed; `-1` picks a random seed.'),
+  backendsDir: z
+    .string()
+    .optional()
+    .describe(
+      "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`."
+    ),
   vad_params: vadParamsSchema,
   audio_format: audioFormatSchema
     .optional()

@@ -2572,6 +2572,50 @@
             },
             "gpuMemFreeMb": {
               "type": "number"
+            },
+            "totalTime": {
+              "description": "Total native inference time for the run, in ms.",
+              "type": "number"
+            },
+            "totalWallMs": {
+              "description": "Wall-clock time spent inside the native engine for the run, in ms.",
+              "type": "number"
+            },
+            "totalSamples": {
+              "description": "Audio samples processed across the run.",
+              "type": "number"
+            },
+            "processCalls": {
+              "description": "Native `process()` invocations made across the run.",
+              "type": "number"
+            },
+            "whisperSampleMs": {
+              "description": "Whisper: sampling time, in ms.",
+              "type": "number"
+            },
+            "whisperBatchdMs": {
+              "description": "Whisper: batched-decode time, in ms.",
+              "type": "number"
+            },
+            "whisperPromptMs": {
+              "description": "Whisper: prompt-processing time, in ms.",
+              "type": "number"
+            },
+            "totalTranscriptions": {
+              "description": "Parakeet: transcriptions produced across the session.",
+              "type": "number"
+            },
+            "modelLoadMs": {
+              "description": "Parakeet: model load time, in ms.",
+              "type": "number"
+            },
+            "totalEncodedFrames": {
+              "description": "Parakeet: encoder frames produced across the run.",
+              "type": "number"
+            },
+            "encoderOnCoreml": {
+              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -2597,6 +2641,14 @@
             },
             "id": {
               "type": "number"
+            },
+            "isEndOfTurn": {
+              "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+              "type": "boolean"
+            },
+            "startsWord": {
+              "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+              "type": "boolean"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -2716,6 +2768,50 @@
             },
             "gpuMemFreeMb": {
               "type": "number"
+            },
+            "totalTime": {
+              "description": "Total native inference time for the run, in ms.",
+              "type": "number"
+            },
+            "totalWallMs": {
+              "description": "Wall-clock time spent inside the native engine for the run, in ms.",
+              "type": "number"
+            },
+            "totalSamples": {
+              "description": "Audio samples processed across the run.",
+              "type": "number"
+            },
+            "processCalls": {
+              "description": "Native `process()` invocations made across the run.",
+              "type": "number"
+            },
+            "whisperSampleMs": {
+              "description": "Whisper: sampling time, in ms.",
+              "type": "number"
+            },
+            "whisperBatchdMs": {
+              "description": "Whisper: batched-decode time, in ms.",
+              "type": "number"
+            },
+            "whisperPromptMs": {
+              "description": "Whisper: prompt-processing time, in ms.",
+              "type": "number"
+            },
+            "totalTranscriptions": {
+              "description": "Parakeet: transcriptions produced across the session.",
+              "type": "number"
+            },
+            "modelLoadMs": {
+              "description": "Parakeet: model load time, in ms.",
+              "type": "number"
+            },
+            "totalEncodedFrames": {
+              "description": "Parakeet: encoder frames produced across the run.",
+              "type": "number"
+            },
+            "encoderOnCoreml": {
+              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -2741,6 +2837,14 @@
             },
             "id": {
               "type": "number"
+            },
+            "isEndOfTurn": {
+              "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+              "type": "boolean"
+            },
+            "startsWord": {
+              "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+              "type": "boolean"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -10232,7 +10336,7 @@
                       "type": "string"
                     },
                     "detect_language": {
-                      "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
+                      "description": "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own.",
                       "type": "boolean"
                     },
                     "suppress_blank": {
@@ -10274,6 +10378,24 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "max_initial_ts": {
+                      "description": "Maximum initial timestamp the decoder may emit, as a fraction of the window.",
+                      "type": "number"
+                    },
+                    "no_speech_thold": {
+                      "description": "No-speech probability above which a segment is treated as silence.",
+                      "type": "number"
+                    },
+                    "seed": {
+                      "description": "Decoding RNG seed; `-1` picks a random seed.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "backendsDir": {
+                      "description": "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+                      "type": "string"
                     },
                     "vad_params": {
                       "type": "object",
@@ -10339,6 +10461,12 @@
                         "caption_enabled": {
                           "description": "Format output segments as captions.",
                           "type": "boolean"
+                        },
+                        "seed": {
+                          "description": "RNG seed applied to the whisper context; `-1` picks a random seed.",
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig"
@@ -17106,7 +17234,7 @@
                   "type": "string"
                 },
                 "detect_language": {
-                  "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
+                  "description": "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own.",
                   "type": "boolean"
                 },
                 "suppress_blank": {
@@ -17148,6 +17276,24 @@
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
+                },
+                "max_initial_ts": {
+                  "description": "Maximum initial timestamp the decoder may emit, as a fraction of the window.",
+                  "type": "number"
+                },
+                "no_speech_thold": {
+                  "description": "No-speech probability above which a segment is treated as silence.",
+                  "type": "number"
+                },
+                "seed": {
+                  "description": "Decoding RNG seed; `-1` picks a random seed.",
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "backendsDir": {
+                  "description": "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+                  "type": "string"
                 },
                 "vad_params": {
                   "type": "object",
@@ -17213,6 +17359,12 @@
                     "caption_enabled": {
                       "description": "Format output segments as captions.",
                       "type": "boolean"
+                    },
+                    "seed": {
+                      "description": "RNG seed applied to the whisper context; `-1` picks a random seed.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigMiscConfig"
@@ -19427,6 +19579,50 @@
             },
             "gpuMemFreeMb": {
               "type": "number"
+            },
+            "totalTime": {
+              "description": "Total native inference time for the run, in ms.",
+              "type": "number"
+            },
+            "totalWallMs": {
+              "description": "Wall-clock time spent inside the native engine for the run, in ms.",
+              "type": "number"
+            },
+            "totalSamples": {
+              "description": "Audio samples processed across the run.",
+              "type": "number"
+            },
+            "processCalls": {
+              "description": "Native `process()` invocations made across the run.",
+              "type": "number"
+            },
+            "whisperSampleMs": {
+              "description": "Whisper: sampling time, in ms.",
+              "type": "number"
+            },
+            "whisperBatchdMs": {
+              "description": "Whisper: batched-decode time, in ms.",
+              "type": "number"
+            },
+            "whisperPromptMs": {
+              "description": "Whisper: prompt-processing time, in ms.",
+              "type": "number"
+            },
+            "totalTranscriptions": {
+              "description": "Parakeet: transcriptions produced across the session.",
+              "type": "number"
+            },
+            "modelLoadMs": {
+              "description": "Parakeet: model load time, in ms.",
+              "type": "number"
+            },
+            "totalEncodedFrames": {
+              "description": "Parakeet: encoder frames produced across the run.",
+              "type": "number"
+            },
+            "encoderOnCoreml": {
+              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -19452,6 +19648,14 @@
             },
             "id": {
               "type": "number"
+            },
+            "isEndOfTurn": {
+              "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+              "type": "boolean"
+            },
+            "startsWord": {
+              "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+              "type": "boolean"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -19466,6 +19670,12 @@
             },
             "probability": {
               "type": "number"
+            },
+            "source": {
+              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "type": "string",
+              "enum": ["silero", "energy"],
+              "title": "TranscribeResponseVadSource"
             }
           },
           "required": ["speaking", "probability"],
@@ -19502,6 +19712,102 @@
               "title": "TranscribeResponseEndOfTurnParakeet"
             }
           ]
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "TranscribeResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "TranscribeResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "TranscribeResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "TranscribeResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "TranscribeResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "TranscribeResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "TranscribeResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "TranscribeResponseDiagnostics"
         },
         "type": {
           "type": "string",
@@ -19667,6 +19973,50 @@
             },
             "gpuMemFreeMb": {
               "type": "number"
+            },
+            "totalTime": {
+              "description": "Total native inference time for the run, in ms.",
+              "type": "number"
+            },
+            "totalWallMs": {
+              "description": "Wall-clock time spent inside the native engine for the run, in ms.",
+              "type": "number"
+            },
+            "totalSamples": {
+              "description": "Audio samples processed across the run.",
+              "type": "number"
+            },
+            "processCalls": {
+              "description": "Native `process()` invocations made across the run.",
+              "type": "number"
+            },
+            "whisperSampleMs": {
+              "description": "Whisper: sampling time, in ms.",
+              "type": "number"
+            },
+            "whisperBatchdMs": {
+              "description": "Whisper: batched-decode time, in ms.",
+              "type": "number"
+            },
+            "whisperPromptMs": {
+              "description": "Whisper: prompt-processing time, in ms.",
+              "type": "number"
+            },
+            "totalTranscriptions": {
+              "description": "Parakeet: transcriptions produced across the session.",
+              "type": "number"
+            },
+            "modelLoadMs": {
+              "description": "Parakeet: model load time, in ms.",
+              "type": "number"
+            },
+            "totalEncodedFrames": {
+              "description": "Parakeet: encoder frames produced across the run.",
+              "type": "number"
+            },
+            "encoderOnCoreml": {
+              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -19692,6 +20042,14 @@
             },
             "id": {
               "type": "number"
+            },
+            "isEndOfTurn": {
+              "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+              "type": "boolean"
+            },
+            "startsWord": {
+              "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+              "type": "boolean"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -19706,6 +20064,12 @@
             },
             "probability": {
               "type": "number"
+            },
+            "source": {
+              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "type": "string",
+              "enum": ["silero", "energy"],
+              "title": "TranscribeStreamResponseVadSource"
             }
           },
           "required": ["speaking", "probability"],
@@ -19742,6 +20106,102 @@
               "title": "TranscribeStreamResponseEndOfTurnParakeet"
             }
           ]
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "TranscribeStreamResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "TranscribeStreamResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "TranscribeStreamResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "TranscribeStreamResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "TranscribeStreamResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "TranscribeStreamResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "TranscribeStreamResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "TranscribeStreamResponseDiagnostics"
         },
         "type": {
           "type": "string",

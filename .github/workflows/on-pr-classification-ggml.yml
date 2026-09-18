@@ -18,6 +18,9 @@ on:
       - ".github/workflows/*classification-ggml*.yml"
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
+      # on-pr carve-out: on-pr-nx.yml will not build this package, so a
+      # template-only change has to start this orchestrator itself.
+      - "cmake/qvac-addon/**"
   workflow_dispatch:
 
   workflow_call:
