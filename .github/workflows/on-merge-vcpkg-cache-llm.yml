@@ -2,8 +2,19 @@ name: On Merge vcpkg Cache (LLM)
 
 # cpp-tests-llm.yml only writes its vcpkg cache on a trusted event, and its
 # only other caller is pull_request_target -- so without this, nothing populates
-# the cache but a manual dispatch. Paths mirror the cache key's inputs; the
-# cron recovers from eviction.
+# the cache and every PR leg stays cold. Paths mirror the cache key's inputs; the
+# cron recovers from eviction before the server prunes it (see the schedule).
+#
+# This dispatches cpp-tests-llm.yml rather than calling it with `uses:`. A
+# `uses:` call fails at startup with no jobs and no error text, because the
+# callee's test job declares `environment: release` and the release environment
+# has custom_branch_policies with no policies defined -- which blocks a job in a
+# CALLED workflow when the caller was triggered by push or schedule. The same job
+# runs fine as a top-level workflow_dispatch, which is what this does. Dropping
+# `environment:` is not an option: the job's secrets come from it.
+#
+# Consequence: this workflow reports success once the dispatch is accepted, not
+# once the cache is warm. Check the dispatched run for that.
 
 on:
   push:
@@ -14,29 +25,58 @@ on:
       - "packages/llm-llamacpp/vcpkg-configuration.json"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
+      # The rest of the key lives here: the version segment in the cpp-tests
+      # workflow, and the toolchain digest the action computes. Without these a
+      # key change merges without warming anything and every PR leg stays cold
+      # until the cron.
+      - ".github/workflows/cpp-tests-llm.yml"
+      - ".github/actions/vcpkg-toolchain-fingerprint/**"
       # This job also writes the unit-test model cache, whose key hashes this
       # script. Without it that entry never refreshes when the model set changes.
       - "packages/llm-llamacpp/scripts/download-unit-test-models.js"
-  # Twice weekly, not weekly. The cache server prunes entries older than
-  # CACHE_CLEANUP_OLDER_THAN_DAYS=5, so a 7-day refresh leaves the entry evicted
-  # for two days before every run. Keep the longest gap here under 5 days.
   schedule:
-    - cron: "17 2 * * 1,4"
+    # Every 2 days, not weekly. The self-hosted cache server prunes an entry when
+    # it has gone CACHE_CLEANUP_OLDER_THAN_DAYS=5 days without an upload AND
+    # without a download, so a weekly cron loses the entry before it fires, and
+    # PR legs are left with the host layer alone -- which has no key and so
+    # cannot help a host that has never built the package, the exact case the
+    # keyed layer exists to cover.
+    #
+    # Sized on ONE failed run, not the steady-state gap: that is what actually
+    # loses the entry. Two fixed weekdays give 4 days steady but 7 after a miss,
+    # and Mon/Wed/Fri gives 3 and 5 -- both at or past the cutoff. Every 2 days
+    # gives 2 and 4, which survives with a day in hand. Day-of-month rather than
+    # weekday keeps it even across month ends: */2 lands on the 29th or 31st and
+    # then the 1st, so the boundary gap is 1-2 days, never longer.
+    #
+    # Hours are staggered across the five dispatchers so they do not contend for
+    # a runner. These only dispatch a workflow, so the cadence is close to free.
+    - cron: "17 4 */2 * *"
   workflow_dispatch:
 
-# Never cancel: a cancelled job cannot save the build it did not finish.
+# Never cancel: a cancelled dispatch leaves the cache unrefreshed.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: on-merge-vcpkg-cache-llm-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
-  refresh:
-    uses: ./.github/workflows/cpp-tests-llm.yml
-    secrets: inherit
-    with:
-      workdir: packages/llm-llamacpp
-      # Pinned: the callee defaults to github.ref, which floats to main's tip.
-      ref: ${{ github.sha }}
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch cpp-tests-llm
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh workflow run "cpp-tests-llm.yml" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$TARGET_REF" \
+            -f "workdir=packages/llm-llamacpp"
+          echo "dispatched cpp-tests-llm.yml on $TARGET_REF"
