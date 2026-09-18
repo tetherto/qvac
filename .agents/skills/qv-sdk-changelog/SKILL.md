@@ -33,14 +33,14 @@ Package slugs match git tags (`sdk`, `inference`, `cli`, `ai-sdk-provider`, `ope
 **`sdk` and `inference` are lockstep on major.minor.** Two changelogs, two
 releases, engine first: `--package=inference` for `release-inference-<x.y.z>`,
 then `--package=sdk` for `release-sdk-<x.y.z>`. Both notes for the same `x.y.z`
-share one **display floor** so they do not re-list an intervening patch (e.g.
-0.20.0 should not repeat 0.19.1). That floor is `--base-commit` = the last
-lockstep patch backmerge on main, **plus** the patch-gap audit in Step 2.
-Do not take inference from the previous `.0` while SDK used the last patch:
-that duplicates already-shipped patch notes and makes the two files disagree.
-Do not treat that shared `--base-commit` as the whole story either: `git log
-<patch-backmerge>..HEAD` cannot see main-only PRs that landed while the patch
-branch was open.
+share one **display floor**: the last lockstep version already shipped (patch or
+`.0`). `--base-commit` is that version's backmerge on main so the new notes do
+not repeat it. Use the same floor on both packages; splitting them (inference
+from the previous `.0`, SDK from a later patch) duplicates patch notes and
+makes the files disagree.
+
+`--base-commit` is only the generate range, not the full set of notes. See
+Step 2 when that floor is a patch.
 
 The SDK is the consumer-facing full notes. `--package=sdk` also scans
 `packages/inference` (`CHANGELOG_EXTRA_SCAN_DIRS` in
@@ -77,44 +77,35 @@ Run `git tag --list "<package>-v*" --sort=-v:refname` to check for existing vers
   - **Patch release** (version ends in non-zero patch, e.g. `0.8.4`): uses the absolute latest tag as base (e.g. `sdk-v0.8.3`)
 - If no tags: ask the user for `--base-commit` and `--base-version` (migration scenario)
 
-**Why this matters:** patches ship on separate release branches and get backmerged into main.
-Using the latest patch tag as `--base-commit` for a minor would miss every PR that
-landed on **main** between the previous `.0` and the patch backmerge and was never
-cherry-picked onto the patch branch. The generator range is `git log <base>..HEAD`,
-so those commits are already ancestors of the backmerge and silently disappear.
-Exhibit: [#4384](https://github.com/tetherto/qvac/pull/4384) merged to main during
-SDK 0.19.1, never sat on `release-sdk-0.19.1`, and dropped out of both 0.19.1 and
-0.20.0 notes until it was added by hand.
+**Why this matters:** patches ship on a `release-<pkg>-*` branch and backmerge
+into main. The generator's range is `git log <base>..HEAD`. A commit that landed
+on **main** while that patch branch was open, and was never on the patch branch,
+is already an ancestor of the backmerge, so it is invisible to that range. It
+also never appeared in the patch notes. The next minor then ships the code
+with no changelog line unless those PRs are unioned in.
 
-The correct `--base-commit` for a **standalone** minor (cli, plugins, a package
-not lockstep with another) is still the previous minor's `.0` tag.
+**Standalone minor** (cli, plugins, anything not lockstep with another package):
+`--base-commit` is the previous `.0`. That range still includes main-only work
+in the patch window, and it will also re-list the patch. Accept the overlap or
+drop PR numbers already in `changelog/<patch>/`.
 
-**Lockstep `sdk` + `inference` at the same major.minor:** both packages use the
-**same** `--base-commit` / `--base-version` as the last lockstep *display floor*
-(the last patch backmerge, so 0.19.1 is not duplicated). Then, when that floor is
-a patch (version not `.0`), the gap audit below is mandatory — not optional, not
-"if you remember 4384". Find the backmerge SHA from the SDK changelog for that
-version, or:
+**Lockstep `sdk` + `inference`:** both packages use the **same** `--base-commit`
+/ `--base-version` — the last lockstep display floor. When that floor is a
+`.0`, generate is enough. When it is a **patch**, the notes are:
 
-```bash
-git log --oneline --grep='backmerge release-sdk-' -20
-```
+1. Generator output from the patch backmerge (work after the floor).
+2. Plus main-only work between the previous lockstep `.0` backmerge and that
+   patch backmerge: first-parent merges touching `packages/inference` or
+   `packages/sdk`, minus `[skiplog]`, minus PR numbers already in
+   `packages/sdk/changelog/<patch>/CHANGELOG.md`.
 
-**Patch-gap audit (mandatory on lockstep minors whose previous ship was a patch).**
-After the raw generate, list first-parent merges on main from the previous lockstep
-`.0` backmerge to the patch backmerge that touch `packages/inference` or
-`packages/sdk`. Drop `[skiplog]`. Drop PR numbers already in
-`packages/sdk/changelog/<patch>/CHANGELOG.md`. Anything left is in this release's
-*code* but in no notes — hand-add it to **both** lockstep changelogs (`CHANGELOG.md`,
-`CHANGELOG_LLM.md`, and `breaking.md` / `models.md` / `api.md` when the PR tag
-requires them). Do not re-run the generator over the hand edits; use
-`--update-root-changelog` only.
+Hand-add (2) to **both** lockstep changelogs (`CHANGELOG.md`, `CHANGELOG_LLM.md`,
+and `breaking.md` / `models.md` / `api.md` when the PR tag requires them). Do
+not re-run the generator over the hand edits; `--update-root-changelog` only.
 
 ```bash
-PREV_MINOR_BACKMERGE=<sha>   # e.g. backmerge release-sdk-0.19.0
-PATCH_BACKMERGE=<sha>        # e.g. backmerge release-sdk-0.19.1
-git log --first-parent --format='%s' ${PREV_MINOR_BACKMERGE}..${PATCH_BACKMERGE}
-# then keep subjects whose merge diff touches packages/inference or packages/sdk
+git log --first-parent --format='%s' <prev-lockstep-.0-backmerge>..<patch-backmerge>
+# keep subjects whose merge diff touches packages/inference or packages/sdk
 ```
 
 **`inference-v*` / historical `sdk-v*` tags are often not ancestors of `main`.**
@@ -435,11 +426,11 @@ push, and keep this list to things that are cheap to prevent:
   Never `--no-config`. Never `bunx prettier` until `packages/<pkg>/node_modules`
   (or a linked install) can resolve that package. Quote style and trailing commas
   on `CHANGELOG_LLM.md` are the usual fail.
-- **Lockstep display floor is not the whole range.** `sdk` and `inference` at
-  the same `x.y.z` share one `--base-commit` (last patch backmerge) so patch
-  notes are not duplicated. That range misses main-only PRs during the patch
-  cut. Run the Step 2 patch-gap audit; do not "ignore the `.0` default" without
-  it. SDK notes are the full consumer set; inference is the engine slice.
+- **Lockstep display floor is not the whole range.** Same `--base-commit` on
+  `sdk` and `inference` so already-shipped notes are not repeated. When that
+  floor is a patch, union in the Step 2 main-only window (previous lockstep
+  `.0` backmerge → patch backmerge, minus skiplog, minus the patch notes).
+  SDK is the consumer set; inference is the engine slice.
 - **`inference-v*` is often not on `main`.** Use the backmerge SHA, not the tag.
 - **Nested worktrees inherit `GIT_DIR`.** `unset GIT_DIR GIT_WORK_TREE` before
   generate/commit/cherry-pick, or you operate on the parent repo.
@@ -457,7 +448,7 @@ Before completing:
 - [ ] Clone is not shallow (`git rev-parse --is-shallow-repository` → `false`)
 - [ ] Base reference resolved (tag or `--base-commit`) and is an ancestor of `HEAD`
 - [ ] For lockstep `sdk` + `inference` at the same major.minor: both used the **same** `--base-commit` / `--base-version` (last lockstep display floor); SDK changelog includes the engine slice
-- [ ] When that floor is a patch: patch-gap audit ran (previous `.0` backmerge → patch backmerge, minus skiplog, minus PRs already in the patch notes) and leftovers were hand-added to both changelogs
+- [ ] When that floor is a patch: main-only window unioned in (previous lockstep `.0` backmerge → patch backmerge, minus skiplog, minus the patch notes) on both changelogs
 - [ ] `GIT_DIR` / `GIT_WORK_TREE` unset (or pointed at this worktree) so generate/git did not run in a parent repo
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
