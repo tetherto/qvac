@@ -219,13 +219,11 @@ endif()
 # Applying the block there is a hard error rather than a no-op, because lld
 # defaults to --no-undefined-version and rejects a version script that assigns a
 # version to a symbol the output does not define.
+#
+# The version node's name follows the same split, for the same reason: it exists
+# to keep the host's libstdc++ from answering for that C++ ABI, so the links
+# without the block keep the anonymous node symbols.map ships.
 if(UNIX AND NOT APPLE)
-  # The ELF version node symbols.map stamps on every export. Consumers record a
-  # DT_VERNEED on it, which is what stops the host process' own C++ runtime from
-  # satisfying their references first; symbols.map carries the full rationale.
-  # Declared here as well so the name reaches consumers through the package
-  # config, and asserted against the script below so the two cannot drift.
-  set(QVAC_FABRIC_ABI_VERSION "QVAC_FABRIC_ABI_1")
   # Whether consumers should expect to import their C++ runtime from this
   # module. True only for the link that embeds libc++; Android links
   # libc++_shared.so and the ASan build links libc++.so.1, so there the runtime
@@ -237,39 +235,58 @@ if(UNIX AND NOT APPLE)
   else()
     set(QVAC_FABRIC_OWNS_CXX_RUNTIME OFF)
   endif()
+  # symbols.map ships anonymous, which is what the links above need. The link
+  # that owns the C++ runtime gets the ABI block spliced in and the node named,
+  # the two halves of the same guarantee: the name is what makes consumers
+  # record a DT_VERNEED, and the DT_VERNEED is what keeps the host's libstdc++
+  # from answering for the block. symbols.map carries the full rationale.
   set(_fabric_version_script "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map")
-  if(QVAC_FABRIC_LIBCXX_ARCHIVE)
+  if(QVAC_FABRIC_OWNS_CXX_RUNTIME)
+    # Declared here so the name reaches consumers through the package config.
+    # This is its only definition: the script below is stamped from it.
+    set(QVAC_FABRIC_ABI_VERSION "QVAC_FABRIC_ABI_1")
     set(_fabric_cxx_runtime_map
       "${CMAKE_CURRENT_SOURCE_DIR}/symbols-linux-cxx-runtime.map")
     file(READ "${_fabric_version_script}" _fabric_symbols)
     file(READ "${_fabric_cxx_runtime_map}" _fabric_cxx_runtime_symbols)
-    # Splice at an explicit marker rather than a syntactic anchor, and fail on a
-    # miss: dropping the block silently would leave a module that links and runs
-    # but has no exported C++ ABI, reintroducing the cross-module `catch`
-    # failures the block exists to fix.
+    # Splice at explicit markers rather than syntactic anchors, and fail on a
+    # miss: dropping either silently would leave a module that links and runs
+    # but has no exported C++ ABI, or exports one nothing pins, reintroducing
+    # the cross-module `catch` failures the pair exists to fix.
     if(NOT _fabric_symbols MATCHES "# QVAC_FABRIC_LINUX_CXX_RUNTIME")
       message(FATAL_ERROR
         "qvac-fabric: symbols.map has no '# QVAC_FABRIC_LINUX_CXX_RUNTIME' "
         "marker to splice symbols-linux-cxx-runtime.map into. The Linux "
         "runtime must export the C++ ABI; restore the marker.")
     endif()
-    if(NOT _fabric_symbols MATCHES "(^|\n)${QVAC_FABRIC_ABI_VERSION}[ \t]*\\{")
+    if(NOT _fabric_symbols MATCHES "# QVAC_FABRIC_ABI_NODE\n\\{")
       message(FATAL_ERROR
-        "qvac-fabric: symbols.map does not declare the "
-        "'${QVAC_FABRIC_ABI_VERSION}' version node. Consumers pin their C++ "
-        "runtime to fabric through that node; an anonymous node leaves them "
-        "resolving it from the host's libstdc++ instead.")
+        "qvac-fabric: symbols.map has no '# QVAC_FABRIC_ABI_NODE' marker "
+        "directly above its version node, so '${QVAC_FABRIC_ABI_VERSION}' "
+        "cannot be stamped on it. Consumers pin their C++ runtime to fabric "
+        "through that node; an anonymous node leaves them resolving it from "
+        "the host's libstdc++ instead.")
     endif()
     string(REPLACE
       "# QVAC_FABRIC_LINUX_CXX_RUNTIME" "${_fabric_cxx_runtime_symbols}"
+      _fabric_symbols "${_fabric_symbols}")
+    string(REPLACE
+      "# QVAC_FABRIC_ABI_NODE\n{" "${QVAC_FABRIC_ABI_VERSION} {"
       _fabric_symbols "${_fabric_symbols}")
     set(_fabric_version_script "${CMAKE_CURRENT_BINARY_DIR}/symbols-linux.map")
     file(WRITE "${_fabric_version_script}" "${_fabric_symbols}")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
       "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map" "${_fabric_cxx_runtime_map}")
+  else()
+    # Nothing to publish: this link's node stays anonymous, so a consumer has no
+    # version to record a DT_VERNEED on. Empty rather than unset so the package
+    # config says "this build shares its runtime" instead of going missing.
+    set(QVAC_FABRIC_ABI_VERSION "")
   endif()
   target_link_options(${qvac-fabric}_module PRIVATE
     -Wl,--version-script=${_fabric_version_script})
+  set_property(TARGET ${qvac-fabric}_module APPEND PROPERTY
+    LINK_DEPENDS "${_fabric_version_script}")
 elseif(APPLE)
   target_link_options(${qvac-fabric}_module PRIVATE
     -Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/exports.txt)
