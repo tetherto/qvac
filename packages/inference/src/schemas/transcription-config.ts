@@ -198,16 +198,12 @@ export const whisperConfigSchema = z.object({
     .number()
     .optional()
     .describe('No-speech probability above which a segment is treated as silence.'),
-  seed: z
-    .number()
-    .int()
-    .optional()
-    .describe('Decoding RNG seed; `-1` picks a random seed.'),
+  seed: z.number().int().optional().describe('Decoding RNG seed; `-1` picks a random seed.'),
   backendsDir: z
     .string()
     .optional()
     .describe(
-      'Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon\'s own `prebuilds/`.'
+      "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`."
     ),
   vad_params: vadParamsSchema,
   audio_format: audioFormatSchema
