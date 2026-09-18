@@ -61,11 +61,6 @@ on:
           - dev
           - feature
           - temp
-      config_ref_override:
-        description: "Override the trusted config ref (options.ci is read from it, not from the pushed commit)"
-        required: false
-        default: ''
-        type: string
 
 permissions:
   contents: read
@@ -122,7 +117,9 @@ jobs:
           CHANGED: ${{ steps.filter.outputs.changes }}
           # Available because the checkout above is fetch-depth: 0, which fetches
           # +refs/heads/*:refs/remotes/origin/*, so every branch is present.
-          CONFIG_REF: origin/${{ inputs.config_ref_override || github.event.repository.default_branch }}
+          # No dispatch override: this workflow publishes, so an override would
+          # hand control of options.ci back to whoever dispatches it.
+          CONFIG_REF: origin/${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
 
@@ -426,8 +423,8 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: npm install --ignore-scripts --package-lock=false
 
-      # Via env: buildStep comes from project.json read at github.sha, which on
-      # feature-*/tmp-* is anyone with write access. This job holds publish creds.
+      # Via env, not interpolated: buildStep is a script name resolved from
+      # CONFIG_REF, and this job holds publish credentials.
       - name: Run build step
         if: matrix.buildStep != 'none'
         working-directory: ${{ matrix.workdir }}
@@ -546,8 +543,8 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: npm install --ignore-scripts --package-lock=false
 
-      # Via env: buildStep comes from project.json read at github.sha, which on
-      # feature-*/tmp-* is anyone with write access. This job holds publish creds.
+      # Via env, not interpolated: buildStep is a script name resolved from
+      # CONFIG_REF, and this job holds publish credentials.
       - name: Run build step
         if: matrix.buildStep != 'none'
         working-directory: ${{ matrix.workdir }}
