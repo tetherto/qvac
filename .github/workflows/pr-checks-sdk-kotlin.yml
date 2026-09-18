@@ -12,7 +12,6 @@ on:
       - 'packages/sdk/e2e/conformance/**'
       - 'packages/sdk/contract/**'
       - 'packages/sdk/package.json'
-      - '.cursor/skills/qv-sdk-lockstep-sync/**'
       - '.github/workflows/pr-checks-sdk-kotlin.yml'
       - '.github/workflows/publish-sdk-kotlin.yml'
       - '.github/workflows/on-pr-sdk-kotlin-e2e.yml'
