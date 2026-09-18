@@ -108,7 +108,7 @@ jobs:
       carveouts: ${{ steps.compute.outputs.carveouts }}
       pinmodel: ${{ steps.filter.outputs.pinmodel }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
       - id: compute
         uses: ./.github/actions/nx-project-matrix
         with:
@@ -178,13 +178,13 @@ jobs:
         shell: bash
         working-directory: .
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: lts/*
       - name: Generate pins from fresh downloads
@@ -193,7 +193,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: node scripts/generate-model-manifest.mjs --force
       - name: Upload pinned model manifest
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ${{ matrix.package }}-model-manifest
           path: ${{ matrix.workdir }}/test/integration/models.manifest.json
@@ -224,7 +224,7 @@ jobs:
         if: runner.environment != 'github-hosted'
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -291,7 +291,7 @@ jobs:
           git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "git@github.com:"
 
       - name: Setup Bare runtime
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@4a377a2e6474914559de747f60dc426d2b834bbc
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
@@ -566,7 +566,7 @@ jobs:
 
       - name: Upload performance report
         if: always() && !cancelled()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # 4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: ${{ matrix.package }}-perf-report-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ matrix.workdir }}/test/results/performance-report.json
@@ -619,7 +619,7 @@ jobs:
       - name: Upload RTF benchmark results
         if: always() && !cancelled() && (matrix.runRtfBenchmarks || inputs.run_rtf_benchmarks) && matrix.rtfBenchmark
         continue-on-error: true
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: rtf-results-${{ matrix.runner || matrix.os }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ matrix.workdir }}/benchmarks/results/rtf-benchmark-*.json
