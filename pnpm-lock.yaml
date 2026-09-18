@@ -1058,7 +1058,7 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.16.0
+        specifier: ^0.16.1
         version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.6.2
