@@ -7,8 +7,12 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
+    # cmake/qvac-addon/** is native input for every consuming addon (link line,
+    # exported symbols, build-time assertions). Keep this list contiguous:
+    # ts-check-names.test.mjs stops at the first non-entry line.
     paths:
       - "packages/**"
+      - "cmake/qvac-addon/**"
   workflow_dispatch:
     inputs:
       repository:
