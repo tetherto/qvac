@@ -127,6 +127,18 @@ void expectVulkanBackend(const Audio8Model& model) {
   EXPECT_EQ(
       runtimeInt(model, "backendId"), backendIdFromName(VULKAN_BACKEND_NAME));
   EXPECT_EQ(runtimeInt(model, "gpuUnsupported"), 0);
+  EXPECT_EQ(runtimeInt(model, "codecSidecarLoaded"), 0);
+  EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 0);
+}
+
+tts_cpp::audio8::SynthesisResult resultOnBackend(const std::string& backend) {
+  tts_cpp::audio8::SynthesisResult result;
+  result.pcm.assign(4096, 0.0f);
+  result.sample_rate = 44100;
+  result.duration_s = 4096.0f / 44100.0f;
+  result.frames = 2;
+  result.codec_synthesis_backend = backend;
+  return result;
 }
 
 void readVoiceRepeatedly(const Audio8Model& model, int iterations) {
@@ -288,6 +300,34 @@ TEST(Audio8Validate, LoadIsDeferredAndStubFailsToParse) {
   EXPECT_FALSE(m->isLoaded());
   EXPECT_THROW(m->load(), StatusError);
   EXPECT_FALSE(m->isLoaded());
+}
+
+TEST(Audio8Stats, CoremlBackendIsRecognisedByNamedPrefix) {
+  EXPECT_TRUE(Audio8Model::codecBackendIsCoreml("coreml-all"));
+  EXPECT_TRUE(Audio8Model::codecBackendIsCoreml("coreml-gpu"));
+  EXPECT_TRUE(Audio8Model::codecBackendIsCoreml(Audio8Model::kCoremlBackendPrefix));
+  EXPECT_FALSE(Audio8Model::codecBackendIsCoreml("ggml"));
+  EXPECT_FALSE(Audio8Model::codecBackendIsCoreml("MTL0"));
+  EXPECT_FALSE(Audio8Model::codecBackendIsCoreml("xcoreml"));
+  EXPECT_FALSE(Audio8Model::codecBackendIsCoreml(""));
+}
+
+TEST(Audio8Stats, CodecOnCoremlFollowsTheLastSynthesis) {
+  Audio8Model model(minimallyValidStubConfig());
+  EXPECT_EQ(runtimeInt(model, "codecSidecarLoaded"), 0);
+  EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 0);
+
+  model.recordSynthesisResult(resultOnBackend("coreml-all"), 0.5);
+  EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 1);
+  EXPECT_EQ(runtimeInt(model, "generatedFrames"), 2);
+  EXPECT_EQ(runtimeInt(model, "totalSamples"), 4096);
+
+  model.recordSynthesisResult(resultOnBackend("ggml"), 0.5);
+  EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 0);
+
+  model.recordSynthesisResult(resultOnBackend("coreml-gpu"), 0.5);
+  EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 1);
+  EXPECT_EQ(runtimeInt(model, "codecSidecarLoaded"), 0);
 }
 
 TEST(Audio8Validate, ConfigDefaultsAllUnset) {

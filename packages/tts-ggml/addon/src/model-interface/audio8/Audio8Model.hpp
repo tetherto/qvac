@@ -11,10 +11,7 @@
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/audio8/Audio8Config.hpp"
-
-namespace tts_cpp::audio8 {
-class Engine;
-}
+#include "tts-cpp/audio8/engine.h"
 
 namespace qvac::ttsggml::audio8 {
 
@@ -53,6 +50,12 @@ public:
   std::string getName() const override { return "Audio8Model"; }
   std::any process(const std::any& input) override;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
+
+  static constexpr const char* kCoremlBackendPrefix = "coreml";
+  static bool codecBackendIsCoreml(const std::string& backend);
+
+  void recordSynthesisResult(
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds);
 
   void cancel() const override;
 
@@ -130,6 +133,8 @@ private:
   int backendId_ = 0;
   std::string backendName_ = "CPU";
   bool gpuUnsupported_ = false;
+  bool codecSidecarLoaded_ = false;
+  bool codecOnCoreml_ = false;
 };
 
 } // namespace qvac::ttsggml::audio8
