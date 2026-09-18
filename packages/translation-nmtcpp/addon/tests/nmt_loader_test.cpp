@@ -156,6 +156,17 @@ TEST_F(NmtLoaderDims, RejectsModuloCollisionHeader) {
   EXPECT_FALSE(nmtReadTensorDims(&loader, NMT_MAX_TENSOR_DIMS, ne, nelements));
 }
 
+TEST_F(NmtLoaderDims, RejectsTruncatedDimensions) {
+  auto bytes = dimsBytes({VALID_DIM_ROWS});
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  int32_t ne[NMT_MAX_TENSOR_DIMS] = {1, 1, 1, 1};
+  int32_t nelements = 1;
+
+  EXPECT_FALSE(nmtReadTensorDims(&loader, 2, ne, nelements));
+}
+
 class NmtLoaderName : public ::testing::Test {
 protected:
   static constexpr int32_t NEGATIVE_LENGTH = -1;
@@ -202,4 +213,118 @@ TEST_F(NmtLoaderName, RejectsShortRead) {
   std::string name;
   EXPECT_FALSE(
       nmtReadTensorName(&loader, static_cast<int32_t>(bytes.size()) + 1, name));
+}
+
+class NmtLoaderBoundedString : public ::testing::Test {
+protected:
+  static constexpr int64_t MAX_LENGTH = 8;
+};
+
+TEST_F(NmtLoaderBoundedString, ReadsValidBytes) {
+  const std::string expected = "abcd";
+  std::vector<uint8_t> bytes(expected.begin(), expected.end());
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  std::string out;
+  EXPECT_TRUE(nmtReadBoundedString(
+      &loader, static_cast<int64_t>(expected.size()), MAX_LENGTH, out));
+  EXPECT_EQ(out, expected);
+}
+
+TEST_F(NmtLoaderBoundedString, ReadsZeroLengthAsEmpty) {
+  std::vector<uint8_t> bytes(1, 'a');
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  std::string out = "stale";
+  EXPECT_TRUE(nmtReadBoundedString(&loader, 0, MAX_LENGTH, out));
+  EXPECT_TRUE(out.empty());
+  EXPECT_EQ(reader.pos, 0U);
+}
+
+TEST_F(NmtLoaderBoundedString, RejectsLengthOverMax) {
+  std::vector<uint8_t> bytes(16, 'a');
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  std::string out;
+  EXPECT_FALSE(nmtReadBoundedString(&loader, MAX_LENGTH + 1, MAX_LENGTH, out));
+  EXPECT_EQ(reader.pos, 0U);
+}
+
+TEST_F(NmtLoaderBoundedString, RejectsNegativeLength) {
+  std::vector<uint8_t> bytes(1, 'a');
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  std::string out;
+  EXPECT_FALSE(nmtReadBoundedString(&loader, -1, MAX_LENGTH, out));
+  EXPECT_EQ(reader.pos, 0U);
+}
+
+TEST_F(NmtLoaderBoundedString, RejectsShortRead) {
+  std::vector<uint8_t> bytes(2, 'a');
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  std::string out;
+  EXPECT_FALSE(nmtReadBoundedString(
+      &loader, static_cast<int64_t>(bytes.size()) + 1, MAX_LENGTH, out));
+}
+
+class NmtLoaderCount : public ::testing::Test {
+protected:
+  static constexpr int32_t MAX_COUNT = 10;
+  static constexpr int32_t VALID_COUNT = 3;
+  static constexpr int32_t NEGATIVE_COUNT = -1;
+};
+
+TEST_F(NmtLoaderCount, ReadsValidCount) {
+  auto bytes = dimsBytes({VALID_COUNT});
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  int32_t count = 0;
+  EXPECT_TRUE(nmtReadCount(&loader, MAX_COUNT, count));
+  EXPECT_EQ(count, VALID_COUNT);
+}
+
+TEST_F(NmtLoaderCount, RejectsNegativeCount) {
+  auto bytes = dimsBytes({NEGATIVE_COUNT});
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  int32_t count = 0;
+  EXPECT_FALSE(nmtReadCount(&loader, MAX_COUNT, count));
+}
+
+TEST_F(NmtLoaderCount, RejectsOverLimitCount) {
+  auto bytes = dimsBytes({MAX_COUNT + 1});
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  int32_t count = 0;
+  EXPECT_FALSE(nmtReadCount(&loader, MAX_COUNT, count));
+}
+
+TEST_F(NmtLoaderCount, RejectsTruncatedCount) {
+  std::vector<uint8_t> bytes(2, 0);
+  BufferReader reader{bytes.data(), bytes.size(), 0};
+  auto loader = makeLoader(reader);
+
+  int32_t count = 0;
+  EXPECT_FALSE(nmtReadCount(&loader, MAX_COUNT, count));
+}
+
+TEST(NmtLoaderTensorType, AcceptsKnownType) {
+  EXPECT_TRUE(nmtIsValidTensorType(GGML_TYPE_F32));
+}
+
+TEST(NmtLoaderTensorType, RejectsNegativeType) {
+  EXPECT_FALSE(nmtIsValidTensorType(-1));
+}
+
+TEST(NmtLoaderTensorType, RejectsTypeCount) {
+  EXPECT_FALSE(nmtIsValidTensorType(GGML_TYPE_COUNT));
 }

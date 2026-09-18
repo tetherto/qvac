@@ -111,9 +111,12 @@ static void byteswap_tensor(ggml_tensor* tensor) {
   } while (0)
 #endif
 
-template <typename T> static void read_safe(nmt_model_loader* loader, T& dest) {
-  loader->read(loader->context, &dest, sizeof(T));
+template <typename T> static bool read_safe(nmt_model_loader* loader, T& dest) {
+  if (loader->read(loader->context, &dest, sizeof(T)) != sizeof(T)) {
+    return false;
+  }
   BYTESWAP_VALUE(dest);
+  return true;
 }
 
 bool nmtReadTensorDims(
@@ -124,7 +127,9 @@ bool nmtReadTensorDims(
   }
   int64_t product = 1;
   for (int i = 0; i < nDims; ++i) {
-    read_safe(loader, ne[i]);
+    if (!read_safe(loader, ne[i])) {
+      return false;
+    }
     if (ne[i] < 1) {
       return false;
     }
@@ -137,18 +142,39 @@ bool nmtReadTensorDims(
   return true;
 }
 
-bool nmtReadTensorName(
-    nmt_model_loader* loader, int32_t length, std::string& name) {
-  if (length < 0 || length > NMT_MAX_TENSOR_NAME_LENGTH) {
+bool nmtReadBoundedString(
+    nmt_model_loader* loader, int64_t length, int64_t maxLength,
+    std::string& out) {
+  if (length < 0 || length > maxLength) {
     return false;
   }
-  std::vector<char> buffer(length);
+  if (length == 0) {
+    out.clear();
+    return true;
+  }
+  std::vector<char> buffer(static_cast<size_t>(length));
   if (loader->read(loader->context, buffer.data(), buffer.size()) !=
       buffer.size()) {
     return false;
   }
-  name.assign(buffer.data(), buffer.size());
+  out.assign(buffer.data(), buffer.size());
   return true;
+}
+
+bool nmtReadTensorName(
+    nmt_model_loader* loader, int32_t length, std::string& name) {
+  return nmtReadBoundedString(loader, length, NMT_MAX_TENSOR_NAME_LENGTH, name);
+}
+
+bool nmtReadCount(nmt_model_loader* loader, int32_t maxCount, int32_t& count) {
+  if (!read_safe(loader, count)) {
+    return false;
+  }
+  return count >= 0 && count <= maxCount;
+}
+
+bool nmtIsValidTensorType(int32_t ttype) {
+  return ttype >= 0 && ttype < GGML_TYPE_COUNT;
 }
 
 using buft_list_t =
@@ -298,9 +324,14 @@ static bool load_sentencepiece_model(
       "SentencePiece model size: " + std::to_string(sp_model_size));
 
   if (sp_model_size > 0) {
-    std::vector<char> sp_model_data(sp_model_size);
-    loader->read(loader->context, sp_model_data.data(), sp_model_size);
-    std::string serialized_model(sp_model_data.data(), sp_model_size);
+    std::string serialized_model;
+    if (!nmtReadBoundedString(
+            loader,
+            sp_model_size,
+            NMT_MAX_SENTENCEPIECE_MODEL_BYTES,
+            serialized_model)) {
+      return false;
+    }
 
     auto status = processor->LoadFromSerializedProto(serialized_model);
     if (status.ok()) {
@@ -406,25 +437,19 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
   // load vocab
   {
     int32_t n_vocab = 0;
-    read_safe(loader, n_vocab);
+    if (!nmtReadCount(loader, NMT_MAX_VOCAB_SIZE, n_vocab)) {
+      return false;
+    }
 
     std::string word;
-    std::vector<char> tmp;
-
-    tmp.reserve(128);
 
     for (int i = 0; i < n_vocab; i++) {
       uint32_t len;
       read_safe(loader, len);
 
-      if (len > 0) {
-        tmp.resize(len);
-        loader->read(loader->context, &tmp[0], tmp.size()); // read to buffer
-        word.assign(&tmp[0], tmp.size());
-      } else {
-        // seems like we have an empty-string token in multi-language models (i
-        // = 50256)
-        word = "";
+      if (!nmtReadBoundedString(
+              loader, len, NMT_MAX_VOCAB_TOKEN_LENGTH, word)) {
+        return false;
       }
 
       vocab.src_token_to_id[word] = i;
@@ -447,8 +472,10 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
     vocab.has_sentencepiece_processors = src_loaded && tgt_loaded;
 
     if (model.type == e_model::MODEL_INDICTRANS) {
-      int32_t tgt_encoder_size;
-      read_safe(loader, tgt_encoder_size);
+      int32_t tgt_encoder_size = 0;
+      if (!nmtReadCount(loader, NMT_MAX_VOCAB_SIZE, tgt_encoder_size)) {
+        return false;
+      }
 
       vocab.tgt_id_to_token.clear();
       vocab.tgt_token_to_id.clear();
@@ -461,10 +488,9 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
         read_safe(loader, token_len);
 
         std::string token;
-        if (token_len > 0) {
-          std::vector<char> tmp(token_len);
-          loader->read(loader->context, &tmp[0], tmp.size());
-          token.assign(&tmp[0], tmp.size());
+        if (!nmtReadBoundedString(
+                loader, token_len, NMT_MAX_VOCAB_TOKEN_LENGTH, token)) {
+          return false;
         }
 
         vocab.tgt_id_to_token[token_id] = token;
@@ -911,6 +937,10 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
         return false;
       }
 
+      if (!nmtIsValidTensorType(ttype)) {
+        return false;
+      }
+
       const size_t bpe = ggml_type_size(ggml_type(ttype));
 
       if ((nelements * bpe) / ggml_blck_size(tensor->type) !=
@@ -1019,10 +1049,10 @@ struct nmt_context* nmtInitFromFileWithParamsNoState(
 
   loader.context = &fin;
 
-  loader.read = [](void* ctx, void* output, size_t read_size) {
+  loader.read = [](void* ctx, void* output, size_t read_size) -> size_t {
     std::ifstream* fin = (std::ifstream*)ctx;
     fin->read((char*)output, read_size);
-    return read_size;
+    return static_cast<size_t>(fin->gcount());
   };
 
   loader.eof = [](void* ctx) {
