@@ -36,6 +36,9 @@ outputs:
   carveouts:
     description: 'JSON array of affected package short-names whose options.ci is flagged carveOut:true (routed to their own bespoke reusable by the caller, not the generic matrix job)'
     value: ${{ steps.compute.outputs.carveouts }}
+  allrows:
+    description: 'Same rows as `matrix`, carve-outs included. For lanes that are orthogonal to carve-out routing (the TS-check producer): carveOut picks which workflow drives a package''s native jobs, not whether it has TS checks.'
+    value: ${{ steps.compute.outputs.allrows }}
 
 runs:
   using: composite
@@ -245,6 +248,10 @@ runs:
           echo "::error::envSecretName must be GITHUB_TOKEN or QASE_API_TOKEN, got: $BAD_SECRETS"
           exit 1
         fi
+
+        # Emitted before the partition, while $ROWS still holds every row, for
+        # lanes that must cover carved-out packages too.
+        echo "allrows=$ROWS" >> "$GITHUB_OUTPUT"
 
         # Partition: carveOut rows go to the caller's bespoke reusable, so keep
         # them out of the generic matrix and surface just their package names.
