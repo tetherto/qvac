@@ -61,20 +61,20 @@ on:
           - dev
           - feature
           - temp
+      config_ref_override:
+        description: "Override the trusted config ref (options.ci is read from it, not from the pushed commit)"
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
-
-# Never cancel: this publishes to GPR/npm and cuts tags. Two pushes touching the
-# same package queue instead of racing.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   detect:
     name: Detect changed packages
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       any: ${{ steps.rows.outputs.any }}
       matrix: ${{ steps.rows.outputs.matrix }}
@@ -120,6 +120,9 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
           DISPATCH_PKG: ${{ inputs.package }}
           CHANGED: ${{ steps.filter.outputs.changes }}
+          # Available because the checkout above is fetch-depth: 0, which fetches
+          # +refs/heads/*:refs/remotes/origin/*, so every branch is present.
+          CONFIG_REF: origin/${{ inputs.config_ref_override || github.event.repository.default_branch }}
         run: |
           set -euo pipefail
 
@@ -154,15 +157,45 @@ jobs:
           rows="[]"
           for pkg in $(echo "$packages" | jq -r '.[]'); do
             pj="packages/${pkg}/project.json"
-            onmerge=$(jq -c '.targets["on-merge"].options.ci // {}' "$pj")
+
+            # The package must still exist in the pushed commit: a merge that
+            # deletes or renames one still matches on.push.paths, and publishing
+            # it would ship the previous contents.
+            if [ ! -f "$pj" ]; then
+              echo "::notice::packages/${pkg} has no project.json at ${GITHUB_SHA}, skipping (deleted or renamed)"
+              continue
+            fi
+
+            # Config comes from CONFIG_REF, not the pushed commit. Every key below
+            # steers what gets built, tested and published, and a push to
+            # feature-*/tmp-* needs no review, so reading them from the commit they
+            # gate lets that push rewrite its own publish rules. Matches on-pr-nx.
+            if ! onmerge=$(git show "${CONFIG_REF}:${pj}" 2>/dev/null | jq -c '.targets["on-merge"].options.ci // {}'); then
+              echo "::notice::packages/${pkg}/project.json is not on ${CONFIG_REF} yet, skipping. Land it on the default branch first."
+              continue
+            fi
+
             root=$(jq -r '.root' "$pj")
-            has_build=$(jq -r 'if .targets.build then "true" else "false" end' "$pj")
+            has_build=$(git show "${CONFIG_REF}:${pj}" | jq -r 'if .targets.build then "true" else "false" end')
+
+            # Derived, not declared, like hasPrebuilds above. package.json is the
+            # only place that knows whether wrappers are generated, and two
+            # packages carry the script with no verifyGenerated flag today.
+            has_check=$(git show "${CONFIG_REF}:packages/${pkg}/package.json" 2>/dev/null \
+              | jq -r 'if .scripts["check:generated"] then "true" else "false" end' || echo false)
+
+            # After `+ $onmerge` so the derived values win over stale project.json
+            # keys; buildStep defaults to "none" so a package that omits it builds
+            # nothing rather than running `npm run ""` and exiting 0.
             row=$(jq -n \
               --arg pkg "$pkg" \
               --arg workdir "$root" \
               --argjson hasPrebuilds "$has_build" \
+              --argjson verifyGenerated "$has_check" \
               --argjson onmerge "$onmerge" \
-              '{package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds} + $onmerge')
+              '{package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds}
+               + $onmerge
+               + {verifyGenerated: $verifyGenerated, buildStep: ($onmerge.buildStep // "none")}')
             rows=$(echo "$rows" | jq -c --argjson r "$row" '. + [$r]')
           done
 
@@ -187,6 +220,7 @@ jobs:
 
   publish-logic:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       publish_main: ${{ steps.logic.outputs.publish_main }}
       publish_release: ${{ steps.logic.outputs.publish_release }}
@@ -203,9 +237,11 @@ jobs:
     # Both events, as main gates it: publish-npm accepts a 'skipped' guard, so
     # push-only would let a release-* dispatch reach npm ungated.
     if: >-
+      needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       startsWith(github.ref_name, 'release-')
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -248,8 +284,10 @@ jobs:
       packages: ${{ format('["{0}"]', matrix.package) }}
     secrets: inherit
 
-  # Mobile is NOT consolidated: pre/post-publish mobile gate stays on main's
-  # per-package on-merge-<pkg>.yml. on-merge-nx gates on desktop integration only.
+  # Mobile is NOT consolidated into the matrix, because `uses:` cannot take an
+  # expression. decoder-audio's run blocked publish and is mobile-gate-decoder-audio
+  # below; asr-ggml, bci-whispercpp and tts-ggml ran theirs post-publish off
+  # post-build-gate, and those are the three static jobs at the end of this file.
 
   # Same `packages` bypass: build exactly this package, not nx-affected.
   prebuild:
@@ -322,14 +360,24 @@ jobs:
     # Test gates are per-package in the steps below: needs.<job>.result is the
     # matrix-wide aggregate and `matrix` is unavailable in a job-level `if:`.
     # verify-generated and mobile-gate-decoder-audio are enforced here, aggregate
-    # and all, and are skipped only when no selected package applies.
+    # and all. `success()` rather than `!= failure`, because a skipped gate is not
+    # a passed one; the only permitted absence is an empty selected row set.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
+      (needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
+      (needs.verify-generated.result == 'success' || needs.detect.outputs.verify-generated-rows == '[]') &&
       (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
       (always() && !cancelled() &&
-      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true')))
+      (needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))))
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: release
+    # Per package, not per workflow: one group for all 13 lets an unrelated
+    # package's merge cancel a queued publish, since GitHub keeps only one
+    # pending run per group even with cancel-in-progress: false.
+    concurrency:
+      group: ${{ github.workflow }}-publish-gpr-${{ github.ref }}-${{ matrix.package }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -436,12 +484,18 @@ jobs:
     # gate makes the aggregate equal the one package.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
+      (needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
+      (needs.verify-generated.result == 'success' || needs.detect.outputs.verify-generated-rows == '[]') &&
       (needs.mobile-gate-decoder-audio.result != 'failure' && needs.mobile-gate-decoder-audio.result != 'cancelled' &&
       (always() && !cancelled() &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      needs.publish-logic.outputs.publish_release == 'true'))
+      needs.publish-logic.outputs.publish_release == 'true')))
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment: npm
+    concurrency:
+      group: ${{ github.workflow }}-publish-npm-${{ github.ref }}-${{ matrix.package }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -501,12 +555,28 @@ jobs:
           BUILD_STEP: ${{ matrix.buildStep }}
         run: npm run "$BUILD_STEP"
 
+      # 12 of the 13 deleted workflows validated this before it reached the
+      # external action, and qvac-actions does not check the charset itself.
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        env:
+          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
+        run: |
+          if ! echo "$NPM_TAG_INPUT" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$NPM_TAG_INPUT'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
       - name: Determine dist-tag
         id: dist-tag
         uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           workdir: ${{ matrix.workdir }}
-          tag: ${{ matrix.npmTagOverride || inputs.npm_tag }}
+          # `|| 'latest'` restores the five packages that forced it on a push;
+          # only vla-ggml sets npmTagOverride, and an empty tag would otherwise
+          # leave the dist-tag to be derived.
+          tag: ${{ matrix.npmTagOverride || inputs.npm_tag || 'latest' }}
 
       # asr/audiogen/tts ship one npm package per platform plus a JS-only meta
       # with version-locked optionalDependencies. npm only; GPR stays unsliced.
@@ -574,19 +644,29 @@ jobs:
       always() && !cancelled() &&
       needs.detect.outputs.post-integration-rows != '[]'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
+      rows: ${{ steps.gate.outputs.rows }}
     steps:
       # Keyed on publish-npm only: a GPR dev publish must not reopen this gate
       # (#4175). publish-gpr-skip-policy.test.mjs guards it.
+      #
+      # `rows` carries the selected packages so the static post-publish mobile
+      # jobs below can scope themselves without re-deriving the set.
       - id: gate
         shell: bash
+        env:
+          ROWS: ${{ needs.detect.outputs.post-integration-rows }}
         run: |
           set -euo pipefail
           should="false"
+          rows="[]"
           if [ "${{ needs.publish-npm.result }}" = "success" ]; then
             should="true"
+            rows="$ROWS"
           fi
+          echo "rows=$rows" >> "$GITHUB_OUTPUT"
           echo "should_run_tests=$should" >> "$GITHUB_OUTPUT"
 
   post-publish-integration:
@@ -600,7 +680,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.detect.outputs.post-integration-rows) }}
+        include: ${{ fromJSON(needs.post-build-gate.outputs.rows) }}
     permissions:
       contents: read
       packages: read
@@ -618,7 +698,9 @@ jobs:
   create-tag:
     name: Create tag (${{ matrix.package }})
     needs: [detect, publish-npm]
-    if: needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
+    if: >-
+      needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
+      needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     strategy:
       fail-fast: false
       matrix:
@@ -629,3 +711,61 @@ jobs:
     with:
       repo_name: ${{ matrix.repoName }}
       published_version: ${{ needs.publish-npm.outputs.published_version }}
+
+  # Post-publish mobile, restored from the deleted on-merge-<pkg>.yml files. One
+  # static job each because `uses:` cannot take an expression, gated on the
+  # package being in the row set post-build-gate actually selected so a merge
+  # touching only another package does not launch a Device Farm run.
+  mobile-post-publish-asr-ggml:
+    name: Post-publish mobile (asr-ggml)
+    needs: [post-build-gate]
+    if: >-
+      always() && !cancelled() &&
+      needs.post-build-gate.outputs.should_run_tests == 'true' &&
+      contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, 'asr-ggml')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+
+  mobile-post-publish-bci-whispercpp:
+    name: Post-publish mobile (bci-whispercpp)
+    needs: [post-build-gate]
+    if: >-
+      always() && !cancelled() &&
+      needs.post-build-gate.outputs.should_run_tests == 'true' &&
+      contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, 'bci-whispercpp')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
+
+  mobile-post-publish-tts-ggml:
+    name: Post-publish mobile (tts-ggml)
+    needs: [post-build-gate]
+    if: >-
+      always() && !cancelled() &&
+      needs.post-build-gate.outputs.should_run_tests == 'true' &&
+      contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, 'tts-ggml')
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.repository }}
+      ref: ${{ github.sha }}
