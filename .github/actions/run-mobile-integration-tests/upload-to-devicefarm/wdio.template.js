@@ -103,12 +103,13 @@ exports.config = {
     //     -> run-as: package not debuggable: <pkg>
     // Both observed on real Device Farm runs. So try only the world-readable
     // external-files path — which an app CAN be changed to write to, and which
-    // adb can read without run-as — and otherwise say plainly that the log is
+    // adb can read without run-as — and otherwise say plainly that this file is
     // unavailable rather than burning five doomed pulls per run.
     //
-    // This is why an Android mobile failure cannot be triaged from its
-    // artifacts today: logcat carries no bare output either. Making the app
-    // write its console log to the external files dir would close the gap.
+    // Android is NOT losing its app-side output: the bare runtime logs to
+    // logcat under the `bare` tag, so logcat_full.txt carries the TAP lines and
+    // the failure reason (e.g. "E bare: Test 'x' failed: AddonError ...").
+    // bare_console.log is simply the iOS channel for the same thing.
     global.bareLogCandidates = function (isAndroid, bundleId) {
       if (!isAndroid) return ['@' + bundleId + ':documents/bare_console.log'];
       return ['/sdcard/Android/data/' + bundleId + '/files/bare_console.log'];
@@ -129,9 +130,9 @@ exports.config = {
       }
       if (isAndroid) {
         console.log(
-          '[bare-log] ' + reason + ' unavailable on Android: the app writes it to its private ' +
-          'data dir, which adb cannot read and run-as refuses on a release-signed APK. ' +
-          'Use an iOS run to read app-side output. Last error: ' +
+          '[bare-log] ' + reason + ': no bare_console.log on Android (the app writes it to its ' +
+          'private data dir, which adb cannot read and run-as refuses on a release-signed APK). ' +
+          'App-side output is in logcat_full.txt under the `bare` tag. Last error: ' +
           (lastError ? lastError.message : 'none')
         );
         return;

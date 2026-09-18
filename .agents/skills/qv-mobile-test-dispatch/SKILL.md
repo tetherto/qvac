@@ -156,11 +156,18 @@ fails the run with the reason rather than falling back to `@latest`.
 | `decoder-audio` | no native prebuild of its own (rides `bare-ffmpeg` from npm). `package` has no effect; use `ref`. |
 | `inference-addon-cpp` | compiles its own prebuilds in-run from the dispatched `ref`, so no prebuild input is needed or offered |
 
-## Known harness gap
+## Reading a failure
 
-When an on-device test fails, the app-side log flush errors
-(`[bare-log] after flush failed: The first argument must be of type string…`) on
-every run, pass or fail. The reason a runner reported FAIL is therefore usually
-not in the artifacts — only the harness assertion at `app.test.js`. Reproduce
-locally or raise it with the mobile test framework owners rather than guessing
-from the Device Farm logs.
+The Device Farm artifacts only show the harness assertion (`app.test.js`), which
+is the same for every failure. The reason lives in the app's own output, and
+where that is depends on the platform:
+
+- **Android** — `logcat_full.txt`, under the **`bare`** tag. Grep for
+  `E bare` / `I bare`; TAP lines and the real error are there, e.g.
+  `E bare: Test 'runFitStubTest' failed: AddonError: ADDON_NOT_FOUND ... dlopen fail`.
+  Note `Logcat.logcat` is a smaller, different file — use `logcat_full.txt`.
+- **iOS** — `bare_console.log`, pulled from the app container.
+
+There is no `bare_console.log` on Android: the app writes it into its private
+data dir, which adb cannot read and `run-as` refuses on a release-signed APK.
+That is expected, not a failure — logcat is the Android channel.
