@@ -92,9 +92,14 @@ export function resolveManifestSource(dependencySpec) {
   };
 }
 
-function toLocalTarballSpec(tarballPath, platform = process.platform) {
+// Unix: WHATWG file URL (`file:///…`).
+// win32: `file:` + posixified absolute path, not `pathToFileURL`.
+// `pathToFileURL('C:\\…')` is `file:///C:/…`, which bun/npm have rejected;
+// a bare `C:/…` path then failed `enforce-inference-versions` (it only skips
+// `file:`/`link:`/`npm:`). `file:C:/…` is both installable and skippable.
+export function toLocalTarballSpec(tarballPath, platform = process.platform) {
   if (platform === "win32") {
-    return path.win32.resolve(tarballPath).replaceAll("\\", "/");
+    return `file:${path.win32.resolve(tarballPath).replaceAll("\\", "/")}`;
   }
   return pathToFileURL(path.resolve(tarballPath)).href;
 }
