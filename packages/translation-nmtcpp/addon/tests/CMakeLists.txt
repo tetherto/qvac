@@ -10,6 +10,7 @@ set(TEST_SOURCES
   translation_tests.cpp
   nmt_model_wrapper_test_indic.cpp
   nmt_test.cpp
+  nmt_loader_test.cpp
   test_nmt_lazy_init_backend.cpp
   nmt_gpu_selection_test.cpp
   backend_env.cpp

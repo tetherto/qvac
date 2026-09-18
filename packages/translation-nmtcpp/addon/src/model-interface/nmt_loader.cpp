@@ -116,6 +116,22 @@ template <typename T> static void read_safe(nmt_model_loader* loader, T& dest) {
   BYTESWAP_VALUE(dest);
 }
 
+bool nmt_read_tensor_dims(
+    nmt_model_loader* loader,
+    int32_t n_dims,
+    int32_t (&ne)[NMT_MAX_TENSOR_DIMS],
+    int32_t& nelements) {
+  if (n_dims < 1 || n_dims > NMT_MAX_TENSOR_DIMS) {
+    return false;
+  }
+  nelements = 1;
+  for (int i = 0; i < n_dims; ++i) {
+    read_safe(loader, ne[i]);
+    nelements *= ne[i];
+  }
+  return true;
+}
+
 using buft_list_t =
     std::vector<std::pair<ggml_backend_dev_t, ggml_backend_buffer_type_t>>;
 
@@ -849,16 +865,22 @@ static bool nmt_model_load(struct nmt_model_loader* loader, nmt_context& ctx) {
       }
 
       int32_t nelements = 1;
-      int32_t ne[4] = {1, 1, 1, 1};
-      for (int i = 0; i < n_dims; ++i) {
-        read_safe(loader, ne[i]);
-        nelements *= ne[i];
+      int32_t ne[NMT_MAX_TENSOR_DIMS] = {1, 1, 1, 1};
+      if (!nmt_read_tensor_dims(loader, n_dims, ne, nelements)) {
+        return false;
+      }
+
+      if (length < 0 || length > NMT_MAX_TENSOR_NAME_LENGTH) {
+        return false;
       }
 
       std::string name;
-      std::vector<char> tmp(length);                      // create a buffer
-      loader->read(loader->context, &tmp[0], tmp.size()); // read to buffer
-      name.assign(&tmp[0], tmp.size());
+      std::vector<char> tmp(length);
+      if (loader->read(loader->context, tmp.data(), tmp.size()) !=
+          tmp.size()) {
+        return false;
+      }
+      name.assign(tmp.data(), tmp.size());
 
       if (model.tensors.find(name) == model.tensors.end()) {
         return false;
