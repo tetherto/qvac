@@ -1,6 +1,6 @@
 import fs from 'bare-fs'
 import path from 'bare-path'
-import { FFmpegDecoder, type DecoderOutput } from '@qvac/decoder-audio'
+import type { DecoderOutput } from '@qvac/decoder-audio'
 import { FORMATS_NEEDING_DECODE } from '@/constants/audio'
 import { Readable } from 'bare-stream'
 import Buffer from 'bare-buffer'
@@ -53,6 +53,9 @@ export async function decodeAudioToStream(
   options: DecodeAudioOptions = {}
 ): Promise<Readable> {
   const { sampleRate, inactivityTimeoutMs = DECODER_INACTIVITY_TIMEOUT_MS } = options
+  // A literal dynamic import keeps the decoder packageable by default and
+  // lets raw-only bundles explicitly defer it without breaking worker startup.
+  const { FFmpegDecoder } = await import('@qvac/decoder-audio')
   const decoder = new FFmpegDecoder({
     config: { audioFormat, ...(sampleRate !== undefined && { sampleRate }) },
     logger

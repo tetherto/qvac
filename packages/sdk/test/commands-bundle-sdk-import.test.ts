@@ -4,11 +4,15 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { bundleSdk } from '@/commands/bundle'
+import { bundleSdk, resolveDeferredModules } from '@/commands/bundle'
+import { ConfigValidationFailedError } from '@/utils/errors-client'
 import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
 
-function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
+function fakeBundleSdkProject(
+  t: { after: (fn: () => void) => void },
+  opts: { lazyAudioDecoder?: boolean } = {}
+) {
   const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-project-'))
   const sdkPath = path.join(projectRoot, 'external-sdk')
   const sdkDistPath = path.join(sdkPath, 'dist')
@@ -49,6 +53,7 @@ function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
     `${JSON.stringify({
       name: '@qvac/inference',
       type: 'module',
+      ...(opts.lazyAudioDecoder && { qvac: { optionalAudioDecoder: true } }),
       exports: {
         './package': './package.json',
         './plugins': './dist/plugins/index.js'
@@ -93,6 +98,27 @@ describe('selectExportTarget', () => {
   it('returns null for missing or unknown-only conditions', () => {
     assert.equal(selectExportTarget(undefined), null)
     assert.equal(selectExportTarget({ types: './dist/x.d.ts' }), null)
+  })
+})
+
+describe('resolveDeferredModules', () => {
+  it('keeps the decoder bundled by default', () => {
+    assert.deepEqual(resolveDeferredModules({}, ['react-native-bare-kit']), [
+      'react-native-bare-kit'
+    ])
+  })
+
+  it('defers the decoder only for an explicit raw-only opt-out', () => {
+    assert.deepEqual(resolveDeferredModules({ includeAudioDecoder: false }, []), [
+      '@qvac/decoder-audio'
+    ])
+  })
+
+  it('does not duplicate an explicitly deferred decoder', () => {
+    assert.deepEqual(
+      resolveDeferredModules({ includeAudioDecoder: false }, ['@qvac/decoder-audio']),
+      ['@qvac/decoder-audio']
+    )
   })
 })
 
@@ -211,6 +237,43 @@ describe('generateWorkerEntry', () => {
 })
 
 describe('bundleSdk worker entries', () => {
+  it('rejects decoder opt-out for the selected SDK with an older inference runtime', async (t) => {
+    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
+    fs.writeFileSync(configPath, JSON.stringify({ includeAudioDecoder: false }))
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, sdkPath, configPath, quiet: true }),
+      (error: unknown) => {
+        assert.ok(error instanceof ConfigValidationFailedError)
+        assert.match(error.message, /includeAudioDecoder: false.*lazy audio decoder support/)
+        return true
+      }
+    )
+    assert.ok(!fs.existsSync(outputDir), 'fails before generating worker files')
+  })
+
+  it('allows decoder opt-out when the selected inference runtime supports it', async (t) => {
+    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t, {
+      lazyAudioDecoder: true
+    })
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        plugins: ['@qvac/sdk/llamacpp-completion/plugin'],
+        includeAudioDecoder: false
+      })
+    )
+
+    await bundleSdk({
+      projectRoot,
+      sdkPath,
+      configPath,
+      hosts: [`${process.platform}-${process.arch}`],
+      quiet: true
+    })
+    assert.ok(fs.existsSync(path.join(outputDir, 'worker.bundle.js')))
+  })
+
   it('uses resolved imports for bare-pack but writes a relocatable runtime entry', async (t) => {
     const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
 
