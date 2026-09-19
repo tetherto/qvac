@@ -1215,3 +1215,92 @@ TEST(
       << "explicit save failure must invalidate the active cache session; "
          "otherwise a later prompt without cacheKey retries the stale save";
 }
+
+// A pure-attention model rolls a cached request back with a tail trim, so the
+// addon must not pay for a full-state temp-file dump on every cached turn.
+// The only pure-attention case that needs the dump is a divergent history,
+// where reconciliation discards resident state a trim cannot bring back.
+TEST(
+    TextLlmContextCancelDuringGenerationTest,
+    PureAttentionAppendOnlyCachedCancelRollsBackWithoutSnapshot) {
+  const std::string modelPath = qwen3PureAttentionModelPath();
+  if (!fs::exists(modelPath)) {
+    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "4096";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "32";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+
+  std::string mp = modelPath;
+  std::string proj;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(mp), std::move(proj), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("pure-attention-cancel-rollback-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".ggsq");
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt seed;
+  seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  seed.saveCacheToDisk = true;
+  ASSERT_NO_THROW(model->processPrompt(seed));
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(baseCtx, nullptr);
+  auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
+  ASSERT_NE(textCtx, nullptr);
+  const llama_pos preRequestNPast = baseCtx->getNPast();
+  ASSERT_GT(preRequestNPast, 0);
+
+  std::atomic<bool> observed{false};
+  std::atomic<bool> snapshotSeen{false};
+  LlamaModel::Prompt cancellable;
+  // Full-history continuation: the seed turn is a prefix, so reconciliation
+  // only appends and no resident state is discarded.
+  cancellable.input =
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"user","content":"Start answering, then cancel."}])";
+  cancellable.cacheKey = cachePath.string();
+  cancellable.saveCacheToDisk = true;
+  cancellable.outputCallback = [&](const std::string&) {
+    if (observed.exchange(true)) {
+      return;
+    }
+    snapshotSeen.store(textCtx->hasPreRequestCacheSnapshotForTesting());
+    baseCtx->stop();
+  };
+
+  ASSERT_NO_THROW(model->processPrompt(cancellable));
+  ASSERT_TRUE(observed.load())
+      << "test did not reach the streaming callback to inspect the request";
+  EXPECT_FALSE(snapshotSeen.load())
+      << "an append-only cached request on pure-attention memory must not "
+         "write a full-state snapshot";
+  EXPECT_EQ(baseCtx->getNPast(), preRequestNPast)
+      << "cancel must trim the appended tail back to the pre-request cursor";
+
+  // The rolled-back sequence must still be a usable prefix for the next
+  // authoritative turn.
+  LlamaModel::Prompt followup;
+  followup.input =
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"user","content":"Answer briefly this time."}])";
+  followup.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(followup));
+  EXPECT_GT(baseCtx->getNPast(), preRequestNPast);
+
+  fs::remove(cachePath);
+}

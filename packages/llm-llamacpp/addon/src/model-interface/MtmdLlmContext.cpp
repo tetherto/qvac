@@ -1350,6 +1350,18 @@ void MtmdLlmContext::beginCacheRequest() {
   pendingPromptLedger_.entries.clear();
   pendingCheckpoint_.reset();
   preRequestCacheSnapshot_.clear();
+  // Same policy as TextLlmContext: pure-attention memory rolls back with a
+  // tail trim, so the full-state dump is deferred to `reconcilePrompt` and
+  // only taken when resident state is about to be discarded.
+  if (needsFullStateSnapshot_) {
+    capturePreRequestCacheSnapshot();
+  }
+}
+
+void MtmdLlmContext::capturePreRequestCacheSnapshot() {
+  if (!preRequestCacheSnapshot_.empty()) {
+    return;
+  }
   if (!snapshotSequenceState(
           modelCtx_.lctx, seqId_, current_.pos, preRequestCacheSnapshot_)) {
     throw qvac_errors::StatusError(
@@ -1414,6 +1426,9 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
       checkpoint = "cold";
     }
   } else if (!needsFullStateSnapshot_ && reuseTarget < cachedLength) {
+    // A tail trim cannot bring the discarded range back on rollback, so
+    // this is the one pure-attention path that needs the pre-request dump.
+    capturePreRequestCacheSnapshot();
     const llama_pos reusePos = residentLedger_.positions(reuseTarget);
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
     residentLedger_.truncate(reuseTarget);
@@ -1512,7 +1527,25 @@ void MtmdLlmContext::commitCacheRequest() {
 
 bool MtmdLlmContext::restorePreRequestCacheState() {
   bool ok = true;
-  ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
+  if (!preRequestCacheSnapshot_.empty()) {
+    ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
+  } else if (current_.pos > preRequestCacheUsage_.pos) {
+    // Append-only request on pure-attention memory: dropping the appended
+    // tail is the exact pre-request state.
+    try {
+      clearSequenceMemory(modelCtx_.lctx, preRequestCacheUsage_.pos, -1);
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[MtmdLlm] cache request tail trim failed on rollback "
+              "(preRequestPos=%d, pos=%d): %s\n",
+              preRequestCacheUsage_.pos,
+              current_.pos,
+              e.what()));
+      ok = false;
+    }
+  }
   residentLedger_ = preRequestLedger_;
   current_ = preRequestCacheUsage_;
   pendingPromptLedger_.entries.clear();

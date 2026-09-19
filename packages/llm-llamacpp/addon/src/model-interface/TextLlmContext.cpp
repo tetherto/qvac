@@ -1235,6 +1235,19 @@ void TextLlmContext::beginCacheRequest() {
   pendingPromptLedger_.entries.clear();
   pendingCheckpoint_.reset();
   preRequestCacheSnapshot_.clear();
+  // Pure-attention memory rolls back with a tail trim to `preRequestNPast_`,
+  // so a full-state dump is only taken when reconciliation is about to
+  // discard resident state that a trim cannot bring back (see
+  // `reconcilePrompt`). Models that cannot trim need it up front.
+  if (needsFullStateSnapshot_) {
+    capturePreRequestCacheSnapshot();
+  }
+}
+
+void TextLlmContext::capturePreRequestCacheSnapshot() {
+  if (!preRequestCacheSnapshot_.empty()) {
+    return;
+  }
   if (!snapshotSequenceState(
           modelCtx_.lctx, seqId_, nPast_, preRequestCacheSnapshot_)) {
     throw qvac_errors::StatusError(
@@ -1295,6 +1308,10 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
       checkpoint = "cold";
     }
   } else if (!needsFullStateSnapshot_ && reuseTarget < cachedLength) {
+    // The trimmed range is resident state the request may still need back
+    // on rollback, and a tail trim cannot restore it. Capture the pre-request
+    // dump now; the append-only common case never pays for it.
+    capturePreRequestCacheSnapshot();
     const llama_pos reusePos = residentLedger_.positions(reuseTarget);
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
     residentLedger_.truncate(reuseTarget);
@@ -1370,7 +1387,25 @@ void TextLlmContext::commitCacheRequest() {
 
 bool TextLlmContext::restorePreRequestCacheState() {
   bool ok = true;
-  ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
+  if (!preRequestCacheSnapshot_.empty()) {
+    ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
+  } else if (nPast_ > preRequestNPast_) {
+    // No dump was needed: the request only appended to resident memory, so
+    // dropping the appended tail is the exact pre-request state.
+    try {
+      clearSequenceMemory(modelCtx_.lctx, preRequestNPast_, -1);
+    } catch (const std::exception& e) {
+      QLOG_IF(
+          Priority::WARNING,
+          string_format(
+              "[TextLlm] cache request tail trim failed on rollback "
+              "(preRequestNPast=%d, nPast=%d): %s\n",
+              preRequestNPast_,
+              nPast_,
+              e.what()));
+      ok = false;
+    }
+  }
   residentLedger_ = preRequestLedger_;
   nPast_ = preRequestNPast_;
   pendingPromptLedger_.entries.clear();
