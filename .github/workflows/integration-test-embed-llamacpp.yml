@@ -285,4 +285,3 @@ jobs:
       - name: Run integration test
         working-directory: ${{ env.WORKDIR }}
         run: npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }}
-

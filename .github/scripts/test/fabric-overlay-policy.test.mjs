@@ -326,6 +326,21 @@ test('cpp-lint overlays fabric after npm install and before generating the build
   )
 })
 
+test('embed integration downloads its package-scoped prebuild bundle', () => {
+  const source = read('.github/workflows/integration-test-embed-llamacpp.yml')
+
+  assert.match(
+    source,
+    /^ {10}name: prebuilds-embed-llamacpp$/m,
+    'embed integration must download the bundle emitted by reusable-prebuilds'
+  )
+  assert.doesNotMatch(
+    source,
+    /^ {10}name: prebuilds$/m,
+    'the generic prebuilds artifact is never published by reusable-prebuilds'
+  )
+})
+
 // The loop above runs at module load, so the counters are final by the time
 // node:test executes this.
 test('per-job overlay assertions were actually generated', () => {
