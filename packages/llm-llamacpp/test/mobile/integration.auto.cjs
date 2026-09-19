@@ -441,6 +441,11 @@ async function runGemma4ImageHighResAuroraPerfTest (options = {}) { // eslint-di
   return runIntegrationModule('../integration/gemma4-image-high-res-aurora-perf.test.js', options)
 }
 
+async function runGemma4MultimodalTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4MultimodalTest')) return __FILTERED
+  return runIntegrationModule('../integration/gemma4-multimodal.test.js', options)
+}
+
 async function runGemma4Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4Test')) return __FILTERED
   return runIntegrationModule('../integration/gemma4.test.js', options)

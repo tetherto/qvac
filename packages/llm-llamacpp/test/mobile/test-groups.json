@@ -12,6 +12,7 @@
     "imageTileMode": ["runQwen35ImageTileModeTokensTest"],
     "multiImageEncode": ["runQwen35MultiImageEncodeTest"],
     "gemma": ["runGemma4Test"],
+    "gemmaMultimodal": ["runGemma4MultimodalTest"],
     "quantizedKvcache": ["runQuantizedKvcacheTest"],
     "continuousBatching": ["runContinuousBatchingTest"],
     "lightA": [
@@ -57,6 +58,9 @@
     ],
     "funcShardD": [
       "runGemma4Test"
+    ],
+    "gemmaMultimodal": [
+      "runGemma4MultimodalTest"
     ],
     "funcShardE": [
       "runApiBehaviorTest",
