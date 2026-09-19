@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] - 2026-09-18
+
+### Fixed
+
+- [#3728](https://github.com/tetherto/qvac/pull/3728) - fix[notask]: keep an approval when the approver comments afterwards
+
 ## [0.2.1] - 2026-06-30
 
 ### Fixed
