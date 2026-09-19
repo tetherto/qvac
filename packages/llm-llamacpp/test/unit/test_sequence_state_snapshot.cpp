@@ -7,7 +7,7 @@
 #include <gtest/gtest.h>
 #include <llama.h>
 
-#include "utils/RecurrentStateSnapshot.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 
 using namespace qvac_lib_inference_addon_llama::utils;
 
@@ -41,19 +41,19 @@ fs::path makeTempFile(const std::string& suffix) {
 
 } // namespace
 
-TEST(RecurrentStateSnapshotTest, EmptyByDefault) {
-  RecurrentStateSnapshot snap;
+TEST(SequenceStateSnapshotTest, EmptyByDefault) {
+  SequenceStateSnapshot snap;
   EXPECT_TRUE(snap.empty());
   EXPECT_FALSE(snap.hasFile());
   EXPECT_TRUE(snap.filePath().empty());
   EXPECT_EQ(snap.nPast, 0);
 }
 
-TEST(RecurrentStateSnapshotTest, AdoptEmptyMarksCapturedWithoutFile) {
+TEST(SequenceStateSnapshotTest, AdoptEmptyMarksCapturedWithoutFile) {
   // The pre-prefill capture path uses `adoptEmpty` to record "we
   // captured an empty sequence". The snapshot must report a recorded
   // capture (so rollback gates trigger) but expose no on-disk file.
-  RecurrentStateSnapshot snap;
+  SequenceStateSnapshot snap;
   snap.adoptEmpty(/*nPastAt=*/0);
   EXPECT_FALSE(snap.empty());
   EXPECT_FALSE(snap.hasFile());
@@ -61,10 +61,10 @@ TEST(RecurrentStateSnapshotTest, AdoptEmptyMarksCapturedWithoutFile) {
   EXPECT_EQ(snap.nPast, 0);
 }
 
-TEST(RecurrentStateSnapshotTest, ClearResetsAdoptEmptyState) {
+TEST(SequenceStateSnapshotTest, ClearResetsAdoptEmptyState) {
   // Clearing a captured-empty snapshot must wipe the captured flag so
   // subsequent rollback queries see it as "nothing captured".
-  RecurrentStateSnapshot snap;
+  SequenceStateSnapshot snap;
   snap.adoptEmpty(/*nPastAt=*/0);
   ASSERT_FALSE(snap.empty());
   snap.clear();
@@ -73,15 +73,15 @@ TEST(RecurrentStateSnapshotTest, ClearResetsAdoptEmptyState) {
   EXPECT_EQ(snap.nPast, 0);
 }
 
-TEST(RecurrentStateSnapshotTest, MoveTransfersCapturedEmptyState) {
+TEST(SequenceStateSnapshotTest, MoveTransfersCapturedEmptyState) {
   // A captured-empty snapshot moves like any other capture: the
   // destination inherits the captured flag, the source resets to
   // "nothing captured". Guards against future regressions where
   // move would forget to copy `captured_`.
-  RecurrentStateSnapshot src;
+  SequenceStateSnapshot src;
   src.adoptEmpty(/*nPastAt=*/5);
 
-  RecurrentStateSnapshot dst(std::move(src));
+  SequenceStateSnapshot dst(std::move(src));
   EXPECT_TRUE(src.empty());
   EXPECT_EQ(src.nPast, 0);
   EXPECT_FALSE(dst.empty());
@@ -89,13 +89,13 @@ TEST(RecurrentStateSnapshotTest, MoveTransfersCapturedEmptyState) {
   EXPECT_EQ(dst.nPast, 5);
 }
 
-TEST(RecurrentStateSnapshotTest, ClearRemovesUnderlyingFile) {
+TEST(SequenceStateSnapshotTest, ClearRemovesUnderlyingFile) {
   // Seed the snapshot with a real on-disk file via the test seam,
   // then verify clear() removes it and resets the metadata.
   const fs::path tmp = makeTempFile("clear");
   ASSERT_TRUE(fs::exists(tmp));
 
-  RecurrentStateSnapshot snap;
+  SequenceStateSnapshot snap;
   snap.seedForTesting(tmp.string(), /*nPastAt=*/42);
   ASSERT_FALSE(snap.empty());
   ASSERT_EQ(snap.nPast, 42);
@@ -108,37 +108,37 @@ TEST(RecurrentStateSnapshotTest, ClearRemovesUnderlyingFile) {
       << "clear() must remove the temp file the snapshot owned";
 }
 
-TEST(RecurrentStateSnapshotTest, ClearOnEmptySnapshotIsNoOp) {
+TEST(SequenceStateSnapshotTest, ClearOnEmptySnapshotIsNoOp) {
   // Defense against the destructor / clear() path calling
   // `std::filesystem::remove` with an empty string on a never-seeded
   // snapshot. Must be a clean no-op.
-  RecurrentStateSnapshot snap;
+  SequenceStateSnapshot snap;
   EXPECT_NO_THROW(snap.clear());
   EXPECT_TRUE(snap.empty());
 }
 
-TEST(RecurrentStateSnapshotTest, DestructorRemovesUnderlyingFile) {
+TEST(SequenceStateSnapshotTest, DestructorRemovesUnderlyingFile) {
   const fs::path tmp = makeTempFile("dtor");
   ASSERT_TRUE(fs::exists(tmp));
 
   {
-    RecurrentStateSnapshot snap;
+    SequenceStateSnapshot snap;
     snap.seedForTesting(tmp.string(), /*nPastAt=*/0);
     ASSERT_TRUE(fs::exists(tmp));
-  } // ~RecurrentStateSnapshot here
+  } // ~SequenceStateSnapshot here
 
   EXPECT_FALSE(fs::exists(tmp))
       << "destructor must remove the temp file the snapshot owned";
 }
 
-TEST(RecurrentStateSnapshotTest, MoveConstructTransfersFileOwnership) {
+TEST(SequenceStateSnapshotTest, MoveConstructTransfersFileOwnership) {
   const fs::path tmp = makeTempFile("move_ctor");
   ASSERT_TRUE(fs::exists(tmp));
 
-  RecurrentStateSnapshot src;
+  SequenceStateSnapshot src;
   src.seedForTesting(tmp.string(), /*nPastAt=*/7);
 
-  RecurrentStateSnapshot dst(std::move(src));
+  SequenceStateSnapshot dst(std::move(src));
   // Source loses ownership and file metadata.
   EXPECT_TRUE(src.empty());
   EXPECT_EQ(src.nPast, 0);
@@ -153,16 +153,16 @@ TEST(RecurrentStateSnapshotTest, MoveConstructTransfersFileOwnership) {
   EXPECT_FALSE(fs::exists(tmp));
 }
 
-TEST(RecurrentStateSnapshotTest, MoveAssignReplacesAndCleansOldFile) {
+TEST(SequenceStateSnapshotTest, MoveAssignReplacesAndCleansOldFile) {
   // Move-assigning a new snapshot over an existing one must remove
   // the previously owned file (otherwise it leaks).
   const fs::path oldFile = makeTempFile("move_assign_old");
   const fs::path newFile = makeTempFile("move_assign_new");
 
-  RecurrentStateSnapshot dst;
+  SequenceStateSnapshot dst;
   dst.seedForTesting(oldFile.string(), /*nPastAt=*/1);
 
-  RecurrentStateSnapshot src;
+  SequenceStateSnapshot src;
   src.seedForTesting(newFile.string(), /*nPastAt=*/2);
 
   dst = std::move(src);
@@ -179,16 +179,16 @@ TEST(RecurrentStateSnapshotTest, MoveAssignReplacesAndCleansOldFile) {
   dst.clear();
 }
 
-TEST(RecurrentStateSnapshotTest, SnapshotOnNullCtxFails) {
+TEST(SequenceStateSnapshotTest, SnapshotOnNullCtxFails) {
   // Pre-seed `snap` with a real file so the helper's "clear before
   // populate" step has something to remove. After the null-ctx
   // failure path, the snapshot must report empty AND the seeded file
   // must be gone (no leaked temp file).
   const fs::path tmp = makeTempFile("snap_null_ctx");
-  RecurrentStateSnapshot snap;
+  SequenceStateSnapshot snap;
   snap.seedForTesting(tmp.string(), /*nPastAt=*/7);
 
-  EXPECT_FALSE(snapshotRecurrentState(
+  EXPECT_FALSE(snapshotSequenceState(
       /*lctx=*/nullptr, /*seqId=*/0, /*nPastAt=*/12, snap));
   EXPECT_TRUE(snap.empty());
   EXPECT_EQ(snap.nPast, 0);
@@ -196,18 +196,17 @@ TEST(RecurrentStateSnapshotTest, SnapshotOnNullCtxFails) {
       << "failed capture must not leak the pre-existing temp file";
 }
 
-TEST(RecurrentStateSnapshotTest, RestoreOnNullCtxFails) {
-  RecurrentStateSnapshot snap;
+TEST(SequenceStateSnapshotTest, RestoreOnNullCtxFails) {
+  SequenceStateSnapshot snap;
   snap.seedForTesting("dummy_nonexistent_path.bin", /*nPastAt=*/0);
-  EXPECT_FALSE(restoreRecurrentState(/*lctx=*/nullptr, /*seqId=*/0, snap));
+  EXPECT_FALSE(restoreSequenceState(/*lctx=*/nullptr, /*seqId=*/0, snap));
 }
 
 TEST(
-    RecurrentStateSnapshotTest,
-    RestoreEmptySnapshotIsNoOpButRequiresCtxSafety) {
+    SequenceStateSnapshotTest, RestoreEmptySnapshotIsNoOpButRequiresCtxSafety) {
   // Empty snapshot + null ctx still returns false (we never reach the
   // empty-shortcut path because the ctx check guards first); this is
   // the documented contract — programming errors are surfaced.
-  RecurrentStateSnapshot snap;
-  EXPECT_FALSE(restoreRecurrentState(/*lctx=*/nullptr, /*seqId=*/0, snap));
+  SequenceStateSnapshot snap;
+  EXPECT_FALSE(restoreSequenceState(/*lctx=*/nullptr, /*seqId=*/0, snap));
 }

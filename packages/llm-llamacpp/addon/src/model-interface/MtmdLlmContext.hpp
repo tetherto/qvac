@@ -9,8 +9,8 @@
 #include <llama/mtmd/mtmd.h>
 
 #include "../utils/ReasoningUtils.hpp"
-#include "../utils/RecurrentStateSnapshot.hpp"
 #include "../utils/RequestRollbackState.hpp"
+#include "../utils/SequenceStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
@@ -326,7 +326,7 @@ private:
           fallbackTags);
 
   struct CacheCheckpoint {
-    qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot state;
+    qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot state;
     qvac_lib_inference_addon_llama::cache::Ledger ledger;
     ContextUsage usage;
   };
@@ -425,8 +425,10 @@ private:
   bool isQwen3ReasoningFamily_ = false;
 
   // True when this model requires full-state snapshots for request rollback
-  // and divergent-history checkpoints.
-  bool needsRecurrentSnapshot_ = false;
+  // and divergent-history checkpoints. Decided once by
+  // `needsFullStateSnapshot` in ModelMemoryPolicy.hpp, shared with
+  // TextLlmContext so both contexts gate identically.
+  bool needsFullStateSnapshot_ = false;
 
   // Tracks whether the current request is prefill-only so the cache
   // transaction can commit immediately after successful prefill.
@@ -439,7 +441,7 @@ private:
   qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
   ContextUsage preRequestCacheUsage_;
-  qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot
+  qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot
       preRequestCacheSnapshot_;
   std::optional<CacheCheckpoint> pendingCheckpoint_;
   std::deque<CacheCheckpoint> cacheCheckpoints_;

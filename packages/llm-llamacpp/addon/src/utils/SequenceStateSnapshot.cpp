@@ -1,4 +1,4 @@
-#include "RecurrentStateSnapshot.hpp"
+#include "SequenceStateSnapshot.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -63,14 +63,12 @@ void removeFileQuiet(const std::string& path) noexcept {
 
 } // namespace
 
-// ---- RecurrentStateSnapshot ----
+// ---- SequenceStateSnapshot ----
 
-RecurrentStateSnapshot::~RecurrentStateSnapshot() {
-  removeFileQuiet(filePath_);
-}
+SequenceStateSnapshot::~SequenceStateSnapshot() { removeFileQuiet(filePath_); }
 
-RecurrentStateSnapshot::RecurrentStateSnapshot(
-    RecurrentStateSnapshot&& other) noexcept
+SequenceStateSnapshot::SequenceStateSnapshot(
+    SequenceStateSnapshot&& other) noexcept
     : nPast(other.nPast), filePath_(std::move(other.filePath_)),
       captured_(other.captured_) {
   other.filePath_.clear();
@@ -78,8 +76,8 @@ RecurrentStateSnapshot::RecurrentStateSnapshot(
   other.captured_ = false;
 }
 
-RecurrentStateSnapshot&
-RecurrentStateSnapshot::operator=(RecurrentStateSnapshot&& other) noexcept {
+SequenceStateSnapshot&
+SequenceStateSnapshot::operator=(SequenceStateSnapshot&& other) noexcept {
   if (this != &other) {
     removeFileQuiet(filePath_);
     filePath_ = std::move(other.filePath_);
@@ -92,14 +90,14 @@ RecurrentStateSnapshot::operator=(RecurrentStateSnapshot&& other) noexcept {
   return *this;
 }
 
-void RecurrentStateSnapshot::clear() noexcept {
+void SequenceStateSnapshot::clear() noexcept {
   removeFileQuiet(filePath_);
   filePath_.clear();
   nPast = 0;
   captured_ = false;
 }
 
-void RecurrentStateSnapshot::seedForTesting(
+void SequenceStateSnapshot::seedForTesting(
     std::string filePath, llama_pos nPastAt) noexcept {
   removeFileQuiet(filePath_);
   filePath_ = std::move(filePath);
@@ -107,14 +105,14 @@ void RecurrentStateSnapshot::seedForTesting(
   captured_ = true;
 }
 
-void RecurrentStateSnapshot::seedEmptyForTesting(llama_pos nPastAt) noexcept {
+void SequenceStateSnapshot::seedEmptyForTesting(llama_pos nPastAt) noexcept {
   removeFileQuiet(filePath_);
   filePath_.clear();
   nPast = nPastAt;
   captured_ = true;
 }
 
-void RecurrentStateSnapshot::adoptFile(
+void SequenceStateSnapshot::adoptFile(
     std::string filePath, llama_pos nPastAt) noexcept {
   removeFileQuiet(filePath_);
   filePath_ = std::move(filePath);
@@ -122,7 +120,7 @@ void RecurrentStateSnapshot::adoptFile(
   captured_ = true;
 }
 
-void RecurrentStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
+void SequenceStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
   removeFileQuiet(filePath_);
   filePath_.clear();
   nPast = nPastAt;
@@ -131,9 +129,9 @@ void RecurrentStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
 
 // ---- Free functions ----
 
-bool snapshotRecurrentState(
+bool snapshotSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
-    RecurrentStateSnapshot& out) {
+    SequenceStateSnapshot& out) {
   out.clear();
   if (lctx == nullptr) {
     return false;
@@ -173,9 +171,9 @@ bool snapshotRecurrentState(
   return true;
 }
 
-bool restoreRecurrentState(
+bool restoreSequenceState(
     ::llama_context* lctx, llama_seq_id seqId,
-    const RecurrentStateSnapshot& snapshot) {
+    const SequenceStateSnapshot& snapshot) {
   if (lctx == nullptr) {
     return false;
   }

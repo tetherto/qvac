@@ -10,8 +10,8 @@
 
 #include "../utils/ChatTemplateUtils.hpp"
 #include "../utils/ReasoningUtils.hpp"
-#include "../utils/RecurrentStateSnapshot.hpp"
 #include "../utils/RequestRollbackState.hpp"
+#include "../utils/SequenceStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
 #include "SequenceDriver.hpp"
@@ -285,7 +285,7 @@ private:
           fallbackTags);
 
   struct CacheCheckpoint {
-    qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot state;
+    qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot state;
     qvac_lib_inference_addon_llama::cache::Ledger ledger;
   };
   void beginCacheRequest();
@@ -381,15 +381,17 @@ private:
   qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
-  qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot
+  qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot
       preRequestCacheSnapshot_;
   std::optional<CacheCheckpoint> pendingCheckpoint_;
   std::deque<CacheCheckpoint> cacheCheckpoints_;
 
-  // True when this context's model is recurrent, hybrid, or DeepSeek V4.
-  // These models require full-state snapshots for request rollback and
-  // divergent-history checkpoints because arbitrary tail removal is unsafe.
-  bool needsRecurrentSnapshot_ = false;
+  // True when this context's model needs full-state snapshots for request
+  // rollback and divergent-history checkpoints because arbitrary tail
+  // removal is unsafe. Decided once by `needsFullStateSnapshot` in
+  // ModelMemoryPolicy.hpp (recurrent, hybrid, DeepSeek V4, ...); every
+  // non-standard memory layout must be added there, not at call sites.
+  bool needsFullStateSnapshot_ = false;
 
   // Tracks whether the current request is prefill-only so the cache
   // transaction can commit immediately after successful prefill.

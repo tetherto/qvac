@@ -8,16 +8,22 @@
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
 
-// Owning handle for a per-sequence state snapshot persisted to a temp
-// file on disk. Captured via `llama_state_seq_save_file`, which under
-// the hood calls `state_seq_write_data(io, seq_id, /*flags=*/0)` —
-// llama.cpp's full-state sequence path, routed to disk instead of an
+// Owning handle for a per-sequence full-state snapshot persisted to a
+// temp file on disk. Captured via `llama_state_seq_save_file`, which
+// under the hood calls `state_seq_write_data(io, seq_id, /*flags=*/0)`
+// — llama.cpp's full-state sequence path, routed to disk instead of an
 // in-memory byte buffer.
-// On hybrid memories this covers BOTH the attention KV and the
-// recurrent (SSM / RWKV) hidden state for `seqId`, so a later
-// `llama_state_seq_load_file` rebuilds the entire sequence in one
-// shot without needing `seq_rm` (which the recurrent module rejects
-// for partial-tail ranges that include the final committed pos).
+//
+// The snapshot is model-agnostic: it captures whatever memory llama.cpp
+// keeps for `seqId`. It is required wherever that memory cannot be
+// rewound by removing a tail range (see `needsFullStateSnapshot` in
+// ModelMemoryPolicy.hpp): recurrent (SSM / RWKV) and hybrid models,
+// whose hidden state is not positionally indexed, and DeepSeek V4,
+// whose compressed cache has the same restriction. On hybrid memories
+// the dump covers BOTH the attention KV and the recurrent hidden state,
+// so a later `llama_state_seq_load_file` rebuilds the entire sequence
+// in one shot without needing `seq_rm` (which the recurrent module
+// rejects for partial-tail ranges that include the final committed pos).
 //
 // Why disk: the in-memory variant duplicated the live cache buffer
 // llama.cpp already owns. On hybrid models that buffer is large and
@@ -32,15 +38,15 @@ namespace utils {
 // ownership and leave the source in an empty state.
 //
 // `nPast` records the next-position-to-write at snapshot time.
-class RecurrentStateSnapshot {
+class SequenceStateSnapshot {
 public:
-  RecurrentStateSnapshot() = default;
-  ~RecurrentStateSnapshot();
+  SequenceStateSnapshot() = default;
+  ~SequenceStateSnapshot();
 
-  RecurrentStateSnapshot(const RecurrentStateSnapshot&) = delete;
-  RecurrentStateSnapshot& operator=(const RecurrentStateSnapshot&) = delete;
-  RecurrentStateSnapshot(RecurrentStateSnapshot&& other) noexcept;
-  RecurrentStateSnapshot& operator=(RecurrentStateSnapshot&& other) noexcept;
+  SequenceStateSnapshot(const SequenceStateSnapshot&) = delete;
+  SequenceStateSnapshot& operator=(const SequenceStateSnapshot&) = delete;
+  SequenceStateSnapshot(SequenceStateSnapshot&& other) noexcept;
+  SequenceStateSnapshot& operator=(SequenceStateSnapshot&& other) noexcept;
 
   // `nPast` is intentionally a public field — it mirrors the caller's
   // sequence cursor at snapshot time and is read/written together with
@@ -70,7 +76,7 @@ public:
   // `llama_state_seq_save_file`, so unit tests can exercise the
   // `empty()` gates without loading a real
   // `llama_context`. The path does not have to exist on disk —
-  // production code MUST use `snapshotRecurrentState` instead so the
+  // production code MUST use `snapshotSequenceState` instead so the
   // payload is actually valid for restore.
   void seedForTesting(std::string filePath, llama_pos nPastAt) noexcept;
 
@@ -82,7 +88,7 @@ public:
 
   // Transfer ownership of a temp file produced by
   // `llama_state_seq_save_file` into this snapshot. Removes any
-  // previously owned file. Used by `snapshotRecurrentState`; not
+  // previously owned file. Used by `snapshotSequenceState`; not
   // intended for general callers.
   void adoptFile(std::string filePath, llama_pos nPastAt) noexcept;
 
@@ -108,11 +114,11 @@ private:
 // Empty sequences (`nPastAt <= 0`) are treated as a successful
 // capture with no on-disk payload (see `adoptEmpty`); `out.empty()`
 // returns false afterwards so the rollback gates know a capture has
-// been recorded, and `restoreRecurrentState` will clear the sequence
+// been recorded, and `restoreSequenceState` will clear the sequence
 // memory to match.
-bool snapshotRecurrentState(
+bool snapshotSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
-    RecurrentStateSnapshot& out);
+    SequenceStateSnapshot& out);
 
 // Restores `snapshot` into `seqId`. For snapshots backed by a file,
 // calls `llama_state_seq_load_file` to fully replace the sequence's
@@ -125,9 +131,9 @@ bool snapshotRecurrentState(
 // Returns true on success, false when the captured-empty sequence
 // clear is refused or the underlying load reports a 0-byte read
 // (corrupted / missing / truncated file).
-bool restoreRecurrentState(
+bool restoreSequenceState(
     ::llama_context* lctx, llama_seq_id seqId,
-    const RecurrentStateSnapshot& snapshot);
+    const SequenceStateSnapshot& snapshot);
 
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

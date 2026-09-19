@@ -1451,7 +1451,7 @@ TEST_F(ToolGrammarModelTest, SyntheticCloseIsLazilyReconciled) {
 // architecture-specific, and the sampler reset, which is not. This test covers
 // the second — the only one this PR adds state to — and deliberately does not
 // re-cover the first. Qwen3-0.6B is pure attention, so the
-// `RecurrentStateSnapshot` restore path in `TextLlmContext.cpp` is not entered
+// `SequenceStateSnapshot` restore path in `TextLlmContext.cpp` is not entered
 // here, and that path already has dedicated coverage on the Qwen3.5 hybrid
 // fixture in `test_cancel_rollback.cpp`:
 //
