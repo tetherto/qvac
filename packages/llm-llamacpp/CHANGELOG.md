@@ -15,6 +15,13 @@
   delta prompts/tools and still expose that option, so they are intentionally
   incompatible with this addon until the SDK migration lands.
 
+### Fixed
+
+- The multimodal context now decides whether a model needs full-state
+  snapshots through the same `needsFullStateSnapshot` policy as the text
+  context, so DeepSeek V4 vision models get transactional rollback and
+  divergent-history checkpoints instead of an unsafe tail trim.
+
 ## [0.53.1] - 2026-09-16
 
 ### Fixed

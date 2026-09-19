@@ -14,13 +14,13 @@ struct CancelRecoveryHooks {
   const char* labelTag = "";
   ::llama_context* ctx = nullptr;
   llama_seq_id seqId = 0;
-  bool needsRecurrentSnapshot = false;
+  bool needsFullStateSnapshot = false;
   llama_pos currentPos = 0;
   llama_pos preRequestPos = 0;
   qvac_lib_inference_addon_llama::utils::RequestRollbackState& rollback;
-  std::function<void(llama_pos restoredNPast)> onRecurrentRestored;
-  std::function<void(llama_pos restoredNPast)> onRecurrentRestoreFailed;
-  std::function<void()> onRecurrentMissingSnapshotAdvanced;
+  std::function<void(llama_pos restoredNPast)> onSnapshotRestored;
+  std::function<void(llama_pos restoredNPast)> onSnapshotRestoreFailed;
+  std::function<void()> onMissingSnapshotAdvanced;
   std::function<void(llama_pos delta)> removeLastNTokens;
   std::function<void()> onPureAttentionRolledBack;
 };
@@ -28,11 +28,11 @@ struct CancelRecoveryHooks {
 inline bool rollbackCancelledRequest(const CancelRecoveryHooks& hooks) {
   bool rollbackOk = true;
 
-  if (hooks.needsRecurrentSnapshot) {
+  if (hooks.needsFullStateSnapshot) {
     if (hooks.rollback.hasSnapshot()) {
       const llama_pos restoredNPast = hooks.rollback.nPast();
       if (hooks.rollback.restore(hooks.ctx, hooks.seqId)) {
-        hooks.onRecurrentRestored(restoredNPast);
+        hooks.onSnapshotRestored(restoredNPast);
       } else {
         QLOG_IF(
             qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
@@ -45,7 +45,7 @@ inline bool rollbackCancelledRequest(const CancelRecoveryHooks& hooks) {
                 restoredNPast,
                 hooks.currentPos,
                 hooks.seqId));
-        hooks.onRecurrentRestoreFailed(restoredNPast);
+        hooks.onSnapshotRestoreFailed(restoredNPast);
         rollbackOk = false;
       }
     } else if (hooks.currentPos > hooks.preRequestPos) {
@@ -60,7 +60,7 @@ inline bool rollbackCancelledRequest(const CancelRecoveryHooks& hooks) {
               hooks.preRequestPos,
               hooks.currentPos,
               hooks.seqId));
-      hooks.onRecurrentMissingSnapshotAdvanced();
+      hooks.onMissingSnapshotAdvanced();
       rollbackOk = false;
     }
   } else {

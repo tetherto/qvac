@@ -97,7 +97,7 @@ endif()
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )
@@ -154,7 +154,7 @@ if(BUILD_CLI)
     ${PROJECT_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
   )

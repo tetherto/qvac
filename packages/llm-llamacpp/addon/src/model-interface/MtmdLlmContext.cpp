@@ -22,8 +22,8 @@
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
-#include "utils/RecurrentStateSnapshot.hpp"
 #include "utils/ScopeGuard.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 #include "utils/StopStringMatch.hpp"
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -167,14 +167,23 @@ void MtmdLlmContext::initializeCommonState() {
           harmonyCallToken_));
 
   // Snapshot-required detection mirrors TextLlmContext: gate on the
-  // architectural predicate (recurrent or hybrid) rather than on
+  // shared `needsFullStateSnapshot` policy rather than on
   // `llama_memory_can_shift`, which is about RoPE K-shift and reports
   // `true` for recurrent + hybrid memories. See TextLlmContext for
   // the full rationale.
   const auto* const model = modelCtx_.model;
-  needsRecurrentSnapshot_ =
+  const std::optional<std::string> architecture =
+      qvac_lib_inference_addon_llama::utils::getModelArchitecture(model);
+  const bool isDeepSeekV4 =
+      architecture.has_value() &&
+      qvac_lib_inference_addon_llama::utils::isDeepSeekV4Architecture(
+          architecture.value());
+  needsFullStateSnapshot_ =
       (model != nullptr) &&
-      (llama_model_is_recurrent(model) || llama_model_is_hybrid(model));
+      qvac_lib_inference_addon_llama::utils::needsFullStateSnapshot(
+          llama_model_is_recurrent(model),
+          llama_model_is_hybrid(model),
+          isDeepSeekV4);
   // EOS-inside-reasoning recovery is a Qwen3-specific workaround;
   // gate it on the explicit Qwen3-family predicate so non-Qwen
   // reasoning families (e.g. Gemma 4) don't inherit it. See
@@ -583,7 +592,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
   }
 
-  // Snapshot the sequence state at prefill entry on recurrent / hybrid
+  // Snapshot the sequence state at prefill entry on full-state-snapshot
   // memory so a mid-prefill cancellation can roll back to the exact
   // pre-prefill cache. Captures both attention KV and the recurrent
   // hidden state, restored in one shot on cancel. Required because
@@ -591,12 +600,12 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   // metadata (Qwen3VL M-RoPE x/y), so a metadata-only resync cannot
   // recover the exact pre-cancel position between mtmd chunks.
   const ContextUsage prefillEntryUsage = current_;
-  if (needsRecurrentSnapshot_) {
+  if (needsFullStateSnapshot_) {
     if (!requestRollback_.capture(modelCtx_.lctx, seqId_, current_.pos)) {
       // Capture failed: cancel falls back to best-effort positional cleanup.
       QLOG_IF(
           Priority::WARNING,
-          "[MtmdLlm] failed to capture prefill-entry recurrent snapshot; "
+          "[MtmdLlm] failed to capture prefill-entry full-state snapshot; "
           "mid-prefill cancel will not roll back recurrent state\n");
     }
   }
@@ -680,7 +689,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
           QLOG_IF(
               Priority::WARNING,
               string_format(
-                  "[MtmdLlm] prefill-entry recurrent snapshot restore "
+                  "[MtmdLlm] prefill-entry full-state snapshot restore "
                   "failed on cancel (nPastLocal=%d, snapshotPos=%d, "
                   "seqId=%d); recurrent state may be inconsistent until "
                   "the next full reset\n",
@@ -697,7 +706,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
         const llama_pos totalDelta = nPastLocal - current_.pos;
         current_.pos = nPastLocal;
         removeLastNTokens(totalDelta);
-        if (needsRecurrentSnapshot_ && current_.pos > prefillEntryUsage.pos) {
+        if (needsFullStateSnapshot_ && current_.pos > prefillEntryUsage.pos) {
           current_ = prefillEntryUsage;
           rollbackOk = false;
         }
@@ -806,23 +815,23 @@ bool MtmdLlmContext::cancelGenerationCleanup(
       .labelTag = "[MtmdLlm]",
       .ctx = modelCtx_.lctx,
       .seqId = seqId_,
-      .needsRecurrentSnapshot = needsRecurrentSnapshot_,
+      .needsFullStateSnapshot = needsFullStateSnapshot_,
       .currentPos = current_.pos,
       .preRequestPos = preRequestUsage_.pos,
       .rollback = requestRollback_,
-      .onRecurrentRestored =
+      .onSnapshotRestored =
           [this](llama_pos restoredPos) {
             current_ = preRequestUsage_;
             current_.pos = restoredPos;
             refreshCurrentCacheTokensFromMemory();
           },
-      .onRecurrentRestoreFailed =
+      .onSnapshotRestoreFailed =
           [this](llama_pos restoredPos) {
             current_ = preRequestUsage_;
             current_.pos = restoredPos;
             current_.cacheTokens = restoredPos;
           },
-      .onRecurrentMissingSnapshotAdvanced =
+      .onMissingSnapshotAdvanced =
           [this]() {
             current_ = preRequestUsage_;
             current_.cacheTokens = preRequestUsage_.pos;
@@ -1278,7 +1287,7 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
     return 0;
   }
 
-  if (needsRecurrentSnapshot_) {
+  if (needsFullStateSnapshot_) {
     // TODO: Re-enable tail-token removal for recurrent / hybrid SSM models
     // once QVAC supports llama.cpp sequence checkpoint save + restore. Until
     // then, partial `llama_memory_seq_rm` can fail because recurrent state
@@ -1341,7 +1350,7 @@ void MtmdLlmContext::beginCacheRequest() {
   pendingPromptLedger_.entries.clear();
   pendingCheckpoint_.reset();
   preRequestCacheSnapshot_.clear();
-  if (!snapshotRecurrentState(
+  if (!snapshotSequenceState(
           modelCtx_.lctx, seqId_, current_.pos, preRequestCacheSnapshot_)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -1383,14 +1392,14 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
   size_t reuse = reuseTarget;
   std::string checkpoint = "none";
 
-  if (needsRecurrentSnapshot_ && reuseTarget < cachedLength) {
+  if (needsFullStateSnapshot_ && reuseTarget < cachedLength) {
     reuse = 0;
     for (auto it = cacheCheckpoints_.rbegin(); it != cacheCheckpoints_.rend();
          ++it) {
       const size_t count = it->ledger.entries.size();
       if (count <= reuseTarget &&
           cache::commonPrefix(it->ledger, fullLedger) == count &&
-          restoreRecurrentState(modelCtx_.lctx, seqId_, it->state)) {
+          restoreSequenceState(modelCtx_.lctx, seqId_, it->state)) {
         residentLedger_ = it->ledger;
         current_ = it->usage;
         reuse = count;
@@ -1404,7 +1413,7 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
       current_ = {};
       checkpoint = "cold";
     }
-  } else if (!needsRecurrentSnapshot_ && reuseTarget < cachedLength) {
+  } else if (!needsFullStateSnapshot_ && reuseTarget < cachedLength) {
     const llama_pos reusePos = residentLedger_.positions(reuseTarget);
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
     residentLedger_.truncate(reuseTarget);
@@ -1462,18 +1471,18 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
 }
 
 void MtmdLlmContext::capturePendingCheckpoint() {
-  if (!needsRecurrentSnapshot_) {
+  if (!needsFullStateSnapshot_) {
     return;
   }
   CacheCheckpoint checkpoint;
   checkpoint.ledger = residentLedger_;
   checkpoint.usage = current_;
-  if (!snapshotRecurrentState(
+  if (!snapshotSequenceState(
           modelCtx_.lctx, seqId_, current_.pos, checkpoint.state)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),
-        "[MtmdLlm] failed to capture recurrent cache checkpoint");
+        "[MtmdLlm] failed to capture full-state cache checkpoint");
   }
   pendingCheckpoint_ = std::move(checkpoint);
 }
@@ -1482,7 +1491,7 @@ void MtmdLlmContext::commitCacheRequest() {
   if (!cacheRequestActive_) {
     return;
   }
-  if (needsRecurrentSnapshot_ && !preRequestCacheSnapshot_.empty()) {
+  if (needsFullStateSnapshot_ && !preRequestCacheSnapshot_.empty()) {
     cache::appendProcessCheckpoint(
         cacheCheckpoints_,
         CacheCheckpoint{
@@ -1503,7 +1512,7 @@ void MtmdLlmContext::commitCacheRequest() {
 
 bool MtmdLlmContext::restorePreRequestCacheState() {
   bool ok = true;
-  ok = restoreRecurrentState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
+  ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
   residentLedger_ = preRequestLedger_;
   current_ = preRequestCacheUsage_;
   pendingPromptLedger_.entries.clear();
@@ -1528,9 +1537,9 @@ PrefillPlan MtmdLlmContext::preparePrefill(
     bool isPrefillOnlyRequest) {
   // Set BEFORE `tokenizeChat` so `configureReasoningTags` can suppress
   // the "will hard-fail" preemptive warning for cache-warm requests that
-  // will never enter generation. Also consulted by
-  // `snapshotForRecurrentRollback` (fired later via `onPrefillComplete`)
-  // to skip the boundary capture on prefill-only turns.
+  // will never enter generation. Also consulted by `onPrefillComplete`
+  // to commit the cache transaction right after prefill on
+  // prefill-only turns.
   isPrefillOnlyRequest_ = isPrefillOnlyRequest;
   resetMedia();
   validateByteBufferCount(mediaPlan, media.size());
@@ -2070,7 +2079,7 @@ void MtmdLlmContext::snapshotPreRequestRollbackAnchor() {
   // path takes its own capture after tokenize in
   // `evalMessageWithTools` — this hook exists so the batch path, which
   // never runs that site, has an equivalent rollback anchor.
-  if (!needsRecurrentSnapshot_) {
+  if (!needsFullStateSnapshot_) {
     return;
   }
   if (!requestRollback_.capture(modelCtx_.lctx, seqId_, current_.pos)) {
@@ -2081,7 +2090,7 @@ void MtmdLlmContext::snapshotPreRequestRollbackAnchor() {
     // the request.
     QLOG_IF(
         Priority::WARNING,
-        "[MtmdLlm] failed to capture prefill-entry recurrent snapshot at "
+        "[MtmdLlm] failed to capture prefill-entry full-state snapshot at "
         "batch admission; cancel rollback will be a no-op and CacheTokens "
         "may report the transient peak\n");
   }

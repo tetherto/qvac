@@ -34,7 +34,7 @@ add_executable(
   test_utf8_token_buffer.cpp
   test_chat_template_utils.cpp
   test_reasoning_utils.cpp
-  test_recurrent_state_snapshot.cpp
+  test_sequence_state_snapshot.cpp
   test_qwen_template.cpp
   test_logging_macros.cpp
   test_log_safe_string.cpp
@@ -84,7 +84,7 @@ add_executable(
   ${CMAKE_SOURCE_DIR}/addon/src/utils/BackendSelection.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ChatTemplateUtils.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/ReasoningUtils.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/utils/RecurrentStateSnapshot.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/utils/SequenceStateSnapshot.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/RequestRollbackState.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/utils/QwenTemplate.cpp
 )

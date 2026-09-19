@@ -23,7 +23,7 @@
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
-#include "utils/RecurrentStateSnapshot.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 
 // Tests for the transactional cancel-rollback paths for hybrid SSM models.
 // Two layers of
@@ -43,9 +43,9 @@
 
 namespace fs = std::filesystem;
 
-using qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot;
-using qvac_lib_inference_addon_llama::utils::restoreRecurrentState;
-using qvac_lib_inference_addon_llama::utils::snapshotRecurrentState;
+using qvac_lib_inference_addon_llama::utils::restoreSequenceState;
+using qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot;
+using qvac_lib_inference_addon_llama::utils::snapshotSequenceState;
 
 namespace {
 
@@ -212,8 +212,8 @@ TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripQwen35Hybrid) {
   const llama_pos posBefore = seqPosMax(*model);
   ASSERT_GT(posBefore, 0) << "prefill must have advanced the cache";
 
-  RecurrentStateSnapshot snap;
-  ASSERT_TRUE(snapshotRecurrentState(
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
       model->getContext(), /*seqId=*/0, posBefore + 1, snap));
   ASSERT_FALSE(snap.empty())
       << "hybrid model snapshot must be non-empty (recurrent state present)";
@@ -223,7 +223,7 @@ TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripQwen35Hybrid) {
   ASSERT_EQ(seqPosMax(*model), -1)
       << "reset should fully clear the sequence memory";
 
-  ASSERT_TRUE(restoreRecurrentState(model->getContext(), /*seqId=*/0, snap));
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
   EXPECT_EQ(seqPosMax(*model), posBefore)
       << "restore must return the cache to the snapshotted position";
 }
@@ -241,15 +241,15 @@ TEST_F(
   const llama_pos posBefore = seqPosMax(*model);
   ASSERT_GT(posBefore, 0);
 
-  RecurrentStateSnapshot snap;
-  ASSERT_TRUE(snapshotRecurrentState(
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
       model->getContext(), /*seqId=*/0, posBefore + 1, snap));
   ASSERT_FALSE(snap.empty());
 
   model->reset();
   ASSERT_EQ(seqPosMax(*model), -1);
 
-  ASSERT_TRUE(restoreRecurrentState(model->getContext(), /*seqId=*/0, snap));
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
   EXPECT_EQ(seqPosMax(*model), posBefore);
 }
 
@@ -262,14 +262,14 @@ TEST_F(CancelRollbackPrimitiveTest, SnapshotEmptySequenceHybridIsRestorable) {
     GTEST_SKIP() << "Qwen3.5 hybrid model not found";
   }
 
-  RecurrentStateSnapshot snap;
-  ASSERT_TRUE(snapshotRecurrentState(
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
       model->getContext(), /*seqId=*/0, /*nPastAt=*/0, snap));
   EXPECT_EQ(snap.nPast, 0);
 
   // Restoring an empty-sequence snapshot must succeed and leave the
   // cache empty.
-  ASSERT_TRUE(restoreRecurrentState(model->getContext(), /*seqId=*/0, snap));
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
   EXPECT_EQ(seqPosMax(*model), -1);
 }
 
@@ -287,8 +287,8 @@ TEST_F(CancelRollbackPrimitiveTest, RestoreDropsLaterContentOnHybrid) {
   const llama_pos posAfterShort = seqPosMax(*model);
   ASSERT_GT(posAfterShort, 0);
 
-  RecurrentStateSnapshot snap;
-  ASSERT_TRUE(snapshotRecurrentState(
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
       model->getContext(), /*seqId=*/0, posAfterShort + 1, snap));
 
   // Run a longer prefill that resets and grows the cache beyond the
@@ -302,7 +302,7 @@ TEST_F(CancelRollbackPrimitiveTest, RestoreDropsLaterContentOnHybrid) {
   ASSERT_GT(posAfterLong, posAfterShort)
       << "second prefill should have grown the cache beyond the snapshot";
 
-  ASSERT_TRUE(restoreRecurrentState(model->getContext(), /*seqId=*/0, snap));
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
   EXPECT_EQ(seqPosMax(*model), posAfterShort)
       << "restore must drop the second prefill's tail and return to the "
          "snapshotted position";
