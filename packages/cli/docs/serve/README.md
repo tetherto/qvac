@@ -65,6 +65,13 @@ currently loaded. Unloading an alias frees its resources but keeps it configured
 next request loads it again. There is no "load" endpoint — send a normal request, or set
 `preload: true`.
 
+Model-load failures return `503 model_load_failed`. When the SDK reports that its
+worker exited before establishing IPC, the response describes that early exit
+instead of claiming the startup timeout elapsed. If the worker is still running,
+the response reports that IPC was not established before the startup timeout.
+Raw SDK messages and worker stderr are not copied into these startup summaries.
+The separate configured per-load deadline continues to return `503 model_load_timeout`.
+
 ### Load management (`serve.load`)
 
 Tune lazy-load behavior under `serve.load` in `qvac.config.*` (each has a CLI

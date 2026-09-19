@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify'
+import { WorkerStartupError } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { resolveModelAlias } from '@/serve/core/config/models'
 import { ModelLoadTimeoutError } from '@/serve/core/load-manager'
@@ -88,7 +89,7 @@ export async function ensureReady(
     if (err instanceof ModelLoadTimeoutError) {
       throw new HttpError(503, 'model_load_timeout', err.message)
     }
-    const message = err instanceof Error ? err.message : String(err)
+    const message = modelLoadFailureMessage(err)
     throw new HttpError(503, 'model_load_failed', `Model "${modelName}" failed to load: ${message}`)
   } finally {
     disconnect?.dispose()
@@ -99,6 +100,22 @@ export async function ensureReady(
     throw new HttpError(503, 'model_not_ready', `Model "${modelName}" is not loaded yet.`)
   }
   return entry
+}
+
+function modelLoadFailureMessage(err: unknown): string {
+  const startup =
+    err instanceof WorkerStartupError
+      ? err
+      : err instanceof Error && err.cause instanceof WorkerStartupError
+        ? err.cause
+        : null
+  if (!startup) return err instanceof Error ? err.message : String(err)
+
+  // The outer SDK error can say "timeout" even when the worker exited early.
+  // Reconstruct only known diagnostics: startup.message includes raw stderr.
+  return startup.workerExited
+    ? `Worker process exited (code ${startup.exitCode}, signal ${startup.exitSignal}) before IPC was established`
+    : 'Worker did not establish IPC before the startup timeout'
 }
 
 // Aborts if the client disconnects before the load finishes: `reply.raw` closes
