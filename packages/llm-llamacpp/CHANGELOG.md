@@ -21,6 +21,10 @@
   snapshots through the same `needsFullStateSnapshot` policy as the text
   context, so DeepSeek V4 vision models get transactional rollback and
   divergent-history checkpoints instead of an unsafe tail trim.
+- Pure-attention models no longer write a full-state temp-file snapshot at the
+  start of every cached request. The dump is taken only when reconciliation is
+  about to discard resident state; append-only turns roll back with a tail
+  trim to the pre-request cursor.
 
 ## [0.53.1] - 2026-09-16
 

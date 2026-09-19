@@ -331,6 +331,7 @@ private:
     ContextUsage usage;
   };
   void beginCacheRequest();
+  void capturePreRequestCacheSnapshot();
   PrefillPlan reconcilePrompt(
       PrefillPlan fullPlan,
       const qvac_lib_inference_addon_llama::cache::Ledger& fullLedger,

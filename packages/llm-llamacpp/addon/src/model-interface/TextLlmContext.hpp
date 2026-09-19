@@ -212,6 +212,12 @@ public:
   void forceReasoningRecoveryDecodeFailureForTesting() noexcept {
     forceReasoningRecoveryDecodeFailureForTesting_ = true;
   }
+  /// True while the active cache request holds a pre-request full-state
+  /// dump. Lets tests prove pure-attention append-only requests never write
+  /// one and roll back with a tail trim instead.
+  [[nodiscard]] bool hasPreRequestCacheSnapshotForTesting() const noexcept {
+    return !preRequestCacheSnapshot_.empty();
+  }
   /// Forces this context's tools-dropped count, so a test can give a slot a
   /// known value without needing a chat template that actually rejects tool
   /// definitions — unreachable through the addon's config, since fabric
@@ -289,6 +295,7 @@ private:
     qvac_lib_inference_addon_llama::cache::Ledger ledger;
   };
   void beginCacheRequest();
+  void capturePreRequestCacheSnapshot();
   std::vector<llama_token> reconcilePrompt(
       const std::vector<llama_token>& fullPrompt, bool isPrefillOnlyRequest);
   void rebuildSamplerFromLedger(
