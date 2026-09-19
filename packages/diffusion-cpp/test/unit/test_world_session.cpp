@@ -7,6 +7,8 @@
 
 #include "handlers/WorldSessionHandlers.hpp"
 #include "model-interface/WorldSessionModel.hpp"
+#include "utils/EsrganUpscaler.hpp"
+#include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_sd;
 using qvac_errors::StatusError;
@@ -17,6 +19,28 @@ using qvac_errors::StatusError;
 // test_sd_model.cpp.
 
 class WorldSessionModelTest : public ::testing::Test {};
+
+TEST_F(WorldSessionModelTest, StreamingPlacementWarningIsVisibleByDefault) {
+  const auto previousVerbosity = logging::g_verbosityLevel;
+  logging::g_verbosityLevel =
+      qvac_lib_inference_addon_cpp::logger::Priority::ERROR;
+  testing::internal::CaptureStdout();
+  sdLogCallback(
+      SD_LOG_WARN,
+      "stable-diffusion.cpp:7874 - stream_layers has no effect unless "
+      "diffusion params backend is cpu; ignoring\n",
+      nullptr);
+  const auto output = testing::internal::GetCapturedStdout();
+  testing::internal::CaptureStdout();
+  sdLogCallback(SD_LOG_WARN, "ordinary warning", nullptr);
+  sdLogCallback(SD_LOG_INFO, "ordinary info", nullptr);
+  sdLogCallback(SD_LOG_WARN, nullptr, nullptr);
+  const auto filtered = testing::internal::GetCapturedStdout();
+  logging::g_verbosityLevel = previousVerbosity;
+  EXPECT_NE(output.find("[ERROR]"), std::string::npos);
+  EXPECT_NE(output.find("diffusion params backend is cpu"), std::string::npos);
+  EXPECT_TRUE(filtered.empty());
+}
 
 TEST_F(WorldSessionModelTest, ConstructWithEmptyConfigDoesNotThrow) {
   WorldSessionConfig config{};
@@ -43,6 +67,9 @@ TEST_F(WorldSessionModelTest, ConfigDefaultsMatchDocumentedContract) {
   EXPECT_EQ(config.localAttnSize, 0);    // 0 = engine default (8)
   EXPECT_EQ(config.frameJpegQuality, 0); // 0 = PNG frames
   EXPECT_FALSE(config.offloadParamsToCpu);
+  EXPECT_TRUE(config.paramsBackend.empty());
+  EXPECT_TRUE(config.maxVram.empty());
+  EXPECT_FALSE(config.streamLayers);
   EXPECT_FALSE(config.kvCache);
   EXPECT_FALSE(config.profile);
 }
@@ -120,6 +147,31 @@ TEST_F(WorldSessionModelTest, DestroyUnloadedModelIsNoop) {
 // `v == "true"` comparison, and silently kept the false default.
 
 class WorldSessionHandlersTest : public ::testing::Test {};
+
+TEST_F(WorldSessionHandlersTest, LayerStreamingUsesEngineAssignmentSyntax) {
+  WorldSessionConfig config{};
+  for (const auto& budget : {"6", "-1", "0", "cuda0=6,vulkan0=-1"}) {
+    applyWorldSessionHandlers(config, {{"maxVram", budget}});
+    EXPECT_EQ(config.maxVram, budget);
+  }
+  applyWorldSessionHandlers(
+      config,
+      {{"paramsBackend", "diffusion=disk,vae=cpu"},
+       {"offloadParamsToCpu", "true"},
+       {"streamLayers", "1"}});
+  EXPECT_EQ(config.paramsBackend, "diffusion=disk,vae=cpu");
+  EXPECT_TRUE(config.offloadParamsToCpu);
+  EXPECT_TRUE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "0"}});
+  EXPECT_FALSE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "true"}});
+  EXPECT_TRUE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "false"}});
+  EXPECT_FALSE(config.streamLayers);
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"streamLayers", "yes"}}),
+      StatusError);
+}
 
 TEST_F(WorldSessionHandlersTest, NumericBooleansParse) {
   WorldSessionConfig config{};
