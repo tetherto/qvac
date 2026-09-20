@@ -77,7 +77,10 @@ to load.
 
 ## Save the cache to disk
 
-`saveCacheToDisk: true` writes the full in-memory KV cache state to the `cacheKey` file after inference completes.
+`saveCacheToDisk: true` writes the full in-memory KV cache state to the
+`cacheKey` file once the request commits (see [Commit and
+rollback](#commit-and-rollback)). A request that rolls back leaves the file as
+it was.
 
 ```js
 await model.run(
@@ -173,6 +176,27 @@ reconciliation removes it; if the render preserves it, it remains reusable.
 > `remove_thinking_from_context`. Upgrade the SDK only after its full-history
 > cache migration lands.
 
+## Commit and rollback
+
+A cached request is a transaction. It commits, and its tokens stay resident,
+whenever the caller received what was produced: the model stopped on its own
+(EOS or an antiprompt), it hit the caller's `n_predict` limit, or the caller
+cancelled after prefill had completed. Such a cancel keeps the prompt and every
+streamed token, so the next full-history turn resumes from there. A cancel
+during prefill, a decode error and a context overflow roll the request back to
+the state before the prompt was sent, skip `saveCacheToDisk`, and leave the
+on-disk file untouched. Prefill-only requests commit as soon as prefill
+completes.
+
+The same rule applies to requests without `cacheKey`. Nothing reuses their
+state, so the only visible difference is `CacheTokens`, which reports the
+tokens actually decoded rather than the pre-request cursor.
+
+The `cacheKey` file changes only through the saves described in [Save the
+cache to disk](#save-the-cache-to-disk): a commit with `saveCacheToDisk`, a
+switch to another `cacheKey`, or a request that omits `cacheKey`. Process-local
+checkpoints are never written into it.
+
 ## Save failures
 
 If a cache write fails (e.g. the disk is full, the path is unwritable, or `llama_state_save_file` returns false), a `StatusError` with code `UnableToSaveSessionFile` is thrown.
@@ -184,7 +208,10 @@ If a cache write fails (e.g. the disk is full, the path is unwritable, or `llama
 
 ## Cache token count
 
-`CacheTokens` is available in `response.stats` after every run. No dedicated command needed.
+`CacheTokens` is available in `response.stats` after every run. No dedicated
+command needed. It reports the tokens resident after the request settled: the
+committed prompt plus generated tokens, or the pre-request cursor when the
+request rolled back (see [Commit and rollback](#commit-and-rollback)).
 
 ```js
 const response = await model.run(

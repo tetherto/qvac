@@ -119,8 +119,11 @@ GenerationStopReason toGenerationStopReason(StopReason reason) {
 bool finalizeTerminalDriver(
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
     const std::function<void(const std::string&)>& outputCallback) {
-  if (reason == StopReason::Cancelled || reason == StopReason::DecodeError) {
+  if (reason == StopReason::Cancelled) {
     return driver.onCancel(outputCallback);
+  }
+  if (reason == StopReason::DecodeError) {
+    return driver.onFailure(outputCallback);
   }
   if (prefillOnly) {
     driver.onSequenceEnd(outputCallback);
@@ -584,11 +587,10 @@ void ContinuousBatchScheduler::finalizeFinishedSequences() {
     if (hasValidDriverF()(req)) {
       auto& slot = *slots_[req.seqId];
       // Sync the driver's live KV cursor to the batcher's authoritative
-      // `req.currentPos` before finalize so `onCancel` (called for
-      // Cancelled / DecodeError) computes the correct tail trim on
-      // pure-attention drivers. Without this a mid-prefill cancel /
-      // decode-error leaves the driver's `nPast_` at the admission
-      // cursor while live KV holds the partial prefill, so `onCancel`
+      // `req.currentPos` before finalize so `onCancel` / `onFailure` see
+      // the partial prefill actually committed to live KV. Without this a
+      // mid-prefill cancel / decode-error leaves the driver's `nPast_` at the
+      // admission cursor while live KV holds the partial prefill, so `onCancel`
       // under-trims by `req.currentPos - preRequestNPast` cells and
       // any subsequent save serialises a KV span wider than the
       // metadata's `nPast`.
@@ -660,7 +662,7 @@ void ContinuousBatchScheduler::failSlotLocked(
     // Rollback-ok signal is intentionally discarded: this failure path
     // never persists cache (no `saveCacheForSlot` below) — a subsequent
     // `batcher_.cancel` wipes the sequence via `clearSeqKv`.
-    (void)slot->driver->onCancel({});
+    (void)slot->driver->onFailure({});
     if (req != nullptr) {
       accumulateSlotRuntimeStats(*slot, *req);
     }
@@ -1270,10 +1272,11 @@ void ContinuousBatchScheduler::cancelSlotLocked(
       if (req != nullptr) {
         accumulateSlotRuntimeStats(*slots_[seqId], *req);
       }
-      // Skip save on rollback failure regardless of policy. A successful
-      // rollback is also not a commit: `shouldPersistAfterFinalize()` preserves
-      // the previous cache file instead of needlessly rewriting the restored
-      // state. Together these gates prevent cancelled work from touching disk.
+      // A user cancel during generation commits the cached request, so the
+      // save persists real progress. It is skipped when the driver could not
+      // leave live memory coherent (`rollbackOk == false`) or when the hook
+      // ended in a rollback (`shouldPersistAfterFinalize()` false), so a
+      // failed or rolled-back request never touches the last known-good file.
       if (savePolicy == SaveCachePolicy::Save && rollbackOk &&
           slots_[seqId]->driver->shouldPersistAfterFinalize()) {
         saveCacheForSlot(seqId, *slots_[seqId]);
@@ -1608,11 +1611,11 @@ void ContinuousBatchScheduler::accumulateSlotRuntimeStats(
   // reports its terminal reason; a cancelled/prefill-only slot reports None.
   std::optional<GenerationStopReason> stopReason;
   if (slot.driver) {
-    // `onCancel` has already rolled `nPast` back to the admission cursor, so
-    // `CacheTokens` matches the restored live driver cursor and the unchanged
-    // last known-good file. Both graceful cancellation and error recovery skip
-    // persistence after rollback. Work performed is still reported via
-    // `promptTokens` / `generatedTokens`.
+    // The terminal hook has already settled the driver: a cached request
+    // cancelled during generation keeps its tokens (committed), one cancelled
+    // during prefill or failed is rolled back to the admission cursor, so
+    // `CacheTokens` matches the live driver cursor either way. Work performed
+    // is still reported via `promptTokens` / `generatedTokens`.
     nPast = static_cast<int64_t>(slot.driver->getNPast());
     toolsDropped =
         static_cast<int64_t>(slot.driver->getToolDefinitionsDropped());

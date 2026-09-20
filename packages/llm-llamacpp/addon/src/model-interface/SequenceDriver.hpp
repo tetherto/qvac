@@ -52,6 +52,23 @@ stopReasonAfterRequestRollback(GenerationStopReason reason) {
                                             : GenerationStopReason::None;
 }
 
+/// Whether a generation that ended for `reason` commits its cache request.
+/// A request commits when the caller received a completed answer: the model
+/// stopped on its own (EOS or antiprompt) or the caller's own `n_predict`
+/// budget ran out. The resident state is consistent in all three cases, and
+/// the next full-history render will extend it, so discarding it would only
+/// re-prefill the answer the model just produced. Cancellation commits too,
+/// through `onCancel`, since the caller received every streamed token.
+/// Everything that reaches `onGenerationFinished` with another reason
+/// (`None` here means a decode error; `ContextOverflow` means the sequence
+/// hit its window) rolls the request back so the cache never holds a turn
+/// the caller did not get.
+[[nodiscard]] constexpr bool commitsCacheRequest(GenerationStopReason reason) {
+  return reason == GenerationStopReason::Eos ||
+         reason == GenerationStopReason::Antiprompt ||
+         reason == GenerationStopReason::PredictionLimit;
+}
+
 /// Per-sequence step outcome reported by `SequenceDriver::onLogitsReady`.
 /// `decodedInline` lets a driver piggy-back a fresh `llama_decode` (for
 /// example to flush a forced follow-up token) without bouncing through
@@ -144,8 +161,8 @@ struct PrefillPlan {
 ///   `loadCache` -> `preparePrefill`
 ///   -> `snapshotPreRequestCursor` -> `snapshotPreRequestRollbackAnchor`
 ///   -> `onPrefillComplete` -> N x `onLogitsReady`
-///   -> (`onGenerationFinished` | `onCancel`) -> `onSequenceEnd` ->
-///   `saveCache`
+///   -> (`onGenerationFinished` | `onCancel` | `onFailure`) -> `onSequenceEnd`
+///   -> `saveCache`
 class SequenceDriver {
 public:
   SequenceDriver() = default;
@@ -259,17 +276,29 @@ public:
       const std::function<void(const std::string&)>& outputCallback,
       GenerationStopReason terminalReason = GenerationStopReason::None) = 0;
 
-  /// Fired when the sequence is cancelled (user-requested or fatal error).
-  /// Returns `true` when internal rollback (metadata + live KV / recurrent
-  /// state) is coherent with the pre-request cursor and callers may persist
-  /// the driver's state via `saveCache`. Returns `false` when the
-  /// rollback could not be completed (e.g. recurrent full-state restore
-  /// refused): live state may not match `getNPast()` and callers MUST skip
-  /// cache persistence for this request to preserve the last
-  /// known-good on-disk cache. Implementations that need no rollback
-  /// (single hook) may simply return `true`.
+  /// Fired when the caller cancels the sequence. Once prefill completed the
+  /// request keeps what the caller received, exactly like a prediction-limit
+  /// stop: the prompt and every streamed token stay resident (and a cache
+  /// transaction commits), so the next full-history turn extends them.
+  /// Cancelled during prefill it rolls back to the state before the prompt
+  /// was sent, since the caller received nothing. The rule is the same with
+  /// or without `cacheKey`. Returns `true` when live memory
+  /// matches the driver's metadata and callers may persist it via
+  /// `saveCache`; `false` when a rollback could not be completed (e.g. a
+  /// recurrent full-state restore was refused), in which case callers MUST
+  /// skip cache persistence to preserve the last known-good on-disk cache.
   [[nodiscard]] virtual bool
   onCancel(const std::function<void(const std::string&)>& outputCallback) = 0;
+
+  /// Fired when the sequence dies of a fatal error (decode failure). Unlike
+  /// `onCancel`, a cached request rolls back to its pre-request state: the
+  /// caller got no usable answer and live memory may be inconsistent. Same
+  /// return contract as `onCancel`. Drivers without a transaction may treat
+  /// it as a cancel.
+  [[nodiscard]] virtual bool
+  onFailure(const std::function<void(const std::string&)>& outputCallback) {
+    return onCancel(outputCallback);
+  }
 
   /// Try to populate this sequence's KV-cache from a previously
   /// persisted cache. Returns true when the cache was loaded

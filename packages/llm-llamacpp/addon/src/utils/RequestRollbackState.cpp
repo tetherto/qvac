@@ -15,8 +15,4 @@ bool RequestRollbackState::restore(::llama_context* ctx, llama_seq_id seqId) {
   return restoreSequenceState(ctx, seqId, snapshot_);
 }
 
-void RequestRollbackState::seedForTesting(llama_pos nPast) noexcept {
-  snapshot_.seedForTesting("qvac_test_request_rollback_sentinel.bin", nPast);
-}
-
 } // namespace qvac_lib_inference_addon_llama::utils

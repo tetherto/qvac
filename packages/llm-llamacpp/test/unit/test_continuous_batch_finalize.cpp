@@ -56,6 +56,11 @@ public:
     calls.emplace_back("onCancel");
     return rollbackOk;
   }
+  [[nodiscard]] bool
+  onFailure(const std::function<void(const std::string&)>&) override {
+    calls.emplace_back("onFailure");
+    return rollbackOk;
+  }
   bool rollbackOk = true;
   [[nodiscard]] bool loadCache(const std::string&) override { return false; }
   void saveCache(const std::string&) const override {}
@@ -69,20 +74,21 @@ const std::function<void(const std::string&)> kNoCallback;
 
 } // namespace
 
-/// Decode-error finalization must run the generation-complete hook
-/// (onCancel/onGenerationFinished), which is what triggers TextLlmContext's
-/// transactional post-generation policy. The pre-fix
+/// Decode-error finalization must run the failure hook, which rolls a cached
+/// request back. It must NOT run onCancel: a user cancel commits the decoded
+/// prefix, and a decode error has no usable prefix to commit. The pre-fix
 /// path called only onSequenceEnd, which flushes UTF-8 and skips that policy
 /// work, leaving KV state inconsistent.
-TEST(ContinuousBatchFinalize, DecodeErrorRunsGenerationCompleteHook) {
+TEST(ContinuousBatchFinalize, DecodeErrorRunsFailureHook) {
   RecordingDriver driver;
   (void)finalizeTerminalDriver(
       driver, StopReason::DecodeError, /*prefillOnly=*/false, kNoCallback);
 
-  EXPECT_TRUE(driver.fired("onCancel") || driver.fired("onGenerationFinished"))
-      << "decode-error finalization must fire onCancel/onGenerationFinished so "
-         "the post-generation policy work runs; instead it fired only "
-         "onSequenceEnd (UTF-8 flush)";
+  EXPECT_TRUE(driver.fired("onFailure"))
+      << "decode-error finalization must fire onFailure so the request rolls "
+         "back";
+  EXPECT_FALSE(driver.fired("onCancel"))
+      << "a decode error must not take the cancel path, which commits";
 }
 
 /// Cancelled terminations route through onCancel (regression guard for the
@@ -158,9 +164,16 @@ TEST(ContinuousBatchFinalize, PrefillOnlyOnlyFlushes) {
 
 /// `finalizeTerminalDriver` must forward the driver's rollback-ok signal so
 /// the scheduler can skip `saveCache` when a recurrent full-state restore was
-/// refused. Cancelled / DecodeError paths report through `onCancel`; natural
-/// generation finalization can also report a rollback failure when generation
-/// was truncated mid-reasoning.
+/// refused. Cancelled paths report through `onCancel`, DecodeError through
+/// `onFailure`; natural generation finalization can also report a rollback
+/// failure when generation was truncated mid-reasoning.
+TEST(ContinuousBatchFinalize, DecodeErrorForwardsRollbackFailure) {
+  RecordingDriver driver;
+  driver.rollbackOk = false;
+  EXPECT_FALSE(finalizeTerminalDriver(
+      driver, StopReason::DecodeError, /*prefillOnly=*/false, kNoCallback));
+}
+
 TEST(ContinuousBatchFinalize, CancelForwardsRollbackFailure) {
   RecordingDriver driver;
   driver.rollbackOk = false;

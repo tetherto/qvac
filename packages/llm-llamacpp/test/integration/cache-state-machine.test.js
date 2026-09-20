@@ -247,19 +247,27 @@ safeTest('cacheKey stores tokens but stays under n_predict', { timeout: 600_000 
 })
 
 safeTest(
-  'Cancelling after first token keeps cache growth bounded',
+  'Cancelling after first token commits the streamed prefix',
   { timeout: 600_000 },
   async (t) => {
     const { model, dirPath } = await setupModel(t, { n_predict: '256', ctx_size: '4096' })
     const sessionName = path.join(dirPath, 'cache-cancel.bin')
-    const warmStats = await runAndCollectStats(model, buildPrompt(), cacheOpts(sessionName))
+    // Warm with a prefill-only turn so the baseline holds exactly the prompt.
+    const warmStats = await runAndCollectStats(model, buildPrompt(), {
+      ...cacheOpts(sessionName),
+      prefill: true
+    })
     const stats = await runAndCancelAfterFirstToken(model, buildPrompt(), cacheOpts(sessionName))
     const delta = toNumber(stats.CacheTokens) - toNumber(warmStats.CacheTokens)
-    // Cancel = "request never happened": cache is rolled back to the
-    // pre-request cursor, so delta versus the warm baseline must be ~0
-    // (allow ±1 for BOS/EOS bookkeeping). Prompt / generated counters
-    // still reflect work the model performed.
-    t.ok(Math.abs(delta) <= 1, `cache delta (${delta}) ~0 after cancel rollback`)
+    // Cancel commits what the caller received: the streamed tokens stay
+    // resident on top of the warm prompt, like a prediction-limit stop.
+    // Allow ±1 for the final prompt token the addon re-decodes to refresh
+    // logits on a fully cached prompt.
+    t.ok(delta > 0, `cache grew by ${delta} after a cancelled generation`)
+    t.ok(
+      Math.abs(delta - stats.generatedTokens) <= 1,
+      `cache delta (${delta}) matches the streamed tokens (${stats.generatedTokens})`
+    )
     const threshold = 20
     t.ok(
       stats.generatedTokens > 0,
@@ -325,6 +333,8 @@ safeTest(
     t.is(stats.generatedTokens, 0, 'prefill-only cancellation generates no tokens')
     t.is(stats.TTFT, 0, 'prefill-only cancellation has no time-to-first-token')
     t.is(stats.TPS, 0, 'prefill-only cancellation has no generation TPS')
+    // A cancel during prefill rolls back to the state before the prompt was
+    // sent: the caller received nothing, so nothing is kept or persisted.
     t.is(stats.CacheTokens, 0, 'cancelled prefill rolls cache back to the pre-request cursor')
     t.absent(fs.existsSync(sessionName), 'cancelled prefill does not persist cache to disk')
   }
@@ -351,6 +361,8 @@ safeTest(
     t.is(stats.generatedTokens, 0, 'prefill-only cancellation generates no tokens')
     t.is(stats.TTFT, 0, 'prefill-only cancellation has no time-to-first-token')
     t.is(stats.TPS, 0, 'prefill-only cancellation has no generation TPS')
+    // A cancel during prefill rolls back to the state before the prompt was
+    // sent: the caller received nothing, so nothing is kept or persisted.
     t.is(stats.CacheTokens, 0, 'cancelled prefill rolls cache back to the pre-request cursor')
     t.absent(fs.existsSync(sessionName), 'cancelled prefill does not persist cache to disk')
   }

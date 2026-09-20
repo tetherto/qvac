@@ -1892,39 +1892,28 @@ namespace {
 std::vector<uint8_t> readFileBytes(const fs::path& path);
 } // namespace
 
-/// Cancel = "request never happened": `onCancel` rolls the driver's
-/// `nPast` back to the admission cursor (the warm baseline loaded from
-/// `cacheKey`). The restored state remains usable in memory, but a rolled-back
-/// request must not rewrite the last known-good cache file. `CacheTokens` in
-/// the batch runtime stats must equal the warm baseline — not the transient
-/// peak reached mid-generation, and not zero from an over-rollback that wiped
-/// the baseline.
+/// A cancelled cached batch request commits what its caller received: the
+/// prompt suffix decoded on top of the warm baseline plus every streamed
+/// token stay resident, `CacheTokens` reports that committed cursor (not the
+/// admission cursor, and not zero from an over-rollback), and with
+/// `saveCacheToDisk` the cache file is rewritten with the committed state.
 ///
-/// The scheduler resets its stats snapshot at admission whenever the
-/// queue is idle, so each `processPromptBatch` call reports CacheTokens
-/// for that batch alone. Prime a `cacheKey` with a short prefill, then
-/// run a baseline batch (finishes naturally) and a cancel batch on the
-/// same key. The cancel batch's `CacheTokens` must (a) be much smaller
-/// than the baseline (no peak leak) and (b) match the primer's value
-/// within a tiny tolerance (rollback lands exactly on the warm baseline).
+/// The scheduler resets its stats snapshot at admission whenever the queue
+/// is idle, so each `processPromptBatch` call reports CacheTokens for that
+/// batch alone. Prime a `cacheKey` with a short prefill, then cancel a
+/// continuation on the same key after its first token.
 TEST_F(
-    ContinuousBatchingIntegrationTest,
-    BatchCancelRestoresMemoryWithoutOverwritingWarmCache) {
+    ContinuousBatchingIntegrationTest, BatchCancelCommitsProgressAndPersists) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "32";
   auto model = loadModel();
 
   const fs::path cachePath = fs::temp_directory_path() /
-                             ("batch-cancel-warm-" + uniqueTestId() + ".bin");
+                             ("batch-cancel-commit-" + uniqueTestId() + ".bin");
 
   const std::string primerInput = "Remember these facts: the sky is blue.";
   const std::string continuationInput =
       R"([{"role":"user","content":"Remember these facts: the sky is blue."},{"role":"assistant","content":"I will remember that the sky is blue."},{"role":"user","content":"Say two short sentences about the sky."}])";
-  const auto makeContinuation = [&continuationInput]() {
-    LlamaModel::Prompt prompt;
-    prompt.input = continuationInput;
-    return prompt;
-  };
 
   auto primer = makePrompt(primerInput);
   primer.prefill = true;
@@ -1937,27 +1926,16 @@ TEST_F(
       test_common::getStatValue(model->runtimeStats(), "CacheTokens");
   ASSERT_GT(primeCacheTokens, 0.0) << "prefill did not populate CacheTokens";
 
-  auto baseline = makeContinuation();
-  baseline.cacheKey = cachePath.string();
-  std::vector<LlamaModel::Prompt> baselineBatch{std::move(baseline)};
-  auto baselineOutputs = model->processPromptBatch(baselineBatch);
-  ASSERT_EQ(baselineOutputs.size(), 1u);
-  EXPECT_FALSE(baselineOutputs[0].empty());
-  const double baselineCacheTokens =
-      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
-  ASSERT_GT(baselineCacheTokens, primeCacheTokens)
-      << "baseline batch did not grow past the warm baseline; test setup is "
-         "not exercising the peak-vs-rollback distinction";
-
-  // Give an accidental rewrite an unmistakably different timestamp even on
-  // filesystems with coarse timestamp resolution.
-  const auto preservedCacheBytes = readFileBytes(cachePath);
-  const auto preservedCacheTime =
+  // Give the rewrite an unmistakably newer timestamp even on filesystems
+  // with coarse timestamp resolution.
+  const auto primedCacheBytes = readFileBytes(cachePath);
+  const auto primedCacheTime =
       fs::last_write_time(cachePath) - std::chrono::seconds(10);
-  fs::last_write_time(cachePath, preservedCacheTime);
+  fs::last_write_time(cachePath, primedCacheTime);
 
   std::atomic<bool> cancelIssued = false;
-  auto cancelPrompt = makeContinuation();
+  LlamaModel::Prompt cancelPrompt;
+  cancelPrompt.input = continuationInput;
   cancelPrompt.cacheKey = cachePath.string();
   cancelPrompt.saveCacheToDisk = true;
   cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
@@ -1973,23 +1951,25 @@ TEST_F(
   const double cancelledCacheTokens =
       test_common::getStatValue(model->runtimeStats(), "CacheTokens");
 
-  EXPECT_LT(cancelledCacheTokens, baselineCacheTokens)
+  EXPECT_GT(cancelledCacheTokens, primeCacheTokens)
       << "cancelled batch reported CacheTokens=" << cancelledCacheTokens
-      << " >= baseline " << baselineCacheTokens
-      << "; pre-rollback peak is leaking into stats";
-  // Rollback must land exactly on the admission cursor. A tolerance of
-  // 1 absorbs any single-token accounting drift; anything larger points
-  // at either a stale peak (>> primeCacheTokens) or an over-rollback
-  // that wiped the warm baseline (== 0).
-  EXPECT_LE(std::abs(cancelledCacheTokens - primeCacheTokens), 1.0)
-      << "cancelled batch CacheTokens=" << cancelledCacheTokens
-      << " but warm baseline was " << primeCacheTokens
-      << "; rollback did not restore the admission cursor";
+      << " <= warm baseline " << primeCacheTokens
+      << "; the decoded suffix and streamed tokens were not committed";
 
-  EXPECT_EQ(readFileBytes(cachePath), preservedCacheBytes)
-      << "a rolled-back request replaced the last known-good cache bytes";
-  EXPECT_EQ(fs::last_write_time(cachePath), preservedCacheTime)
-      << "a rolled-back request rewrote the last known-good cache file";
+  EXPECT_NE(readFileBytes(cachePath), primedCacheBytes)
+      << "a cancelled cached request commits and must persist its state";
+  EXPECT_GT(fs::last_write_time(cachePath), primedCacheTime)
+      << "saveCacheToDisk did not rewrite the cache file after the cancel";
+
+  // The committed state serves the next authoritative turn.
+  LlamaModel::Prompt followup;
+  followup.input =
+      R"([{"role":"user","content":"Remember these facts: the sky is blue."},{"role":"assistant","content":"I will remember that the sky is blue."},{"role":"user","content":"Say two short sentences about the sky."},{"role":"assistant","content":"The sky is blue."},{"role":"user","content":"What colour is it?"}])";
+  followup.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> followupBatch{std::move(followup)};
+  auto followupOutputs = model->processPromptBatch(followupBatch);
+  ASSERT_EQ(followupOutputs.size(), 1u);
+  EXPECT_FALSE(followupOutputs[0].empty());
 
   fs::remove(cachePath);
 }

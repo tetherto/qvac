@@ -21,10 +21,6 @@ public:
 
   void clear() noexcept { snapshot_.clear(); }
 
-  // Test seam for restore-failure handling. The sentinel path is not a valid
-  // llama state file and must never be used by production code.
-  void seedForTesting(llama_pos nPast) noexcept;
-
 private:
   SequenceStateSnapshot snapshot_;
 };

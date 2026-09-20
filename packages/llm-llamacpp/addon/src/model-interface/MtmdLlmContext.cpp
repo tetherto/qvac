@@ -513,6 +513,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   // Set before tokenization because reasoning setup and cache transactions
   // distinguish generation from prefill-only requests.
   isPrefillOnlyRequest_ = prefill;
+  prefillComplete_ = false;
 
   lastGeneratedTokenCount_ = 0;
 
@@ -600,7 +601,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   // metadata (Qwen3VL M-RoPE x/y), so a metadata-only resync cannot
   // recover the exact pre-cancel position between mtmd chunks.
   const ContextUsage prefillEntryUsage = current_;
-  if (needsFullStateSnapshot_) {
+  // A cached request rolls back through its own transaction snapshot
+  // (cancel during prefill, failures), so it never needs this anchor.
+  if (needsFullStateSnapshot_ && !cacheRequestActive_) {
     if (!requestRollback_.capture(modelCtx_.lctx, seqId_, current_.pos)) {
       // Capture failed: cancel falls back to best-effort positional cleanup.
       QLOG_IF(
@@ -666,6 +669,18 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     }
 
     if (stopGeneration_.load()) {
+      if (cacheRequestActive_) {
+        // Cached request cancelled before it produced anything: restore the
+        // state from before the prompt was sent. Publish the decoded cursor
+        // first so the transaction rollback trims exactly what was added.
+        current_.pos = nPastLocal;
+        refreshCurrentCacheTokensFromMemory();
+        stopGeneration_.store(false);
+        return {
+            .ok = false,
+            .cancelled = true,
+            .rollbackOk = cancelGenerationCleanup([](const std::string&) {})};
+      }
       // A prior chunk may have queued GPU work whose logits are never read on
       // the cancel path. Finish it before rolling KV/recurrent state back.
       llama_synchronize(modelCtx_.lctx);
@@ -794,9 +809,38 @@ void MtmdLlmContext::flushPendingUtf8ToCallback(
   }
 }
 
+bool MtmdLlmContext::handleUserCancel(
+    const std::function<void(const std::string&)>& outputCallback) {
+  // Same rule as TextLlmContext::onCancel, with or without `cacheKey`: after
+  // prefill completed the request keeps its state, during prefill it rolls
+  // back to the pre-request state like any failure.
+  if (prefillComplete_) {
+    return commitCancelledRequest(outputCallback);
+  }
+  return cancelGenerationCleanup(outputCallback);
+}
+
+bool MtmdLlmContext::commitCancelledRequest(
+    const std::function<void(const std::string&)>& outputCallback) {
+  // Same contract as TextLlmContext::commitCancelledRequest: a cancel after
+  // prefill completed keeps what the caller received. Finish queued backend
+  // work first so the memory the ledger describes is complete.
+  llama_synchronize(modelCtx_.lctx);
+  flushPendingUtf8ToCallback(outputCallback);
+  if (cacheRequestActive_) {
+    commitCacheRequest();
+  }
+  requestRollback_.clear();
+  common_sampler_reset(smpl_.get());
+  return true;
+}
+
 bool MtmdLlmContext::cancelGenerationCleanup(
     const std::function<void(const std::string&)>& outputCallback) {
   // Rollback = "request never happened": restore the pre-request cursor.
+  // Reached for failures, context overflow and cancels during prefill; a
+  // cancel after prefill completed keeps the state instead (see
+  // `commitCancelledRequest`).
   // If cancellation lands after llama_decode() but before the next sampler
   // read, the implicit sampler-side synchronize is skipped. Finish any queued
   // backend work before mutating KV/recurrent state during rollback.
@@ -893,7 +937,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     return {
         .ok = true,
         .cancelled = true,
-        .rollbackOk = cancelGenerationCleanup(outputCallback)};
+        .rollbackOk = handleUserCancel(outputCallback)};
   }
 
   while (nRemain != 0) {
@@ -902,7 +946,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       return {
           .ok = true,
           .cancelled = true,
-          .rollbackOk = cancelGenerationCleanup(outputCallback)};
+          .rollbackOk = handleUserCancel(outputCallback)};
     }
     // The context is 100% full on either measure: no room for one more
     // token, and nothing is evicted to make room any more.
@@ -1050,7 +1094,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     return {
         .ok = true,
         .cancelled = true,
-        .rollbackOk = cancelGenerationCleanup(outputCallback)};
+        .rollbackOk = handleUserCancel(outputCallback)};
   }
   if (generationStopReason_ == GenerationStopReason::None &&
       params_.n_predict > 0 && nRemain == 0) {
@@ -1574,6 +1618,7 @@ PrefillPlan MtmdLlmContext::preparePrefill(
   // to commit the cache transaction right after prefill on
   // prefill-only turns.
   isPrefillOnlyRequest_ = isPrefillOnlyRequest;
+  prefillComplete_ = false;
   resetMedia();
   validateByteBufferCount(mediaPlan, media.size());
   // Load media in prompt-marker order: byte buffers consume the next hoisted
@@ -1741,6 +1786,7 @@ void MtmdLlmContext::onPrefillComplete(
   // Trailing text advances positions and KV cells 1:1; media cells were
   // already accounted by evalMediaSegment.
   advanceTextSpan(currentPos);
+  prefillComplete_ = true;
   if (cacheRequestActive_) {
     residentLedger_ = pendingPromptLedger_;
     rebuildSamplerFromLedger(residentLedger_);
@@ -1764,12 +1810,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
   if (stopGeneration_.load()) {
-    // Leave `stopGeneration_` set so the post-loop `cancelGenerationCleanup`
-    // in `generateResponse` runs; do NOT emit EOT since the rollback drops
-    // all sampled tokens. Aligns with `TextLlmContext::onLogitsReady` and
-    // avoids routing an internal stop through the scheduler's normal-finish
-    // path (which would trigger `onGenerationFinished` instead of
-    // `onCancel` rollback).
+    // Leave `stopGeneration_` set so the post-loop `handleUserCancel` in
+    // `generateResponse` runs; do NOT emit EOT, the cancel path settles the
+    // request itself. Aligns with `TextLlmContext::onLogitsReady` and avoids
+    // routing an internal stop through the scheduler's normal-finish path
+    // (which would trigger `onGenerationFinished` instead of `onCancel`).
     return {.finished = true};
   }
 
@@ -1908,12 +1953,9 @@ bool MtmdLlmContext::onGenerationFinished(
     generationStopReason_ = terminalReason;
   }
   onSequenceEnd(outputCallback);
-  const bool emptyGeneration =
-      cacheRequestActive_ &&
-      residentLedger_.entries.size() == pendingPromptLedger_.entries.size();
-  if (emptyGeneration ||
-      (generationStopReason_ != GenerationStopReason::Eos &&
-       generationStopReason_ != GenerationStopReason::Antiprompt)) {
+  // Same rule as TextLlmContext: the stop reason alone decides, and an
+  // immediate-EOS answer commits.
+  if (!commitsCacheRequest(generationStopReason_)) {
     return cancelGenerationCleanup(outputCallback);
   }
   commitCacheRequest();
@@ -1926,10 +1968,13 @@ bool MtmdLlmContext::onGenerationFinished(
 
 bool MtmdLlmContext::onCancel(
     const std::function<void(const std::string&)>& outputCallback) {
-  // Batch cancel = "request never happened": roll back to the
-  // pre-request cursor captured at admission by `snapshotPreRequestCursor`.
-  // The single-prompt path invokes `cancelGenerationCleanup` directly
-  // from its own generation loop.
+  // The single-prompt path reaches `handleUserCancel` directly from its own
+  // loops; this is the batch-scheduler entry with the same semantics.
+  return handleUserCancel(outputCallback);
+}
+
+bool MtmdLlmContext::onFailure(
+    const std::function<void(const std::string&)>& outputCallback) {
   return cancelGenerationCleanup(outputCallback);
 }
 

@@ -1267,21 +1267,15 @@ namespace LlmLlamacpp {
      * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
      * later run keyed by the same string can resume without re-prefilling.
      *
-     * The continuous-batch scheduler intentionally SKIPS the save on
-     * teardown legs where persistence could corrupt the last known-good
-     * on-disk cache:
-     *   - Any batch error-recovery path (e.g. decode failure or per-slot
-     *     failure with `SaveCachePolicy::Skip`).
-     *   - Graceful cancel of a hybrid / recurrent request whose driver
-     *     cannot roll live memory back to the pre-request cursor —
-     *     either the recurrent full-state restore was refused, or no
-     *     pre-request snapshot exists yet the driver advanced past the
-     *     pre-request cursor. Cancels that roll back cleanly still save.
-     *
-     * On both skip paths the sequence's in-memory KV is still cleared, so
-     * subsequent requests decode from a coherent baseline; only the
-     * on-disk cache is untouched. Pure-attention drivers always roll back
-     * via `removeLastNTokens` and therefore save on cancel as usual.
+     * The save is the commit of the request's cache transaction, so it runs
+     * whenever the caller received what was produced: end-of-sequence, an
+     * antiprompt hit, the caller's own `n_predict` limit, or a cancel after
+     * generation started. Such a cancel keeps the prompt and every streamed
+     * token resident, so the next full-history turn resumes from there. A
+     * cancel during prefill, a decode error and a context overflow roll the
+     * request back to the state before the prompt was sent, and on those legs
+     * the on-disk cache is left untouched so the last known-good file
+     * survives. Prefill-only requests commit as soon as prefill completes.
      */
     saveCacheToDisk?: boolean;
     /**
