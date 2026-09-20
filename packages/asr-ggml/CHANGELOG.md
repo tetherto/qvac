@@ -16,6 +16,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-18`, keeping the speech packages on
+  one engine stack. The pinned engine adds an Apple-only Core ML sidecar for the
+  Parakeet Unified RNN-T encoder, presence-driven on a compiled `.mlmodelc` next
+  to the model file and falling back to ggml without it, so published behavior
+  is unchanged unless that file is shipped.
 - Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
   one engine stack. The pinned engine adds an optional Apple-only Core ML
   sidecar for the Sortformer diarization encoder; the prebuilds keep it
