@@ -150,22 +150,36 @@ export const bciPlugin = definePlugin({
               request.requestId
             )
 
-        for await (const value of iterator) {
-          yield metadata
-            ? {
-                type: 'bciTranscribeStream' as const,
-                segment: value as TranscribeSegment
-              }
-            : {
-                type: 'bciTranscribeStream' as const,
-                text: value as string
-              }
-        }
+        // Iterated by hand rather than with `for await` so the generator's
+        // return value survives: it carries the execution time the profiling
+        // layer reads off the terminal frame.
+        try {
+          let result = await iterator.next()
+          while (!result.done) {
+            yield metadata
+              ? {
+                  type: 'bciTranscribeStream' as const,
+                  segment: result.value as TranscribeSegment
+                }
+              : {
+                  type: 'bciTranscribeStream' as const,
+                  text: result.value as string
+                }
+            result = await iterator.next()
+          }
 
-        yield {
-          type: 'bciTranscribeStream' as const,
-          text: '',
-          done: true
+          // The addon reports no stats for a stream, so there is no backend
+          // verdict to attach here — only the timing.
+          yield attachModelExecutionMs(
+            {
+              type: 'bciTranscribeStream' as const,
+              text: '',
+              done: true
+            },
+            result.value.modelExecutionMs
+          )
+        } finally {
+          await iterator.return?.(undefined as never)
         }
       }
     })

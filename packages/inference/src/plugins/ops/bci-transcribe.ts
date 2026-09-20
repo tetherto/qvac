@@ -10,7 +10,7 @@ import Buffer from 'bare-buffer'
 import { getEngineLogger } from '@/logging/index'
 import { TranscriptionFailedError } from '@/errors/index'
 import { nowMs } from '@/profiling/index'
-import { buildStreamResult } from '@/profiling/model-execution'
+import { buildStreamResult, type StreamResult } from '@/profiling/model-execution'
 import { buildAsrBackendDiagnostics } from '@/utils/asr-diagnostics'
 import type { InferenceBackendDiagnostics } from '@/schemas/index'
 import { toTranscribeSegment, type AsrAddonSegment } from '@/utils/transcribe-metadata'
@@ -208,27 +208,31 @@ export async function* bciTranscribe(
   }
 }
 
+// The addon reports no `stats` for a stream, so the return carries only the
+// locally measured execution time — which the profiling layer needs either way.
+type BciStreamReturn = StreamResult
+
 export function bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata: true,
   opts?: BciStreamOpts,
   requestId?: string
-): AsyncGenerator<TranscribeSegment, void, void>
+): AsyncGenerator<TranscribeSegment, BciStreamReturn, void>
 export function bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata?: boolean,
   opts?: BciStreamOpts,
   requestId?: string
-): AsyncGenerator<string, void, void>
+): AsyncGenerator<string, BciStreamReturn, void>
 export async function* bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata?: boolean,
   opts?: BciStreamOpts,
   requestId?: string
-): AsyncGenerator<string | TranscribeSegment, void, void> {
+): AsyncGenerator<string | TranscribeSegment, BciStreamReturn, void> {
   // Same `kind: "transcribe"` as the unary BCI variant — the registry
   // doesn't distinguish streaming vs non-streaming variants of the same
   // operation, so `cancel({ modelId, kind: "transcribe" })` cancels
@@ -269,6 +273,7 @@ export async function* bciTranscribeStream(
     ...(opts?.emit !== undefined && { emit: opts.emit })
   }
 
+  const modelStart = nowMs()
   const response = await model.transcribeStream(neuralStream, streamOpts)
 
   for await (const output of response.iterate()) {
@@ -290,4 +295,6 @@ export async function* bciTranscribeStream(
       yield text
     }
   }
+
+  return buildStreamResult(nowMs() - modelStart)
 }
