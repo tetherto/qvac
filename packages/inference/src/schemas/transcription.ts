@@ -65,7 +65,8 @@ export const transcribeStatsSchema = z.object({
     .optional()
     .describe('Native `process()` invocations made across the run.'),
 
-  // Whisper-only stage timings.
+  // whisper.cpp stage timings: the whisper engine and the BCI engine, which
+  // runs on the same decoder.
   whisperSampleMs: z.number().optional().describe('Whisper: sampling time, in ms.'),
   whisperBatchdMs: z.number().optional().describe('Whisper: batched-decode time, in ms.'),
   whisperPromptMs: z.number().optional().describe('Whisper: prompt-processing time, in ms.'),
