@@ -243,6 +243,8 @@ public:
 
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
+  [[nodiscard]] bool onFailure(
+      const std::function<void(const std::string&)>& outputCallback) override;
 
   /// Disk prompt-cache for a multimodal batch slot, embedding the versioned
   /// token/media ledger in the sequence-state file.
@@ -359,6 +361,13 @@ private:
   // `GenerateResponseResult::rollbackOk`.
   [[nodiscard]] bool cancelGenerationCleanup(
       const std::function<void(const std::string&)>& outputCallback);
+  // User cancel entry point: after prefill completed the request keeps its
+  // state (`commitCancelledRequest`), during prefill it rolls back
+  // (`cancelGenerationCleanup`).
+  [[nodiscard]] bool handleUserCancel(
+      const std::function<void(const std::string&)>& outputCallback);
+  [[nodiscard]] bool commitCancelledRequest(
+      const std::function<void(const std::string&)>& outputCallback);
 
   common_init_result_ptr llamaInit_;
   mtmd::context_ptr ctxVision_;
@@ -438,6 +447,10 @@ private:
   bool cacheReconciliationEnabled_ = false;
   bool cacheRequestActive_ = false;
   bool cacheRequestRolledBack_ = false;
+  // Request phase, reset at request entry and set by `onPrefillComplete`.
+  // A cancel before it rolls the request back to the pre-request state; a
+  // cancel after it keeps the prompt and streamed tokens, cached or not.
+  bool prefillComplete_ = false;
   qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;

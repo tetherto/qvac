@@ -182,6 +182,8 @@ public:
 
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
+  [[nodiscard]] bool onFailure(
+      const std::function<void(const std::string&)>& outputCallback) override;
 
   [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
   void saveCache(const std::string& cacheKey) const override;
@@ -189,12 +191,6 @@ public:
   void snapshotPreRequestCursor() override;
   void snapshotPreRequestRollbackAnchor() override;
 
-  void seedPrefillEntryRollbackForTesting(llama_pos nPast) noexcept {
-    requestRollback_.seedForTesting(nPast);
-  }
-  void forcePrefillEntryRestoreFailureForTesting(bool value) noexcept {
-    forcePrefillEntryRestoreFailureForTesting_ = value;
-  }
   /// Replaces the next token this context samples *while the reasoning block
   /// is open*, before the sampler accepts it. Two reasons for that shape:
   /// the EOS-inside-reasoning recovery only triggers on a genuinely sampled
@@ -282,6 +278,10 @@ private:
   // prompt is reconciled against the cache ledger.
   [[nodiscard]] bool rollbackCurrentRequest(
       const std::function<void(const std::string&)>& outputCallback);
+  // Cancel after prefill completed: keep the prompt and streamed tokens
+  // resident (and commit the cache transaction when one is active).
+  [[nodiscard]] bool commitCancelledRequest(
+      const std::function<void(const std::string&)>& outputCallback);
   // `fallbackTags` is the model-family reasoning channel, resolved by the
   // caller so `configureTemplateDerivedSampling` can build the
   // reasoning-budget markers from the same value.
@@ -331,7 +331,6 @@ private:
 
   llama_pos nPast_ = 0;
   llama_pos perSeqCtxCeiling_ = -1;
-  bool forcePrefillEntryRestoreFailureForTesting_ = false;
   llama_token forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
   bool forceReasoningRecoveryDecodeFailureForTesting_ = false;
   // Snapshot of `nPast_` at `evalMessageWithTools` entry. Restored by
@@ -385,6 +384,10 @@ private:
   bool cacheReconciliationEnabled_ = false;
   bool cacheRequestActive_ = false;
   bool cacheRequestRolledBack_ = false;
+  // Request phase, reset at `preparePrefill` and set by `onPrefillComplete`.
+  // A cancel before it rolls the request back to the pre-request state; a
+  // cancel after it keeps the prompt and streamed tokens, cached or not.
+  bool prefillComplete_ = false;
   qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;

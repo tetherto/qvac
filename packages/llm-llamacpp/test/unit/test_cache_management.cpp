@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/SequenceDriver.hpp"
 #include "test_common.hpp"
 #include "test_prompt_helpers.hpp"
 
@@ -162,7 +163,7 @@ TEST_F(CacheManagementTest, EnableCacheWithFilename) {
         R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])",
         session1_path,
         true);
-    EXPECT_TRUE(output.empty());
+    EXPECT_FALSE(output.empty());
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -184,7 +185,7 @@ TEST_F(CacheManagementTest, SessionPersistence) {
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}])",
         session1_path,
         true);
-    EXPECT_TRUE(output1.empty());
+    EXPECT_FALSE(output1.empty());
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
@@ -195,10 +196,59 @@ TEST_F(CacheManagementTest, SessionPersistence) {
         R"([{"role": "user", "content": "What is bitcoin? Answer shortly."}, {"role": "assistant", "content": "Bitcoin is a decentralized digital currency."}, {"role": "user", "content": "What did I ask you before? Answer shortly."}])",
         session1_path,
         true);
-    EXPECT_TRUE(output2.empty());
+    EXPECT_FALSE(output2.empty());
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
+}
+
+// A generation that stops at `n_predict` is a completed request from the
+// caller's side: the answer was streamed. Its tokens therefore stay resident
+// and the transaction commits, so the next full-history turn reuses them
+// instead of re-prefilling the answer the model just produced.
+TEST_F(CacheManagementTest, PredictionLimitGenerationCommitsCache) {
+  if (!hasValidModel()) {
+    FAIL() << "Test model not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const auto readBytes = [](const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::string(
+        (std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  };
+  const std::string history =
+      R"([{"role": "user", "content": "Explain how bitcoin mining works in detail."}])";
+
+  // Seed with a prefill-only turn so the pre-request cursor is known.
+  LlamaModel::Prompt seed;
+  seed.input = history;
+  seed.prefill = true;
+  seed.cacheKey = session1_path;
+  seed.saveCacheToDisk = true;
+  ASSERT_TRUE(model->processPrompt(seed).empty());
+  ASSERT_TRUE(fs::exists(session1_path));
+  const double seededTokens =
+      getStatValue(model->runtimeStats(), "CacheTokens");
+  ASSERT_GT(seededTokens, 0.0);
+  const std::string seededBytes = readBytes(session1_path);
+
+  // Fixture n_predict is 10, so this generation stops at the prediction
+  // limit long before the model finishes its answer.
+  const std::string output =
+      processPromptWithCacheOptions(model, history, session1_path, true);
+  EXPECT_FALSE(output.empty());
+  EXPECT_EQ(
+      getStatValue(model->runtimeStats(), "stopReason"),
+      static_cast<double>(GenerationStopReason::PredictionLimit));
+  EXPECT_GT(getStatValue(model->runtimeStats(), "CacheTokens"), seededTokens)
+      << "prediction-limit generation must commit its tokens, not roll back";
+  EXPECT_NE(readBytes(session1_path), seededBytes)
+      << "the committed generation must be persisted under cacheKey";
 }
 
 TEST_F(CacheManagementTest, SwitchToSession2) {
@@ -1221,7 +1271,7 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
       R"([{"role": "user", "content": "The sky is blue. What color is the sky?"}])";
   std::string response1 =
       processPromptWithCacheOptions(model, singlePrompt, cacheFile, true);
-  ASSERT_TRUE(response1.empty());
+  ASSERT_FALSE(response1.empty());
   ASSERT_TRUE(fs::exists(cacheFile));
 
   // 2. Submit a batch prompt. The scheduler's first slot will occupy seq 0,
@@ -1247,7 +1297,8 @@ TEST_F(CacheManagementTest, StaleCacheResidencyInvalidatedByBatchSlot) {
     fs::remove(cacheFile);
   }
 
-  EXPECT_TRUE(response2.empty());
+  EXPECT_FALSE(response2.empty())
+      << "a reloaded cache must still yield a completion";
   EXPECT_GT(getStatValue(model->runtimeStats(), "CacheTokens"), 0.0)
       << "STALE CACHE RESIDENCY BUG: CacheManager believed the cache was "
          "resident in seq 0 even though the batch scheduler occupied and "

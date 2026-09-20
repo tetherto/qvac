@@ -21,6 +21,20 @@
   snapshots through the same `needsFullStateSnapshot` policy as the text
   context, so DeepSeek V4 vision models get transactional rollback and
   divergent-history checkpoints instead of an unsafe tail trim.
+- A cached generation that stops at `n_predict`, or answers with an immediate
+  EOS, now commits its cache transaction instead of rolling back. Truncated
+  turns no longer re-prefill their own output on the next turn, and their
+  `CacheTokens` and `stopReason` stats reflect what was generated.
+- Cancelling a request after prefill completed now keeps its state like a
+  prediction-limit stop: the prompt and every streamed token stay resident,
+  a cached request commits and is persisted with `saveCacheToDisk`, and the
+  next full-history turn resumes from there. A cancel during prefill still
+  rolls back to the state before the prompt was sent, as do decode errors and
+  context overflow. The rule is the same with or without `cacheKey`; without
+  one it only changes `CacheTokens`, which now reports the tokens that were
+  actually decoded instead of the pre-request cursor. On hybrid models the
+  cached cancel path reuses the transaction's own snapshot instead of taking
+  a separate prefill-entry dump on every turn.
 - Pure-attention models no longer write a full-state temp-file snapshot at the
   start of every cached request. The dump is taken only when reconciliation is
   about to discard resident state; append-only turns roll back with a tail

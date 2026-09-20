@@ -557,8 +557,10 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   // memory so a mid-prefill cancellation can roll back to the exact
   // pre-prefill cache. Pure-attention models use `removeLastNTokens`
   // (which is a no-op for recurrent memory per PR #2808), so the
-  // snapshot is skipped on that path.
-  if (needsFullStateSnapshot_) {
+  // snapshot is skipped on that path. A cached request rolls back through
+  // its own transaction snapshot (cancel during prefill, failures), so it
+  // skips this capture too.
+  if (needsFullStateSnapshot_ && !cacheRequestActive_) {
     if (!requestRollback_.capture(modelCtx_.lctx, seqId_, nPast_)) {
       // Capture failed: the cancel path will be unable to roll back the
       // recurrent half of the cache, so degrade to a warning.
@@ -573,6 +575,17 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   llama_pos tokenIndex = 0;
   while (tokenIndex < nTokens) {
     if (stopGeneration_.load()) {
+      if (cacheRequestActive_) {
+        // Cached request cancelled before it produced anything: restore the
+        // state from before the prompt was sent. `nPast_` already counts the
+        // decoded batches, so the transaction rollback trims or restores
+        // exactly what this request added.
+        stopGeneration_.store(false);
+        return {
+            .ok = false,
+            .cancelled = true,
+            .rollbackOk = rollbackCurrentRequest([](const std::string&) {})};
+      }
       // A prior chunk's llama_decode may have queued GPU work whose logits are
       // never read on the cancel path. Finish it before rolling KV back.
       llama_synchronize(modelCtx_.lctx);
@@ -583,11 +596,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
         // no-op on recurrent memory and `seq_rm` over a partial tail
         // is rejected by the recurrent module.
         const llama_pos restoredNPast = requestRollback_.nPast();
-        const bool forceRestoreFailure =
-            forcePrefillEntryRestoreFailureForTesting_;
-        forcePrefillEntryRestoreFailureForTesting_ = false;
-        if (!forceRestoreFailure &&
-            requestRollback_.restore(modelCtx_.lctx, seqId_)) {
+        if (requestRollback_.restore(modelCtx_.lctx, seqId_)) {
           nPast_ = restoredNPast;
         } else {
           // Restore underflowed: the recurrent half is in an undefined
@@ -672,6 +681,7 @@ PrefillPlan TextLlmContext::preparePrefill(
   // the "will hard-fail" preemptive warning for cache-warm requests that
   // will never enter generation.
   isPrefillOnlyRequest_ = isPrefillOnlyRequest;
+  prefillComplete_ = false;
 
   std::vector<llama_token> inputTokens;
   tokenizeChat(chatMsgs, tools, inputTokens, isCacheLoaded);
@@ -724,6 +734,7 @@ void TextLlmContext::syncPosition(llama_pos currentPos) { nPast_ = currentPos; }
 void TextLlmContext::onPrefillComplete(
     llama_pos currentPos, size_t prefillTokenCount) {
   nPast_ = currentPos;
+  prefillComplete_ = true;
   if (cacheRequestActive_) {
     residentLedger_ = pendingPromptLedger_;
     // Match llama-server's sampler initialization: after prefill, rebuild
@@ -1083,12 +1094,10 @@ bool TextLlmContext::onGenerationFinished(
     generationStopReason_ = terminalReason;
   }
   onSequenceEnd(outputCallback);
-  const bool emptyGeneration =
-      cacheRequestActive_ &&
-      residentLedger_.entries.size() == pendingPromptLedger_.entries.size();
-  if (emptyGeneration ||
-      (generationStopReason_ != GenerationStopReason::Eos &&
-       generationStopReason_ != GenerationStopReason::Antiprompt)) {
+  // An empty generation that stopped for a committing reason (immediate EOS)
+  // is a valid answer and commits like any other; only the stop reason
+  // decides.
+  if (!commitsCacheRequest(generationStopReason_)) {
     return rollbackCurrentRequest(outputCallback);
   }
   commitCacheRequest();
@@ -1104,12 +1113,45 @@ bool TextLlmContext::onGenerationFinished(
 
 bool TextLlmContext::onCancel(
     const std::function<void(const std::string&)>& outputCallback) {
+  // Once prefill completed the caller has received the prompt's answer as
+  // far as it got, so the request keeps its state (and commits its cache
+  // transaction when one is active). Cancelled during prefill it rolls back
+  // to the pre-request state like any failure. Same rule with or without
+  // `cacheKey`; without one the difference is only visible in `CacheTokens`.
+  if (prefillComplete_) {
+    return commitCancelledRequest(outputCallback);
+  }
   return rollbackCurrentRequest(outputCallback);
+}
+
+bool TextLlmContext::onFailure(
+    const std::function<void(const std::string&)>& outputCallback) {
+  return rollbackCurrentRequest(outputCallback);
+}
+
+bool TextLlmContext::commitCancelledRequest(
+    const std::function<void(const std::string&)>& outputCallback) {
+  // Cancel after prefill completed keeps what the caller already received,
+  // exactly like a prediction-limit stop: the prompt and every streamed
+  // token stay resident and the next full-history turn extends them. Finish
+  // queued backend work first so the KV the ledger describes is complete.
+  llama_synchronize(modelCtx_.lctx);
+  flushPendingUtf8ToCallback(outputCallback);
+  if (cacheRequestActive_) {
+    commitCacheRequest();
+  }
+  requestRollback_.clear();
+  // Sampler history is rebuilt from the ledger by the next request.
+  common_sampler_reset(smpl_.get());
+  return true;
 }
 
 bool TextLlmContext::rollbackCurrentRequest(
     const std::function<void(const std::string&)>& outputCallback) {
   // Rollback = "request never happened": restore the pre-request cursor.
+  // Reached for failures, context overflow and cancels during prefill; a
+  // cancel after prefill completed keeps the state instead (see
+  // `commitCancelledRequest`).
   // If cancellation lands after llama_decode() but before the next sampler
   // read, the implicit sampler-side synchronize is skipped. Finish any queued
   // backend work before mutating KV/recurrent state during rollback.

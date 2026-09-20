@@ -30,20 +30,21 @@ class ContinuousBatchSchedulerTestPeer;
 
 namespace qvac_lib_inference_addon_llama::batching {
 
-/// Fire the terminal lifecycle hook for a finished sequence. A sequence that
-/// ran generation goes through onCancel (cancel/error) or onGenerationFinished
-/// (natural stop, which flushes output and commits or rolls back the request);
-/// a prefill-only slot only flushes via onSequenceEnd. One place
-/// for the mapping every terminal path shares (normal drain, cancel-all,
-/// decode-error finalization).
+/// Fire the terminal lifecycle hook for a finished sequence. A cancelled
+/// sequence goes through onCancel (which commits a cached request that was
+/// generating and rolls back one still in prefill), a decode error through
+/// onFailure (which always rolls back), and a
+/// natural stop through onGenerationFinished (which commits or rolls back by
+/// stop reason); a prefill-only slot only flushes via onSequenceEnd. One
+/// place for the mapping every terminal path shares (normal drain,
+/// cancel-all, decode-error finalization).
 ///
 /// Returns `true` when the terminal hook left the driver in a state safe
-/// to persist via `saveCache`. Cancel/DecodeError paths forward
-/// `onCancel`'s rollback-ok signal; natural generation forwards
-/// `onGenerationFinished` so a prediction-limit rollback can also veto
+/// to persist via `saveCache`: each hook forwards its own signal, so a
+/// refused recurrent restore or a rolled-back stop reason vetoes
 /// persistence. Prefill-only paths always return `true`. Callers that
 /// persist cache MUST skip `saveCache` when this returns `false` so a
-/// failed recurrent rollback cannot leak the request into the on-disk cache.
+/// failed rollback cannot leak the request into the on-disk cache.
 [[nodiscard]] bool finalizeTerminalDriver(
     SequenceDriver& driver, StopReason reason, bool prefillOnly,
     const std::function<void(const std::string&)>& outputCallback);
@@ -580,9 +581,9 @@ private:
   void clearLocked() noexcept;
   /// Persistence policy for `cancelSlotLocked`. `Save` is the default and
   /// matches the graceful-cancel semantics that the drain path already
-  /// runs: on cancel, `onCancel` rolls the driver back to its admission
-  /// cursor and `saveCacheForSlot` persists that rolled-back state so
-  /// the caller's `cacheKey` reflects the pre-request warm baseline.
+  /// runs: on cancel during generation, `onCancel` commits the cached
+  /// request's prompt and streamed tokens and `saveCacheForSlot` persists
+  /// that committed state so the caller's `cacheKey` resumes from it.
   ///
   /// `Skip` is the error-recovery variant: after an unexpected driver
   /// throw the slot's live memory and logical accounting are already
