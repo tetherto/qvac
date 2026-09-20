@@ -741,7 +741,6 @@ void TextLlmContext::onPrefillComplete(
     // history from the complete authoritative prompt, not only the reused
     // prefix or decoded suffix.
     rebuildSamplerFromLedger(residentLedger_);
-    capturePendingCheckpoint();
     if (isPrefillOnlyRequest_) {
       commitCacheRequest();
     }
@@ -1251,7 +1250,6 @@ void TextLlmContext::restoreCacheStateTokens(
   residentLedger_ = decoded.ledger;
   nPast_ = decoded.nPast;
   cacheCheckpoints_.clear();
-  pendingCheckpoint_.reset();
 }
 
 void TextLlmContext::clearCacheReconciliationState() {
@@ -1259,7 +1257,6 @@ void TextLlmContext::clearCacheReconciliationState() {
   pendingPromptLedger_.entries.clear();
   preRequestLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();
-  pendingCheckpoint_.reset();
   cacheCheckpoints_.clear();
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = false;
@@ -1275,7 +1272,6 @@ void TextLlmContext::beginCacheRequest() {
   preRequestNPast_ = nPast_;
   preRequestLedger_ = residentLedger_;
   pendingPromptLedger_.entries.clear();
-  pendingCheckpoint_.reset();
   preRequestCacheSnapshot_.clear();
   // Pure-attention memory rolls back with a tail trim to `preRequestNPast_`,
   // so a full-state dump is only taken when reconciliation is about to
@@ -1389,22 +1385,6 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
   return std::vector<llama_token>(fullPrompt.begin() + reuse, fullPrompt.end());
 }
 
-void TextLlmContext::capturePendingCheckpoint() {
-  if (!needsFullStateSnapshot_) {
-    return;
-  }
-  CacheCheckpoint checkpoint;
-  checkpoint.ledger = residentLedger_;
-  if (!snapshotSequenceState(
-          modelCtx_.lctx, seqId_, nPast_, checkpoint.state)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToSaveSessionFile),
-        "[TextLlm] failed to capture full-state cache checkpoint");
-  }
-  pendingCheckpoint_ = std::move(checkpoint);
-}
-
 void TextLlmContext::commitCacheRequest() {
   if (!cacheRequestActive_) {
     return;
@@ -1417,11 +1397,6 @@ void TextLlmContext::commitCacheRequest() {
             .ledger = preRequestLedger_});
   } else {
     preRequestCacheSnapshot_.clear();
-  }
-  if (pendingCheckpoint_.has_value()) {
-    cache::appendProcessCheckpoint(
-        cacheCheckpoints_, std::move(*pendingCheckpoint_));
-    pendingCheckpoint_.reset();
   }
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = false;
@@ -1451,7 +1426,6 @@ bool TextLlmContext::restorePreRequestCacheState() {
   residentLedger_ = preRequestLedger_;
   nPast_ = preRequestNPast_;
   pendingPromptLedger_.entries.clear();
-  pendingCheckpoint_.reset();
   preRequestCacheSnapshot_.clear();
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = true;

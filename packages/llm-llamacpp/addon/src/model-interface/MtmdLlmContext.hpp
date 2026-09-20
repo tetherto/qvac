@@ -342,7 +342,6 @@ private:
   ledgerFromChunks(const mtmd::input_chunks& chunks) const;
   void rebuildSamplerFromLedger(
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
-  void capturePendingCheckpoint();
   void commitCacheRequest();
   bool restorePreRequestCacheState();
   void appendResidentToken(llama_token token);
@@ -457,7 +456,6 @@ private:
   ContextUsage preRequestCacheUsage_;
   qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot
       preRequestCacheSnapshot_;
-  std::optional<CacheCheckpoint> pendingCheckpoint_;
   std::deque<CacheCheckpoint> cacheCheckpoints_;
   size_t pendingReuseEntries_ = 0;
 
