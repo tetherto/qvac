@@ -45,7 +45,12 @@ target_compile_options(
     -g)
 
 # Disable POSIX regex in gtest - clang cross-compilation target doesn't find regex.h properly
-target_compile_definitions(addon-test PRIVATE GTEST_HAS_POSIX_RE=0)
+target_compile_definitions(
+  addon-test
+  PRIVATE
+    GTEST_HAS_POSIX_RE=0
+    QVAC_TRANSLATION_NMTCPP_TESTING
+)
 
 if(NOT WIN32)
   target_compile_options(
