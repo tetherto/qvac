@@ -786,10 +786,12 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
   }
   current_.pos = nPastLocal;
   refreshCurrentCacheTokensFromMemory();
+  // The single-prompt path does not go through `onPrefillComplete`, so mark
+  // the phase here: from now on a cancel keeps the request's state.
+  prefillComplete_ = true;
   if (cacheRequestActive_) {
     residentLedger_ = pendingPromptLedger_;
     rebuildSamplerFromLedger(residentLedger_);
-    capturePendingCheckpoint();
     if (prefill) {
       commitCacheRequest();
     }
@@ -1392,7 +1394,6 @@ void MtmdLlmContext::beginCacheRequest() {
   preRequestCacheUsage_ = current_;
   preRequestLedger_ = residentLedger_;
   pendingPromptLedger_.entries.clear();
-  pendingCheckpoint_.reset();
   preRequestCacheSnapshot_.clear();
   // Same policy as TextLlmContext: pure-attention memory rolls back with a
   // tail trim, so the full-state dump is deferred to `reconcilePrompt` and
@@ -1529,23 +1530,6 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
   return suffix;
 }
 
-void MtmdLlmContext::capturePendingCheckpoint() {
-  if (!needsFullStateSnapshot_) {
-    return;
-  }
-  CacheCheckpoint checkpoint;
-  checkpoint.ledger = residentLedger_;
-  checkpoint.usage = current_;
-  if (!snapshotSequenceState(
-          modelCtx_.lctx, seqId_, current_.pos, checkpoint.state)) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToSaveSessionFile),
-        "[MtmdLlm] failed to capture full-state cache checkpoint");
-  }
-  pendingCheckpoint_ = std::move(checkpoint);
-}
-
 void MtmdLlmContext::commitCacheRequest() {
   if (!cacheRequestActive_) {
     return;
@@ -1559,11 +1543,6 @@ void MtmdLlmContext::commitCacheRequest() {
             .usage = preRequestCacheUsage_});
   } else {
     preRequestCacheSnapshot_.clear();
-  }
-  if (pendingCheckpoint_.has_value()) {
-    cache::appendProcessCheckpoint(
-        cacheCheckpoints_, std::move(*pendingCheckpoint_));
-    pendingCheckpoint_.reset();
   }
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = false;
@@ -1593,7 +1572,6 @@ bool MtmdLlmContext::restorePreRequestCacheState() {
   residentLedger_ = preRequestLedger_;
   current_ = preRequestCacheUsage_;
   pendingPromptLedger_.entries.clear();
-  pendingCheckpoint_.reset();
   preRequestCacheSnapshot_.clear();
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = true;
@@ -1790,7 +1768,6 @@ void MtmdLlmContext::onPrefillComplete(
   if (cacheRequestActive_) {
     residentLedger_ = pendingPromptLedger_;
     rebuildSamplerFromLedger(residentLedger_);
-    capturePendingCheckpoint();
     if (isPrefillOnlyRequest_) {
       commitCacheRequest();
     }
@@ -1992,7 +1969,6 @@ void MtmdLlmContext::restoreCacheStateTokens(
   residentLedger_ = decoded.ledger;
   current_ = {.pos = decoded.nPast, .cacheTokens = decoded.cacheTokens};
   cacheCheckpoints_.clear();
-  pendingCheckpoint_.reset();
 }
 
 void MtmdLlmContext::clearCacheReconciliationState() {
@@ -2000,7 +1976,6 @@ void MtmdLlmContext::clearCacheReconciliationState() {
   pendingPromptLedger_.entries.clear();
   preRequestLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();
-  pendingCheckpoint_.reset();
   cacheCheckpoints_.clear();
   pendingReuseEntries_ = 0;
   cacheRequestActive_ = false;

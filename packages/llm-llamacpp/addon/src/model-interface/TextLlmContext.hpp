@@ -300,7 +300,6 @@ private:
       const std::vector<llama_token>& fullPrompt, bool isPrefillOnlyRequest);
   void rebuildSamplerFromLedger(
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
-  void capturePendingCheckpoint();
   void commitCacheRequest();
   bool restorePreRequestCacheState();
   void appendResidentToken(llama_token token);
@@ -393,7 +392,6 @@ private:
   qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
   qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot
       preRequestCacheSnapshot_;
-  std::optional<CacheCheckpoint> pendingCheckpoint_;
   std::deque<CacheCheckpoint> cacheCheckpoints_;
 
   // True when this context's model needs full-state snapshots for request

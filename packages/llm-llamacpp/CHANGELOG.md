@@ -35,6 +35,11 @@
   actually decoded instead of the pre-request cursor. On hybrid models the
   cached cancel path reuses the transaction's own snapshot instead of taking
   a separate prefill-entry dump on every turn.
+- Hybrid and recurrent models no longer capture a full-state checkpoint at
+  the end of every prefill. Divergent-history reconciliation restores the
+  pre-request checkpoint instead, so a follow-up turn re-prefills the previous
+  turn's prompt and answer; this halves the number of checkpoint files kept
+  per sequence.
 - Pure-attention models no longer write a full-state temp-file snapshot at the
   start of every cached request. The dump is taken only when reconciliation is
   about to discard resident state; append-only turns roll back with a tail
