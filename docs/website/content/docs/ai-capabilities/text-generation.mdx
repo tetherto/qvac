@@ -158,6 +158,54 @@ turn in application code:
 </Tab>
 </Tabs>
 
+### Deferred tool loading
+
+A large tool set costs prompt tokens on every conversation and makes the model's
+choice harder. Setting `deferLoading: true` on a tool keeps it registered but
+leaves its parameter schema out of the prompt: the model sees only its name and
+description, in a compact catalog carried by a built-in `tool_search` tool, and
+loads the schema when it needs it.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tools/llamacpp-deferred-tools.js title="completion-deferred-tools.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tools/llamacpp-deferred-tools.ts title="completion-deferred-tools.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+The model calls `tool_search({ query })` with a capability or an exact tool
+name; the SDK searches the registered tools outside inference and appends the
+matching definitions to the conversation as a tool result, and the model calls
+them by name on its next step.
+
+Notes:
+
+* Tools without `deferLoading` behave exactly as before.
+* `tool_search` is a reserved name and is added only when something defers.
+* `group` is the heading a tool is listed under in the catalog — a skill or an
+  MCP server name.
+* Loading a definition twice appends nothing; the search result says the tool is
+  already available.
+* `completion()` stays stateless. The loaded set is read back from the
+  conversation, so a reopened chat given the same tools and the same history has
+  the same tools loaded, and concurrent chats cannot mix.
+* `generationParams.tool_choice` cannot name a deferred tool — its schema is not
+  in the prompt, so the call cannot be constrained. Force `"tool_search"`
+  instead.
+* On the worker-orchestrated loop the SDK runs `tool_search` itself; your
+  handlers are never called for it.
+
 ### MCP
 
 You create and manage the MCP client, connect it to one or more MCP servers, and pass it to `completion()`. The following script shows how to attach an MCP client to `completion()` so the model can call a web search tool and then continue with the results:

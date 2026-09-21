@@ -122,6 +122,49 @@ curl 'http://localhost:11434/v1/models/catalog?search=qwen'
 The live remote model registry and on-disk download state are not included yet (planned
 follow-ups).
 
+## Tools: deferred loading
+
+`tools[]` entries accept `defer_loading: true` (and an optional `group`), either
+on the `function` object or on the tool entry. A deferred tool is registered but
+its parameter schema stays out of the prompt — the model sees its name and
+description in a catalog carried by a built-in `tool_search` tool, and the
+schema is loaded when the model searches for it.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<alias>",
+    "messages": [{"role": "user", "content": "open an issue about the flaky test"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "create_issue",
+        "description": "Open a new issue on a repository",
+        "parameters": {"type": "object", "properties": {"title": {"type": "string"}}},
+        "defer_loading": true,
+        "group": "github"
+      }
+    }]
+  }'
+```
+
+`tool_search` never reaches the client: the server runs it, appends the
+definitions and asks the model again, so the response only ever carries tool
+calls you can execute. Up to four searches run per request before the turn is
+answered as it stands.
+
+Two consequences worth knowing:
+
+- The search happens inside one request. The `tool` message holding the loaded
+  definitions is not part of the response, so a later request re-searches if the
+  model needs the same tool again.
+- `tool_choice` naming a deferred tool is rejected with `400`
+  `invalid_tool_choice` — its schema is not in the prompt, so the call cannot be
+  forced. Name `tool_search` instead.
+
+Tools without `defer_loading` behave exactly as before.
+
 ## `POST /v1/completions`
 
 Legacy (pre-chat) OpenAI text-completions endpoint, kept for compatibility with

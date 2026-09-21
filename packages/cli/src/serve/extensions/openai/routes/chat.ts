@@ -13,6 +13,12 @@ import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-enabled'
 import {
+  MAX_TOOL_SEARCH_ROUNDS,
+  foldToolSearch,
+  hasDeferredTools,
+  stripToolSearchCalls
+} from '@/serve/lib/tool-search'
+import {
   chatCompletionsBody,
   CHAT_UNSUPPORTED_PARAMS,
   messagesHaveToolCalls,
@@ -142,7 +148,15 @@ ends with \`data: [DONE]\\n\\n\` (OpenAI compatibility).
 \`{ type: 'function', function: { name } }\` to force one tool. \`required\` and
 a named tool constrain generation with the chat template's tool grammar. Both
 need a matching entry in \`tools\`; anything else — including a bare tool name
-in place of the object form — is rejected with \`invalid_tool_choice\`.
+in place of the object form — is rejected with \`invalid_tool_choice\`. A tool
+that sets \`defer_loading\` cannot be named: its schema is not in the prompt, so
+there is nothing to constrain. Name \`tool_search\` instead.
+
+**Deferred tools**: a \`tools[]\` entry may set \`defer_loading: true\` (and an
+optional \`group\`), keeping its parameter schema out of the prompt until the
+model asks for it. The model sees a compact catalog carried by a built-in
+\`tool_search\` tool; the server runs that search itself and asks the model
+again, so the response only carries tool calls the client can execute.
 
 **Unparseable tool calls**: a tool call the model emits but that fails to parse
 or validate is dropped, so the response carries \`finish_reason: "stop"\` and no
@@ -213,24 +227,43 @@ async function runBlocking(
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
     const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
-    const result = completionFn({
-      modelId: p.sdkModelId,
-      history,
-      stream: false,
-      captureThinking: true,
-      // Auto-cache keys on the conversation prefix so a follow-up turn only
-      // prefills the new tail instead of the whole history. The SDK normalizes
-      // out think blocks before hashing, so a client that round-trips plain
-      // assistant text still hits the cache.
-      kvCache: true,
-      ...(p.tools !== undefined ? { tools: p.tools } : {}),
-      ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
-      ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
-    })
-    req.bindCancel(result.requestId)
+
+    // A `tool_search` call is answered here and the model asked again, so the
+    // response only ever carries tool calls the client can run. Requests that
+    // declare no deferred tools leave the loop on the first pass.
+    let turnHistory = history
+    let drained
+    for (let round = 0; ; round++) {
+      const result = completionFn({
+        modelId: p.sdkModelId,
+        history: turnHistory,
+        stream: false,
+        captureThinking: true,
+        // Auto-cache keys on the conversation prefix so a follow-up turn only
+        // prefills the new tail instead of the whole history. The SDK normalizes
+        // out think blocks before hashing, so a client that round-trips plain
+        // assistant text still hits the cache.
+        kvCache: true,
+        ...(p.tools !== undefined ? { tools: p.tools } : {}),
+        ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
+        ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
+      })
+      req.bindCancel(result.requestId)
+      drained = await drainCompletion(result)
+
+      if (round >= MAX_TOOL_SEARCH_ROUNDS) break
+      const extended = foldToolSearch(
+        p.tools,
+        turnHistory,
+        drained.toolCalls,
+        drained.rawFullText ?? drained.text
+      )
+      if (!extended) break
+      turnHistory = extended
+    }
 
     const { text, thinking, toolCalls, toolErrors, stats, completionTokens, finishReason } =
-      await drainCompletion(result)
+      stripToolSearchCalls(drained)
 
     req.server.qvac.logger.info(
       `  completion done tokens=${completionTokens} finish=${finishReason}` +
@@ -265,18 +298,6 @@ async function runStreaming(
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
     const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
-    const result = completionFn({
-      modelId: p.sdkModelId,
-      history,
-      stream: true,
-      captureThinking: true,
-      // See runBlocking: auto-cache the conversation prefix for cross-turn reuse.
-      kvCache: true,
-      ...(p.tools !== undefined ? { tools: p.tools } : {}),
-      ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
-      ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
-    })
-    req.bindCancel(result.requestId)
 
     initSSE(reply)
     const raw = reply.raw
@@ -295,11 +316,54 @@ async function runStreaming(
 
     sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
 
-    const { toolCalls, toolErrors, stats, completionTokens, finishReason } = await drainCompletion(
-      result,
-      (token) => sendSSE(raw, chunk({ content: token }, null)),
-      (token) => sendSSE(raw, chunk({ reasoning_content: token }, null))
-    )
+    // Whether a turn was a `tool_search` turn is only known once it ends, and
+    // its tool-call markup must not reach the client. So when the request
+    // defers tools the turn is buffered and flushed once it turns out to be
+    // the answer; a request with no deferred tools streams live as before.
+    const defersTools = hasDeferredTools(p.tools)
+    let turnHistory = history
+    let drained
+    for (let round = 0; ; round++) {
+      const buffered: ChatCompletionDelta[] = []
+      const emit = (delta: ChatCompletionDelta) => {
+        if (defersTools) buffered.push(delta)
+        else sendSSE(raw, chunk(delta, null))
+      }
+
+      const result = completionFn({
+        modelId: p.sdkModelId,
+        history: turnHistory,
+        stream: true,
+        captureThinking: true,
+        // See runBlocking: auto-cache the conversation prefix for cross-turn reuse.
+        kvCache: true,
+        ...(p.tools !== undefined ? { tools: p.tools } : {}),
+        ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
+        ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
+      })
+      req.bindCancel(result.requestId)
+
+      drained = await drainCompletion(
+        result,
+        (token) => emit({ content: token }),
+        (token) => emit({ reasoning_content: token })
+      )
+
+      const extended =
+        round >= MAX_TOOL_SEARCH_ROUNDS
+          ? null
+          : foldToolSearch(p.tools, turnHistory, drained.toolCalls, drained.rawFullText ?? drained.text)
+      if (!extended) {
+        for (const delta of buffered) sendSSE(raw, chunk(delta, null))
+        break
+      }
+      // A search turn produced no answer: drop what it emitted and ask again
+      // with the definitions it loaded.
+      turnHistory = extended
+    }
+
+    const { toolCalls, toolErrors, stats, completionTokens, finishReason } =
+      stripToolSearchCalls(drained)
     const hasToolCalls = toolCalls.length > 0
 
     req.server.qvac.logger.info(

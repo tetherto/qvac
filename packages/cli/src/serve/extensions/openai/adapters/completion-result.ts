@@ -31,6 +31,12 @@ export interface DrainedCompletion {
   completionTokens: number
   /** OpenAI `finish_reason`: `tool_calls` wins, then `length` on truncation, else `stop`. */
   finishReason: OpenAiFinishReason
+  /**
+   * The turn's output exactly as the model emitted it, tool-call markup
+   * included, when the addon reported it. Replaying a tool-call turn needs
+   * this rather than `text`: the model has to see its own call syntax.
+   */
+  rawFullText: string | undefined
 }
 
 /**
@@ -56,6 +62,7 @@ export async function drainCompletion(
   const toolErrors: ToolCallError[] = []
   let stats: CompletionStats | undefined
   let stopReason: string | undefined
+  let rawFullText: string | undefined
 
   for await (const event of result.events) {
     if (event.type === 'contentDelta') {
@@ -71,6 +78,9 @@ export async function drainCompletion(
     } else if (event.type === 'completionStats') {
       stats = event.stats
     } else if (event.type === 'completionDone') {
+      if ('raw' in event && event.raw) {
+        rawFullText = event.raw.fullText
+      }
       if (event.stopReason === 'error') {
         throw new HttpError(502, 'inference_failed', 'Inference failed mid-stream.')
       }
@@ -96,7 +106,8 @@ export async function drainCompletion(
     stats,
     stopReason,
     completionTokens,
-    finishReason
+    finishReason,
+    rawFullText
   }
 }
 

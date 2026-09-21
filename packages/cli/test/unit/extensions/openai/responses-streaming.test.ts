@@ -127,7 +127,7 @@ describe('writeStreamingResponse', () => {
       stats: { generatedTokens: 5, emittedTokens: 2 }
     })
 
-    const completed = await writeStreamingResponse(holder.res, p, result)
+    const completed = await writeStreamingResponse(holder.res, p, () => result)
     const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
 
     const deltas = events.filter((e) => e['type'] === 'response.output_text.delta')
@@ -158,7 +158,7 @@ describe('writeStreamingResponse', () => {
       stats: { generatedTokens: 3 }
     })
 
-    const completed = await writeStreamingResponse(holder.res, p, result)
+    const completed = await writeStreamingResponse(holder.res, p, () => result)
     const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
 
     const argDeltas = events.filter((e) => e['type'] === 'response.function_call_arguments.delta')
@@ -195,7 +195,7 @@ describe('writeStreamingResponse', () => {
       stopReason: 'length'
     })
 
-    const completed = await writeStreamingResponse(holder.res, p, result)
+    const completed = await writeStreamingResponse(holder.res, p, () => result)
     const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
 
     assert.equal(completed['status'], 'incomplete')

@@ -29,7 +29,8 @@ import { RESPONSES_VOLATILE_STUB } from '@/serve/extensions/openai/adapters/resp
 import {
   writeBlockingResponse,
   writeStreamingResponse,
-  type ResponsesHandlerParams
+  type ResponsesHandlerParams,
+  type RunTurn
 } from '@/serve/extensions/openai/adapters/response-writers'
 import { openaiState } from '@/serve/extensions/openai/state'
 
@@ -223,34 +224,33 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
 
+      // One turn per call: the writers re-run it with the search results
+      // appended when the model asks for `tool_search`.
+      const runTurn = (stream: boolean): RunTurn => {
+        return (history) => {
+          const result = completionFn({
+            modelId: params.sdkModelId,
+            history,
+            stream,
+            ...(params.tools !== undefined ? { tools: params.tools } : {}),
+            ...(params.generationParams !== undefined
+              ? { generationParams: params.generationParams }
+              : {}),
+            ...(params.responseFormat !== undefined
+              ? { responseFormat: params.responseFormat }
+              : {})
+          })
+          req.bindCancel(result.requestId)
+          return result
+        }
+      }
+
       if (streaming) {
-        const result = completionFn({
-          modelId: params.sdkModelId,
-          history: params.history,
-          stream: true,
-          ...(params.tools !== undefined ? { tools: params.tools } : {}),
-          ...(params.generationParams !== undefined
-            ? { generationParams: params.generationParams }
-            : {}),
-          ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {})
-        })
-        req.bindCancel(result.requestId)
         initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
-        await writeStreamingResponse(reply.raw, writerParams, result)
+        await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
       } else {
-        const result = completionFn({
-          modelId: params.sdkModelId,
-          history: params.history,
-          stream: false,
-          ...(params.tools !== undefined ? { tools: params.tools } : {}),
-          ...(params.generationParams !== undefined
-            ? { generationParams: params.generationParams }
-            : {}),
-          ...(params.responseFormat !== undefined ? { responseFormat: params.responseFormat } : {})
-        })
-        req.bindCancel(result.requestId)
         reply.hijack()
-        await writeBlockingResponse(reply.raw, writerParams, result)
+        await writeBlockingResponse(reply.raw, writerParams, runTurn(false))
       }
     }
   )

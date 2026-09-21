@@ -28,6 +28,7 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
 import type { DisposableScope } from '@/runtime/disposable-scope'
 import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integration'
+import { resolveDeferredTools } from '@/utils/tools/defer'
 import { parseToolCalls } from '@/utils/tools/index'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import { toolChoiceDemandsCall } from '@/schemas/completion-stream'
@@ -414,7 +415,14 @@ export async function* completion(
   const modelConfig = getModelConfig(modelId)
   const history = seedConfiguredSystemPrompt(requestHistory, modelConfig)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
-  const toolsActive = !!tools?.length && toolsEnabled
+  // With deferred tools the prompt and the parser see different lists: the
+  // prompt carries the always-loaded ones plus `tool_search` and its catalog,
+  // while the parser also accepts whatever earlier searches appended to the
+  // history. `null` when nothing defers, which leaves the existing path alone.
+  const deferred = resolveDeferredTools(tools, history)
+  const toolsToRender = deferred?.toolsToRender ?? tools
+  const callableTools = deferred?.callableTools ?? tools
+  const toolsActive = !!toolsToRender?.length && toolsEnabled
   const dialect =
     tools && tools.length > 0 ? (params.toolDialect ?? detectToolDialect(modelId)) : undefined
 
@@ -472,8 +480,8 @@ export async function* completion(
   if (!kvCache) {
     // KV-cache disabled — straight passthrough, no session involvement.
     let historyWithTools: Array<HistoryMsg | Tool> = history
-    if (toolsActive && tools) {
-      historyWithTools = prependToolsToHistory(history, tools)
+    if (toolsActive && toolsToRender) {
+      historyWithTools = prependToolsToHistory(history, toolsToRender)
     }
 
     const transformedHistory = transformMessages(historyWithTools)
@@ -482,7 +490,7 @@ export async function* completion(
     return yield* processModelResponse(
       model,
       transformedHistory,
-      tools,
+      callableTools,
       mergedGenerationParams,
       undefined,
       dialect,
@@ -503,7 +511,10 @@ export async function* completion(
   // The tool block is baked into the cache on the turn that first sends it and
   // never trimmed, so a late or changed tool set has to land on a fresh cache
   // rather than a warm prefix holding the old block.
-  const configHash = generateConfigHash(systemPromptFromHistory, toolsActive ? tools : undefined)
+  const configHash = generateConfigHash(
+    systemPromptFromHistory,
+    toolsActive ? toolsToRender : undefined
+  )
 
   let turn: TurnHandle
   if (typeof kvCache === 'string') {
@@ -543,7 +554,7 @@ export async function* completion(
       session,
       turn,
       history,
-      toolsActive ? tools : undefined,
+      toolsActive ? toolsToRender : undefined,
       mergedGenerationParams?.tool_choice
     )
   } catch (error) {
@@ -561,7 +572,7 @@ export async function* completion(
     result = yield* processModelResponse(
       model,
       messagesToSend,
-      tools,
+      callableTools,
       mergedGenerationParams,
       { cacheKey: turn.cachePath, saveCacheToDisk: true },
       dialect,

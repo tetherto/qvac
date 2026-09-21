@@ -224,3 +224,52 @@ test('ToolResultReader: close() returns the upstream and fails a pending waiter'
   t.ok(returned, 'close() returned the upstream iterator')
   reader.close() // idempotent -- second call is a no-op
 })
+
+test('orchestrateCompletion: runs tool_search itself and never asks the client', async (t) => {
+  const deferredTool = {
+    type: 'function' as const,
+    name: 'create_issue',
+    description: 'Open a new issue on a repository',
+    deferLoading: true,
+    parameters: {
+      type: 'object' as const,
+      properties: { title: { type: 'string' as const } },
+      required: ['title']
+    }
+  }
+
+  let turn = 0
+  const seenHistories: CompletionStreamRequest['history'][] = []
+  async function* runTurn(request: CompletionStreamRequest) {
+    seenHistories.push(request.history)
+    turn++
+    if (turn === 1) yield toolTurn('call-1', 'tool_search', { query: 'create_issue' })
+    else if (turn === 2) yield toolTurn('call-2', 'create_issue', { title: 'bug' })
+    else yield contentTurn('Opened it.')
+  }
+
+  const frames = await collect(
+    orchestrateCompletion(
+      baseRequest({ tools: [deferredTool] }),
+      runTurn,
+      stubReader({ 'call-2': { url: 'https://example.invalid/1' } })
+    )
+  )
+
+  const callbacks = frames.filter((frame) => frame.toolCallback)
+  t.is(callbacks.length, 1, 'only the client-runnable tool is delegated')
+  t.is(callbacks[0]?.toolCallback?.name, 'create_issue')
+
+  const searchResult = seenHistories[1]?.at(-1)
+  t.is(searchResult?.role, 'tool', 'the search result was appended as a tool message')
+  t.ok(
+    searchResult?.content.includes('"create_issue"'),
+    'the definition reached the next turn through the history'
+  )
+  t.ok(
+    frames
+      .flatMap((frame) => frame.events ?? [])
+      .some((event) => event.type === 'toolCall' && event.call.name === 'tool_search'),
+    'the client still sees that a search happened'
+  )
+})

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { toolSchema } from '@/schemas/tools'
+import { TOOL_SEARCH_NAME } from '@/utils/tools/defer'
 import { completionEventSchema } from '@/schemas/completion-event'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 
@@ -96,9 +97,11 @@ export function toolChoiceDemandsCall(toolChoice: string | undefined): boolean {
   return toolChoice !== undefined && toolChoice !== 'auto' && toolChoice !== 'none'
 }
 
+type ToolChoiceTool = { type: 'function'; name: string; deferLoading?: boolean | undefined }
+
 export function refineToolChoiceMatchesTools(
   data: {
-    tools?: { type: 'function'; name: string }[] | undefined
+    tools?: ToolChoiceTool[] | undefined
     generationParams?: { tool_choice?: string | undefined } | undefined
   },
   ctx: z.RefinementCtx
@@ -114,11 +117,45 @@ export function refineToolChoiceMatchesTools(
     }
     return
   }
-  if (!data.tools?.some((tool) => tool.name === toolChoice)) {
+  // `tool_search` is synthesised rather than declared, so naming it is only
+  // valid when something actually defers.
+  if (toolChoice === TOOL_SEARCH_NAME && data.tools?.some((tool) => tool.deferLoading === true)) {
+    return
+  }
+  const named = data.tools?.find((tool) => tool.name === toolChoice)
+  if (!named) {
     ctx.addIssue({
       code: 'custom',
       message: `generationParams.tool_choice names "${toolChoice}", which is not one of the declared tools.`,
       path: ['generationParams', 'tool_choice']
+    })
+    return
+  }
+  // A deferred tool has no parameter schema in the prompt, so the addon has
+  // nothing to build a grammar from and could not honour the demand.
+  if (named.deferLoading === true) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `generationParams.tool_choice names "${toolChoice}", which sets deferLoading. Force "${TOOL_SEARCH_NAME}" instead, or drop deferLoading from that tool.`,
+      path: ['generationParams', 'tool_choice']
+    })
+  }
+}
+
+/**
+ * `tool_search` is built in and always callable when anything defers, so a
+ * caller-declared tool of that name would be shadowed without warning.
+ */
+export function refineReservedToolNames(
+  data: { tools?: { name: string }[] | undefined },
+  ctx: z.RefinementCtx
+): void {
+  const index = data.tools?.findIndex((tool) => tool.name === TOOL_SEARCH_NAME) ?? -1
+  if (index >= 0) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `"${TOOL_SEARCH_NAME}" is reserved for the built-in deferred-tool search and cannot be declared.`,
+      path: ['tools', index, 'name']
     })
   }
 }
@@ -249,6 +286,7 @@ function refineNoToolsWithStructuredOutput(
 export const completionClientParamsSchema = completionClientParamsBaseSchema
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
+  .superRefine(refineReservedToolNames)
 
 export const completionStreamRequestSchema = completionClientParamsBaseSchema
   .extend({
@@ -256,6 +294,7 @@ export const completionStreamRequestSchema = completionClientParamsBaseSchema
   })
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
+  .superRefine(refineReservedToolNames)
 
 export const completionStreamResponseSchema = z
   .object({
@@ -287,6 +326,7 @@ export const completionOrchestrateRequestSchema = completionClientParamsBaseSche
   })
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
+  .superRefine(refineReservedToolNames)
 
 /**
  * Downstream frame of the orchestrated completion duplex stream. Exactly one
