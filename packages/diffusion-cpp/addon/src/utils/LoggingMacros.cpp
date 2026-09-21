@@ -14,9 +14,9 @@ namespace logging {
 std::atomic<Priority> g_verbosityLevel{Priority::ERROR};
 
 namespace {
-std::mutex verbosityMutex;
-Priority baseVerbosity = Priority::ERROR;
-std::vector<std::pair<const ScopedVerbosity*, Priority>> overrides;
+std::mutex g_verbosityMutex;
+Priority g_baseVerbosity = Priority::ERROR;
+std::vector<std::pair<const ScopedVerbosity*, Priority>> g_overrides;
 
 Priority priorityFor(int level) {
   switch (level) {
@@ -35,25 +35,25 @@ Priority priorityFor(int level) {
 ScopedVerbosity::ScopedVerbosity(std::optional<int> level) {
   if (!level.has_value())
     return;
-  const std::lock_guard<std::mutex> lock(verbosityMutex);
-  if (overrides.empty()) {
-    baseVerbosity = g_verbosityLevel.load(std::memory_order_relaxed);
+  const std::lock_guard<std::mutex> lock(g_verbosityMutex);
+  if (g_overrides.empty()) {
+    g_baseVerbosity = g_verbosityLevel.load(std::memory_order_relaxed);
   }
-  overrides.emplace_back(this, priorityFor(*level));
-  g_verbosityLevel.store(overrides.back().second, std::memory_order_relaxed);
+  g_overrides.emplace_back(this, priorityFor(*level));
+  g_verbosityLevel.store(g_overrides.back().second, std::memory_order_relaxed);
 }
 
 ScopedVerbosity::~ScopedVerbosity() {
-  const std::lock_guard<std::mutex> lock(verbosityMutex);
+  const std::lock_guard<std::mutex> lock(g_verbosityMutex);
   const auto it = std::find_if(
-      overrides.begin(), overrides.end(), [this](const auto& entry) {
+      g_overrides.begin(), g_overrides.end(), [this](const auto& entry) {
         return entry.first == this;
       });
-  if (it == overrides.end())
+  if (it == g_overrides.end())
     return;
-  overrides.erase(it);
+  g_overrides.erase(it);
   g_verbosityLevel.store(
-      overrides.empty() ? baseVerbosity : overrides.back().second,
+      g_overrides.empty() ? g_baseVerbosity : g_overrides.back().second,
       std::memory_order_relaxed);
 }
 
@@ -69,10 +69,10 @@ void setVerbosityLevel(
   } catch (...) {
   }
 
-  const std::lock_guard<std::mutex> lock(verbosityMutex);
+  const std::lock_guard<std::mutex> lock(g_verbosityMutex);
   // A later explicit global setting supersedes earlier session overrides.
-  overrides.clear();
-  baseVerbosity = priority;
+  g_overrides.clear();
+  g_baseVerbosity = priority;
   g_verbosityLevel.store(priority, std::memory_order_relaxed);
 
   configMap.erase(it);
