@@ -16,13 +16,13 @@ using namespace qvac_lib_inference_addon_llama::utils;
 // `gemma4.test.js` integration suites — those exercise the snapshot +
 // restore + replay path against actual hybrid / pure-attention models.
 //
-// The snapshot is now disk-backed: each capture writes the full per-
-// sequence state to a temp file via `llama_state_seq_save_file`. The
-// tests below cover the ownership / RAII contract that surrounds that
-// file (clear, destructor, move) so we never leak a temp file or
-// double-delete one. The test seam (`seedForTesting`) hands the
-// snapshot a sentinel path so we can exercise the lifecycle without a
-// real `llama_context`.
+// The snapshot has two backends: a temp file written via
+// `llama_state_seq_save_file`, or a host buffer from
+// `llama_state_seq_get_data`. The tests below cover the ownership / RAII
+// contract around both (clear, destructor, move) so we never leak a temp
+// file or double-delete one. The test seam (`seedForTesting`) hands the
+// snapshot a sentinel path so we can exercise the lifecycle without a real
+// `llama_context`; `adoptBuffer` does the same for the memory backend.
 
 namespace fs = std::filesystem;
 
@@ -209,4 +209,76 @@ TEST(
   // the documented contract — programming errors are surfaced.
   SequenceStateSnapshot snap;
   EXPECT_FALSE(restoreSequenceState(/*lctx=*/nullptr, /*seqId=*/0, snap));
+}
+
+TEST(SequenceStateSnapshotTest, AdoptBufferOwnsPayloadInMemory) {
+  SequenceStateSnapshot snap;
+  snap.adoptBuffer(std::vector<uint8_t>{1, 2, 3, 4}, /*nPastAt=*/9);
+  EXPECT_FALSE(snap.empty());
+  EXPECT_TRUE(snap.hasBuffer());
+  EXPECT_TRUE(snap.hasPayload());
+  EXPECT_FALSE(snap.hasFile()) << "a memory-backed snapshot owns no file";
+  EXPECT_EQ(snap.bytes(), 4u);
+  EXPECT_EQ(snap.nPast, 9);
+
+  snap.clear();
+  EXPECT_TRUE(snap.empty());
+  EXPECT_FALSE(snap.hasBuffer());
+  EXPECT_EQ(snap.bytes(), 0u);
+}
+
+TEST(SequenceStateSnapshotTest, MoveTransfersBufferOwnership) {
+  SequenceStateSnapshot src;
+  src.adoptBuffer(std::vector<uint8_t>(64, 7), /*nPastAt=*/3);
+
+  SequenceStateSnapshot dst(std::move(src));
+  EXPECT_TRUE(src.empty());
+  EXPECT_FALSE(src.hasBuffer());
+  EXPECT_EQ(src.bytes(), 0u);
+  EXPECT_TRUE(dst.hasBuffer());
+  EXPECT_EQ(dst.bytes(), 64u);
+  EXPECT_EQ(dst.nPast, 3);
+
+  // Move-assigning a file-backed snapshot over it drops the buffer and
+  // takes the file, and vice versa: exactly one payload is ever owned.
+  const fs::path tmp = makeTempFile("move_over_buffer");
+  SequenceStateSnapshot fileBacked;
+  fileBacked.seedForTesting(tmp.string(), /*nPastAt=*/1);
+  dst = std::move(fileBacked);
+  EXPECT_FALSE(dst.hasBuffer());
+  EXPECT_TRUE(dst.hasFile());
+  dst.clear();
+  EXPECT_FALSE(fs::exists(tmp));
+}
+
+TEST(SequenceStateSnapshotTest, AdoptFileRecordsPayloadBytes) {
+  const fs::path tmp = makeTempFile("adopt_bytes");
+  SequenceStateSnapshot snap;
+  snap.adoptFile(tmp.string(), /*nPastAt=*/2, /*bytes=*/4096);
+  EXPECT_TRUE(snap.hasFile());
+  EXPECT_FALSE(snap.hasBuffer());
+  EXPECT_EQ(snap.bytes(), 4096u);
+  snap.clear();
+  EXPECT_FALSE(fs::exists(tmp));
+}
+
+TEST(SequenceStateSnapshotTest, MemorySnapshotOnNullCtxFails) {
+  SequenceStateSnapshot snap;
+  snap.adoptBuffer(std::vector<uint8_t>{1}, /*nPastAt=*/1);
+  EXPECT_FALSE(snapshotSequenceState(
+      /*lctx=*/nullptr,
+      /*seqId=*/0,
+      /*nPastAt=*/12,
+      snap,
+      SnapshotStorage::Memory));
+  EXPECT_TRUE(snap.empty());
+  EXPECT_FALSE(snap.hasBuffer())
+      << "a failed capture must drop the old payload";
+}
+
+TEST(SequenceStateSnapshotTest, EstimateOnNullCtxIsZero) {
+  EXPECT_EQ(
+      estimateMaxSequenceStateBytes(
+          /*lctx=*/nullptr, /*vocab=*/nullptr, /*perSeqTokens=*/4096),
+      0u);
 }

@@ -6,6 +6,7 @@
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include <process.h>
@@ -14,6 +15,8 @@
 #endif
 
 #include <llama.h>
+
+#include "common/common.h"
 
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
@@ -75,8 +78,11 @@ SequenceStateSnapshot::~SequenceStateSnapshot() { removeFileQuiet(filePath_); }
 SequenceStateSnapshot::SequenceStateSnapshot(
     SequenceStateSnapshot&& other) noexcept
     : nPast(other.nPast), filePath_(std::move(other.filePath_)),
+      buffer_(std::move(other.buffer_)), bytes_(other.bytes_),
       captured_(other.captured_) {
   other.filePath_.clear();
+  other.buffer_.clear();
+  other.bytes_ = 0;
   other.nPast = 0;
   other.captured_ = false;
 }
@@ -86,9 +92,13 @@ SequenceStateSnapshot::operator=(SequenceStateSnapshot&& other) noexcept {
   if (this != &other) {
     removeFileQuiet(filePath_);
     filePath_ = std::move(other.filePath_);
+    buffer_ = std::move(other.buffer_);
+    bytes_ = other.bytes_;
     nPast = other.nPast;
     captured_ = other.captured_;
     other.filePath_.clear();
+    other.buffer_.clear();
+    other.bytes_ = 0;
     other.nPast = 0;
     other.captured_ = false;
   }
@@ -98,36 +108,47 @@ SequenceStateSnapshot::operator=(SequenceStateSnapshot&& other) noexcept {
 void SequenceStateSnapshot::clear() noexcept {
   removeFileQuiet(filePath_);
   filePath_.clear();
+  buffer_.clear();
+  buffer_.shrink_to_fit();
+  bytes_ = 0;
   nPast = 0;
   captured_ = false;
 }
 
 void SequenceStateSnapshot::seedForTesting(
     std::string filePath, llama_pos nPastAt) noexcept {
-  removeFileQuiet(filePath_);
+  clear();
   filePath_ = std::move(filePath);
   nPast = nPastAt;
   captured_ = true;
 }
 
 void SequenceStateSnapshot::seedEmptyForTesting(llama_pos nPastAt) noexcept {
-  removeFileQuiet(filePath_);
-  filePath_.clear();
+  clear();
   nPast = nPastAt;
   captured_ = true;
 }
 
 void SequenceStateSnapshot::adoptFile(
-    std::string filePath, llama_pos nPastAt) noexcept {
-  removeFileQuiet(filePath_);
+    std::string filePath, llama_pos nPastAt, uint64_t bytes) noexcept {
+  clear();
   filePath_ = std::move(filePath);
+  bytes_ = bytes;
+  nPast = nPastAt;
+  captured_ = true;
+}
+
+void SequenceStateSnapshot::adoptBuffer(
+    std::vector<uint8_t> buffer, llama_pos nPastAt) noexcept {
+  clear();
+  bytes_ = buffer.size();
+  buffer_ = std::move(buffer);
   nPast = nPastAt;
   captured_ = true;
 }
 
 void SequenceStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
-  removeFileQuiet(filePath_);
-  filePath_.clear();
+  clear();
   nPast = nPastAt;
   captured_ = true;
 }
@@ -136,7 +157,7 @@ void SequenceStateSnapshot::adoptEmpty(llama_pos nPastAt) noexcept {
 
 bool snapshotSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
-    SequenceStateSnapshot& out) {
+    SequenceStateSnapshot& out, SnapshotStorage storage) {
   out.clear();
   if (lctx == nullptr) {
     return false;
@@ -154,12 +175,28 @@ bool snapshotSequenceState(
     return true;
   }
 
+  if (storage == SnapshotStorage::Memory) {
+    // Same serialized bytes as the file path below, kept in host memory.
+    const size_t size = llama_state_seq_get_size(lctx, seqId);
+    if (size == 0) {
+      return false;
+    }
+    std::vector<uint8_t> buffer(size);
+    const size_t copied =
+        llama_state_seq_get_data(lctx, buffer.data(), buffer.size(), seqId);
+    if (copied == 0) {
+      return false;
+    }
+    buffer.resize(copied);
+    out.adoptBuffer(std::move(buffer), nPastAt);
+    return true;
+  }
+
   // Write the full state (KV + recurrent) to a temp file via
   // `llama_state_seq_save_file`. Internally this calls
   // `state_seq_write_data(io, seq_id, /*flags=*/0)`, llama.cpp's
   // full-state sequence path. We do not save any prompt tokens
-  // alongside the state; those are recovered from `nPast` /
-  // `postReasoningTokens_` at restore time.
+  // alongside the state; the ledger lives in the cache transaction.
   std::string path = makeUniqueSnapshotPath(seqId);
   const size_t savedBytes = llama_state_seq_save_file(
       lctx,
@@ -172,9 +209,55 @@ bool snapshotSequenceState(
     return false;
   }
 
-  out.adoptFile(std::move(path), nPastAt);
+  out.adoptFile(std::move(path), nPastAt, savedBytes);
   snapshotFilesWritten().fetch_add(1, std::memory_order_relaxed);
   return true;
+}
+
+uint64_t estimateMaxSequenceStateBytes(
+    ::llama_context* lctx, const ::llama_vocab* vocab, uint32_t perSeqTokens) {
+  if (lctx == nullptr || vocab == nullptr || perSeqTokens == 0) {
+    return 0;
+  }
+  auto* mem = llama_get_memory(lctx);
+  if (mem == nullptr) {
+    return 0;
+  }
+  llama_token probe = llama_vocab_bos(vocab);
+  if (probe == LLAMA_TOKEN_NULL) {
+    probe = llama_vocab_eos(vocab);
+  }
+  if (probe == LLAMA_TOKEN_NULL) {
+    probe = 0;
+  }
+
+  constexpr llama_seq_id kProbeSeq = 0;
+  llama_batch batch = llama_batch_init(1, 0, 1);
+  const auto decodeAt = [&](llama_pos pos) {
+    common_batch_clear(batch);
+    common_batch_add(batch, probe, pos, {kProbeSeq}, false);
+    return llama_decode(lctx, batch) == 0;
+  };
+
+  size_t afterOne = 0;
+  size_t afterTwo = 0;
+  const bool ok = decodeAt(0) &&
+                  (afterOne = llama_state_seq_get_size(lctx, kProbeSeq)) > 0 &&
+                  decodeAt(1) &&
+                  (afterTwo = llama_state_seq_get_size(lctx, kProbeSeq)) > 0;
+  llama_batch_free(batch);
+  // Leave the context exactly as found: empty probe sequence, clean perf
+  // counters (runtime stats read them after the first real request).
+  llama_synchronize(lctx);
+  llama_memory_seq_rm(mem, kProbeSeq, -1, -1);
+  llama_perf_context_reset(lctx);
+
+  if (!ok || afterTwo < afterOne) {
+    return 0;
+  }
+  const uint64_t perToken = afterTwo - afterOne;
+  const uint64_t fixed = afterOne > perToken ? afterOne - perToken : afterOne;
+  return fixed + perToken * static_cast<uint64_t>(perSeqTokens);
 }
 
 uint64_t sequenceStateSnapshotFilesWritten() noexcept {
@@ -190,6 +273,16 @@ bool restoreSequenceState(
   if (snapshot.empty()) {
     // No capture recorded — nothing to do.
     return true;
+  }
+  if (snapshot.hasBuffer()) {
+    // Memory-backed: `set_data` fully replaces the sequence's attention KV
+    // and recurrent state from the host copy.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+    return llama_state_seq_set_data(
+               lctx,
+               snapshot.buffer().data(),
+               snapshot.buffer().size(),
+               seqId) != 0;
   }
   if (!snapshot.hasFile()) {
     // Captured-but-empty: rewind the sequence to a clean state. We

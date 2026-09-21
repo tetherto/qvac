@@ -1408,7 +1408,11 @@ void MtmdLlmContext::capturePreRequestCacheSnapshot() {
     return;
   }
   if (!snapshotSequenceState(
-          modelCtx_.lctx, seqId_, current_.pos, preRequestCacheSnapshot_)) {
+          modelCtx_.lctx,
+          seqId_,
+          current_.pos,
+          preRequestCacheSnapshot_,
+          cacheCheckpointPolicy_.storage)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),
@@ -1541,7 +1545,9 @@ void MtmdLlmContext::commitCacheRequest() {
         CacheCheckpoint{
             .state = std::move(preRequestCacheSnapshot_),
             .ledger = preRequestLedger_,
-            .usage = preRequestCacheUsage_});
+            .usage = preRequestCacheUsage_},
+        cacheCheckpointPolicy_,
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
   } else {
     preRequestCacheSnapshot_.clear();
   }

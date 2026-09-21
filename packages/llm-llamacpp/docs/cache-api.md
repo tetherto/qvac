@@ -75,6 +75,57 @@ matching prefix before prefilling again. Legacy cache files without a ledger
 are treated as cold misses. A current-format file with a corrupt ledger fails
 to load.
 
+### Checkpoints on hybrid and recurrent models
+
+Pure-attention models restore a matching prefix by trimming the KV tail.
+Hybrid and recurrent models (Qwen3.5, Jamba, Granite-Hybrid, DeepSeek V4, ...)
+cannot, so the addon keeps process-local full-state checkpoints per sequence:
+one is taken at the start of every cached request and kept when the request
+commits. A diverging history restores the newest checkpoint that is still a
+prefix of the new prompt and re-prefills from there. Checkpoints live in the
+OS temp directory, are pruned as soon as they stop matching, and are lost when
+the process exits.
+
+Each checkpoint is a full copy of the sequence state, so three load-config
+fields bound the footprint. None of them has any effect on pure-attention
+models.
+
+- `cache_checkpoints`: how many to keep per sequence (default 32, maximum
+  1024). `0` keeps none, which makes every divergent turn a cold prefill.
+- `cache_checkpoints_max_bytes`: total payload budget per sequence, enforced
+  before the count: the oldest checkpoints are dropped until the total fits.
+  `0` (default) is unlimited. When set, the load fails with `InvalidArgument`
+  if the budget cannot hold `cache_checkpoints` checkpoints of the largest size
+  the context allows. The addon measures that size on the loaded model, so
+  the error names the exact numbers and the count that would fit.
+- `cache_checkpoint_storage`: `disk` (default) writes checkpoints and the
+  per-request rollback snapshot to the OS temp directory; `memory` keeps them
+  in host RAM, so a cached chat never touches the disk. Each live snapshot
+  costs one full copy of the sequence state in RAM.
+
+The storage setting is independent of the `cacheKey` file. In both modes that
+file is written only by the saves described in [Save the cache to
+disk](#save-the-cache-to-disk): a committed request with `saveCacheToDisk`, a
+switch to another `cacheKey`, or a request without one. So a chat can run
+entirely in memory and be persisted later by sending a turn with
+`saveCacheToDisk: true`; the file then holds the full conversation state and a
+later run, including one after a process restart, loads it and continues from
+there. Checkpoints are never persisted: after a restart the list is empty in
+both modes and the first diverging turn on a hybrid model is a cold prefill.
+
+```js
+const model = new LlmLlamacpp({
+  files: { model: [modelPath] },
+  config: {
+    device: 'gpu',
+    ctx_size: '8192',
+    cache_checkpoints: '4',
+    cache_checkpoints_max_bytes: String(2 * 1024 * 1024 * 1024),
+    cache_checkpoint_storage: 'memory'
+  }
+})
+```
+
 ## Save the cache to disk
 
 `saveCacheToDisk: true` writes the full in-memory KV cache state to the
@@ -193,7 +244,8 @@ completes.
 
 A chat on a pure-attention model with one `cacheKey` and no `saveCacheToDisk`
 therefore never touches the disk: the conversation lives in the KV cache, and
-no snapshot or checkpoint is ever written for these models.
+no snapshot or checkpoint is ever written for these models. On hybrid and
+recurrent models the same holds with `cache_checkpoint_storage: 'memory'`.
 
 The same rule applies to requests without `cacheKey`. Nothing reuses their
 state, so the only visible difference is `CacheTokens`, which reports the

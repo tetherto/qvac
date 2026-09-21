@@ -1286,7 +1286,11 @@ void TextLlmContext::capturePreRequestCacheSnapshot() {
     return;
   }
   if (!snapshotSequenceState(
-          modelCtx_.lctx, seqId_, nPast_, preRequestCacheSnapshot_)) {
+          modelCtx_.lctx,
+          seqId_,
+          nPast_,
+          preRequestCacheSnapshot_,
+          cacheCheckpointPolicy_.storage)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),
@@ -1397,7 +1401,9 @@ void TextLlmContext::commitCacheRequest() {
         cacheCheckpoints_,
         CacheCheckpoint{
             .state = std::move(preRequestCacheSnapshot_),
-            .ledger = preRequestLedger_});
+            .ledger = preRequestLedger_},
+        cacheCheckpointPolicy_,
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
   } else {
     preRequestCacheSnapshot_.clear();
   }

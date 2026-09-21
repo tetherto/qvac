@@ -17,6 +17,7 @@
 #include <picojson/picojson.h>
 
 #include "AsyncWeightsLoader.hpp"
+#include "CacheLedger.hpp"
 #include "CacheManager.hpp"
 #include "ContinuousBatchScheduler.hpp"
 #include "LlamaFinetuner.hpp"
@@ -350,6 +351,12 @@ private:
     /// Set when llama_n_seq_max > 1, null otherwise.
     std::unique_ptr<batching::ContinuousBatchScheduler> batchScheduler_;
 
+    /// Checkpoint policy from the load config (`cache_checkpoints`,
+    /// `cache_checkpoints_max_bytes`, `cache_checkpoint_storage`), applied to
+    /// the single-prompt context and to every batch driver.
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy
+        cacheCheckpointPolicy_;
+
     // configuration values parsed from configFilemap
     std::optional<load_fit_normalization::NormalizedFitSnapshot>
         normalizedFitSnapshot_;
@@ -384,6 +391,9 @@ private:
   /// decoding via `n_parallel >= 2` (which llama.cpp maps directly to
   /// `n_seq_max`); applies to text and multimodal models alike.
   static bool isMultiBatchActivated(ReloadableState& state);
+  /// Fails the load early when `cache_checkpoints_max_bytes` cannot hold
+  /// `cache_checkpoints` checkpoints of the largest size this context allows.
+  static void validateCheckpointBudget(ReloadableState& state);
 
   static std::unique_ptr<batching::ContinuousBatchScheduler>
   initBatchScheduler(ReloadableState& state);

@@ -229,6 +229,97 @@ TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripQwen35Hybrid) {
       << "restore must return the cache to the snapshotted position";
 }
 
+// Same roundtrip with the memory backend: the bytes come from
+// `llama_state_seq_get_data`, go back through `llama_state_seq_set_data`,
+// and no file is written at any point.
+TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripInMemoryHybrid) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+
+  primeWithPrefill(*model, "Hello, this is the seed prompt.");
+  const llama_pos posBefore = seqPosMax(*model);
+  ASSERT_GT(posBefore, 0);
+  const uint64_t filesBefore = sequenceStateSnapshotFilesWritten();
+
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
+      model->getContext(),
+      /*seqId=*/0,
+      posBefore + 1,
+      snap,
+      qvac_lib_inference_addon_llama::utils::SnapshotStorage::Memory));
+  ASSERT_FALSE(snap.empty());
+  EXPECT_TRUE(snap.hasBuffer());
+  EXPECT_FALSE(snap.hasFile());
+  EXPECT_GT(snap.bytes(), 0u);
+  EXPECT_EQ(sequenceStateSnapshotFilesWritten(), filesBefore)
+      << "a memory-backed capture must not write a file";
+
+  model->reset();
+  ASSERT_EQ(seqPosMax(*model), -1);
+
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
+  EXPECT_EQ(seqPosMax(*model), posBefore)
+      << "restore from the host buffer must return the cache to the "
+         "snapshotted position";
+}
+
+// The load-time budget check measures one checkpoint's worst case on the
+// real context. The estimate must be an upper bound of a real capture, and a
+// budget that cannot hold the requested count must fail the load with
+// InvalidArgument instead of filling up silently later.
+TEST_F(CancelRollbackPrimitiveTest, EstimateBoundsRealSnapshotOnHybrid) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  const uint64_t worstCase =
+      qvac_lib_inference_addon_llama::utils::estimateMaxSequenceStateBytes(
+          model->getContext(),
+          llama_model_get_vocab(model->getModel()),
+          llama_n_ctx_seq(model->getContext()));
+  ASSERT_GT(worstCase, 0u) << "the probe must be able to run on an idle model";
+  ASSERT_EQ(seqPosMax(*model), -1) << "the probe must leave the sequence empty";
+
+  primeWithPrefill(*model, "Hello, this is the seed prompt.");
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
+      model->getContext(),
+      /*seqId=*/0,
+      seqPosMax(*model) + 1,
+      snap,
+      qvac_lib_inference_addon_llama::utils::SnapshotStorage::Memory));
+  EXPECT_LE(snap.bytes(), worstCase)
+      << "a real snapshot must never exceed the load-time estimate";
+}
+
+TEST_F(CancelRollbackPrimitiveTest, TooSmallCheckpointBudgetFailsTheLoad) {
+  const std::string modelPath = qwen35HybridModelPath();
+  if (!fs::exists(modelPath)) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "4096";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  config["cache_checkpoints"] = "4";
+  config["cache_checkpoints_max_bytes"] = "1024";
+
+  EXPECT_THROW(
+      {
+        std::string mp = modelPath;
+        std::string proj;
+        LlamaModel model(std::move(mp), std::move(proj), std::move(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError)
+      << "a 1 KiB budget cannot hold four checkpoints of a 4096-token "
+         "sequence; the load must fail early";
+}
+
 // Same roundtrip for a pure-attention model. The snapshot+restore primitive
 // is architecture-agnostic — it works for attention-only memories too.
 TEST_F(

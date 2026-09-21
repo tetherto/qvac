@@ -21,8 +21,11 @@ public:
 
   void clear() noexcept { snapshot_.clear(); }
 
+  void setStorage(SnapshotStorage storage) noexcept { storage_ = storage; }
+
 private:
   SequenceStateSnapshot snapshot_;
+  SnapshotStorage storage_ = SnapshotStorage::Disk;
 };
 
 } // namespace qvac_lib_inference_addon_llama::utils

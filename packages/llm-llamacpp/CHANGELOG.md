@@ -15,6 +15,19 @@
   delta prompts/tools and still expose that option, so they are intentionally
   incompatible with this addon until the SDK migration lands.
 
+### Added
+
+- `cache_checkpoints` load-config field (also `cache-checkpoints`): per-sequence
+  cap on the process-local full-state checkpoints kept for cached requests on
+  hybrid / recurrent models. Default 32, `0` disables them, maximum 1024.
+- `cache_checkpoints_max_bytes`: byte budget for those checkpoints, enforced
+  before the count. The load fails early with `InvalidArgument` when the budget
+  cannot hold `cache_checkpoints` checkpoints of the largest size the context
+  allows, measured on the loaded model.
+- `cache_checkpoint_storage`: `disk` (default) or `memory`. With `memory` the
+  checkpoints and the per-request rollback snapshot stay in host RAM, so a
+  cached chat on a hybrid / recurrent model never touches the disk.
+
 ### Fixed
 
 - The multimodal context now decides whether a model needs full-state
