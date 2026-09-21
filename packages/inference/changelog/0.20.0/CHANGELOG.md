@@ -43,3 +43,7 @@ Release Date: 2026-09-17
 - Unify agent configuration. (see PR [#4353](https://github.com/tetherto/qvac/pull/4353))
 - Update @qvac/decoder-audio to 0.6.0. (see PR [#4436](https://github.com/tetherto/qvac/pull/4436))
 - Update @qvac/bci-whispercpp to 0.9.1. (see PR [#4437](https://github.com/tetherto/qvac/pull/4437))
+
+## ⚙️ Infrastructure
+
+- Prefix the Windows e2e inference tarball pin with `file:`. (see PR [#4556](https://github.com/tetherto/qvac/pull/4556))
