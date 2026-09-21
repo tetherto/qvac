@@ -280,8 +280,8 @@ public:
   /// request keeps what the caller received, exactly like a prediction-limit
   /// stop: the prompt and every streamed token stay resident (and a cache
   /// transaction commits), so the next full-history turn extends them.
-  /// Cancelled during prefill it rolls back to the state before the prompt
-  /// was sent, since the caller received nothing. The rule is the same with
+  /// Cancelled during prefill it rolls back, dropping everything the request
+  /// added, since the caller received nothing. The rule is the same with
   /// or without `cacheKey`. Returns `true` when live memory
   /// matches the driver's metadata and callers may persist it via
   /// `saveCache`; `false` when a rollback could not be completed (e.g. a

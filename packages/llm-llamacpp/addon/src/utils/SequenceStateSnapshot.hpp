@@ -120,6 +120,11 @@ bool snapshotSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
     SequenceStateSnapshot& out);
 
+// Process-wide count of snapshot files actually written by
+// `snapshotSequenceState` (empty-sequence captures write nothing and are not
+// counted). Test seam: lets a test prove a code path never touched the disk.
+[[nodiscard]] uint64_t sequenceStateSnapshotFilesWritten() noexcept;
+
 // Restores `snapshot` into `seqId`. For snapshots backed by a file,
 // calls `llama_state_seq_load_file` to fully replace the sequence's
 // attention KV and recurrent state. For captured-but-empty snapshots

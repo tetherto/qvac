@@ -183,10 +183,17 @@ whenever the caller received what was produced: the model stopped on its own
 (EOS or an antiprompt), it hit the caller's `n_predict` limit, or the caller
 cancelled after prefill had completed. Such a cancel keeps the prompt and every
 streamed token, so the next full-history turn resumes from there. A cancel
-during prefill, a decode error and a context overflow roll the request back to
-the state before the prompt was sent, skip `saveCacheToDisk`, and leave the
-on-disk file untouched. Prefill-only requests commit as soon as prefill
+during prefill, a decode error and a context overflow roll the request back:
+everything the request added is dropped, `saveCacheToDisk` is skipped, and the
+on-disk file is left untouched. On pure-attention models the rollback lands on
+the longest prefix the cache shares with the request's prompt, which is what a
+retry reuses; on hybrid and recurrent models the state from before the prompt
+is restored from a snapshot. Prefill-only requests commit as soon as prefill
 completes.
+
+A chat on a pure-attention model with one `cacheKey` and no `saveCacheToDisk`
+therefore never touches the disk: the conversation lives in the KV cache, and
+no snapshot or checkpoint is ever written for these models.
 
 The same rule applies to requests without `cacheKey`. Nothing reuses their
 state, so the only visible difference is `CacheTokens`, which reports the

@@ -1395,9 +1395,9 @@ void MtmdLlmContext::beginCacheRequest() {
   preRequestLedger_ = residentLedger_;
   pendingPromptLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();
-  // Same policy as TextLlmContext: pure-attention memory rolls back with a
-  // tail trim, so the full-state dump is deferred to `reconcilePrompt` and
-  // only taken when resident state is about to be discarded.
+  // Same policy as TextLlmContext: pure-attention memory never needs a dump,
+  // its rollback target follows the divergence point in `reconcilePrompt`.
+  // Models that cannot trim snapshot up front.
   if (needsFullStateSnapshot_) {
     capturePreRequestCacheSnapshot();
   }
@@ -1471,14 +1471,15 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
       checkpoint = "cold";
     }
   } else if (!needsFullStateSnapshot_ && reuseTarget < cachedLength) {
-    // A tail trim cannot bring the discarded range back on rollback, so
-    // this is the one pure-attention path that needs the pre-request dump.
-    capturePreRequestCacheSnapshot();
+    // The rollback target moves to the divergence point (see the same branch
+    // in TextLlmContext::reconcilePrompt); no snapshot is written.
     const llama_pos reusePos = residentLedger_.positions(reuseTarget);
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
     residentLedger_.truncate(reuseTarget);
     current_.pos = reusePos;
     refreshCurrentCacheTokensFromMemory();
+    preRequestLedger_ = residentLedger_;
+    preRequestCacheUsage_ = current_;
   }
 
   for (auto it = cacheCheckpoints_.begin(); it != cacheCheckpoints_.end();) {
@@ -1553,8 +1554,9 @@ bool MtmdLlmContext::restorePreRequestCacheState() {
   if (!preRequestCacheSnapshot_.empty()) {
     ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
   } else if (current_.pos > preRequestCacheUsage_.pos) {
-    // Append-only request on pure-attention memory: dropping the appended
-    // tail is the exact pre-request state.
+    // Pure-attention memory: everything this request added sits after the
+    // rollback target (the pre-request cursor, or the divergence point when
+    // reconciliation trimmed), so dropping that tail restores it.
     try {
       clearSequenceMemory(modelCtx_.lctx, preRequestCacheUsage_.pos, -1);
     } catch (const std::exception& e) {

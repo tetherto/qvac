@@ -40,10 +40,12 @@
   pre-request checkpoint instead, so a follow-up turn re-prefills the previous
   turn's prompt and answer; this halves the number of checkpoint files kept
   per sequence.
-- Pure-attention models no longer write a full-state temp-file snapshot at the
-  start of every cached request. The dump is taken only when reconciliation is
-  about to discard resident state; append-only turns roll back with a tail
-  trim to the pre-request cursor.
+- Pure-attention models never write a full-state temp-file snapshot any more.
+  A rolled-back request drops what it added with a tail trim; when
+  reconciliation had trimmed a diverging history first, the rollback lands on
+  the prefix shared with the request's prompt rather than restoring the old
+  tail. A chat with one `cacheKey` and no `saveCacheToDisk` therefore keeps
+  everything in memory on these models.
 
 ## [0.53.1] - 2026-09-16
 
