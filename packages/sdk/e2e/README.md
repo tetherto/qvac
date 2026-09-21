@@ -24,7 +24,11 @@ If nothing is detected on localhost, the command prompts to install `aedes` + `w
 keeps an embedded broker alive while tests are running. Bring your own broker if you prefer — just expose
 `ws://...:8080` and `mqtt://...:1883`.
 
-**Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`, `--runId`.
+**Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`,
+`--include`, `--runId`. `--suite`, `--exclude-suite` and `--filter` narrow each other;
+`--include` takes exact testIds and adds them on top, so it is how you run a suite plus a
+specific test. An id it cannot find fails the run rather than being skipped. It needs
+`@qvac/test-suite` 0.11.2 or newer.
 Mobile and Electron add `--skip-build` (see below). Run `npx qvac-test run:local:<platform> --help` for the
 full list.
 
@@ -200,11 +204,55 @@ other's bundle.
 
 See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-test-sdk.yml).
 
-- `test-e2e-smoke` — runs the `smoke` suite on desktop and mobile consumers.
+- `test-e2e-smoke` — runs the `smoke` suite **plus the tests this PR touched**, on desktop and
+  mobile consumers. The smoke suite is only a fraction of the catalog, so without this a green
+  smoke run says nothing about tests the PR added or changed. "Touched" means changed files under
+  `packages/sdk/e2e/{tests,fixtures,assets}`, plus an inference engine directory, an SDK
+  `client/api` file, and a handler module registered in `registry.ts`. Source with no declared link
+  to a test maps to nothing and leaves a plain smoke run.
+  A PR comment reports what was added, and anything
+  the impact mapper could not attribute. See
+  [Smoke runs cover the tests a PR touched](../../../docs/ci/LABELS.md#smoke-runs-cover-the-tests-a-pr-touched).
+  To check locally what a smoke run would add for your branch — this is the same code CI runs, so
+  it answers "which tests will this PR pull in?" before you push:
+
+  ```bash
+  node scripts/impacted-tests.mjs --base main --head HEAD
+  ```
+
+  It reads the TypeScript sources while `run:producer` loads `dist/tests`, so run `npm run build`
+  first if you want the two to agree locally. CI always builds before the producer.
+
 - `test-e2e-full` — runs the full catalog on desktop and mobile consumers.
 - Both labels build `packages/inference` and test it together with `packages/sdk` from the authorized PR HEAD.
 - Release-branch PRs with SDK or inference changes auto-run the same desktop and mobile suite.
 - Success applies the `e2e-tested` label.
+
+These three are **base runs**: each records its per-platform failure set into a hidden state
+comment on the PR, which is what the rerun label below consumes.
+
+### Re-running only the tests that failed
+
+- `test-e2e-rerun-failed` — re-runs just the tests that failed on the last base run, on the
+  platforms where they failed. A platform that was green is not started at all: one failure
+  on Windows and one on Linux means two tests on two runners, with macOS, Android, and iOS
+  skipped entirely.
+
+The label needs no new commit — the rerun always tests the current PR HEAD, so it verifies a
+pushed fix or, on an unchanged commit, checks for flakiness. It is removed automatically once
+the run picks it up, so the next attempt is a single click, and it never applies `e2e-tested`.
+
+Wait for the **QVAC E2E — base run recorded** comment before applying it. The base failure set
+is not known until every family finishes, so a rerun labelled while the base run is still going
+is rejected with a comment saying so (it cannot cancel the base run — reruns use their own
+concurrency group).
+
+The plan is anchored to the base run, not to the previous rerun: every attempt re-runs the
+same set until a new `test-e2e-smoke` / `test-e2e-full` run replaces the base.
+
+See [Re-running failed SDK e2e tests](../../../docs/ci/LABELS.md#re-running-failed-sdk-e2e-tests)
+for the full behaviour table, including what happens when no base is recorded, the base is
+green, or a recorded test no longer exists.
 
 ### Manual runs
 

@@ -7,11 +7,16 @@ import {
   extractResponseFormat,
   InvalidResponseFormatError,
   UnsupportedImageContentError,
-  extractGenerationParams
+  extractGenerationParams,
+  extractToolChoice,
+  withToolChoice,
+  InvalidToolChoiceError
 } from '@/serve/extensions/openai/schemas/common'
 import {
   openaiMessagesToHistory,
   writeChatImages,
+  chatCompletionsBody,
+  toSdkChatArgs,
   type OpenAIMessage
 } from '@/serve/extensions/openai/schemas/chat'
 import {
@@ -1180,5 +1185,208 @@ describe('parseLegacyPrompt', () => {
 describe('legacyPromptToHistory', () => {
   it('wraps a string in a single-turn user history', () => {
     assert.deepEqual(legacyPromptToHistory('hello'), [{ role: 'user', content: 'hello' }])
+  })
+})
+
+describe('extractToolChoice', () => {
+  const emptyParams = { type: 'object' as const, properties: {} }
+  const tools = [
+    { type: 'function' as const, name: 'get_weather', description: '', parameters: emptyParams },
+    { type: 'function' as const, name: 'get_time', description: '', parameters: emptyParams }
+  ]
+
+  it('returns undefined when the request sets no tool_choice', () => {
+    assert.equal(extractToolChoice({}, tools), undefined)
+    assert.equal(extractToolChoice({ tool_choice: null }, tools), undefined)
+  })
+
+  it('passes auto and none through without needing tools', () => {
+    assert.equal(extractToolChoice({ tool_choice: 'auto' }, undefined), 'auto')
+    assert.equal(extractToolChoice({ tool_choice: 'none' }, undefined), 'none')
+  })
+
+  it('accepts required when tools are declared', () => {
+    assert.equal(extractToolChoice({ tool_choice: 'required' }, tools), 'required')
+  })
+
+  it('flattens the chat object form to the bare tool name', () => {
+    assert.equal(
+      extractToolChoice(
+        { tool_choice: { type: 'function', function: { name: 'get_weather' } } },
+        tools
+      ),
+      'get_weather'
+    )
+  })
+
+  it('flattens the responses object form to the bare tool name', () => {
+    assert.equal(
+      extractToolChoice({ tool_choice: { type: 'function', name: 'get_time' } }, tools),
+      'get_time'
+    )
+  })
+
+  it('rejects required with no tools', () => {
+    assert.throws(
+      () => extractToolChoice({ tool_choice: 'required' }, undefined),
+      InvalidToolChoiceError
+    )
+    assert.throws(() => extractToolChoice({ tool_choice: 'required' }, []), InvalidToolChoiceError)
+  })
+
+  it('rejects a name that is not among the declared tools', () => {
+    assert.throws(
+      () => extractToolChoice({ tool_choice: { type: 'function', name: 'get_stock' } }, tools),
+      InvalidToolChoiceError
+    )
+  })
+
+  it('rejects a bare string that is neither a mode nor an object form', () => {
+    assert.throws(
+      () => extractToolChoice({ tool_choice: 'get_weather' }, tools),
+      InvalidToolChoiceError
+    )
+    assert.throws(() => extractToolChoice({ tool_choice: 'atuo' }, tools), InvalidToolChoiceError)
+  })
+
+  it('rejects a non-function tool_choice type', () => {
+    assert.throws(
+      () => extractToolChoice({ tool_choice: { type: 'custom', name: 'x' } }, tools),
+      InvalidToolChoiceError
+    )
+  })
+
+  it('rejects an object form with no usable name', () => {
+    assert.throws(
+      () => extractToolChoice({ tool_choice: { type: 'function' } }, tools),
+      InvalidToolChoiceError
+    )
+    assert.throws(
+      () => extractToolChoice({ tool_choice: { type: 'function', function: { name: '' } } }, tools),
+      InvalidToolChoiceError
+    )
+  })
+
+  it('rejects an array', () => {
+    assert.throws(() => extractToolChoice({ tool_choice: [] }, tools), InvalidToolChoiceError)
+  })
+
+  // Collapsing to the bare name would read back as the mode and invert the
+  // request: targeting a tool called `none` would switch tool calling off.
+  it('rejects targeting a tool whose name collides with a mode', () => {
+    const reserved = ['auto', 'none', 'required']
+    for (const name of reserved) {
+      const declared = [
+        { type: 'function' as const, name, description: '', parameters: emptyParams }
+      ]
+      assert.throws(
+        () =>
+          extractToolChoice({ tool_choice: { type: 'function', function: { name } } }, declared),
+        InvalidToolChoiceError,
+        `chat object form naming ${name}`
+      )
+      assert.throws(
+        () => extractToolChoice({ tool_choice: { type: 'function', name } }, declared),
+        InvalidToolChoiceError,
+        `responses object form naming ${name}`
+      )
+    }
+  })
+
+  it('still reads the bare mode strings as modes', () => {
+    const declared = [
+      { type: 'function' as const, name: 'none', description: '', parameters: emptyParams }
+    ]
+    assert.equal(extractToolChoice({ tool_choice: 'none' }, declared), 'none')
+    assert.equal(extractToolChoice({ tool_choice: 'required' }, declared), 'required')
+  })
+})
+
+describe('withToolChoice', () => {
+  it('leaves params untouched when there is no choice', () => {
+    assert.equal(withToolChoice(undefined, undefined), undefined)
+    assert.deepEqual(withToolChoice({ temp: 0.2 }, undefined), { temp: 0.2 })
+  })
+
+  it('creates params when the request set only a tool_choice', () => {
+    assert.deepEqual(withToolChoice(undefined, 'required'), { tool_choice: 'required' })
+  })
+
+  it('merges the choice into existing params', () => {
+    assert.deepEqual(withToolChoice({ temp: 0.2 }, 'get_weather'), {
+      temp: 0.2,
+      tool_choice: 'get_weather'
+    })
+  })
+})
+
+describe('chat tool_choice wiring', () => {
+  const weatherTool = {
+    type: 'function',
+    function: {
+      name: 'get_weather',
+      description: 'Get weather',
+      parameters: { type: 'object', properties: { city: { type: 'string' } } }
+    }
+  }
+
+  function body(extra: Record<string, unknown>): Record<string, unknown> {
+    return {
+      model: 'my-llm',
+      messages: [{ role: 'user', content: 'Weather in Lugano?' }],
+      tools: [weatherTool],
+      ...extra
+    }
+  }
+
+  it('accepts both tool_choice forms through the request schema', () => {
+    assert.equal(chatCompletionsBody.safeParse(body({ tool_choice: 'required' })).success, true)
+    assert.equal(
+      chatCompletionsBody.safeParse(
+        body({ tool_choice: { type: 'function', function: { name: 'get_weather' } } })
+      ).success,
+      true
+    )
+  })
+
+  it('threads a mode choice into generationParams', () => {
+    const args = toSdkChatArgs(
+      chatCompletionsBody.parse(body({ tool_choice: 'required' })),
+      'hermes'
+    )
+    assert.equal(args.generationParams?.tool_choice, 'required')
+  })
+
+  it('threads the object form through as the bare tool name', () => {
+    const args = toSdkChatArgs(
+      chatCompletionsBody.parse(
+        body({ tool_choice: { type: 'function', function: { name: 'get_weather' } } })
+      ),
+      'hermes'
+    )
+    assert.equal(args.generationParams?.tool_choice, 'get_weather')
+  })
+
+  it('keeps tool_choice alongside the other generation params', () => {
+    const args = toSdkChatArgs(
+      chatCompletionsBody.parse(body({ tool_choice: 'required', temperature: 0.3 })),
+      'hermes'
+    )
+    assert.equal(args.generationParams?.tool_choice, 'required')
+    assert.equal(args.generationParams?.temp, 0.3)
+  })
+
+  it('leaves generationParams undefined when nothing was set', () => {
+    const args = toSdkChatArgs(chatCompletionsBody.parse(body({})), 'hermes')
+    assert.equal(args.generationParams, undefined)
+  })
+
+  it('rejects a demanding tool_choice with no tools', () => {
+    const parsed = chatCompletionsBody.parse({
+      model: 'my-llm',
+      messages: [{ role: 'user', content: 'hi' }],
+      tool_choice: 'required'
+    })
+    assert.throws(() => toSdkChatArgs(parsed, 'hermes'), InvalidToolChoiceError)
   })
 })

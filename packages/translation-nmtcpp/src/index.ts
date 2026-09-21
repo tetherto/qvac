@@ -395,6 +395,48 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
 
   private async _load(): Promise<void> {
     const otherConfig: Record<string, unknown> = { ...this._config };
+    let mainGpu = otherConfig["main-gpu"] ?? otherConfig.main_gpu;
+    if (
+      otherConfig["main-gpu"] !== undefined &&
+      otherConfig.main_gpu !== undefined
+    ) {
+      throw new TypeError("Use only one of main-gpu and main_gpu");
+    }
+    if (
+      otherConfig["main-gpu"] !== undefined ||
+      otherConfig.main_gpu !== undefined
+    ) {
+      if (typeof mainGpu === "string") {
+        mainGpu = /^[+-]?\d+$/.test(mainGpu)
+          ? Number(mainGpu)
+          : mainGpu.toLowerCase();
+      }
+      if (
+        mainGpu !== "dedicated" &&
+        mainGpu !== "integrated" &&
+        !(
+          typeof mainGpu === "number" &&
+          Number.isInteger(mainGpu) &&
+          mainGpu >= -2147483648 &&
+          mainGpu <= 2147483647
+        )
+      ) {
+        throw new TypeError(
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'",
+        );
+      }
+      if (
+        ["gpu_backend", "gpuBackend", "gpu_device", "gpuDevice"].some(
+          (key) => otherConfig[key] !== undefined,
+        )
+      ) {
+        throw new TypeError(
+          "main-gpu cannot be combined with legacy GPU selectors",
+        );
+      }
+      otherConfig["main-gpu"] = mainGpu;
+      delete otherConfig.main_gpu;
+    }
 
     // Accept camelCase aliases for the GPU keys so the config object can
     // stay consistent with backendsDir/openclCacheDir. The C++ binding
@@ -686,7 +728,7 @@ namespace TranslationNmtcpp {
     pivotConfig?: Record<string, unknown>;
 
     /**
-     * Enable GPU (non-CPU) compute backend. Read once at load() time.
+     * Enable an eligible Vulkan, Metal, OpenCL, or CUDA compute backend.
      * Bergamot is CPU-only by design — this flag is a no-op for that backend.
      *
      * `use_gpu` mirrors the C-struct field (`nmt_context_params::use_gpu`)
@@ -699,10 +741,10 @@ namespace TranslationNmtcpp {
     useGPU?: boolean;
 
     /**
-     * Case-insensitive substring filter over the ggml device name when selecting
+     * Case-insensitive substring filter over eligible ggml device names when selecting
      * a compute backend (e.g. "vulkan", "vulkan0", "opencl", "metal"). When set,
      * replaces the default gated selector with a single explicit pass.
-     * An explicit "opencl" bypasses the build-time USE_OPENCL guard.
+     * Any explicit selector resolving to OpenCL bypasses the build-time USE_OPENCL guard.
      *
      * `gpu_backend` mirrors the C-struct field and is the primary key.
      * `gpuBackend` is the camelCase alias matching the sibling-addon convention.
@@ -710,6 +752,14 @@ namespace TranslationNmtcpp {
      */
     gpu_backend?: string;
     gpuBackend?: string;
+
+    /** Raw ggml registry index or GPU class. Requires use_gpu/useGPU.
+     * Unsupported devices fall back to CPU; out-of-range indices warn and auto-select.
+     * Cannot be combined with gpu_backend/gpu_device or their camelCase aliases.
+     */
+    "main-gpu"?: number | string;
+    /** Alias for main-gpu; specifying both keys is rejected. */
+    main_gpu?: number | string;
 
     /**
      * Ordinal within the matching compute devices. Defaults to 0.

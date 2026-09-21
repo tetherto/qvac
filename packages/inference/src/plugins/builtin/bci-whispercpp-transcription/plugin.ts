@@ -1,4 +1,3 @@
-import bciAddonLogging from '@qvac/bci-whispercpp/addonLogging'
 import BCIWhispercpp, { type BCIWhispercppConfig } from '@qvac/bci-whispercpp'
 import {
   definePlugin,
@@ -168,7 +167,7 @@ export const bciPlugin = definePlugin({
   },
 
   logging: {
-    module: bciAddonLogging,
+    module: () => import('@qvac/bci-whispercpp/addonLogging'),
     namespace: ModelType.bciWhispercppTranscription
   }
 })

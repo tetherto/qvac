@@ -9,6 +9,7 @@ import {
 } from "@qvac/infer-base";
 
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
+import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import {
   BackendId as BackendIdEnum,
   type ASRRunOutput,
@@ -416,11 +417,13 @@ class ASRGgml {
   }
 
   async run(audio: AudioInput): Promise<QvacResponse<ASRRunOutput>> {
-    this._assertNoOpenSession(
-      "concurrent run() during an open streaming session",
-    );
-    const runFn = (): Promise<QvacResponse<ASRRunOutput>> =>
-      this._driver.run(this._driver.normalizeAudio(audio));
+    const runFn = async (): Promise<QvacResponse<ASRRunOutput>> => {
+      await this._waitForClosingSessionOrThrow(
+        "concurrent run() during an open streaming session",
+      );
+      return await this._driver.run(this._driver.normalizeAudio(audio));
+    };
+
     if (this.exclusiveRun) {
       return await this._inferenceQueue.run(runFn, "onSettle");
     }
@@ -431,10 +434,10 @@ class ASRGgml {
     audio: AudioInput,
     opts: ASRStreamingOptions = {},
   ): Promise<QvacResponse<ASRStreamOutput>> {
-    this._assertNoOpenSession(
-      "concurrent runStreaming() during an open streaming session",
-    );
     const startFn = async (): Promise<QvacResponse<ASRStreamOutput>> => {
+      await this._waitForClosingSessionOrThrow(
+        "concurrent runStreaming() during an open streaming session",
+      );
       const session = await this._driver.createStreamingSession(
         this._driver.normalizeAudio(audio),
         opts,
@@ -509,13 +512,19 @@ class ASRGgml {
     }
   }
 
-  private _assertNoOpenSession(adds: string): void {
-    if (this._openSession) {
+  private async _waitForClosingSessionOrThrow(adds: string): Promise<void> {
+    const session = this._openSession;
+    if (!session) return;
+
+    if (!session.closing) {
       throw new QvacErrorAddonASRGgml({
         code: ERR_CODES.STREAMING_SESSION_ACTIVE,
         adds,
       });
     }
+
+    await session.done;
+    if (this._openSession === session) this._openSession = null;
   }
 
 }
@@ -579,6 +588,8 @@ namespace ASRGgml {
   export type InferenceClientState = InferenceClientStateShape;
 
   export import BackendId = BackendIdEnum;
+
+  export const resolveBackendsDir = resolveBackendsDirImpl;
 }
 
 export = ASRGgml;

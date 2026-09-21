@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.27.3] - 2026-09-18
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.0` -> `^0.16.1`. Another hard floor: Android consumers built against `0.16.0` fail to load. That release named the ELF version node `QVAC_FABRIC_ABI_1` on every ELF target, so an Android addon records a `DT_VERNEED` that bionic cannot satisfy — `dlopen` fails and `bare` reports `ADDON_NOT_FOUND: Cannot find addon '.'` from `binding.js` before any model work. `0.16.1` names the node only where fabric owns the C++ runtime (Linux embedding libc++); Android keeps the anonymous node it had through `0.15.0`. An Android binary linked against `0.16.0` keeps the versioned imports and still fails, so this package has to be rebuilt. A caret on a `0.x` version locks the minor, so `^0.16.0` could still resolve `0.16.0`. Released as a patch rather than a minor so consumers already tracking the `0.27.x` line pick this up without a range change of their own. Linux binaries built against `0.16.0` are unaffected. Desktop was unaffected. No API change. Rationale: fabric `0.16.1` ([#4566](https://github.com/tetherto/qvac/pull/4566)).
+
+## [0.27.2] - 2026-09-17
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.15.0` -> `^0.16.0`. Another hard floor, for the reason the last one turned out not to be enough on its own: `0.15.0` exported the C++ runtime, but nothing bound this addon to it. `bare`'s executable links GNU `libstdc++.so.6`, which puts a second complete C++ runtime in the process' **global** lookup scope — searched ahead of a `dlopen`'d module's own `DT_NEEDED` chain — so `__cxa_throw`, `__gxx_personality_v0` and the `std::` typeinfo objects resolved from libstdc++ while fabric's exports went unused. `0.16.0` names its version node `QVAC_FABRIC_ABI_1`, which makes this module record a `DT_VERNEED` that libstdc++ cannot satisfy, and that is what completes the pin. A caret on a `0.x` version locks the minor, so `^0.15.0` could not have resolved `0.16.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.27.x` line pick this up without a range change of their own.
+- The build now proves the pin instead of assuming it: `qvac_addon_finalize` reads the linked module with `readelf` and fails if any C++ runtime symbol is imported without the `QVAC_FABRIC_ABI_1` requirement. That check exists because the built ELF is the only place the invariant is observable — paired with a fabric that does not stamp the node, this module links and loads exactly as before and merely stops matching typed catches.
+- The module now exports the two `bare_*` entry points the runtime resolves by name and nothing else, down from about 1985 symbols: its own and nlohmann's typeinfo, and the whole of `inference-addon-cpp`, are no longer exported. `bare` loads modules `RTLD_LOCAL`, so nothing could reach those anyway; the addon and fabric are now a closed unit exposing plain C by construction rather than by the loader flags of whichever host loads them.
+
+### Fixed
+
+- The typed-catch behaviour `0.27.1` described takes effect only now. With the runtime unpinned, this addon's `catch (const std::exception&)` handlers in the model interface and `JSCATCH`'s arm at the JS boundary still saw a fabric throw as foreign, so that entry's claim did not hold on Linux. The gap was also wider than the two static libc++ copies it described: `std::exception_ptr` split down the same seam, with `std::current_exception` binding to libstdc++ and `std::rethrow_exception` to fabric's libc++, which re-raises the exception with a class GNU's personality routine matches only against `catch (...)`. `inference-addon-cpp`'s `JsAsyncTask` round-trips errors through exactly that path, so an error raised inside fabric and rethrown across an async boundary reached JS as `INTERNAL_ERROR` / `"Unknown error"` whatever handler was in place. Measured on `llm-llamacpp`; the mechanism is in shared code rather than in any one addon. Linux only; macOS, Windows, Android and iOS already share one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4519](https://github.com/tetherto/qvac/pull/4519)).
+
+## [0.27.1] - 2026-09-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.27.x` line pick this up without a range change of their own.
+- One C++ runtime per process means one copy of every `std::` typeinfo, and RTTI matches typeinfo by address rather than by name. An exception raised inside the shared runtime is therefore matched by type on the way out: this addon's own `catch (const std::exception&)` handlers in the model interface, and `JSCATCH`'s equivalent arm at the JS boundary, now match a throw that came from fabric, where before it fell through to the catch-all and reached JS as `INTERNAL_ERROR` / `"Unknown error"`. Linux only; macOS, Windows, Android and iOS already shared one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
+## [0.27.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own. No API change for this package.
+- The MoE fixes are the ones that matter here: the out-of-bounds write reproduced with the persistent expert cache at large context, which a mixture-of-experts VLA checkpoint can reach.
+- Also ships the iOS test-harness work from [#4399](https://github.com/tetherto/qvac/pull/4399), which landed after `0.26.0` with no version bump of its own. It hardlinks pre-staged models and captures iOS crash reports; it touches only `test/`, so no shipped code changes with it.
+
+## [0.26.0] - 2026-09-10
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.10.0` -> `^0.13.0`, which carries `qvac-fabric` `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.10.0` would not have resolved `0.13.0` on its own. No API change for this package.
+- Also ships the pnpm+nx monorepo foundation (#3543), which landed after `0.25.0` with no version bump of its own.
+
 ## [0.25.0] - 2026-09-07
 
 ### Changed

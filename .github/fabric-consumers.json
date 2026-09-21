@@ -4,6 +4,8 @@
     "vla-ggml",
     "translation-nmtcpp",
     "model-fit",
-    "ocr-ggml"
+    "ocr-ggml",
+    "embed-llamacpp",
+    "llm-llamacpp"
   ]
 }

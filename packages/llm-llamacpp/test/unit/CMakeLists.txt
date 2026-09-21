@@ -36,6 +36,8 @@ add_executable(
   test_recurrent_state_snapshot.cpp
   test_qwen_template.cpp
   test_logging_macros.cpp
+  test_log_safe_string.cpp
+  test_stop_string_match.cpp
   test_llama_lazy_init_backend.cpp
   test_borrow_tracked_shared_buffer.cpp
   test_continuous_batching_default.cpp
@@ -53,6 +55,7 @@ add_executable(
   test_kv_leak_on_admit_failure.cpp
   test_runtime_stats.cpp
   test_reasoning_budget.cpp
+  test_tool_grammar.cpp
   test_cancel_rollback.cpp
   test_job_cancel_registry.cpp
   test_reasoning_block_compactor.cpp
@@ -61,6 +64,7 @@ add_executable(
   test_finetune_cancel_action.cpp
   test_finetune_pending_pause.cpp
   test_whole_model_cancel_finetune.cpp
+  backend_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LlmParsers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/handlers/LoadConfigHandlers.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
@@ -143,32 +147,30 @@ endif()
 target_link_libraries(
   addon-test
   PRIVATE
-    llama::llama
-    llama::llama-common
-    llama::mtmd
+    qvac-fabric::headers
+    ${qvac_fabric_target}_module
     nlohmann_json::nlohmann_json
     GTest::gtest
     GTest::gtest_main
     GTest::gmock_main
 )
 
+# Stage the shared Fabric runtime and its dlopen'd ggml backends beside the test
+# binary. backend_env.cpp uses GGML_BACKEND_DIR to preload them.
+qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
+
+# AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
+# addon-test dynamically links the shared @qvac/fabric runtime
+# (qvac__fabric@0.bare), and the shipped fabric prebuild is built with
+# -static-libstdc++. See packages/classification-ggml/test/unit/CMakeLists.txt
+# for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI
+# runs: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1.
 if(NOT WIN32)
   target_link_libraries(
     addon-test
     PRIVATE
       -fsanitize=address
   )
-endif()
-# Copy ggml backend libraries next to the test executable
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    add_custom_command(TARGET addon-test POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:ggml::${_backend}>
-        ${CMAKE_CURRENT_BINARY_DIR}
-      COMMENT "Copying ggml backend ${_backend} to test directory"
-    )
-  endforeach()
 endif()
 
 add_test(NAME LlamaModelTests COMMAND addon-test)

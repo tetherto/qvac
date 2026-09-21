@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-import path = require("bare-path");
-/* eslint-enable @typescript-eslint/no-require-imports */
 import type { QvacResponse } from "@qvac/infer-base";
 
 import {
@@ -13,6 +10,7 @@ import {
   type WhisperConfigurationParams,
 } from "./configChecker";
 import { QvacErrorAddonASRGgml, ERR_CODES } from "../../lib/error";
+import { resolveBackendsDir } from "../../lib/backends";
 import { END_OF_INPUT } from "../../lib/constants";
 import { normalizeAudioStream, type ByteFormat } from "../../lib/audio";
 import type {
@@ -31,7 +29,6 @@ import type {
   StreamingSession,
 } from "../types";
 
-const PREBUILDS_DIR = path.join(__dirname, "..", "..", "prebuilds");
 const MS_PER_SECOND = 1000;
 const DEFAULT_BYTE_FORMAT: ByteFormat = "s16le";
 /** The native wire format is pinned; all input is normalized to f32. */
@@ -99,7 +96,12 @@ export interface WhisperConfig extends Record<string, unknown> {
 export interface WhisperEngineConfig {
   engine: "whisper";
   whisperConfig?: WhisperConfig;
-  contextParams?: Record<string, unknown>;
+  contextParams?: Record<string, unknown> & {
+    /** Raw ggml registry index (number or integer string), or GPU class. */
+    "main-gpu"?: number | string;
+    /** Alias of main-gpu; supply only one spelling. */
+    main_gpu?: number | string;
+  };
   miscConfig?: Record<string, unknown>;
   audio_format?: string;
   vadModelPath?: string;
@@ -294,13 +296,16 @@ export class WhisperDriver implements AsrDriver {
 
     this._pendingJobId = null;
     const response = this.ctx.job.start() as QvacResponse<ASRStreamOutput>;
+    let closing = false;
     const finalized = response.await().finally(() => {
       addon.finishStreaming();
     });
     void finalized.catch(() => {});
     response.await = () => finalized;
 
-    void this._pumpStreamingAudio(audio).catch((error: unknown) => {
+    void this._pumpStreamingAudio(audio, () => {
+      closing = true;
+    }).catch((error: unknown) => {
       this._pendingJobId = null;
       this.ctx.job.fail(error as Error);
     });
@@ -311,6 +316,9 @@ export class WhisperDriver implements AsrDriver {
         () => {},
         () => {},
       ),
+      get closing(): boolean {
+        return closing;
+      },
     });
   }
 
@@ -351,13 +359,17 @@ export class WhisperDriver implements AsrDriver {
     await addon.append({ type: END_OF_INPUT });
   }
 
-  async _pumpStreamingAudio(audio: NormalizedAudioStream): Promise<void> {
+  async _pumpStreamingAudio(
+    audio: NormalizedAudioStream,
+    markClosing: () => void,
+  ): Promise<void> {
     this.ctx.logger.debug("Start handling streaming audio");
     const addon = this._requiredAddon();
     for await (const chunk of audio) {
       addon.appendStreamingAudio({ type: "audio", input: bytesOf(chunk) });
     }
     this.ctx.logger.debug("Ending streaming session");
+    markClosing();
     addon.endStreaming();
   }
 
@@ -416,7 +428,7 @@ export class WhisperDriver implements AsrDriver {
       backendsDir:
         typeof this.params.backendsDir === "string"
           ? this.params.backendsDir
-          : PREBUILDS_DIR,
+          : resolveBackendsDir(),
     };
   }
 

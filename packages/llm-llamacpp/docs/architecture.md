@@ -55,7 +55,7 @@
 - **Quantized models**: GGUF format
 - **Multimodal**: Vision models (i.e. Qwen3-VL, SmolVLM, etc.)
 - **Sharded loading**: Caller passes every shard (and the `.tensors.txt` companion); the addon streams them into llama.cpp in order
-- **Multi-GPU**: `split-mode`/`tensor-split` for pipeline (`'layer'`) and tensor (`'row'` on CUDA/SYCL) parallelism — see [multi-gpu.md](multi-gpu.md)
+- **Multi-GPU**: `split-mode`/`tensor-split` for pipeline (`'layer'`) and EXPERIMENTAL tensor (`'tensor'`) parallelism — see [multi-gpu.md](multi-gpu.md)
 
 ## Target Platforms
 
@@ -69,7 +69,7 @@
 
 **Dependencies:**
 - inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler, runJob/activate/loadWeights/cancel/cancelJob/activeJobs/destroyInstance)
-- qvac-fabric-llm.cpp (≥9840.1.1): Inference engine
+- @qvac/fabric (^0.16.1): Shared llama.cpp/ggml/mtmd inference engine
 - @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + serialized admission)
 - @qvac/logging: `QvacLogger` wrapper
 - bare-process: runtime/process integration used by the JS package surface
@@ -131,7 +131,7 @@ graph TB
 | @qvac/infer-base | Framework | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` |
 | @qvac/logging | Framework | `QvacLogger` wrapper |
 | inference-addon-cpp | Native | C++ addon framework (multi-job scheduler) |
-| qvac-fabric-llm.cpp | Native | Inference engine |
+| @qvac/fabric | Native | Shared llama.cpp/ggml/mtmd inference engine, dynamically linked as `qvac__fabric@0.bare` |
 | bare-process | Runtime | Process/runtime integration |
 | Bare Runtime | Runtime | JavaScript execution |
 

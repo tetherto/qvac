@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.41.3] - 2026-09-18
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.0` -> `^0.16.1`. Another hard floor: Android consumers built against `0.16.0` fail to load. That release named the ELF version node `QVAC_FABRIC_ABI_1` on every ELF target, so an Android addon records a `DT_VERNEED` that bionic cannot satisfy — `dlopen` fails and `bare` reports `ADDON_NOT_FOUND: Cannot find addon '.'` from `binding.js` before any model work. `0.16.1` names the node only where fabric owns the C++ runtime (Linux embedding libc++); Android keeps the anonymous node it had through `0.15.0`. An Android binary linked against `0.16.0` keeps the versioned imports and still fails, so this package has to be rebuilt. A caret on a `0.x` version locks the minor, so `^0.16.0` could still resolve `0.16.0`. Released as a patch rather than a minor so consumers already tracking the `0.41.x` line pick this up without a range change of their own. Linux binaries built against `0.16.0` are unaffected. Desktop was unaffected. No API change. Rationale: fabric `0.16.1` ([#4566](https://github.com/tetherto/qvac/pull/4566)).
+
+## [0.41.2] - 2026-09-17
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.15.0` -> `^0.16.0`. Another hard floor, for the reason the last one turned out not to be enough on its own: `0.15.0` exported the C++ runtime, but nothing bound this addon to it. `bare`'s executable links GNU `libstdc++.so.6`, which puts a second complete C++ runtime in the process' **global** lookup scope — searched ahead of a `dlopen`'d module's own `DT_NEEDED` chain — so `__cxa_throw`, `__gxx_personality_v0` and the `std::` typeinfo objects resolved from libstdc++ while fabric's exports went unused. `0.16.0` names its version node `QVAC_FABRIC_ABI_1`, which makes this module record a `DT_VERNEED` that libstdc++ cannot satisfy, and that is what completes the migration `0.41.0` started. A caret on a `0.x` version locks the minor, so `^0.15.0` could not have resolved `0.16.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.41.x` line pick this up without a range change of their own.
+- The build now proves the pin instead of assuming it: `qvac_addon_finalize` reads the linked module with `readelf` and fails if any C++ runtime symbol is imported without the `QVAC_FABRIC_ABI_1` requirement. That check exists because the built ELF is the only place the invariant is observable — paired with a fabric that does not stamp the node, this module links and loads exactly as before and merely stops matching typed catches.
+- The module now exports the two `bare_*` entry points the runtime resolves by name and nothing else, down from about 1985 symbols: its own and nlohmann's typeinfo, and the whole of `inference-addon-cpp`, are no longer exported. `bare` loads modules `RTLD_LOCAL`, so nothing could reach those anyway; the addon and fabric are now a closed unit exposing plain C by construction rather than by the loader flags of whichever host loads them.
+
+### Fixed
+
+- The behaviour `0.41.1` described takes effect only now: a load setting that only fabric can reject surfaces with llama's own message rather than being flattened. With the runtime unpinned, this addon's `catch (const std::exception&)` handlers and `JSCATCH`'s arm at the JS boundary still saw a fabric throw as foreign, so that entry's claim did not hold on Linux. The gap was also wider than the two static libc++ copies it described: `std::exception_ptr` split down the same seam, with `std::current_exception` binding to libstdc++ and `std::rethrow_exception` to fabric's libc++, which re-raises the exception with a class GNU's personality routine matches only against `catch (...)`. `inference-addon-cpp`'s `JsAsyncTask` round-trips errors through exactly that path, so an error raised inside fabric and rethrown across an async boundary — a model load among them — reached JS as `INTERNAL_ERROR` / `"Unknown error"` whatever handler was in place. Measured on `llm-llamacpp`; the mechanism is in shared code rather than in any one addon. Linux only; macOS, Windows, Android and iOS already share one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4519](https://github.com/tetherto/qvac/pull/4519)).
+
+## [0.41.1] - 2026-09-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.41.x` line pick this up without a range change of their own. This continues the migration `0.41.0` started: the runtime now supplies the addon's C++ library as well as llama, ggml and the vector-index API.
+- One C++ runtime per process means one copy of every `std::` typeinfo, and RTTI matches typeinfo by address rather than by name. A load setting that only fabric can reject therefore surfaces with llama's own message instead of being flattened: this addon's `catch (const std::exception&)` handlers, and `JSCATCH`'s equivalent arm at the JS boundary, now match a throw that came from fabric, where before it fell through to the catch-all and reached JS as `INTERNAL_ERROR` / `"Unknown error"`. Linux only; macOS, Windows, Android and iOS already shared one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
+## [0.41.0] - 2026-09-15
+
+This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. llama.cpp, ggml and the vector-index API are now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer.
+
+### Changed
+
+- The llama/ggml runtime, its compute backends and the `ggml_vec_index_*` vector-index API are now provided by the `@qvac/fabric` npm dependency (`^0.14.0`) rather than the static `qvac-fabric` vcpkg port. The addon no longer bundles them; on desktop it resolves the single `@qvac/fabric` install and loads the backend modules from `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to this addon's own `prebuilds/` on mobile (where the package tree isn't resolvable from the packed worklet bundle). `@qvac/fabric` carries the prebuilt runtime inside its own tarball, so run `npm install` before `bare-make generate`/`build` and do not prune the dependency at runtime.
+- The range is a hard floor, not a courtesy bump: `0.12.0` first shipped the `vector-index` feature, and `0.13.0` is the first build that actually exports the `ggml_vec_index_*` symbols on Darwin and iOS (the visibility fix against `CXX_VISIBILITY_PRESET hidden`). Against `0.12.0` a Darwin consumer links cleanly and then SIGSEGVs on the first call. `^0.14.0` raises the floor further to pick up `qvac-fabric` `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). A caret on a `0.x` version locks the minor, so a `^0.13.0` range would not have resolved `0.14.0` on its own. BERT embedding touches none of `10549.1.0`'s MoE, multimodal-projector or speculative-decoding paths, so that part of the bump keeps this package on the current shared runtime rather than a superseded one.
+- `CMakeLists.txt` now builds on the shared `cmake/qvac-addon` template, replacing the hand-rolled preamble (vcpkg triplet overlay, libc++ flags, lint-cpp config sync, C++20 block, Windows lean-header defines, `--exclude-libs,ALL`, `JS_LOGGER`/`BACKENDS_SUBDIR`). This also picks up the Android 16 KB page-size link flags and the Apple compiler-rt `force_load` that the template applies to every addon.
+- `BACKENDS_SUBDIR` moved from `<host>/embed-llamacpp` to `<host>/qvac__fabric`, matching where the shared runtime stages its backends.
+- The `vk-profiling` build feature is gone. Vulkan profiling is now a property of the shared runtime, selected when building `@qvac/fabric`.
+
+### Breaking
+
+- `split-mode` no longer accepts `'row'` ([#4328](https://github.com/tetherto/qvac/pull/4328)). Previously `'row'` was degraded to `'layer'` at load with a warning, because no shipped backend provides the required split buffers; it is now rejected outright, and the declared type is `'none' | 'layer'`. GPU backend selection is also an explicit allowlist of Vulkan, Metal, OpenCL and CUDA rather than "any non-CPU ggml device". Callers passing `'row'` must pass `'layer'`.
+
+### Fixed
+
+- `IdMapIndex` module-isolation assertions are made from a fresh process instead of by evicting `require.cache` entries ([#4464](https://github.com/tetherto/qvac/pull/4464)), which stopped working from `bare@1.31.1`. Test-only; no shipped code changes.
+- iOS test-harness work from [#4399](https://github.com/tetherto/qvac/pull/4399) — hardlinked pre-staged models and iOS crash-report capture. `test/` only.
+
+### Removed
+
+- `qvac-fabric` from `vcpkg.json`. The addon's remaining vcpkg dependencies are `opencl` (Android), `qvac-lib-inference-addon-cpp` and `qvac-lint-cpp`.
+
+## [0.40.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). Carries the fix that keeps the `ggml_vec_index_*` C API exportable under hidden visibility — this package is the only consumer of that API — plus metadata-only GGUF loading under `no_alloc`; no API change for this package.
+
 ## [0.39.0] - 2026-09-08
 
 ### Changed

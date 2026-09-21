@@ -16,18 +16,18 @@ on:
     paths:
       - "packages/llm-llamacpp/**"
       - ".github/workflows/*llm-llamacpp*.yml"
+      - "packages/fabric/vcpkg.json"
+      - "packages/fabric/vcpkg-configuration.json"
 
   workflow_dispatch:
   workflow_call:
 
 permissions:
+  checks: read
   contents: read
   pull-requests: read
   packages: read
   id-token: write
-
-env:
-  PKG_DIR: packages/llm-llamacpp
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -86,6 +86,66 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  detect-fabric-stack:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
+      # A stack PR only produces an artifact to wait for when on-pr-fabric will
+      # actually publish one. That producer needs the prebuilds label (or a
+      # label implying it) and, because wait-and-download only trusts a
+      # pull_request_target producer, a pull_request_target event. Every
+      # downstream fabric clause reads this rather than fabric_stack so the two
+      # sides cannot drift into a 120-minute poll for an artifact nobody builds.
+      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && github.event_name == 'pull_request_target' }}
+    steps:
+      - name: Checkout repository (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect fabric-stack PR
+        id: detect
+        uses: tetherto/qvac/.github/actions/detect-fabric-stack@6620d695d3a07cafe3931182e7844dde376a23f8
+      - name: Warn when a stack PR builds against released fabric
+        if: steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds != 'true'
+        shell: bash
+        run: |
+          echo "::warning::This PR changes packages/fabric, but no prebuilds label is set, so on-pr-fabric publishes nothing. Native jobs here build against the released @qvac/fabric, not this PR's. Add the 'prebuilds' label to exercise the stack."
+
+  resolve-fabric-prebuilds:
+    if: needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - detect-fabric-stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Wait for fabric-prebuilds from on-pr-fabric
+        uses: tetherto/qvac/.github/actions/wait-and-download-fabric-prebuilds@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          github-token: ${{ github.token }}
+          # needs_fabric_artifact pins this job to pull_request_target, where the
+          # PR payload always carries a head SHA. The fallback stays because the
+          # action rejects an empty SHA outright, and every other head-SHA
+          # consumer in this workflow reads it the same way.
+          head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Re-publish fabric-prebuilds for downstream jobs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
+
   verify-fabric-lockstep:
     if: needs.authorize.outputs.allowed == 'true'
     needs: [fork-approval, authorize]
@@ -124,61 +184,60 @@ jobs:
           workdir: packages/llm-llamacpp
 
   cpp-tests:
-    if: needs.ci-router.outputs.run_cpp_tests == 'true' && needs.authorize.outputs.allowed == 'true'
+    # resolve-fabric-prebuilds is skipped on every non-fabric-stack PR, and an
+    # if: without a status-check function carries an implicit success() over all
+    # of needs — which would skip this job there. always() suppresses it; the
+    # sanity-checks gate it also suppresses is restored explicitly below.
+    if: |-
+      always() && !cancelled() && needs.sanity-checks.result == 'success' && needs.detect-fabric-stack.result == 'success' && needs.ci-router.outputs.run_cpp_tests == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     needs:
       - fork-approval
       - authorize
       - sanity-checks
       - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     uses: ./.github/workflows/cpp-tests-llm.yml
     secrets: inherit
     with:
       workdir: packages/llm-llamacpp
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   cpp-lint:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
+    # resolve-fabric-prebuilds is skipped on every non-fabric-stack PR, and an
+    # if: without a status-check function carries an implicit success() over all
+    # of needs — which would skip this job there. always() suppresses it; the
+    # gates it also suppresses are restored explicitly below.
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_verified_checks == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     uses: ./.github/workflows/cpp-lint.yaml
     needs:
       - fork-approval
       - authorize
       - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/llm-llamacpp
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
-  ts-checks:
+  await-ts-checks:
+    name: Await PR-head TypeScript checks
+    if: github.event_name == 'pull_request_target' && needs.authorize.outputs.allowed == 'true'
     needs: [fork-approval, authorize]
-    if: needs.authorize.outputs.allowed == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        working-directory: packages/llm-llamacpp
-        run: npm install
-
-      - name: Type declaration check
-        working-directory: packages/llm-llamacpp
-        run: npm run test:dts
-
-      - name: Run lint and unit tests
-        id: run_lint_and_unit_tests
-        uses: ./.github/actions/run-lint-and-unit-tests
-        with:
-          gpr-token: ${{ secrets.GITHUB_TOKEN }}
-          pat-token: ${{ secrets.GITHUB_TOKEN }}
-          registry-type: gpr
-          workdir: packages/llm-llamacpp
+    uses: ./.github/workflows/reusable-await-ts-checks.yml
+    with:
+      check_name: 'llm-pr-head-ts-checks / ts-checks'
 
   detect-native-changes:
     if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
@@ -214,10 +273,16 @@ jobs:
   # `prebuilds` artifact, re-publishing it for downstream jobs. Falls back to a
   # rebuild (reuse_hit=false) whenever nothing matches.
   prebuild-artifact-reuse:
-    if: needs.detect-native-changes.outputs.native_changed == 'false'
+    # Deliberately the broad fabric_stack signal, not needs_fabric_artifact: a
+    # prebuild cached before the fabric change is stale for any stack PR,
+    # whether or not this run is the one that overlays the PR's fabric.
+    if: |
+      needs.detect-native-changes.outputs.native_changed == 'false' &&
+      needs.detect-fabric-stack.outputs.fabric_stack != 'true'
     needs:
       - fork-approval
       - detect-native-changes
+      - detect-fabric-stack
       - sanity-checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -241,6 +306,7 @@ jobs:
           workflow-file: on-pr-llm-llamacpp.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-llm-llamacpp
 
   prebuild:
     needs:
@@ -249,13 +315,21 @@ jobs:
       - ci-router
       - sanity-checks
       - detect-native-changes
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
       - prebuild-artifact-reuse
+    # A failed detection leaves needs_fabric_artifact empty, which satisfies
+    # needs_fabric_artifact != 'true' — without the result guard a stack PR would
+    # build against the released @qvac/fabric and prebuild-artifact-save would
+    # then publish that bundle as reusable.
     if: |
       always() &&
       !cancelled() &&
       needs.sanity-checks.result == 'success' &&
+      needs.detect-fabric-stack.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     permissions:
       contents: write
@@ -267,6 +341,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   prebuild-artifact-save:
     # Tag this successful prebuild run with a tiny marker artifact named with
@@ -299,13 +374,15 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
   run-integration-tests:
-    if: always() && !cancelled() && needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    if: always() && !cancelled() && needs.detect-fabric-stack.result == 'success' && needs.ci-router.outputs.run_desktop == 'true' && needs.authorize.outputs.allowed == 'true' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
     needs:
       - fork-approval
       - authorize
       - prebuild
       - prebuild-artifact-reuse
       - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     permissions:
       contents: read
       packages: read
@@ -315,6 +392,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   # MOBILE IS NOW ON-DEMAND ONLY. The PR mobile lane was removed to stop PRs from
   # auto-launching (costly) AWS Device Farm runs. Run it by dispatching
@@ -593,9 +671,14 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [authorize, verify-fabric-lockstep, run-integration-tests, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, ts-checks, ci-router]
+    needs: [authorize, verify-fabric-lockstep, run-integration-tests, sanity-checks, detect-fabric-stack, resolve-fabric-prebuilds, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, cpp-tests, cpp-lint, await-ts-checks, ci-router]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' }}
-      build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      # Every status below opens with the same fabric-stack guard: a skipped
+      # downstream job is only a deliberate no-op when the decision that skipped
+      # it is trustworthy. If detection failed, or the prebuild hand-off failed
+      # on a stack PR, the skips are consequences of that failure and must not
+      # read as passes.
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.verify-fabric-lockstep.result == 'success' && needs.sanity-checks.result == 'success' && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' || needs.await-ts-checks.result == 'skipped') }}
+      build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}

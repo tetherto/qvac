@@ -26,16 +26,57 @@ export const AUDIOGEN_INPUT_CHANNELS = 2
  * 384 KB per second — so a request cannot exhaust the inference process.
  */
 export const AUDIOGEN_INPUT_MAX_SECONDS = 600
+/**
+ * Semantic codes the ACE-Step LM emits per second of audio (the 5 Hz LM), so
+ * an `audioCodes` payload is bounded the same way PCM inputs are: a request
+ * cannot carry more codes than `AUDIOGEN_INPUT_MAX_SECONDS` of audio needs.
+ */
+const ACESTEP_CODES_PER_SECOND = 5
+/** Longest `audioCodes` array the SDK accepts (600 s at 5 codes per second). */
+export const AUDIOGEN_MAX_AUDIO_CODES = AUDIOGEN_INPUT_MAX_SECONDS * ACESTEP_CODES_PER_SECOND
+const INT32_MIN = -2147483648
+const INT32_MAX = 2147483647
+
+/**
+ * Operations `audioEdit()` chains over a source recording, in the vocabulary
+ * of `@qvac/audiogen-ggml`'s `AudioEditOperationType` (ACE-Step only):
+ * `flow-edit` re-conditions the whole clip from a source prompt to a target
+ * prompt, `repaint` regenerates a time range against a new prompt.
+ */
+export const AUDIOGEN_EDIT_OPERATIONS = ['flow-edit', 'repaint'] as const
+export const audioGenEditOperationTypeSchema = z.enum(AUDIOGEN_EDIT_OPERATIONS)
+
+/** Repaint preservation modes; `balanced` is the default and honours `strength`. */
+export const AUDIOGEN_REPAINT_MODES = ['conservative', 'balanced', 'aggressive'] as const
+export const audioGenRepaintModeSchema = z.enum(AUDIOGEN_REPAINT_MODES)
 
 /**
  * ACE-Step task discriminators reachable through the SDK. `text2music` is the
  * default caption-driven generation; `cover-nofsq` re-renders `sourceAudio`
- * with a new caption while keeping its structure. The engine also reserves an
- * FSQ-roundtrip `cover` task that is not implemented yet, so it is not offered
- * here.
+ * with a new caption while keeping its structure; `lego` regenerates a single
+ * instrument layer of `sourceAudio`, named by `track`. The engine also
+ * reserves an FSQ-roundtrip `cover` task that is not implemented yet, so it is
+ * not offered here.
  */
-export const AUDIOGEN_TASK_TYPES = ['text2music', 'cover-nofsq'] as const
+export const AUDIOGEN_TASK_TYPES = ['text2music', 'cover-nofsq', 'lego'] as const
 export const audioGenTaskTypeSchema = z.enum(AUDIOGEN_TASK_TYPES)
+
+/** Instrument layers the `lego` task can target, in the engine's vocabulary. */
+export const AUDIOGEN_TRACKS = [
+  'vocals',
+  'backing_vocals',
+  'drums',
+  'bass',
+  'guitar',
+  'keyboard',
+  'percussion',
+  'strings',
+  'synth',
+  'fx',
+  'brass',
+  'woodwinds'
+] as const
+export const audioGenTrackSchema = z.enum(AUDIOGEN_TRACKS)
 
 const commonAudioGenRuntimeConfigShape = {
   useGPU: z
@@ -158,6 +199,14 @@ export const audioGenConfigSchema = z.discriminatedUnion('engine', [
 const unitIntervalSchema = z.number().min(0).max(1)
 
 /**
+ * LM sampling knobs. Generation and understanding drive the same sampler, so
+ * both paths share one definition: the addon accepts any finite value here and
+ * reads `lmTopK: 0` as "top-k off", which a `positive()` bound would reject.
+ */
+const lmTemperatureSchema = z.number().nonnegative()
+const lmTopKSchema = z.number().int().nonnegative()
+
+/**
  * Wire form of a reference/source audio input. `filePath` inputs are decoded
  * server-side (any format the SDK's audio decoder supports, plus raw PCM);
  * `base64` inputs must already be interleaved stereo 48 kHz Float32 LE PCM.
@@ -182,6 +231,29 @@ function bytesToBase64(bytes: Uint8Array) {
   return encodeBase64(bytes)
 }
 
+/**
+ * Wire form of frozen ACE-Step semantic codes: a plain int32 array, so it
+ * survives JSON transport and reaches non-JS clients as a list of integers.
+ */
+const audioCodesWireSchema = z
+  .array(z.number().int().min(INT32_MIN).max(INT32_MAX))
+  .min(1)
+  .max(AUDIOGEN_MAX_AUDIO_CODES)
+  .describe(
+    'Frozen ACE-Step semantic codes (int32) to synthesize instead of running the LM, e.g. codes recovered from an earlier run. ACE-Step only; rejected by MiniMax.'
+  )
+
+/**
+ * Client form of `audioCodes`: the `Int32Array` the addon works with, or a
+ * plain number array. Normalized to the wire form.
+ */
+export const audioGenClientAudioCodesSchema = z
+  .union([
+    z.instanceof(Int32Array).transform((codes): number[] => Array.from(codes)),
+    z.array(z.number())
+  ])
+  .pipe(audioCodesWireSchema)
+
 const audioGenGenerationShape = {
   modelId: z.string().min(1),
   caption: z.string().trim().min(1, 'caption must not be empty or whitespace-only'),
@@ -191,6 +263,54 @@ const audioGenGenerationShape = {
   bpm: z.number().int().positive().optional(),
   keyscale: z.string().min(1).optional(),
   timesignature: z.string().min(1).optional(),
+  augmentCaptionWithMetadata: z
+    .boolean()
+    .optional()
+    .describe(
+      'Append BPM/tempo, time signature, and key guidance to the internal conditioning caption while the result metadata keeps the original caption (default: false). ACE-Step only; rejected by MiniMax.'
+    ),
+  simpleMode: z
+    .boolean()
+    .optional()
+    .describe(
+      "Treat `caption` as a short natural-language query and let the LM compose the full request before synthesis: a detailed caption, lyrics, and any metadata left unset. Options you set are kept. Requires `taskType: 'text2music'` and no `audioCodes`; leave `lyrics` unset for LM-written vocals or pass '[Instrumental]' for an instrumental. Mutually exclusive with `rewriteQuery`. ACE-Step only."
+    ),
+  rewriteQuery: z
+    .boolean()
+    .optional()
+    .describe(
+      "Query Rewriting: the LM rewrites `caption` into a detailed musical description before synthesis, preserving the lyric content and filling metadata left unset. Takes caption AND lyrics as input, so real `lyrics` are required ('[Instrumental]' belongs to Simple Mode). Requires `taskType: 'text2music'`; mutually exclusive with `simpleMode`. Faithful rewriting needs the 1.7B LM. ACE-Step only."
+    ),
+  generateLrc: z
+    .boolean()
+    .optional()
+    .describe(
+      "Align the lyrics with the generated audio and return karaoke-style LRC text in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`. Needs lyrics to align — pass `lyrics` or let Simple Mode write them; instrumental requests are rejected. Requires `taskType: 'text2music'`. ACE-Step only."
+    ),
+  computeQualityScore: z
+    .boolean()
+    .optional()
+    .describe(
+      "Teacher-force the generated audio codes back through the LM and report a weighted [0, 1] match against the request in `stats.qualityScore` (caption/lyrics PMI plus metadata recall). Costs extra LM forwards after code generation; made for ranking a batch of takes. Requires `taskType: 'text2music'`. ACE-Step only."
+    ),
+  normalizeLoudness: z
+    .boolean()
+    .optional()
+    .describe(
+      'Percentile loudness normalization on the generated audio (default: true): the 99.999th-percentile sample scales to full scale and the tiny tail above it clips. Set false for the raw engine output. Audio edits are never normalized. ACE-Step only.'
+    ),
+  guidanceScale: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe(
+      'DiT classifier-free guidance scale. 0 (the default) resolves automatically: 1.0 on turbo variants, which disables CFG, and 7.0 on base/sft. Values above 1 run CFG via APG and double the DiT cost per step. ACE-Step only.'
+    ),
+  track: audioGenTrackSchema
+    .optional()
+    .describe(
+      "Instrument layer the `lego` task regenerates. Required when `taskType` is 'lego' and rejected otherwise. ACE-Step only."
+    ),
   duration: z
     .number()
     .positive()
@@ -221,20 +341,13 @@ const audioGenGenerationShape = {
     .describe(
       'MiniMax flow classifier-free guidance scale for this generation. MiniMax only; rejected by ACE-Step.'
     ),
-  lmTemperature: z
-    .number()
-    .nonnegative()
+  lmTemperature: lmTemperatureSchema
     .optional()
     .describe('LM sampling temperature (ACE-Step default: 0.85).'),
   lmTopP: unitIntervalSchema
     .optional()
     .describe('LM nucleus-sampling probability (ACE-Step default: 0.9).'),
-  lmTopK: z
-    .number()
-    .int()
-    .nonnegative()
-    .optional()
-    .describe('LM top-k cutoff; 0 disables top-k filtering.'),
+  lmTopK: lmTopKSchema.optional().describe('LM top-k cutoff; 0 disables top-k filtering.'),
   lmCfgScale: z
     .number()
     .nonnegative()
@@ -262,7 +375,9 @@ const audioGenGenerationShape = {
     .describe('DCW high-frequency correction strength (official default: 0.02).'),
   taskType: audioGenTaskTypeSchema
     .optional()
-    .describe('Generation task: text2music (default) or cover-nofsq (requires sourceAudio).'),
+    .describe(
+      'Generation task: text2music (default), cover-nofsq (requires sourceAudio), or lego (requires track).'
+    ),
   audioCoverStrength: unitIntervalSchema
     .optional()
     .describe(
@@ -277,6 +392,7 @@ const audioGenGenerationShape = {
 
 const audioGenParamsShape = {
   ...audioGenGenerationShape,
+  audioCodes: audioCodesWireSchema.optional(),
   referenceAudio: audioGenAudioInputSchema
     .optional()
     .describe('Optional timbre reference audio; omit to keep the engine default.'),
@@ -315,17 +431,111 @@ function validateCoverTask(
   }
 }
 
+/**
+ * `track` names the layer the `lego` task regenerates, so the two are bound
+ * together: `lego` without a layer has nothing to rebuild, and a layer without
+ * `lego` is silently ignored by the engine.
+ */
+function validateLegoTask(
+  value: { taskType?: string | undefined; track?: string | undefined; sourceAudio?: unknown },
+  ctx: z.RefinementCtx
+) {
+  if (value.taskType === 'lego' && value.track === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['track'],
+      message: "taskType 'lego' requires track"
+    })
+  }
+  if (value.taskType === 'lego' && value.sourceAudio === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['sourceAudio'],
+      message: "taskType 'lego' requires sourceAudio"
+    })
+  }
+  if (value.track !== undefined && value.taskType !== 'lego') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['track'],
+      message: "track is only valid with taskType 'lego'"
+    })
+  }
+}
+
+/**
+ * The four LM-driven controls only run on the `text2music` path. An unset
+ * `taskType` is that path, so only an explicit other task rejects them.
+ *
+ * Simple Mode and Query Rewriting additionally need the LM to produce the
+ * codes, so neither combines with pre-supplied `audioCodes` on any task.
+ */
+const TEXT_TO_MUSIC_ONLY_CONTROLS = [
+  'simpleMode',
+  'rewriteQuery',
+  'generateLrc',
+  'computeQualityScore'
+] as const
+
+function validateTextToMusicControls(
+  value: {
+    taskType?: string | undefined
+    audioCodes?: unknown
+    simpleMode?: boolean | undefined
+    rewriteQuery?: boolean | undefined
+    generateLrc?: boolean | undefined
+    computeQualityScore?: boolean | undefined
+  },
+  ctx: z.RefinementCtx
+) {
+  if (value.simpleMode === true && value.rewriteQuery === true) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['rewriteQuery'],
+      message:
+        'simpleMode and rewriteQuery cannot be combined: Simple Mode writes the lyrics, Query Rewriting rewrites around existing ones'
+    })
+  }
+  for (const control of ['simpleMode', 'rewriteQuery'] as const) {
+    if (value[control] === true && value.audioCodes !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [control],
+        message: `${control} cannot take pre-supplied audioCodes`
+      })
+    }
+  }
+  if (value.taskType === undefined || value.taskType === 'text2music') return
+  for (const control of TEXT_TO_MUSIC_ONLY_CONTROLS) {
+    if (value[control] === true) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [control],
+        message: `${control} requires taskType 'text2music'`
+      })
+    }
+  }
+}
+
 function validateAudioGenRequest(
   value: {
     duration?: number | undefined
     maxFrames?: number | undefined
     taskType?: string | undefined
     sourceAudio?: unknown
+    audioCodes?: unknown
     audioCoverStrength?: number | undefined
+    track?: string | undefined
+    simpleMode?: boolean | undefined
+    rewriteQuery?: boolean | undefined
+    generateLrc?: boolean | undefined
+    computeQualityScore?: boolean | undefined
   },
   ctx: z.RefinementCtx
 ) {
   validateCoverTask(value, ctx)
+  validateLegoTask(value, ctx)
+  validateTextToMusicControls(value, ctx)
   if (value.duration !== undefined && value.maxFrames !== undefined) {
     ctx.addIssue({
       code: 'custom',
@@ -338,6 +548,7 @@ function validateAudioGenRequest(
 export const audioGenClientParamsSchema = z
   .object({
     ...audioGenGenerationShape,
+    audioCodes: audioGenClientAudioCodesSchema.optional(),
     referenceAudio: audioGenClientAudioInputSchema.optional(),
     sourceAudio: audioGenClientAudioInputSchema.optional()
   })
@@ -352,6 +563,135 @@ export const audioGenStreamRequestSchema = z
   })
   .strict()
   .superRefine(validateAudioGenRequest)
+
+// ---------------------------------------------------------------------------
+// Source-driven editing (`audioEdit()`): the addon's ordered Flow-Edit /
+// Repaint pipeline over one source recording. ACE-Step only.
+// ---------------------------------------------------------------------------
+
+const audioEditPromptSchema = z
+  .object({
+    caption: z.string().trim().min(1, 'caption must not be empty or whitespace-only'),
+    lyrics: z.string().optional().describe('Lyrics for this prompt; omit for `[Instrumental]`.')
+  })
+  .strict()
+
+export const audioEditFlowEditOperationSchema = z
+  .object({
+    type: z.literal('flow-edit'),
+    from: audioEditPromptSchema.describe('Description of the unedited source audio.'),
+    to: audioEditPromptSchema.describe('Description of the desired audio.'),
+    nMin: unitIntervalSchema
+      .optional()
+      .describe('Start of the Flow-Edit diffusion window (0..1, default 0).'),
+    nMax: unitIntervalSchema
+      .optional()
+      .describe('End of the Flow-Edit diffusion window (0..1, default 1).'),
+    nAvg: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe('Forward-noise samples averaged per active step (default 1).')
+  })
+  .strict()
+
+export const audioEditRepaintOperationSchema = z
+  .object({
+    type: z.literal('repaint'),
+    caption: z.string().trim().min(1, 'caption must not be empty or whitespace-only'),
+    lyrics: z
+      .string()
+      .optional()
+      .describe('Lyrics for the repainted region; omit for `[Instrumental]`.'),
+    start: z
+      .number()
+      .nonnegative()
+      .describe('Region start in seconds; must lie inside the source recording.'),
+    end: z
+      .number()
+      .positive()
+      .optional()
+      .describe(
+        'Region end in seconds; omit to repaint through the end of the source. The range must span at least one latent frame (1/25 s).'
+      ),
+    mode: audioGenRepaintModeSchema
+      .optional()
+      .describe('Preservation mode outside the repainted region (default balanced).'),
+    strength: unitIntervalSchema
+      .optional()
+      .describe('Balanced-mode preservation strength (0..1, default 0.5).')
+  })
+  .strict()
+
+export const audioEditOperationSchema = z.discriminatedUnion('type', [
+  audioEditFlowEditOperationSchema,
+  audioEditRepaintOperationSchema
+])
+
+const audioEditShape = {
+  modelId: z.string().min(1),
+  operations: z
+    .array(audioEditOperationSchema)
+    .min(1)
+    .describe(
+      'Ordered edit pipeline: operations run in array order and may repeat or mix. Flow-Edit is supported on turbo DiT variants only.'
+    ),
+  seed: z
+    .number()
+    .int()
+    .optional()
+    .describe('Seeds the first operation; each following operation uses seed + its index.')
+}
+
+/**
+ * Cross-field rules the addon enforces per operation, checked up front so a
+ * bad pipeline fails before any audio is decoded or the model slot is taken.
+ */
+function validateAudioEditOperations(
+  value: { operations: Array<z.output<typeof audioEditOperationSchema>> },
+  ctx: z.RefinementCtx
+) {
+  value.operations.forEach((operation, index) => {
+    if (operation.type === 'flow-edit') {
+      if ((operation.nMin ?? 0) > (operation.nMax ?? 1)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['operations', index, 'nMin'],
+          message: 'flow-edit requires nMin <= nMax'
+        })
+      }
+      return
+    }
+    if (operation.end !== undefined && operation.end <= operation.start) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['operations', index, 'end'],
+        message: 'repaint requires end > start'
+      })
+    }
+  })
+}
+
+export const audioEditClientParamsSchema = z
+  .object({
+    ...audioEditShape,
+    sourceAudio: audioGenClientAudioInputSchema
+  })
+  .strict()
+  .superRefine(validateAudioEditOperations)
+
+export const audioEditStreamRequestSchema = z
+  .object({
+    ...audioEditShape,
+    sourceAudio: audioGenAudioInputSchema.describe(
+      'Recording to edit: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1].'
+    ),
+    type: z.literal('audioEditStream'),
+    requestId: z.string().min(1).optional()
+  })
+  .strict()
+  .superRefine(validateAudioEditOperations)
 
 export type AudioGenProgress = {
   stage: string
@@ -374,34 +714,142 @@ export const audioGenProgressSchema = z.object({
     )
 }) satisfies z.ZodType<AudioGenProgress>
 
+/**
+ * The LM's description of a clip, returned by `audioUnderstand()`. `audioCodes`
+ * are the recovered FSQ codes, reusable as a generation's `audioCodes` input.
+ */
+export const audioGenUnderstandResultSchema = z.object({
+  caption: z.string(),
+  bpm: z.number(),
+  duration: z.number().describe('LM estimate in seconds. The recovered codes fix the true length.'),
+  keyscale: z.string(),
+  timesignature: z.string(),
+  vocalLanguage: z.string(),
+  audioCodes: z
+    .array(z.number().int().min(INT32_MIN).max(INT32_MAX))
+    .max(AUDIOGEN_MAX_AUDIO_CODES)
+    .describe(
+      "FSQ semantic codes recovered from the clip, reusable as a generation's `audioCodes` input."
+    )
+})
+
 export const audioGenStatsSchema = z.object({
   audioDurationMs: z.number().optional(),
   totalTimeMs: z.number().optional(),
   realTimeFactor: z.number().optional(),
   backendDevice: z.number().optional(),
-  backendId: z.number().optional()
+  backendId: z.number().optional(),
+  lyricsScore: z
+    .number()
+    .optional()
+    .describe(
+      'Lyric-to-audio alignment confidence in [0, 1]. Present only when the run set `generateLrc`.'
+    ),
+  lrc: z
+    .string()
+    .optional()
+    .describe('LRC-formatted lyric timestamps. Present only when the run set `generateLrc`.'),
+  qualityScore: z
+    .number()
+    .optional()
+    .describe(
+      'Weighted quality of the generated codes against the request, in [0, 1]. Present only when the run set `computeQualityScore`.'
+    ),
+  understand: audioGenUnderstandResultSchema
+    .optional()
+    .describe(
+      "The LM's description of the analysed clip. Present only on stats resolved by an `audioUnderstand()` response; also streamed as an output item."
+    )
 })
+
+/**
+ * `audioUnderstand()` runs ACE-Step's reverse pipeline over a recording: the
+ * engine encodes the PCM, recovers the FSQ semantic codes, and the LM reports
+ * the clip's metadata and a caption. Sampling knobs mirror the LM controls on
+ * a generation.
+ */
+const audioUnderstandShape = {
+  modelId: z.string().min(1),
+  seed: z.number().int().optional().describe('RNG seed for the LM decode; omit for a random seed.'),
+  vocalLanguage: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Language hint (e.g. 'es') forced into the result instead of the LM's guess."),
+  lmTemperature: lmTemperatureSchema.optional().describe('LM sampling temperature (default 0.85).'),
+  lmTopP: unitIntervalSchema.optional().describe('LM nucleus-sampling probability (default 0.9).'),
+  lmTopK: lmTopKSchema.optional().describe('LM top-k cutoff; 0 disables top-k filtering.')
+}
+export const audioUnderstandClientParamsSchema = z
+  .object({
+    ...audioUnderstandShape,
+    sourceAudio: audioGenClientAudioInputSchema
+  })
+  .strict()
+export const audioUnderstandRequestSchema = z
+  .object({
+    ...audioUnderstandShape,
+    sourceAudio: audioGenAudioInputSchema.describe(
+      'Recording to analyse: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1].'
+    ),
+    type: z.literal('audioUnderstand'),
+    requestId: z.string().min(1).optional()
+  })
+  .strict()
+export const audioUnderstandResponseSchema = z
+  .object({
+    type: z.literal('audioUnderstand'),
+    progress: audioGenProgressSchema.optional(),
+    understand: audioGenUnderstandResultSchema.optional(),
+    done: z.boolean().default(false),
+    stopReason: z.enum(['completed', 'cancelled']).optional(),
+    stats: audioGenStatsSchema.optional(),
+    diagnostics: inferenceBackendDiagnosticsSchema.optional()
+  })
+  .strict()
+
+// Generation and editing stream the same frames — progress ticks, PCM chunks,
+// one terminal frame — and differ only in the wire `type` that routes them.
+const audioGenStreamFrameShape = {
+  progress: audioGenProgressSchema.optional(),
+  data: base64Schema.optional(),
+  sampleRate: z.number().int().positive().optional(),
+  channels: z.number().int().positive().optional(),
+  bitsPerSample: z.number().int().positive().optional(),
+  done: z.boolean().default(false),
+  stopReason: z.enum(['completed', 'cancelled']).optional(),
+  stats: audioGenStatsSchema.optional(),
+  diagnostics: inferenceBackendDiagnosticsSchema
+    .optional()
+    .describe(
+      'Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
+    )
+}
 
 export const audioGenStreamResponseSchema = z
   .object({
     type: z.literal('audioGenStream'),
-    progress: audioGenProgressSchema.optional(),
-    data: base64Schema.optional(),
-    sampleRate: z.number().int().positive().optional(),
-    channels: z.number().int().positive().optional(),
-    bitsPerSample: z.number().int().positive().optional(),
-    done: z.boolean().default(false),
-    stopReason: z.enum(['completed', 'cancelled']).optional(),
-    stats: audioGenStatsSchema.optional(),
-    diagnostics: inferenceBackendDiagnosticsSchema
-      .optional()
-      .describe(
-        'Backend selection detail for the completed run. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
-      )
+    ...audioGenStreamFrameShape
+  })
+  .strict()
+
+export const audioEditStreamResponseSchema = z
+  .object({
+    type: z.literal('audioEditStream'),
+    ...audioGenStreamFrameShape
   })
   .strict()
 
 export type AudioGenTaskType = z.infer<typeof audioGenTaskTypeSchema>
+export type AudioGenEditOperationType = z.infer<typeof audioGenEditOperationTypeSchema>
+export type AudioGenRepaintMode = z.infer<typeof audioGenRepaintModeSchema>
+export type AudioEditPrompt = z.infer<typeof audioEditPromptSchema>
+export type AudioEditFlowEditOperation = z.infer<typeof audioEditFlowEditOperationSchema>
+export type AudioEditRepaintOperation = z.infer<typeof audioEditRepaintOperationSchema>
+export type AudioEditOperation = z.infer<typeof audioEditOperationSchema>
+export type AudioEditClientParams = z.input<typeof audioEditClientParamsSchema>
+export type AudioEditStreamRequest = z.infer<typeof audioEditStreamRequestSchema>
+export type AudioEditStreamResponse = z.infer<typeof audioEditStreamResponseSchema>
 export type AudioGenEngine = z.infer<typeof audioGenEngineSchema>
 export type AudioGenAudioInput = z.infer<typeof audioGenAudioInputSchema>
 export type AcestepAudioGenRuntimeConfig = z.infer<typeof acestepAudioGenRuntimeConfigSchema>
@@ -414,6 +862,11 @@ export type AudioGenClientParams = z.input<typeof audioGenClientParamsSchema>
 export type AudioGenStreamRequest = z.infer<typeof audioGenStreamRequestSchema>
 export type AudioGenStats = z.infer<typeof audioGenStatsSchema>
 export type AudioGenStreamResponse = z.infer<typeof audioGenStreamResponseSchema>
+export type AudioGenTrack = z.infer<typeof audioGenTrackSchema>
+export type AudioGenUnderstandResult = z.infer<typeof audioGenUnderstandResultSchema>
+export type AudioUnderstandClientParams = z.input<typeof audioUnderstandClientParamsSchema>
+export type AudioUnderstandRequest = z.infer<typeof audioUnderstandRequestSchema>
+export type AudioUnderstandResponse = z.infer<typeof audioUnderstandResponseSchema>
 
 export interface AudioGenAudio {
   pcm: Uint8Array
@@ -426,6 +879,18 @@ export interface AudioGenResult {
   requestId: string
   progressStream: AsyncGenerator<AudioGenProgress>
   audio: Promise<AudioGenAudio>
+  stats: Promise<AudioGenStats | undefined>
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
+}
+
+/**
+ * An `audioUnderstand()` run. Shaped like `AudioGenResult`, except the run
+ * produces a description rather than audio.
+ */
+export interface AudioUnderstandResult {
+  requestId: string
+  progressStream: AsyncGenerator<AudioGenProgress>
+  description: Promise<AudioGenUnderstandResult>
   stats: Promise<AudioGenStats | undefined>
   diagnostics: Promise<InferenceBackendDiagnostics | undefined>
 }

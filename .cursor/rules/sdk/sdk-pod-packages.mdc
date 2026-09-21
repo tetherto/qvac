@@ -1,57 +1,10 @@
 ---
-description: Defines SDK pod packages - the central source of truth for package scope
-alwaysApply: true
+description: Resolve current SDK pod ownership and release package slugs
+alwaysApply: false
 ---
 
-# SDK Pod Packages
+# SDK pod scope
 
-The following packages belong to the SDK pod:
-
-- `packages/sdk`
-- `packages/cli`
-- `packages/rag`
-- `packages/logging`
-- `packages/error`
-- `packages/ai-sdk-provider`
-- `packages/test-suite`
-- `packages/inference`
-- `packages/registry-server`
-- `plugins/opencode` (tag slug: `opencode-plugin`)
-- `plugins/openclaw` (tag slug: `openclaw-plugin`)
-
-When any rule or skill references "SDK pod" or "SDK pod packages", these are the packages in scope.
-
-Changelog / release `--package=` values use the **tag slug** (see `scripts/sdk/package-paths.cjs`).
-
-## Agent stack (release cascade subset)
-
-```text
-@qvac/sdk
-  -> @qvac/cli
-    -> @qvac/ai-sdk-provider
-      -> @qvac/opencode-plugin
-      -> @qvac/openclaw-plugin
-```
-
-`@qvac/sdk` and `packages/sdk-python` (`tetherto-qvac-sdk`) stay lockstep at the `@qvac/inference` version anchor via `qv-sdk-lockstep-sync` (not listed above). Use `/qv-agent-stack-sync` for plan / prepare-cascade / promote.
-
-## Glob Patterns
-
-```yaml
-globs:
-  - packages/sdk/**
-  - packages/cli/**
-  - packages/rag/**
-  - packages/logging/**
-  - packages/error/**
-  - packages/ai-sdk-provider/**
-  - packages/test-suite/**
-  - packages/inference/**
-  - packages/registry-server/**
-  - plugins/opencode/**
-  - plugins/openclaw/**
-```
-
-## Skill Naming Convention
-
-SDK pod skills use the `qv-sdk-` prefix (`qv-sdk-pr-create`, `qv-sdk-changelog`, `qv-sdk-backmerge`, `qv-sdk-e2e-create`, `qv-sdk-pr-status`, `qv-sdk-update-models`). Agent-stack orchestration is `qv-agent-stack-sync`.
+Read `.github/teams/sdk.json` for current ownership and
+`scripts/sdk/package-paths.cjs` for release/changelog package slugs. Do not maintain
+a duplicate package roster in agent configuration.

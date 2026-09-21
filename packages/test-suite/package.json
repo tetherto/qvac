@@ -1,6 +1,6 @@
 {
   "name": "@qvac/test-suite",
-  "version": "0.11.1",
+  "version": "0.11.3",
   "description": "Generic distributed testing framework for multi-platform execution",
   "type": "module",
   "main": "./dist/index.js",
@@ -37,10 +37,11 @@
     "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
+    "test:unit": "npm run build && node --test test/unit/*.test.js",
     "lint": "lunte && eslint src/",
     "lint:fix": "lunte --fix && eslint --fix src/",
-    "format": "prettier --check 'src/**/*.{ts,tsx,js,json}' 'templates/**/*.{ts,tsx,js,json}'",
-    "format:fix": "prettier --write 'src/**/*.{ts,tsx,js,json}' 'templates/**/*.{ts,tsx,js,json}'",
+    "format": "prettier --check 'src/**/*.{ts,tsx,js,json}' 'templates/**/*.{ts,tsx,js,json}' 'test/**/*.js'",
+    "format:fix": "prettier --write 'src/**/*.{ts,tsx,js,json}' 'templates/**/*.{ts,tsx,js,json}' 'test/**/*.js'",
     "check": "npm run lint && npm run format"
   },
   "keywords": [

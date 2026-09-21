@@ -1,0 +1,34 @@
+name: Reusable Await PR-head TypeScript Checks
+
+on:
+  workflow_call:
+    inputs:
+      check_name:
+        description: The producer check-run name to wait for on the PR head SHA.
+        required: true
+        type: string
+
+permissions:
+  checks: read
+  contents: read
+
+jobs:
+  await-ts-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 27
+    steps:
+      # Trusted base-branch checkout of only the poller scripts; never PR code.
+      - name: Checkout await-ts-checks scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/await-ts-checks
+          persist-credentials: false
+
+      - name: Wait for the PR-head TypeScript check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHECK_NAME: ${{ inputs.check_name }}
+        run: node .github/scripts/await-ts-checks/await.mjs

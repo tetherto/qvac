@@ -1,14 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WhisperDriver = void 0;
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-const path = require("bare-path");
 const whisper_1 = require("./whisper");
 const configChecker_1 = require("./configChecker");
 const error_1 = require("../../lib/error");
+const backends_1 = require("../../lib/backends");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
-const PREBUILDS_DIR = path.join(__dirname, "..", "..", "prebuilds");
 const MS_PER_SECOND = 1000;
 const DEFAULT_BYTE_FORMAT = "s16le";
 /** The native wire format is pinned; all input is normalized to f32. */
@@ -188,18 +186,24 @@ class WhisperDriver {
         addon.startStreaming(streamingConfig);
         this._pendingJobId = null;
         const response = this.ctx.job.start();
+        let closing = false;
         const finalized = response.await().finally(() => {
             addon.finishStreaming();
         });
         void finalized.catch(() => { });
         response.await = () => finalized;
-        void this._pumpStreamingAudio(audio).catch((error) => {
+        void this._pumpStreamingAudio(audio, () => {
+            closing = true;
+        }).catch((error) => {
             this._pendingJobId = null;
             this.ctx.job.fail(error);
         });
         return Promise.resolve({
             response,
             done: finalized.then(() => { }, () => { }),
+            get closing() {
+                return closing;
+            },
         });
     }
     _validateStreamingOptions(opts) {
@@ -236,13 +240,14 @@ class WhisperDriver {
         this.ctx.logger.debug("Sending end-of-input signal");
         await addon.append({ type: constants_1.END_OF_INPUT });
     }
-    async _pumpStreamingAudio(audio) {
+    async _pumpStreamingAudio(audio, markClosing) {
         this.ctx.logger.debug("Start handling streaming audio");
         const addon = this._requiredAddon();
         for await (const chunk of audio) {
             addon.appendStreamingAudio({ type: "audio", input: bytesOf(chunk) });
         }
         this.ctx.logger.debug("Ending streaming session");
+        markClosing();
         addon.endStreaming();
     }
     _resolveVadModelPath() {
@@ -296,7 +301,7 @@ class WhisperDriver {
             audio_format: WIRE_AUDIO_FORMAT,
             backendsDir: typeof this.params.backendsDir === "string"
                 ? this.params.backendsDir
-                : PREBUILDS_DIR,
+                : (0, backends_1.resolveBackendsDir)(),
         };
     }
     _buildWhisperConfig(overrideWhisperConfig) {

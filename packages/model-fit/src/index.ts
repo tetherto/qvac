@@ -6,6 +6,7 @@ import path = require('bare-path')
 /** Shape of the native addon this module wraps. */
 interface FitBinding {
   paramsFit(config: FitConfig): FitResult
+  paramsFitAsync(config: FitConfig): Promise<FitResult>
 }
 
 export interface FitConfig {
@@ -75,10 +76,22 @@ export interface FitConfig {
    * measured against llama's defaults does not describe a load that uses
    * something else.
    *
-   * `enum llama_split_mode`: how the model splits across multiple GPUs.
+   * `enum llama_split_mode`: how the model splits across multiple GPUs. 0
+   * (NONE), 1 (LAYER) and 3 (TENSOR) are accepted; 2 (ROW) throws — fabric
+   * deprecates it, no supported backend provides the split buffers it needs,
+   * and the llm/embed addons reject it too.
    */
   splitMode?: number
-  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
+  /**
+   * Raw ggml registry index of the device a NONE placement goes on, or -1 for
+   * the CPU sentinel (requires `nGpuLayers` 0 and `splitMode` 0). llama reads
+   * it only under split mode NONE; LAYER, TENSOR and an omitted `splitMode`
+   * leave it inert — llama defaults to LAYER and the fitter never rewrites the
+   * mode. Validated only when `splitMode` is pinned to 0: an index at or past
+   * `nDevices` throws, and an in-range index that is not a supported GPU — the
+   * CPU entry, or a backend outside the allowlist — yields a CPU-only
+   * projection instead.
+   */
   mainGpu?: number
   /** `ggml_type` of the K cache. A quantised KV needs less memory than F16. */
   typeK?: number
@@ -98,6 +111,30 @@ export interface FitBuftOverride {
   bufferType: string
 }
 
+/**
+ * Projected memory for one device — or the trailing `"host"` row — at the
+ * parameters the result reports, in bytes. `freeBytes`/`marginBytes` give the
+ * budget the verdict was judged against; the remaining fields are the
+ * projected demand.
+ */
+export interface FitProjectionRow {
+  /** Device name as the backend reports it, or `"host"` for the host row. */
+  name: string
+  totalBytes: number
+  /**
+   * Raw backend gauge, before the margin. On a device with its own memory the
+   * budget is `freeBytes - marginBytes` and headroom is that minus the demand.
+   * A device sharing the host pool (Apple silicon, Adreno/Mali) is clamped
+   * below that, so the figure is an upper bound there.
+   */
+  freeBytes: number
+  /** The margin applied to this row, in bytes (`marginMiB` × 1 MiB). */
+  marginBytes: number
+  modelBytes: number
+  contextBytes: number
+  computeBytes: number
+}
+
 /** What the fitter measured against. Present on every outcome. */
 export interface FitDeviceInventory {
   /**
@@ -107,17 +144,28 @@ export interface FitDeviceInventory {
   maxDevices: number
   /** Devices actually registered (ggml_backend_dev_count()). 0 yields ERROR. */
   nDevices: number
-  /** Of those, how many are accelerators (GPU or iGPU). 0 means host-only. */
+  /** Raw GPU/iGPU count; may include families outside the execution allowlist. */
   nGpuDevices: number
+  /**
+   * Projected memory per device the model was assigned to, in the order
+   * llama.cpp holds them (`llama_model_get_device`, the index `tensorSplit`
+   * uses), ending with the host row. The device rows are not `nDevices`: the
+   * CPU device is counted there but its demand lands in the host row. Match
+   * rows by `name`, not by position against `nDevices`.
+   *
+   * Populated on SUCCESS and FAILURE; empty on ERROR, and empty when the probe
+   * that produces it fails. Optional because results decoded from an older
+   * addon or process runner predate the field.
+   */
+  projection?: FitProjectionRow[]
 }
 
 /** The fitted load plan. Only meaningful on a SUCCESS. */
 export interface FitPlan {
   /**
    * Fitted number of layers to offload to GPU. Negative means "all layers"
-   * (the llama default), which is what comes back when the fitter had no
-   * offload decision to make — e.g. on a host with no accelerator. Check
-   * `nGpuDevices` before reading this as a plan.
+   * (the llama default). Zero means the successful plan uses no GPU offload;
+   * `nGpuDevices` is raw diagnostic inventory and must not determine this.
    */
   nGpuLayers: number
   /** Fitted context size. Always concrete, never 0. */
@@ -144,7 +192,13 @@ export interface FitPlan {
    * projected to fit.
    */
   splitMode: number
-  /** Device holding the model, or -1 for an explicit CPU-only NONE placement. */
+  /**
+   * 0 for a GPU plan — the ordinal of the one-device list under NONE, inert
+   * under LAYER and TENSOR — or -1 for any CPU-only plan: one whose device list
+   * is empty or that offloads no layer. Never an echo of the raw input index. A
+   * CPU-only plan also reports `nGpuLayers` 0 and `splitMode` NONE unless the
+   * caller pinned those fields.
+   */
   mainGpu: number
   /** `enum ggml_type` for the K cache. Changes KV memory, so it changes the fit. */
   typeK: number
@@ -213,6 +267,9 @@ export const FIT_STATUS = Object.freeze({
 const UINT32_MAX = 4294967295
 const INT32_MAX = 2147483647
 const INT32_MIN = -2147483648
+// LLAMA_SPLIT_MODE_ROW. Inside the enum domain but not accepted: fabric
+// deprecates it and no supported backend provides the split buffers it needs.
+const SPLIT_MODE_ROW = 2
 
 // Every numeric field crosses into C++ as a uint32_t or int32_t. Fractions
 // truncate there and out-of-range values wrap, so `marginMiB: -1` would silently
@@ -255,6 +312,9 @@ function validateNumber (config: FitConfig, key: NumericField, min: number, max:
   if (value < min || value > max) {
     throw new RangeError(`model-fit: config.${key} must be between ${min} and ${max}`)
   }
+  if (key === 'splitMode' && value === SPLIT_MODE_ROW) {
+    throw new RangeError('model-fit: config.splitMode 2 (ROW) is not accepted; use 1 (LAYER) or 3 (TENSOR)')
+  }
 }
 
 // Relationships the native side would otherwise accept and the fitter would
@@ -280,27 +340,8 @@ function validateRelationships (config: FitConfig): void {
   }
 }
 
-/**
- * Memory-fit preflight for a llama.cpp GGUF model. Runs `common_fit_params`,
- * which simulates allocations (no weights are loaded) to project whether the
- * model fits available device memory and, if so, with which offload plan.
- *
- * This is a synchronous, blocking in-process native call. Callers that need
- * isolation should use `@qvac/model-fit/process` to run it in a disposable
- * Bare subprocess.
- *
- * Calls are serialised process-wide: `common_fit_params` mutates global llama
- * logger state and is not thread safe, so concurrent callers block instead of
- * running together.
- *
- * Backends must be registered before the fitter can see any device. When
- * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
- * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
- * statically linked build, which self-registers.
- * Every backend library in that directory is `dlopen`ed into this process, so
- * it must be an application-controlled location — never remote or user input.
- */
-export function fitParams (config: FitConfig): FitResult {
+// Validation and backendsDir resolution shared by both entry points.
+function prepareFitConfig (config: FitConfig): FitConfig {
   if (config === null || config === undefined || typeof config !== 'object' || Array.isArray(config)) {
     throw new TypeError('model-fit: config object is required')
   }
@@ -335,5 +376,38 @@ export function fitParams (config: FitConfig): FitResult {
     }
   }
 
-  return binding.paramsFit(resolved)
+  return resolved
+}
+
+/**
+ * Memory-fit preflight for a llama.cpp GGUF model. Runs `common_fit_params`,
+ * which simulates allocations (no weights are loaded) to project whether the
+ * model fits available device memory and, if so, with which offload plan.
+ *
+ * This is a synchronous, blocking in-process native call; `fitParamsAsync`
+ * runs the same fit on a worker thread. Callers that need isolation should use
+ * `@qvac/model-fit/process` to run it in a disposable Bare subprocess.
+ *
+ * Calls are serialised process-wide: `common_fit_params` mutates global llama
+ * logger state and is not thread safe, so concurrent callers block instead of
+ * running together.
+ *
+ * Backends must be registered before the fitter can see any device. When
+ * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
+ * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
+ * statically linked build, which self-registers.
+ * Every backend library in that directory is `dlopen`ed into this process, so
+ * it must be an application-controlled location — never remote or user input.
+ */
+export function fitParams (config: FitConfig): FitResult {
+  return binding.paramsFit(prepareFitConfig(config))
+}
+
+/**
+ * `fitParams` on a worker thread: same config, validation and result, without
+ * blocking the JS loop. Validation failures reject. Fits stay serialised
+ * process-wide.
+ */
+export async function fitParamsAsync (config: FitConfig): Promise<FitResult> {
+  return binding.paramsFitAsync(prepareFitConfig(config))
 }

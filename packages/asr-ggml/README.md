@@ -120,7 +120,7 @@ SDK code — see [Engine Selection](#engine-selection).
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
+| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan; CUDA (x64 prebuild; arm64 via `build:cuda` / `ASR_CUDA=ON`) |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno) |
 | Windows | x64 | 10+ | ✅ Tier 1 | Vulkan; CUDA via `build:cuda` / `ASR_CUDA=ON` |
 
@@ -144,6 +144,48 @@ Then:
 
 ```bash
 npm install @qvac/asr-ggml
+```
+
+### Platform packages
+
+`@qvac/asr-ggml` is a meta package that ships the JavaScript wrapper only.
+The native prebuild for each desktop host lives in a version-locked platform
+package selected at install time through `os`/`cpu` filtered
+`optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/asr-ggml-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/asr-ggml-linux-arm64` |
+| darwin-arm64 | `@qvac/asr-ggml-darwin-arm64` |
+| darwin-x64 | `@qvac/asr-ggml-darwin-x64` |
+| win32-x64 | `@qvac/asr-ggml-win32-x64` |
+
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time with an error naming the missing
+package; a locally built `prebuilds/` directory in the package root always
+takes precedence. Use `require('@qvac/asr-ggml').resolveBackendsDir()` to
+locate the directory holding the host's prebuilt binaries and dynamically
+loaded ggml backends.
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/asr-ggml` version:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/asr-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/asr-ggml-ios` |
+
+```json
+{
+  "dependencies": {
+    "@qvac/asr-ggml": "x.y.z",
+    "@qvac/asr-ggml-android-arm64": "x.y.z"
+  }
+}
 ```
 
 ## Quickstart
@@ -412,7 +454,7 @@ Notes:
 
 - **GPU is opt-in.** `use_gpu` defaults to `false`; set it in `contextParams`.
 - **Four context keys force a full reload** — `model`, `use_gpu`,
-  `flash_attn`, `gpu_device`. Changing any of them destroys and rebuilds the
+  `flash_attn`, `gpu_device`, `main-gpu`, `main_gpu`. Changing any of them destroys and rebuilds the
   whisper context (seconds, depending on model size). Everything in
   `whisperConfig` is applied in place.
 - `backendsDir` (in `whisperConfig`) overrides where dynamically-loaded ggml
@@ -503,15 +545,16 @@ that ends mid-sample is rejected.
 GPU backends are selected per platform via `vcpkg.json` features; no
 `bare-make generate` flag is needed:
 
-- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host)
+- **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host); the linux-x64 prebuild additionally bundles CUDA, see below
 - **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
 - **macOS / iOS** — Metal, statically linked
 
 **CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
 gated behind the `ASR_CUDA` CMake option — supported on linux-x64,
-linux-arm64 and win32-x64. Published prebuilds do not enable it; build it
-yourself with `npm run build:cuda` (or `bare-make generate -D ASR_CUDA=ON`),
-which adds the `cuda` feature to the `speech-cpp` dependency and turns on
+linux-arm64 and win32-x64. The published linux-x64 prebuild turns it on (the
+prebuild workflow installs the CUDA toolkit); elsewhere build it yourself
+with `npm run build:cuda` (or `bare-make generate -D ASR_CUDA=ON`). The
+option adds the `cuda` feature to the `speech-cpp` dependency and turns on
 `GGML_CUDA`. Every linux-x64 and linux-arm64 build, and win32-x64 with the
 cuda feature, uses ggml's hybrid dynamically-loaded backend mode: the
 per-arch CPU-variant and Vulkan backends ship as runtime-loaded modules
@@ -545,6 +588,25 @@ compiles the CUDA backend.
 Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true`.
 
+
+For Whisper GPU selection, set `contextParams['main-gpu']` (or the alias
+`contextParams.main_gpu`) to a raw ggml registry index, an integer string,
+`'dedicated'`, or `'integrated'` (class names are case-insensitive). With GPU
+enabled and no explicit selector, dedicated GPUs are preferred. A class
+selector is strict: if that class is unavailable, execution falls back to CPU.
+An in-range numeric selector preserves its registry identity before backend
+filtering; a CPU, excluded backend, or refused Adreno Vulkan slot falls back to
+CPU without selecting another GPU. An out-of-range index logs a warning and
+uses normal selection. The supported local families are Metal, CUDA, Vulkan,
+and OpenCL; the existing Adreno OpenCL guard still applies.
+
+`main-gpu` does not enable GPU execution by itself. `use_gpu: false` always
+selects CPU. The legacy `contextParams.gpu_device` retains its existing
+Whisper GPU/IGPU-ordinal meaning and Adreno guard. Combining it with either
+new selector spelling, or supplying both new spellings, is rejected.
+
+This selector currently applies to the Whisper engine.
+
 `getBackendInfo()` reports what actually ran — `backendName`, `backendId`
 (see the `BackendId` enum), string `backendDevice`, `backendDescription`,
 `encoderBackend`, and `encoderOnCoreml` (Apple: whether the Neural Engine
@@ -556,7 +618,10 @@ Two paths matter on Android and Linux:
 
 - **`backendsDir`** (in `whisperConfig` / `parakeetConfig`) — root directory
   holding dynamically-loaded ggml backend libraries (CUDA, Vulkan, OpenCL,
-  per-arch CPU variants). Defaults to the package's `prebuilds/`; the native addon
+  per-arch CPU variants). Defaults to `resolveBackendsDir()`: the package's
+  own `prebuilds/` when present (local builds, mobile flatten), otherwise the
+  installed platform package (see [Platform packages](#platform-packages));
+  the native addon
   appends `<bare-target>/<module-name>` before scanning. Pass an explicit path
   when backend libraries ship elsewhere — e.g. Android's
   `ApplicationInfo.nativeLibraryDir` when they are packaged inside the APK.

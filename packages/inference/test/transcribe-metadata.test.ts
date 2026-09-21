@@ -227,10 +227,19 @@ test('assertMetadataSupported: passes for whisper engine', (t) => {
   }, 'metadata=true on whisper does not throw')
 })
 
-test('assertMetadataSupported: throws TranscriptionFailedError for parakeet', (t) => {
+// The parakeet engine emits per-segment metadata natively: its output
+// serializer sends text/start/end/id/toAppend/isEndOfTurn/startsWord for every
+// segment and `timestampsEnabled` defaults to true.
+test('assertMetadataSupported: passes for parakeet engine', (t) => {
+  t.execution(() => {
+    assertMetadataSupported('m', ModelType.parakeetTranscription, true)
+  }, 'metadata=true on parakeet does not throw')
+})
+
+test('assertMetadataSupported: names the supported engines when it rejects', (t) => {
   let caught: unknown
   try {
-    assertMetadataSupported('my-model', ModelType.parakeetTranscription, true)
+    assertMetadataSupported('my-model', 'some-other-engine', true)
   } catch (err) {
     caught = err
   }
@@ -240,6 +249,31 @@ test('assertMetadataSupported: throws TranscriptionFailedError for parakeet', (t
     String((caught as Error).message).includes('my-model'),
     'error message includes offending model id'
   )
+  t.ok(
+    String((caught as Error).message).includes(ModelType.parakeetTranscription),
+    'error message lists parakeet among the supported engines'
+  )
+})
+
+test('toTranscribeSegment: carries the parakeet-only segment flags', (t) => {
+  const segment = toTranscribeSegment({
+    text: 'turn ends here',
+    start: 1,
+    end: 2,
+    toAppend: false,
+    id: 4,
+    isEndOfTurn: true,
+    startsWord: false
+  })
+  t.is(segment.isEndOfTurn, true, 'isEndOfTurn survives')
+  t.is(segment.startsWord, false, 'startsWord survives even when false')
+  t.ok(transcribeSegmentSchema.safeParse(segment).success, 'still schema-valid')
+})
+
+test('toTranscribeSegment: omits the parakeet flags for whisper segments', (t) => {
+  const segment = toTranscribeSegment({ text: 'hi', start: 0, end: 1, toAppend: false, id: 0 })
+  t.is('isEndOfTurn' in segment, false, 'no isEndOfTurn key when the engine sent none')
+  t.is('startsWord' in segment, false, 'no startsWord key when the engine sent none')
 })
 
 test('assertMetadataSupported: throws for unknown / empty engine', (t) => {
