@@ -1,6 +1,7 @@
 # SDK Tests
 
-SDK dogfooding tests built on [`@tetherto/qvac-test-suite`](https://github.com/tetherto/qvac-test-suite).
+SDK dogfooding tests built on [`@qvac/test-suite`](../../test-suite), the test-orchestration framework
+that lives in this monorepo at `packages/test-suite`.
 A producer orchestrates a shared queue of tests over MQTT; a consumer runs them on desktop (Node), Electron
 (packaged Electron main process), strict Snap, or mobile (Bare + React Native).
 
@@ -23,7 +24,11 @@ If nothing is detected on localhost, the command prompts to install `aedes` + `w
 keeps an embedded broker alive while tests are running. Bring your own broker if you prefer — just expose
 `ws://...:8080` and `mqtt://...:1883`.
 
-**Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`, `--runId`.
+**Common flags.** All `run:local:*` commands accept `--filter`, `--suite`, `--exclude-suite`,
+`--include`, `--runId`. `--suite`, `--exclude-suite` and `--filter` narrow each other;
+`--include` takes exact testIds and adds them on top, so it is how you run a suite plus a
+specific test. An id it cannot find fails the run rather than being skipped. It needs
+`@qvac/test-suite` 0.11.2 or newer.
 Mobile and Electron add `--skip-build` (see below). Run `npx qvac-test run:local:<platform> --help` for the
 full list.
 
@@ -44,14 +49,31 @@ Which rebuild command you run depends on what changed.
 
 | You changed                              | Command                      | Rebuild packaged apps?                    |
 | ---------------------------------------- | ---------------------------- | ----------------------------------------- |
+| Inference source (`packages/inference/`) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
 | SDK source (`packages/sdk/` outside e2e) | `npm run install:build:full` | Yes — `--skip-build` will miss the change |
 | Test code or assets in `e2e/`            | `npm run install:build`      | Yes for mobile and Electron               |
 | Only the producer side (filter, suite)   | none                         | No — use `--skip-build`                   |
 
 - `install:build` = `npm install --install-links && npm run build`. Picks up changes in this package.
-- `install:build:full` = `prepare:sdk` (bun install + bun run build in `packages/sdk/`) + `install:build`.
-  Use after any SDK change. If you've already rebuilt the SDK yourself (`cd .. && bun run build`), plain
-  `install:build` is enough.
+- `install:build:sdk` is a faster opt-in shortcut: it builds `packages/sdk/` (`prepare:sdk`), clears the
+  SDK snapshot, reconciles `@qvac/inference` if it was previously pinned (see below), then reinstalls and
+  bundles — skipping the inference rebuild and leaving `@qvac/inference` on its published range. Only
+  reach for it when you know your local `packages/inference` matches what's published. CI always builds
+  inference from the branch, so anything else can pass here and still fail there.
+- `install:build:full` builds the whole local chain — `packages/inference` → `packages/sdk` → `e2e` — and is
+  the one to run when in doubt. `packages/sdk` pins `@qvac/inference` to a published range, so the script
+  packs the local inference to a tarball, swaps the spec in for the install, and restores the manifest
+  afterwards (the working tree stays clean even on failure or Ctrl-C).
+- **Mobile needs the same inference pinned separately.** It installs its own npm tree later, after
+  `install:build:full` has already restored `packages/sdk/package.json` — so it also writes an
+  `@qvac/inference` npm `override` into `@qvac/test-suite`'s consumer template
+  (`scripts/pin-consumer-inference.mjs`). Without it, mobile silently gets the published inference and
+  crashes at bootstrap (`SyntaxError: ... does not provide an export named ...`) while desktop passes.
+  Re-apply or drop with `npm run pin:consumer-inference` / `unpin:consumer-inference`.
+- **A second `install:build:full`/`install:build:sdk` run can serve stale inference.** npm doesn't
+  re-resolve a cached `file:` dependency just because its spec or tarball content changed.
+  `scripts/reconcile-e2e-inference.mjs` forces a fresh resolve before each install — unconditionally in
+  `install:build:full`, only when needed in `install:build:sdk`.
 - **Mobile requires a fresh APK/IPA** to pick up either SDK or test-code changes — the baked app bundle
   contains the compiled test executors and the SDK. Omit `--skip-build` to rebuild.
 - **Electron requires a fresh Forge package** to pick up SDK, test-code, or `fixtures/qvac.config.electron.json`
@@ -60,6 +82,24 @@ Which rebuild command you run depends on what changed.
 - **`--skip-build` is for fast iteration that doesn't touch compiled code**: re-running the same build with
   a different `--filter` or `--suite`, or just re-running to debug flakiness. The producer reads
   definitions fresh each run, so filter / suite changes are picked up without rebuilding.
+
+### Resetting the local tree
+
+`clean:*` scripts are split by what they throw away, so a routine reset doesn't cost you more than it needs
+to:
+
+| Script               | Removes                                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clean:build`        | `dist`, `build`, `out`, `qvac`, `.sdk-e2e`, the generated `snap/*` build dirs, and the mobile consumer pin (it names a tarball in `.sdk-e2e`) |
+| `clean:config`       | Generated `qvac.config*.json`                                                                                                                 |
+| `clean:cache`        | `.qvac-cache` (downloaded models), `.qvac-worker-backup`, `rag-hyperdb`, `rag-turbovec`                                                       |
+| `clean:dependencies` | `node_modules` / lockfiles here, in `packages/sdk`, and in `packages/inference`                                                               |
+| `clean:all`          | All of the above                                                                                                                              |
+
+**`clean:cache` and `clean:all` discard downloaded models.** If `cacheDirectory` is configured to a local
+path (CI always does this; see `.github/workflows/test-node-sdk.yml`), that's where `run:bootstrap:*`
+pre-downloads them — running a bootstrap step and then `clean:cache`/`clean:all`, or the reverse, throws
+that work away. Reach for `clean:build` alone for a routine "rebuild my scripts" reset.
 
 ### Electron local smoke
 
@@ -75,10 +115,10 @@ npx qvac-test run:local:electron --filter completion-
 The Electron consumer registers the desktop/shared executor set, so standard filters such as `completion-`,
 `embedding-`, `translation-`, or `model-` route through the same test definitions used by desktop.
 
-The full Electron pass intentionally skips `diffusion-`, `finetune-`, `delegated-`, `no-lingering-bare-`, and
+The full Electron pass intentionally skips `diffusion-`, `finetune-`, `no-lingering-bare-`, and
 `vla-` tests. These suites are resource-heavy or depend on process/lifecycle behavior that is not stable inside
 the packaged Electron worker model: diffusion and VLA require heavyweight model execution, finetune can monopolize
-the worker during long-running operations, delegated inference depends on peer/provider startup semantics, and
+the worker during long-running operations, and
 no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
 packaged worker lock.
 
@@ -112,6 +152,11 @@ The first revision records its home/common paths and creates SDK registry Corest
 must have a different revision home while preserving and reopening those SDK-owned files from common storage.
 After that preflight, the normal MQTT consumer runs the Electron-supported SDK model and addon tests inside the
 installed Snap.
+
+GPU inference uses Canonical's `graphics-core22` content interface and wrapper, with `mesa-core22` as the default
+userspace driver provider. The refresh harness and CI explicitly connect this provider for locally built,
+unsigned Snaps before launching them; the `opengl` plug alone exposes device access but does not supply the
+matching Vulkan userspace drivers required by the native inference backends.
 
 Use `QVAC_TEST_SNAP_SUDO=0` when snap administration does not require `sudo`. Set
 `QVAC_TEST_SNAP_KEEP_INSTALLED=1` to preserve the package and common data after refresh diagnostics.
@@ -159,10 +204,55 @@ other's bundle.
 
 See [`.github/workflows/on-pr-test-sdk.yml`](../../../.github/workflows/on-pr-test-sdk.yml).
 
-- `test-e2e-smoke` — runs the `smoke` suite on desktop and mobile consumers.
+- `test-e2e-smoke` — runs the `smoke` suite **plus the tests this PR touched**, on desktop and
+  mobile consumers. The smoke suite is only a fraction of the catalog, so without this a green
+  smoke run says nothing about tests the PR added or changed. "Touched" means changed files under
+  `packages/sdk/e2e/{tests,fixtures,assets}`, plus an inference engine directory, an SDK
+  `client/api` file, and a handler module registered in `registry.ts`. Source with no declared link
+  to a test maps to nothing and leaves a plain smoke run.
+  A PR comment reports what was added, and anything
+  the impact mapper could not attribute. See
+  [Smoke runs cover the tests a PR touched](../../../docs/ci/LABELS.md#smoke-runs-cover-the-tests-a-pr-touched).
+  To check locally what a smoke run would add for your branch — this is the same code CI runs, so
+  it answers "which tests will this PR pull in?" before you push:
+
+  ```bash
+  node scripts/impacted-tests.mjs --base main --head HEAD
+  ```
+
+  It reads the TypeScript sources while `run:producer` loads `dist/tests`, so run `npm run build`
+  first if you want the two to agree locally. CI always builds before the producer.
+
 - `test-e2e-full` — runs the full catalog on desktop and mobile consumers.
-- Release-branch PRs with SDK changes auto-run the same desktop and mobile suite.
+- Both labels build `packages/inference` and test it together with `packages/sdk` from the authorized PR HEAD.
+- Release-branch PRs with SDK or inference changes auto-run the same desktop and mobile suite.
 - Success applies the `e2e-tested` label.
+
+These three are **base runs**: each records its per-platform failure set into a hidden state
+comment on the PR, which is what the rerun label below consumes.
+
+### Re-running only the tests that failed
+
+- `test-e2e-rerun-failed` — re-runs just the tests that failed on the last base run, on the
+  platforms where they failed. A platform that was green is not started at all: one failure
+  on Windows and one on Linux means two tests on two runners, with macOS, Android, and iOS
+  skipped entirely.
+
+The label needs no new commit — the rerun always tests the current PR HEAD, so it verifies a
+pushed fix or, on an unchanged commit, checks for flakiness. It is removed automatically once
+the run picks it up, so the next attempt is a single click, and it never applies `e2e-tested`.
+
+Wait for the **QVAC E2E — base run recorded** comment before applying it. The base failure set
+is not known until every family finishes, so a rerun labelled while the base run is still going
+is rejected with a comment saying so (it cannot cancel the base run — reruns use their own
+concurrency group).
+
+The plan is anchored to the base run, not to the previous rerun: every attempt re-runs the
+same set until a new `test-e2e-smoke` / `test-e2e-full` run replaces the base.
+
+See [Re-running failed SDK e2e tests](../../../docs/ci/LABELS.md#re-running-failed-sdk-e2e-tests)
+for the full behaviour table, including what happens when no base is recorded, the base is
+green, or a recorded test no longer exists.
 
 ### Manual runs
 
@@ -178,6 +268,15 @@ Non-obvious inputs:
   picks the branch that supplies the _workflow YAML_; `test-version` is the git ref that gets checked out for
   the _code under test_ (and the e2e package). Leave `test-version` blank to test the same branch the
   workflow was loaded from. Set it to test workflow edits from one branch against SDK code on another.
+- `inference-source` controls the `@qvac/inference` package used by every selected platform:
+  - `branch` builds and packs `packages/inference` from `test-version`. The resulting tarball is produced once
+    and reused by desktop, Electron, Snap, Android, and iOS jobs, so SDK and inference changes from that ref are
+    tested together.
+  - `npm` resolves the public `@qvac/inference` package. Set `inference-version` to a version/range or dist-tag;
+    blank means `latest`.
+  - `manifest` preserves the dependency already declared in `packages/sdk/package.json`.
+- The npm selector is resolved to one immutable version before platform fan-out. The exact branch SHA/package
+  version is shown in the workflow summary and PR test comments.
 - `suite` + `suite-custom` — pick `custom` to pass arbitrary comma-separated suite tags via `suite-custom`.
 - `desktop-platforms`, `electron-platforms`, and `snap-platforms` — advanced JSON runner overrides,
   pre-filled with the workflow defaults. Narrow them to specific runners only when debugging.

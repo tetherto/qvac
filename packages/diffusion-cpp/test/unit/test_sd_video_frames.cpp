@@ -14,13 +14,14 @@ using qvac_lib_inference_addon_sd::SdVideoFrames;
 // Helpers
 // ---------------------------------------------------------------------------
 //
-// SdVideoFrames owns two layers of malloc() allocations:
+// SdVideoFrames wraps two layers of engine allocations:
 //   1. the sd_image_t* array itself
 //   2. each frame's pixel data buffer (frame.data)
 //
-// Both are freed on destruction using free(). These helpers mirror what
-// generate_video() does internally so tests exercise the exact same
-// ownership contract the real API relies on.
+// Both are released on destruction with a single free_sd_images() call —
+// the engine's matching deallocator — never with the addon's free(). These
+// helpers mirror what generate_video() does internally so tests exercise
+// the exact same ownership contract the real API relies on.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -122,8 +123,9 @@ TEST(SdVideoFramesTest, DestroysFramesWith4kPlus1Count) {
 
 TEST(SdVideoFramesTest, HandlesFrameWithNullPixelBuffer) {
   // On mid-run decode failure the library may leave an individual frame's
-  // data pointer null. The destructor must tolerate free(NULL) gracefully
-  // (which is standard C) instead of assuming every frame has pixels.
+  // data pointer null. free_sd_images() null-checks each frame's data, so
+  // the destructor must tolerate this instead of assuming every frame has
+  // pixels.
   auto *arr = static_cast<sd_image_t *>(malloc(sizeof(sd_image_t) * 3));
   ASSERT_NE(arr, nullptr);
   arr[0] = sd_image_t{16, 16, 3, nullptr};

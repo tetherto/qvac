@@ -10,17 +10,15 @@ import { MODELLESS_CONFIG } from '../helpers/config.js'
 // fidelity needs a model and lives in the real-model suite.)
 describe('serve: lifecycle (spawned binary)', () => {
   it('binds a real port and answers /v1/models over the socket', async (t) => {
-    const srv = await configuredServer(t, MODELLESS_CONFIG, ['--cors'])
+    const origin = 'https://trusted.example'
+    const srv = await configuredServer(t, MODELLESS_CONFIG, ['--cors', '--cors-origin', origin])
 
-    const res = await fetch(`${srv.baseUrl}/v1/models`)
+    const res = await fetch(`${srv.baseUrl}/v1/models`, { headers: { origin } })
     assert.equal(res.status, 200)
     const body = (await res.json()) as { object: string; data: unknown[] }
     assert.equal(body.object, 'list')
     // CORS header travels over the real transport (set by @fastify/cors).
-    assert.ok(
-      res.headers.get('access-control-allow-origin'),
-      'expected CORS header over the socket'
-    )
+    assert.equal(res.headers.get('access-control-allow-origin'), origin)
   })
 
   it('shuts down on SIGTERM', async (t) => {

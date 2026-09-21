@@ -8,7 +8,7 @@ import {
   SDK_CLIENT_ERROR_CODES,
   SDK_SERVER_ERROR_CODES
 } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { errorTests } from '../../error-tests.js'
 

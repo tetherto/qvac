@@ -26,10 +26,13 @@ const assert = require('node:assert/strict')
 const {
   parseCanonicalTestLabel,
   normalizeDesktopRecord,
+  normalizeMobileRecord,
   normalizeManualRecord,
+  normalizeStreamingRecord,
   expandCanonicalReport,
   dedupeRecords,
-  renderMarkdown
+  renderMarkdown,
+  missingExpectedDevices
 } = require('../aggregate-tts-ggml-rtf')
 
 const MB = 1024 * 1024
@@ -195,7 +198,131 @@ test('mobile smoke rows infer backend from platform and remain visibly marked', 
   const markdown = renderMarkdown(iosRecords.concat(androidRecord), [])
   assert.ok(markdown.includes('| Language | Run Type |'))
   assert.ok(markdown.includes('GPU backends covered: metal, vulkan'))
-  assert.ok(markdown.includes('GPU backends still missing: opencl'))
+  assert.ok(markdown.includes('GPU backends still missing: opencl, cuda'))
+})
+
+test('a desktop record labels the observed backend, so a CUDA-pinned lane is not aggregated as vulkan', () => {
+  const observedCuda = desktopReport(false)
+  observedCuda.summary.backendId = 2
+  observedCuda.labels.activeBackend = 'cuda'
+  assert.equal(normalizeDesktopRecord(observedCuda, '/x/ci.json').backend, 'cuda')
+
+  const activeOnly = desktopReport(false)
+  activeOnly.labels.activeBackend = 'cuda'
+  assert.equal(normalizeDesktopRecord(activeOnly, '/x/ci.json').backend, 'cuda')
+
+  const fellBackToCpu = desktopReport(false)
+  fellBackToCpu.summary.backendId = 0
+  assert.equal(normalizeDesktopRecord(fellBackToCpu, '/x/ci.json').backend, 'cpu')
+
+  assert.equal(normalizeDesktopRecord(desktopReport(false), '/x/ci.json').backend, 'vulkan')
+})
+
+test('android GPU rows on Adreno devices resolve to opencl, correcting the guessed vulkan label token', () => {
+  const adreno = mobileCanonicalReport()
+  adreno.device = { name: 'Samsung Galaxy S25', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Adreno (TM) 830' }
+  adreno.results[0].test = '[GPU] supertonic q4 vulkan'
+  const [adrenoRecord] = expandCanonicalReport(adreno, '/x/Samsung_Galaxy_S25/performance-report.json').records
+  assert.equal(adrenoRecord.backend, 'opencl')
+
+  const unprobed = mobileCanonicalReport()
+  unprobed.device = { name: 'Samsung Galaxy S25 Ultra', platform: 'android', arch: 'arm64', runner: 'aws-device-farm-Android', gpu: null }
+  unprobed.results[0].test = '[GPU] supertonic q4 vulkan'
+  const [unprobedRecord] = expandCanonicalReport(unprobed, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json').records
+  assert.equal(unprobedRecord.backend, 'opencl')
+
+  const mali = mobileCanonicalReport()
+  mali.device = { name: 'Pixel 9', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Mali-G715' }
+  mali.results[0].test = '[GPU] supertonic q4 vulkan'
+  const [maliRecord] = expandCanonicalReport(mali, '/x/Pixel_9/performance-report.json').records
+  assert.equal(maliRecord.backend, 'vulkan')
+
+  const cpu = mobileCanonicalReport()
+  cpu.device = { name: 'Samsung Galaxy S25', platform: 'android', arch: 'arm64', runner: 'device-farm', gpu: 'Adreno (TM) 830' }
+  cpu.results[0].test = '[CPU] supertonic q4 cpu'
+  const [cpuRecord] = expandCanonicalReport(cpu, '/x/Samsung_Galaxy_S25/performance-report.json').records
+  assert.equal(cpuRecord.backend, 'cpu')
+})
+
+test('a hand-authored manual backend is never second-guessed by the Adreno correction', () => {
+  const manual = {
+    device: 'Samsung Galaxy S25 Ultra',
+    platform: 'android-arm64',
+    platformFamily: 'android',
+    gpu: 'gpu',
+    backend: 'vulkan',
+    gpuModel: 'Adreno (TM) 830',
+    engine: 'supertonic',
+    meanRtf: 0.3
+  }
+  assert.equal(normalizeManualRecord(manual, '/x/manual.json').backend, 'vulkan')
+
+  const guessed = { ...manual }
+  delete guessed.backend
+  assert.equal(normalizeManualRecord(guessed, '/x/manual.json').backend, 'opencl')
+})
+
+test('manual full-schema and compact artifacts keep their authored backend, unlike the same shapes from CI', () => {
+  const fullSchema = {
+    platform: 'android-arm64',
+    platformName: 'android',
+    engine: 'supertonic',
+    model: { type: 'supertonic', variant: 'q4' },
+    requested: { useGPU: true },
+    labels: { device: 'Samsung Galaxy S25 Ultra', backend: 'vulkan' },
+    summary: { rtf: { mean: 0.3 } }
+  }
+  assert.equal(normalizeDesktopRecord(fullSchema, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeDesktopRecord(fullSchema, '/x/ci.json').backend, 'opencl')
+
+  const compact = {
+    engine: 'supertonic',
+    modelType: 'supertonic',
+    platformName: 'android',
+    deviceLabel: 'Samsung Galaxy S25 Ultra',
+    useGPU: true,
+    backendHint: 'vulkan',
+    summary: { rtf: { mean: 0.3 } }
+  }
+  assert.equal(normalizeMobileRecord(compact, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeMobileRecord(compact, '/x/ci.json').backend, 'opencl')
+
+  const streaming = {
+    engine: 'supertonic',
+    kind: 'streaming',
+    platformName: 'android',
+    deviceLabel: 'Samsung Galaxy S25 Ultra',
+    useGPU: true,
+    backendHint: 'vulkan',
+    summary: { ttfaMs: { mean: 120 } }
+  }
+  assert.equal(normalizeStreamingRecord(streaming, '/x/manual.json', 'manual').backend, 'vulkan')
+  assert.equal(normalizeStreamingRecord(streaming, '/x/ci.json', 'mobile-ci').backend, 'opencl')
+})
+
+test('the observed backend id is ground truth and beats both the label hint and the Adreno heuristic', () => {
+  const withId = (deviceName, backendId, label) => {
+    const report = mobileCanonicalReport()
+    report.device = { name: deviceName, platform: 'android', arch: 'arm64', runner: 'aws-device-farm-Android', gpu: null }
+    report.results[0].test = label
+    report.results[0].metrics.backend_id = backendId
+    return expandCanonicalReport(report, `/x/${deviceName.replace(/ /g, '_')}/performance-report.json`).records[0]
+  }
+
+  assert.equal(withId('Google Pixel 9', 4, '[GPU] supertonic q4 vulkan').backend, 'opencl')
+  assert.equal(withId('Samsung Galaxy S25 Ultra', 3, '[GPU] supertonic q4 vulkan').backend, 'vulkan')
+  assert.equal(withId('Samsung Galaxy S25 Ultra', null, '[GPU] supertonic q4 vulkan').backend, 'opencl')
+})
+
+test('streaming rows also take the observed backend id from the canonical report', () => {
+  const report = mobileCanonicalReport()
+  report.device = { name: 'Samsung Galaxy S25 Ultra', platform: 'android', arch: 'arm64', runner: 'aws-device-farm-Android', gpu: null }
+  report.results[0].test = '[GPU] streaming supertonic q4 vulkan'
+  report.results[0].metrics = { ttfa_ms: 120, inter_chunk_p95_ms: 40, wall_time_ms: 900, chunks_per_run_mean: 6, backend_id: 4 }
+
+  const { streaming } = expandCanonicalReport(report, '/x/Samsung_Galaxy_S25_Ultra/performance-report.json')
+  assert.equal(streaming.length, 1)
+  assert.equal(streaming[0].backend, 'opencl')
 })
 
 test('mobile multilingual rows keep language separate from variant and backend', () => {
@@ -507,4 +634,38 @@ test('dedupeRecords keeps rows evaluated by different Whisper models separate', 
   )
 
   assert.equal(dedupeRecords([small, tiny]).length, 2)
+})
+
+// ---------------------------------------------------------------------------
+// Expected-device gate (--expect-devices)
+
+test('missing expected devices are detected from desktop rows only', () => {
+  const records = [
+    normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json'),
+    { source: 'mobile-ci', device: 'qvac-macos26-arm64-gpu' },
+    { source: 'manual', device: 'macos-15-large' }
+  ]
+  assert.deepEqual(missingExpectedDevices(records, []), [])
+  assert.deepEqual(missingExpectedDevices(records, ['rtx-4090-box']), [])
+  // Mobile and manual rows never stand in for a desktop lane.
+  assert.deepEqual(
+    missingExpectedDevices(records, ['rtx-4090-box', 'qvac-macos26-arm64-gpu', 'macos-15-large']),
+    ['qvac-macos26-arm64-gpu', 'macos-15-large']
+  )
+})
+
+test('markdown surfaces missing expected devices and stays silent without the flag', () => {
+  const records = [normalizeDesktopRecord(desktopReport(true), 'rtf-benchmark-linux-x64-chatterbox-q4-gpu.json')]
+  const expected = ['rtx-4090-box', 'qvac-macos26-arm64-gpu']
+
+  const markdown = renderMarkdown(records, [], expected)
+  assert.ok(markdown.includes('- Expected desktop devices reporting: 1/2'))
+  assert.ok(markdown.includes('MISSING desktop devices'))
+  assert.ok(markdown.includes('qvac-macos26-arm64-gpu'))
+
+  assert.ok(!renderMarkdown(records, []).includes('Expected desktop devices'))
+
+  const complete = renderMarkdown(records, [], ['rtx-4090-box'])
+  assert.ok(complete.includes('- Expected desktop devices reporting: 1/1'))
+  assert.ok(!complete.includes('MISSING desktop devices'))
 })

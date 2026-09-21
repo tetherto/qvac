@@ -3,19 +3,23 @@ import { before, after, type TestContext } from 'node:test'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildServer, type StartServerOptions } from '../../../src/serve/index.js'
-import { preloadModels } from '../../../src/serve/core/lifecycle.js'
+import { buildServer, type StartServerOptions } from '@/serve/index'
+import { preloadModels } from '@/serve/core/lifecycle'
+import type { OpenAIExtensionOptions } from '@/serve/extensions/openai/state'
 import { MODELLESS_CONFIG, writeConfigDir } from './config.js'
-// Side-effect import: augments FastifyInstance with `.qvac`.
-import '../../../src/serve/lib/types.js'
 
 export interface CreateServerOptions {
   config?: unknown
   apiKey?: string
   cors?: boolean
+  corsOrigins?: string[]
   publicBaseUrl?: string
   docs?: boolean
   model?: string[]
+  transcribeOverride?: OpenAIExtensionOptions['transcribeOverride']
+  loadModelOverride?: StartServerOptions['loadModelOverride']
+  /** Extension names to mount. Defaults to every registered extension. */
+  extensions?: string[]
 }
 
 function serverOptions(projectRoot: string, opts: CreateServerOptions): StartServerOptions {
@@ -26,9 +30,15 @@ function serverOptions(projectRoot: string, opts: CreateServerOptions): StartSer
     quiet: true,
     ...(opts.apiKey !== undefined ? { apiKey: opts.apiKey } : {}),
     ...(opts.cors !== undefined ? { cors: opts.cors } : {}),
+    ...(opts.corsOrigins !== undefined ? { corsOrigins: opts.corsOrigins } : {}),
     ...(opts.publicBaseUrl !== undefined ? { publicBaseUrl: opts.publicBaseUrl } : {}),
     ...(opts.docs !== undefined ? { docs: opts.docs } : {}),
-    ...(opts.model !== undefined ? { model: opts.model } : {})
+    ...(opts.model !== undefined ? { model: opts.model } : {}),
+    ...(opts.extensions !== undefined ? { extensions: opts.extensions } : {}),
+    ...(opts.transcribeOverride !== undefined
+      ? { extensionOptions: { openai: { transcribeOverride: opts.transcribeOverride } } }
+      : {}),
+    ...(opts.loadModelOverride !== undefined ? { loadModelOverride: opts.loadModelOverride } : {})
   }
 }
 
@@ -80,7 +90,12 @@ export function useModelServer(config: unknown): () => FastifyInstance {
     await writeFile(join(dir, 'qvac.config.json'), JSON.stringify(config))
     app = await buildServer(serverOptions(dir, {}))
     await app.ready()
-    await preloadModels(app.qvac.serveConfig, app.qvac.registry, app.qvac.logger)
+    await preloadModels(
+      app.qvac.serveConfig,
+      app.qvac.registry,
+      app.qvac.logger,
+      app.qvac.loadManager
+    )
     // preloadModels swallows per-model errors; fail loudly if a preload model
     // didn't reach READY so a load failure isn't seen as confusing 404s.
     for (const [alias, entry] of app.qvac.serveConfig.models) {

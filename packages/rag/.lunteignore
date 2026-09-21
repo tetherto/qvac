@@ -1,0 +1,3 @@
+dist
+test/dist
+src/adapters/database/hyperspec

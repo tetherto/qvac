@@ -227,6 +227,37 @@ test('failed after ended is a no-op', async (t) => {
   t.alike(result, ['value'], 'finish promise still resolves with the original payload')
 })
 
+test('failed settles await even when an error listener throws', async (t) => {
+  const response = new QvacResponse({ cancelHandler: dummyCancelHandler })
+  const failure = new Error('failed')
+  response.onError(() => {
+    throw new Error('listener boom')
+  })
+
+  t.exception(() => response.failed(failure), /listener boom/)
+  const outcome = await Promise.race([
+    response.await().catch((err) => err),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), 50))
+  ])
+
+  t.is(outcome, failure, 'await rejects even when the error listener throws')
+})
+
+test('ended settles await even when a finish listener throws', async (t) => {
+  const response = new QvacResponse({ cancelHandler: dummyCancelHandler })
+  response.onFinish(() => {
+    throw new Error('listener boom')
+  })
+
+  t.exception(() => response.ended('done'), /listener boom/)
+  const outcome = await Promise.race([
+    response.await(),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), 50))
+  ])
+
+  t.is(outcome, 'done', 'await resolves even when the finish listener throws')
+})
+
 // ------------------------------
 // Constructor signal wiring
 // ------------------------------
@@ -253,6 +284,26 @@ test('constructor signal — abort after construction fails the response with th
   } catch (err) {
     t.is(err, reason, 'await rejects with the abort reason unchanged')
   }
+})
+
+test('constructor signal — abort settles await even when an error listener throws', async (t) => {
+  const controller = makeAbortable()
+  const reason = new Error('aborted')
+  const response = new QvacResponse({
+    cancelHandler: dummyCancelHandler,
+    signal: controller.signal
+  })
+  response.onError(() => {
+    throw new Error('listener boom')
+  })
+
+  t.exception(() => controller.abort(reason), /listener boom/)
+  const outcome = await Promise.race([
+    response.await().catch((err) => err),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), 50))
+  ])
+
+  t.is(outcome, reason, 'await rejects even when the abort error listener throws')
 })
 
 test('constructor signal — already-aborted signal fails the response with the abort reason', async (t) => {

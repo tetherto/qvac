@@ -22,9 +22,12 @@
 //     (integration-mobile-test-tts-ggml.yml), which auto-includes this file
 //     via test/mobile/integration.auto.cjs.  The desktop macOS-arm64 runner
 //     is `no_gpu:true` (hosted paravirtual Metal is broken), so it skips.
-//   - Linux/Windows GPU runners exercise Vulkan; there tts-cpp already forces
-//     quantized KV -> f32, so the q8_0 cell can't reproduce the Metal bug,
-//     but the f16/f32/default cells still guard those backends.
+//   - The Vulkan-pinned linux/windows GPU runners can't reproduce the Metal
+//     bug in the q8_0 cell (tts-cpp forces quantized KV -> f32 there), but
+//     the f16/f32/default cells still guard those backends.
+//   - The CUDA-pinned linux runner (TTS_CPP_GPU_BACKEND=cuda) additionally
+//     sweeps the real q8_0 cell — CUDA implements the q8_0 CONT, so the
+//     memory-cheapest KV dtype runs natively there (see kvCacheMatrix.js).
 //   - NO_GPU=true (the no-GPU matrix entries) skips the whole file.
 
 const fs = require('bare-fs')

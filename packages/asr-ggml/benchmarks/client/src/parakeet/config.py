@@ -1,0 +1,118 @@
+import yaml
+import os
+from enum import Enum
+from typing import Optional
+from pydantic import BaseModel, HttpUrl, Field, model_validator
+
+
+class SpeakerGroup(str, Enum):
+    CLEAN = "clean"
+    OTHER = "other"
+    ALL = "all"
+
+
+class DatasetType(str, Enum):
+    LIBRISPEECH = "librispeech"
+    FLEURS = "fleurs"
+
+
+class Language(str, Enum):
+    ENGLISH = "english"
+    FRENCH = "french"
+    GERMAN = "german"
+    SPANISH = "spanish"
+    ITALIAN = "italian"
+    PORTUGUESE = "portuguese"
+    HINDI = "hindi"
+    GUJARATI = "gujarati"
+    KANNADA = "kannada"
+    TAMIL = "tamil"
+    MANDARIN_CHINESE = "mandarin_chinese"
+    RUSSIAN = "russian"
+    JAPANESE = "japanese"
+    CZECH = "czech"
+
+
+class ModelType(str, Enum):
+    TDT = "tdt"
+    UNIFIED = "unified"
+    CTC = "ctc"
+    EOU = "eou"
+    SORTFORMER = "sortformer"
+    INDIC_CONFORMER = "indic-conformer"
+
+
+class ServerConfig(BaseModel):
+    url: HttpUrl = Field(..., description="Server URL")
+    timeout: int = Field(60, gt=0, description="HTTP request timeout in seconds")
+    batch_size: int = Field(..., gt=0, description="Batch size for transcription")
+    lib: str = Field(..., description="Model addon library name")
+    version: Optional[str] = Field(None, description="Model addon library version")
+
+
+class DatasetConfig(BaseModel):
+    dataset_type: DatasetType = Field(
+        DatasetType.LIBRISPEECH, description="Dataset type (librispeech or fleurs)"
+    )
+    speaker_group: SpeakerGroup = Field(
+        SpeakerGroup.CLEAN, description="Subset of LibriSpeech speakers based on transcript WER (only for LibriSpeech)"
+    )
+    language: Language = Field(
+        Language.ENGLISH, description="Dataset language"
+    )
+    max_samples: int = Field(0, description="Maximum number of samples to process (0 = unlimited)")
+
+
+class CERConfig(BaseModel):
+    enabled: bool = Field(True, description="Calculate CER score")
+
+
+class WERConfig(BaseModel):
+    enabled: bool = Field(True, description="Calculate WER score")
+
+
+class ModelConfig(BaseModel):
+    path: str = Field("./models/parakeet-tdt-0.6b-v3.f16.gguf", description="Path to the .gguf model file")
+    sample_rate: int = Field(16000, description="Audio sample rate")
+    audio_format: str = Field("s16le", description="Audio format (s16le or f32le)")
+    model_type: ModelType = Field(ModelType.TDT, description="Parakeet model type")
+    language: Optional[str] = Field(None, description="Model language identifier")
+    max_threads: int = Field(4, gt=0, description="Max CPU threads for inference")
+    use_gpu: bool = Field(False, description="Enable GPU acceleration")
+    caption_enabled: bool = Field(False, description="Enable caption/subtitle mode")
+    timestamps_enabled: bool = Field(True, description="Include timestamps in output")
+    streaming: bool = Field(False, description="Enable streaming mode (duplex streaming session)")
+    streaming_chunk_ms: int = Field(320, gt=0, description="Streaming chunk size in milliseconds")
+    streaming_history_ms: Optional[int] = Field(None, gt=0, description="Sortformer rolling-history window in milliseconds")
+    streaming_emit_partials: bool = Field(True, description="Emit partial hypotheses before chunk boundaries")
+
+    @model_validator(mode='after')
+    def validate_model_config(self):
+        abs_path = os.path.abspath(self.path)
+        if not os.path.exists(self.path):
+            raise ValueError(
+                f"Model file not found: {self.path}\n"
+                f"Absolute path: {abs_path}\n"
+                f"Please ensure the model file exists before running the benchmark."
+            )
+        if self.model_type == ModelType.INDIC_CONFORMER and not self.language:
+            raise ValueError("Indic Conformer requires a model language identifier")
+        return self
+
+
+class Config(BaseModel):
+    server: ServerConfig
+    dataset: DatasetConfig
+    cer: CERConfig
+    wer: WERConfig
+    model: ModelConfig = Field(default_factory=ModelConfig, description="Model configuration")
+
+    @classmethod
+    def from_yaml(cls, path: str = "config/config-parakeet.yaml") -> "Config":
+        with open(path, "r", encoding="utf-8") as f:
+            return cls(**yaml.safe_load(f))
+
+
+if __name__ == "__main__":
+    cfg = Config.from_yaml()
+    print(cfg.model_dump_json(indent=2))

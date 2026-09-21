@@ -1,0 +1,1891 @@
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <iterator>
+#include <stdexcept>
+#include <string>
+#include <variant>
+#include <vector>
+
+#include <ggml-backend.h>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
+
+#include "model-interface/LoadFitNormalization.hpp"
+#include "test_common.hpp"
+#include "utils/LoggingMacros.hpp"
+
+namespace lfn = load_fit_normalization;
+
+namespace {
+
+void expectOnlyMappedFieldChanges(
+    bool common_params::* sourceField,
+    bool lfn::NormalizedFitSnapshot::* snapshotField) {
+  common_params baselineParams;
+  const auto baselineSnapshot =
+      lfn::makeNormalizedFitSnapshot(baselineParams, 0);
+
+  common_params toggledParams;
+  toggledParams.*sourceField = !(toggledParams.*sourceField);
+  const auto toggledSnapshot = lfn::makeNormalizedFitSnapshot(toggledParams, 0);
+
+  auto expectedSnapshot = baselineSnapshot;
+  expectedSnapshot.*snapshotField = !(expectedSnapshot.*snapshotField);
+  EXPECT_EQ(toggledSnapshot, expectedSnapshot);
+}
+
+} // namespace
+
+TEST(LoadFitSnapshotTest, CapturesEveryFitAffectingCommonParam) {
+  common_params params;
+  params.n_gpu_layers = 17;
+  params.n_ctx = 4096;
+  params.n_batch = 512;
+  params.n_ubatch = 128;
+  params.n_parallel = 3;
+  params.split_mode = LLAMA_SPLIT_MODE_LAYER;
+  params.main_gpu = 1;
+  const size_t runtimeDeviceCount = llama_max_devices();
+  ASSERT_LT(runtimeDeviceCount, std::size(params.tensor_split));
+  std::vector<float> expectedTensorSplit;
+  expectedTensorSplit.reserve(runtimeDeviceCount);
+  for (size_t i = 0; i < runtimeDeviceCount; ++i) {
+    const float value = static_cast<float>(i + 1) / 100.0F;
+    params.tensor_split[i] = value;
+    expectedTensorSplit.push_back(value);
+  }
+  params.cache_type_k = GGML_TYPE_Q8_0;
+  params.cache_type_v = GGML_TYPE_Q4_0;
+  params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
+  // mlock without mmap: exercises both snapshot mappings at once
+  // (useMmap = false, useMlock = true).
+  params.load_mode = LLAMA_LOAD_MODE_MLOCK;
+  params.no_kv_offload = true;
+  params.no_op_offload = true;
+  params.swa_full = true;
+  params.kv_unified = true;
+  params.no_extra_bufts = true;
+  params.no_host = true;
+  ggml_backend_buffer_type_t cpuBuft = ggml_backend_cpu_buffer_type();
+  params.tensor_buft_overrides = {
+      {"blk\\.0\\..*", cpuBuft}, {"output.*", cpuBuft}, {nullptr, nullptr}};
+
+  const auto snapshot = lfn::makeNormalizedFitSnapshot(params, 8192);
+
+  EXPECT_EQ(snapshot.nGpuLayers, 17);
+  EXPECT_EQ(snapshot.nCtx, 4096U);
+  EXPECT_EQ(snapshot.nBatch, 512U);
+  EXPECT_EQ(snapshot.nUbatch, 128U);
+  EXPECT_EQ(snapshot.nParallel, 3U);
+  EXPECT_EQ(snapshot.splitMode, static_cast<int32_t>(LLAMA_SPLIT_MODE_LAYER));
+  EXPECT_EQ(snapshot.mainGpu, 1);
+  ASSERT_EQ(snapshot.tensorSplit.size(), runtimeDeviceCount);
+  EXPECT_LT(snapshot.tensorSplit.size(), std::size(params.tensor_split));
+  EXPECT_EQ(snapshot.tensorSplit, expectedTensorSplit);
+  EXPECT_EQ(snapshot.typeK, static_cast<int32_t>(GGML_TYPE_Q8_0));
+  EXPECT_EQ(snapshot.typeV, static_cast<int32_t>(GGML_TYPE_Q4_0));
+  EXPECT_EQ(
+      snapshot.flashAttnType,
+      static_cast<int32_t>(LLAMA_FLASH_ATTN_TYPE_ENABLED));
+  EXPECT_FALSE(snapshot.useMmap);
+  EXPECT_TRUE(snapshot.useMlock);
+  EXPECT_FALSE(snapshot.kvOffload);
+  EXPECT_FALSE(snapshot.opOffload);
+  EXPECT_TRUE(snapshot.swaFull);
+  EXPECT_TRUE(snapshot.kvUnified);
+  EXPECT_FALSE(snapshot.useExtraBufferTypes);
+  EXPECT_FALSE(snapshot.useHostBuffer);
+  ASSERT_EQ(snapshot.tensorBufferOverrides.size(), 2U);
+  EXPECT_EQ(snapshot.tensorBufferOverrides[0].pattern, "blk\\.0\\..*");
+  EXPECT_EQ(snapshot.tensorBufferOverrides[1].pattern, "output.*");
+  EXPECT_EQ(
+      snapshot.tensorBufferOverrides[0].bufferType,
+      ggml_backend_buft_name(cpuBuft));
+}
+
+TEST(LoadFitSnapshotTest, MapsSwaFullOnlyToSwaFull) {
+  expectOnlyMappedFieldChanges(
+      &common_params::swa_full, &lfn::NormalizedFitSnapshot::swaFull);
+}
+
+TEST(LoadFitSnapshotTest, MapsKvUnifiedOnlyToKvUnified) {
+  expectOnlyMappedFieldChanges(
+      &common_params::kv_unified, &lfn::NormalizedFitSnapshot::kvUnified);
+}
+
+TEST(LoadFitSnapshotTest, MapsNoOpOffloadOnlyToInvertedOpOffload) {
+  expectOnlyMappedFieldChanges(
+      &common_params::no_op_offload, &lfn::NormalizedFitSnapshot::opOffload);
+}
+
+TEST(
+    LoadFitSnapshotTest, MapsNoExtraBufferTypesOnlyToInvertedExtraBufferTypes) {
+  expectOnlyMappedFieldChanges(
+      &common_params::no_extra_bufts,
+      &lfn::NormalizedFitSnapshot::useExtraBufferTypes);
+}
+
+TEST(LoadFitSnapshotTest, MapsNoHostOnlyToInvertedHostBuffer) {
+  expectOnlyMappedFieldChanges(
+      &common_params::no_host, &lfn::NormalizedFitSnapshot::useHostBuffer);
+}
+
+TEST(LoadFitSnapshotTest, CapturesFitPolicyDefaults) {
+  common_params params;
+
+  const auto snapshot = lfn::makeNormalizedFitSnapshot(params, 0);
+
+  EXPECT_TRUE(snapshot.fitParams);
+  EXPECT_EQ(snapshot.fitParamsMinCtx, 4096);
+  EXPECT_EQ(
+      snapshot.fitParamsTargetBytes,
+      std::vector<uint64_t>(llama_max_devices(), 1024ULL * 1024ULL * 1024ULL));
+}
+
+TEST(LoadFitSnapshotTest, MapsFitParamsOnlyToFitParams) {
+  expectOnlyMappedFieldChanges(
+      &common_params::fit_params, &lfn::NormalizedFitSnapshot::fitParams);
+}
+
+TEST(LoadFitSnapshotTest, MapsFitParamsMinimumContextIndependently) {
+  common_params baselineParams;
+  const auto baselineSnapshot =
+      lfn::makeNormalizedFitSnapshot(baselineParams, 0);
+  common_params params;
+  params.fit_params_min_ctx = 12'345;
+
+  const auto snapshot = lfn::makeNormalizedFitSnapshot(params, 0);
+  auto expectedSnapshot = baselineSnapshot;
+  expectedSnapshot.fitParamsMinCtx = 12'345;
+
+  EXPECT_EQ(snapshot, expectedSnapshot);
+}
+
+TEST(LoadFitSnapshotTest, OwnsEveryFitTargetMarginInOrder) {
+  common_params baselineParams;
+  const auto baselineSnapshot =
+      lfn::makeNormalizedFitSnapshot(baselineParams, 0);
+  common_params params;
+  std::vector<uint64_t> expectedTargetBytes;
+  expectedTargetBytes.reserve(params.fit_params_target.size());
+  for (size_t i = 0; i < params.fit_params_target.size(); ++i) {
+    const uint64_t value = 1'000'003ULL + i * 7'919ULL;
+    params.fit_params_target[i] = static_cast<size_t>(value);
+    expectedTargetBytes.push_back(value);
+  }
+
+  const auto snapshot = lfn::makeNormalizedFitSnapshot(params, 0);
+  auto expectedSnapshot = baselineSnapshot;
+  expectedSnapshot.fitParamsTargetBytes = expectedTargetBytes;
+
+  EXPECT_EQ(snapshot, expectedSnapshot);
+}
+
+TEST(LoadFitSnapshotTest, CapturesEveryModelMetadataOverrideTypeInOrder) {
+  common_params params;
+  llama_model_kv_override intOverride{};
+  intOverride.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+  std::strcpy(intOverride.key, "metadata.int");
+  intOverride.val_i64 = -9'876'543'210LL;
+  llama_model_kv_override floatOverride{};
+  floatOverride.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
+  std::strcpy(floatOverride.key, "metadata.float");
+  floatOverride.val_f64 = 1234.56789;
+  llama_model_kv_override boolOverride{};
+  boolOverride.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
+  std::strcpy(boolOverride.key, "metadata.bool");
+  boolOverride.val_bool = true;
+  llama_model_kv_override stringOverride{};
+  stringOverride.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+  std::strcpy(stringOverride.key, "metadata.string");
+  std::strcpy(stringOverride.val_str, "distinctive-value");
+  llama_model_kv_override terminator{};
+  llama_model_kv_override afterTerminator{};
+  afterTerminator.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+  std::strcpy(afterTerminator.key, "metadata.after-terminator");
+  afterTerminator.val_i64 = 42;
+  params.kv_overrides = {
+      intOverride,
+      floatOverride,
+      boolOverride,
+      stringOverride,
+      terminator,
+      afterTerminator};
+
+  const auto snapshot = lfn::makeNormalizedFitSnapshot(params, 0);
+
+  ASSERT_EQ(snapshot.modelKvOverrides.size(), 4U);
+  EXPECT_EQ(snapshot.modelKvOverrides[0].key, "metadata.int");
+  EXPECT_EQ(
+      snapshot.modelKvOverrides[0].type,
+      static_cast<int32_t>(LLAMA_KV_OVERRIDE_TYPE_INT));
+  EXPECT_EQ(
+      std::get<int64_t>(snapshot.modelKvOverrides[0].value), -9'876'543'210LL);
+  EXPECT_EQ(snapshot.modelKvOverrides[1].key, "metadata.float");
+  EXPECT_EQ(
+      snapshot.modelKvOverrides[1].type,
+      static_cast<int32_t>(LLAMA_KV_OVERRIDE_TYPE_FLOAT));
+  EXPECT_DOUBLE_EQ(
+      std::get<double>(snapshot.modelKvOverrides[1].value), 1234.56789);
+  EXPECT_EQ(snapshot.modelKvOverrides[2].key, "metadata.bool");
+  EXPECT_EQ(
+      snapshot.modelKvOverrides[2].type,
+      static_cast<int32_t>(LLAMA_KV_OVERRIDE_TYPE_BOOL));
+  EXPECT_TRUE(std::get<bool>(snapshot.modelKvOverrides[2].value));
+  EXPECT_EQ(snapshot.modelKvOverrides[3].key, "metadata.string");
+  EXPECT_EQ(
+      snapshot.modelKvOverrides[3].type,
+      static_cast<int32_t>(LLAMA_KV_OVERRIDE_TYPE_STR));
+  EXPECT_EQ(
+      std::get<std::string>(snapshot.modelKvOverrides[3].value),
+      "distinctive-value");
+}
+
+TEST(LoadFitSnapshotTest, OwnsModelMetadataOverrideKeyAndStringValue) {
+  lfn::NormalizedFitSnapshot snapshot;
+  {
+    common_params params;
+    llama_model_kv_override stringOverride{};
+    stringOverride.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+    std::strcpy(stringOverride.key, "owned.metadata.key");
+    std::strcpy(stringOverride.val_str, "owned metadata value");
+    params.kv_overrides = {stringOverride, {}};
+
+    snapshot = lfn::makeNormalizedFitSnapshot(params, 0);
+    std::strcpy(params.kv_overrides[0].key, "mutated.metadata.key");
+    std::strcpy(params.kv_overrides[0].val_str, "mutated metadata value");
+  }
+
+  ASSERT_EQ(snapshot.modelKvOverrides.size(), 1U);
+  EXPECT_EQ(snapshot.modelKvOverrides[0].key, "owned.metadata.key");
+  EXPECT_EQ(
+      std::get<std::string>(snapshot.modelKvOverrides[0].value),
+      "owned metadata value");
+}
+
+TEST(LoadFitSnapshotTest, RejectsUnknownModelMetadataOverrideType) {
+  common_params params;
+  llama_model_kv_override unknownOverride{};
+  unknownOverride.tag = static_cast<llama_model_kv_override_type>(999);
+  std::strcpy(unknownOverride.key, "metadata.unknown");
+  params.kv_overrides = {unknownOverride, {}};
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::makeNormalizedFitSnapshot(params, 0)),
+      std::invalid_argument);
+}
+
+TEST(LoadFitSnapshotTest, NullBufferTypeIsEmptyAndTerminatorStopsCopying) {
+  common_params params;
+  ggml_backend_buffer_type_t cpuBuft = ggml_backend_cpu_buffer_type();
+  params.tensor_buft_overrides = {
+      {"null-buffer.*", nullptr},
+      {nullptr, nullptr},
+      {"after-terminator.*", cpuBuft},
+  };
+
+  const auto snapshot = lfn::makeNormalizedFitSnapshot(params, 0);
+
+  ASSERT_EQ(snapshot.tensorBufferOverrides.size(), 1U);
+  EXPECT_EQ(snapshot.tensorBufferOverrides[0].pattern, "null-buffer.*");
+  EXPECT_TRUE(snapshot.tensorBufferOverrides[0].bufferType.empty());
+}
+
+TEST(LoadFitSnapshotTest, OwnsPatternAfterSourceMutationAndDestruction) {
+  lfn::NormalizedFitSnapshot snapshot;
+  {
+    common_params params;
+    std::string sourcePattern = "owned-pattern.*";
+    params.tensor_buft_overrides = {
+        {sourcePattern.c_str(), nullptr}, {nullptr, nullptr}};
+
+    snapshot = lfn::makeNormalizedFitSnapshot(params, 0);
+    sourcePattern.assign("mutated-pattern-with-different-storage.*");
+
+    ASSERT_EQ(snapshot.tensorBufferOverrides.size(), 1U);
+    EXPECT_EQ(snapshot.tensorBufferOverrides[0].pattern, "owned-pattern.*");
+  }
+
+  ASSERT_EQ(snapshot.tensorBufferOverrides.size(), 1U);
+  EXPECT_EQ(snapshot.tensorBufferOverrides[0].pattern, "owned-pattern.*");
+}
+
+TEST(LoadFitSnapshotTest, ResolvesOnlyTheOmittedContextSentinel) {
+  common_params omitted;
+  omitted.n_ctx = 0;
+  common_params explicitCtx;
+  explicitCtx.n_ctx = 2048;
+
+  EXPECT_EQ(lfn::makeNormalizedFitSnapshot(omitted, 8192).nCtx, 8192U);
+  EXPECT_EQ(lfn::makeNormalizedFitSnapshot(omitted, 0).nCtx, 0U);
+  EXPECT_EQ(lfn::makeNormalizedFitSnapshot(explicitCtx, 8192).nCtx, 2048U);
+}
+
+class LoadFitNormalizationTest : public ::testing::Test {
+protected:
+  test_common::MockModelMetaData metadata_{false, "llama"};
+
+  static backend_selection::SplitDeviceSelection
+  splitSelection(const std::vector<std::string>& names) {
+    static char handles[16];
+    backend_selection::SplitDeviceSelection selection;
+    selection.sourceGpuCount = names.size();
+    for (size_t index = 0; index < names.size(); ++index) {
+      selection.devices.push_back(
+          {.name = names[index],
+           .handle = reinterpret_cast<ggml_backend_dev_t>(&handles[index]),
+           .sourceGpuIndex = index});
+    }
+    return selection;
+  }
+
+  static lfn::NormalizationDependencies backend(
+      lfn::SelectedBackend selected,
+      std::vector<std::string> splitDevices = {"mock-device"}) {
+    const auto devices = splitSelection(splitDevices);
+    return {
+        .resolveBackend = [selected](
+                              backend_selection::BackendType,
+                              const std::optional<backend_selection::MainGpu>&,
+                              const ModelMetaData&,
+                              bool) { return selected; },
+        .splitDevices = [devices]() { return devices; }};
+  }
+
+  static lfn::ConfigMap baseConfig() {
+    return {
+        {"device", "gpu"},
+        {"gpu-layers", "23"},
+        {"batch-size", "512"},
+        {"ubatch-size", "128"},
+        {"parallel", "2"}};
+  }
+};
+
+TEST_F(
+    LoadFitNormalizationTest, PadsTensorBufferOverridesForFabricAutomaticFit) {
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      baseConfig(),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  ASSERT_EQ(
+      result.params.tensor_buft_overrides.size(),
+      llama_max_tensor_buft_overrides());
+  for (const auto& override : result.params.tensor_buft_overrides) {
+    EXPECT_EQ(override.pattern, nullptr);
+    EXPECT_EQ(override.buft, nullptr);
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, ExplicitContextAndMinimumClampAreCanonical) {
+  auto config = baseConfig();
+  config["ctx-size"] = "4";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.n_ctx, 8);
+  EXPECT_EQ(result.fitSnapshot.nCtx, 8U);
+}
+
+TEST_F(
+    LoadFitNormalizationTest, MissingContextMetadataLeavesSnapshotUnresolved) {
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      baseConfig(),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.n_ctx, 0);
+  EXPECT_EQ(result.fitSnapshot.nCtx, 0U);
+}
+
+TEST_F(LoadFitNormalizationTest, CpuFallbackClearsGpuPlacement) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "0.25,0.75";
+  config["main-gpu"] = "1";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}, {}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+}
+
+TEST_F(
+    LoadFitNormalizationTest,
+    SplitModeUsesEligibleSetWhenRawMainGpuTargetsRejectedDevice) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["main-gpu"] = "0";
+  auto dependencies =
+      backend({.type = backend_selection::CPU, .name = "none"}, {});
+  auto selection = splitSelection({"vulkan0"});
+  selection.sourceGpuCount = 2;
+  selection.devices.front().sourceGpuIndex = 1;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_NE(result.params.devices.front(), nullptr);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies = backend(
+      {.type = backend_selection::GPU,
+       .name = "opencl0",
+       .adrenoVersion = 830,
+       .isOpenCl = true});
+  auto selection = splitSelection({"vulkan0"});
+  selection.devices.front().isOpenCl = false;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_FALSE(result.adrenoVersion.has_value());
+  EXPECT_EQ(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// RPC devices are prepended to the split set but cannot host the projector or
+// carry an Adreno tier, so both come from the first local device.
+TEST_F(LoadFitNormalizationTest, SplitModePrimarySkipsPrependedRpcDevice) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.devices[0].isRpc = true;
+  selection.devices[0].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_FALSE(result.adrenoVersion.has_value());
+  EXPECT_EQ(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeFallsBackToRpcPrimaryWhenAllRpc) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "rpc1"});
+  selection.devices[0].isRpc = true;
+  selection.devices[1].isRpc = true;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "rpc0");
+}
+
+// A KV-cache trait held by any participant governs the whole load, while the
+// projector device still comes from the first local one.
+TEST_F(LoadFitNormalizationTest, SplitModeKvTraitsComeFromAnyDevice) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
+  selection.devices[1].isOpenCl = true;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.adrenoVersion, 830);
+  EXPECT_NE(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_NE(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeOpenClDeviceRejectsQuantizedKv) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-k"] = "q8_0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
+  selection.devices[1].isOpenCl = true;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitFollowsFilteredDeviceMapping) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,2,3";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.sourceGpuCount = 3;
+  selection.devices[0].sourceGpuIndex = 0;
+  selection.devices[1].sourceGpuIndex = 2;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 3.0F);
+}
+
+// Two shares against three registered GPUs can only be the per-eligible-device
+// list, and it is read in final order whatever the source ordinals are.
+TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsFinalCountWhenReordered) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,3";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan1", "vulkan0"});
+  selection.sourceGpuCount = 3;
+  selection.devices[0].sourceGpuIndex = 2;
+  selection.devices[1].sourceGpuIndex = 0;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 3.0F);
+}
+
+// The message names both cardinalities so the caller can tell which list to
+// write.
+TEST_F(
+    LoadFitNormalizationTest,
+    TensorSplitRejectsCountMatchingNeitherCardinality) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,2,3,4";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.sourceGpuCount = 3;
+  selection.devices[0].sourceGpuIndex = 0;
+  selection.devices[1].sourceGpuIndex = 2;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "four shares match neither 3 registered nor 2 eligible devices";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(), ::testing::HasSubstr("tensor-split has 4 values"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("3 registered GPU devices"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("2 eligible devices"));
+  }
+}
+
+// The share count is validated even when nothing needs remapping.
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsWrongCountWithoutRemap) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,2,3";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend(
+              {.type = backend_selection::GPU, .name = "vulkan0"},
+              {"vulkan0", "vulkan1"}))),
+      qvac_errors::StatusError);
+}
+
+// Fabric tokenizes --tensor-split on `[,/]+`, so the share counter must too;
+// each of these normalises to "1,2".
+TEST_F(LoadFitNormalizationTest, TensorSplitCountsTokensLikeFabric) {
+  for (const char* value : {"1,,2", "1, 2", "1/2"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "layer";
+    config["tensor-split"] = value;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "vulkan0"},
+            {"vulkan0", "vulkan1"}));
+    EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F) << value;
+    EXPECT_FLOAT_EQ(result.params.tensor_split[1], 2.0F) << value;
+  }
+}
+
+// Equal counts resolve to the final order even though RPC hoisting left it
+// unsorted by sourceGpuIndex.
+TEST_F(LoadFitNormalizationTest, TensorSplitFinalOrderWinsWhenCountsAreEqual) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,, 2";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.devices[0].sourceGpuIndex = 1;
+  selection.devices[1].sourceGpuIndex = 0;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F);
+  EXPECT_FLOAT_EQ(result.params.tensor_split[1], 2.0F);
+}
+
+// Fabric keeps empty and whitespace-only fields and would throw on them, so
+// what reaches it is the re-joined token list: each of these becomes "1,2".
+TEST_F(
+    LoadFitNormalizationTest, TensorSplitEmptyOrBlankFieldsNeverReachFabric) {
+  for (const char* value : {",1,2", "/1,2", "1, ,2", ", 1 , 2 ,"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "layer";
+    config["tensor-split"] = value;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "vulkan0"},
+            {"vulkan0", "vulkan1"}));
+    EXPECT_FLOAT_EQ(result.params.tensor_split[0], 1.0F) << value;
+    EXPECT_FLOAT_EQ(result.params.tensor_split[1], 2.0F) << value;
+  }
+}
+
+// Only one spelling can be remapped; leaving the other would let it race the
+// rewritten one through the passthrough loop.
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsBothSpellings) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,1";
+  config["tensor_split"] = "2,1";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "vulkan0"},
+            {"vulkan0", "vulkan1"})));
+    FAIL() << "both tensor-split spellings must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "both 'tensor-split' and 'tensor_split' are present"));
+  }
+}
+
+// A leftover key would reach fabric through the passthrough loop as
+// --tensor-split and set shares on a CPU-only load.
+TEST_F(LoadFitNormalizationTest, CpuFallbackErasesBothTensorSplitSpellings) {
+  for (const char* key : {"tensor-split", "tensor_split"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "layer";
+    config[key] = "0.25,0.75";
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::CPU, .name = "none"}, {}));
+    EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE) << key;
+    EXPECT_FLOAT_EQ(result.params.tensor_split[0], 0.0F) << key;
+    EXPECT_FLOAT_EQ(result.params.tensor_split[1], 0.0F) << key;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeWarnsWhenEveryGpuIsRejected) {
+  using qvac_lib_inference_addon_cpp::logger::Priority;
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  backend_selection::SplitDeviceSelection selection;
+  selection.sourceGpuCount = 1;
+  selection.rejectedDevices = {"ROCm0 (HIP)"};
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  auto& verbosity = qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
+  const Priority previous = verbosity;
+  verbosity = Priority::WARNING;
+  ::testing::internal::CaptureStdout();
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  const std::string output = ::testing::internal::GetCapturedStdout();
+  verbosity = previous;
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_THAT(
+      output,
+      ::testing::HasSubstr(
+          "[WARNING]: [LlamaModel] no eligible GPU backend found; rejected "
+          "ROCm0 (HIP); falling back to CPU"));
+}
+
+// The message must direct callers to the two modes that do work.
+TEST_F(LoadFitNormalizationTest, SplitModeRowIsRejected) {
+  auto config = baseConfig();
+  config["split-mode"] = "row";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+    FAIL() << "split-mode 'row' must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr(
+            "commonParamsParse: split-mode 'row' is no longer accepted; it "
+            "never took effect on any shipped backend. Use 'layer' or "
+            "'tensor' (accepted values: 'none', 'layer', 'tensor')."));
+  }
+}
+
+// QVAC-24205: the Adreno restrictions (one-bit BitNet, finetuning) also govern
+// the split device set. The fixture's resolveBackend applies no policy of its
+// own, so every placement below comes from applyAdrenoRestrictions.
+
+TEST_F(LoadFitNormalizationTest, SplitModeOneBitBitnetBelowAdreno800UsesCpu) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["tensor-split"] = "1,1";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 740;
+  selection.devices[1].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  EXPECT_FALSE(result.params.mmproj_use_gpu);
+  // '--device none' parses to the bare terminator: no device is pinned.
+  ASSERT_EQ(result.params.devices.size(), 1U);
+  EXPECT_EQ(result.params.devices.front(), nullptr);
+}
+
+TEST_F(
+    LoadFitNormalizationTest, SplitModeOneBitBitnetOnAdreno800PlusDropsOpenCl) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
+  selection.devices[0].adrenoVersion = 830;
+  selection.devices[1].adrenoVersion = 830;
+  selection.devices[1].isOpenCl = true;
+  const ggml_backend_dev_t vulkanHandle = selection.devices[0].handle;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.adrenoVersion, 830);
+  // The Vulkan device plus the null terminator: the OpenCL one is gone.
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_EQ(result.params.devices.front(), vulkanHandle);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeFinetuningBelowAdreno800UsesCpu) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 740;
+  selection.devices[1].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {.active = true},
+      dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  ASSERT_EQ(result.params.devices.size(), 1U);
+  EXPECT_EQ(result.params.devices.front(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeFinetuningOnAdreno800PlusKeepsGpu) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 830;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {.active = true},
+      dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  ASSERT_EQ(result.params.devices.size(), 3U);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+// A device with no Adreno tier is not an Adreno, so neither restriction may
+// fire off it — asserted with BOTH triggers active at once.
+TEST_F(LoadFitNormalizationTest, SplitModeNonAdrenoSetIsNotRestricted) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "GPUOpenCL"});
+  selection.devices[1].isOpenCl = true;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      bitnet,
+      {.active = true},
+      dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  ASSERT_EQ(result.params.devices.size(), 3U);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+// An RPC endpoint reading as 830 beside a local 740 must not skip the CPU
+// fallback the local tier demands.
+TEST_F(
+    LoadFitNormalizationTest,
+    SplitModeRestrictionIgnoresRpcEndpointRaisingTier) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.devices[0].isRpc = true;
+  selection.devices[0].adrenoVersion = 830;
+  selection.devices[1].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  ASSERT_EQ(result.params.devices.size(), 1U);
+  EXPECT_EQ(result.params.devices.front(), nullptr);
+}
+
+// The other direction: a sub-800 endpoint beside a non-Adreno local GPU must
+// not clear the list, since there is no local Adreno at all.
+TEST_F(
+    LoadFitNormalizationTest,
+    SplitModeRestrictionIgnoresRpcEndpointOnNonAdrenoLocal) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.devices[0].isRpc = true;
+  selection.devices[0].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {.active = true},
+      dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_FALSE(result.adrenoVersion.has_value());
+  ASSERT_EQ(result.params.devices.size(), 3U);
+  EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+// The reported tier is the MAX across local participants: the lower tier sorts
+// first so that reading only the first device would leave the guard disarmed.
+TEST_F(LoadFitNormalizationTest, SplitModeReportsMaxAdrenoTierAcrossDevices) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 740;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.adrenoVersion, 830);
+  // Armed: the q8_0 default is suppressed on Adreno 800+ Vulkan.
+  EXPECT_NE(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_NE(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// The max spans local participants only: here the RPC endpoint would read as
+// 830 while the only real GPU is a 740.
+TEST_F(LoadFitNormalizationTest, SplitModeMaxAdrenoTierIgnoresRpcEndpoint) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "rpc0"}, {});
+  auto selection = splitSelection({"rpc0", "vulkan0"});
+  selection.devices[0].isRpc = true;
+  selection.devices[0].adrenoVersion = 830;
+  selection.devices[1].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.adrenoVersion, 740);
+  // Not armed: the q8_0 default still applies on Adreno <800.
+  EXPECT_EQ(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(result.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// The crash guard proper: an 830 participant arms it whatever position it
+// holds, replacing a native abort with a clean error.
+TEST_F(
+    LoadFitNormalizationTest, SplitModeMaxAdrenoTierArmsQuantizedKvRejection) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-k"] = "q8_0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"vulkan0", "vulkan1"});
+  selection.devices[0].adrenoVersion = 740;
+  selection.devices[1].adrenoVersion = 830;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "quantized KV must be rejected when any participant is 800+";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("not supported on Adreno 800+ (Vulkan)"));
+  }
+}
+
+// split-mode 'none' resolves through chooseBackend, so a GPU result on an
+// Adreno-<800 one-bit BitNet load proves the split filter did not run.
+//
+// The backend must be named "none": this branch forwards `--device <name>` to
+// qvac-fabric's parser, which rejects any name absent from the live ggml
+// registry. The Adreno-740 split participant below would be dropped to CPU if
+// the filter ran.
+TEST_F(
+    LoadFitNormalizationTest, SplitModeNoneLeavesAdrenoPolicyToChooseBackend) {
+  test_common::MockModelMetaData bitnet{true, "bitnet"};
+  auto config = baseConfig();
+  config["split-mode"] = "none";
+  auto dependencies = backend(
+      {.type = backend_selection::GPU, .name = "none", .adrenoVersion = 740},
+      {});
+  auto selection = splitSelection({"vulkan0"});
+  selection.devices[0].adrenoVersion = 740;
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), bitnet, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.params.mmproj_backend, "none");
+  EXPECT_EQ(result.adrenoVersion, 740);
+}
+
+// QVAC-24253: split-mode 'tensor' (LLAMA_SPLIT_MODE_TENSOR).
+
+TEST_F(LoadFitNormalizationTest, TensorSplitParsesAndDisablesFit) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  // qvac-fabric's auto-fit is not implemented for SPLIT_MODE_TENSOR, so the
+  // addon disables it rather than letting fabric log a misleading fit failure.
+  EXPECT_FALSE(result.params.fit_params);
+  EXPECT_FALSE(result.fitSnapshot.fitParams);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitLeavesFitEnabledForOtherModes) {
+  // 'none' is covered separately below with the CPU backend: it forwards
+  // `--device <name>` to llama.cpp's parser, which rejects a device that does
+  // not exist on the host running the test.
+  auto layerConfig = baseConfig();
+  layerConfig["split-mode"] = "layer";
+  const auto layer = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(layerConfig),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_TRUE(layer.params.fit_params);
+  EXPECT_TRUE(layer.fitSnapshot.fitParams);
+
+  auto noneConfig = baseConfig();
+  noneConfig["split-mode"] = "none";
+  const auto none = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(noneConfig),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+  EXPECT_TRUE(none.params.fit_params);
+  EXPECT_TRUE(none.fitSnapshot.fitParams);
+}
+
+// qvac-fabric registers `--fit [on|off]` as a common arg, so it reaches
+// params through this addon's generic passthrough. The tensor-mode override
+// must therefore be applied after the arg loop, or a caller-supplied fit=on
+// silently re-enables it and the "auto-fit disabled" notice becomes false.
+TEST_F(LoadFitNormalizationTest, TensorSplitFitOverrideBeatsExplicitFitOn) {
+  for (const char* value : {"on", "1", "true", "enabled"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config["fit"] = value;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+    EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR)
+        << "fit=" << value;
+    EXPECT_FALSE(result.params.fit_params) << "fit=" << value;
+    EXPECT_FALSE(result.fitSnapshot.fitParams) << "fit=" << value;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModesPinEligibleDeviceHandles) {
+  for (const char* mode : {"layer", "tensor"}) {
+    auto config = baseConfig();
+    config["split-mode"] = mode;
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "vulkan0"},
+            {"mock-device-0", "mock-device-1"}));
+    ASSERT_EQ(result.params.devices.size(), 3U) << "mode: " << mode;
+    EXPECT_NE(result.params.devices[0], nullptr) << "mode: " << mode;
+    EXPECT_NE(result.params.devices[1], nullptr) << "mode: " << mode;
+    EXPECT_EQ(result.params.devices[2], nullptr) << "mode: " << mode;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, SplitModeWithNoEnumerableDevicesUsesCpu) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  EXPECT_EQ(result.params.n_gpu_layers, 23);
+  EXPECT_FALSE(result.params.mmproj_use_gpu);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_NE(result.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_NE(result.params.cache_type_v, GGML_TYPE_Q8_0);
+  ASSERT_EQ(result.params.devices.size(), 1U);
+  EXPECT_EQ(result.params.devices.front(), nullptr);
+}
+
+// A caller-supplied fit=on must still be honoured outside tensor mode.
+TEST_F(LoadFitNormalizationTest, ExplicitFitOnSurvivesInNonTensorModes) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["fit"] = "on";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_TRUE(result.params.fit_params);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsUnderscoreKeyAndUppercase) {
+  auto config = baseConfig();
+  config["split_mode"] = "TENSOR";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsFlashAttnOff) {
+  // qvac-fabric's --flash-attn goes through common_arg_utils::is_falsey, which
+  // treats all four of these as equivalent to "off". Checking only "off" would
+  // let the other three reach fabric in the state the guard exists to prevent.
+  for (const char* key : {"flash-attn", "flash_attn"}) {
+    for (const char* value : {"off", "disabled", "false", "0"}) {
+      auto config = baseConfig();
+      config["split-mode"] = "tensor";
+      config[key] = value;
+      try {
+        static_cast<void>(lfn::normalizeLoadForFit(
+            "/tmp/model.gguf",
+            std::move(config),
+            metadata_,
+            {},
+            backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+        FAIL() << "tensor split with " << key << "=" << value << " must throw";
+      } catch (const qvac_errors::StatusError& error) {
+        EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
+        EXPECT_THAT(error.what(), ::testing::HasSubstr("flash attention"));
+        // The message must name the spelling the caller actually used, not a
+        // key they never set.
+        EXPECT_THAT(error.what(), ::testing::HasSubstr(key));
+        EXPECT_THAT(error.what(), ::testing::HasSubstr(value));
+      }
+    }
+  }
+}
+
+// Both spellings reach fabric as separate --flash-attn flags, and ConfigMap is
+// an unordered_map, so with a contradictory pair the value that lands last —
+// and wins in fabric's parser — is unspecified. Checking only the first key
+// found let { "flash-attn": "on", "flash_attn": "off" } skip the guard and
+// still disable flash attention under tensor mode. Both orderings are pinned
+// so neither can regress.
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsContradictoryFlashAttnKeys) {
+  const std::vector<std::pair<std::string, std::string>> kPairs = {
+      {"on", "off"}, {"off", "on"}};
+  for (const auto& [hyphen, underscore] : kPairs) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config["flash-attn"] = hyphen;
+    config["flash_attn"] = underscore;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+      FAIL() << "tensor split with flash-attn=" << hyphen
+             << " and flash_attn=" << underscore << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash attention"));
+    }
+  }
+}
+
+// Under finetuning it is tuneLoadConfigMap, not the caller, that writes
+// flash-attn=off, so the message must not tell them to remove a key they never
+// set.
+TEST_F(LoadFitNormalizationTest, TensorSplitFlashAttnMessageNamesFinetuning) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  FinetuneConfigOverrides finetune;
+  finetune.active = true;
+  finetune.flashAttn = false;
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        finetune,
+        backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+    FAIL() << "tensor split while finetuning must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("finetuning"));
+    EXPECT_THAT(
+        error.what(),
+        ::testing::Not(::testing::HasSubstr("remove flash-attn")));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitAllowsFlashAttnOnOrUnset) {
+  auto explicitOn = baseConfig();
+  explicitOn["split-mode"] = "tensor";
+  explicitOn["flash-attn"] = "on";
+  EXPECT_EQ(
+      lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(explicitOn),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"}))
+          .params.split_mode,
+      LLAMA_SPLIT_MODE_TENSOR);
+
+  // Unset is the common case: tuneLoadConfigMap defaults flash-attn to "on".
+  auto unset = baseConfig();
+  unset["split-mode"] = "tensor";
+  EXPECT_EQ(
+      lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(unset),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"}))
+          .params.split_mode,
+      LLAMA_SPLIT_MODE_TENSOR);
+}
+
+// The guard rejects on the falsey set, so every truthy synonym must pass — and
+// so must "auto", which fabric promotes to ENABLED for this mode itself
+// ("enabling flash_attn since it is required for SPLIT_MODE_TENSOR"). "auto"
+// is the interesting case: it is neither truthy nor falsey, and the sibling
+// guards in tuneLoadConfigMap treat it as a third state, so it is the value
+// most likely to break if the shared vocabulary changes.
+TEST_F(LoadFitNormalizationTest, TensorSplitAllowsFlashAttnTruthyOrAuto) {
+  for (const char* key : {"flash-attn", "flash_attn"}) {
+    // Lower-case only: this path runs fabric's argument parser, whose
+    // is_truthy/is_falsey/is_autoy are case-SENSITIVE, so a mixed-case value
+    // is rejected before the guard — see TensorSplitMixedCaseFlashAttnRejected.
+    for (const char* value : {"on", "enabled", "true", "1", "auto", "-1"}) {
+      auto config = baseConfig();
+      config["split-mode"] = "tensor";
+      config[key] = value;
+      EXPECT_EQ(
+          lfn::normalizeLoadForFit(
+              "/tmp/model.gguf",
+              std::move(config),
+              metadata_,
+              {},
+              backend({.type = backend_selection::GPU, .name = "vulkan0"}))
+              .params.split_mode,
+          LLAMA_SPLIT_MODE_TENSOR)
+          << "tensor split with " << key << "=" << value << " must be allowed";
+    }
+  }
+}
+
+// The addon matches case-sensitively, as fabric does, so a mixed-case value is
+// rejected up front with a message naming the accepted spellings. It failed
+// before too, but at argument parsing and with a less specific message; the
+// caller is now told which value is at fault and what is accepted.
+TEST_F(LoadFitNormalizationTest, TensorSplitMixedCaseFlashAttnRejected) {
+  for (const char* value : {"On", "AUTO", "True"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config["flash-attn"] = value;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+      FAIL() << "mixed-case flash-attn=" << value << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("unknown value"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash-attn"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr(value));
+    }
+  }
+}
+
+// Duplicate spellings are a hard error, implementing the contract index.d.ts
+// already publishes ("Supplying both is an error") and matching what
+// split-mode and mmproj-use-gpu already do. Before this, the KV guards
+// resolved "hyphen, else underscore" and stopped at the first hit while the
+// passthrough loop dispatched BOTH as --flash-attn — so a contradictory pair
+// let the addon read one value while fabric applied the other, which could
+// leave the Adreno crash guard closed on a config that reaches the driver bug.
+// Rejected regardless of split-mode; the tensor case is covered separately by
+// TensorSplitRejectsContradictoryFlashAttnKeys.
+TEST_F(LoadFitNormalizationTest, RejectsBothFlashAttnSpellings) {
+  const std::vector<std::pair<std::string, std::string>> kPairs = {
+      {"on", "off"}, {"off", "auto"}, {"on", "on"}};
+  for (const auto& [hyphen, underscore] : kPairs) {
+    auto config = baseConfig();
+    config["flash-attn"] = hyphen;
+    config["flash_attn"] = underscore;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+      FAIL() << "flash-attn=" << hyphen << " + flash_attn=" << underscore
+             << " must throw";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("both"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash-attn"));
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("flash_attn"));
+    }
+  }
+}
+
+// Finetuning erases "flash_attn" and rewrites "flash-attn", so without an
+// up-front check a duplicate pair would be silently resolved rather than
+// rejected. Pins that validation runs before those defaults.
+TEST_F(LoadFitNormalizationTest, RejectsBothFlashAttnSpellingsUnderFinetuning) {
+  auto config = baseConfig();
+  config["flash-attn"] = "on";
+  config["flash_attn"] = "on";
+  FinetuneConfigOverrides finetune;
+  finetune.active = true;
+  finetune.flashAttn = true;
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          finetune,
+          backend({.type = backend_selection::GPU, .name = "vulkan0"}))),
+      qvac_errors::StatusError);
+}
+
+// split-mode 'tensor' + 'auto' must take the q8_0 KV default. Fabric promotes
+// AUTO to ENABLED unconditionally for this mode, so the capability probe the
+// exclusion protects everywhere else does not exist here — and tensor mode
+// force-disables auto-fit, so a needlessly doubled KV cache has nothing to
+// trim it back.
+TEST_F(LoadFitNormalizationTest, TensorSplitWithAutoTakesQ8_0KvDefault) {
+  for (const char* value : {"auto", "-1"}) {
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    config["flash-attn"] = value;
+    const auto normalized = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+    EXPECT_EQ(normalized.params.cache_type_k, GGML_TYPE_Q8_0)
+        << "tensor + flash-attn=" << value << " must default K to q8_0";
+    EXPECT_EQ(normalized.params.cache_type_v, GGML_TYPE_Q8_0)
+        << "tensor + flash-attn=" << value << " must default V to q8_0";
+  }
+}
+
+// The non-tensor counterpart: the exclusion still applies where the probe is
+// real. This pair is what makes the tensor case above meaningful.
+TEST_F(LoadFitNormalizationTest, NonTensorWithAutoKeepsF16KvDefault) {
+  auto config = baseConfig();
+  config["flash-attn"] = "auto";
+  const auto normalized = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_NE(normalized.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_NE(normalized.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+// The documented workaround for the 'auto' KV asymmetry — recommended in the
+// CHANGELOG, the README and the index.d.ts field doc, and previously pinned
+// nowhere. An explicit cache type must survive alongside 'auto'.
+TEST_F(LoadFitNormalizationTest, AutoWithExplicitCacheTypeIsHonoured) {
+  auto config = baseConfig();
+  config["flash-attn"] = "auto";
+  config["cache-type-k"] = "q8_0";
+  config["cache-type-v"] = "q8_0";
+  const auto normalized = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(normalized.params.cache_type_k, GGML_TYPE_Q8_0);
+  EXPECT_EQ(normalized.params.cache_type_v, GGML_TYPE_Q8_0);
+}
+
+TEST_F(
+    LoadFitNormalizationTest,
+    TensorSplitDefersUnsupportedArchitectureToFabric) {
+  test_common::MockModelMetaData mamba{false, "mamba2"};
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      mamba,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsSupportedArchitecture) {
+  test_common::MockModelMetaData qwen{false, "qwen3"};
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      qwen,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitCpuFallbackClearsToNone) {
+  auto config = baseConfig();
+  config["split-mode"] = "tensor";
+  config["tensor-split"] = "0.25,0.75";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}, {}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.params.main_gpu, -1);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  // The tensor-mode constraints key on the post-fallback split_mode, so a CPU
+  // fallback must not disable auto-fit.
+  EXPECT_TRUE(result.params.fit_params);
+}
+
+// Architecture support is owned by qvac-fabric. Keep every architecture from
+// the addon's former denylist here to ensure normalization never reintroduces
+// a local mirror that can drift from fabric.
+TEST_F(
+    LoadFitNormalizationTest,
+    TensorSplitDoesNotMirrorFabricArchitectureSupport) {
+  static constexpr const char* kArchitectures[] = {
+      "grok",          "mpt",
+      "plamo2",        "minicpm3",
+      "gemma3n",       "mamba",
+      "mamba2",        "jamba",
+      "falcon-h1",     "olmo2",
+      "olmoe",         "deepseek2",
+      "deepseek32",    "glm-dsa",
+      "bitnet",        "t5",
+      "nemotron_h",    "nemotron_h_moe",
+      "granitehybrid", "lfm2",
+      "lfm2moe",       "minimax-m2",
+      "minimax-m3",    "mistral4",
+      "kimi-linear",   "qwen3tts",
+      "qwen3next",     "deepseek2-ocr",
+      "t5encoder",     "llama",
+      "qwen3",         "qwen3moe",
+      "gemma3",        "deepseek4",
+      "qwen35",        "qwen35moe"};
+
+  for (const char* arch : kArchitectures) {
+    test_common::MockModelMetaData metadata{false, arch};
+    auto config = baseConfig();
+    config["split-mode"] = "tensor";
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+    EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR)
+        << "architecture validation must be deferred to fabric: " << arch;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, TensorSplitErrorTextListsTensor) {
+  auto config = baseConfig();
+  config["split-mode"] = "not_a_split_mode";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "vulkan0"})));
+    FAIL() << "an invalid split-mode must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid split-mode"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("'tensor'"));
+  }
+}
+
+TEST_F(
+    LoadFitNormalizationTest, GpuDefaultsReachCanonicalKvAndPlacementFields) {
+  auto config = baseConfig();
+  config["ctx-size"] = "4096";
+  config["split-mode"] = "layer";
+  config["main-gpu"] = "1";
+  config["tensor-split"] = "0.25,0.75";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "vulkan0"},
+          {"vulkan0", "vulkan1"}));
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.fitSnapshot.nGpuLayers, 23);
+  EXPECT_EQ(result.fitSnapshot.nCtx, 4096U);
+  EXPECT_EQ(result.fitSnapshot.nBatch, 512U);
+  EXPECT_EQ(result.fitSnapshot.nUbatch, 128U);
+  EXPECT_EQ(result.fitSnapshot.nParallel, 2U);
+  EXPECT_EQ(result.fitSnapshot.splitMode, LLAMA_SPLIT_MODE_LAYER);
+  EXPECT_EQ(result.fitSnapshot.mainGpu, 0);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[0], 0.25F);
+  EXPECT_EQ(result.fitSnapshot.tensorSplit[1], 0.75F);
+  EXPECT_EQ(result.fitSnapshot.typeK, static_cast<int32_t>(GGML_TYPE_Q8_0));
+  EXPECT_EQ(result.fitSnapshot.typeV, static_cast<int32_t>(GGML_TYPE_Q8_0));
+}
+
+TEST_F(LoadFitNormalizationTest, FinetuneOutputsRemainExplicit) {
+  auto config = baseConfig();
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {.active = true,
+       .batchSize = 64,
+       .microBatchSize = 16,
+       .contextLength = 256,
+       .flashAttn = false},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+  EXPECT_TRUE(result.params.training);
+  EXPECT_EQ(result.params.n_ctx, 256);
+  EXPECT_EQ(result.params.n_batch, 64);
+  EXPECT_EQ(result.params.n_ubatch, 16);
+}
+
+TEST_F(LoadFitNormalizationTest, MissingDeviceKeepsLegacyErrorMapping) {
+  auto config = baseConfig();
+  config.erase("device");
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::CPU, .name = "none"})));
+    FAIL() << "missing device must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("must specify a device"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, RetiredDiscardKeyIsRejectedAsUnknownArgument) {
+  auto config = baseConfig();
+  config["n_discarded"] = "64";
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::CPU, .name = "none"})));
+    FAIL() << "retired n_discarded key must throw";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid argument"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("n-discarded"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, DuplicateSplitModeRemainsInvalidArgument) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["split_mode"] = "layer";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, UnknownGenericArgumentRemainsInvalid) {
+  auto config = baseConfig();
+  config["invalid_arg_name_xyz"] = "value";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, PositiveNegatableBooleanEnablesKvOffload) {
+  auto config = baseConfig();
+  config["kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_FALSE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+  EXPECT_EQ(result.params.n_parallel, 2);
+}
+
+TEST_F(LoadFitNormalizationTest, NegatedSpellingDisablesKvOffload) {
+  auto config = baseConfig();
+  config["no-kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.no_kv_offload);
+}
+
+TEST_F(LoadFitNormalizationTest, NegatableBooleanLeavesNeighbouringKeysIntact) {
+  auto config = baseConfig();
+  config["ctx-size"] = "2048";
+  config["no-kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_ctx, 2048);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+}
+
+TEST_F(LoadFitNormalizationTest, FalseyValueDisablesKvOffload) {
+  auto config = baseConfig();
+  config["kv-offload"] = "off";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+  EXPECT_EQ(result.params.n_parallel, 2);
+}
+
+TEST_F(LoadFitNormalizationTest, FalseyValueOnNegatedSpellingEnablesKvOffload) {
+  auto config = baseConfig();
+  config["no-kv-offload"] = "false";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_FALSE(result.params.no_kv_offload);
+}
+
+TEST_F(LoadFitNormalizationTest, UnknownBooleanValueIsRejected) {
+  auto config = baseConfig();
+  config["kv-offload"] = "maybe";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, ContradictorySpellingsAreRejected) {
+  auto config = baseConfig();
+  config["kv-offload"] = "";
+  config["no-kv-offload"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, ContradictoryUnderscoreAliasesAreRejected) {
+  auto config = baseConfig();
+  config["kv_offload"] = "on";
+  config["no_kv_offload"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, AgreeingSpellingsAreAccepted) {
+  auto config = baseConfig();
+  config["kv-offload"] = "off";
+  config["no-kv-offload"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_TRUE(result.params.no_kv_offload);
+  EXPECT_EQ(result.params.n_batch, 512U);
+  EXPECT_EQ(result.params.n_ubatch, 128U);
+  EXPECT_EQ(result.params.n_parallel, 2);
+}
+
+TEST_F(
+    LoadFitNormalizationTest,
+    DeprecatedAliasesSelectingDifferentModesAreRejected) {
+  auto config = baseConfig();
+  config["no-mmap"] = "";
+  config["direct-io"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, DeprecatedAliasesAgreeingOnNoneAreAccepted) {
+  auto config = baseConfig();
+  config["no-mmap"] = "";
+  config["no-direct-io"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
+TEST_F(LoadFitNormalizationTest, DeprecatedAliasPolarityFromValueIsHonoured) {
+  auto config = baseConfig();
+  config["mmap"] = "off";
+  config["direct-io"] = "off";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
+TEST_F(LoadFitNormalizationTest, LoadModeWithDeprecatedMmapAliasIsRejected) {
+  auto config = baseConfig();
+  config["load-mode"] = "mlock";
+  config["no-mmap"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(
+    LoadFitNormalizationTest, LoadModeWithDeprecatedDirectIoAliasIsRejected) {
+  auto config = baseConfig();
+  config["load_mode"] = "dio";
+  config["no_direct_io"] = "";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, InvalidChatTemplateRemainsInvalid) {
+  auto config = baseConfig();
+  config["chat-template"] = "invalid_template_name_xyz123";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::CPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}

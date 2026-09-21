@@ -39,10 +39,15 @@ function isModelConstant(value: unknown): value is ModelConstant {
 
 /**
  * Recursively walks `value` and adds every `ModelConstant`-shaped object it
- * encounters to `out`, keyed by `modelId`. Used so a single definition with
+ * encounters to `out`, keyed by `src`. Used so a single definition with
  * companion models (e.g. chatterbox T3 + s3gen, whisper + VAD,
  * diffusion + VAE + LLM, bergamot pivot, ESRGAN upscaler) contributes its
  * full set to the pre-download list — not just the root `constant`.
+ *
+ * Keyed by `src` (the full registry URL), NOT `modelId`: modelId is the bare
+ * filename, which distinct models can share — the single- and
+ * multi-embodiment GR00T conversions both ship `groot-q5_vf16.gguf`, and a
+ * modelId key silently drops one of them from the pre-download list.
  */
 function collectModelConstants(
   value: unknown,
@@ -51,7 +56,7 @@ function collectModelConstants(
 ): void {
   if (value == null || typeof value !== 'object') return
   if (isModelConstant(value)) {
-    if (!out.has(value.modelId)) out.set(value.modelId, value)
+    if (!out.has(value.src)) out.set(value.src, value)
     return
   }
   if (seen.has(value)) return
@@ -162,19 +167,22 @@ export class ResourceManager {
     }
 
     // Discover every constant referenced by every contributing def, keyed
-    // by `modelId` so the same constant referenced by multiple defs (or
-    // listed both as the root `constant` and inside `config`) is only
-    // downloaded once.
+    // by `src` so the same constant referenced by multiple defs (or listed
+    // both as the root `constant` and inside `config`) is only downloaded
+    // once. `src` (the full registry URL) is the unique identity — `modelId`
+    // is the bare filename, which distinct models can share (both GR00T
+    // conversions ship `groot-q5_vf16.gguf`), and keying on it silently
+    // drops one of the colliding models from the pre-download list.
     const contributors = allDefinitions.filter(
       ([dep, def]) => !def.skipPreDownload && isAllowed(dep)
     )
     const constants = new Map<string, ModelConstant>()
     const owners = new Map<string, string[]>()
     const addConstant = (c: ModelConstant, dep: string) => {
-      if (!constants.has(c.modelId)) constants.set(c.modelId, c)
-      const list = owners.get(c.modelId) ?? []
+      if (!constants.has(c.src)) constants.set(c.src, c)
+      const list = owners.get(c.src) ?? []
       if (!list.includes(dep)) list.push(dep)
-      owners.set(c.modelId, list)
+      owners.set(c.src, list)
     }
 
     for (const [dep, def] of contributors) {
@@ -197,9 +205,9 @@ export class ResourceManager {
     )
 
     const downloadItems: BootstrapDownloadItem[] = downloadList.map((constant) => ({
-      id: constant.modelId,
+      id: constant.src,
       name: constant.name,
-      ownerLabel: (owners.get(constant.modelId) ?? []).join(',') || '?',
+      ownerLabel: (owners.get(constant.src) ?? []).join(',') || '?',
       run: async () => {
         await downloadAsset({
           assetSrc: constant as never,

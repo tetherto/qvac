@@ -14,6 +14,13 @@ import type { DeclarationReflection, SignatureReflection } from "typedoc";
 import type { ApiFunction, ApiObject, ApiOverload, ExpandedType, TypeField, ErrorEntry, ApiData, StructuredType } from "./types.js";
 import { auditTsDoc } from "./audit-tsdoc.js";
 import {
+  CURATED_SINGLETONS,
+  CURATED_SINGLETON_NAMES,
+  CURATED_SINGLETONS_BY_NAME,
+  convertCuratedSingletons,
+  resolveCuratedEntryPoint,
+} from "./curated-singletons.js";
+import {
   readSampleProse,
   readIndexSummaries,
   type SampleFunctionProse,
@@ -77,6 +84,17 @@ async function tryLoadCache(
   // rendering. Missing any of these from the sentinel leaves stale cache
   // hits when contributors change the helpers without touching SDK source.
   const newestSourceMtime = await getNewestMtime(sdkPath, ".ts");
+  // Curated singletons are declared outside the SDK package, so their sources
+  // must feed the sentinel too — otherwise editing `profiler` leaves a stale
+  // cache hit.
+  const curatedMtimes = await Promise.all(
+    CURATED_SINGLETONS.map((s) =>
+      getNewestMtime(
+        path.dirname(resolveCuratedEntryPoint(sdkPath, s)),
+        ".ts",
+      ).catch(() => 0),
+    ),
+  );
   const newestSamplesMtime = samplesDir
     ? await getNewestMtime(samplesDir, ".mdx").catch(() => 0)
     : 0;
@@ -93,6 +111,7 @@ async function tryLoadCache(
     path.join(SCRIPT_DIR, "zod-describe-extractor.ts"),
     path.join(SCRIPT_DIR, "audit-tsdoc.ts"),
     path.join(SCRIPT_DIR, "render.ts"),
+    path.join(SCRIPT_DIR, "curated-singletons.ts"),
   ];
   for (const file of helperFiles) {
     try {
@@ -107,6 +126,7 @@ async function tryLoadCache(
     newestSourceMtime,
     newestSamplesMtime,
     newestTemplatesMtime,
+    ...curatedMtimes,
     ...helperMtimes,
   );
 
@@ -123,12 +143,25 @@ async function tryLoadCache(
 // Public API
 // ---------------------------------------------------------------------------
 
+function resolveSdkEntryPoint(sdkPath: string) {
+  const src = path.join(sdkPath, "src", "index.ts");
+  const root = path.join(sdkPath, "index.ts");
+  const chosen = fsSync.existsSync(src) ? src : root;
+  return chosen.replace(/\\/g, "/");
+}
+
+function resolveSdkSchemasDir(sdkPath: string) {
+  const src = path.join(sdkPath, "src", "schemas");
+  if (fsSync.existsSync(src)) return src;
+  return path.join(sdkPath, "schemas");
+}
+
 export async function extractApiData(
   sdkPath: string,
   version: string,
   options?: { forceExtract?: boolean; samplesDir?: string },
 ): Promise<ApiData> {
-  const entryPoint = path.join(sdkPath, "index.ts").replace(/\\/g, "/");
+  const entryPoint = resolveSdkEntryPoint(sdkPath);
   const tsconfigPath = path.join(sdkPath, "tsconfig.json").replace(/\\/g, "/");
 
   try {
@@ -169,11 +202,24 @@ export async function extractApiData(
 
   buildTypeMap(project);
   initTsProgram(tsconfigPath);
-  await loadZodDescriptions(path.join(sdkPath, "schemas"));
+  await loadZodDescriptions(resolveSdkSchemasDir(sdkPath));
   await loadSampleProse(options?.samplesDir);
 
+  // Curated singletons re-exported from a sibling package are absent from the
+  // SDK project, so convert their owning packages before anything walks the
+  // reflections. Their named types (`ProfilerExport`, …) live in those
+  // projects; `augmentTypeMap` keeps the SDK's own types authoritative.
+  const { variables: curatedVariables, projects: curatedProjects } =
+    await convertCuratedSingletons(sdkPath, project);
+  for (const curated of curatedProjects) augmentTypeMap(curated);
+  if (curatedVariables.length > 0) {
+    console.log(
+      `✓ Converted ${curatedVariables.length} curated singleton(s) from sibling packages`,
+    );
+  }
+
   console.log(`🔍 Auditing TSDoc completeness...`);
-  await auditTsDoc(project, sdkPath);
+  await auditTsDoc(project, sdkPath, { curatedVariables });
 
   const apiFunctions = extractApiFunctions(project);
   console.log(`✓ Extracted ${apiFunctions.length} API functions`);
@@ -202,7 +248,7 @@ export async function extractApiData(
   }
   console.log(`✓ Validation passed for all ${apiFunctions.length} functions`);
 
-  const apiObjects = extractApiObjects(project);
+  const apiObjects = extractApiObjects(project, curatedVariables);
   if (sampleProseCache.size > 0) {
     for (const obj of apiObjects) applySampleProseToObject(obj);
   }
@@ -244,7 +290,7 @@ export async function extractApiData(
 async function extractErrors(
   sdkPath: string,
 ): Promise<{ client: ErrorEntry[]; server: ErrorEntry[] }> {
-  const schemasDir = path.join(sdkPath, "schemas");
+  const schemasDir = resolveSdkSchemasDir(sdkPath);
   let clientSource = "";
   let serverSource = "";
 
@@ -528,6 +574,7 @@ function buildApiFunction(
     examples: string[];
     throws: Array<{ error: string; description: string }>;
     deprecated?: string;
+    prototype?: string;
     label?: string;
   };
   const rawOverloads: RawOverload[] = overloadSigs.map((s, idx) => {
@@ -555,7 +602,15 @@ function buildApiFunction(
     // packages/sdk/client/api/embed.ts and load-model.ts).
     const sigComment = (s as any).comment;
     const sigBlockTags = sigComment?.blockTags ?? [];
-    const description = extractComment(sigComment?.summary) || "";
+    const protoTag = sigBlockTags.find((t: any) => t.tag === "@prototype");
+    const protoSplit = protoTag
+      ? splitPrototypeTag(
+          extractComment(protoTag.content),
+          "This overload is a prototype and is not production grade.",
+        )
+      : null;
+    const description =
+      extractComment(sigComment?.summary) || protoSplit?.spilledDescription || "";
     const examples = sigBlockTags
       .filter((t: any) => t.tag === "@example")
       .map((t: any) => extractComment(t.content));
@@ -564,19 +619,43 @@ function buildApiFunction(
     // see it, leaving the description as the only signal. Fall back to
     // the parsed-from-typedoc form when the source reader can't find the
     // overload (e.g. cross-file re-exports).
+    //
+    // Overload-inheritance rule: when overloads 2+ have no docstring of
+    // their own, TypeDoc still surfaces the first overload's `@throws` on
+    // their `sigBlockTags` (block tags inherit from the primary signature —
+    // this is why `worldCreateScene`'s three signatures each render a
+    // throws section). Our source reader is stricter: it only picks up
+    // tags written literally above overload `idx`, so `perOverloadThrows`
+    // is empty for the inheriting overloads. Falling straight to
+    // `sigBlockTags` in that case strips every `{ClassName}` (already gone
+    // by parse time) and renders inherited throws as classless bullets
+    // even though overload 0 has the class names on disk. Mirror TypeDoc's
+    // inherit-from-first behaviour by reusing `perOverloadThrows[0]` before
+    // dropping to the class-name-losing path.
     const sourceThrows = perOverloadThrows?.[idx];
+    const inheritedSourceThrows =
+      idx > 0 &&
+      (!sourceThrows || sourceThrows.length === 0) &&
+      perOverloadThrows &&
+      perOverloadThrows[0] &&
+      perOverloadThrows[0].length > 0
+        ? perOverloadThrows[0]
+        : null;
+    const effectiveSourceThrows =
+      sourceThrows && sourceThrows.length > 0 ? sourceThrows : inheritedSourceThrows;
     const throws =
-      sourceThrows && sourceThrows.length > 0
-        ? sourceThrows
+      effectiveSourceThrows && effectiveSourceThrows.length > 0
+        ? effectiveSourceThrows
         : sigBlockTags
             .filter((t: any) => t.tag === "@throws")
             .map((t: any) => {
               const text = extractComment(t.content);
-              const m = text.match(/^\{([^}]+)\}\s*(.*)/);
-              if (m) return { error: m[1], description: m[2] };
-              return { error: text, description: "" };
+              const m = text.match(/^\{([^}]+)\}\s*(.*)/s);
+              if (m) return { error: m[1], description: m[2].trim() };
+              // Classless throws: description-only, no forged error name.
+              return { error: "", description: text.trim() };
             })
-            .filter((t: any) => t.error);
+            .filter((t: any) => t.error || t.description);
     // Author-provided short label, written as `@overloadLabel "Single text"`.
     // When missing, the heading falls back to plain `Overload N`.
     const labelTag = sigBlockTags.find((t: any) => t.tag === "@overloadLabel");
@@ -588,8 +667,11 @@ function buildApiFunction(
     const deprecated = depTag
       ? extractComment(depTag.content) || "This overload is deprecated."
       : undefined;
+    // @prototype on a specific overload — surfaces a "Prototype only"
+    // callout scoped to this overload. Mirrors @deprecated.
+    const prototype = protoSplit?.prototype;
 
-    return { signature: sigText, description, examples, throws, deprecated, label };
+    return { signature: sigText, description, examples, throws, deprecated, prototype, label };
   });
 
   // De-dupe identical overload signatures (TypeDoc sometimes emits the
@@ -619,16 +701,30 @@ function buildApiFunction(
           if (ov.throws.length > 0) entry.throws = ov.throws;
           if (ov.examples.length > 0) entry.examples = ov.examples;
           if (ov.deprecated) entry.deprecated = ov.deprecated;
+          if (ov.prototype) entry.prototype = ov.prototype;
           if (ov.label) entry.label = ov.label;
           return entry;
         })
       : undefined;
 
+  // TypeDoc treats `@prototype` as an unknown tag and swallows every
+  // following paragraph until the next `@` tag. When authors put the
+  // marker first, the real description lives in the tag body — first
+  // paragraph stays the callout, the rest becomes `description`.
+  const protoTag = blockTags.find((tag: any) => tag.tag === "@prototype");
+  const protoSplit = protoTag
+    ? splitPrototypeTag(
+        extractComment(protoTag.content),
+        "This function is a prototype and is not production grade.",
+      )
+    : null;
+
   return {
     name,
     signature,
     overloads,
-    description: extractComment(summary) || "No description available",
+    description:
+      extractComment(summary) || protoSplit?.spilledDescription || "",
     parameters,
     expandedParams,
     returns: {
@@ -747,11 +843,12 @@ function buildApiFunction(
         .filter((tag: any) => tag.tag === "@throws")
         .map((tag: any) => {
           const text = extractComment(tag.content);
-          const match = text.match(/^\{([^}]+)\}\s*(.*)/);
-          if (match) return { error: match[1], description: match[2] };
-          return { error: text, description: "" };
+          const match = text.match(/^\{([^}]+)\}\s*(.*)/s);
+          if (match) return { error: match[1], description: match[2].trim() };
+          // Classless throws: description-only, no forged error name.
+          return { error: "", description: text.trim() };
         })
-        .filter((t: any) => t.error);
+        .filter((t: any) => t.error || t.description);
     })(),
     examples: blockTags
       .filter((tag: any) => tag.tag === "@example")
@@ -762,6 +859,7 @@ function buildApiFunction(
       if (comment?.isDeprecated) return "This function is deprecated.";
       return undefined;
     })(),
+    prototype: protoSplit?.prototype,
   };
 }
 
@@ -812,12 +910,29 @@ function extractApiFunctions(project: any): ApiFunction[] {
 // TypeDoc object extraction (exported variables with object-like shapes)
 // ---------------------------------------------------------------------------
 
-function extractApiObjects(project: any): ApiObject[] {
+/**
+ * Build the `## Objects` section from the curated singleton allow-list.
+ *
+ * Candidates are matched by exported name, never by source path: the SDK
+ * re-exports part of its surface from sibling packages, and a path filter
+ * silently drops an object the moment a declaration moves. Every allow-listed
+ * name must produce an entry — otherwise extraction throws.
+ */
+function extractApiObjects(
+  project: any,
+  curatedVariables: DeclarationReflection[] = [],
+): ApiObject[] {
   const objects: ApiObject[] = [];
-  const allVars = project.getReflectionsByKind(ReflectionKind.Variable) as DeclarationReflection[];
+  const allVars = [
+    ...(project.getReflectionsByKind(
+      ReflectionKind.Variable,
+    ) as DeclarationReflection[]),
+    ...curatedVariables,
+  ];
 
   for (const refl of allVars) {
     const decl = refl as DeclarationReflection;
+    if (!CURATED_SINGLETON_NAMES.has(decl.name)) continue;
     const type = (decl as any).type;
     const props = extractTypeProperties(type, new Set<string>());
     if (!props || props.length === 0) continue;
@@ -830,11 +945,6 @@ function extractApiObjects(project: any): ApiObject[] {
     const sourcePath = (decl.sources?.[0]?.fullFileName ?? (decl as any).sources?.[0]?.file?.fullFileName ?? "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
     if (normalizedPath && (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/"))) continue;
-    // Object summary scope: only public, curated singletons. Today this is
-    // just `profiler` from `packages/sdk/profiling/`. Adding more curated
-    // objects here is a deliberate editorial decision — they show up on
-    // the single-page summary, so the bar should be intentional.
-    if (!normalizedPath.includes("/profiling/")) continue;
 
     const comment = decl.comment;
     const summary = comment?.summary;
@@ -862,7 +972,7 @@ function extractApiObjects(project: any): ApiObject[] {
       name: decl.name,
       description: (() => {
         const moduleDoc = extractComment(summary) ? null : readModuleJsDoc(sourcePath);
-        return extractComment(summary) || moduleDoc?.description || "No description available";
+        return extractComment(summary) || moduleDoc?.description || "";
       })(),
       objectSignature,
       fields,
@@ -872,10 +982,32 @@ function extractApiObjects(project: any): ApiObject[] {
         const extracted = blockTags
           .filter((tag: any) => tag.tag === "@example")
           .map((tag: any) => extractComment(tag.content));
-        if (extracted.length > 0) return extracted;
-        return readModuleJsDoc(sourcePath)?.examples ?? [];
+        const examples =
+          extracted.length > 0
+            ? extracted
+            : readModuleJsDoc(sourcePath)?.examples ?? [];
+        const rewrite = CURATED_SINGLETONS_BY_NAME.get(decl.name)?.exampleImport;
+        if (!rewrite) return examples;
+        return examples.map((ex) =>
+          ex.replaceAll(`"${rewrite.from}"`, `"${rewrite.to}"`),
+        );
       })(),
     });
+  }
+
+  const missing = [...CURATED_SINGLETON_NAMES].filter(
+    (name) => !objects.some((o) => o.name === name),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Curated public singleton(s) missing from the extracted API objects: ` +
+        `${missing.join(", ")}.\n\n` +
+        `These are allow-listed in scripts/api-docs/curated-singletons.ts and must ` +
+        `appear in the "## Objects" section. Likely causes:\n` +
+        `  1. The declaration moved — update the entry's packageDir/entryPoint.\n` +
+        `  2. The export was removed from packages/sdk/src/index.ts — drop the entry.\n` +
+        `  3. The value is no longer an object with callable properties.\n`,
+    );
   }
 
   return objects.sort((a, b) =>
@@ -925,20 +1057,19 @@ function buildObjectSignature(
 function validateApiFunction(fn: ApiFunction): void {
   const errors: string[] = [];
   if (!fn.name?.trim()) errors.push("Missing name");
-  if (
-    !fn.description?.trim() ||
-    fn.description === "undefined" ||
-    fn.description === "null"
-  ) {
+  if (fn.description === "undefined" || fn.description === "null") {
     errors.push(
-      `Missing or invalid description (add JSDoc comment in source)`,
+      `Invalid description placeholder (add JSDoc comment in source)`,
     );
   }
   if (!fn.signature?.trim()) errors.push("Missing signature");
+  // Prose legitimately mentions `undefined` inside inline code (e.g. "resolves
+  // with `undefined` when the run produced none"). Strip code spans first so
+  // the check still catches a stringified value leaking into the description.
+  const prose = fn.description?.replace(/`[^`]*`/g, "") ?? "";
   if (
-    fn.description &&
-    (fn.description.includes("undefined") ||
-      fn.description.includes("[object Object]"))
+    prose.includes("undefined") ||
+    prose.includes("[object Object]")
   ) {
     errors.push(
       `Description contains invalid placeholder: "${fn.description}"`,
@@ -968,6 +1099,19 @@ function buildTypeMap(project: any): void {
   const interfaces = project.getReflectionsByKind(ReflectionKind.Interface) as DeclarationReflection[];
   for (const r of [...aliases, ...interfaces]) {
     typeMap.set(r.name, r);
+  }
+}
+
+/**
+ * Add a secondary project's named types to the lookup without disturbing the
+ * SDK's own entries. Used for the packages converted on behalf of the curated
+ * singletons: the SDK project stays authoritative on name collisions.
+ */
+function augmentTypeMap(project: any): void {
+  const aliases = project.getReflectionsByKind(ReflectionKind.TypeAlias) as DeclarationReflection[];
+  const interfaces = project.getReflectionsByKind(ReflectionKind.Interface) as DeclarationReflection[];
+  for (const r of [...aliases, ...interfaces]) {
+    if (!typeMap.has(r.name)) typeMap.set(r.name, r);
   }
 }
 
@@ -1167,18 +1311,40 @@ function mergeSampleProseIntoFunction(
   // with the rest of this function: "SDK JSDoc always wins"). Previously we
   // replaced `fn.throws` wholesale when the sample had any row, which could
   // silently discard errors the JSDoc declared but the sample didn't.
+  //
+  // The dedup Map is keyed on `error` (class name) — that only works for
+  // classed entries, which have identity. Classless entries (`error === ""`,
+  // legitimate under the classless-@throws support in `parseThrowsBlockTags`)
+  // all share the same map key and would collapse to one via `Map.set("", ...)`,
+  // silently dropping throws. Handle them positionally instead: preserve JSDoc
+  // classless entries in place; append sample classless only when the JSDoc
+  // declared none of its own (mirroring the field-level fill-empty-only rule).
   if (prose.throws.length > 0) {
-    const existing = new Map<string, { error: string; description: string }>();
-    for (const t of fn.throws ?? []) existing.set(t.error, t);
+    const classedByName = new Map<string, { error: string; description: string }>();
+    const result: { error: string; description: string }[] = [];
+    let jsdocHasClassless = false;
+    for (const t of fn.throws ?? []) {
+      if (t.error) classedByName.set(t.error, t);
+      else jsdocHasClassless = true;
+      result.push(t);
+    }
     for (const s of prose.throws) {
-      const current = existing.get(s.error);
-      if (!current) {
-        existing.set(s.error, { error: s.error, description: s.description });
-      } else if (!current.description || current.description.trim() === "") {
-        current.description = s.description;
+      if (s.error) {
+        const current = classedByName.get(s.error);
+        if (!current) {
+          const entry = { error: s.error, description: s.description };
+          classedByName.set(s.error, entry);
+          result.push(entry);
+        } else if (!current.description || current.description.trim() === "") {
+          current.description = s.description;
+        }
+      } else if (!jsdocHasClassless) {
+        // Sample-only classless: append in sample order, once we know the
+        // JSDoc declared no classless entries of its own.
+        result.push({ error: s.error, description: s.description });
       }
     }
-    fn.throws = [...existing.values()];
+    fn.throws = result;
   }
 }
 
@@ -1291,9 +1457,12 @@ function initTsProgram(tsconfigPath: string): void {
 function readModuleJsDoc(
   fileName: string,
 ): { description: string; examples: string[] } | null {
-  if (!tsProgram) return null;
   const normalizedPath = fileName.replace(/\\/g, "/");
-  const sourceFile = tsProgram.getSourceFile(normalizedPath);
+  // Curated singletons are declared outside the SDK program (see
+  // `curated-singletons.ts`), so parse those files standalone.
+  const sourceFile =
+    tsProgram?.getSourceFile(normalizedPath) ??
+    readStandaloneSourceFile(normalizedPath);
   if (!sourceFile) return null;
 
   const fullText = sourceFile.getFullText();
@@ -1310,6 +1479,19 @@ function readModuleJsDoc(
 
   const raw = fullText.slice(jsdoc.pos, jsdoc.end);
   return parseJsDocBlock(raw);
+}
+
+/**
+ * Parse a single file into a `SourceFile` outside any program. Returns null
+ * when the file cannot be read.
+ */
+function readStandaloneSourceFile(fileName: string): ts.SourceFile | null {
+  try {
+    const text = fsSync.readFileSync(fileName, "utf-8");
+    return ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true);
+  } catch {
+    return null;
+  }
 }
 
 function parseJsDocBlock(raw: string): { description: string; examples: string[] } {
@@ -1357,10 +1539,13 @@ function parseThrowsFromJsDoc(
     const error = (m[1] ?? "").trim();
     const description = (m[2] ?? "").trim();
     if (!error && !description) continue;
-    entries.push({
-      error: error || description,
-      description: error ? description : "",
-    });
+    // `@throws` without a `{ClassName}` header is valid TSDoc: the tag body is
+    // free-form. Leave `error` empty in that case so the renderer can pick a
+    // representation for classless entries (see `single-page.njk`) instead of
+    // shoehorning the description into a field that will later be wrapped in
+    // inline-code backticks — which produces MDX with mismatched fences when
+    // the description carries its own backticks or JSX-like tokens.
+    entries.push({ error, description });
   }
   return entries;
 }
@@ -2262,6 +2447,30 @@ function buildSyntacticSignature(
     return `${p.name}${optional}: ${p.type}`;
   });
   return `function ${name}(${parts.join(", ")}): ${returnType};`;
+}
+
+/**
+ * TypeDoc treats unknown tags such as `@prototype` as consuming every
+ * following paragraph until the next `@` tag. When the marker is first in
+ * the JSDoc, the real description lands in the tag body. Keep the first
+ * paragraph as the prototype callout and treat the rest as description.
+ */
+function splitPrototypeTag(
+  content: string,
+  emptyFallback: string,
+): { prototype: string; spilledDescription: string } {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return { prototype: emptyFallback, spilledDescription: "" };
+  }
+  const blank = /\n[ \t]*\n/.exec(trimmed);
+  if (!blank) {
+    return { prototype: trimmed, spilledDescription: "" };
+  }
+  return {
+    prototype: trimmed.slice(0, blank.index).trim(),
+    spilledDescription: trimmed.slice(blank.index).trim(),
+  };
 }
 
 function extractComment(nodes: any): string {

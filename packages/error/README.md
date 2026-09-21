@@ -22,14 +22,10 @@ npm i @qvac/error
 ### Basic Usage
 
 ```javascript
-const { QvacErrorBase, addCodes } = require('@qvac/error')
+import { QvacErrorBase, addCodes } from '@qvac/error'
 
 // Create your own error class extending the base
-class QvacErrorCustom extends QvacErrorBase {
-  constructor(code, adds) {
-    super(code, adds)
-  }
-}
+class QvacErrorCustom extends QvacErrorBase {}
 
 // Define your error codes (reserve at least 1000 codes per library)
 const ERR_CODES = Object.freeze({
@@ -57,7 +53,7 @@ addCodes({
 // Using your custom errors
 try {
   // Some operation that fails
-  throw new QvacErrorCustom(ERR_CODES.VALIDATION_ERROR, 'username')
+  throw new QvacErrorCustom({ code: ERR_CODES.VALIDATION_ERROR, adds: 'username' })
 } catch (error) {
   console.error(error.message) // "Validation failed for field: username"
   console.error(error.code) // 1000
@@ -79,11 +75,12 @@ try {
 Base error class that extends the native Error.
 
 ```javascript
-new QvacErrorBase(code, adds)
+new QvacErrorBase(options)
 ```
 
-- `code` (Number): The error code
-- `adds` (Array|String): Additional parameters to format the error message
+- `options.code` (Number): The error code
+- `options.adds` (Array|String): Additional parameters to format the error message
+- `options.cause` (Error): The underlying error that caused this one
 
 #### `addCodes(codes)`
 
@@ -109,10 +106,14 @@ Reserved internal error codes:
 - `INVALID_CODE_DEFINITION`: 1
 - `ERROR_CODE_ALREADY_EXISTS`: 2
 - `MISSING_ERROR_DEFINITION`: 3
+- `PACKAGE_VERSION_CONFLICT`: 4
+- `INVALID_PACKAGE_INFO`: 5
 
 ## Development
 
-After cloning, run `npm install`. If npm lifecycle scripts are disabled, also run `npm run prepare` to initialize git hooks.
+The package is written in TypeScript under `src/` and compiled to `dist/` with `tsc`.
+After cloning, run `npm install` (its `prepare` script builds `dist/`); run `npm run build`
+to recompile, `npm run typecheck` to type-check, and `npm run test:unit` for the tests.
 
 ## Best Practices
 

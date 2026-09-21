@@ -1,29 +1,29 @@
-import type { CheckContext } from '../check.js'
-import { createDefaultContext } from '../check.js'
-import type { CheckSection } from '../types.js'
-import { checkNodeVersion, checkCliHost } from './runtime.js'
+import type { CheckContext } from '@/doctor/check'
+import { createDefaultContext } from '@/doctor/check'
+import type { CheckSection } from '@/doctor/types'
+import { checkNodeVersion, checkCliHost } from '@/doctor/checks/runtime'
 import {
   checkTotalMemory,
   checkAvailableMemory,
   checkGpuAcceleration,
   checkFreeDiskSpace
-} from './hardware.js'
-import { checkDesktopTargets, checkAndroidTarget, checkIosTarget } from './targets.js'
-import { checkFfmpeg, checkBareRuntime, checkBun } from './tools.js'
-import { checkSdkInstalled } from './project.js'
+} from '@/doctor/checks/hardware'
+import { checkDesktopTargets, checkAndroidTarget, checkIosTarget } from '@/doctor/checks/targets'
+import { checkFfmpeg, checkBareRuntime, checkBun } from '@/doctor/checks/tools'
+import { checkSdkInstalled } from '@/doctor/checks/project'
 
-export type { Check, CheckContext, ProbeFn, ProbeResult } from '../check.js'
-export { createDefaultContext, probeBinary } from '../check.js'
-export { checkNodeVersion, checkCliHost } from './runtime.js'
+export type { Check, CheckContext, ProbeFn, ProbeResult } from '@/doctor/check'
+export { createDefaultContext, probeBinary } from '@/doctor/check'
+export { checkNodeVersion, checkCliHost } from '@/doctor/checks/runtime'
 export {
   checkTotalMemory,
   checkAvailableMemory,
   checkGpuAcceleration,
   checkFreeDiskSpace
-} from './hardware.js'
-export { checkDesktopTargets, checkAndroidTarget, checkIosTarget } from './targets.js'
-export { checkFfmpeg, checkBareRuntime, checkBun } from './tools.js'
-export { checkSdkInstalled } from './project.js'
+} from '@/doctor/checks/hardware'
+export { checkDesktopTargets, checkAndroidTarget, checkIosTarget } from '@/doctor/checks/targets'
+export { checkFfmpeg, checkBareRuntime, checkBun } from '@/doctor/checks/tools'
+export { checkSdkInstalled } from '@/doctor/checks/project'
 
 export interface CollectChecksOptions {
   context?: CheckContext | undefined

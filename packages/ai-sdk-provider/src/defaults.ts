@@ -7,10 +7,8 @@
 // (and remove this TODO) when the CLI ticket lands.
 export const DEFAULT_BASE_URL = 'http://127.0.0.1:11435/v1'
 
-// `qvac serve` does not validate the API key. The value is sent only because
-// some OpenAI-shaped HTTP clients refuse to issue a request without an
-// Authorization header. Override with `apiKey` for downstream proxies that
-// do enforce a key.
+// External-mode fallback for OpenAI-shaped clients that require an
+// Authorization header. Managed mode generates and persists its own key.
 export const DEFAULT_API_KEY = 'qvac'
 
 export const DEFAULT_HEADERS: Readonly<Record<string, string>> = Object.freeze({})

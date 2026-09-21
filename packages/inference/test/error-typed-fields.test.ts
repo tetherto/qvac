@@ -1,0 +1,202 @@
+import test from 'brittle'
+import { createErrorResponse } from '@/schemas/error'
+// Type-only import from the public surface pins the exported record type.
+import type { ContextOverflowErrorSizes } from '@/surface'
+import {
+  ContextOverflowError,
+  RequestIdConflictError,
+  RequestNotFoundError,
+  RequestRejectedByPolicyError,
+  InferenceCancelledError,
+  ModelNotLoadedError
+} from '@/errors'
+
+test('createErrorResponse: RequestRejectedByPolicyError carries its named fields on typedFields', (t) => {
+  const err = new RequestRejectedByPolicyError(
+    'rid-1',
+    'completion',
+    'model-1',
+    'oneAtATimePerModel'
+  )
+  const response = createErrorResponse(err)
+
+  t.is(response.type, 'error')
+  // `QvacErrorBase.name` is the SCREAMING_SNAKE error-code name from the
+  // error-code definitions, not the JS class name.
+  t.is(response.name, 'REQUEST_REJECTED_BY_POLICY')
+  t.is(response.code, 52420)
+  t.alike(response.typedFields, {
+    requestId: 'rid-1',
+    kind: 'completion',
+    modelId: 'model-1',
+    reason: 'oneAtATimePerModel'
+  })
+})
+
+test('createErrorResponse: RequestIdConflictError carries requestId on typedFields', (t) => {
+  const err = new RequestIdConflictError('rid-2')
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'REQUEST_ID_CONFLICT')
+  t.is(response.code, 52417)
+  t.alike(response.typedFields, { requestId: 'rid-2' })
+})
+
+test('createErrorResponse: RequestNotFoundError carries requestId on typedFields', (t) => {
+  const err = new RequestNotFoundError('rid-3')
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'REQUEST_NOT_FOUND')
+  t.is(response.code, 52418)
+  t.alike(response.typedFields, { requestId: 'rid-3' })
+})
+
+test('createErrorResponse: ContextOverflowError carries overflow fields on typedFields', (t) => {
+  const err = new ContextOverflowError(5432, 4096, 'model-1')
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'CONTEXT_OVERFLOW')
+  t.is(response.code, 52421)
+  t.alike(response.typedFields, {
+    promptTokens: 5432,
+    ctxSize: 4096,
+    modelId: 'model-1'
+  })
+})
+
+// The canonical sizes-record form: one record in, all fields out.
+test('createErrorResponse: ContextOverflowError sizes-record form carries every field', (t) => {
+  const contextSizes: ContextOverflowErrorSizes = {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192
+  }
+  const err = new ContextOverflowError(contextSizes, 'model-1')
+  t.ok(err.message.includes('8201'), 'the message factory sees the record fields')
+  t.alike(createErrorResponse(err).typedFields, {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192,
+    modelId: 'model-1'
+  })
+})
+
+// The positional form is deprecated but must keep working for existing callers.
+test('createErrorResponse: ContextOverflowError carries warm-cache fields on typedFields', (t) => {
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, {
+    cachedTokens: 8170,
+    requiredTokens: 8201
+  })
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'CONTEXT_OVERFLOW')
+  t.alike(response.typedFields, {
+    promptTokens: 31,
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    ctxSize: 8192,
+    modelId: 'model-1'
+  })
+})
+
+test('ContextOverflowError message names both halves on a warm cache', (t) => {
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, {
+    cachedTokens: 8170,
+    requiredTokens: 8201
+  })
+  t.ok(err.message.includes('uses 8201 context units'), 'leads with the failing total')
+  t.ok(err.message.includes('8170 already cached'), 'names the cached half')
+})
+
+// A lone total can be a cached sum or KV cells — the message must not blame
+// a "prompt" of that size or call the value tokens.
+test('ContextOverflowError message stays unit-neutral when only requiredTokens is known', (t) => {
+  const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
+    requiredTokens: 600
+  })
+  t.ok(err.message.includes('Request uses 600 context units'), 'unit-neutral phrasing')
+  t.absent(err.message.includes('600 prompt tokens'), 'the total is not labelled a prompt')
+  t.absent(err.message.includes('600 tokens'), 'the total is not labelled tokens')
+})
+
+// A wider, structurally assignable extras object must not override the
+// positional arguments — the deprecated overload reads only its two fields.
+test('ContextOverflowError legacy extras cannot override positional args', (t) => {
+  const wideExtras = {
+    cachedTokens: 8170,
+    requiredTokens: 8201,
+    promptTokens: 999,
+    ctxSize: 999,
+    modelId: 'other-model',
+    cause: 'shadowed'
+  }
+  const err = new ContextOverflowError(31, 8192, 'model-1', undefined, wideExtras)
+  t.is(err.promptTokens, 31)
+  t.is(err.ctxSize, 8192)
+  t.is(err.modelId, 'model-1')
+  t.is(err.cachedTokens, 8170)
+  t.is(err.requiredTokens, 8201)
+})
+
+// The guards trigger at equality (a free output slot is needed), so the
+// message must not read as a contradiction at total == capacity.
+test('ContextOverflowError message reads coherently at the equality boundary', (t) => {
+  const err = new ContextOverflowError(undefined, 512, 'model-1', undefined, {
+    requiredTokens: 512
+  })
+  t.ok(err.message.includes('leaves no room to generate'), 'equality is about the output slot')
+})
+
+test('createErrorResponse: ContextOverflowError omits absent fields from typedFields', (t) => {
+  // A bare overflow (the `processPromptImpl` wording) parses to no numbers,
+  // so every size field can be absent. The envelope must omit absent fields
+  // (rather than send `undefined` values) so the client reconstructor's
+  // optional-number readers see `undefined` on the re-instance.
+  const err = new ContextOverflowError()
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'CONTEXT_OVERFLOW')
+  t.is(response.code, 52421)
+  t.alike(response.typedFields, {})
+})
+
+test('createErrorResponse: QvacError without toErrorResponseFields omits typedFields', (t) => {
+  // ModelNotLoadedError is a QvacError but doesn't opt into typed-field
+  // serialisation — the response carries name/code/message but no
+  // typedFields envelope.
+  const err = new ModelNotLoadedError('model-1')
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'MODEL_NOT_LOADED')
+  t.is(response.typedFields, undefined)
+})
+
+test('createErrorResponse: plain Error produces a non-typed envelope', (t) => {
+  const err = new Error('something broke')
+  const response = createErrorResponse(err)
+
+  t.is(response.type, 'error')
+  t.is(response.message, 'something broke')
+  t.is(response.name, undefined)
+  t.is(response.code, undefined)
+  t.is(response.typedFields, undefined)
+})
+
+test('createErrorResponse: InferenceCancelledError does NOT round-trip via typedFields (client-constructed)', (t) => {
+  // InferenceCancelledError is built client-side in completion-stream.ts
+  // when the event stream ends with stopReason: "cancelled". Even if the
+  // server happens to throw one (rare — e.g. a fixture), the reconstructor
+  // map deliberately has no entry for its name, so a `typedFields` value
+  // here would be inert. We assert the envelope shape is sane and explicitly
+  // does not declare typed fields the client wasn't asked to reconstruct.
+  const err = new InferenceCancelledError('rid-4')
+  const response = createErrorResponse(err)
+
+  t.is(response.name, 'INFERENCE_CANCELLED')
+  t.is(response.code, 52419)
+  // No `toErrorResponseFields()` method on this class — typedFields stays
+  // undefined.
+  t.is(response.typedFields, undefined)
+})

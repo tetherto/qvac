@@ -58,5 +58,10 @@
     "spdxId": "ltx-2-community",
     "name": "LTX-2 Community License Agreement",
     "url": "https://github.com/Lightricks/LTX-2/blob/main/LICENSE"
+  },
+  {
+    "spdxId": "qwen-community-1.0",
+    "name": "Qwen Community License 1.0",
+    "url": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next/raw/de4b8e4d43b917e7706784d8bb445c9af86a3540/LICENSE"
   }
 ]

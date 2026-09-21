@@ -9,8 +9,8 @@
  *
  * A version records its number and the folder holding it, and nothing else.
  * Whether a versioned collection's line is the current one is read from the
- * folder: the current line is written `(v0.17)`, a Fumadocs folder group
- * excluded from the slug, and every other line `v0.16`. Currency is therefore
+ * folder: the current line is written `(v0.19)`, a Fumadocs folder group
+ * excluded from the slug, and every other line `v0.18`. Currency is therefore
  * stated once, in the one place that also determines the URLs.
  *
  * Inventory packages declare no current version. Their version-less path
@@ -60,8 +60,8 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'collection',
     path: '/sdk',
     versions: [
-      { version: 'v0.17', folder: '(v0.17)' },
-      { version: 'v0.16', folder: 'v0.16' },
+      { version: 'v0.19', folder: '(v0.19)' },
+      { version: 'v0.18', folder: 'v0.18' },
     ],
   },
   {

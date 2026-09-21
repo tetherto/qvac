@@ -1,6 +1,6 @@
 import { transcribe } from '@qvac/sdk'
 import * as path from 'node:path'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { parakeetTests } from '../../../parakeet-tests.js'
 
@@ -46,7 +46,9 @@ export class ParakeetExecutor extends AbstractModelExecutor<typeof parakeetTests
   }
 
   private resolveResource(testId: string): string {
+    if (testId.startsWith('parakeet-indic-conformer-')) return 'parakeet-indic-conformer'
     if (testId.startsWith('parakeet-ctc-')) return 'parakeet-ctc'
+    if (testId.startsWith('parakeet-unified-')) return 'parakeet-unified'
     if (testId.startsWith('parakeet-sortformer-')) return 'parakeet-sortformer'
     return 'parakeet-tdt'
   }

@@ -7,6 +7,7 @@ const path = require('path')
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
 const mobileAutoFile = path.join(repoRoot, 'test', 'mobile', 'integration.auto.cjs')
+const MOBILE_EXCLUDED_INTEGRATION_FILES = new Set(['rag-id-map-index.test.js'])
 
 function getIntegrationTestFiles() {
   if (!fs.existsSync(integrationDir)) {
@@ -16,6 +17,7 @@ function getIntegrationTestFiles() {
   return fs
     .readdirSync(integrationDir)
     .filter((f) => f.endsWith('.test.js'))
+    .filter((f) => !MOBILE_EXCLUDED_INTEGRATION_FILES.has(f))
     .sort()
 }
 

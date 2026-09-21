@@ -148,7 +148,7 @@ private:
   std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer_;
   // LavaSR denoiser (follow-up): runs before the enhancer
   // (rate-preserving); loaded when cfg_.denoiserGgufPath is set; null disables
-  // it. The tts-cpp UL-UNAS forward is implemented in qvac-ext-lib-whisper.cpp
+  // it. The tts-cpp UL-UNAS forward is implemented in qvac-fabric-speech.cpp
   // PR #78; denoiser + native chunk streaming is rejected in validateConfig
   // (batch only — a stateful streaming denoiser is the follow-up).
   std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser_;

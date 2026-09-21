@@ -18,8 +18,16 @@ await model.run([
 | --- | --- | --- |
 | `cacheKey` | `string` | Path to the cache file. Omit to disable caching. |
 | `saveCacheToDisk` | `boolean` | `true` writes the cache to the `cacheKey` path after inference. If omitted, cache stays in RAM and only auto-saves on cache switch or clear. |
-| `prefill` | `boolean` | Evaluate prompt without generating a response. |
+| `prefill` | `boolean` | Evaluate prompt without generating a response. On a model loaded with `parallel >= 2`, must be paired with `saveCacheToDisk: true` and a `cacheKey` — see below. |
 | `generationParams` | `object` | Per-run overrides for temp, top_p, top_k, predict, seed, penalties. |
+
+## Prefill on a parallel model (`parallel >= 2`)
+
+A prefill-only run warms context state without generating. On a model loaded with `parallel >= 2` that state lives in a scheduler slot which is torn down when the run ends, so nothing a concurrent job could reach survives unless the prefill is **persistable** — `saveCacheToDisk: true` plus a `cacheKey`.
+
+A *live-only* prefill (no persistence) is therefore rejected with `InvalidArgument` on a parallel model, both as a single `run()` and per batch item, rather than silently producing nothing. Load with `parallel: 1` if you want live-only cache warming, where the warmed context is reused by the next run on that instance.
+
+See [continuous-batching.md](continuous-batching.md#prefill-rules-persistable-vs-live-only) for the scheduler-side rules.
 
 ## Enable caching
 

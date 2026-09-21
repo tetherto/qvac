@@ -1,8 +1,12 @@
 node_modules
-package-lock.json
+dist
+test/dist
+bun.lock
 .npmrc
 .idea/
-.npmrc
 .local-store
+local-store
+store
+test-external-hyperdb-store
 models
 .test

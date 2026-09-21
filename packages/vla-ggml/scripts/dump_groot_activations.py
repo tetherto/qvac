@@ -5,12 +5,33 @@ Runs Isaac-GR00T's `Gr00tPolicy` on a fixed synthetic fixture and dumps named
 intermediate tensors to a safetensors file that the C++ milestone tests
 (test/unit/test_groot_m*_*.cpp) and the infer-parity test diff their ggml
 sub-graph outputs against. `--embodiment` selects the fixture preset (keys +
-dims + tag): `droid` (base N1.7-3B, default) or `libero` (the LIBERO ckpt).
+dims + tag): `droid` (base N1.7-3B, default), `libero` (the LIBERO ckpt), or
+`real_g1` / `real_r1_pro` (further base-checkpoint embodiments with distinct
+cat_ids, for end-to-end parity of a SELECTED non-default embodiment).
 
 Must run on a CUDA GPU with Isaac-GR00T installed. Note the LIBERO checkpoint's
 config sets `use_flash_attention: true`; flash-attn needs Ampere+, so on a
 Turing GPU (e.g. T4) flip it to false (sdpa — exact attention, same numerics)
 in the checkpoint's config.json before dumping.
+
+Every GR00T checkpoint pulls its VLM backbone from the GATED
+`nvidia/Cosmos-Reason2-2B` repo, so a box without access to it cannot load the
+model at all. If you have the backbone on disk (e.g. copied from another
+machine's HF cache) point the checkpoint at it instead of authenticating — there
+are TWO independent references and missing either one sends the loader back to
+the hub:
+
+  * `config.json` -> `model_name`: the backbone weights. `get_backbone_cls`
+    selects the class by substring, so the local path must still contain
+    `nvidia/Cosmos-Reason2` (e.g. `/path/local-hf/nvidia/Cosmos-Reason2-2B`).
+  * `processor_config.json` -> `processor_kwargs.model_name`: the tokenizer /
+    processor. Checkpoints ship without this key and
+    `Gr00tN1d7Processor.from_pretrained` re-`setdefault`s the gated repo id, so
+    it must be set explicitly.
+
+With both pointing at a local directory, `transformers` treats the backbone as
+local and skips its hub metadata lookups, and the dump runs fully offline
+(`HF_HUB_OFFLINE=1`). Only the lookup path changes; the weights are the same.
 
 Usage:
     python dump_groot_activations.py \
@@ -22,6 +43,19 @@ Usage:
         --checkpoint /path/to/GR00T-N1.7-LIBERO/libero_10 \
         --embodiment libero \
         --out activations_libero_v4.safetensors
+
+`--mode sweep` instead dumps the multi-embodiment parity fixture: it runs ONLY
+the three embodiment-conditioned submodules (state_encoder, action_encoder,
+action_decoder — the only per-embodiment weights) on a FIXED synthetic input,
+once per cat_id, so the C++ port can validate that every shipped embodiment row
+slices + matmuls correctly. No cameras / real observation are needed because the
+rest of the action head is embodiment-agnostic. Use the SAME checkpoint the
+multi-embodiment GGUF was converted from (base N1.7-3B ships all trained rows):
+
+    python dump_groot_activations.py \
+        --checkpoint /path/to/GR00T-N1.7-3B \
+        --mode sweep \
+        --out activations_sweep.safetensors
 """
 
 import argparse
@@ -55,6 +89,49 @@ PRESETS = {
         "state_keys": {"x": 1, "y": 1, "z": 1, "roll": 1, "pitch": 1, "yaw": 1, "gripper": 2},
         "language_key": "annotation.human.action.task_description",
         "instruction": "pick up the black bowl and place it on the plate",
+    },
+    # Two further base-checkpoint embodiments with distinct cat_ids, so an
+    # end-to-end parity run can gate a SELECTED non-default embodiment rather
+    # than only the GGUF's default one. Both keep the shared weights of the base
+    # checkpoint, so they pair with a base-derived multi GGUF (see
+    # make_multi_embodiment_fixture.py). Keys/dims/history come from the
+    # checkpoint's own processor_config.json modality_configs and statistics.json
+    # — do not hand-edit them; a mismatch makes Gr00tPolicy reject the fixture.
+    # Image count per infer = len(video_keys) * video_history, which is the
+    # embodiment's num_cameras from the GGUF's point of view: 2 for real_g1,
+    # 6 for real_r1_pro, against LIBERO's 2 and DROID's 4.
+    "real_g1": {
+        "embodiment_tag": "REAL_G1_RELATIVE_EEF_RELATIVE_JOINTS",
+        "video_keys": ["ego_view"],
+        "video_history": 2,  # delta_indices [-20, 0]
+        "state_keys": {
+            "left_wrist_eef_9d": 9,
+            "right_wrist_eef_9d": 9,
+            "left_hand": 7,
+            "right_hand": 7,
+            "left_arm": 7,
+            "right_arm": 7,
+            "waist": 3,
+        },
+        "language_key": "annotation.human.task_description",
+        "instruction": "pick up the cup and hand it over",
+    },
+    "real_r1_pro": {
+        "embodiment_tag": "REAL_R1_PRO_SHARPA_RELATIVE_EEF",
+        "video_keys": [
+            "ego_view_res320x240_freq20",
+            "left_wrist_view_res320x240_freq20",
+            "right_wrist_view_res320x240_freq20",
+        ],
+        "video_history": 2,  # delta_indices [-20, 0]
+        "state_keys": {
+            "left_wrist_eef": 9,
+            "right_wrist_eef": 9,
+            "left_hand_joints": 22,
+            "right_hand_joints": 22,
+        },
+        "language_key": "annotation.human.coarse_action",
+        "instruction": "pick up the bottle and place it on the tray",
     },
 }
 
@@ -157,6 +234,67 @@ class ActivationRecorder:
         self._handles = []
 
 
+# ── Multi-embodiment sweep fixture ────────────────────────────────────────
+# The only per-embodiment weights are the 3 CategorySpecific submodules; the
+# rest of the action head is shared. So the parity fixture feeds these three a
+# FIXED synthetic input and records the output for every cat_id — cameras / real
+# observations aren't needed. Dims match the GR00T N1.7-3B action head and the
+# C++ test constants (test_groot_embodiment_sweep.cpp): max_state_dim =
+# max_action_dim = 132, action horizon = 40, dit_output_dim = 1024. The
+# action-encoder timestep is a fixed float in (0, 1).
+SWEEP_MAX_STATE_DIM = 132
+SWEEP_MAX_ACTION_DIM = 132
+SWEEP_N_ACTION_TOKENS = 40
+SWEEP_DIT_OUTPUT_DIM = 1024
+SWEEP_TIMESTEP = 0.5
+
+
+def dump_embodiment_sweep(action_head, device, cat_ids, out_path):
+    """Run the 3 embodiment-conditioned submodules per cat_id on fixed inputs."""
+    rng = np.random.default_rng(SEED)
+    param_dtype = next(action_head.state_encoder.parameters()).dtype
+
+    def synth(*shape):
+        a = rng.uniform(-1.0, 1.0, size=shape).astype(np.float32)
+        return torch.from_numpy(a).to(device=device, dtype=param_dtype)
+
+    # Fixed synthetic inputs, shared across every cat_id (batch = 1).
+    state_in = synth(1, 1, SWEEP_MAX_STATE_DIM)
+    actions_in = synth(1, SWEEP_N_ACTION_TOKENS, SWEEP_MAX_ACTION_DIM)
+    decoder_in = synth(1, SWEEP_N_ACTION_TOKENS + 1, SWEEP_DIT_OUTPUT_DIM)
+    timesteps = torch.full((1,), SWEEP_TIMESTEP, device=device, dtype=param_dtype)
+
+    def f32(t):
+        return t.detach().float().cpu().clone()
+
+    tensors = {
+        "sweep.input.state": f32(state_in),
+        "sweep.input.actions": f32(actions_in),
+        "sweep.input.decoder": f32(decoder_in),
+        "sweep.input.timestep": torch.tensor([float(SWEEP_TIMESTEP)]),
+    }
+
+    with torch.no_grad():
+        for cid in cat_ids:
+            # CategorySpecific* forward takes the embodiment id as a LongTensor of
+            # shape (batch,); it indexes the per-category weight row. (If a future
+            # Isaac-GR00T revision renames/reorders this arg, only these 3 calls
+            # need touching.)
+            emb = torch.full((1,), int(cid), dtype=torch.long, device=device)
+            se = action_head.state_encoder(state_in, emb)
+            ae = action_head.action_encoder(actions_in, timesteps, emb)
+            ad = action_head.action_decoder(decoder_in, emb)
+            tensors[f"sweep.cat{int(cid)}.state_encoder_output"] = f32(se)
+            tensors[f"sweep.cat{int(cid)}.action_encoder_output"] = f32(ae)
+            tensors[f"sweep.cat{int(cid)}.action_decoder_output"] = f32(ad)
+
+    meta = {"seed": str(SEED), "cat_ids": json.dumps([int(c) for c in cat_ids])}
+    save_file(tensors, out_path, metadata=meta)
+    print(f"Saved sweep fixture: {len(cat_ids)} cat_ids -> {out_path}")
+    for name, t in tensors.items():
+        print(f"  {name:44s} {tuple(t.shape)} {t.dtype}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", required=True)
@@ -170,6 +308,14 @@ def main():
     ap.add_argument(
         "--embodiment", default="droid", choices=sorted(PRESETS.keys()),
         help="fixture preset: droid (base N1.7-3B) or libero (LIBERO ckpt)")
+    ap.add_argument(
+        "--mode", default="full", choices=["full", "sweep"],
+        help="full: the milestone/e2e activation dump; sweep: per-cat_id "
+             "embodiment-parity fixture (see module docstring)")
+    ap.add_argument(
+        "--cat-ids", default=",".join(str(i) for i in range(32)),
+        help="sweep mode: comma-separated cat_ids to dump (default 0..31; the "
+             "C++ test only checks the ones its GGUF actually ships)")
     args = ap.parse_args()
     preset = PRESETS[args.embodiment]
 
@@ -184,6 +330,11 @@ def main():
 
     model = policy.model
     action_head = model.action_head
+
+    if args.mode == "sweep":
+        cat_ids = [int(c) for c in args.cat_ids.split(",") if c.strip() != ""]
+        dump_embodiment_sweep(action_head, args.device, cat_ids, args.out)
+        return
 
     recorder = ActivationRecorder()
     recorder.attach("backbone_output", model.backbone)

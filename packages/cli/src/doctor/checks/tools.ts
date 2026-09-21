@@ -1,4 +1,4 @@
-import type { Check } from '../check.js'
+import type { Check } from '@/doctor/check'
 
 export const checkFfmpeg: Check = (ctx) => {
   const r = ctx.probe('ffmpeg', ['-version'])

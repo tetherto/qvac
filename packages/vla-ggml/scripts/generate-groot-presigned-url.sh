@@ -11,7 +11,7 @@ set -e
 
 REGION="${AWS_REGION:-eu-central-1}"
 BUCKET="${S3_BUCKET:-${MODEL_S3_BUCKET}}"
-BASE_PATH="qvac_models_compiled/vla/groot-n1.7-3b-libero"
+BASE_PATH="qvac_models_compiled/vla/groot-n1.7-3b-multi"
 MODEL_NAME="groot-q5_vf16.gguf"
 
 # Mask the bucket name in workflow logs before any command can echo it.

@@ -14,6 +14,8 @@ export interface TTSJobData {
     noise?: string;
     reverb?: string;
     quality?: string;
+    referenceAudio?: string;
+    referenceText?: string;
 }
 export interface TTSWeightData {
     filename: string;

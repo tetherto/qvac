@@ -1,0 +1,59 @@
+import { type LlmConfig } from '@/schemas/index'
+
+/**
+ * Converts an LlmConfig into the flat string-keyed map the C++ addon expects.
+ *
+ * JS-only fields excluded from the output (must NOT be forwarded to the addon):
+ *   - modelType   (schema discriminant, meaningless at C++ level)
+ *   - system_prompt  (JS-side history seeding only; C++ removed --system-prompt in 8189)
+ */
+export function transformLlmConfig(llmConfig: LlmConfig) {
+  const transformed = JSON.parse(
+    JSON.stringify(llmConfig, (key: string, v: unknown) =>
+      key === 'modelType' || key === 'system_prompt'
+        ? undefined
+        : key === 'stop_sequences'
+          ? Array.isArray(v)
+            ? v.join(', ')
+            : v
+          : typeof v === 'number' || typeof v === 'boolean'
+            ? String(v)
+            : v
+    ).replace(
+      /"([a-z][A-Za-z]*)":/g,
+      (_, key: string) => `"${key.replace(/[A-Z]/g, (l: string) => `_${l.toLowerCase()}`)}":`
+    )
+  ) as Record<string, string>
+
+  if ('stop_sequences' in transformed) {
+    transformed['reverse_prompt'] = transformed['stop_sequences']
+    delete transformed['stop_sequences']
+  }
+
+  if ('opencl_cache_dir' in transformed) {
+    transformed['openclCacheDir'] = transformed['opencl_cache_dir']
+    delete transformed['opencl_cache_dir']
+  }
+
+  if ('cpu-moe' in transformed) {
+    if (transformed['cpu-moe'] === 'true') {
+      transformed['cpu-moe'] = ''
+    } else {
+      delete transformed['cpu-moe']
+    }
+  }
+
+  if ('kv-offload' in transformed) {
+    const enabled = transformed['kv-offload'] === 'true'
+    delete transformed['kv-offload']
+    transformed[enabled ? 'kv-offload' : 'no-kv-offload'] = ''
+  }
+
+  if (transformed['prefetch-weights'] === 'true') {
+    transformed['prefetch-weights'] = '1'
+  } else if (transformed['prefetch-weights'] === 'false') {
+    transformed['prefetch-weights'] = '0'
+  }
+
+  return transformed
+}

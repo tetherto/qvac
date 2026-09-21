@@ -1,6 +1,6 @@
 # Agent Integrations
 
-This document is the monorepo reference for QVAC's coding-agent integration stack: `@qvac/ai-sdk-provider`, `@qvac/opencode-plugin`, `qvac serve openai`, QVAC docs, and the external `models.dev` provider metadata.
+This document is the monorepo reference for QVAC's coding-agent integration stack: `@qvac/ai-sdk-provider`, `@qvac/opencode-plugin`, `@qvac/openclaw-plugin`, `qvac serve --openai`, QVAC docs, and the external `models.dev` provider metadata.
 
 Use it when implementing, reviewing, or releasing work related to OpenCode, OpenClaw, Cline/Roo/Aider/Continue, Vercel AI SDK consumers, managed `qvac serve`, OpenAI-compatible HTTP behavior, model discovery, or package release choreography.
 
@@ -22,7 +22,7 @@ The integration stack bridges those two worlds without putting agent-specific as
 OpenCode / coding agent
   -> @qvac/opencode-plugin                 (OpenCode-specific turnkey UX)
     -> @qvac/ai-sdk-provider managed mode  (spawn/reuse local qvac serve)
-      -> @qvac/cli qvac serve openai       (OpenAI-compatible HTTP adapter)
+      -> @qvac/cli qvac serve --openai       (OpenAI-compatible HTTP adapter)
         -> @qvac/sdk                       (client RPC, Bare worker, native addons)
           -> registry + model constants    (P2P model metadata/files)
 ```
@@ -32,7 +32,7 @@ Manual/custom-provider integrations skip the OpenCode plugin:
 ```text
 OpenCode / Cline / Aider / Continue / Roo / Open WebUI
   -> custom OpenAI-compatible provider config
-    -> qvac serve openai
+    -> qvac serve --openai
       -> @qvac/sdk
 ```
 
@@ -43,9 +43,10 @@ The design rule is: keep general OpenAI-compatible behavior in `@qvac/cli`, gene
 | Package / area | Path | Public package | Primary role |
 | --- | --- | --- | --- |
 | SDK | `packages/sdk` | `@qvac/sdk` | Canonical QVAC API: model loading, completion, tool-call parsing, registry integration, cancellation primitives, native addon RPC. |
-| CLI OpenAI server | `packages/cli/src/serve` | `@qvac/cli` | Runs `qvac serve openai`, exposes OpenAI-compatible HTTP routes, owns request/response translation, model alias routing, auth/CORS, cancellation, queueing, and lifecycle for loaded models. |
+| CLI OpenAI server | `packages/cli/src/serve` | `@qvac/cli` | Runs `qvac serve --openai`. `serve/core` owns model alias routing, auth/CORS, cancellation, queueing, and lifecycle for loaded models; `serve/extensions/openai` owns the OpenAI-compatible routes and request/response translation. |
 | AI SDK provider | `packages/ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider wrapper. Owns `createQvac`, external/managed modes, typed model metadata exports, friendly catalog ids, and managed serve reuse/lifecycle. |
 | OpenCode plugin | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode-specific turnkey setup. Starts a host process, injects a `qvac` provider into OpenCode config, selects project model defaults, applies temporary OpenAI-compat shims, and tears down on exit. |
+| OpenClaw plugin | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw provider plugin: managed local `qvac serve` via OpenClaw `localService`, static catalog from `@qvac/ai-sdk-provider/models`. |
 | Public HTTP docs | `docs/website/content/docs/provider/http-server` | QVAC docs | Public setup docs for OpenAI-compatible tools. OpenCode docs should be plugin-first; manual server setup is the advanced/custom-provider path. |
 | Architecture docs | `docs/architecture` | Internal repo docs | Design/reference material for maintainers and agents. |
 | External provider catalog | `providers/qvac` in `anomalyco/models.dev` | `models.dev` entry | External discovery metadata for QVAC provider/models. Not a runtime source of truth. |
@@ -96,7 +97,7 @@ Implement here when the change is about QVAC's core inference semantics:
 
 Do not implement OpenCode-specific request-shape hacks here unless the behavior is actually required by the OpenAI-compatible API generally. The SDK should not know about OpenCode, Cline, Aider, or any other agent.
 
-### `@qvac/cli` / `qvac serve openai`
+### `@qvac/cli` / `qvac serve --openai`
 
 Implement here when the behavior belongs to the OpenAI-compatible HTTP API:
 
@@ -132,7 +133,8 @@ Implement here only for OpenCode-specific behavior:
 - Injecting `provider.qvac` into OpenCode's config.
 - Setting project `model` and `small_model` to `qvac/<model>` when `setDefaultModel` is true.
 - Spawning a real Node/Bun host process because OpenCode runs plugins inside a compiled binary whose `process.execPath` is not a JS runtime.
-- Returning quickly on `QVAC_LISTENING` so `opencode run` does not hit startup timeout while model download/preload continues behind the local proxy.
+- Returning quickly on the `QVAC_LISTENING` handshake so `opencode run` does not hit startup timeout while model download/preload continues behind the local proxy.
+- Validating that handshake and injecting the proxy's access token into OpenCode's provider options.
 - Proxy/shim behavior that only exists because OpenCode or `@ai-sdk/openai-compatible` currently disagrees with QVAC serve.
 - Plugin option parsing from defaults, project `qvac.json`, plugin tuple options, and `QVAC_*` env vars.
 
@@ -151,7 +153,7 @@ Do not encode QVAC runtime behavior in models.dev. It is discovery metadata, not
 
 ### Public docs
 
-For OpenCode docs, lead with `@qvac/opencode-plugin`. Manual `qvac serve openai` and custom provider JSON are advanced paths.
+For OpenCode docs, lead with `@qvac/opencode-plugin`. Manual `qvac serve --openai` and custom provider JSON are advanced paths.
 
 Docs should answer:
 
@@ -159,7 +161,7 @@ Docs should answer:
 - which model to choose,
 - what hardware/performance trade-off to expect,
 - what the plugin manages,
-- when manual `qvac serve openai` is needed,
+- when manual `qvac serve --openai` is needed,
 - which features are temporary shims or known limitations.
 
 Avoid framing docs around internal state users should not need to think about, such as "no provider block", "no second terminal", or "no `QVAC_MODEL` prefix". State the positive behavior instead: the plugin starts managed QVAC serve, registers `qvac`, and selects a project model.
@@ -185,10 +187,15 @@ OpenCode-specific constraints shaped the plugin:
 
 - OpenCode plugins run inside OpenCode's compiled binary. `process.execPath` points at the editor/binary, not Node/Bun, so `@qvac/ai-sdk-provider` cannot spawn its managed supervisor directly from the plugin process.
 - The plugin therefore spawns a host child in a real Node/Bun runtime. The host imports `@qvac/ai-sdk-provider`, starts managed mode, and owns the local proxy.
-- The host prints `QVAC_LISTENING` as soon as the local proxy is listening, before model download/preload completes. The plugin can then inject the provider and return within OpenCode's startup budget.
+- The host emits `QVAC_LISTENING` as soon as the local proxy is listening, before model download/preload completes. The plugin can then inject the provider and return within OpenCode's startup budget (`listenTimeoutMs`), and requests that arrive early queue on the proxy's readiness promise.
 - The first user turn may be slow on a cold model because the proxy waits for the upstream serve/model to become ready.
+- The handshake travels on a dedicated pipe (fd 3), not the host's log stdout, so the credential it carries can never be mirrored into OpenCode's stderr or `QVAC_HOST_LOG`.
+- Two distinct credentials exist. The host mints a random proxy token before readiness and requires it (timing-safe) on every inbound proxy request, answering with serve's own `401 invalid_api_key` envelope otherwise; the real managed serve key never leaves the host and is substituted on the upstream hop, read per request from the provider's live getter so a recovered serve is not sent a stale key.
+- A missing, malformed, or late handshake fails startup closed: the plugin closes its readers, terminates the host, and injects no provider, so no unauthenticated gateway or orphaned serve is left behind.
 - Host logs are quiet by default so they do not corrupt OpenCode's TUI. `debug` / `QVAC_DEBUG=1` mirrors milestones and request traces to stderr.
 - Multiple OpenCode windows share a matching serve through provider managed-mode reuse.
+
+Known limitation: the host proxy is a raw `node:http` forwarder, so a failed upstream request surfaces as a proxy error and does not itself trigger `@qvac/ai-sdk-provider`'s recovery path, which only runs inside the provider's wrapped `fetch`. Reading the provider's live coordinates per request means recovery driven by another provider request is picked up immediately; making the proxy itself initiate recovery would require rebuilding it on `fetch`/`Response` streams.
 
 Current plugin shims:
 
@@ -267,7 +274,7 @@ Common examples:
 ### CLI serve
 
 - Route/unit tests for validation, translation, error envelopes, streaming, cancellation, and model routing.
-- Node-based e2e tests for `qvac serve openai` when changing public HTTP behavior.
+- Node-based e2e tests for `qvac serve --openai` when changing public HTTP behavior.
 - Update OpenAPI/docs if route behavior changes.
 
 ### AI SDK provider
@@ -291,13 +298,16 @@ Common examples:
 
 Release lower layers before upper layers when a feature spans packages:
 
-1. `@qvac/sdk` — model constants, inference semantics, parser fixes.
-2. `@qvac/cli` — server routes or serve behavior that depends on SDK changes.
-3. `@qvac/ai-sdk-provider` — managed mode/provider changes that depend on CLI behavior.
-4. `@qvac/opencode-plugin` — plugin changes that depend on provider/CLI.
-5. Docs/models.dev can land alongside the package that makes the behavior real, but avoid documenting unreleased package behavior as current.
+1. `@qvac/inference` — engine changes, released first on the major.minor `@qvac/sdk` will adopt.
+2. `@qvac/sdk` — model constants, inference semantics, parser fixes (its `@qvac/inference` range + `tetherto-qvac-sdk` via `qv-sdk-inference-version`).
+3. `@qvac/cli` — server routes or serve behavior that depends on SDK changes.
+4. `@qvac/ai-sdk-provider` — managed mode/provider changes that depend on CLI behavior.
+5. `@qvac/opencode-plugin` / `@qvac/openclaw-plugin` — plugin changes that depend on provider/CLI.
+6. Docs/models.dev can land alongside the package that makes the behavior real, but avoid documenting unreleased package behavior as current.
 
 If upper packages use caret ranges that already resolve to a lower-layer patch fix, a new upper release may not be needed. Verify with a fresh install, not just lockfile assumptions.
+
+For cascade planning (which packages need a bump, suggested 0.x versions, draft release + backmerge PRs), use `/qv-agent-stack-sync --plan` then `--prepare-cascade`. Publish stays human-gated.
 
 ### QVAC package releases
 
@@ -346,7 +356,7 @@ Before opening or updating PRs for this stack:
 
 ## Related references
 
-- `packages/cli/docs/serve-openai.md` — `qvac serve openai` route/config reference.
+- `packages/cli/docs/serve/` — `qvac serve` reference: shared config in `README.md`, per-extension routes in `default.md` and `openai.md`.
 - `docs/architecture/ARCHITECTURE.md` — SDK architecture.
 - `.cursor/rules/agent-integrations.mdc` — Cursor-local quick reference for this stack.
 - `.cursor/rules/sdk/main.mdc` — SDK coding conventions.

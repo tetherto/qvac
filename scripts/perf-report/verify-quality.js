@@ -21,10 +21,8 @@ const {
   evaluateQuality
 } = require('../test-utils/quality-metrics')
 
-const DEFAULT_GT_DIR = path.resolve(__dirname, '../../packages/ocr-onnx/test/quality')
-
 function parseArgs (argv) {
-  const args = { reportPath: null, gtDir: DEFAULT_GT_DIR, help: false, verbose: false }
+  const args = { reportPath: null, gtDir: null, help: false, verbose: false }
   for (let i = 2; i < argv.length; i++) {
     switch (argv[i]) {
       case '--ground-truth-dir': args.gtDir = path.resolve(argv[++i]); break
@@ -49,8 +47,7 @@ USAGE:
   node scripts/perf-report/verify-quality.js <performance-report.json> [options]
 
 OPTIONS:
-  --ground-truth-dir <dir>  Directory containing .quality.json files
-                            (default: packages/ocr-onnx/test/quality/)
+  --ground-truth-dir <dir>  Directory containing .quality.json files (required)
   -v, --verbose             Show hypothesis/reference text previews
   -h, --help                Show this help
 
@@ -170,6 +167,11 @@ function main () {
 
   if (!fs.existsSync(args.reportPath)) {
     console.error(`Error: file not found: ${args.reportPath}`)
+    process.exit(1)
+  }
+
+  if (!args.gtDir) {
+    console.error('Error: --ground-truth-dir is required')
     process.exit(1)
   }
 

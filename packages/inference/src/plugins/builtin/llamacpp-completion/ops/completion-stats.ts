@@ -1,0 +1,87 @@
+import type { CompletionStats } from '@/schemas/index'
+import type { LlmStats } from '@/utils/addon-responses'
+
+function finiteNumber(value: number | undefined) {
+  return value !== undefined && Number.isFinite(value) ? value : undefined
+}
+
+export function normalizeCompletionStats(stats: LlmStats | undefined) {
+  if (!stats) return undefined
+
+  const timeToFirstToken = finiteNumber(stats.TTFT)
+  const tokensPerSecond = finiteNumber(stats.TPS)
+  const promptTokensPerSecond = finiteNumber(stats.ppTPS)
+  const cacheTokens = finiteNumber(stats.CacheTokens)
+  const promptTokens = finiteNumber(stats.promptTokens)
+  const generatedTokens = finiteNumber(stats.generatedTokens)
+  const avgConcurrentSeq = finiteNumber(stats.avgConcurrentSeq)
+  const toolDefinitionsDropped = finiteNumber(stats.toolDefinitionsDropped)
+
+  const normalized: CompletionStats = {
+    ...(timeToFirstToken !== undefined && { timeToFirstToken }),
+    ...(tokensPerSecond !== undefined && { tokensPerSecond }),
+    ...(promptTokensPerSecond !== undefined && { promptTokensPerSecond }),
+    ...(cacheTokens !== undefined && { cacheTokens }),
+    ...(promptTokens !== undefined && { promptTokens }),
+    ...(generatedTokens !== undefined && { generatedTokens }),
+    ...(avgConcurrentSeq !== undefined && { avgConcurrentSeq }),
+    ...(toolDefinitionsDropped !== undefined && { toolDefinitionsDropped }),
+    ...(stats.backendDevice !== undefined && { backendDevice: stats.backendDevice })
+  }
+
+  if (
+    timeToFirstToken === undefined &&
+    tokensPerSecond === undefined &&
+    promptTokensPerSecond === undefined &&
+    cacheTokens === undefined &&
+    promptTokens === undefined &&
+    generatedTokens === undefined &&
+    avgConcurrentSeq === undefined &&
+    toolDefinitionsDropped === undefined &&
+    stats.backendDevice === undefined
+  ) {
+    return undefined
+  }
+
+  return normalized
+}
+
+/**
+ * Attach the count of non-empty pieces the addon streamed without
+ * overwriting `generatedTokens` (`llama_perf` `n_eval`). Length / KV-cache
+ * decisions keep the decode count; usage reporting prefers `emittedTokens`.
+ * Zero is attached explicitly so inflated `n_eval` cannot be used as usage
+ * when nothing was streamed.
+ */
+export function withEmittedTokens(
+  stats: CompletionStats | undefined,
+  emittedPieces: number
+): CompletionStats | undefined {
+  const emittedTokens = emittedPieces
+  if (!stats && emittedTokens === 0) return undefined
+  return {
+    ...(stats ?? {}),
+    emittedTokens
+  }
+}
+
+export function stoppedByLength({
+  cancelled,
+  effectivePredict,
+  generatedTokens,
+  stoppedAtContextBoundary
+}: {
+  cancelled: boolean
+  effectivePredict: number | undefined
+  generatedTokens: number | undefined
+  stoppedAtContextBoundary: boolean
+}): boolean {
+  if (cancelled) return false
+  if (stoppedAtContextBoundary) return true
+  return (
+    effectivePredict !== undefined &&
+    effectivePredict > 0 &&
+    generatedTokens !== undefined &&
+    generatedTokens >= effectivePredict
+  )
+}

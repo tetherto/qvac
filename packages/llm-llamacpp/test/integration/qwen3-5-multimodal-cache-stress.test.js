@@ -17,8 +17,9 @@ const skipStress =
     : false
 
 const CTX_SIZE = 8192
-const N_DISCARDED = 1024
-const PREFILL_PRESSURE_OVERSHOOT = 64
+const CONTROLLED_PREFILL_COARSE_WORDS = 384
+const CONTROLLED_PREFILL_FINE_WORDS = 1
+const MAX_CONTROLLED_PREFILLS = 96
 // Cancel has to land while prefill is still running. Multimodal prefill of one
 // image + a short text turn completes in well under a second on Linux x64 GPU
 // (where this suite primarily runs), so a 1500ms delay let prefill finish first
@@ -28,16 +29,56 @@ const PREFILL_PRESSURE_OVERSHOOT = 64
 const PREFILL_CANCEL_DELAY_MS = 150
 const MIN_QWEN35_IMAGE_CACHE_TOKENS = 2880
 
-const QWEN35_MODEL = {
-  modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
-  downloadUrl:
-    'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+// Model size is selectable so the EOS / generation-length behaviour can be A/B'd
+// between the small and larger Qwen3.5-VL checkpoints without re-editing:
+//   QVAC_QWEN35_MTMD_SIZE=0.8b (default) | 2b
+// The 0.8B model stops generation early (~552 tokens) on the first "write a long
+// story" turn, which under-fills the cached conversation the controlled
+// prefill pressure builds on; this toggle lets a larger model confirm whether
+// that early-EOS behaviour is size-specific. Both models + their mmproj are pinned in
+// models.manifest.json (ensureModelPath resolves the source from there; the
+// downloadUrl here is cosmetic).
+//
+// Only the 0.8b pair is mobile pre-staged — it is the default and the weekly
+// vlmPerfQwen35 shard already carries it. The 2b pair is an explicit local A/B
+// opt-in and is never selected on a Device Farm shard:
+// prestage-ignore: Qwen3.5-2B-Q8_0.gguf — opt-in via QVAC_QWEN35_MTMD_SIZE=2b only
+// prestage-ignore: mmproj-Qwen3.5-2B-F16.gguf — opt-in via QVAC_QWEN35_MTMD_SIZE=2b only
+const QWEN35_MTMD_SIZE = (process.env.QVAC_QWEN35_MTMD_SIZE || '0.8b').toLowerCase()
+
+const QWEN35_MODELS = {
+  '0.8b': {
+    model: {
+      modelName: 'Qwen3.5-0.8B-Q8_0.gguf',
+      downloadUrl:
+        'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf'
+    },
+    mmproj: {
+      modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
+      downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+    }
+  },
+  '2b': {
+    model: {
+      modelName: 'Qwen3.5-2B-Q8_0.gguf',
+      downloadUrl:
+        'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q8_0.gguf'
+    },
+    mmproj: {
+      modelName: 'mmproj-Qwen3.5-2B-F16.gguf',
+      downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/mmproj-F16.gguf'
+    }
+  }
 }
 
-const QWEN35_MMPROJ = {
-  modelName: 'mmproj-Qwen3.5-0.8B-F16.gguf',
-  downloadUrl: 'https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf'
+if (!QWEN35_MODELS[QWEN35_MTMD_SIZE]) {
+  throw new Error(
+    `QVAC_QWEN35_MTMD_SIZE must be one of ${Object.keys(QWEN35_MODELS).join(', ')} (got "${QWEN35_MTMD_SIZE}")`
+  )
 }
+
+const QWEN35_MODEL = QWEN35_MODELS[QWEN35_MTMD_SIZE].model
+const QWEN35_MMPROJ = QWEN35_MODELS[QWEN35_MTMD_SIZE].mmproj
 
 const SYSTEM_PROMPT = {
   role: 'system',
@@ -79,22 +120,22 @@ function makeImageTurn(imageBytes) {
     { role: 'user', type: 'media', content: imageBytes },
     {
       role: 'user',
-      content:
-        'Describe the image briefly, then write a very long story inspired by it with many scenes, characters, and details. Keep writing continuously until the token budget is exhausted.'
+      content: 'Describe the image in one concise sentence.'
     }
   ]
 }
 
-function makePrefillPressureTurn(cacheTokens) {
-  const freeSlots = Math.max(0, CTX_SIZE - toNumber(cacheTokens))
-  const wordCount = Math.max(96, Math.min(4600, freeSlots + PREFILL_PRESSURE_OVERSHOOT))
-  return makeLongTextTurn(wordCount)
-}
-
-function makeDecodePressureTurn(cacheTokens) {
-  const freeSlots = Math.max(0, CTX_SIZE - toNumber(cacheTokens))
-  const wordCount = Math.max(96, Math.min(4600, freeSlots + N_DISCARDED - 256))
-  return makeLongTextTurn(wordCount)
+function makeControlledPrefillTurn(wordCount) {
+  return [
+    {
+      role: 'user',
+      content: [
+        'Controlled cache-pressure chunk.',
+        repeatWord('detail', wordCount),
+        'End of controlled chunk.'
+      ].join(' ')
+    }
+  ]
 }
 
 function makeCancelPrefillTurn(imageBytes) {
@@ -114,19 +155,6 @@ function makeFixedImagePrefillTurn(imageBytes, label) {
     {
       role: 'user',
       content: `Image prefill ${label}: reply with one word.`
-    }
-  ]
-}
-
-function makeLongTextTurn(wordCount) {
-  return [
-    {
-      role: 'user',
-      content: [
-        'Store this long note in the cached conversation. It intentionally fills the remaining context window.',
-        repeatWord('detail', wordCount),
-        'End of long note.'
-      ].join(' ')
     }
   ]
 }
@@ -151,7 +179,6 @@ async function setupModel(t, configOverrides = {}) {
       gpu_layers: '98',
       ctx_size: String(CTX_SIZE),
       n_predict: '512',
-      n_discarded: String(N_DISCARDED),
       temp: '0',
       seed: '42',
       'reasoning-budget': '0',
@@ -199,6 +226,89 @@ async function runAndCollect(addon, prompt, runOptions = {}) {
     text: chunks.join(''),
     stats: response.stats || {}
   }
+}
+
+async function measurePrefillCacheCells(t, addon, prompt, cacheKey, baselineStats, label) {
+  const probeCacheKey = `${cacheKey}.${label.replace(/ /g, '-')}.probe`
+  cleanupIntegrationCacheFiles(probeCacheKey)
+  fs.copyFileSync(cacheKey, probeCacheKey)
+
+  try {
+    const result = await runAndCollect(addon, prompt, { cacheKey: probeCacheKey, prefill: true })
+    const baselineCacheTokens = toNumber(baselineStats.CacheTokens)
+    const cacheCells = toNumber(result.stats.CacheTokens) - baselineCacheTokens
+
+    t.is(result.text, '', `${label}: cache-cell probe emits no text`)
+    t.is(
+      toNumber(result.stats.generatedTokens),
+      0,
+      `${label}: cache-cell probe reports zero generated tokens`
+    )
+    t.ok(
+      cacheCells > 0 && cacheCells < CTX_SIZE,
+      `${label}: addon measured a valid physical prompt (${cacheCells} cache cells)`
+    )
+    assertCachedStats(t, result.stats, `${label}: cache-cell probe`)
+    await runNoCacheSeparator(t, addon, `after ${label} cache-cell probe`)
+
+    return cacheCells
+  } finally {
+    try {
+      fs.unlinkSync(probeCacheKey)
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err
+    }
+  }
+}
+
+async function applyControlledPrefillPressure(
+  t,
+  addon,
+  cacheOpts,
+  initialStats,
+  targetCacheTokens,
+  coarseCacheCells,
+  fineCacheCells
+) {
+  let stats = initialStats
+  let totalControlledCacheCells = 0
+  const chunkCacheCellCounts = []
+  let runs = 0
+
+  while (runs < MAX_CONTROLLED_PREFILLS) {
+    runs++
+    const cacheTokens = toNumber(stats.CacheTokens)
+    if (cacheTokens >= targetCacheTokens) break
+
+    const remaining = targetCacheTokens - cacheTokens
+    const useCoarseChunk = remaining > coarseCacheCells + fineCacheCells
+    const wordCount = useCoarseChunk
+      ? CONTROLLED_PREFILL_COARSE_WORDS
+      : CONTROLLED_PREFILL_FINE_WORDS
+    const measuredCacheCells = useCoarseChunk ? coarseCacheCells : fineCacheCells
+    const result = await runAndCollect(addon, makeControlledPrefillTurn(wordCount), {
+      ...cacheOpts,
+      prefill: true
+    })
+
+    chunkCacheCellCounts.push(measuredCacheCells)
+    totalControlledCacheCells += measuredCacheCells
+    stats = result.stats
+  }
+
+  t.ok(chunkCacheCellCounts.length > 0, 'controlled prefill pressure ran at least one chunk')
+  t.ok(
+    chunkCacheCellCounts.every((count) => count > 0 && count < CTX_SIZE),
+    `controlled prefill chunks were individually valid (${chunkCacheCellCounts.join(', ')})`
+  )
+  t.ok(
+    toNumber(stats.CacheTokens) >= targetCacheTokens,
+    'controlled prefill pressure reached the measured decode threshold ' +
+      `(${stats.CacheTokens} >= ${targetCacheTokens}, controlledCacheCells=${totalControlledCacheCells})`
+  )
+  assertCachedStats(t, stats, 'controlled prefill pressure')
+
+  return { stats, totalControlledCacheCells, chunkCacheCellCounts }
 }
 
 async function cancelResponse(addon, response) {
@@ -270,21 +380,17 @@ function assertCachedStats(t, stats, label) {
 
 function assertCanceledPrefillRolledBack(t, beforeStats, cancelResult) {
   // Cancel = "request never happened": prefill cancel must roll the
-  // cache back to the pre-request cursor, modulo any context slides
-  // that fired before cancel landed. We therefore expect the cache
-  // size to match the pre-cancel baseline (minus slide discards) and
-  // never to exceed it.
+  // cache back to the pre-request cursor, so the cache size must match
+  // the pre-cancel baseline and never exceed it.
   const { stats: afterStats, cancelFired } = cancelResult
   t.ok(cancelFired, 'cancel timer fired before prefill completed (test harness sanity check)')
   const beforeCacheTokens = toNumber(beforeStats.CacheTokens)
   const afterCacheTokens = toNumber(afterStats.CacheTokens)
-  const slideDiscard = toNumber(afterStats.contextSlides) * N_DISCARDED
-  const baselineAfterSlides = Math.max(beforeCacheTokens - slideDiscard, 0)
 
   t.ok(
-    afterCacheTokens <= baselineAfterSlides + 1,
+    afterCacheTokens <= beforeCacheTokens + 1,
     'cancel during prefill rolls cache back to pre-request cursor ' +
-      `(${beforeCacheTokens} - ${slideDiscard} -> ${afterCacheTokens}, slides=${afterStats.contextSlides || 0})`
+      `(${beforeCacheTokens} -> ${afterCacheTokens})`
   )
 }
 
@@ -315,7 +421,7 @@ async function assertContextOverflow(t, action, label) {
 }
 
 safeTest(
-  'Qwen3.5-VL cached chat stresses sliding and cancel recovery',
+  'Qwen3.5-VL cached chat stresses context overflow and cancel recovery',
   {
     timeout: 2_400_000,
     skip: skipStress
@@ -354,12 +460,13 @@ safeTest(
 
     const first = await runAndCollect(addon, makeImageTurn(imageBytes), {
       ...cacheOpts,
-      generationParams: { predict: N_DISCARDED + 256 }
+      generationParams: { predict: 64 }
     })
     t.ok(first.text.length > 0, 'first multimodal turn generated output')
     t.ok(
-      toNumber(first.stats.generatedTokens) > N_DISCARDED,
-      `first turn generated enough disposable tokens (${first.stats.generatedTokens})`
+      toNumber(first.stats.generatedTokens) > 0 && toNumber(first.stats.generatedTokens) <= 64,
+      'first multimodal turn completed a bounded normal generation ' +
+        `(${first.stats.generatedTokens} tokens, stop=${first.stats.stopReason})`
     )
     t.ok(
       toNumber(first.stats.CacheTokens) > MIN_QWEN35_IMAGE_CACHE_TOKENS,
@@ -369,27 +476,6 @@ safeTest(
     t.ok(fs.existsSync(cachePath), 'first turn saved cache to disk')
     await runNoCacheSeparator(t, addon, 'after first multimodal turn')
 
-    const prefillSlide = await runAndCollect(
-      addon,
-      makePrefillPressureTurn(first.stats.CacheTokens),
-      {
-        ...cacheOpts,
-        prefill: true
-      }
-    )
-    t.is(prefillSlide.text, '', 'prefill stress run emits no text')
-    t.is(
-      toNumber(prefillSlide.stats.generatedTokens),
-      0,
-      'prefill stress run reports zero generated tokens'
-    )
-    t.ok(
-      toNumber(prefillSlide.stats.contextSlides) > 0,
-      `prefill stress run triggered context sliding (${prefillSlide.stats.contextSlides})`
-    )
-    assertCachedStats(t, prefillSlide.stats, 'prefill stress run')
-    await runNoCacheSeparator(t, addon, 'after prefill stress run')
-
     const canceledPrefillResult = await runAndCancelDuringPrefill(
       addon,
       makeCancelPrefillTurn(imageBytes),
@@ -398,7 +484,7 @@ safeTest(
         prefill: true
       }
     )
-    assertCanceledPrefillRolledBack(t, prefillSlide.stats, canceledPrefillResult)
+    assertCanceledPrefillRolledBack(t, first.stats, canceledPrefillResult)
     await runNoCacheSeparator(t, addon, 'after canceled prefill')
 
     const afterPrefillCancel = await runAndCollect(
@@ -412,43 +498,6 @@ safeTest(
     t.ok(afterPrefillCancel.text.length > 0, 'chat recovered after cancel during prefill')
     assertCachedStats(t, afterPrefillCancel.stats, 'after prefill cancel')
     await runNoCacheSeparator(t, addon, 'after prefill-cancel recovery')
-
-    const decodePressure = await runAndCollect(
-      addon,
-      makeDecodePressureTurn(afterPrefillCancel.stats.CacheTokens),
-      {
-        ...cacheOpts,
-        prefill: true
-      }
-    )
-    t.is(decodePressure.text, '', 'decode pressure prefill emits no text')
-    t.is(
-      toNumber(decodePressure.stats.generatedTokens),
-      0,
-      'decode pressure prefill reports zero generated tokens'
-    )
-    t.ok(
-      toNumber(decodePressure.stats.contextSlides) > 0,
-      `decode pressure prefill triggered context sliding (${decodePressure.stats.contextSlides})`
-    )
-    assertCachedStats(t, decodePressure.stats, 'decode pressure prefill')
-    await runNoCacheSeparator(t, addon, 'after decode pressure prefill')
-
-    const decodeSlide = await runAndCollect(addon, makeShortDecodeTurn(), {
-      ...cacheOpts,
-      generationParams: { predict: 256 }
-    })
-    t.ok(decodeSlide.text.length > 0, 'decode stress run generated output')
-    t.ok(
-      toNumber(decodeSlide.stats.generatedTokens) > 0,
-      'decode stress run reports generated tokens'
-    )
-    t.ok(
-      toNumber(decodeSlide.stats.contextSlides) > 0,
-      `decode stress run triggered generation sliding (${decodeSlide.stats.contextSlides})`
-    )
-    assertCachedStats(t, decodeSlide.stats, 'decode stress run')
-    await runNoCacheSeparator(t, addon, 'after decode stress run')
 
     const canceledDecode = await runAndCancelAfterFirstChunk(addon, makeShortDecodeTurn(), {
       ...cacheOpts,
@@ -472,6 +521,71 @@ safeTest(
     )
     t.ok(afterDecodeCancel.text.length > 0, 'chat recovered after cancel during decoding')
     assertCachedStats(t, afterDecodeCancel.stats, 'after decode cancel')
+    await runNoCacheSeparator(t, addon, 'after decode-cancel recovery')
+
+    // Filling the context is the LAST thing this test does. Nothing is
+    // evicted to make room any more, so once the cached conversation reaches
+    // the window every later turn on this cache key is refused too, and any
+    // cancel-recovery step placed after this point could never run.
+    // `afterDecodeCancel` is the baseline because it is the newest cached
+    // state on disk; probing against an older snapshot measures the wrong
+    // delta.
+    const decodePromptCacheCells = await measurePrefillCacheCells(
+      t,
+      addon,
+      makeShortDecodeTurn(),
+      cachePath,
+      afterDecodeCancel.stats,
+      'decode prompt'
+    )
+    const coarsePrefillCacheCells = await measurePrefillCacheCells(
+      t,
+      addon,
+      makeControlledPrefillTurn(CONTROLLED_PREFILL_COARSE_WORDS),
+      cachePath,
+      afterDecodeCancel.stats,
+      'coarse controlled prefill'
+    )
+    const finePrefillCacheCells = await measurePrefillCacheCells(
+      t,
+      addon,
+      makeControlledPrefillTurn(CONTROLLED_PREFILL_FINE_WORDS),
+      cachePath,
+      afterDecodeCancel.stats,
+      'fine controlled prefill'
+    )
+    const decodeOverflowThreshold = CTX_SIZE - decodePromptCacheCells + 1
+    const controlledPressure = await applyControlledPrefillPressure(
+      t,
+      addon,
+      cacheOpts,
+      afterDecodeCancel.stats,
+      decodeOverflowThreshold,
+      coarsePrefillCacheCells,
+      finePrefillCacheCells
+    )
+    await runNoCacheSeparator(t, addon, 'after controlled prefill pressure')
+
+    let decodeOverflowError = null
+    try {
+      await runAndCollect(addon, makeShortDecodeTurn(), {
+        ...cacheOpts,
+        generationParams: { predict: 64 }
+      })
+    } catch (err) {
+      decodeOverflowError = err
+    }
+    t.ok(
+      decodeOverflowError,
+      'a turn that no longer fits the filled context must be refused ' +
+        `(after ${controlledPressure.totalControlledCacheCells} controlled cache cells)`
+    )
+    t.ok(
+      /context overflow/i.test(decodeOverflowError && decodeOverflowError.message),
+      `the refusal must say the context is full, got: ${
+        decodeOverflowError && decodeOverflowError.message
+      }`
+    )
   }
 )
 
@@ -488,7 +602,7 @@ safeTest(
     const imageBytes = new Uint8Array(fs.readFileSync(imagePath))
     const CTX_SIZE_OVERRIDE = '6000'
 
-    const addon = await setupModel(t, { n_discarded: '0', ctx_size: CTX_SIZE_OVERRIDE })
+    const addon = await setupModel(t, { ctx_size: CTX_SIZE_OVERRIDE })
     const cachePath = path.join(os.tmpdir(), `qwen35-mtmd-cache-token-overflow-${Date.now()}.bin`)
     cleanupIntegrationCacheFiles(cachePath)
     t.teardown(() => {

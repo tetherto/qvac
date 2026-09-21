@@ -1,10 +1,12 @@
 #include <any>
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <future>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -152,6 +154,28 @@ TEST(AddonJsTest, CancelWithoutIdCancelsSnapshotOfLiveJobs) {
   EXPECT_FALSE(recorder->cancelAllCalled)
       << "cancel-all must never reach for jobs outside the snapshot";
   EXPECT_FALSE(recorder->cancelId.has_value());
+}
+
+TEST(AddonJsTest, CancelWithoutLiveJobsDoesNotRetainAddonForNoOpWork) {
+  js_env_t env;
+  auto scheduler = std::make_unique<RecordingScheduler>();
+  RecordingScheduler* recorder = scheduler.get();
+  AddonJs addon(
+      &env, std::make_unique<MockOutputCallback>(),
+      std::make_unique<MockModel>(), std::move(scheduler));
+
+  mock_js::lastCreatedDeferred = nullptr;
+  addon.cancelJob();
+  js_deferred_t* deferred = mock_js::lastCreatedDeferred;
+  ASSERT_NE(deferred, nullptr);
+
+  for (int i = 0; i != 1000 && !deferred->settled.load(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ASSERT_TRUE(deferred->settled.load());
+  EXPECT_TRUE(recorder->liveIdsQueried);
+  EXPECT_FALSE(recorder->cancelledJobs.has_value())
+      << "an empty snapshot should not enqueue work that retains AddonCpp";
 }
 
 TEST(AddonJsTest, CancelWithIdCancelsOnlyThatJob) {

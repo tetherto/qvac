@@ -1,5 +1,5 @@
 import { downloadAsset, loadModel, unloadModel, suspend, resume, WHISPER_TINY } from '@qvac/sdk'
-import { BaseExecutor, type TestResult } from '@tetherto/qvac-test-suite/mobile'
+import { BaseExecutor, type TestResult } from '@qvac/test-suite/mobile'
 import {
   downloadResilienceRegistrySuspend,
   downloadResilienceHttpNetdrop,

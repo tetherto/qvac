@@ -65,6 +65,12 @@ public:
   // empty" on restore). Mostly useful for tests / diagnostics.
   [[nodiscard]] bool hasFile() const noexcept { return !filePath_.empty(); }
 
+  // True when the boundary records only a position, no state payload.
+  // Pure-attention memory is positionally indexed, so rewinding to the
+  // boundary is a tail trim rather than a state reload: there is nothing
+  // to restore that re-decoding the kept tokens does not rebuild.
+  [[nodiscard]] bool isPositionOnly() const noexcept { return positionOnly_; }
+
   // Best-effort cleanup. Removes the underlying file (if any) and
   // resets `nPast` / `captured_`. Safe to call multiple times, safe on
   // a snapshot that never adopted a file.
@@ -96,9 +102,20 @@ public:
   // `set_data_ext` on the empty-state serialization.
   void adoptEmpty(llama_pos nPastAt) noexcept;
 
+  // Record a position-only boundary at `nPastAt`. Restore trims the
+  // sequence back to that position instead of reloading state. Only
+  // valid for memory that can drop a partial tail, which is every
+  // pure-attention model; recurrent / hybrid modules reject that range
+  // and must keep using the full-state capture above.
+  void adoptPositionOnly(llama_pos nPastAt) noexcept;
+
+  // Test seam for the position-only branch, no `llama_context` needed.
+  void seedPositionOnlyForTesting(llama_pos nPastAt) noexcept;
+
 private:
   std::string filePath_;
   bool captured_ = false;
+  bool positionOnly_ = false;
 };
 
 // Captures the full state of `seqId` into `out` by writing it to a

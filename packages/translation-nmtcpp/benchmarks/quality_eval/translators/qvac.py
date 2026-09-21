@@ -109,7 +109,13 @@ def translate_direct(texts, src_lang, trg_lang, is_quantized):
         # Note: Bare runtime's stdin doesn't work with file redirection (<), but works with pipes
         # Redirect stdout to output file and stderr to temp file
         # Use --cpu flag for translation
-        cmd = f"cat {input_path} | bare {script_path} --cpu {hyperparam_str} {src_lang} {trg_lang} > {output_path} 2> {stderr_path}"
+        # BARE_BIN lets CI point at bare.cmd on Windows, where shell=True runs
+        # cmd.exe: no `cat` builtin, so `type` feeds the pipe instead.
+        bare_bin = str(Path(env.get("BARE_BIN", "bare")))
+        if os.name == "nt":
+            cmd = f'type "{input_path}" | "{bare_bin}" "{script_path}" --cpu {hyperparam_str} {src_lang} {trg_lang} > "{output_path}" 2> "{stderr_path}"'
+        else:
+            cmd = f'cat "{input_path}" | "{bare_bin}" "{script_path}" --cpu {hyperparam_str} {src_lang} {trg_lang} > "{output_path}" 2> "{stderr_path}"'
 
         print(f"[QVAC] Command: {cmd}", file=sys.stderr)
         print(f"[QVAC] Stderr will be captured to: {stderr_path}", file=sys.stderr)

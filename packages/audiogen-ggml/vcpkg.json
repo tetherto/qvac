@@ -2,18 +2,65 @@
   "dependencies": [
     {
       "name": "qvac-lib-inference-addon-cpp",
-      "version>=": "1.2.4"
+      "version>=": "1.4.0"
     },
     {
       "name": "qvac-lint-cpp",
       "version>=": "1.4.4#3"
     },
     {
-      "name": "audiogen-cpp",
-      "version>=": "2026-07-27"
+      "name": "ggml-speech",
+      "version>=": "2026-09-15",
+      "default-features": false
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-09-18",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "metal"
+      ],
+      "platform": "osx | ios"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-09-18",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "vulkan",
+        "opencl"
+      ],
+      "platform": "android"
+    },
+    {
+      "name": "speech-cpp",
+      "version>=": "2026-09-18",
+      "default-features": false,
+      "features": [
+        "audiogen",
+        "vulkan"
+      ],
+      "platform": "!(osx | ios | android)"
     }
   ],
   "features": {
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration",
+      "supports": "!(osx | ios | android)",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "version>=": "2026-09-18",
+          "default-features": false,
+          "features": [
+            "cuda"
+          ],
+          "platform": "!(osx | ios | android)"
+        }
+      ]
+    },
     "tests": {
       "description": "Build C++ unit tests",
       "dependencies": [
@@ -24,8 +71,13 @@
       "description": "Enable Vulkan GPU acceleration",
       "dependencies": [
         {
-          "name": "audiogen-cpp",
-          "features": ["vulkan"]
+          "name": "speech-cpp",
+          "version>=": "2026-09-18",
+          "default-features": false,
+          "features": [
+            "vulkan"
+          ],
+          "platform": "!(osx | ios)"
         }
       ]
     }

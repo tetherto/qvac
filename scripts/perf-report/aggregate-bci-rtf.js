@@ -10,8 +10,9 @@
 const fs = require('fs')
 const path = require('path')
 
-// BCI GPU backends: Vulkan (linux/win32/android), Metal (darwin/ios), OpenCL
-// (Adreno android). No CoreML/DirectML path. CUDA is disabled in the build.
+// BCI GPU backends: Vulkan (linux/win32/Mali android), Metal (darwin/ios),
+// OpenCL (Adreno android, e.g. Samsung Galaxy S25). No CoreML/DirectML path.
+// CUDA is disabled in the build.
 const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
 
 // ggml active-backend ids reported by the addon, mapped to the backend label.
@@ -25,13 +26,14 @@ function parseArgs (argv) {
     output: '',
     jsonOutput: '',
     htmlOutput: '',
-    manualDir: path.resolve('packages/bci-whispercpp/benchmarks/manual-results')
+    manualDir: path.resolve('packages/bci-whispercpp/benchmarks/manual-results'),
+    expectDevices: []
   }
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     const next = argv[i + 1]
-    if ((arg === '--input' || arg === '--dir') && next) { args.input = next; i++ } else if (arg === '--output' && next) { args.output = next; i++ } else if ((arg === '--json-output' || arg === '--output-json') && next) { args.jsonOutput = next; i++ } else if (arg === '--output-html' && next) { args.htmlOutput = next; i++ } else if (arg === '--manual-dir' && next) { args.manualDir = next; i++ }
+    if ((arg === '--input' || arg === '--dir') && next) { args.input = next; i++ } else if (arg === '--output' && next) { args.output = next; i++ } else if ((arg === '--json-output' || arg === '--output-json') && next) { args.jsonOutput = next; i++ } else if (arg === '--output-html' && next) { args.htmlOutput = next; i++ } else if (arg === '--manual-dir' && next) { args.manualDir = next; i++ } else if (arg === '--expect-devices' && next) { args.expectDevices = next.split(',').map((device) => device.trim()).filter(Boolean); i++ }
   }
 
   if (!args.input) throw new Error('Missing required --input argument')
@@ -105,11 +107,34 @@ function humanizeSourceFile (sourceFile) {
   return path.basename(sourceFile).replace(/\.[^.]+$/, '').replace(/_/g, ' ')
 }
 
-function normalizeBackend (platformName, useGPU, backendHint) {
+const ADRENO_GPU_RE = /adreno/i
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
+const ADRENO_ANDROID_BACKEND = 'opencl'
+const GUESSED_ANDROID_GPU_HINTS = new Set(['', 'vulkan', 'mobile-accelerated', 'gpu'])
+const HAND_AUTHORED_BACKEND_SOURCES = new Set(['manual'])
+
+function isAdrenoDevice (gpuModel, deviceName) {
+  return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
+    ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
+}
+
+function isHandAuthoredBackend (source, backendHint) {
+  return Boolean(backendHint) && HAND_AUTHORED_BACKEND_SOURCES.has(String(source || ''))
+}
+
+function needsAdrenoCorrection (source, backendHint, gpuModel, deviceName) {
+  return !isHandAuthoredBackend(source, backendHint) && isAdrenoDevice(gpuModel, deviceName)
+}
+
+function normalizeBackend (platformName, useGPU, backendHint, adreno) {
+  const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
+  if (adreno && useGPU && platform === 'android' && GUESSED_ANDROID_GPU_HINTS.has(hint)) {
+    return ADRENO_ANDROID_BACKEND
+  }
   if (hint) return hint
   if (!useGPU) return 'cpu'
-  switch (String(platformName || '').toLowerCase()) {
+  switch (platform) {
     case 'darwin':
     case 'ios':
       return 'metal'
@@ -124,11 +149,11 @@ function normalizeBackend (platformName, useGPU, backendHint) {
 
 // Prefer the observed ggml backend id (per-device ground truth) over the
 // platform-family guess. Falls back to normalizeBackend when no id was reported.
-function resolveMobileBackend (backendId, platformName, useGPU) {
+function resolveMobileBackend (backendId, platformName, useGPU, adreno) {
   if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
     return BACKEND_BY_ID[backendId]
   }
-  return normalizeBackend(platformName, useGPU)
+  return normalizeBackend(platformName, useGPU, '', adreno)
 }
 
 function num (value) {
@@ -143,15 +168,20 @@ function normalizeReport (report, sourceFile, source) {
   const memory = summary.memory || {}
   const platformName = report.platformName || report.platform || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
+  const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || ''
+  const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
+  const backendHint = (report.labels && report.labels.backend) ||
+    (report.requested && report.requested.backendHint)
+  const adreno = needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel)
 
   return {
     source,
-    device: (report.labels && (report.labels.device || report.labels.runner)) || report.platform || 'unknown',
+    device: deviceLabel || report.platform || 'unknown',
     platform: report.platform || 'unknown',
     platformFamily: platformName || 'unknown',
     model: report.model && report.model.name ? report.model.name.replace(/\.bin$/, '') : 'unknown',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || (report.requested && report.requested.backendHint)),
+    backend: normalizeBackend(platformName, useGPU, backendHint, adreno),
     meanTps: num(tps.mean),
     stddevTps: num(tps.stddev),
     p50Tps: num(tps.p50),
@@ -242,7 +272,8 @@ function normalizeMobileRecords (report, sourceFile) {
       platformFamily: platformFamily || 'unknown',
       model: values.modelTag,
       gpu: values.provider,
-      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU),
+      backend: resolveMobileBackend(values.backendId, platformFamily, useGPU,
+        isAdrenoDevice(device.gpu, device.name)),
       meanTps: mean(values.tps),
       stddevTps: stddev(values.tps),
       p50Tps: percentile(values.tps, 50),
@@ -313,19 +344,36 @@ function dedupeRecords (records) {
   return [...byKey.values()]
 }
 
-function buildCoverage (records) {
+// Same silent-loss guard as aggregate-asr-ggml-rtf.js: the desktop matrix jobs
+// tolerate step failures, so a lane can lose its rtf-results artifact without
+// failing the run. The summarize workflow passes the matrix's device list via
+// --expect-devices; a device with zero desktop rows makes the report loudly
+// incomplete. Mobile and manual rows never satisfy the expectation.
+function missingExpectedDevices (records, expectedDevices) {
+  const reporting = new Set(
+    records.filter((record) => record.source === 'desktop-ci').map((record) => record.device)
+  )
+  return expectedDevices.filter((device) => !reporting.has(device))
+}
+
+function buildCoverage (records, expectedDevices = []) {
   const gpuCoverage = new Set(
     records.filter((record) => record.gpu === 'gpu').map((record) => record.backend).filter(Boolean)
   )
-  return {
+  const coverage = {
     rowCount: records.length,
     gpuBackendsCovered: Array.from(gpuCoverage).sort(),
     missingBackends: SUPPORTED_GPU_BACKENDS.filter((backend) => !gpuCoverage.has(backend))
   }
+  if (expectedDevices.length > 0) {
+    coverage.expectedDesktopDevices = expectedDevices
+    coverage.missingDesktopDevices = missingExpectedDevices(records, expectedDevices)
+  }
+  return coverage
 }
 
-function renderMarkdown (records) {
-  const coverage = buildCoverage(records)
+function renderMarkdown (records, expectedDevices = []) {
+  const coverage = buildCoverage(records, expectedDevices)
   const lines = [
     '## BCI Performance Findings',
     '',
@@ -341,13 +389,28 @@ function renderMarkdown (records) {
   lines.push('### Coverage')
   lines.push('')
   lines.push(`- Rows aggregated: ${coverage.rowCount}`)
+  if (coverage.expectedDesktopDevices) {
+    const reporting = coverage.expectedDesktopDevices.length - coverage.missingDesktopDevices.length
+    lines.push(`- Expected desktop devices reporting: ${reporting}/${coverage.expectedDesktopDevices.length}`)
+    if (coverage.missingDesktopDevices.length > 0) {
+      lines.push(`- MISSING desktop devices (lane ran without an rtf-results artifact, or never ran): ${coverage.missingDesktopDevices.join(', ')} — this report is INCOMPLETE`)
+    }
+  }
   lines.push(`- GPU backends covered: ${coverage.gpuBackendsCovered.join(', ') || 'none'}`)
   lines.push(`- GPU backends still missing: ${coverage.missingBackends.join(', ') || 'none'}`)
   return lines.join('\n') + '\n'
 }
 
-function renderHtml (records) {
-  const coverage = buildCoverage(records)
+function renderHtml (records, expectedDevices = []) {
+  const coverage = buildCoverage(records, expectedDevices)
+  const expectedDeviceItems = []
+  if (coverage.expectedDesktopDevices) {
+    const reporting = coverage.expectedDesktopDevices.length - coverage.missingDesktopDevices.length
+    expectedDeviceItems.push(`    <li>Expected desktop devices reporting: <code>${escapeHtml(`${reporting}/${coverage.expectedDesktopDevices.length}`)}</code></li>`)
+    if (coverage.missingDesktopDevices.length > 0) {
+      expectedDeviceItems.push(`    <li><strong>MISSING desktop devices (lane ran without an rtf-results artifact, or never ran): <code>${escapeHtml(coverage.missingDesktopDevices.join(', '))}</code> — this report is INCOMPLETE</strong></li>`)
+    }
+  }
   const rows = records.map((record) => {
     return [
       record.source, record.device, record.platform, record.model, record.gpu, record.backend,
@@ -405,6 +468,7 @@ function renderHtml (records) {
     '  <h2>Coverage</h2>',
     '  <ul>',
     `    <li>Rows aggregated: <code>${escapeHtml(String(coverage.rowCount))}</code></li>`,
+    ...expectedDeviceItems,
     `    <li>GPU backends covered: <code>${escapeHtml(coverage.gpuBackendsCovered.join(', ') || 'none')}</code></li>`,
     `    <li>GPU backends still missing: <code>${escapeHtml(coverage.missingBackends.join(', ') || 'none')}</code></li>`,
     '  </ul>',
@@ -426,8 +490,8 @@ function main () {
         .concat(loadManualRecords(manualDir))
     )
   )
-  const markdown = renderMarkdown(records)
-  const html = renderHtml(records)
+  const markdown = renderMarkdown(records, args.expectDevices)
+  const html = renderHtml(records, args.expectDevices)
 
   if (args.output) {
     const outputPath = path.resolve(args.output)
@@ -437,7 +501,7 @@ function main () {
   if (args.jsonOutput) {
     const jsonOutputPath = path.resolve(args.jsonOutput)
     ensureParentDir(jsonOutputPath)
-    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records, coverage: buildCoverage(records) }, null, 2) + '\n', 'utf8')
+    fs.writeFileSync(jsonOutputPath, JSON.stringify({ records, coverage: buildCoverage(records, args.expectDevices) }, null, 2) + '\n', 'utf8')
   }
   if (args.htmlOutput) {
     const htmlOutputPath = path.resolve(args.htmlOutput)
@@ -446,6 +510,14 @@ function main () {
   }
 
   process.stdout.write(markdown)
+
+  // Fail only after every output is written: the incomplete report must stay
+  // inspectable (later workflow steps upload it with `if: !cancelled()`).
+  const missing = missingExpectedDevices(records, args.expectDevices)
+  if (missing.length > 0) {
+    console.error(`::error title=BCI report is missing benchmark device(s)::No desktop rows from: ${missing.join(', ')}. The lane lost its rtf-results artifact, its runner label changed, or it never ran — the consolidated report is incomplete.`)
+    process.exitCode = 1
+  }
 }
 
 if (require.main === module) {
@@ -457,5 +529,6 @@ module.exports = {
   normalizeMobileRecords,
   renderMarkdown,
   renderHtml,
-  buildCoverage
+  buildCoverage,
+  missingExpectedDevices
 }

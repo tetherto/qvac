@@ -580,7 +580,7 @@ const METRIC_COLUMNS = {
 
 /**
  * @param {Object} opts
- * @param {string} opts.addon       - Addon identifier (e.g. 'ocr-onnx', 'nmtcpp')
+ * @param {string} opts.addon       - Addon identifier (e.g. 'ocr-ggml', 'nmtcpp')
  * @param {string} [opts.addonType] - One of 'ocr','translation','vision','tts','generic'
  * @param {Object} [opts.device]    - Override auto-detected device info
  */

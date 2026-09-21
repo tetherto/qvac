@@ -10,6 +10,14 @@ from typing import Optional, List
 from .base import OCRBackend, OCRResult, BoundingBox
 
 
+class BackendDeviceError(RuntimeError):
+    """Raised when the addon resolves a different device than requested.
+
+    Kept distinct from generic batch errors so callers can abort instead of
+    falling back to a silently mislabeled CPU run.
+    """
+
+
 class QVACOCRGgmlBackend(OCRBackend):
     """OCR backend using the QVAC OCR GGML addon.
 
@@ -27,6 +35,7 @@ class QVACOCRGgmlBackend(OCRBackend):
         bare_path: str = "bare",
         language: str = "en",
         timeout: int = 600,
+        backend_device: Optional[str] = None,
         **kwargs
     ):
         """Initialize QVAC OCR GGML backend.
@@ -39,6 +48,8 @@ class QVACOCRGgmlBackend(OCRBackend):
             bare_path: Path to the bare runtime executable
             language: Language code for OCR (e.g., 'en')
             timeout: Timeout in seconds for batch operations
+            backend_device: ggml backend device ('cpu', 'vulkan', 'metal');
+                None uses the addon default (cpu)
             **kwargs: Additional arguments passed to parent
         """
         backend_name = f"qvac-{pipeline}"
@@ -49,6 +60,7 @@ class QVACOCRGgmlBackend(OCRBackend):
         self.bare_path = bare_path
         self.language = language
         self.timeout = timeout
+        self.backend_device = backend_device
 
         # Determine addon path
         if addon_path:
@@ -120,6 +132,8 @@ class QVACOCRGgmlBackend(OCRBackend):
                 "--recognizer", self.recognizer_path,
                 "--pipeline", self.pipeline
             ]
+            if self.backend_device:
+                cmd += ["--backend", self.backend_device]
 
             result = subprocess.run(
                 cmd,
@@ -131,14 +145,23 @@ class QVACOCRGgmlBackend(OCRBackend):
             )
 
             # Parse model load time from stderr
+            resolved_device = None
             for line in result.stderr.split('\n'):
                 if line.startswith('MODEL_READY:'):
                     self._model_load_time = int(line.split(':')[1])
+                elif line.startswith('BACKEND_DEVICE:'):
+                    resolved_device = line.split(':', 1)[1].strip()
                 elif line.startswith('ERROR:'):
                     raise RuntimeError(f"Batch OCR failed: {line}")
 
             if result.returncode != 0:
                 raise RuntimeError(f"Batch OCR failed: {result.stderr}")
+
+            if self.backend_device in ("vulkan", "metal") and resolved_device not in ("GPU", "IGPU"):
+                raise BackendDeviceError(
+                    f"Requested backend device '{self.backend_device}' but the addon "
+                    f"resolved '{resolved_device or 'unknown'}'"
+                )
 
             # Read results
             results = {}

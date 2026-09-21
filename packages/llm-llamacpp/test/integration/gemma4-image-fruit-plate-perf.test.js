@@ -4,6 +4,7 @@
 // 30-minute mobile cap. Asserts a fruit keyword + records perf.
 
 const test = require('brittle')
+// prestage-uses: vlm-perf-gemma4 — GEMMA4_MODEL is defined in _vlm-image-perf.js
 const { GEMMA4_MODEL, IMAGE_CASES, isDarwinX64, runVlmImagePerf } = require('./_vlm-image-perf.js')
 
 test('Gemma4-VL image perf [fruit plate]', { timeout: 1_800_000, skip: isDarwinX64 }, async (t) => {

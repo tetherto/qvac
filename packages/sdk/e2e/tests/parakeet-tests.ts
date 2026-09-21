@@ -1,6 +1,11 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
-type ParakeetDependency = 'parakeet-tdt' | 'parakeet-ctc' | 'parakeet-sortformer'
+type ParakeetDependency =
+  | 'parakeet-tdt'
+  | 'parakeet-ctc'
+  | 'parakeet-sortformer'
+  | 'parakeet-indic-conformer'
+  | 'parakeet-unified'
 
 const createParakeetTest = (
   testId: string,
@@ -8,6 +13,7 @@ const createParakeetTest = (
   audioFileName: string,
   expectation:
     | { validation: 'contains-all' | 'contains-any'; contains: string[] }
+    | { validation: 'regex'; pattern: string }
     | { validation: 'type'; expectedType: 'string' | 'number' | 'array' }
     | { validation: 'throws-error'; errorContains: string },
   estimatedDurationMs: number = 60000,
@@ -125,6 +131,75 @@ export const parakeetCtcCorruptedWav = createParakeetTest(
   60000
 )
 
+// ── Unified RNN-T tests ───────────────────────────────────────────────────────
+// Parakeet Unified 0.6B — English batch + low-latency streaming from one
+// checkpoint (standard RNN-T with punctuation and capitalization). The engine
+// auto-detects the model type from the GGUF metadata.
+
+export const parakeetUnifiedWav = createParakeetTest(
+  'parakeet-unified-wav',
+  'parakeet-unified',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  300000, // download ~400 MB (q4_0)
+  ['smoke']
+)
+
+export const parakeetUnifiedMp3 = createParakeetTest(
+  'parakeet-unified-mp3',
+  'parakeet-unified',
+  'transcription-short-mp3.mp3',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+export const parakeetUnifiedSilence = createParakeetTest(
+  'parakeet-unified-silence',
+  'parakeet-unified',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+// Corrupted WAV on the Unified path
+export const parakeetUnifiedCorruptedWav = createParakeetTest(
+  'parakeet-unified-corrupted-wav',
+  'parakeet-unified',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
+// ── Indic Conformer CTC (desktop-only) ────────────────────────────────────────
+// Multilingual CTC with a required `modelConfig.language` mask. Happy path
+// uses the asr-ggml Hindi sample (`sample_hi.raw` wrapped as WAV) and asserts
+// Devanagari rather than a brittle token list. Not tagged smoke: mobile is
+// skipped, and smoke must be stable on both desktop and mobile.
+
+export const parakeetIndicConformerHi = createParakeetTest(
+  'parakeet-indic-conformer-hi',
+  'parakeet-indic-conformer',
+  'sample-hi.wav',
+  { validation: 'regex', pattern: '[\\u0900-\\u097F]' },
+  600000
+)
+
+export const parakeetIndicConformerSilence = createParakeetTest(
+  'parakeet-indic-conformer-silence',
+  'parakeet-indic-conformer',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+export const parakeetIndicConformerCorruptedWav = createParakeetTest(
+  'parakeet-indic-conformer-corrupted-wav',
+  'parakeet-indic-conformer',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
 // ── Sortformer v2.1 (diarization) tests ───────────────────────────────────────
 // Batch `transcribe` on PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0 — expect "Speaker …"
 
@@ -173,6 +248,25 @@ export const parakeetCtcTests = [
   parakeetCtcCorruptedWav
 ]
 
+export const parakeetUnifiedTests = [
+  parakeetUnifiedWav,
+  parakeetUnifiedMp3,
+  parakeetUnifiedSilence,
+  parakeetUnifiedCorruptedWav
+]
+
+export const parakeetIndicConformerTests = [
+  parakeetIndicConformerHi,
+  parakeetIndicConformerSilence,
+  parakeetIndicConformerCorruptedWav
+]
+
 export const parakeetSortformerTests = [parakeetSortformerSingle, parakeetSortformerTwoSpeakers]
 
-export const parakeetTests = [...parakeetTdtTests, ...parakeetCtcTests, ...parakeetSortformerTests]
+export const parakeetTests = [
+  ...parakeetTdtTests,
+  ...parakeetCtcTests,
+  ...parakeetUnifiedTests,
+  ...parakeetIndicConformerTests,
+  ...parakeetSortformerTests
+]

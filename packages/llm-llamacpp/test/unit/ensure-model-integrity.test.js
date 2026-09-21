@@ -44,7 +44,7 @@ function writeModel(dir, name, content) {
 }
 
 function fakeDownloader(content, spy) {
-  return async function (_urls, dest) {
+  return function (_urls, dest) {
     spy.calls++
     fs.writeFileSync(dest, content)
   }
@@ -107,7 +107,7 @@ test('repeated verification hashes an unchanged model only once per process', as
   try {
     writeModel(dir, name, GOOD)
     resetVerificationCache()
-    const hashFile = async function () {
+    const hashFile = function () {
       hashes++
       return sha256
     }

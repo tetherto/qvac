@@ -1,0 +1,255 @@
+name: Mobile Test — Validate Manual Device Selection
+description: |
+  Fail-fast guard for the on-demand (workflow_dispatch) mobile path. BEFORE any
+  build or Device Farm run, it confirms:
+    * at least one device was supplied and every requested MODEL exists in the
+      AWS Device Farm fleet for the target platform (so a typo or empty
+      selection costs nothing instead of falling back to the full pool);
+    * the optional `tests` mocha --grep filter matches at least one real runner
+      NAME — a typo must not reach WebdriverIO, select zero tests, and pass
+      green (false green). Runner names come from the addon's test-groups.json
+      (multi-spec addons) or its committed test/mobile/integration.auto.cjs
+      (single-spec addons), so EVERY addon validates the filter;
+    * the total run count (specs x devices) is within the cap. specs comes from
+      the addon's test-groups.json group count (multi-spec) or is 1
+      (single-spec), and collapses to 1 whenever a `tests` filter is given — so
+      an oversized fan-out is rejected here rather than after build/upload spend.
+
+  The MODEL match mirrors schedule-test-run's device filter exactly:
+    * CONTAINS (default): the requested value is a case-sensitive substring of
+      a fleet device's model (e.g. "Pixel 9" also matches "Pixel 9 Pro XL").
+    * EQUALS: the requested value equals a fleet device's model exactly.
+
+  Requires an OIDC role granted devicefarm:ListDevices (the same role the
+  scheduler and sdk-device-farm-select-pool already use).
+
+inputs:
+  platform:
+    description: "Android | iOS"
+    required: true
+  devices:
+    description: "Comma-separated MODEL values requested by the dispatcher, e.g. 'Pixel 9, iPhone 17'."
+    required: true
+  device-model-operator:
+    description: "MODEL match operator: CONTAINS (default) or EQUALS. Must match what schedule-test-run is given."
+    required: false
+    default: "CONTAINS"
+  tests:
+    description: "Optional mocha --grep filter (a regex over runner NAMES). When a runner-name source is given (test-groups-path or runner-source-path) it is validated to match at least one known runner so a typo fails fast (free) instead of producing an empty, false-green Device Farm run."
+    required: false
+    default: ""
+  test-groups-path:
+    description: "Path to the addon's test/mobile/test-groups.json (multi-spec addons). When set, enables runner-name validation of 'tests' and a spec-count-aware run-count cap before any build/schedule spend."
+    required: false
+    default: ""
+  runner-source-path:
+    description: "Path to the addon's committed test/mobile/integration.auto.cjs (single-spec addons that ship no test-groups.json). When set, its `async function run<Name>` declarations are the runner-name source for validating 'tests'. spec-count is 1."
+    required: false
+    default: ""
+  aws-role-to-assume:
+    description: "AWS IAM role ARN for OIDC (needs devicefarm:ListDevices)."
+    required: true
+  aws-region:
+    description: "AWS region for Device Farm (Device Farm is us-west-2)."
+    required: false
+    default: "us-west-2"
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+      with:
+        role-to-assume: ${{ inputs.aws-role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Validate requested devices exist on Device Farm
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        DEVICES: ${{ inputs.devices }}
+        MODEL_OPERATOR: ${{ inputs.device-model-operator }}
+        TESTS: ${{ inputs.tests }}
+        TEST_GROUPS_PATH: ${{ inputs.test-groups-path }}
+        RUNNER_SOURCE_PATH: ${{ inputs.runner-source-path }}
+      run: |
+        set -euo pipefail
+
+        MODEL_OP="${MODEL_OPERATOR:-CONTAINS}"
+        case "$MODEL_OP" in
+          EQUALS|CONTAINS) ;;
+          *) echo "::error::device-model-operator must be EQUALS or CONTAINS (got '$MODEL_OP')"; exit 1 ;;
+        esac
+
+        # Parse the comma-separated list, trimming whitespace, dropping empties,
+        # and de-duplicating — mirrors schedule-test-run so validation matches
+        # exactly what will be scheduled (no duplicate billed runs).
+        MODELS_JSON=$(printf '%s' "$DEVICES" | jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | unique')
+        MODEL_COUNT=$(echo "$MODELS_JSON" | jq 'length')
+        if [ "$MODEL_COUNT" -eq 0 ]; then
+          echo "::error::No device selected. A manual mobile run must specify at least one device (input 'devices'), e.g. 'Pixel 9' or 'Pixel 9, iPhone 17'."
+          exit 1
+        fi
+        # Same device cap the scheduler enforces, so a fat-fingered list is
+        # rejected here (cheaply) instead of at scheduling time.
+        MAX_DEVICES=10
+        if [ "$MODEL_COUNT" -gt "$MAX_DEVICES" ]; then
+          echo "::error::$MODEL_COUNT unique devices requested, cap is $MAX_DEVICES. Narrow the selection."
+          exit 1
+        fi
+
+        # Runner-name source, used to (1) reject a `tests` filter that matches
+        # no real runner — a typo would otherwise reach WebdriverIO, select zero
+        # tests, and pass green (false green) — and (2) know how many specs a run
+        # fans out into, so the total Device Farm run count is capped HERE
+        # (before any build/upload spend) instead of only inside the scheduler.
+        #   * Multi-spec addons pass test-groups-path: runner names are the flat
+        #     set of values for the platform; specs is the group count.
+        #   * Single-spec addons pass runner-source-path (their committed
+        #     integration.auto.cjs): runner names are its `async function
+        #     run<Name>` declarations; specs is 1.
+        # An addon passing neither leaves SPEC_COUNT=1 and skips filter
+        # validation (only the device cap applies).
+        SPEC_COUNT=1
+        RUNNERS_JSON=""
+        RUNNER_COUNT=0
+        PLAT_KEY=$([ "$PLATFORM" = "Android" ] && echo android || echo ios)
+        if [ -n "${TEST_GROUPS_PATH:-}" ]; then
+          if [ ! -f "$TEST_GROUPS_PATH" ]; then
+            echo "::error::test-groups file not found at '$TEST_GROUPS_PATH' — cannot validate the tests filter or run count."
+            exit 1
+          fi
+          # Groups map to arrays of runner names, so recursive strings gives the
+          # flat, deduped set for this platform.
+          RUNNERS_JSON=$(jq -c --arg p "$PLAT_KEY" '(.[$p] // {}) | [.. | strings] | unique' "$TEST_GROUPS_PATH")
+          RUNNER_COUNT=$(echo "$RUNNERS_JSON" | jq 'length')
+          GROUP_COUNT=$(jq --arg p "$PLAT_KEY" '(.[$p] // {}) | keys | length' "$TEST_GROUPS_PATH")
+          if [ "$RUNNER_COUNT" -eq 0 ]; then
+            echo "::error::No runner names found in '$TEST_GROUPS_PATH' for '$PLAT_KEY'."
+            exit 1
+          fi
+          SPEC_COUNT=$GROUP_COUNT
+        elif [ -n "${RUNNER_SOURCE_PATH:-}" ]; then
+          if [ ! -f "$RUNNER_SOURCE_PATH" ]; then
+            echo "::error::runner source file not found at '$RUNNER_SOURCE_PATH' — cannot validate the tests filter."
+            exit 1
+          fi
+          # integration.auto.cjs declares one `async function run<Name> (` per
+          # on-device test; that is the authoritative runner-name list.
+          RUNNERS_JSON=$(grep -oE 'async function run[A-Za-z0-9_]+' "$RUNNER_SOURCE_PATH" | sed 's/^async function //' | jq -R . | jq -sc 'unique')
+          RUNNER_COUNT=$(echo "$RUNNERS_JSON" | jq 'length')
+          if [ "$RUNNER_COUNT" -eq 0 ]; then
+            echo "::error::No 'async function run<Name>' declarations found in '$RUNNER_SOURCE_PATH'."
+            exit 1
+          fi
+          SPEC_COUNT=1
+        fi
+
+        if [ -n "${TESTS:-}" ]; then
+          # Same mocha-safe charset allowlist the workflows enforce at the sink,
+          # applied HERE (before the ~90-120 min build) so a disallowed pattern
+          # (e.g. an anchored '^runFoo') fails fast instead of building first and
+          # only being rejected by the per-workflow allowlist afterwards.
+          if ! printf '%s' "$TESTS" | grep -Eq '^[A-Za-z0-9_ |().*+-]+$'; then
+            echo "::error::Invalid 'tests' filter '$TESTS'. Allowed: letters, digits, and _ space | ( ) . * + - (a mocha --grep on test NAMES, e.g. 'runAddonTest' or 'runFoo|runBar')."
+            exit 1
+          fi
+          if [ "$RUNNER_COUNT" -gt 0 ]; then
+            # The tests filter is a mocha --grep regex matched against runner
+            # NAMES (same semantics as on-device mocha). Fail fast if it matches
+            # none of them.
+            # grep -c prints 0 and exits 1 on no match; an INVALID regex exits 2
+            # with empty stdout, so default to 0 and let the zero-match branch
+            # reject it with a clear message instead of a bash integer error.
+            MATCHED=$(echo "$RUNNERS_JSON" | jq -r '.[]' | grep -Ec -- "$TESTS" || true)
+            MATCHED=${MATCHED:-0}
+            if [ "$MATCHED" -eq 0 ]; then
+              echo "::error::tests filter '$TESTS' matches none of the $RUNNER_COUNT known $PLAT_KEY runner(s) — a typo would run zero tests and pass green. It is a mocha --grep on runner NAMES. Known runners:"
+              echo "$RUNNERS_JSON" | jq -r '.[]' | sort -u | sed 's/^/  - /'
+              exit 1
+            fi
+            echo "tests filter '$TESTS' matches $MATCHED of $RUNNER_COUNT $PLAT_KEY runner(s)."
+          else
+            echo "::warning::tests filter '$TESTS' set but this addon exposes no runner-name source to validate it against — skipping filter validation."
+          fi
+          # A filter collapses the run to a single grepped spec regardless of source.
+          SPEC_COUNT=1
+        else
+          echo "No tests filter: the run fans out over $SPEC_COUNT $PLAT_KEY spec(s)."
+        fi
+
+        # Total Device Farm runs = specs x devices. Reject an oversized fan-out
+        # here (before build/upload) — the scheduler enforces the same ceiling
+        # as an authoritative backstop. 40 covers the documented broad-coverage
+        # flow (e.g. 3 devices x the heaviest shard set) while still blocking a
+        # runaway spray.
+        MAX_RUNS=40
+        TOTAL_RUNS=$((SPEC_COUNT * MODEL_COUNT))
+        if [ "$TOTAL_RUNS" -gt "$MAX_RUNS" ]; then
+          echo "::error::$SPEC_COUNT spec(s) x $MODEL_COUNT device(s) = $TOTAL_RUNS Device Farm runs exceeds the cap of $MAX_RUNS. Add a tests filter (-f tests=...) to collapse to one spec, or reduce devices."
+          exit 1
+        fi
+        echo "Run-count check OK: $SPEC_COUNT spec(s) x $MODEL_COUNT device(s) = $TOTAL_RUNS run(s) (cap $MAX_RUNS)."
+
+        PLAT_UPPER=$([ "$PLATFORM" = "Android" ] && echo ANDROID || echo IOS)
+        FILTER=$(jq -nc --arg plat "$PLAT_UPPER" '[{attribute:"PLATFORM", operator:"EQUALS", values:[$plat]}]')
+
+        echo "Listing $PLAT_UPPER devices on Device Farm..."
+        FLEET=$(aws devicefarm list-devices --filters "$FILTER" --query 'devices[].{model: model, name: name, availability: availability}' --output json)
+        FLEET_COUNT=$(echo "$FLEET" | jq 'length')
+        if [ "$FLEET_COUNT" -eq 0 ]; then
+          echo "::error::Device Farm returned no $PLAT_UPPER devices — cannot validate the selection. Check the OIDC role has devicefarm:ListDevices."
+          exit 1
+        fi
+
+        MISSING=""
+        for MIDX in $(seq 0 $((MODEL_COUNT - 1))); do
+          MODEL=$(echo "$MODELS_JSON" | jq -r ".[$MIDX]")
+          if [ "$MODEL_OP" = "EQUALS" ]; then
+            HIT=$(echo "$FLEET" | jq --arg m "$MODEL" 'map(select(.model == $m)) | length')
+          else
+            HIT=$(echo "$FLEET" | jq --arg m "$MODEL" 'map(select(.model | contains($m))) | length')
+          fi
+          if [ "$HIT" -gt 0 ]; then
+            echo "  OK   '$MODEL' matches $HIT $PLAT_UPPER device model(s) [$MODEL_OP]"
+          else
+            echo "  MISS '$MODEL' matches no $PLAT_UPPER device model [$MODEL_OP]"
+            MISSING="$MISSING $MODEL"
+          fi
+        done
+
+        if [ -n "$MISSING" ]; then
+          echo "::error::These requested device(s) do not exist on Device Farm for $PLAT_UPPER [$MODEL_OP]:$MISSING"
+          echo "Available $PLAT_UPPER device models:"
+          echo "$FLEET" | jq -r '.[].model' | sort -u | sed 's/^/  - /'
+          exit 1
+        fi
+
+        echo "All requested $PLAT_UPPER device(s) exist on Device Farm."
+
+        # Overlap guard: the scheduler creates one run per selector with
+        # maxDevices:1, so two selectors that resolve to the SAME fleet model
+        # would schedule (and bill) that model twice. `unique` on the raw input
+        # strings can't catch this because two different CONTAINS selectors can
+        # share a match (e.g. "Google Pixel 9" and "Google Pixel 9 Pro" both
+        # match "Google Pixel 9 Pro"). Resolve every selector to the fleet
+        # model(s) it matches and reject any model claimed by more than one.
+        # EQUALS selectors are exact, so distinct EQUALS values never overlap —
+        # this only ever fires for ambiguous CONTAINS selections.
+        MATCHED_ALL='[]'
+        for MIDX in $(seq 0 $((MODEL_COUNT - 1))); do
+          MODEL=$(echo "$MODELS_JSON" | jq -r ".[$MIDX]")
+          if [ "$MODEL_OP" = "EQUALS" ]; then
+            SEL_MODELS=$(echo "$FLEET" | jq -c --arg m "$MODEL" '[.[] | select(.model == $m) | .model] | unique')
+          else
+            SEL_MODELS=$(echo "$FLEET" | jq -c --arg m "$MODEL" '[.[] | select(.model | contains($m)) | .model] | unique')
+          fi
+          MATCHED_ALL=$(jq -nc --argjson a "$MATCHED_ALL" --argjson b "$SEL_MODELS" '$a + $b')
+        done
+        DUPES=$(echo "$MATCHED_ALL" | jq -c 'group_by(.) | map(select(length > 1) | .[0]) | unique')
+        if [ "$(echo "$DUPES" | jq 'length')" -gt 0 ]; then
+          echo "::error::device selectors overlap on model(s) $(echo "$DUPES" | jq -r 'join(", ")') — Device Farm could schedule (and bill) the same model more than once. For a multi-device run, use -f device_model_operator=EQUALS with exact, distinct fleet names (see the device table in docs/ci/MOBILE-ON-DEMAND.md)."
+          exit 1
+        fi
+
+        echo "No overlapping $PLAT_UPPER device selectors — every requested run maps to a distinct model."

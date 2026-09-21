@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -15,10 +16,20 @@ namespace qvac_lib_inference_addon_llama::batching {
 
 enum class StopReason : uint8_t {
   None,
-  Finished,     // Explicitly marked finished (e.g., EOG sampled)
-  LimitReached, // Reached maxTokensPerSequence
-  DecodeError,  // llama_decode returned a non-zero rc
+  Finished,    // Explicitly marked finished (e.g., EOG sampled)
+  DecodeError, // llama_decode returned a non-zero rc
   Cancelled,
+  // The slot's context window is full: no room for even one more token.
+  // `maxTokensPerSequence` is `ctxTotalTokens / n_parallel`, the same value
+  // the driver gets as its ceiling, and `submit` rejects any request whose
+  // prompt plus a positive `n_predict` would not fit. So a slot can only
+  // walk into this condition with no caller cap, which makes a full window
+  // the one thing it can mean, never a prediction-limit cutoff.
+  ContextOverflow,
+  // The caller's `n_predict` cap. Distinct from `Finished` because the
+  // sample that trips it is ordinary content the caller received, so it is
+  // counted, while an EOG merely stops the sequence and is not.
+  PredictionLimit,
 };
 
 struct Request {
@@ -33,20 +44,23 @@ struct Request {
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
   bool hasUnfedSample = false;
-  /// When true, the sequence driver can slide its context window during
-  /// generation: `exceededLimit()` then lets the position reach the cap
-  /// so the slide (which drops it back below) gets a chance to fire
-  /// instead of hard-truncating the sequence.
-  bool slideCapable = false;
   StopReason stopReason = StopReason::None;
   unsigned maxTokensPerSequence;
+  /// Observed wall-clock stamps for the per-request end-to-end stats: fixed by
+  /// the first sampled token, including one that ends the sequence, since the
+  /// caller sees that token too. `lastTokenAt` advances only for a sample that
+  /// is counted, so the rate window matches `generatedTokens` (see
+  /// sampleAndAppendIdle). Batch-shared decode makes an isolated per-request
+  /// compute rate unmeasurable; these give the observed timeline instead.
+  std::optional<std::chrono::steady_clock::time_point> firstTokenAt,
+      lastTokenAt;
 
   Request(
       uint32_t rid, PrefillPlan&& plan, unsigned maxTokens,
-      llama_pos initialPos = 0, bool canSlide = false);
+      llama_pos initialPos = 0);
   Request(
       uint32_t rid, std::vector<llama_token>&& toks, unsigned maxTokens,
-      llama_pos initialPos = 0, bool canSlide = false);
+      llama_pos initialPos = 0);
 
   [[nodiscard]] bool isPrefillComplete() const;
   [[nodiscard]] bool exceededLimit() const;
@@ -89,7 +103,9 @@ public:
       unsigned maxChunkSize, unsigned maxTokensPerSequence, size_t batchSize)
       : maxChunkSize_(maxChunkSize),
         maxTokensPerSequence_(maxTokensPerSequence), slots_(batchSize),
-        lastLogitIndices_(batchSize, -1) {}
+        lastLogitIndices_(batchSize, -1), chunkSizes_(batchSize, 0) {
+    unbudgeted_.reserve(batchSize);
+  }
 
   enum class AddStatus : int8_t {
     Ok,
@@ -103,8 +119,7 @@ public:
   addRequest(std::vector<llama_token>&& tokens, uint32_t& seqId);
   [[nodiscard]] AddStatus addRequestAt(
       uint32_t seqId, std::vector<llama_token>&& tokens,
-      llama_pos initialPos = 0, bool slideCapable = false,
-      llama_pos initialKvCells = -1);
+      llama_pos initialPos = 0, llama_pos initialKvCells = -1);
   /// Plan-aware admission: text tokens plus interleaved media barriers.
   /// Barriers must be sorted by `afterTextTokens` and anchored within
   /// `plan.tokens` (`ErrInvalidPlan` otherwise). Sizing uses
@@ -117,7 +132,7 @@ public:
   /// KV-cap check must use this value rather than `initialPos`.
   [[nodiscard]] AddStatus addRequestAt(
       uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos = 0,
-      bool slideCapable = false, llama_pos initialKvCells = -1);
+      llama_pos initialKvCells = -1);
 
   [[nodiscard]] std::optional<uint32_t> firstFreeSeqId() const;
 
@@ -133,11 +148,6 @@ public:
 
   bool markFinished(uint32_t seqId, StopReason reason = StopReason::Finished);
 
-  /// Drop `discarded` tokens from a sequence's position after the driver
-  /// performed an in-step context slide, so the next token feeds at the
-  /// compacted position.
-  void applySlide(uint32_t seqId, llama_pos discarded);
-
   /// Mark every active slot as finished with `reason`. Used to terminate
   /// all in-flight requests (e.g. on a fatal decode error). No-op for
   /// already-finished slots.
@@ -152,23 +162,40 @@ public:
       uint32_t seqId, llama_pos currentPos, size_t prefillTokenCount)>;
 
   struct FillResult {
-    unsigned chunkSize;
-    unsigned numActiveSequences;
+    /// Tokens placed in the batch across every slot. 0 means nothing was
+    /// fed and the batch is empty.
+    unsigned totalTokens = 0;
+    unsigned numActiveSequences = 0;
     /// Active slots still feeding prompt tokens this step. The remaining
     /// `numActiveSequences - numPrefillingSequences` slots are generating.
-    /// Lets callers split a step's `chunkSize` tokens into prompt vs decode.
     unsigned numPrefillingSequences = 0;
+    /// Exact split of `totalTokens` into prompt vs decode work. Slots get
+    /// individual chunk sizes, so these are sums, not a chunk times a count.
+    unsigned prefillTokens = 0;
+    unsigned decodeTokens = 0;
   };
 
   /// Fill batch with tokens from active slots. Never writes past
   /// `batch.capacity()`; if the batch cannot hold at least one token per
-  /// active sequence, returns `chunkSize == 0` and leaves the batch empty.
-  /// Side effect: refreshes the per-slot logit-index bookkeeping consumed
-  /// by the next sampleAndAppendIdle() call.
+  /// active sequence, returns `totalTokens == 0` and leaves the batch empty.
+  /// Side effect: refreshes the per-slot chunk budgets consumed by advance()
+  /// and the logit-index bookkeeping consumed by sampleAndAppendIdle().
   [[nodiscard]] FillResult fillBatch(LlamaBatch& batch);
 
-  void
-  advance(unsigned chunkSize, const PrefillCompleteFn& onPrefillComplete = {});
+  /// Tokens fed to `seqId` by the most recent fillBatch(); 0 if none.
+  /// Valid until the next fillBatch(), whose planChunksForActiveSeqs()
+  /// zeroes every budget, and until `seqId` is released — cancel(), clear()
+  /// and extractFinished() zero that slot's budget as they free it, so a
+  /// budget can never outlive the request it was computed for.
+  [[nodiscard]] unsigned chunkSizeFor(uint32_t seqId) const noexcept;
+
+  /// Commit the most recent fillBatch(): advances each slot by the chunk it
+  /// was actually given. Must be called after fillBatch() + llama_decode()
+  /// and before the next fillBatch(): the per-slot chunk budgets it commits
+  /// are refreshed by every fillBatch(). Committing is one-shot — a second
+  /// advance() with no fillBatch() between is a no-op, so a slot's position
+  /// can never run ahead of the KV cache by replaying a budget.
+  void advance(const PrefillCompleteFn& onPrefillComplete = {});
 
   /// A slot blocked on its head media barrier, ready for the scheduler
   /// to run `SequenceDriver::evalMediaSegment(mediaIndex, currentPos)`.
@@ -220,8 +247,30 @@ private:
   /// recent fillBatch(). Reset to -1 at the top of every fillBatch().
   std::vector<int> lastLogitIndices_;
 
-  [[nodiscard]] FillResult
-  getChunkSizeForActiveSeqs(const LlamaBatch& batch) const;
+  /// Tokens granted to each slot by the most recent fillBatch(), indexed by
+  /// seqId. Zeroed at the top of every planChunksForActiveSeqs(), and per
+  /// slot by releaseBudget() whenever a slot is freed.
+  std::vector<unsigned> chunkSizes_;
+
+  /// True between a fillBatch() that granted tokens and the advance() that
+  /// commits them. Makes the fillBatch()/advance() pairing self-enforcing
+  /// rather than a call-site convention: advance() is a no-op unless there
+  /// are budgets outstanding.
+  bool budgetsPending_ = false;
+
+  /// Scratch list of seqIds still awaiting a budget, reused across steps so
+  /// the planner does not allocate on the per-decode-step hot path. Only
+  /// meaningful inside planChunksForActiveSeqs().
+  std::vector<uint32_t> unbudgeted_;
+
+  /// Forget the chunk budget recorded for `seqId`. Called wherever a slot is
+  /// freed, so a budget can never be committed against a later occupant of
+  /// the same seqId.
+  void releaseBudget(uint32_t seqId) noexcept;
+
+  /// Assign each active slot its own chunk for this step and report the
+  /// totals. Writes `chunkSizes_`.
+  [[nodiscard]] FillResult planChunksForActiveSeqs(const LlamaBatch& batch);
 };
 
 } // namespace qvac_lib_inference_addon_llama::batching

@@ -133,7 +133,8 @@ function buildCanonicalStreamingReport(settings, summary, backend) {
           // Consumed by aggregate-tts-ggml-rtf.js expandCanonicalReport ->
           // chunkCount.mean (the "Chunks/run" column for mobile streaming rows).
           chunks_per_run_mean:
-            typeof chunkCount.mean === 'number' ? Number(chunkCount.mean.toFixed(2)) : null
+            typeof chunkCount.mean === 'number' ? Number(chunkCount.mean.toFixed(2)) : null,
+          backend_id: typeof summary.backendId === 'number' ? summary.backendId : null
         }
       }
     ]

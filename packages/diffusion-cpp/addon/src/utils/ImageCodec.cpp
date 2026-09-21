@@ -22,7 +22,7 @@ namespace image_codec {
 
 namespace {
 
-// STB requires this exact C callback shape for stbi_write_png_to_func.
+// STB requires this exact C callback shape for stbi_write_*_to_func.
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void writePngBytes(void* context, void* payload, int payloadSize) {
   if (context == nullptr || payload == nullptr || payloadSize <= 0) {
@@ -71,6 +71,32 @@ std::vector<uint8_t> encodeToPng(const sd_image_t& image) {
       static_cast<int>(channel),
       data,
       static_cast<int>(stride));
+  if (writeResult == 0) {
+    out.clear();
+  }
+  return out;
+}
+
+std::vector<uint8_t> encodeToJpeg(const sd_image_t& image, int quality) {
+  std::vector<uint8_t> out;
+  const auto [width, height, channel, data] = image;
+  if (data == nullptr || width == 0 || height == 0 ||
+      (channel != 1 && channel != 3) || quality < 1 || quality > 100) {
+    return out;
+  }
+  if (width > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
+      height > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
+    return out;
+  }
+
+  const int writeResult = stbi_write_jpg_to_func(
+      writePngBytes,
+      &out,
+      static_cast<int>(width),
+      static_cast<int>(height),
+      static_cast<int>(channel),
+      data,
+      quality);
   if (writeResult == 0) {
     out.clear();
   }

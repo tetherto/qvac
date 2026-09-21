@@ -1,6 +1,6 @@
 import { SDK_SERVER_ERROR_CODES } from '@/schemas/sdk-errors-server'
 import { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
-import { REGISTRY_ERROR_CODES } from '@/schemas/sdk-errors-registry'
+import { REGISTRY_ERROR_CODES } from '@qvac/inference/surface'
 
 /**
  * JSON export of the SDK error-code registries (name → numeric code) for the

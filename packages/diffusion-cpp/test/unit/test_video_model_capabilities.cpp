@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 
 #include <gtest/gtest.h>
 
@@ -52,6 +53,30 @@ std::filesystem::path makeWan22Ti2vGguf() {
   return path;
 }
 
+std::filesystem::path
+makeMiniMaxH3Gguf(bool includeAudio = true, bool includeVideo = true) {
+  const auto path = std::filesystem::temp_directory_path() /
+                    "qvac-minimax-h3-capabilities.gguf";
+  std::ofstream output(path, std::ios::binary | std::ios::trunc);
+  EXPECT_TRUE(output.good());
+  write(output, uint32_t{0x46554747}); // "GGUF"
+  write(output, uint32_t{3});
+  write(
+      output,
+      uint64_t{
+          static_cast<uint64_t>(includeAudio) +
+          static_cast<uint64_t>(includeVideo)});
+  write(output, uint64_t{0});
+  if (includeAudio)
+    writeTensor(
+        output, "model.diffusion_model.audio_patch_proj.weight", {1, 1, 1, 1});
+  if (includeVideo)
+    writeTensor(
+        output, "model.diffusion_model.video_patch_proj.weight", {1, 1, 1, 1});
+  output.close();
+  return path;
+}
+
 } // namespace
 
 TEST(VideoModelCapabilities, DetectsWan22Ti2vFromRenamedGgufContents) {
@@ -61,6 +86,30 @@ TEST(VideoModelCapabilities, DetectsWan22Ti2vFromRenamedGgufContents) {
   std::filesystem::remove(path);
 
   EXPECT_EQ(capabilities.spatialAlignment, 32);
+}
+
+TEST(VideoModelCapabilities, DetectsMiniMaxH3FromBothPatchProjectors) {
+  const auto path = makeMiniMaxH3Gguf();
+  const auto capabilities =
+      qvac_lib_inference_addon_sd::inspectVideoModelCapabilities(path.string());
+  std::filesystem::remove(path);
+
+  EXPECT_TRUE(capabilities.isMiniMaxH3);
+  EXPECT_EQ(capabilities.spatialAlignment, 32);
+  EXPECT_EQ(capabilities.frameCountStride, 17);
+  EXPECT_EQ(capabilities.frameCountOffset, 5);
+}
+
+TEST(VideoModelCapabilities, DoesNotMisidentifySingleH3PatchProjector) {
+  for (const auto [includeAudio, includeVideo] :
+       {std::pair{true, false}, std::pair{false, true}}) {
+    const auto path = makeMiniMaxH3Gguf(includeAudio, includeVideo);
+    const auto capabilities =
+        qvac_lib_inference_addon_sd::inspectVideoModelCapabilities(
+            path.string());
+    std::filesystem::remove(path);
+    EXPECT_FALSE(capabilities.isMiniMaxH3);
+  }
 }
 
 TEST(VideoModelCapabilities, FallsBackToWan21CompatibleAlignment) {

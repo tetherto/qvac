@@ -3,6 +3,7 @@ import { Inter, Inconsolata } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
 import { GoogleTagManager } from '@next/third-parties/google';
 import { AskAIProvider } from '@/components/ask-ai';
+import { AnnouncementBanner } from '@/components/announcement-banner';
 import { Provider } from "./provider";
 import 'katex/dist/katex.css';
 import { docsRootMetadataRobots } from '@/lib/docs-indexing';
@@ -57,6 +58,14 @@ export default function Layout({ children }: LayoutProps<'/'>) {
       </head>
       {gtmId && <GoogleTagManager gtmId={gtmId} />}
       <body className="flex flex-col min-h-screen">
+        {/*
+         * Announcement bar. It sits above everything in the body so it
+         * scrolls/sticks at the very top of the page, and it publishes
+         * `--fd-banner-height` on `:root`, which the `(docs)` layout's sticky
+         * navbar and sidebar offset themselves by. Renders nothing when
+         * `@/lib/announcement` exports `null`.
+         */}
+        <AnnouncementBanner />
         {/*
          * `AskAIProvider` stays at the root layout (and not inside
          * `(docs)/layout.tsx`) so the `Cmd/Ctrl+I` hotkey and the

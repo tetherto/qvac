@@ -15,6 +15,8 @@ const fs = require('#fs')
 
 const DEFAULT_DOWNLOAD_MAX_RETRIES = 3
 const RETRIABLE_DOWNLOAD_CODES = ['REQUEST_TIMEOUT']
+const INFLIGHT_DRAIN_TIMEOUT_MS = 5000
+const INFLIGHT_DRAIN_POLL_MS = 10
 
 // While the app is backgrounded the swarm is suspended; a retry must wait for
 // resume rather than burn its (small) retry budget timing out against a dead
@@ -304,7 +306,7 @@ class QVACRegistryClient extends ReadyResource {
       throw new Error(`Invalid options: ${typeof options}`)
     }
 
-    let core, blobs
+    let core, blobs, blockStart, blockEnd, rangeDownload
 
     try {
       this.logger.info('Downloading model', { path, source })
@@ -344,13 +346,13 @@ class QVACRegistryClient extends ReadyResource {
 
       const totalSize = model.blobBinding.byteLength
 
-      const rangeDownload = core.download({
+      rangeDownload = core.download({
         start: model.blobBinding.blockOffset,
         length: model.blobBinding.blockLength
       })
 
-      const blockStart = model.blobBinding.blockOffset
-      const blockEnd = blockStart + model.blobBinding.blockLength
+      blockStart = model.blobBinding.blockOffset
+      blockEnd = blockStart + model.blobBinding.blockLength
 
       let artifact
       if (options.outputFile) {
@@ -369,10 +371,7 @@ class QVACRegistryClient extends ReadyResource {
         )
         artifact = { path: options.outputFile, totalSize }
 
-        rangeDownload.destroy()
-        await this._clearBlobBlocks(core, blockStart, blockEnd)
-        if (blobs) await blobs.close()
-        if (core) await core.close()
+        await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
       } else {
         const stream = blobs.createReadStream(model.blobBinding, {
           wait: true,
@@ -380,27 +379,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        const cleanup = async () => {
-          rangeDownload.destroy()
-          await this._clearBlobBlocks(core, blockStart, blockEnd)
-          if (blobs) {
-            try {
-              await blobs.close()
-            } catch (cleanupError) {
-              this.logger.warn('Error closing blob instance', { error: cleanupError.message })
-            }
-          }
-          if (core) {
-            try {
-              await core.close()
-            } catch (cleanupError) {
-              this.logger.warn('Error closing blob core', { error: cleanupError.message })
-            }
-          }
-          this.logger.debug('Blob resources closed after stream end')
-        }
-
-        stream.once('end', cleanup)
+        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd)
       }
 
       this.logger.info('Model downloaded successfully')
@@ -412,20 +391,7 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading model', error)
 
-      if (blobs) {
-        try {
-          await blobs.close()
-        } catch (cleanupError) {
-          this.logger.warn('Error closing blob instance on error', { error: cleanupError.message })
-        }
-      }
-      if (core) {
-        try {
-          await core.close()
-        } catch (cleanupError) {
-          this.logger.warn('Error closing blob core on error', { error: cleanupError.message })
-        }
-      }
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
 
       throw error
     }
@@ -449,7 +415,7 @@ class QVACRegistryClient extends ReadyResource {
       throw new Error(`Invalid options: ${typeof options}`)
     }
 
-    let core, blobs
+    let core, blobs, blockStart, blockEnd, rangeDownload
 
     try {
       this.logger.info('Downloading blob directly', {
@@ -487,10 +453,10 @@ class QVACRegistryClient extends ReadyResource {
       }
       const totalSize = blobBinding.byteLength
 
-      const blockStart = pointer.blockOffset
-      const blockEnd = blockStart + pointer.blockLength
+      blockStart = pointer.blockOffset
+      blockEnd = blockStart + pointer.blockLength
 
-      const rangeDownload = core.download({
+      rangeDownload = core.download({
         start: pointer.blockOffset,
         length: pointer.blockLength
       })
@@ -510,10 +476,7 @@ class QVACRegistryClient extends ReadyResource {
         )
         artifact = { path: options.outputFile, totalSize }
 
-        rangeDownload.destroy()
-        await this._clearBlobBlocks(core, blockStart, blockEnd)
-        if (blobs) await blobs.close()
-        if (core) await core.close()
+        await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
       } else {
         const stream = blobs.createReadStream(pointer, {
           wait: true,
@@ -521,27 +484,7 @@ class QVACRegistryClient extends ReadyResource {
         })
         artifact = { stream, totalSize }
 
-        const cleanup = async () => {
-          rangeDownload.destroy()
-          await this._clearBlobBlocks(core, blockStart, blockEnd)
-          if (blobs) {
-            try {
-              await blobs.close()
-            } catch (e) {
-              this.logger.warn('Error closing blob instance', { error: e.message })
-            }
-          }
-          if (core) {
-            try {
-              await core.close()
-            } catch (e) {
-              this.logger.warn('Error closing blob core', { error: e.message })
-            }
-          }
-          this.logger.debug('Blob resources closed after stream end')
-        }
-
-        stream.once('end', cleanup)
+        this._releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd)
       }
 
       this.logger.info('Blob download complete (direct)')
@@ -550,22 +493,74 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading blob directly', error)
 
-      if (blobs) {
-        try {
-          await blobs.close()
-        } catch (e) {
-          this.logger.warn('Error closing blob instance on error', { error: e.message })
-        }
-      }
-      if (core) {
-        try {
-          await core.close()
-        } catch (e) {
-          this.logger.warn('Error closing blob core on error', { error: e.message })
-        }
-      }
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
 
       throw error
+    }
+  }
+
+  _releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd) {
+    let released = false
+
+    // 'close' also covers a destroyed or errored stream; on 'end' alone a
+    // cancelled stream download would never free its blocks.
+    const release = () => {
+      if (released) return
+      released = true
+      return this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd).catch((e) =>
+        this.logger.warn('Error releasing blob resources', { error: e.message })
+      )
+    }
+
+    stream.once('end', release)
+    stream.once('close', release)
+  }
+
+  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd) {
+    // Hypercore can commit in-flight responses after a range is destroyed.
+    if (rangeDownload) rangeDownload.destroy()
+
+    if (core && blockStart !== undefined) {
+      if (rangeDownload) await this._waitForInflightBlocks(core)
+      await this._clearBlobBlocks(core, blockStart, blockEnd)
+    }
+    if (blobs) {
+      try {
+        await blobs.close()
+      } catch (e) {
+        this.logger.warn('Error closing blob instance', { error: e.message })
+      }
+    }
+    if (core) {
+      try {
+        await core.close()
+      } catch (e) {
+        this.logger.warn('Error closing blob core', { error: e.message })
+      }
+    }
+
+    this.logger.debug('Blob resources released')
+  }
+
+  async _waitForInflightBlocks(core) {
+    if (!Array.isArray(core.peers)) return
+
+    const timeoutMs = this._inflightDrainTimeoutMs ?? INFLIGHT_DRAIN_TIMEOUT_MS
+    const pollMs = this._inflightDrainPollMs ?? INFLIGHT_DRAIN_POLL_MS
+    const deadline = Date.now() + timeoutMs
+    while (core.peers.some((peer) => peer.inflight > 0 || peer.dataProcessing > 0)) {
+      if (Date.now() >= deadline) {
+        this.logger.warn('Timed out waiting for in-flight blob blocks before clearing', {
+          timeoutMs,
+          peers: core.peers.map((peer, index) => ({
+            peer: index,
+            inflight: peer.inflight,
+            dataProcessing: peer.dataProcessing
+          }))
+        })
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs))
     }
   }
 

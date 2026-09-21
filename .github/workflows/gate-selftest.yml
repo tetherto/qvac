@@ -131,7 +131,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          addons="tts-ggml transcription-parakeet transcription-whispercpp bci-whispercpp llm-llamacpp embed-llamacpp classification-ggml vla-ggml ocr-ggml translation-nmtcpp diffusion-cpp ocr-onnx"
+          addons="tts-ggml transcription-parakeet transcription-whispercpp bci-whispercpp llm-llamacpp embed-llamacpp classification-ggml vla-ggml ocr-ggml translation-nmtcpp diffusion-cpp"
           checked=0
           failed=0
           skipped=0

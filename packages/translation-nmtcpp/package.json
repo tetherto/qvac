@@ -1,34 +1,46 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "8.1.0",
+  "version": "0.16.4",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
   },
   "scripts": {
-    "build": "bare-make generate && bare-make build && bare-make install",
-    "build:pack": "mkdir -p dist && npm pack --pack-destination dist",
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy nmtcpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy nmtcpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
-    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
+    "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
     "lint-cpp": "clang-tidy -p build $(find addon/src -name '*.cpp')",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js marian.js addonLogging.js index.d.ts marian.d.ts addonLogging.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
-    "test:unit": "npm run test:unit:generate && bare test/unit/all.js",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js && npm run test:prestage && npm run test:package",
+    "test:package": "npm run build:ts && node --test test/package/package-contract.test.js",
+    "test:prestage": "node --test scripts/__tests__/generate-prestage-block.test.js",
     "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
-    "test:integration": "npm run test:integration:generate && bare test/integration/all.js",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js",
     "test:mobile:generate": "bare scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "node scripts/validate-mobile-tests.js",
     "test": "npm run lint && npm run test:unit && npm run test:integration",
     "model:init": "qvac-dev model init",
     "model:new": "qvac-dev model new",
     "model:generate": "qvac-dev model generate",
-    "test:dts": "tsc -p tsconfig.dts.json",
+    "test:dts": "npm run test:types",
+    "test:types": "npm run typecheck && npm run check:generated && npm run test:types:consumer",
+    "test:types:consumer": "tsc --noEmit -p test/types/tsconfig.cjs.json && tsc --noEmit -p test/types/tsconfig.esm.json",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-tests.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D USE_BERGAMOT=ON && bare-make build --target addon-test",
-    "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp:run": "npm run test:scripts && node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
-    "coverage:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "coverage:cpp:run": "npm run test:scripts && LLVM_PROFILE_FILE=default.profraw node scripts/run-cpp-tests.js",
     "coverage:cpp:summary": "cd build/addon/tests && llvm-cov report ./addon-test  --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/addon/tests/ && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
@@ -40,6 +52,7 @@
     "binding.js",
     "index.js",
     "marian.js",
+    "marian.d.ts",
     "prebuilds",
     "third-party",
     "lib",
@@ -65,36 +78,68 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/registry-client": "^0.4.0",
+    "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",
-    "bare-fs": "^4.5.1",
-    "bare-process": "^4.2.2",
     "bare-stream": "^2.7.0",
-    "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
     "lunte": "^1.8.0",
     "prettier": "^3.6.2",
     "prettier-config-holepunch": "^2.0.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/infer-base": "^0.4.0",
+    "@qvac/fabric": "^0.16.1",
+    "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
-    "bare-path": "^3.0.0"
+    "bare-fs": "^4.5.1",
+    "bare-os": "^3.9.3",
+    "bare-path": "^3.0.0",
+    "bare-process": "^4.2.2",
+    "bare-url": "^2.1.6",
+    "brittle": "^3.4.0"
+  },
+  "peerDependencies": {
+    "bare-fetch": "^3.0.1"
+  },
+  "peerDependenciesMeta": {
+    "bare-fetch": {
+      "optional": true
+    }
   },
   "exports": {
     "./package": "./package.json",
-    ".": "./index.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
     "./addonLogging.js": "./addonLogging.js",
-    "./lib/bergamot-model-fetcher": "./lib/bergamot-model-fetcher.js",
-    "./lib/indictrans-model-fetcher": "./lib/indictrans-model-fetcher.js"
+    "./marian": {
+      "types": "./marian.d.ts",
+      "default": "./marian.js"
+    },
+    "./lib/error": {
+      "types": "./lib/error.d.ts",
+      "default": "./lib/error.js"
+    },
+    "./lib/bergamot-model-fetcher": {
+      "types": "./lib/bergamot-model-fetcher.d.ts",
+      "default": "./lib/bergamot-model-fetcher.js"
+    },
+    "./lib/indictrans-model-fetcher": {
+      "types": "./lib/indictrans-model-fetcher.d.ts",
+      "default": "./lib/indictrans-model-fetcher.js"
+    }
   },
   "types": "index.d.ts"
 }

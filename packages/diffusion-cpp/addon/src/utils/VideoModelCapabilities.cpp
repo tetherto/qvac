@@ -119,6 +119,14 @@ bool isImageEmbeddingTensor(const std::string& name) {
   return name.find("model.diffusion_model.img_emb") != std::string::npos;
 }
 
+bool isMiniMaxH3AudioTensor(const std::string& name) {
+  return name.find("audio_patch_proj") != std::string::npos;
+}
+
+bool isMiniMaxH3VideoTensor(const std::string& name) {
+  return name.find("video_patch_proj") != std::string::npos;
+}
+
 } // namespace
 
 VideoModelCapabilities
@@ -145,6 +153,8 @@ inspectVideoModelCapabilities(const std::string& modelPath) {
   }
 
   bool isWan = false;
+  bool hasMiniMaxH3AudioPatchProjection = false;
+  bool hasMiniMaxH3VideoPatchProjection = false;
   bool hasImageEmbedding = false;
   uint64_t patchEmbeddingChannels = 0;
 
@@ -168,6 +178,10 @@ inspectVideoModelCapabilities(const std::string& modelPath) {
       return capabilities;
 
     isWan = isWan || isWanTensor(name);
+    hasMiniMaxH3AudioPatchProjection =
+        hasMiniMaxH3AudioPatchProjection || isMiniMaxH3AudioTensor(name);
+    hasMiniMaxH3VideoPatchProjection =
+        hasMiniMaxH3VideoPatchProjection || isMiniMaxH3VideoTensor(name);
     hasImageEmbedding = hasImageEmbedding || isImageEmbeddingTensor(name);
     if (isPatchEmbeddingTensor(name) && dimensionCount == 4)
       patchEmbeddingChannels = dimensions[3];
@@ -177,6 +191,16 @@ inspectVideoModelCapabilities(const std::string& modelPath) {
   // 16x VAE and 2x diffusion downsampling require a 32-pixel spatial grid.
   if (isWan && patchEmbeddingChannels == 147456 && !hasImageEmbedding)
     capabilities.spatialAlignment = 32;
+
+  // MiniMax-H3 checkpoints expose separate audio/video patch projectors. The
+  // tensor names are model metadata, so this remains reliable after a GGUF is
+  // renamed. H3 uses a 32-pixel spatial grid and 17*k+5 frame packing.
+  if (hasMiniMaxH3AudioPatchProjection && hasMiniMaxH3VideoPatchProjection) {
+    capabilities.isMiniMaxH3 = true;
+    capabilities.spatialAlignment = 32;
+    capabilities.frameCountStride = 17;
+    capabilities.frameCountOffset = 5;
+  }
 
   return capabilities;
 }

@@ -73,9 +73,24 @@ std::string sniffGgufArchitecture(const std::string& ggufPath) {
 }
 
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
-    const std::string& ggufPath, bool forceCpu,
-    const std::string& backendsDir) {
+    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
+    const VlaEmbodimentRequest& embodiment) {
   const std::string arch = sniffGgufArchitecture(ggufPath);
+
+  // Fail closed on an explicit selector the architecture cannot honour. Only
+  // GR00T has an embodiment concept, and silently loading SmolVLA/pi05 for a
+  // caller who named an embodiment would hide the likely cause — `files`
+  // pointing at the wrong GGUF. A named request gets that thing or an error.
+  //
+  // PUBLIC ERROR-CODE CONTRACT: the JS wrapper matches "config.embodiment is
+  // GR00T-only" to report INVALID_CONFIG rather than FAILED_TO_LOAD_WEIGHTS
+  // (see NATIVE_ERR_MARKERS in src/index.ts) — keep that substring verbatim.
+  if (arch != "groot" && (!embodiment.unset() || embodiment.num_cameras > 0)) {
+    throw std::runtime_error(
+        "createVlaModelFromGguf: config.embodiment is GR00T-only, but this "
+        "GGUF is '" +
+        arch + "' — check the model file");
+  }
 
   if (arch == "smolvla") {
     return std::make_unique<SmolvlaModelAdapter>(
@@ -85,7 +100,9 @@ std::unique_ptr<IVlaModel> createVlaModelFromGguf(
     return std::make_unique<Pi05Model>(ggufPath, forceCpu, backendsDir);
   }
   if (arch == "groot") {
-    return std::make_unique<GrootModel>(ggufPath, forceCpu, backendsDir);
+    // `embodiment` selects the embodiment on multi-embodiment GGUFs.
+    return std::make_unique<GrootModel>(
+        ggufPath, forceCpu, backendsDir, embodiment);
   }
 
   throw std::runtime_error(

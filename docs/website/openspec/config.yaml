@@ -1,15 +1,15 @@
 schema: spec-driven
 
 # Project context. Shown to the AI when creating any artifact.
-# Kept as a pointer, not a copy: the project context is owned by the Cursor rule
-# and duplicating it here would let the two drift apart.
+# Kept as a pointer, not a copy: the project context is owned by the package's
+# agent guidance and duplicating it here would let the two drift apart.
 context: |
   This OpenSpec project is rooted at `docs/website` inside the QVAC monorepo. The repo root is two
   levels up from this file's project root.
 
-  Before generating any artifact, read `.cursor/rules/website/main.mdc`, relative to the repo root.
-  It is the single source of truth for this project's context — purpose, repository layout, tech
-  stack, scope of work, and environments — and it is maintained there rather than here.
+  Before generating any artifact, read `AGENTS.md` and `README.md` in this project root. Together
+  they are the single source of truth for this project's context — authoring rules, repository
+  layout, framework, build, and deployment behavior — and it is maintained there rather than here.
 
   Restated inline, because these are the constraints most costly to miss:
   - All generated text MUST be written in English, including when the source task is written in

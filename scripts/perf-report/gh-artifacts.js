@@ -96,20 +96,33 @@ function listWorkflowRuns (workflow, count, repo, opts) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Expands an artifact pattern into `gh run download` flags. Accepts a single
+ * glob or a list, so a caller whose rows live in two differently named
+ * artifacts can fetch both without pulling every artifact on the run.
+ *
+ * @param {string|string[]|null} artifactPattern
+ * @returns {string[]} argv fragment, empty when no pattern was given
+ */
+function patternArgs (artifactPattern) {
+  if (!artifactPattern) return []
+  const patterns = Array.isArray(artifactPattern) ? artifactPattern : [artifactPattern]
+  return patterns.filter(Boolean).flatMap((pattern) => ['-p', String(pattern)])
+}
+
+/**
  * Downloads all (or pattern-matched) artifacts for a single run into
  * `${destDir}/${runId}`, returning that path.
  *
  * @param {string|number} runId
  * @param {string} destDir - staging root
- * @param {string|null} artifactPattern - optional `gh run download -p` glob
+ * @param {string|string[]|null} artifactPattern - optional `gh run download -p` glob(s)
  * @param {string|null} repo - optional "owner/repo" override
  * @returns {string} full path to the per-run directory that was populated
  */
 function downloadRunArtifacts (runId, destDir, artifactPattern, repo) {
   const runDir = path.join(destDir, String(runId))
   fs.mkdirSync(runDir, { recursive: true })
-  const argv = ['run', 'download', String(runId), '-D', runDir]
-  if (artifactPattern) argv.push('-p', artifactPattern)
+  const argv = ['run', 'download', String(runId), '-D', runDir, ...patternArgs(artifactPattern)]
   if (repo) argv.push('-R', repo)
   ghExec(argv)
   return runDir
@@ -128,7 +141,7 @@ function downloadRunArtifacts (runId, destDir, artifactPattern, repo) {
  *
  * @param {Array<{databaseId: string|number}>} runs
  * @param {string} destDir
- * @param {string|null} artifactPattern
+ * @param {string|string[]|null} artifactPattern
  * @param {string|null} repo
  * @param {object} [opts]
  * @param {number} [opts.concurrency=3]
@@ -144,8 +157,7 @@ async function downloadRunArtifactsParallel (runs, destDir, artifactPattern, rep
       const run = runs[myIdx]
       const runDir = path.join(destDir, String(run.databaseId))
       fs.mkdirSync(runDir, { recursive: true })
-      const argv = ['run', 'download', String(run.databaseId), '-D', runDir]
-      if (artifactPattern) argv.push('-p', artifactPattern)
+      const argv = ['run', 'download', String(run.databaseId), '-D', runDir, ...patternArgs(artifactPattern)]
       if (repo) argv.push('-R', repo)
       await new Promise(resolve => {
         const child = spawn('gh', argv, { stdio: ['ignore', 'ignore', 'pipe'] })
@@ -208,6 +220,7 @@ function collectReportsFromDir (dir) {
 module.exports = {
   ghExec,
   listWorkflowRuns,
+  patternArgs,
   downloadRunArtifacts,
   downloadRunArtifactsParallel,
   collectReportsFromDir

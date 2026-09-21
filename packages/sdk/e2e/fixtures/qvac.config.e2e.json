@@ -9,10 +9,11 @@
     "@qvac/sdk/tts-ggml/plugin",
     "@qvac/sdk/ggml-ocr/plugin",
     "@qvac/sdk/sdcpp-generation/plugin",
+    "@qvac/sdk/audiogen-ggml/plugin",
     "@qvac/sdk/ggml-vla/plugin",
     "@qvac/sdk/ggml-classification/plugin",
     "custom-echo-plugin/plugin"
   ],
-  "registryDownloadMaxRetries": 5,
-  "registryStreamTimeoutMs": 120000
+  "registryDownloadMaxRetries": 10,
+  "registryStreamTimeoutMs": 600000
 }

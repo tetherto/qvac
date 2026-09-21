@@ -31,6 +31,22 @@ def test_completion_orchestrate_is_not_on_the_flat_surface():
     assert completion_orchestrate.__module__ == "tetherto.qvac_sdk._completion"
 
 
+def test_js_logger_and_profiler_facades_are_intentionally_absent():
+    # The JS/TS top-level `getLogger` and process-wide `profiler` facades are
+    # deliberately not ported: Python uses stdlib `logging` and the per-call
+    # `profiled_call` instead (see logging_streams.py / profiling.py docstrings
+    # and the docs-site Logging/Profiler pages). Guard the decision so it is not
+    # "fixed" as drift. The log-stream surface and per-call profiling DO exist.
+    assert not hasattr(qvac, "get_logger")
+    assert not hasattr(qvac, "getLogger")
+    assert not hasattr(qvac, "profiler")
+    assert hasattr(qvac, "logging_stream")
+    assert hasattr(qvac, "subscribe_server_logs")
+    from tetherto.qvac_sdk.profiling import profiled_call
+
+    assert profiled_call.__module__ == "tetherto.qvac_sdk.profiling"
+
+
 def test_ergonomic_wrappers_shadow_generated_stubs():
     # These names exist as both a generated stub and a hand-written wrapper;
     # the flat surface must resolve to the wrapper, not the raw stub.
@@ -51,14 +67,15 @@ def test_js_client_api_capabilities_have_python_equivalents():
     # Python names. rag* is JS's 9 helper functions over the single `rag`
     # method; the capability, not each helper, is what's guarded here.
     js_to_python = {
+        "audioGen": "audio_gen_stream",
+        "audioEdit": "audio_edit_stream",
+        "audioUnderstand": "audio_understand",
         "batchCompletion": "batch_completion_stream",
         "completion": "completion",
         "deleteCache": "delete_cache",
         "loadModel": "load_model",
         "downloadAsset": "download_asset",
         "heartbeat": "heartbeat",
-        "startQVACProvider": "provide",
-        "stopQVACProvider": "stop_provide",
         "unloadModel": "unload_model",
         "transcribe": "transcribe",
         "transcribeStream": "transcribe_stream",
@@ -92,6 +109,31 @@ def test_js_client_api_capabilities_have_python_equivalents():
         "vlaPreprocessImage": "vla_preprocess_image",
         "vlaPadState": "vla_pad_state",
         "rag*": "rag",
+        # createVectorIndex/loadVectorIndex return a handle object in JS; Python
+        # reaches the same worker operations through the generated stub.
+        "createVectorIndex": "vector_index",
+        "loadVectorIndex": "vector_index",
     }
     missing = {js: py for js, py in js_to_python.items() if not hasattr(qvac, py)}
     assert not missing, f"JS client/api capabilities missing from qvac: {missing}"
+
+
+def test_asr_backend_ids_decode_backend_id_without_hardcoding():
+    # stats.backend_id is a bare number on the wire; this is the vocabulary that
+    # decodes it, mirroring the TS SDK's ASR_BACKEND_IDS.
+    import json
+    from pathlib import Path
+
+    from tetherto.qvac_sdk import ASR_BACKEND_IDS
+
+    assert "ASR_BACKEND_IDS" in qvac.__all__
+    assert ASR_BACKEND_IDS["CUDA"] == 2
+    assert ASR_BACKEND_IDS["CPU"] == 0
+
+    contract = (
+        Path(__file__).resolve().parents[2]
+        / "sdk"
+        / "contract"
+        / "numeric-constants.json"
+    )
+    assert ASR_BACKEND_IDS == json.loads(contract.read_text())["ASR_BACKEND_IDS"]

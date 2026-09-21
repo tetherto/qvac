@@ -307,18 +307,30 @@ async function issuesEnabled (github, owner, repo) {
   }
 }
 
-async function findOrCreateIssue (github, owner, repo, body, create) {
+// Locate the ledger tracking issue. Searches ALL states (not just open) so a
+// closed ledger still yields its grace-period history: if a maintainer closes the
+// issue, an open-only search treats it as absent, the ledger is rebuilt empty, and
+// every branch's firstFlagged clock resets — so nothing ever survives the grace
+// period and no branch is ever deleted. Prefers an open issue; otherwise falls back
+// to the most recently created closed one.
+async function findLedgerIssue (github, owner, repo) {
   const issues = await github.paginate(github.rest.issues.listForRepo, {
     owner,
     repo,
-    state: 'open',
+    state: 'all',
     labels: LEDGER_LABEL,
     per_page: 100
   })
   // listForRepo includes PRs; exclude them.
-  const issue = issues.find((item) => !item.pull_request)
-  if (issue) return issue
-  if (!create) return null
+  const candidates = issues.filter((item) => !item.pull_request)
+  if (candidates.length === 0) return null
+  const open = candidates.filter((item) => item.state === 'open')
+  const pool = open.length ? open : candidates
+  pool.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  return pool[0]
+}
+
+async function createLedgerIssue (github, owner, repo, body) {
   try {
     await github.rest.issues.createLabel({ owner, repo, name: LEDGER_LABEL, color: 'ededed' })
   } catch {
@@ -375,10 +387,16 @@ export async function processBranchCleanup ({ github, context, core, env = proce
 
   function safelistReason (branch) {
     if (branch.name === defaultBranch || branch.name === 'main') return 'default branch'
-    if (branch.protected) return 'protected branch'
     if (openPrRefs.has(branch.name)) return 'open PR'
     if (WIP_RE.test(branch.name)) return 'WIP flag'
     if (latestReleaseBranches.has(branch.name)) return 'latest published version'
+    // The `protected` flag safelists genuinely locked branches, but many repos use a
+    // ruleset that marks EVERY release-* branch protected purely for merge governance
+    // (PR review / status checks). That must not exempt out-of-window release lines
+    // from the semver-window trim below — they are tag-backed and safe to delete. So
+    // `protected` only safelists non-release branches; release branches are governed
+    // by the window + latest-published rules instead.
+    if (branch.protected && branch.info.type !== 'release') return 'protected branch'
     return null
   }
 
@@ -451,8 +469,8 @@ export async function processBranchCleanup ({ github, context, core, env = proce
     return { candidates: [...candidates.keys()], deleted: [], pending: [], reprieved: [], skipped: [], reportOnly: true }
   }
 
-  // Load ledger + acks from the tracking issue.
-  const issue = await findOrCreateIssue(github, owner, repo, '', false)
+  // Load ledger + acks from the tracking issue (any state — see findLedgerIssue).
+  const issue = await findLedgerIssue(github, owner, repo)
   const ledger = parseLedger(issue?.body)
   let acks = { keep: new Set(), deleteNow: new Set() }
   if (issue) {
@@ -521,9 +539,13 @@ export async function processBranchCleanup ({ github, context, core, env = proce
 
   const hasState = Object.keys(newPending).length > 0 || deleted.length > 0 || exempt.size > 0 || reprieved.length > 0
   if (!issue && hasState) {
-    await findOrCreateIssue(github, owner, repo, body, true)
+    await createLedgerIssue(github, owner, repo, body)
   } else if (issue) {
-    await github.rest.issues.update({ owner, repo, issue_number: issue.number, body })
+    // Reopen if the ledger was closed while branches are still pending — it is the
+    // durable grace-period store and must stay visible for maintainer acks.
+    const update = { owner, repo, issue_number: issue.number, body }
+    if (issue.state === 'closed') update.state = 'open'
+    await github.rest.issues.update(update)
     const summary = buildRunComment(sections, cfg)
     if (summary) {
       await github.rest.issues.createComment({ owner, repo, issue_number: issue.number, body: summary })

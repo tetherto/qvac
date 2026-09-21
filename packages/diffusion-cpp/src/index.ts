@@ -82,8 +82,9 @@ export type ScheduleType =
   | 'smoothstep'
   | 'kl_optimal'
   | 'bong_tangent'
+  | 'ltx2'
 
-export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow'
+export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux2_flow'
 
 export type LoraApplyMode = 'auto' | 'immediately' | 'at_runtime'
 
@@ -96,14 +97,21 @@ export interface SdConfig {
   type?: WeightType
   rng?: RngType
   sampler_rng?: RngType
-  clip_on_cpu?: boolean
-  vae_on_cpu?: boolean
+  vae_auto_cpu_fallback?: boolean
+  vae_auto_cpu_fallback_memory_ratio?: number
   vae_decode_only?: boolean
   vae_tiling?: boolean
   flash_attn?: boolean
   diffusion_fa?: boolean
   mmap?: boolean
   offload_to_cpu?: boolean
+  control_net_cpu?: never
+  clip_on_cpu?: never
+  vae_on_cpu?: never
+  backend?: string
+  params_backend?: string
+  max_vram?: number | string
+  stream_layers?: boolean
   prediction?: PredictionType
   flow_shift?: number
   diffusion_conv_direct?: boolean
@@ -601,7 +609,7 @@ export class ImgStableDiffusion {
     }
 
     if (params.init_image && this._files.llm) {
-      if (prediction !== 'flux2_flow' && prediction !== 'flux_flow') {
+      if (prediction !== 'flux2_flow') {
         throw new Error(
           'FLUX img2img requires an explicit prediction type in config. ' +
             "Set prediction: 'flux2_flow' (FLUX.2). " +
@@ -861,7 +869,7 @@ export function applyFluxImg2ImgDimDefaults(
   hasInitImages: boolean
 ): GenerationParams {
   void hasInitImages
-  const isFlux = prediction === 'flux_flow' || prediction === 'flux2_flow'
+  const isFlux = prediction === 'flux2_flow'
   if (!isFlux) {
     return params
   }

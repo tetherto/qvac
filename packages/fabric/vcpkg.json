@@ -6,7 +6,11 @@
     },
     {
       "name": "qvac-fabric",
-      "version>=": "9840.0.0"
+      "version>=": "10549.1.0",
+      "features": [
+        "hip-backend",
+        "vector-index"
+      ]
     },
     {
       "name": "qvac-lint-cpp",

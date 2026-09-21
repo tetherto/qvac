@@ -5,14 +5,18 @@ import {
   LLAMA_3_2_1B_INST_Q4_0,
   GTE_LARGE_FP16,
   OCR_LATIN,
+  OCR_DOCTR,
   BERGAMOT_EN_FR
 } from '@qvac/sdk'
-import { ValidationHelpers, type TestResult } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   modelLoadLlm,
+  modelLoadLlmLoadModeNone,
+  modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
+  modelLoadOcrDoctr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -26,8 +30,11 @@ import {
 
 const modelLoadTests = [
   modelLoadLlm,
+  modelLoadLlmLoadModeNone,
+  modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
+  modelLoadOcrDoctr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -44,8 +51,11 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
 
   protected handlers = {
     [modelLoadLlm.testId]: this.loadLlm.bind(this),
+    [modelLoadLlmLoadModeNone.testId]: this.loadLlmWithLoadMode.bind(this),
+    [modelLoadLlmLegacyNoMmapRejected.testId]: this.rejectLegacyNoMmap.bind(this),
     [modelLoadEmbedding.testId]: this.loadEmbedding.bind(this),
     [modelLoadOcr.testId]: this.loadOcr.bind(this),
+    [modelLoadOcrDoctr.testId]: this.loadOcrDoctr.bind(this),
     [modelLoadInvalid.testId]: this.loadInvalid.bind(this),
     [modelUnload.testId]: this.unload.bind(this),
     [modelLoadConcurrent.testId]: this.loadConcurrent.bind(this),
@@ -64,7 +74,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -92,6 +102,21 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
       modelConfig: { langList: ['en'] }
     })
     this.resources.register('ocr', modelId)
+    return ValidationHelpers.validate(modelId, expectation)
+  }
+
+  async loadOcrDoctr(
+    params: typeof modelLoadOcrDoctr.params,
+    expectation: typeof modelLoadOcrDoctr.expectation
+  ): Promise<TestResult> {
+    // Deliberately no pipelineType/detectorModelSrc: the plugin must infer
+    // the doctr pipeline from the recognizer src and derive the DBNet
+    // detector itself (QVAC-22514).
+    const modelId = await loadModel({
+      modelSrc: OCR_DOCTR,
+      modelType: 'ggml-ocr'
+    })
+    this.resources.register('doctr', modelId)
     return ValidationHelpers.validate(modelId, expectation)
   }
 
@@ -151,7 +176,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
         modelId = await loadModel({
           modelSrc,
           modelType: 'llamacpp-completion',
-          modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+          modelConfig: { verbosity: 0, ctx_size: 2048 }
         })
         this.resources.register('llm', modelId)
       } else {
@@ -173,7 +198,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -191,7 +216,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -209,7 +234,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
       modelType: 'llamacpp-completion',
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -221,7 +246,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
   ): Promise<TestResult> {
     const modelId = await loadModel({
       modelSrc: LLAMA_3_2_1B_INST_Q4_0,
-      modelConfig: { verbosity: 0, ctx_size: 2048, n_discarded: 256 }
+      modelConfig: { verbosity: 0, ctx_size: 2048 }
     })
     this.resources.register('llm', modelId)
     return ValidationHelpers.validate(modelId, expectation)
@@ -243,6 +268,56 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
       return ValidationHelpers.validate(errorMsg, expectation)
+    }
+  }
+
+  async loadLlmWithLoadMode(
+    params: typeof modelLoadLlmLoadModeNone.params,
+    expectation: typeof modelLoadLlmLoadModeNone.expectation
+  ): Promise<TestResult> {
+    const { loadMode } = params as { loadMode: 'none' | 'mmap' }
+    const dep = `llm-load-mode-${loadMode}`
+    try {
+      const modelId = await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: 'llamacpp-completion',
+        modelConfig: { verbosity: 0, ctx_size: 2048, load_mode: loadMode }
+      })
+      this.resources.register(dep, modelId)
+      return ValidationHelpers.validate(modelId, expectation)
+    } finally {
+      await this.resources.evict(dep)
+    }
+  }
+
+  async rejectLegacyNoMmap(
+    params: typeof modelLoadLlmLegacyNoMmapRejected.params,
+    expectation: typeof modelLoadLlmLegacyNoMmapRejected.expectation
+  ): Promise<TestResult> {
+    const { noMmap } = params as { noMmap: boolean }
+    const dep = 'llm-legacy-no-mmap'
+    try {
+      const modelId = await loadModel({
+        modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+        modelType: 'llamacpp-completion',
+        modelConfig: { no_mmap: noMmap }
+      } as unknown as Parameters<typeof loadModel>[0])
+      // Should not happen, but release it rather than leak on the failure path.
+      this.resources.register(dep, modelId)
+      await this.resources.evict(dep)
+      return { passed: false, output: 'Legacy no_mmap should have been rejected' }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : JSON.stringify(error)
+      // A native --no-mmap error means the key reached the addon: the regression.
+      if (/invalid argument|--no-mmap/.test(errorMsg)) {
+        return {
+          passed: false,
+          output: `no_mmap reached the addon instead of failing SDK validation: ${errorMsg}`
+        }
+      }
+      // The code is on the error, not in its message.
+      const code = (error as { code?: number }).code
+      return ValidationHelpers.validate(`${code} ${errorMsg}`, expectation)
     }
   }
 

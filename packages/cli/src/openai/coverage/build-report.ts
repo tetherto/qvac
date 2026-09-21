@@ -1,10 +1,10 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { categorize, summarizeUnknownLabels } from './categorize.js'
-import { QVAC_EXTENSION_ENDPOINTS } from './extensions.js'
-import { parseRouter } from './parse-router.js'
-import { parseSpec } from './parse-spec.js'
-import { CONSUMER_PRIMARY_ENDPOINTS } from './primary.js'
+import { categorize, summarizeUnknownLabels } from '@/openai/coverage/categorize'
+import { QVAC_EXTENSION_ENDPOINTS } from '@/openai/coverage/extensions'
+import { parseRouter } from '@/openai/coverage/parse-router'
+import { parseSpec } from '@/openai/coverage/parse-spec'
+import { CONSUMER_PRIMARY_ENDPOINTS } from '@/openai/coverage/primary'
 import type {
   CategorySummary,
   CoverageCategory,
@@ -12,10 +12,18 @@ import type {
   CoverageRow,
   CoverageSummary,
   SpecEntry
-} from './types.js'
+} from '@/openai/coverage/types'
 
 const COVERAGE_DIR = dirname(fileURLToPath(import.meta.url))
-export const DEFAULT_ROUTER = join(COVERAGE_DIR, '..', '..', 'serve', 'routes')
+export const DEFAULT_ROUTER = join(
+  COVERAGE_DIR,
+  '..',
+  '..',
+  'serve',
+  'extensions',
+  'openai',
+  'routes'
+)
 
 function percent(n: number, total: number): number {
   if (total === 0) return 0
@@ -84,7 +92,12 @@ export async function buildCoverageReport(
   const parseOpts: Parameters<typeof parseSpec>[0] = {}
   if (options.offline) parseOpts.offline = true
   if (options.specPath) parseOpts.specPath = options.specPath
-  const { entries: specEntries, source: specSource } = await parseSpec(parseOpts)
+  const {
+    entries: specEntries,
+    source: specSource,
+    sourceMode: specSourceMode,
+    sha256: specSha256
+  } = await parseSpec(parseOpts)
   const implementedList = parseRouter(routerPath)
   const implemented = new Set(implementedList)
 
@@ -119,6 +132,8 @@ export async function buildCoverageReport(
   return {
     fetchedAt: new Date().toISOString(),
     specSource,
+    specSourceMode,
+    specSha256,
     routerSource: routerPath,
     implementedCount: implementedList.length,
     extensions: extensions.sort(),

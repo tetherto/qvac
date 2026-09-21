@@ -162,7 +162,7 @@ const platformChildren: Node[] = [
       { name: 'transcription-whispercpp', url: '/platform/addons/transcription-whispercpp', type: 'page' },
       { name: 'transcription-parakeet', url: '/platform/addons/transcription-parakeet', type: 'page' },
       { name: 'tts-ggml', url: '/platform/addons/tts-ggml', type: 'page' },
-      { name: 'ocr-onnx', url: '/platform/addons/ocr-onnx', type: 'page' },
+      { name: 'audiogen-ggml', url: '/platform/addons/audiogen-ggml', type: 'page' },
       { name: 'diffusion-cpp', url: '/platform/addons/diffusion-cpp', type: 'page' },
     ],
   },
@@ -233,19 +233,24 @@ const COLLECTIONS: Collection[] = [
 /**
  * The children a documentation line declares, read out of the page tree
  * Fumadocs builds from `meta.json`. `folderPath` is relative to
- * `content/docs`, group parentheses included — `sdk/(v0.17)`.
+ * `content/docs`, group parentheses included — `sdk/(v0.19)`.
+ *
+ * A folder's `$id` is that same path, which older Fumadocs prefixed with the
+ * root's own id, so both shapes are accepted.
  *
  * Throws when the folder is absent, because the alternative is a collection
  * that renders an empty sidebar: the manifest names a line whose content was
  * never cut, and that should stop the build rather than ship.
  */
 export function lineChildren(pageTree: Root, folderPath: string): Node[] {
-  const id = `${pageTree.$id}:${folderPath}`;
+  const ids = [folderPath, `${pageTree.$id}:${folderPath}`];
 
   function find(nodes: Node[]): Node[] | undefined {
     for (const node of nodes) {
       if (node.type !== 'folder') continue;
-      if (node.$id === id) return node.children;
+      if (typeof node.$id === 'string' && ids.includes(node.$id)) {
+        return node.children;
+      }
       const found = find(node.children);
       if (found) return found;
     }

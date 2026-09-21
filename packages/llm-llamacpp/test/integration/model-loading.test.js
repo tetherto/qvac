@@ -127,6 +127,9 @@ safeTest('model unload is clean and idempotent', { timeout: 600_000 }, async (t)
 
 // This test can take longer to download and execute. Keep it on desktop x64
 // runners where the sharded loader has CI coverage.
+// prestage-ignore: Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf — linux/win x64 only
+// prestage-ignore: Qwen3-0.6B-UD-IQ1_S-00002-of-00003.gguf — linux/win x64 only
+// prestage-ignore: Qwen3-0.6B-UD-IQ1_S-00003-of-00003.gguf — linux/win x64 only
 test(
   'sharded model can run inference end-to-end',
   { timeout: 4 * 60 * 1000, skip: !(isLinuxX64 || isWindowsX64) },

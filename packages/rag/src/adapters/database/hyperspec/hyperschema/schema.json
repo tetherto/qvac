@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "schema": [
     {
       "name": "documents",
@@ -188,6 +188,96 @@
           "required": true,
           "type": "date",
           "version": 1
+        }
+      ]
+    },
+    {
+      "name": "workspaceState",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "key",
+          "required": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "revision",
+          "required": true,
+          "type": "uint32",
+          "version": 2
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "date",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "name": "mutations",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "revision",
+          "required": true,
+          "type": "uint32",
+          "version": 2
+        },
+        {
+          "name": "operation",
+          "required": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "documentIds",
+          "required": true,
+          "type": "json",
+          "version": 2
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 2
+        }
+      ]
+    },
+    {
+      "name": "nativeIds",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "nativeId",
+          "required": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "documentId",
+          "required": true,
+          "type": "string",
+          "version": 2
+        },
+        {
+          "name": "mappingVersion",
+          "required": true,
+          "type": "uint32",
+          "version": 2
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 2
         }
       ]
     }

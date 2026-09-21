@@ -65,7 +65,15 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
   const filteredToc = page.data.toc?.filter(item => item.depth >= 2 && item.depth <= tocMaxDepth) || [];
 
   const isHomePage = !params.slug || params.slug.length === 0;
-  const jsonLdBlocks = buildDocsJsonLd(page, params.slug ?? [], isHomePage);
+  // Breadcrumb ancestors are resolved against the page tree so folders with
+  // no `index.mdx` are collapsed out of the trail instead of emitting a
+  // `ListItem` whose URL 404s.
+  const jsonLdBlocks = buildDocsJsonLd(
+    page,
+    params.slug ?? [],
+    isHomePage,
+    (slugs) => source.getPage(slugs),
+  );
   const pageMarkdownUrl = page.url === '/' ? '/index.md' : `${page.url}.md`;
 
   return (

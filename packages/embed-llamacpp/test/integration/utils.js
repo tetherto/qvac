@@ -407,35 +407,78 @@ function getModelConfig(modelName) {
   return MODEL_CONFIGS[modelName] || null
 }
 
-// Android Device Farm pre-staging: the device's network to huggingface.co is
+// Mobile Device Farm pre-staging: the device's network to huggingface.co is
 // unreliable, but the Device Farm HOST has solid network. The test-spec
-// pre_test phase downloads each model on the host and `adb push`es it here; when
-// a model is already staged we skip the on-device download entirely.
+// pre_test phase downloads each model on the host and pushes it to a
+// platform-readable staging dir; when a model is already staged we skip the
+// on-device download entirely.
 //
-// /data/local/tmp is the one location that is both adb-writable from the host
-// AND readable by the app process (the harness already pushes testFilter.txt
-// here). The app's own scoped dirs reject adb access on Android 11+, so they
-// cannot be used for host pre-staging.
+// Android uses /data/local/tmp because it is both adb-writable from the host AND
+// readable by the app process. iOS uses global.testDir, which maps to the test
+// app's Documents directory where pymobiledevice3 apps push places files.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
+
 function prestagedModelDir(modelName) {
-  if (os.platform() !== 'android') return null
+  const platform = os.platform()
+  let stagedDir = null
+  if (platform === 'android') stagedDir = PRESTAGED_MODEL_DIR
+  else if (platform === 'ios') stagedDir = iosPrestagedModelDir()
+  if (!stagedDir) return null
+
   try {
-    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
-    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+    const p = path.join(stagedDir, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return stagedDir
   } catch (_) {}
   return null
 }
 
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into modelDir spends that whole budget for nothing. Hardlink instead: same
+// inode, zero bytes. On Android the staging dir is a different filesystem, so
+// link() fails EXDEV and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  // Same path in and out — the staged file IS the destination (a caller whose
+  // model dir is testDir itself). Deleting first would destroy the staged model
+  // and leave both link() and copy() failing ENOENT; the copy this replaced was
+  // a harmless no-op here.
+  if (path.resolve(src) === path.resolve(dest)) return 'link'
+
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(
+      `[prestage] hardlink failed on ${os.platform()} (${err.message}); ` +
+        'falling back to a byte copy'
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
 async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
-  fs.copyFileSync(path.join(stagedDir, modelName), modelPath)
+  const how = linkOrCopySync({ src: path.join(stagedDir, modelName), dest: modelPath })
   const res = await verifyModelFileOnce(modelPath, entry)
   if (!res.ok) {
     try {
       fs.unlinkSync(modelPath)
     } catch (_) {}
-    throw new Error(`[prestage] copied model ${modelName} failed integrity: ${res.reason}`)
+    const verb = how === 'link' ? 'hardlinked' : 'copied'
+    throw new Error(`[prestage] ${verb} model ${modelName} failed integrity: ${res.reason}`)
   }
+  return how
 }
 
 /**
@@ -479,15 +522,18 @@ async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, do
     } catch (_) {}
   }
 
-  // Pre-staged path (Android): copy the host-staged model from the read-only
-  // staging dir into the normal (writable) modelDir, then return. The copy is a
-  // fast local operation (no network). Returning a writable dir matters —
-  // load() writes sibling files next to the model (e.g. openclCacheDir).
+  // Pre-staged path: materialise the host-staged model in the normal (writable)
+  // modelDir, then return. Returning a writable dir matters — load() writes
+  // sibling files next to the model (e.g. openclCacheDir) — which is why we
+  // don't just hand back Android's read-only /data/local/tmp staging dir.
   const staged = prestagedModelDir(modelName)
   if (staged) {
     fs.mkdirSync(dir, { recursive: true })
-    console.log(`[prestage] Using pre-staged model ${modelName} (copying into writable modelDir)`)
-    await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    const how = await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    console.log(
+      `[prestage] Using pre-staged model ${modelName} (` +
+        `${how === 'link' ? 'hardlinked' : 'copied'} into writable modelDir)`
+    )
     return [modelName, dir]
   }
 
@@ -678,6 +724,7 @@ module.exports = {
   sha256File,
   resetVerificationCache,
   copyPrestagedModel,
+  linkOrCopySync,
   getDownloadCount,
   resetDownloadCount,
   getModelConfigs,

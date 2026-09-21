@@ -42,7 +42,7 @@ describe('cli: openai coverage', () => {
     const r = await runCli(['openai', 'coverage'], { timeoutMs: 60_000 })
     assert.equal(r.code, 0, r.output)
     assert.ok(!r.output.includes('ENOENT'), r.output)
-    assert.ok(r.stdout.includes('qvac serve openai — coverage'))
+    assert.ok(r.stdout.includes('qvac serve --openai — coverage'))
     assert.ok(r.stdout.includes('qvac extension endpoints beyond the OpenAI spec'))
     assert.ok(r.stdout.includes('GET /v1/audio/models'))
     assert.ok(r.stdout.includes('GET /v1/audio/voices'))

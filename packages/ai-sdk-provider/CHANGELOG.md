@@ -1,5 +1,211 @@
 # Changelog
 
+## [0.7.0]
+
+Release Date: 2026-09-04
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.7.0
+
+Managed mode moves onto the CLI 0.13 launch interface. This release also carries the streamed file-upload fix from 0.6.2, so upgrading straight from 0.6.1 picks up both.
+
+## Breaking Changes
+
+### Managed mode requires `@qvac/cli` 0.13
+
+`@qvac/cli` 0.13 mounts the serve surfaces as extensions and retires the `qvac serve openai` subcommand. Managed mode now launches `qvac serve --openai --no-default`, which the `0.10`–`0.12` lines cannot parse, so the optional CLI peer narrows to `^0.13.0`.
+
+**Before:**
+
+```json
+{ "peerDependencies": { "@qvac/cli": "^0.10.0 || ^0.11.0 || ^0.12.0" } }
+```
+
+**After:**
+
+```json
+{ "peerDependencies": { "@qvac/cli": "^0.13.0" } }
+```
+
+Install managed mode with:
+
+```bash
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli@^0.13.0
+```
+
+External mode is unaffected — it never spawns a CLI, so it works against any serve that speaks the OpenAI-compatible surface.
+
+`--no-default` is part of the launch command on purpose: bare `--openai` would also mount the QVAC surface on the port, while the retired subcommand exposed `/v1/*` alone. Keeping the pair preserves the previous behaviour and keeps the extra surface off a port the provider authenticates and owns.
+
+## Fixes
+
+### Streamed file uploads
+
+`@ai-sdk/provider` 4.0.10 added a third `uploadFile` data variant, `{ type: 'stream', stream }`, and the AI SDK hands it straight to the provider whenever a caller uploads from a stream. Version 0.6.1 did not recognise it and threw a `TypeError`. `uploadFile` now drains the stream and posts the bytes.
+
+The stream is drained rather than forwarded as a streaming request body on purpose: `POST /v1/files` buffers the whole upload into serve's in-memory ephemeral store, so a streaming request would only require `duplex: 'half'` support from the caller's `fetch` without anything streaming on the other end.
+
+An unrecognised data variant now rejects with `UnsupportedFunctionalityError`, naming the variant, so a future addition upstream fails the one unsupported call with a clear error.
+
+### Upload calls honour `abortSignal` and `headers`
+
+Both options are part of the files interface and the AI SDK already passed them, but the QVAC adapter dropped them:
+
+- `abortSignal` is now forwarded, so an in-flight upload can be cancelled.
+- Per-call `headers` are now merged over the configured provider headers, matching the behaviour of every other adapter in this package. The configured `Content-Type` is still stripped so `fetch` picks the multipart boundary itself.
+
+Callers already passing `abortSignal` will see uploads actually abort where they previously ran to completion.
+
+## [0.6.2]
+
+Release Date: 2026-09-04
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.6.2
+
+## Streamed File Uploads Work Again
+
+`@ai-sdk/provider` 4.0.10 added a third `uploadFile` data variant, `{ type: 'stream', stream }`, and the AI SDK hands it straight to the provider whenever a caller uploads from a stream. Version 0.6.1 did not recognise it and threw a `TypeError` instead of uploading. `uploadFile` now drains the stream and posts the bytes.
+
+The stream is drained rather than forwarded as a streaming request body on purpose: `POST /v1/files` buffers the whole upload into serve's in-memory ephemeral store, so a streaming request would only require `duplex: 'half'` support from the caller's `fetch` without anything streaming on the other end.
+
+An unrecognised data variant now rejects with `UnsupportedFunctionalityError`, naming the variant, so a future addition upstream fails the one unsupported call with a clear error.
+
+## Upload Calls Honour `abortSignal` and `headers`
+
+Both options are part of the files interface and the AI SDK already passed them, but the QVAC adapter dropped them:
+
+- `abortSignal` is now forwarded, so an in-flight upload can be cancelled.
+- Per-call `headers` are now merged over the configured provider headers, matching the behaviour of every other adapter in this package. The configured `Content-Type` is still stripped so `fetch` picks the multipart boundary itself.
+
+Callers already passing `abortSignal` will see uploads actually abort where they previously ran to completion.
+
+No provider API surface changed in this patch release.
+
+## [0.6.1]
+
+Release Date: 2026-08-21
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.6.1
+
+## Managed Mode Supports CLI 0.12
+
+`@qvac/ai-sdk-provider` now accepts the `@qvac/cli` `0.12.x` line alongside `0.10.x` and `0.11.x` as its optional managed-mode CLI peer. This lets strict package managers install the provider next to CLI 0.12, which brings in the `@qvac/sdk` 0.18.x runtime and the serve model catalog.
+
+The older lines remain accepted, so existing installs are unaffected. No provider API changes are included in this patch release.
+
+## [0.6.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.6.0
+
+Managed mode now authenticates. The provider generates a random API key for every serve it starts, enforces it on outgoing requests, and keeps it out of the process command line. Callers no longer supply a managed key — they read the live one from the provider when they need it.
+
+## Breaking Changes
+
+### Managed mode owns the API key
+
+`QvacManagedOptions.apiKey` is gone. Passing a key was misleading: the previous `qvac serve` did not validate it, so the option gave the appearance of authentication without any. Managed mode now generates a cryptographically random key per serve fleet, stores it in the private managed registry record, and reuses that record's key when attaching to an existing fleet.
+
+Because the provider owns the credential, a caller-supplied `authorization` header on a managed provider is replaced with the resolved managed key. Custom `fetch` wrappers still run, but they receive requests that are already authorized — treat the `Authorization` header they see as secret material and keep it out of logs.
+
+**Before:**
+
+```ts
+const qvac = await createQvac({
+  mode: 'managed',
+  models: ['QWEN3_8B_INST_Q4_K_M'],
+  apiKey: 'local-key'
+})
+```
+
+**After:**
+
+```ts
+const qvac = await createQvac({
+  mode: 'managed',
+  models: ['QWEN3_8B_INST_Q4_K_M']
+})
+```
+
+### External mode keys are now enforced by serve
+
+In external mode the provider's default `apiKey` is still the literal string `'qvac'`, but `qvac serve` no longer ignores it. If the server was started with `--api-key` or `--api-key-file`, the value passed to `createQvac` must match it, or requests are rejected with a 401.
+
+## New APIs
+
+### `provider.apiKey` exposes the live managed credential
+
+Trusted in-process adapters that need to reach the managed serve outside the provider's own `fetch` can read the key it is currently using:
+
+```ts
+await using qvac = await createQvac({ mode: 'managed', models: ['QWEN3_8B_INST_Q4_K_M'] })
+
+// Read it fresh per request: crash recovery respawns the serve with a new key.
+const res = await fetch(`${qvac.baseURL}/models`, {
+  headers: { authorization: `Bearer ${qvac.apiKey}` }
+})
+```
+
+The property is deliberately non-enumerable, so `{ ...provider }`, `Object.keys(provider)`, and casual object dumps never carry it. Never log it or hand it to an untrusted process.
+
+## Security
+
+### The key never appears in a process argument list
+
+Neither the detached runner nor the `qvac serve` process it starts receives the key through argv. Both read it from a one-shot owner-only (`0600`) file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`, which on Linux is readable by every local account.
+
+Passing the key on the serve command line now only happens against a CLI too old for `--api-key-file`, which the provider detects and falls back to, or behind a `serveBinPath` override, whose version cannot be determined. Install `@qvac/cli` 0.11.0 or newer to keep the key out of the process list in every case.
+
+### Serves from before managed authentication are reaped
+
+The registry sweep that runs at the start of every `createQvac` now also cleans up after older provider versions. A record carrying no key belongs to a serve that is listening without authentication, so the sweep probes it anonymously and shuts it down rather than leaving it running. Abandoned one-shot runner handoff files are removed once no runner could still be waiting to read one.
+
+## Compatibility
+
+The `@qvac/cli` peer range widens to `^0.10.0 || ^0.11.0`. Both work; 0.11.0 is what enables the file-based credential described above.
+
+## [0.5.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.5.0
+
+This release aligns managed mode with `@qvac/cli` 0.10 / `@qvac/sdk` 0.17 and drops the retired ONNX OCR plugin path from provider-facing guidance in favor of ggml OCR.
+
+## Breaking Changes
+
+### Managed mode requires CLI 0.10
+
+The optional `@qvac/cli` peer for managed mode is now `^0.10.0`. Older CLI minors are no longer accepted, so managed installs resolve the CLI 0.10 / SDK 0.17 runtime.
+
+**Before:**
+
+```json
+{ "peerDependencies": { "@qvac/cli": "^0.9.0" } }
+```
+
+**After:**
+
+```json
+{ "peerDependencies": { "@qvac/cli": "^0.10.0" } }
+```
+
+### OCR plugin path
+
+Configs that still reference the retired ONNX OCR plugin must switch to ggml OCR.
+
+**Before:**
+
+```json
+{ "plugins": ["@qvac/sdk/onnx-ocr/plugin"] }
+```
+
+**After:**
+
+```json
+{ "plugins": ["@qvac/sdk/ggml-ocr/plugin"] }
+```
+
+## Dependency Alignment
+
+Promote this release after `@qvac/cli` 0.10.0 is on npm.
+
 ## [0.4.0]
 
 Release Date: 2026-07-27

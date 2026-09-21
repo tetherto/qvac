@@ -9,7 +9,8 @@ export interface GGMLConfig {
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
     "main-gpu"?: NumericLike | "integrated" | "dedicated";
-    "split-mode"?: "none" | "layer" | "row";
+    /** How to split the model across GPUs: 'none' pins one device, 'layer' distributes layers. 'row' is rejected at load; use 'layer'. */
+    "split-mode"?: "none" | "layer";
     "tensor-split"?: string;
     verbosity?: NumericLike;
     /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
@@ -19,6 +20,12 @@ export interface GGMLConfig {
 export interface AddonConfigurationParams {
     path: string;
     config: GGMLConfig;
+    /**
+     * Root the native side searches for ggml compute backends, with
+     * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the
+     * `@qvac/fabric` package's `prebuilds/` on desktop, falling back to this
+     * addon's own `prebuilds/` on mobile.
+     */
     backendsDir?: string;
 }
 export interface BertJobInput {

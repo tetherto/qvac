@@ -48,11 +48,12 @@ class HttpDL {
   /**
    * Destroy any tracked streams that have not finished on their own.
    */
-  async close() {
+  close() {
     for (const stream of this._activeStreams) {
       stream.destroy()
     }
     this._activeStreams.clear()
+    return Promise.resolve()
   }
 
   _request(method, url, maxRedirects = 10) {

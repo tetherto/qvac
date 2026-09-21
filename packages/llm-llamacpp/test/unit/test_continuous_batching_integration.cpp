@@ -228,8 +228,6 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
   const double avgConcurrentSeq =
       test_common::getStatValue(stats, "avgConcurrentSeq");
   const double cacheTokens = test_common::getStatValue(stats, "CacheTokens");
-  const double contextSlides =
-      test_common::getStatValue(stats, "contextSlides");
 
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_FALSE(outputs[0].empty());
@@ -237,7 +235,6 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchReportsAvgConcurrency) {
   EXPECT_GT(avgConcurrentSeq, 1.0);
   EXPECT_LE(avgConcurrentSeq, 2.0);
   EXPECT_GT(cacheTokens, 0.0);
-  EXPECT_GE(contextSlides, 0.0);
 }
 
 /// A real batched run must report both phase-separated throughput rates:
@@ -764,7 +761,7 @@ TEST_F(
 }
 
 /// Regression: Qwen3.5 is a hybrid SSM family; on the continuous-batching
-/// path the end-of-prefill recurrent snapshot must be taken inside
+/// path the recurrent boundary snapshot must be taken inside
 /// `TextLlmContext::onPrefillComplete` (not only inside the single-prompt
 /// `evalMessageWithTools` prefill loop). Without the snapshot,
 /// `compactThinkSpan` aborts early for hybrid models and
@@ -826,7 +823,7 @@ TEST_F(
       test_common::getStatValue(stats, "thinkingBlockDiscards");
 
   EXPECT_GE(thinkingDiscards, 1.0)
-      << "scheduler path must take the end-of-prefill recurrent snapshot "
+      << "scheduler path must take the recurrent boundary snapshot "
          "so `compactThinkSpan` can fire on the hybrid; got "
       << thinkingDiscards << " discards. outputs[0]=" << outputs[0]
       << " outputs[1]=" << outputs[1];
@@ -844,7 +841,6 @@ TEST_F(
   config_["ctx_size"] = "512";
   config_["parallel"] = "2";
   config_["n_predict"] = "-1";
-  config_["n_discarded"] = "0";
   config_["temp"] = "0";
   auto model = loadModel(qwen35HybridModel_);
 
@@ -1413,7 +1409,12 @@ TEST_F(
       << "test setup: no token was emitted, so cancel never fired";
 }
 
-TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchAcceptsPrefillOnly) {
+/// A live-only prefill (no saveCacheToDisk + cacheKey) inside a batch has no
+/// product that survives the slot teardown: the lane's KV is wiped and no
+/// cache file is written. The same policy that rejects it on the single
+/// tagged path must reject it per batch item, before anything is scheduled.
+TEST_F(
+    ContinuousBatchingIntegrationTest, TwoPromptBatchRejectsLiveOnlyPrefill) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
 
@@ -1422,11 +1423,17 @@ TEST_F(ContinuousBatchingIntegrationTest, TwoPromptBatchAcceptsPrefillOnly) {
   std::vector<LlamaModel::Prompt> prompts{
       makePrompt("Say plain text."), std::move(prefillPrompt)};
 
-  auto outputs = model->processPromptBatch(prompts);
-
-  ASSERT_EQ(outputs.size(), 2u);
-  EXPECT_FALSE(outputs[0].empty());
-  EXPECT_TRUE(outputs[1].empty());
+  try {
+    model->processPromptBatch(prompts);
+    FAIL() << "expected processPromptBatch to reject a live-only prefill item";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(
+        e.codeString().find(
+            toString(qvac_errors::general_error::InvalidArgument)),
+        std::string::npos);
+    EXPECT_NE(std::string(e.what()).find("prefill"), std::string::npos)
+        << "unexpected rejection: " << e.what();
+  }
 }
 
 /// Two-stage batch test for prefill-only + cache lifecycle.
@@ -1590,6 +1597,39 @@ TEST_F(
   }
 }
 
+/// The finalize window in `drainFinishedLocked` also drops the mutex, because
+/// `onGenerationFinished` runs reasoning compaction, which now rewinds and
+/// REPLAYS the kept tokens through `llama_decode`. Unlike the decode window it
+/// holds a reference into `slots_` across the unlock, so the usual
+/// reconcile-on-every-reacquisition would run `onCancel` on a driver
+/// mid-finalize and free the slot the drain loop is still using: the slot
+/// keeps its `admissionId` until `freeSlot`, and `extractFinished` only
+/// removed it from the batcher, so it still passes `slotOwnedByLocked`.
+///
+/// Suspension must therefore be lossless. A record made during the window
+/// survives it, and the very next reconcile outside the window consumes it.
+TEST_F(ContinuousBatchingIntegrationTest, TeardownDeferralKeepsPendingCancels) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  // No request is in flight, so the record names a free slot and the apply
+  // outside the window drops it on the ownership re-check rather than
+  // tearing anything down.
+  const auto [survivedDeferred, survivedAfter] =
+      ContinuousBatchSchedulerTestPeer::pendingCancelSurvivesTeardown(
+          *scheduler);
+  EXPECT_TRUE(survivedDeferred)
+      << "a cancel recorded inside the finalize unlock window was consumed "
+         "while the drain loop still held the slot";
+  EXPECT_FALSE(survivedAfter)
+      << "the suspended record was never applied once the window closed";
+}
+
 /// Reproduce bug: A per-slot cancel that lands while `stepLocked()` has
 /// released the scheduler mutex (around media eval / llama_decode) is recorded
 /// in `pendingSlotCancels_` and only applied at the *next* worker-loop top.
@@ -1624,13 +1664,19 @@ TEST_F(
   // The stub runs while stepLocked() holds no lock -- the same window a
   // concurrent caller's cancel() would hit. Issuing the cancel here records it
   // as deferred teardown, then delegates to the real decode so generation
-  // continues.
+  // continues. The live occupant's admission id is read through the peer
+  // (safe here: the unlock window holds no scheduler lock).
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
       *scheduler,
       [scheduler, &readyToCancel, &cancelIssued](
           llama_context* ctx, llama_batch& batch) {
         if (readyToCancel.load() && !cancelIssued.exchange(true)) {
-          scheduler->cancel(kCancelSeqId);
+          const auto admissionId =
+              ContinuousBatchSchedulerTestPeer::admissionIdAt(
+                  *scheduler, kCancelSeqId);
+          if (admissionId.has_value()) {
+            scheduler->cancel(kCancelSeqId, *admissionId);
+          }
         }
         return llama_decode(ctx, batch);
       });
@@ -1699,16 +1745,22 @@ TEST_F(
 
   // Issue the cancel from inside the decode unlock window so its teardown runs
   // in the StepUnlockGuard destructor, then delegate to the real decode so the
-  // surviving sequence keeps generating. Capture cancel()'s return: it is true
-  // only when seqId 1 was still occupied, i.e. the throwing teardown actually
-  // ran. Without it the test could pass vacuously when the slot finished first
-  // and the cancel was a no-op.
+  // surviving sequence keeps generating. Capture whether seqId 1 was still
+  // occupied (its admission id readable) when the cancel was issued, i.e. the
+  // throwing teardown actually ran. Without it the test could pass vacuously
+  // when the slot finished first and the cancel was a no-op.
   ContinuousBatchSchedulerTestPeer::setDecodeFunc(
       *scheduler,
       [scheduler, &readyToCancel, &cancelIssued, &cancelHitOccupied](
           llama_context* ctx, llama_batch& batch) {
         if (readyToCancel.load() && !cancelIssued.exchange(true)) {
-          cancelHitOccupied.store(scheduler->cancel(kCancelSeqId));
+          const auto admissionId =
+              ContinuousBatchSchedulerTestPeer::admissionIdAt(
+                  *scheduler, kCancelSeqId);
+          cancelHitOccupied.store(admissionId.has_value());
+          if (admissionId.has_value()) {
+            scheduler->cancel(kCancelSeqId, *admissionId);
+          }
         }
         return llama_decode(ctx, batch);
       });
@@ -1755,35 +1807,103 @@ TEST_F(
          "teardown on seqId 1";
 }
 
-/// A batched sequence that outgrows its per-slot window (ctx / n_parallel)
-/// must slide (`contextSlides > 0`) and keep generating, like the
-/// single-prompt path does, instead of being hard-truncated at the window.
-///
-/// The slide machinery reads the driver's `nPast_`, but during batched
-/// generation only the batcher's `Request::currentPos` advances; `nPast_`
-/// stays frozen at the prompt length, so the slide condition never fires
-/// and `Request::exceededLimit()` truncates the sequence first.
-///
-/// Setup: ctx 256 with parallel 2 targets a small per-slot window;
-/// n_predict -1 (unbounded) so admission does not cap the request, and
-/// n_discarded 32 enables sliding. llama.cpp's memory-fit step may
-/// adjust the requested ctx, so the effective window is read back via
-/// the decode stub (`llama_n_ctx / parallel`). The prompt elicits an
-/// output long enough to cross the window; once enough pieces stream
-/// out to prove generation survived past it, the test cancels to bound
-/// the run. The cancel rolls the driver's cache back to the pre-request
-/// cursor (this PR's cancel contract), so post-cancel `CacheTokens` is
-/// not a witness of "generation happened" any more; `contextSlides > 0`
-/// carries that invariant on its own — slides only fire when the
-/// sequence has advanced past the per-slot window.
+/// SeqIds are recycled slot indices: when a request drains, the worker frees
+/// its slot and may admit an unrelated request into the same seqId within one
+/// mutex hold. A canceller that captured a job's seqId while that job was
+/// live -- exactly what the per-job cancel action copied out of the cancel
+/// registry does -- can fire only after the job finished and its seqId was
+/// handed to a peer. That stale cancel must be a no-op: it was aimed at the
+/// finished job, not at whatever now occupies the slot.
 TEST_F(
-    ContinuousBatchingIntegrationTest, BatchGenerationSlidesPastPerSlotWindow) {
+    ContinuousBatchingIntegrationTest, StaleCancelMustNotHitSlotsNextOccupant) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["n_predict"] = "64";
+  auto model = loadModel();
+
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr)
+      << "LlamaModelTestPeer::scheduler returned null -- is parallel >= 2?";
+
+  const auto waitForFirstPiece = [](const std::atomic<size_t>& pieces) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(120);
+    while (pieces.load() == 0 && std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return pieces.load() > 0;
+  };
+  const auto runAlone = [&model](LlamaModel::Prompt&& prompt) {
+    return std::async(std::launch::async, [&model, prompt = std::move(prompt)] {
+      std::vector<LlamaModel::Prompt> prompts{prompt};
+      return model->processPromptBatch(prompts);
+    });
+  };
+
+  // Job A: admitted alone, so it owns seqId 0. The canceller captures A's
+  // full identity -- (seqId, admissionId), exactly what the per-job cancel
+  // action now carries -- while A is live, and only fires it later, after
+  // the slot moved on.
+  constexpr uint32_t kSharedSeqId = 0;
+  std::atomic<size_t> aPieces = 0;
+  auto promptA =
+      makePrompt("Write a long, detailed paragraph about redwood forests.");
+  promptA.outputCallback = [&aPieces](const std::string&) {
+    aPieces.fetch_add(1);
+  };
+  auto futureA = runAlone(std::move(promptA));
+  ASSERT_TRUE(waitForFirstPiece(aPieces))
+      << "test setup: job A never emitted a token";
+  const auto staleAdmissionId =
+      ContinuousBatchSchedulerTestPeer::admissionIdAt(*scheduler, kSharedSeqId);
+  ASSERT_TRUE(staleAdmissionId.has_value())
+      << "test setup: job A's slot was not readable while A streamed";
+  ASSERT_EQ(futureA.get().size(), 1u);
+  ASSERT_EQ(scheduler->numActive(), 0u)
+      << "test setup: job A must have released its slot";
+
+  // Job B: admitted alone as well, so it reuses the freed seqId 0.
+  std::atomic<size_t> bPieces = 0;
+  auto promptB =
+      makePrompt("Write a long, detailed paragraph about coral reefs.");
+  promptB.outputCallback = [&bPieces](const std::string&) {
+    bPieces.fetch_add(1);
+  };
+  auto futureB = runAlone(std::move(promptB));
+  ASSERT_TRUE(waitForFirstPiece(bPieces))
+      << "test setup: job B never emitted a token";
+
+  // The canceller finally runs the cancel it captured for A. The admission
+  // id no longer matches the slot's current occupant, so it must no-op.
+  const size_t piecesAtCancel = bPieces.load();
+  EXPECT_FALSE(scheduler->cancel(kSharedSeqId, *staleAdmissionId))
+      << "a cancel aimed at a finished admission must report no live target";
+
+  ASSERT_EQ(futureB.get().size(), 1u);
+  // B, capped at 64 tokens on a long-form prompt, must keep generating well
+  // past the stale cancel; being cut at (or near) piecesAtCancel means the
+  // cancel aimed at finished job A tore down its unrelated successor.
+  constexpr size_t kSurvivalMargin = 8;
+  EXPECT_GT(bPieces.load(), piecesAtCancel + kSurvivalMargin)
+      << "STALE-CANCEL VICTIM: the cancel captured for finished job A "
+         "(seqId 0) tore down job B, which merely reuses the recycled seqId";
+}
+
+/// A batched sequence that fills its per-slot window (ctx / n_parallel) stops
+/// there and returns the tokens it already produced. Nothing is evicted to make
+/// room, so the run must end cleanly at the window rather than throwing or
+/// looping.
+///
+/// Setup: ctx 256 with parallel 2 targets a small per-slot window and
+/// n_predict -1 (unbounded) so nothing but the window bounds the request.
+/// llama.cpp's memory-fit step may adjust the requested ctx, so the
+/// effective window is read back through the decode stub.
+TEST_F(ContinuousBatchingIntegrationTest, BatchGenerationStopsAtPerSlotWindow) {
   REQUIRE_MODEL(model_);
   constexpr size_t kParallel = 2;
   config_["ctx_size"] = "256";
   config_["parallel"] = std::to_string(kParallel);
   config_["n_predict"] = "-1";
-  config_["n_discarded"] = "32";
   auto model = loadModel();
 
   auto* scheduler = LlamaModelTestPeer::scheduler(*model);
@@ -1795,37 +1915,20 @@ TEST_F(
         return llama_decode(ctx, batch);
       });
 
-  std::atomic<size_t> pieces = 0;
-  std::atomic<bool> cancelOnce = false;
   auto prompt = makePrompt(
       "Count upward from 1, one number per line, and do not stop counting.");
-  prompt.outputCallback = [&model, &pieces, &perSlotWindow, &cancelOnce](
-                              const std::string&) {
-    // Pieces under-count tokens (UTF-8 buffering), so once the piece
-    // count alone exceeds the whole per-slot window, prompt + generated
-    // tokens crossed it for sure.
-    constexpr size_t kPastWindowMargin = 32;
-    const size_t window = perSlotWindow.load();
-    if (window > 0 && pieces.fetch_add(1) + 1 >= window + kPastWindowMargin) {
-      bool expected = false;
-      if (cancelOnce.compare_exchange_strong(expected, true)) {
-        model->cancel();
-      }
-    }
-  };
-
   std::vector<LlamaModel::Prompt> prompts{std::move(prompt)};
-  auto outputs = model->processPromptBatch(prompts);
+  std::vector<std::string> outputs;
+  ASSERT_NO_THROW({ outputs = model->processPromptBatch(prompts); });
   const auto stats = model->runtimeStats();
-  const double contextSlides =
-      test_common::getStatValue(stats, "contextSlides");
+  const double cacheTokens = test_common::getStatValue(stats, "CacheTokens");
 
   ASSERT_EQ(outputs.size(), 1u);
-  EXPECT_FALSE(outputs[0].empty());
-  EXPECT_GT(contextSlides, 0.0)
-      << "SLIDE NEVER FIRED: the sequence was truncated at the per-slot "
-         "window instead of sliding; pieces emitted: "
-      << pieces.load() << ", per-slot window: " << perSlotWindow.load();
+  EXPECT_FALSE(outputs[0].empty())
+      << "a slot that fills its window must still return what it generated";
+  ASSERT_GT(perSlotWindow.load(), 0u);
+  EXPECT_LE(cacheTokens, static_cast<double>(perSlotWindow.load()))
+      << "the slot must stop at its per-slot window, not grow past it";
 }
 
 /// Cancel = "request never happened": `onCancel` rolls the driver's
@@ -2121,7 +2224,12 @@ TEST_F(
   ASSERT_TRUE(harness.waitForBlockedDecode())
       << "test setup: decode never started";
 
-  const bool wasActive = scheduler->cancel(0);
+  // The scheduler mutex is released across the blocked decode, so the live
+  // occupant's admission id is readable from here.
+  const auto admissionId =
+      ContinuousBatchSchedulerTestPeer::admissionIdAt(*scheduler, 0);
+  ASSERT_TRUE(admissionId.has_value()) << "test setup: seqId 0 not occupied";
+  const bool wasActive = scheduler->cancel(0, *admissionId);
   EXPECT_TRUE(wasActive);
   EXPECT_EQ(scheduler->numActive(), 1u)
       << "RACE: cancel(seqId) mutated scheduler/llama_context state while "

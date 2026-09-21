@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,7 @@
 #include <gguf.h>
 #include <gtest/gtest.h>
 
+#include "groot_embodiment_test_util.hpp"
 #include "model-interface/groot.hpp"
 #include "pi05_compute.hpp"
 #include "utils/safetensors_lite.hpp"
@@ -76,9 +78,18 @@ struct ggml_tensor* gt(struct ggml_context* c, const std::string& n) {
   return ggml_get_tensor(c, n.c_str());
 }
 
-qvac_lib_infer_vla_ggml::GrootLinearWeights
-linW(struct ggml_context* c, const std::string& p) {
-  return {gt(c, p + ".weight"), gt(c, p + ".bias")};
+// Slices the default embodiment row when the fixture is multi-embodiment
+// (rank-3 weight / rank-2 bias); `view` owns the byte-copied rows, `src` the
+// GGUF data.
+qvac_lib_infer_vla_ggml::GrootLinearWeights linW(
+    struct ggml_context* src, struct ggml_context* view,
+    struct gguf_context* gguf, const std::string& p) {
+  const int row = groot_embodiment_test_util::defaultEmbodimentRow(gguf);
+  return {
+      groot_embodiment_test_util::embodimentRow(
+          view, gt(src, p + ".weight"), row, 2),
+      groot_embodiment_test_util::embodimentRow(
+          view, gt(src, p + ".bias"), row, 1)};
 }
 
 } // namespace
@@ -101,6 +112,15 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
   struct gguf_context* gguf = gguf_init_from_file(ggufPath, gp);
   ASSERT_NE(gguf, nullptr);
   ASSERT_NE(ctxW, nullptr);
+
+  // Holds the byte-copied multi-embodiment rows (own data — data-backed, not a
+  // view context), so it must outlive the per-step compute contexts below. 64
+  // MiB covers the sliced action-encoder + decoder weights (w2 alone is ~9 MiB
+  // F16).
+  std::vector<uint8_t> viewBuf(64u * 1024u * 1024u);
+  struct ggml_init_params viewIp{viewBuf.size(), viewBuf.data(), false};
+  struct ggml_context* ctxView = ggml_init(viewIp);
+  ASSERT_NE(ctxView, nullptr);
 
   using namespace qvac_lib_infer_vla_ggml;
 
@@ -129,13 +149,16 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
     bw.ffn_out_w = gt(ctxW, b + ".ffn_out.weight");
     bw.ffn_out_b = gt(ctxW, b + ".ffn_out.bias");
   }
-  const GrootLinearWeights aeW1 = linW(ctxW, "embodiment.action_encoder.w1");
-  const GrootLinearWeights aeW2 = linW(ctxW, "embodiment.action_encoder.w2");
-  const GrootLinearWeights aeW3 = linW(ctxW, "embodiment.action_encoder.w3");
+  const GrootLinearWeights aeW1 =
+      linW(ctxW, ctxView, gguf, "embodiment.action_encoder.w1");
+  const GrootLinearWeights aeW2 =
+      linW(ctxW, ctxView, gguf, "embodiment.action_encoder.w2");
+  const GrootLinearWeights aeW3 =
+      linW(ctxW, ctxView, gguf, "embodiment.action_encoder.w3");
   const GrootLinearWeights dec1 =
-      linW(ctxW, "embodiment.action_decoder.layer1");
+      linW(ctxW, ctxView, gguf, "embodiment.action_decoder.layer1");
   const GrootLinearWeights dec2 =
-      linW(ctxW, "embodiment.action_decoder.layer2");
+      linW(ctxW, ctxView, gguf, "embodiment.action_decoder.layer2");
   struct ggml_tensor* posEmbedW = gt(ctxW, "dit.position_embedding.weight");
   ASSERT_NE(posEmbedW, nullptr);
 
@@ -156,7 +179,21 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
   const float dt = 1.0f / static_cast<float>(N_STEPS);
 
   for (int step = 0; step < N_STEPS; ++step) {
-    const size_t mem = 2048u * 1024u * 1024u;
+    // 4 GiB, and explicitly size_t like the M4.6 pools rather than the
+    // unsigned-int product this used to be. This is the ONLY groot parity test
+    // that builds the action encoder, the concat, all 32 DiT blocks, the
+    // decoder and the cont into a SINGLE arena — M4.6 spreads the same work
+    // over one context per phase — so it sat closest to its pool ceiling at the
+    // old 2 GiB. That ceiling is a hard failure rather than a slow path: every
+    // tensor here is data-backed (no_alloc=false), the cgraph is allocated
+    // LAST, after all of them, and ggml_new_object returns NULL instead of
+    // aborting once GGML_ASSERT is compiled out, which is the Release config
+    // Windows CI builds. ggml_build_forward_expand(NULL, ...) is then an access
+    // violation with no stack trace, which is exactly the SEH 0xc0000005 seen
+    // on qvac-win25-x64-runner4. M4.6 already allocates 8 GiB on that same
+    // runner, so the headroom is available. The used/total line below is what
+    // turns a recurrence into a number instead of a guess.
+    const size_t mem = size_t(4) * 1024u * 1024u * 1024u;
     std::vector<uint8_t> buf(mem);
     struct ggml_init_params ip{mem, buf.data(), false};
     struct ggml_context* c = ggml_init(ip);
@@ -249,9 +286,21 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
         ggml_view_2d(c, pred, ACT_DIM, N_ACT, pred->nb[1], pred->nb[1]);
     vel = ggml_cont(c, vel);
 
+    // Allocated last, so this is the first thing to come back NULL if the arena
+    // is short — and dereferencing it is an access violation, not a diagnosable
+    // failure. Report the arena occupancy either way: on a pool that is merely
+    // tight rather than exhausted, this line is the warning that the next graph
+    // addition will not fit.
     struct ggml_cgraph* gf = ggml_new_graph_custom(c, 8192, false);
+    std::cerr << "[M4.4] step " << step << " arena: used "
+              << (ggml_used_mem(c) / (1024 * 1024)) << " MiB of "
+              << (mem / (1024 * 1024)) << " MiB\n";
+    ASSERT_NE(gf, nullptr)
+        << "cgraph alloc returned NULL — arena exhausted at step " << step
+        << " (used " << ggml_used_mem(c) << " of " << mem << " bytes)";
     ggml_build_forward_expand(gf, vel);
     ASSERT_EQ(pi05_test::computeGraphCpu(gf), GGML_STATUS_SUCCESS);
+    ASSERT_NE(vel->data, nullptr) << "step " << step;
 
     // Euler update: actions += dt · velocity.
     const float* velp = static_cast<const float*>(vel->data);
@@ -263,6 +312,9 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
     if (step + 1 < N_STEPS) {
       const std::vector<float> exp = act.readF32(
           "action_encoder_input.call" + std::to_string(step + 1) + ".args.0");
+      // Both comparisons iterate exp.size() over `actions`; a fixture whose
+      // horizon disagrees with ours would read past the end of the vector.
+      ASSERT_EQ(exp.size(), actions.size());
       const float cos = cosineSim(actions.data(), exp.data(), exp.size());
       const float rel = relMaxDiff(actions.data(), exp.data(), exp.size());
       std::cerr << "[M4.4] after step " << step << ": cos=" << cos
@@ -275,5 +327,6 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
   }
 
   gguf_free(gguf);
+  ggml_free(ctxView);
   ggml_free(ctxW);
 }

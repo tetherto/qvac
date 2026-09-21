@@ -1,0 +1,336 @@
+import test from 'brittle'
+import { z } from 'zod'
+import type { TurboVecIndexProvider } from '@qvac/rag'
+import {
+  clearPlugins,
+  registerPlugin,
+  getPlugin,
+  getTurboVecIndexProvider,
+  hasPlugin
+} from '@/plugins'
+import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
+import { handlePluginInvokeStream } from '@/handlers/plugin-invoke'
+import {
+  PluginAlreadyRegisteredError,
+  PluginDefinitionInvalidError,
+  PluginModelTypeReservedError,
+  PluginResponseValidationFailedError
+} from '@/errors'
+import { ERROR_CODES, ModelType, type QvacPlugin } from '@/schemas'
+
+let idCounter = 0
+function makeId(prefix: string) {
+  idCounter++
+  return `${prefix}-${idCounter}`
+}
+
+test('registerPlugin: rejects invalid plugin definitions (fail-fast)', function (t) {
+  clearPlugins()
+
+  const invalidPlugin = {
+    modelType: 'test-plugin',
+    displayName: '',
+    addonPackage: '@qvac/test-addon',
+    createModel: function () {
+      return {
+        model: { load: async function () {} }
+      }
+    },
+    handlers: {
+      ping: {
+        requestSchema: z.object({}),
+        responseSchema: z.object({ ok: z.boolean() }),
+        streaming: false,
+        handler: async function () {
+          return { ok: true }
+        }
+      }
+    }
+  }
+
+  try {
+    registerPlugin(invalidPlugin as unknown as QvacPlugin<Record<string, unknown>, string>)
+    t.fail('Expected registerPlugin to throw')
+  } catch (error) {
+    t.ok(error instanceof PluginDefinitionInvalidError)
+    t.is((error as PluginDefinitionInvalidError).code, 53857)
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('pluginInvokeStream: validates streamed chunks against responseSchema', async function (t) {
+  clearPlugins()
+
+  const modelId = makeId('model')
+
+  const requestSchema = z.object({ value: z.string() })
+  const responseSchema = z.object({ token: z.string() })
+
+  registerPlugin({
+    modelType: ModelType.llamacppCompletion,
+    displayName: 'Test Plugin',
+    addonPackage: '@qvac/test-addon',
+    loadConfigSchema: z.object({}),
+    createModel: function () {
+      return {
+        model: { load: async function () {} }
+      }
+    },
+    handlers: {
+      testStream: {
+        requestSchema: requestSchema as z.ZodType,
+        responseSchema: responseSchema as z.ZodType,
+        streaming: true,
+        handler: async function* () {
+          yield { token: 123 }
+        }
+      }
+    }
+  })
+
+  try {
+    registerModel(modelId, {
+      model: {} as unknown as AnyModel,
+      path: '/tmp/model.bin',
+      config: {},
+      modelType: ModelType.llamacppCompletion
+    })
+
+    const stream = handlePluginInvokeStream({
+      type: 'pluginInvokeStream',
+      modelId,
+      handler: 'testStream',
+      params: { value: 'hello' }
+    })
+
+    try {
+      await stream.next()
+      t.fail('Expected stream.next() to throw')
+    } catch (error) {
+      t.ok(error instanceof PluginResponseValidationFailedError)
+      t.is(
+        (error as PluginResponseValidationFailedError).code,
+        ERROR_CODES.PLUGIN_RESPONSE_VALIDATION_FAILED
+      )
+    }
+  } finally {
+    unregisterModel(modelId)
+    clearPlugins()
+  }
+})
+
+test('registerPlugin: accepts valid plugin and retrieves it', function (t) {
+  clearPlugins()
+
+  const validPlugin = {
+    modelType: 'test-valid-plugin',
+    displayName: 'Valid Test Plugin',
+    addonPackage: '@qvac/test-addon',
+    loadConfigSchema: z.object({}),
+    createModel: function () {
+      return {
+        model: { load: async function () {} }
+      }
+    },
+    handlers: {
+      ping: {
+        requestSchema: z.object({}),
+        responseSchema: z.object({ ok: z.boolean() }),
+        streaming: false,
+        handler: async function () {
+          return { ok: true }
+        }
+      }
+    }
+  }
+
+  try {
+    registerPlugin(validPlugin)
+
+    t.ok(hasPlugin('test-valid-plugin'), 'hasPlugin returns true')
+
+    const retrieved = getPlugin('test-valid-plugin')
+    t.ok(retrieved, 'getPlugin returns the plugin')
+    t.is(retrieved?.modelType, 'test-valid-plugin')
+    t.is(retrieved?.displayName, 'Valid Test Plugin')
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('plugin registry exposes a registered TurboVec index provider', function (t) {
+  clearPlugins()
+
+  const provider = {
+    create() {
+      throw new Error('not used')
+    },
+    load() {
+      throw new Error('not used')
+    }
+  } as TurboVecIndexProvider
+
+  try {
+    registerPlugin({
+      modelType: 'test-turbovec-provider',
+      displayName: 'TurboVec Provider Test',
+      addonPackage: '@qvac/test-addon',
+      loadConfigSchema: z.object({}),
+      createModel() {
+        return {
+          model: { load: async function () {} }
+        }
+      },
+      handlers: {},
+      capabilities: {
+        turbovecIndexProvider: provider
+      }
+    })
+
+    t.is(getTurboVecIndexProvider(), provider)
+  } finally {
+    clearPlugins()
+  }
+
+  t.is(getTurboVecIndexProvider(), undefined)
+})
+
+test('registerPlugin: rejects a second TurboVec index provider', function (t) {
+  clearPlugins()
+
+  const firstProvider = {
+    create() {
+      throw new Error('not used')
+    },
+    load() {
+      throw new Error('not used')
+    }
+  } as TurboVecIndexProvider
+  const secondProvider = {
+    create() {
+      throw new Error('not used')
+    },
+    load() {
+      throw new Error('not used')
+    }
+  } as TurboVecIndexProvider
+
+  try {
+    registerPlugin({
+      modelType: 'test-first-turbovec-provider',
+      displayName: 'First TurboVec Provider Test',
+      addonPackage: '@qvac/test-addon',
+      loadConfigSchema: z.object({}),
+      createModel() {
+        return {
+          model: { load: async function () {} }
+        }
+      },
+      handlers: {},
+      capabilities: {
+        turbovecIndexProvider: firstProvider
+      }
+    })
+
+    try {
+      registerPlugin({
+        modelType: 'test-second-turbovec-provider',
+        displayName: 'Second TurboVec Provider Test',
+        addonPackage: '@qvac/test-addon',
+        loadConfigSchema: z.object({}),
+        createModel() {
+          return {
+            model: { load: async function () {} }
+          }
+        },
+        handlers: {},
+        capabilities: {
+          turbovecIndexProvider: secondProvider
+        }
+      })
+      t.fail('Expected registerPlugin to reject a second TurboVec provider')
+    } catch (error) {
+      t.ok(error instanceof PluginDefinitionInvalidError)
+      t.ok(
+        (error as Error).message.includes('test-first-turbovec-provider'),
+        'error names the registered provider plugin'
+      )
+      t.ok(
+        (error as Error).message.includes('test-second-turbovec-provider'),
+        'error names the rejected provider plugin'
+      )
+    }
+
+    t.is(getTurboVecIndexProvider(), firstProvider, 'first provider remains registered')
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('registerPlugin: rejects duplicate modelType registration', function (t) {
+  clearPlugins()
+
+  const plugin = {
+    modelType: 'test-duplicate-plugin',
+    displayName: 'First Plugin',
+    addonPackage: '@qvac/test-addon',
+    loadConfigSchema: z.object({}),
+    createModel: function () {
+      return {
+        model: { load: async function () {} }
+      }
+    },
+    handlers: {}
+  }
+
+  try {
+    registerPlugin(plugin)
+    t.ok(hasPlugin('test-duplicate-plugin'), 'first registration succeeds')
+
+    const duplicatePlugin = {
+      ...plugin,
+      displayName: 'Duplicate Plugin'
+    }
+
+    try {
+      registerPlugin(duplicatePlugin)
+      t.fail('Expected registerPlugin to throw on duplicate')
+    } catch (error) {
+      t.ok(error instanceof PluginAlreadyRegisteredError)
+      t.is((error as PluginAlreadyRegisteredError).code, ERROR_CODES.PLUGIN_ALREADY_REGISTERED)
+    }
+
+    const retrieved = getPlugin('test-duplicate-plugin')
+    t.is(retrieved?.displayName, 'First Plugin', 'original plugin is unchanged')
+  } finally {
+    clearPlugins()
+  }
+})
+
+test('registerPlugin: rejects alias as modelType', function (t) {
+  clearPlugins()
+
+  const plugin = {
+    modelType: 'llm',
+    displayName: 'Custom LLM Plugin',
+    addonPackage: '@custom/llm',
+    loadConfigSchema: z.object({}),
+    createModel: function () {
+      return {
+        model: { load: async function () {} }
+      }
+    },
+    handlers: {}
+  }
+
+  try {
+    registerPlugin(plugin)
+    t.fail('Expected registerPlugin to throw for alias modelType')
+  } catch (error) {
+    t.ok(error instanceof PluginModelTypeReservedError)
+    t.is((error as PluginModelTypeReservedError).code, ERROR_CODES.PLUGIN_MODEL_TYPE_RESERVED)
+  } finally {
+    clearPlugins()
+  }
+})

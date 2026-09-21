@@ -4,6 +4,7 @@ import config from '../qvac-test.config.js'
 
 const snapConfig = config.consumers.snap
 const SNAP_NAME = snapConfig.snapName
+const GRAPHICS_PROVIDER = 'mesa-core22:graphics-core22'
 
 function resolveMountedPath(relativePath) {
   const normalized = posix.normalize(relativePath)
@@ -38,6 +39,10 @@ function runSnapAdmin(args) {
     return
   }
   run('sudo', ['snap', ...args])
+}
+
+function connectGraphicsProvider() {
+  runSnapAdmin(['connect', `${SNAP_NAME}:graphics-core22`, GRAPHICS_PROVIDER])
 }
 
 function hasXvfbRun() {
@@ -87,6 +92,7 @@ try {
     runSnapAdmin(['remove', '--purge', SNAP_NAME])
   }
   runSnapAdmin(['install', '--dangerous', resolve(firstArtifact)])
+  connectGraphicsProvider()
   runProbe('before')
   // Installing another local revision of the same Snap is treated as a refresh.
   runSnapAdmin(['install', '--dangerous', resolve(secondArtifact)])

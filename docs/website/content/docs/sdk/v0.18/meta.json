@@ -1,0 +1,29 @@
+{
+  "title": "SDK",
+  "description": "Install, configure, and build with the SDK",
+  "root": true,
+  "pages": [
+    "---Getting started---",
+    "index",
+    "system-requirements",
+    "js-ts-sdk",
+    "python-sdk",
+    "configuration",
+    "cli",
+    "---Models---",
+    "...models",
+    "---AI capabilities---",
+    "...ai-capabilities",
+    "---P2P capabilities---",
+    "...p2p-capabilities",
+    "---Runtime---",
+    "...runtime",
+    "---Tutorials---",
+    "...tutorials",
+    "---Reference---",
+    "...reference",
+    "---Help---",
+    "troubleshooting",
+    "external:[MessageCircle][Discord](https://discord.com/invite/tetherdev)"
+  ]
+}

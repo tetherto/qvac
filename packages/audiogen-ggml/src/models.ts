@@ -66,7 +66,10 @@ export function ditVariants (): DitVariant[] {
 }
 
 export function registryPath (filename: string): string {
-  return `${REGISTRY_PREFIX}/${filename}`
+  // Concatenation, not a template literal: tsc rewrites exported consts to
+  // `exports.X`, and interpolating that form in a template literal breaks
+  // bare-module-lexer, so bare-pack drops every later require in the file.
+  return REGISTRY_PREFIX + '/' + filename
 }
 
 // filename of the DiT GGUF for a variant (throws on an unknown variant).

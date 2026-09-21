@@ -1,0 +1,203 @@
+@qvac/test-suite
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/test-suite itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+JavaScript Dependencies
+=========================================================================
+
+--- 0bsd (Zero-Clause BSD) ---
+
+  tslib@2.8.1
+    https://github.com/Microsoft/tslib
+
+--- bsd-2-clause (BSD 2-Clause License) ---
+
+  dotenv@16.6.1
+    https://github.com/motdotla/dotenv
+  websocket-stream@5.5.2
+    https://github.com/maxogden/websocket-stream
+
+--- bsd-3-clause (BSD 3-Clause License) ---
+
+  ieee754@1.2.1
+    https://github.com/feross/ieee754
+
+--- isc (ISC License) ---
+
+  fastparallel@2.4.1
+    https://github.com/mcollina/fastparallel
+  fastseries@2.0.0
+    https://github.com/mcollina/fastseries
+  inherits@2.0.4
+    https://github.com/isaacs/inherits
+  lru-cache@10.4.3
+    https://github.com/isaacs/node-lru-cache
+  mqemitter@6.0.2
+    https://github.com/mcollina/mqemitter
+  once@1.4.0
+    https://github.com/isaacs/once
+  split2@4.2.0
+    https://github.com/mcollina/split2
+  wrappy@1.0.2
+    https://github.com/npm/wrappy
+
+--- mit (MIT License) ---
+
+  @babel/runtime@7.29.7
+    https://github.com/babel/babel
+  @esbuild/darwin-arm64@0.27.7
+    https://github.com/evanw/esbuild
+  @types/node@20.19.43
+    https://github.com/DefinitelyTyped/DefinitelyTyped
+  @types/readable-stream@4.0.24
+    https://github.com/DefinitelyTyped/DefinitelyTyped
+  @types/ws@8.18.1
+    https://github.com/DefinitelyTyped/DefinitelyTyped
+  abort-controller@3.0.0
+    https://github.com/mysticatea/abort-controller
+  aedes@0.51.3
+    https://github.com/moscajs/aedes
+  aedes-packet@3.0.0
+    https://github.com/moscajs/aedes-packet
+  aedes-persistence@9.1.2
+    https://github.com/moscajs/aedes-persistence
+  async-limiter@1.0.1
+    https://github.com/strml/async-limiter
+  base64-js@1.5.1
+    https://github.com/beatgammit/base64-js
+  bl@4.1.0
+    https://github.com/rvagg/bl
+  bl@6.1.6
+    https://github.com/rvagg/bl
+  broker-factory@3.1.15
+    https://github.com/chrisguttandin/broker-factory
+  buffer@5.7.1
+    https://github.com/feross/buffer
+  buffer@6.0.3
+    https://github.com/feross/buffer
+  buffer-from@1.1.2
+    https://github.com/LinusU/buffer-from
+  commander@14.0.3
+    https://github.com/tj/commander.js
+  commist@3.2.0
+    https://github.com/mcollina/commist
+  concat-stream@2.0.0
+    https://github.com/maxogden/concat-stream
+  core-util-is@1.0.3
+    https://github.com/isaacs/core-util-is
+  debug@4.4.3
+    https://github.com/debug-js/debug
+  duplexify@3.7.1
+    https://github.com/mafintosh/duplexify
+  end-of-stream@1.4.5
+    https://github.com/mafintosh/end-of-stream
+  esbuild@0.27.7
+    https://github.com/evanw/esbuild
+  event-target-shim@5.0.1
+    https://github.com/mysticatea/event-target-shim
+  events@3.3.0
+    https://github.com/Gozala/events
+  fast-unique-numbers@8.0.13
+    https://github.com/chrisguttandin/fast-unique-numbers
+  fast-unique-numbers@9.0.27
+    https://github.com/chrisguttandin/fast-unique-numbers
+  fastfall@1.5.1
+    https://github.com/mcollina/fastfall
+  help-me@5.0.0
+    https://github.com/mcollina/help-me
+  hyperid@3.3.0
+    https://github.com/mcollina/hyperid
+  ip-address@10.5.0
+    https://github.com/beaugunderson/ip-address
+  isarray@1.0.0
+    https://github.com/juliangruber/isarray
+  js-sdsl@4.3.0
+    https://github.com/js-sdsl/js-sdsl
+  minimist@1.2.8
+    https://github.com/minimistjs/minimist
+  mqtt@5.15.2
+    https://github.com/mqttjs/MQTT.js
+  mqtt-packet@7.1.2
+    https://github.com/mqttjs/mqtt-packet
+  mqtt-packet@9.0.2
+    https://github.com/mqttjs/mqtt-packet
+  ms@2.1.3
+    https://github.com/vercel/ms
+  number-allocator@1.0.14
+    https://github.com/redboltz/number-allocator
+  process@0.11.10
+    https://github.com/shtylman/node-process
+  process-nextick-args@2.0.1
+    https://github.com/calvinmetcalf/process-nextick-args
+  qlobber@7.0.1
+    https://github.com/davedoesdev/qlobber
+  qlobber@8.0.1
+    https://github.com/davedoesdev/qlobber
+  readable-stream@2.3.8
+    https://github.com/nodejs/readable-stream
+  readable-stream@3.6.2
+    https://github.com/nodejs/readable-stream
+  readable-stream@4.7.0
+    https://github.com/nodejs/readable-stream
+  retimer@4.0.0
+    https://github.com/mcollina/retimer
+  reusify@1.1.0
+    https://github.com/mcollina/reusify
+  rfdc@1.4.1
+    https://github.com/davidmarkclements/rfdc
+  safe-buffer@5.1.2
+    https://github.com/feross/safe-buffer
+  safe-buffer@5.2.1
+    https://github.com/feross/safe-buffer
+  smart-buffer@4.2.0
+    https://github.com/JoshGlazebrook/smart-buffer
+  socks@2.8.9
+    https://github.com/JoshGlazebrook/socks
+  stream-shift@1.0.3
+    https://github.com/mafintosh/stream-shift
+  string_decoder@1.1.1
+    https://github.com/nodejs/string_decoder
+  string_decoder@1.3.0
+    https://github.com/nodejs/string_decoder
+  typedarray@0.0.6
+    https://github.com/substack/typedarray
+  ultron@1.1.1
+    https://github.com/unshiftio/ultron
+  undici-types@6.21.0
+    https://github.com/nodejs/undici
+  util-deprecate@1.0.2
+    https://github.com/TooTallNate/util-deprecate
+  uuid@10.0.0
+    https://github.com/uuidjs/uuid
+  uuid@8.3.2
+    https://github.com/uuidjs/uuid
+  uuid-parse@1.1.0
+    https://github.com/zefferus/uuid-parse
+  worker-factory@7.0.50
+    https://github.com/chrisguttandin/worker-factory
+  worker-timers@7.1.8
+    https://github.com/chrisguttandin/worker-timers
+  worker-timers@8.0.34
+    https://github.com/chrisguttandin/worker-timers
+  worker-timers-broker@6.1.8
+    https://github.com/chrisguttandin/worker-timers-broker
+  worker-timers-broker@8.0.18
+    https://github.com/chrisguttandin/worker-timers-broker
+  worker-timers-worker@7.0.71
+    https://github.com/chrisguttandin/worker-timers-worker
+  worker-timers-worker@9.0.15
+    https://github.com/chrisguttandin/worker-timers-worker
+  ws@3.3.3
+    https://github.com/websockets/ws
+  ws@8.21.3
+    https://github.com/websockets/ws
+  xtend@4.0.2
+    https://github.com/Raynos/xtend
+  zod@3.25.76
+    https://github.com/colinhacks/zod
+

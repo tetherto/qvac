@@ -194,29 +194,21 @@ async function runAndCancelAfterFirstToken(model, prompt, runOptions) {
   return normalizeStats(response.stats, { _chunkCount: chunkCount })
 }
 
-async function waitForActiveResponse(model) {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const response = model._job?.active
-    if (response) return response
-    await new Promise((resolve) => setImmediate(resolve))
-  }
-  return null
-}
-
 async function runWithPrefillCancellation(model, prompt, runOptions, cancelViaResponse = false) {
   cleanupRunOptionsCache(runOptions)
-  const responsePromise = model.run(prompt, { ...runOptions, prefill: true })
-  const activeResponse = await waitForActiveResponse(model)
-  const cancelRequested = activeResponse?._status === 'running'
+  // run() resolves right after the job is admitted, while the long prefill is
+  // still in flight, so cancelling through the resolved response (or the
+  // model) lands mid-prefill.
+  const response = await model.run(prompt, { ...runOptions, prefill: true })
+  const cancelRequested = response._status === 'running'
   if (cancelRequested) {
     if (cancelViaResponse) {
-      await activeResponse.cancel()
+      await response.cancel()
     } else {
       await model.cancel()
     }
   }
 
-  const response = await responsePromise
   try {
     await response.await()
   } catch (err) {

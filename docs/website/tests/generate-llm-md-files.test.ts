@@ -7,7 +7,7 @@ describe('urlToMarkdownRelativePath', () => {
   });
 
   it('maps a top-level page to <slug>.md', () => {
-    expect(urlToMarkdownRelativePath('/quickstart')).toBe('quickstart.md');
+    expect(urlToMarkdownRelativePath('/js-ts-sdk')).toBe('js-ts-sdk.md');
   });
 
   it('maps a nested page to <dir>/<slug>.md', () => {
@@ -21,14 +21,14 @@ describe('urlToMarkdownRelativePath', () => {
   });
 
   it('tolerates trailing slashes', () => {
-    expect(urlToMarkdownRelativePath('/quickstart/')).toBe('quickstart.md');
+    expect(urlToMarkdownRelativePath('/js-ts-sdk/')).toBe('js-ts-sdk.md');
     expect(urlToMarkdownRelativePath('/reference/api/')).toBe(
       'reference/api.md',
     );
   });
 
   it('tolerates duplicate leading slashes', () => {
-    expect(urlToMarkdownRelativePath('//quickstart')).toBe('quickstart.md');
+    expect(urlToMarkdownRelativePath('//js-ts-sdk')).toBe('js-ts-sdk.md');
   });
 
   it('throws on empty / missing url', () => {

@@ -371,6 +371,15 @@ test(
 
     const toNum = (v) => (typeof v === 'number' ? v : Number(v || 0))
 
+    const defaultRun = await runOnce({})
+    t.comment(`default (${defaultRun.output.length} chars): ${defaultRun.output.slice(0, 200)}`)
+    t.comment(`default stats: ${JSON.stringify(defaultRun.stats)}`)
+    t.is(
+      toNum(defaultRun.stats.thinkingBlockDiscards),
+      0,
+      `default run should report 0 discards (got ${defaultRun.stats.thinkingBlockDiscards})`
+    )
+
     // Explicit-on — compaction enabled by passing the flag explicitly.
     // Both branches pin their overrides so the test stays valid
     // regardless of any future default change.

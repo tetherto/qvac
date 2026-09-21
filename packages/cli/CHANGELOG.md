@@ -1,5 +1,457 @@
 # Changelog
 
+## [0.13.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.13.1
+
+This is a patch on the 0.13 line. `qvac serve` no longer returns a successful chat or Responses completion when the client sends tools but the model was loaded without tool calling enabled.
+
+## Bug Fixes
+
+### Tools requests are rejected unless the model was loaded with `tools: true`
+
+Llama.cpp only injects tool definitions when the model is loaded with `modelConfig.tools: true` (default `false`). Serve used to accept `tools` on `/v1/chat/completions` and `/v1/responses` anyway, then return `200` with prose and `finish_reason: "stop"` instead of `tool_calls`.
+
+Those requests now return `400` with code `tools_not_enabled`. Set the flag on the served alias and reload the model:
+
+```json
+{
+  "serve": {
+    "models": {
+      "chat": {
+        "model": "QWEN3_600M_INST_Q4",
+        "config": { "tools": true }
+      }
+    }
+  }
+}
+```
+
+Requests that do not send tools are unchanged. Tool calling itself is unchanged: it still works when the model was loaded with the flag.
+
+## [0.13.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.13.0
+
+`qvac serve` becomes a host for mounted surfaces rather than a single OpenAI server, so the QVAC-native API and the OpenAI-compatible API can run together or apart. Translation is now a served endpoint, `qvac configure` prompts for every model type instead of only llamacpp, and worker startup failures finally report the reason they failed. This release also clears a HIGH-severity advisory reachable through the `/docs` route.
+
+## Breaking Changes
+
+### `qvac serve` now serves the QVAC surface by default
+
+`qvac serve` used to print help and do nothing; the only real server was `qvac serve openai`. Serving is now the default, and the OpenAI-compatible surface is a flag rather than a subcommand.
+
+**Before:**
+
+```bash
+qvac serve            # prints help
+qvac serve openai     # serves /v1/*
+```
+
+**After:**
+
+```bash
+qvac serve                          # serves the QVAC surface only
+qvac serve --openai                 # QVAC + /v1/*
+qvac serve --openai --no-default    # /v1/* only
+```
+
+`qvac serve openai` still works, keeps every flag it had, and behaves identically — it prints a deprecation warning on start. Migrate by replacing the `openai` subcommand with `--openai --no-default` if you want the previous surface set exactly.
+
+`qvac openai spec` emits the same paths, schemas, and tags as before. Two `info` fields change, because the document now names the surfaces it mounts:
+
+```
+BEFORE: "title": "QVAC OpenAI-compatible API"
+        "description": "OpenAI-compatible REST API served by `qvac serve openai`."
+AFTER:  "title": "QVAC API"
+        "description": "Mounted surfaces: openai (OpenAI-compatible REST API)."
+```
+
+Configuration is unchanged: `serve.models` and every existing key keep their meaning. OpenAI-specific keys move under `serve.openai`, and an unknown `serve.*` key now logs a warning instead of being dropped in silence.
+
+## New APIs
+
+### Text translation over HTTP
+
+The QVAC surface serves translation at `POST /qvac/v1/translate`. Configure a translation model the same way as any other served model:
+
+```json
+// qvac.config.json
+{
+  "serve": {
+    "models": {
+      "de-en": {
+        "model": "BERGAMOT_DE_EN",
+        "config": { "engine": "Bergamot", "from": "de", "to": "en" }
+      }
+    }
+  }
+}
+```
+
+```bash
+curl localhost:11434/qvac/v1/translate \
+  -H 'content-type: application/json' \
+  -d '{ "model": "de-en", "text": ["Guten Morgen", "Vielen Dank"] }'
+```
+
+```json
+{
+  "object": "translation",
+  "model": "de-en",
+  "translations": ["Good morning", "Thank you very much"]
+}
+```
+
+Batches stream item by item when you ask for a stream, so long batches report progress instead of blocking to the end:
+
+```
+data: {"object":"translation.item","index":0,"text":"Good morning", ...}
+data: {"object":"translation.item","index":1,"text":"Thank you very much", ...}
+data: {"object":"translation.done", ...}
+data: [DONE]
+```
+
+## New Configuration
+
+### Worker handshake timeout is configurable, and startup failures say why
+
+A worker that never completed its RPC handshake produced `RPC_INIT_TIMEOUT` and nothing else — no way to tell a slow cold start from a worker that died on a missing native library. The timeout is now tunable, and every pre-handshake failure carries a typed cause:
+
+```json
+// qvac.config.json
+{ "rpcInitTimeoutMs": 120000 }
+```
+
+```bash
+# Takes precedence over the config file, and also raises `qvac doctor`'s probe
+QVAC_RPC_INIT_TIMEOUT_MS=120000 qvac serve
+```
+
+The typed cause distinguishes the two cases that used to look identical — a worker that exited (raising the timeout will not help) from one that is still running but never connected (a longer timeout may help) — and carries the worker's stderr tail.
+
+## Improvements
+
+### `qvac configure` prompts for every model type
+
+Schema-driven prompts previously covered only llamacpp chat and embedding entries; every other model type fell back to a generic entry you had to finish by hand. `qvac configure` now reads each model type's config schema from the SDK, so type hints, field descriptions, and per-field validation come from the same source the runtime validates against — for all model types, including addons added after this release.
+
+## Bug Fixes
+
+### Preload failures report the real cause, and can refuse to start
+
+On a preload failure `qvac serve` logged only `err.message` (for example "RPC initialization timed out") and discarded `err.cause`, which is where the worker stderr — the actual reason, such as a missing addon or a bad `.so` — lives. The full error cause chain is now logged.
+
+With lazy loading off, preloaded models are the only ones that can serve, yet the server still opened its port when every preload had failed: healthy-looking, serving nothing. `--no-lazy-load` now exits non-zero if every preload model fails. With lazy loading on (the default) the server still starts, because a failed preload retries on the next request, so ordinary and mixed configurations are unaffected.
+
+### A model lazy-loaded over a POST body can now load at all
+
+With `cancelOnDisconnect` on (the default), the first request that lazy-loaded a model through a POST body was cancelled before the load began, returning `503 model_load_failed` ("cancelled before start"). The load left the model unloaded, so every retry hit the same path and such a model could never load.
+
+The disconnect check watched the request stream, which closes as soon as the body is read — and Fastify reads the body before the load starts, so the abort fired immediately. It now watches the response stream, which closes only when the client actually disconnects during the load. A real mid-load disconnect still cancels the in-flight load.
+
+### `qvac serve` builds again
+
+`serve/lib/tool-dialect.ts` still read `isDelegated` from loaded-model info, a field removed when delegated inference was dropped from the SDK, which broke typecheck and build. The stale guard is gone.
+
+## Security
+
+### HIGH-severity advisory cleared on the `/docs` route
+
+`serve --docs` serves Swagger UI through `@fastify/static`, pulled in transitively by `@fastify/swagger-ui@5`, which resolved to a vulnerable version. That exposed [GHSA-83w8-p2f5-377r](https://github.com/advisories/GHSA-83w8-p2f5-377r) (route-guard bypass via path traversal, HIGH, CVSS 7.5) and [GHSA-8pvw-jcv7-9cmj](https://github.com/advisories/GHSA-8pvw-jcv7-9cmj) (authorization bypass, moderate) through the `/docs` route.
+
+`@fastify/swagger-ui` moves to `^6.1.1`, which depends on `@fastify/static ^10.1.0` — past both fix versions — and `fastify-plugin` moves to `^6` to match that chain and avoid a duplicate install. There are no source changes; `npm audit` reports zero vulnerabilities after the bump.
+
+## Requirements
+
+This release requires `@qvac/sdk@^0.19.0`. Both the configurable handshake timeout and `qvac configure`'s schema-driven prompts for every model type read APIs that 0.19.0 is the first SDK release to export.
+
+## [0.12.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.12.0
+
+This release closes the gap between installing the CLI and having a working server. `qvac configure` writes a valid `qvac.config.json` for you, a new catalog endpoint lets you browse the models the SDK provides, and `qvac serve openai` finally honours `preload: false` by loading on first use instead of failing forever. `qvac doctor --deep` can now prove the installed SDK actually starts.
+
+## New Commands
+
+### `qvac configure` builds your config for you
+
+Getting from a fresh install to a working `qvac serve openai` used to mean hand-writing `serve.models` and knowing model constant names. `qvac configure` does it interactively: add a model by capability or search everything, preview the entry it will write, edit it in `$EDITOR` if you want, then merge and save.
+
+```bash
+qvac configure                                  # interactive
+qvac configure --yes                            # chat + transcription starter
+qvac configure --modality chat --modality image  # pick specific capabilities
+```
+
+Search matches on name, role, addon, and quantization, with id matches ranked first. Aliases are derived from the model name (`QWEN3_600M_INST_Q4` → `qwen3-600m-inst-q4`) and deduped. For llamacpp chat and embedding entries the prompts are schema-driven — type hints, field descriptions, and per-field validation come from the SDK's own config schemas.
+
+Writes are safe: the config is written atomically, an existing `qvac.config.json` is merged rather than replaced, and the command refuses to shadow a non-JSON config (`.js`/`.ts`), printing guidance instead. Re-running is idempotent per model; `--force` overwrites an existing entry in place. `Esc` steps back one menu and `Ctrl+C` aborts without writing anything.
+
+Chat, embedding, transcription, and image presets are runnable as written. TTS is an example template carrying a `referenceAudioSrc` placeholder and a link to the addon docs, because a voice reference cannot be guessed — the command is honest about where you have to finish the job by hand.
+
+This is the actionable end of the catalog's `not_configured` hint: browse a model with `GET /v1/models/catalog`, then run `qvac configure` to make it callable.
+
+## New APIs
+
+### Browse available models by capability
+
+`GET /v1/models` only ever described models you had already configured, so there was no way to find out what else the SDK could run. `GET /v1/models/catalog` now lists configured models alongside the SDK's in-process constant catalog, filterable by capability:
+
+```bash
+# Chat-capable models, 20 at a time
+curl 'http://localhost:11434/v1/models/catalog?role=chat&limit=20'
+
+# Free-text search on the model id
+curl 'http://localhost:11434/v1/models/catalog?search=qwen'
+
+# A single entry
+curl 'http://localhost:11434/v1/models/catalog/QWEN3_600M_INST_Q4'
+```
+
+Filters cover `search`, `role`, `addon` (or `type`), `quantization`, `engine`, and `configured`, with `limit`/`offset` pagination and a `has_more` flag.
+
+Entries are deliberately **not** OpenAI `model` objects — they are `model_catalog_entry` rows, because a catalog model that is absent from `serve.models` cannot be called on this server:
+
+```json
+{
+  "object": "model_catalog_entry",
+  "id": "QWEN3_600M_INST_Q4",
+  "configured": false,
+  "usable": false,
+  "state": "not_configured",
+  "role": "chat",
+  "addon": "llm",
+  "quantization": "q4",
+  "params": "600M",
+  "size": 382156480,
+  "hint": "…"
+}
+```
+
+Every row carries `configured`, `usable`, and a `state` that includes a `not_configured` value for catalog-only models, plus a `hint` pointing at how to configure it. `GET /v1/models` remains the single authoritative list of callable models, so a browsable model can never be mistaken for a ready one.
+
+Browsing is fully in-process: it triggers no SDK call, no model load, and no download. Sizes, parameter counts, quantizations, and roles come from the constants, while configured models report their live registry state.
+
+## New Flags
+
+### `qvac doctor --deep` proves the SDK actually runs
+
+The static `qvac doctor` checks could pass on an install whose SDK worker could not start, finish its heartbeat, or shut down cleanly. `--deep` exercises the installed `@qvac/sdk` in an isolated child process — import, worker heartbeat, and shutdown — without loading a model:
+
+```bash
+qvac doctor --deep
+qvac doctor --deep --verbose   # include probe diagnostics
+qvac doctor --deep --json      # machine-readable result
+```
+
+It requires a structured IPC result and a matching process exit code, so a probe that dies quietly is a failure rather than a pass. Common CPU, native-library, Visual C++ runtime, Vulkan, Bare, and worker-handshake failures are classified rather than reported as one generic error. Plain `qvac doctor` behaviour is unchanged unless `--deep` is passed.
+
+### Lazy loading is tunable, and can be turned off
+
+Lazy loading is on by default. Four new `qvac serve openai` flags control it:
+
+```bash
+# Refuse to load on demand — an unloaded model returns 503 model_not_loaded
+qvac serve openai --no-lazy-load
+
+# Allow two models to load at once (default: 1)
+qvac serve openai --load-concurrency 2
+
+# Give up on a cold start after 5 minutes (default: unbounded)
+qvac serve openai --load-timeout 300000
+
+# Finish a load even if the client that triggered it disconnects
+qvac serve openai --no-cancel-load-on-disconnect
+```
+
+The same settings are available in the config file under a new `serve.load` block, which the flags override:
+
+```json
+{
+  "serve": {
+    "load": {
+      "lazy": true,
+      "concurrency": 1,
+      "timeoutMs": null,
+      "cancelOnDisconnect": true
+    }
+  }
+}
+```
+
+`concurrency` and `timeoutMs` must be positive integers; `timeoutMs: null` means no timeout. A config value that is the wrong type or out of range fails startup with the offending path named, rather than being silently ignored.
+
+## Bug Fixes
+
+### `preload: false` now lazy-loads instead of failing forever
+
+A model configured with `preload: false` was registered but never loaded, so every request naming it returned `503 model_not_ready` indefinitely — despite the documented promise of a lazy cold start. Such a model now loads the first time a request names it.
+
+The load is concurrency-safe: simultaneous first requests share a single load rather than starting several, and a failed cold start surfaces as `503 model_load_failed` and is retried on the next request instead of poisoning the alias.
+
+```bash
+# First request loads the model (and blocks while it does); later requests are fast
+curl -X POST http://localhost:11434/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{"model":"my-llm","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Preload defaults are unchanged: constant entries still default to `true`, explicit `{ src, type }` entries to `false`, and `--model <alias>` still forces a warm start.
+
+### Unloading a model is reversible
+
+`DELETE /v1/models/{id}` used to remove the alias from the registry with no way back. The model stayed resolvable from config but was permanently unavailable until the server was restarted. It now resets the alias to `IDLE` and drops the SDK handle, freeing the resources while leaving the alias intact, so the next request simply reloads it:
+
+```bash
+# Frees resources but keeps the alias; the next request reloads it
+curl -X DELETE http://localhost:11434/v1/models/my-llm
+```
+
+Listing follows the same principle. `GET /v1/models` reports every configured model whether or not it is loaded, and `GET /v1/models/{id}` resolves any configured alias, so loading stays transparent to the client. All inference gates — the model requirement check, audio speech, and vector-store embedding — now share one readiness helper, so they agree on when a model is usable.
+
+## Requirements
+
+This release requires `@qvac/sdk@^0.18.1`. `qvac configure` reads its llamacpp field descriptions and validation from the `@qvac/sdk/schemas` subpath, which 0.18.1 is the first SDK release to export.
+
+It also adds one third-party dependency, `@inquirer/prompts` (pinned to `8.5.2`), for the interactive prompts.
+
+## [0.11.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.11.0
+
+This release tightens the security posture of `qvac serve`. Browser access now requires an explicit list of trusted origins, a bind beyond loopback refuses to start without authentication, and the bearer key can be read from a file instead of the command line. Existing `--cors` and `--host` invocations will need updating.
+
+## Breaking Changes
+
+### Trusted browser origins must be named explicitly
+
+`--cors` no longer opens the server to every origin. It is now only a compatibility validation switch: it does not enable CORS by itself, and it fails startup unless at least one exact origin is supplied through `--cors-origin` or `serve.cors.origins`. Wildcards are rejected, as are origins ending in a trailing dot, which no browser sends.
+
+`--docs` no longer inherits wildcard access either. It adds same-port `localhost`, `127.0.0.1`, and `[::1]` origins for Swagger UI, and it rejects `--port 0`, because a same-port origin cannot be computed before the port is known.
+
+**Before:**
+
+```bash
+qvac serve openai --cors --docs
+```
+
+**After:**
+
+```bash
+qvac serve openai --cors --cors-origin https://app.example.com
+```
+
+### A non-loopback bind must authenticate
+
+Binding beyond `127.0.0.1` used to log a warning and start anyway, which quietly exposed an unauthenticated API to the network. It now fails startup unless a key is supplied, or unless the operator says outright that the exposure is intended.
+
+**Before:**
+
+```bash
+# Warned, then served the whole network with no authentication.
+qvac serve openai --host 0.0.0.0
+```
+
+**After:**
+
+```bash
+# Require a bearer token...
+qvac serve openai --host 0.0.0.0 --api-key-file ~/.qvac/serve-key
+
+# ...or accept the risk explicitly, which warns and starts as before.
+qvac serve openai --host 0.0.0.0 --allow-unauthenticated
+```
+
+## New Flags
+
+### `--api-key-file` keeps the credential out of the process list
+
+`--api-key <key>` places the token in the process's command line, which `/proc/<pid>/cmdline` exposes to every local account on Linux. `--api-key-file <path>` reads it from a file instead:
+
+```bash
+printf '%s' "$QVAC_API_KEY" > ~/.qvac/serve-key
+chmod 600 ~/.qvac/serve-key
+qvac serve openai --api-key-file ~/.qvac/serve-key
+```
+
+The path must be a regular file — symlinks and directories are refused — and the CLI warns when the file is readable beyond its owner. `--api-key` and `--api-key-file` are mutually exclusive.
+
+### `--allow-unauthenticated` opts back into an open bind
+
+For operators who genuinely want an unauthenticated listener beyond loopback, this restores the previous warn-and-start behaviour. Anyone who can reach the address can use the server.
+
+## [0.10.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.10.0
+
+This release moves the CLI onto `@qvac/sdk` 0.17.0 and improves the OpenAI-compatible serve surface for transcription timing, companion model config, and completion-token accounting. It also removes the retired `ocr-onnx` plugin path in favor of `ggml-ocr`.
+
+## Breaking Changes
+
+### OCR plugin path
+
+Serve configs and docs that still reference the retired ONNX OCR plugin must switch to the ggml OCR plugin.
+
+**Before:**
+
+```json
+{ "plugins": ["@qvac/sdk/onnx-ocr/plugin"] }
+```
+
+**After:**
+
+```json
+{ "plugins": ["@qvac/sdk/ggml-ocr/plugin"] }
+```
+
+## New APIs
+
+### Timed transcription response formats
+
+`POST /v1/audio/transcriptions` now accepts OpenAI-compatible timed formats such as `vtt` and `srt`, in addition to plain text and JSON. Clients can request timed captions without a separate post-processing step:
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
+  -F model=whisper-transcribe \
+  -F file=@./sample.wav \
+  -F response_format=vtt
+```
+
+### Nested companion model constants in serve config
+
+Serve model entries can resolve nested `*ModelSrc` constant names such as `s3genModelSrc` for multi-component TTS engines. Companion weights no longer need to be hard-coded as raw paths when the constant is already exported by the SDK:
+
+```json
+{
+  "serve": {
+    "models": {
+      "chatterbox": {
+        "model": "TTS_T3_TURBO_EN_CHATTERBOX_Q8_0",
+        "type": "tts",
+        "config": {
+          "ttsEngine": "chatterbox",
+          "language": "en",
+          "s3genModelSrc": "TTS_S3GEN_EN_CHATTERBOX"
+        }
+      }
+    }
+  }
+}
+```
+
+### Completion usage prefers emitted tokens
+
+OpenAI-compatible chat usage now prefers `stats.emittedTokens` (non-empty pieces actually streamed to the client) when the addon reports it, while `generatedTokens` remains the decode-count signal for length and KV-cache budgeting. This keeps `usage.completion_tokens` aligned with what clients observe in the response stream.
+
+## Dependency Alignment
+
+`@qvac/cli` now depends on `@qvac/sdk@^0.17.0`. Publish and promote this release after `@qvac/sdk` 0.17.0 is on npm.
+
+## Other
+
+The package build now uses `tsc-alias` instead of the previous custom path-alias resolver.
+
 ## [0.9.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.9.0

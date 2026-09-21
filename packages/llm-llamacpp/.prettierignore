@@ -11,3 +11,8 @@ test/results
 examples
 addon
 benchmarks
+index.js
+addon.js
+batchHandler.js
+addonLogging.js
+*.d.ts

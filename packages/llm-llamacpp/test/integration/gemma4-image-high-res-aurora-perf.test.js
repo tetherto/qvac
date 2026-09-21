@@ -4,6 +4,7 @@
 // the 30-minute mobile cap. Asserts an aurora keyword + records perf.
 
 const test = require('brittle')
+// prestage-uses: vlm-perf-gemma4 — GEMMA4_MODEL is defined in _vlm-image-perf.js
 const {
   GEMMA4_MODEL,
   IMAGE_CASES,

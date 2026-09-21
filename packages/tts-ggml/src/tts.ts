@@ -22,6 +22,10 @@ export interface TTSJobData {
   noise?: string;
   reverb?: string;
   quality?: string;
+  // Audio8 per-call voice cloning (siblings of `input`), read by
+  // JSAdapter::readAudio8Voice. Ignored by other engines.
+  referenceAudio?: string;
+  referenceText?: string;
 }
 
 export interface TTSWeightData {

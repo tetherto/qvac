@@ -16,17 +16,18 @@ namespace utils {
 //
 //   * a prefill-entry full-state snapshot, restored on cancellation
 //     that fires before prefill finishes;
-//   * an end-of-prefill full-state snapshot, restored both by
-//     thinking-block compaction and by cancellation during generation;
+//   * a reasoning-boundary full-state snapshot, anchored before the span
+//     and restored both by thinking-block compaction and by cancellation
+//     during generation;
 //   * the post-reasoning token capture buffer used to replay the
-//     visible answer after restoring the end-of-prefill snapshot.
+//     visible answer after restoring that snapshot.
 //
 // Failure handling stays in the caller: `capture*` and `restore*`
 // return false when the underlying llama.cpp call short-reads, and the
 // caller decides how to surface that. Under the uniform
 // `remove_thinking_from_context` hard-fail contract (PR #2813), the
-// end-of-prefill reasoning-boundary capture site
-// (`ReasoningBlockCompactor::snapshotAtPrefillBoundary`) throws
+// reasoning-boundary capture site
+// (`ReasoningBlockCompactor::snapshotAtReasoningBoundary`) throws
 // `qvac_errors::StatusError` on underflow, and hybrid restore/replay
 // failures inside `compact()` also throw. Auxiliary cancel-path
 // captures (`capturePrefillEntry`) log a warning and continue.
@@ -61,6 +62,11 @@ public:
   // capture failure (the snapshot is cleared in that case).
   bool captureReasoningBoundary(
       ::llama_context* ctx, llama_seq_id seqId, llama_pos nPast);
+  // Position-only variant for memory that can drop a partial tail, which is
+  // every pure-attention model. Restoring it trims back to `nPast` instead of
+  // reloading state, so compaction never needs `seq_add` and the deferred
+  // K-shift it schedules. Always succeeds: there is nothing to serialize.
+  void captureReasoningBoundaryPosition(llama_pos nPast);
   // No-op when no snapshot is held. Returns false only when a held
   // snapshot fails to restore.
   bool restoreReasoningBoundary(::llama_context* ctx, llama_seq_id seqId);
@@ -85,12 +91,12 @@ public:
     return capturingPostReasoning_;
   }
   void recordPostReasoningToken(llama_token id);
-  // Unconditional append used to seed the replay buffer with the close
-  // marker token id (and any other tokens that must land in the
-  // replayed prefix) before `capturingPostReasoning_` is flipped on.
-  // Skips null token ids; never checks the capture flag. Bumps the
-  // seeded-prefix counter so `clipPostReasoningTokens` cannot drop
-  // structural tokens.
+  // Unconditional append used to seed the replay buffer with the
+  // pre-reasoning preamble a generated-opener template samples, before
+  // `capturingPostReasoning_` is flipped on. No `<think>` or `</think>` is
+  // ever seeded. Skips null token ids; never checks the capture flag. Bumps
+  // the seeded-prefix counter so `clipPostReasoningTokens` cannot drop the
+  // preamble.
   void appendPostReasoningToken(llama_token id);
   [[nodiscard]] const std::vector<llama_token>&
   postReasoningTokens() const noexcept {
@@ -99,19 +105,27 @@ public:
   [[nodiscard]] size_t postReasoningTokenCount() const noexcept {
     return postReasoningTokens_.size();
   }
-  // Number of seeded structural tokens at the head of the replay
-  // buffer (close marker, etc.) that `clipPostReasoningTokens` must
-  // preserve regardless of the live-cache tail size.
+  // Number of seeded tokens at the head of the replay buffer, the
+  // pre-reasoning preamble a generated-opener template samples before the
+  // block opens, that `clipPostReasoningTokens` must preserve regardless of
+  // the live-cache tail size. No structural marker is ever seeded.
   [[nodiscard]] size_t seededPostReasoningCount() const noexcept {
     return seededPostReasoningCount_;
   }
   // Truncate the replay buffer so the captured suffix holds at most
-  // `maxCapturedTail` tokens. The seeded prefix (close marker + any
-  // other tokens added via `appendPostReasoningToken`) is never
-  // dropped, so passing 0 still preserves the structural prefix.
-  // Used when the tools-compact tail trim shrinks the live tail
+  // `maxCapturedTail` tokens. The seeded prefix, everything added through
+  // `appendPostReasoningToken`, is never dropped here, so passing 0 still
+  // replays the preamble. Used when a tail trim shrinks the live tail
   // between close-marker capture and replay.
   void clipPostReasoningTokens(size_t maxCapturedTail);
+
+  // Drop seeded tokens past `maxSeeded`, keeping the captured tail behind
+  // them intact. Needed for an unfinished reasoning span: the seeded prefix
+  // runs up to and including the pieces that open the block, and those sit
+  // inside the range compaction is dropping. With no close marker captured
+  // there is nothing to balance them, so replaying them would leave the
+  // block open in cache for the next turn to resume from.
+  void clipSeededPrefix(size_t maxSeeded);
   void clearPostReasoning() noexcept;
 
   // Replays captured tokens through the decoder, attaching them at
@@ -139,13 +153,17 @@ public:
   void seedPrefillEntryForTesting(llama_pos nPast) noexcept;
 
 private:
+  // Shared first-use reserve for `postReasoningTokens_`. Both writers run once
+  // per generated token, so neither should walk the vector up from zero.
+  void reserveReplayCapacity();
+
   RecurrentStateSnapshot prefillEntry_;
   RecurrentStateSnapshot reasoningBoundary_;
   std::vector<llama_token> postReasoningTokens_;
-  // Count of structural tokens at the head of `postReasoningTokens_`
-  // that must survive `clipPostReasoningTokens`. Incremented by
-  // `appendPostReasoningToken`; reset to zero whenever the buffer is
-  // cleared.
+  // Count of pre-reasoning preamble tokens at the head of
+  // `postReasoningTokens_` that must survive `clipPostReasoningTokens`.
+  // Incremented by `appendPostReasoningToken`; reset to zero whenever the
+  // buffer is cleared. No structural marker is ever seeded here.
   size_t seededPostReasoningCount_ = 0;
   bool capturingPostReasoning_ = false;
 };

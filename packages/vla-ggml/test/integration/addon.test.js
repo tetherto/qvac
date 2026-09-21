@@ -5,7 +5,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const os = require('bare-os')
 const process = require('bare-process')
-const { VlaModel, preprocessImage, padState } = require('../..')
+const { VlaModel, preprocessImage, padState, ERR_CODES } = require('../..')
 
 // ---------------------------------------------------------------------------
 // Performance reporter wiring. Mirrors the OCR addon pattern:
@@ -140,6 +140,7 @@ const _vlaDl = require('./_vla-model-download.cjs')
 const _loadUrlsConfig = () => _vlaDl.loadUrlsConfig('smolvla-urls.json')
 const _downloadFile = _vlaDl.downloadFile
 const _verifyCachedModel = _vlaDl.verifyCachedModel
+const _copyPrestagedModel = _vlaDl.copyPrestagedModel
 
 async function _ensureMobileModel() {
   const modelFilename = 'smolvla-libero-vision-q8.gguf'
@@ -165,6 +166,21 @@ async function _ensureMobileModel() {
       return destPath
     }
     console.log(`[vla-model] cached GGUF rejected (${verdict.reason}) — re-downloading`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
+  }
+
+  // The pre_test phase adb-pushed this shard's GGUF to /data/local/tmp; copy +
+  // verify it instead of the 1.9GB S3 download that flakes on mobile networks.
+  if (_copyPrestagedModel(modelFilename, destPath)) {
+    const staged = await _verifyCachedModel(destPath, urlConfig)
+    if (staged.ok) {
+      const mb = fs.statSync(destPath).size / (1024 * 1024)
+      console.log(`[vla-model] using pre-staged GGUF: ${destPath} (${mb.toFixed(1)}MB)`)
+      return destPath
+    }
+    console.log(`[vla-model] pre-staged GGUF rejected (${staged.reason}) — downloading`)
     try {
       fs.unlinkSync(destPath)
     } catch (_) {}
@@ -421,20 +437,64 @@ function _buildFixtureInputs(name, hp) {
   throw new Error(`unknown fixture name: ${name}`)
 }
 
+// The addon queues native log lines and drains them onto the JS thread through
+// a uv_async handle, so they can land after the load promise settles. Waiting
+// for the load's terminal line makes reading the log deterministic: the queue
+// is FIFO, so once that line is present every earlier load line is too.
+async function _waitForNativeLine(lines, needle, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (lines.some((line) => line.includes(needle))) return true
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return false
+}
+
 async function _runEndToEnd(t, modelPath, backend, fixtureName) {
   // Each iteration owns its own VlaModel and explicitly `unload()`s before
   // returning so memory-constrained mobile devices don't hold two copies of
   // the weights at once. `t.teardown` would defer release to end-of-test,
   // which on Android/iOS pushes us past the device-farm OOM limit.
+  //
+  // The native load log is captured so the assertion below can check how the
+  // weights were placed, not just that the load returned: the alloc+copy
+  // fallback commits the whole model to anonymous memory, which iOS refuses
+  // near its jetsam limit (QVAC-23327). Collection is bounded on purpose.
+  const nativeLog = []
+  const _collect = (...args) => {
+    if (nativeLog.length < 4096) nativeLog.push(args.join(' '))
+  }
   const model = new VlaModel({
     files: { model: [path.resolve(modelPath)] },
+    logger: { error: _collect, warn: _collect, info: _collect, debug: _collect },
     opts: { stats: true }
   })
+  // QVAC_LOG_LEVEL (and its EXPO_PUBLIC_ variant) outrank the logger passed
+  // above, so a harness exporting `warn` would drop the INFO lines the load
+  // assertion reads and fail it for the wrong reason. Pin the level instead.
+  model.logger.setLevel('debug')
 
   const tag = `${fixtureName}/${backend}`
 
   try {
     await model.load({ backend })
+
+    // Windows has no mmap path to take (smolvla.cpp guards it with
+    // `#ifndef _WIN32`), and an accelerator backend legitimately copies into
+    // device-local memory, so only a CPU load elsewhere is required to map.
+    if (backend === 'cpu' && _platform !== 'win32') {
+      const drained = await _waitForNativeLine(nativeLog, 'model loaded successfully')
+      t.ok(drained, `native load log reached the test (${tag})`)
+      if (drained) {
+        const mapped = nativeLog.some((line) => line.includes('mmap+host_ptr buffer ready'))
+        if (!mapped) {
+          for (const line of nativeLog.filter((l) => l.includes('smolvla_load_model'))) {
+            t.comment(line)
+          }
+        }
+        t.ok(mapped, `CPU load mapped the weights instead of copying them (${tag})`)
+      }
+    }
 
     const hp = model.hparams
     t.ok(hp.chunkSize > 0)
@@ -631,6 +691,46 @@ test(
       )
     } finally {
       await model.unload().catch(() => {})
+    }
+  }
+)
+
+// An embodiment named on an architecture that has none must be an error, not a
+// silently-ignored field: `embodiment` is GR00T-only, so a caller who passes it
+// with a SmolVLA GGUF has almost certainly pointed `files` at the wrong model,
+// and loading whatever the file happens to be hides that. The rejection is
+// raised by the factory off the sniffed architecture, so it costs one metadata
+// open — no weights are read.
+test(
+  'integration: config.embodiment on a non-GR00T GGUF is rejected (needs GGUF)',
+  { timeout: 300000 },
+  async (t) => {
+    const modelPath = process.env.QVAC_VLA_MODEL
+    if (!modelPath || !fs.existsSync(modelPath)) {
+      t.comment(`skipping: set QVAC_VLA_MODEL to a valid GGUF (got "${modelPath ?? ''}")`)
+      t.pass()
+      return
+    }
+
+    for (const embodiment of ['oxe_droid_relative_eef_relative_joint', 24]) {
+      const model = new VlaModel({
+        files: { model: [path.resolve(modelPath)] },
+        config: { embodiment }
+      })
+      let err = null
+      try {
+        await model.load({ backend: 'cpu' })
+      } catch (e) {
+        err = e
+      } finally {
+        await model.unload().catch(() => {})
+      }
+      t.ok(err, `embodiment ${JSON.stringify(embodiment)} rejected on a SmolVLA GGUF`)
+      t.ok(
+        err && /GR00T-only/.test(err.message || ''),
+        `error names the architecture mismatch (got: ${err && err.message})`
+      )
+      t.is(err && err.code, ERR_CODES.INVALID_CONFIG, 'reported as INVALID_CONFIG')
     }
   }
 )

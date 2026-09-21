@@ -2,9 +2,11 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 #include "audiogen-cpp/acestep/engine.h"
@@ -12,13 +14,67 @@
 namespace qvac::audiogenggml::acestep {
 
 namespace {
-int16_t f32ToI16(float x) {
-  float v = x * 32767.0F;
-  if (v > 32767.0F) v = 32767.0F;
-  if (v < -32768.0F) v = -32768.0F;
-  return static_cast<int16_t>(v);
+class CancellationReset {
+public:
+  explicit CancellationReset(std::atomic_bool& requested)
+      : requested_(requested) {}
+
+  ~CancellationReset() { requested_.store(false); }
+
+private:
+  std::atomic_bool& requested_;
+};
+
+int16_t f32ToI16(float x, bool preserveInt16Scale = false) {
+  const float scale = preserveInt16Scale && x < 0.0F ? 32768.0F : 32767.0F;
+  float v = x * scale;
+  if (v > 32767.0F)
+    v = 32767.0F;
+  if (v < -32768.0F)
+    v = -32768.0F;
+  return static_cast<int16_t>(std::lrint(v));
 }
-}  // namespace
+
+constexpr int64_t BACKEND_DEVICE_CPU = 0;
+constexpr int64_t BACKEND_DEVICE_GPU = 1;
+
+// Mirrors tts-ggml's BackendUtils.hpp mapping so the codes the two addons
+// report cannot drift apart. Metal registers as "MTL" on newer ggml.
+int64_t backendIdFromName(const std::string& name) {
+  if (name == "CPU")
+    return 0;
+  if (name.rfind("Metal", 0) == 0 || name.rfind("MTL", 0) == 0)
+    return 1;
+  if (name.rfind("CUDA", 0) == 0)
+    return 2;
+  if (name.rfind("Vulkan", 0) == 0)
+    return 3;
+  if (name.rfind("OpenCL", 0) == 0)
+    return 4;
+  return 99;
+}
+
+int64_t backendDeviceFromName(const std::string& name) {
+  return name == "CPU" ? BACKEND_DEVICE_CPU : BACKEND_DEVICE_GPU;
+}
+
+// Wire codes for AudiogenStats.gpuFallbackReason. Mapped explicitly rather than
+// cast from the enum so reordering it upstream cannot silently remap them.
+int64_t gpuFallbackReasonCode(tts_cpp::GpuFallbackReason reason) {
+  switch (reason) {
+  case tts_cpp::GpuFallbackReason::none:
+    return 0;
+  case tts_cpp::GpuFallbackReason::not_requested:
+    return 1;
+  case tts_cpp::GpuFallbackReason::no_devices:
+    return 2;
+  case tts_cpp::GpuFallbackReason::init_failed:
+    return 3;
+  }
+  return 99;
+}
+
+} // namespace
 
 AcestepModel::AcestepModel(AcestepConfig config) : cfg_(std::move(config)) {
   validateConfig(cfg_);
@@ -34,8 +90,9 @@ AcestepModel::~AcestepModel() noexcept {
 
 void AcestepModel::validateConfig(const AcestepConfig& cfg) {
   const bool hasDir = !cfg.modelDir.empty();
-  const bool hasExplicit = !cfg.lmModelPath.empty() && !cfg.ditModelPath.empty() &&
-                           !cfg.textEncModelPath.empty() && !cfg.vaeModelPath.empty();
+  const bool hasExplicit =
+      !cfg.lmModelPath.empty() && !cfg.ditModelPath.empty() &&
+      !cfg.textEncModelPath.empty() && !cfg.vaeModelPath.empty();
   if (!hasDir && !hasExplicit) {
     throw std::invalid_argument(
         "AcestepModel: set `modelDir` or all four explicit stage GGUF paths "
@@ -49,7 +106,8 @@ void AcestepModel::load() {
 }
 
 void AcestepModel::loadLocked() {
-  if (engine_) return;
+  if (engine_)
+    return;
 
   tts_cpp::acestep::EngineOptions opts;
   opts.models_dir = cfg_.modelDir;
@@ -61,8 +119,10 @@ void AcestepModel::loadLocked() {
   // useGpu gates offloading: when off, no layers go to the GPU regardless of
   // nGpuLayers. JS supplies both values (no C++ default).
   opts.n_gpu_layers = cfg_.useGpu ? cfg_.nGpuLayers : 0;
-  if (const char * vb = std::getenv("AUDIOGEN_VERBOSE")) {
-    opts.verbose = (vb[0] == '1' || vb[0] == 't' || vb[0] == 'T' || vb[0] == 'y' || vb[0] == 'Y');
+  if (const char* vb = std::getenv("AUDIOGEN_VERBOSE")) {
+    opts.verbose =
+        (vb[0] == '1' || vb[0] == 't' || vb[0] == 'T' || vb[0] == 'y' ||
+         vb[0] == 'Y');
   }
 
   // Compose the backends-scan directory from the host-provided prebuilds root
@@ -88,6 +148,7 @@ void AcestepModel::loadLocked() {
   }
   sampleRate_ = engine_->sample_rate();
   backendName_ = engine_->backend_name();
+  gpuFallbackReason_ = engine_->gpu_fallback_reason();
 }
 
 void AcestepModel::unload() {
@@ -106,25 +167,90 @@ void AcestepModel::reload() {
 void AcestepModel::cancel() const {
   cancelRequested_.store(true);
   std::lock_guard lk(engineMu_);
-  if (engine_) engine_->cancel();
+  if (engine_)
+    engine_->cancel();
 }
 
 std::any AcestepModel::process(const std::any& input) {
   const auto& in = std::any_cast<const AnyInput&>(input);
+  if (in.understand)
+    return std::any(understandAudio(in));
   return std::any(generate(in));
 }
 
-AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
-  cancelRequested_.store(false);
-  jobInProgress_.store(true);
+std::shared_ptr<tts_cpp::acestep::Engine> AcestepModel::acquireEngine() {
+  std::lock_guard lk(engineMu_);
+  if (!engine_)
+    loadLocked();
+  return engine_;
+}
+
+AcestepModel::UnderstandOutput
+AcestepModel::understandAudio(const AnyInput& in) {
+  CancellationReset cancellationReset(cancelRequested_);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step understanding cancelled");
+  }
   const auto t0 = std::chrono::steady_clock::now();
 
-  std::shared_ptr<tts_cpp::acestep::Engine> engine;
-  {
-    std::lock_guard lk(engineMu_);
-    if (!engine_) loadLocked();
-    engine = engine_;
+  std::shared_ptr<tts_cpp::acestep::Engine> engine = acquireEngine();
+
+  tts_cpp::acestep::UnderstandParams params;
+  params.audio = in.sourceAudio;
+  params.vocal_language = in.vocalLanguage;
+  params.lm_temperature = in.lmTemperature;
+  params.lm_top_p = in.lmTopP;
+  params.lm_top_k = in.lmTopK;
+  params.seed = in.seed;
+
+  auto progress =
+      [this](const std::string& stage, int step, int total) -> bool {
+    if (progressSink_)
+      progressSink_(AudioGenProgress{stage, step, total});
+    return !cancelRequested_.load();
+  };
+
+  tts_cpp::acestep::UnderstandResult result =
+      engine->understand(params, progress);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step understanding cancelled");
   }
+
+  const auto t1 = std::chrono::steady_clock::now();
+  totalTime_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
+  // The run analyses audio instead of producing it: report the input clip's
+  // duration so realTimeFactor still reads as time spent per audio second.
+  sampleRate_ = engine->sample_rate();
+  channels_ = 2;
+  totalSamples_ = static_cast<int64_t>(in.sourceAudio.size());
+  audioDurationMs_ =
+      sampleRate_ > 0
+          ? (static_cast<double>(totalSamples_) / channels_ / sampleRate_) *
+                1000.0
+          : 0.0;
+  realTimeFactor_ =
+      audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
+  hasQualityScore_ = false;
+
+  UnderstandOutput out;
+  out.caption = std::move(result.caption);
+  out.bpm = result.bpm;
+  out.duration = result.duration;
+  out.keyscale = std::move(result.keyscale);
+  out.timesignature = std::move(result.timesignature);
+  out.vocalLanguage = std::move(result.vocal_language);
+  out.audioCodes = std::move(result.audio_codes);
+  return out;
+}
+
+AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
+  CancellationReset cancellationReset(cancelRequested_);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step generation cancelled");
+  }
+  const auto t0 = std::chrono::steady_clock::now();
+
+  std::shared_ptr<tts_cpp::acestep::Engine> engine = acquireEngine();
 
   tts_cpp::acestep::GenerateParams params;
   params.caption = in.caption;
@@ -134,21 +260,87 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   params.bpm = in.bpm;
   params.keyscale = in.keyscale;
   params.timesignature = in.timesignature;
+  params.augment_caption_with_metadata = in.augmentCaptionWithMetadata;
   // Pass duration straight through: >0 caps the track to that many seconds,
   // 0 (the default) lets LM Phase-1 decide the full song length.
   params.duration = in.duration;
+  params.lm_temperature = in.lmTemperature;
+  params.lm_top_p = in.lmTopP;
+  params.lm_top_k = in.lmTopK;
+  params.lm_cfg_scale = in.lmCfgScale;
+  params.lm_phase1 = in.lmPhase1;
+  params.simple_mode = in.simpleMode;
+  params.rewrite_query = in.rewriteQuery;
+  params.normalize_loudness = in.normalizeLoudness;
+  params.generate_lrc = in.generateLrc;
+  params.compute_quality_score = in.computeQualityScore;
+  params.dcw_enabled = in.dcwEnabled;
+  params.dcw_scaler = in.dcwScaler;
+  params.dcw_high_scaler = in.dcwHighScaler;
+  params.audio_codes = in.audioCodes;
+  params.reference_audio = in.referenceAudio;
+  params.source_audio = in.sourceAudio;
+  params.task_type = in.taskType;
+  params.track = in.track;
+  params.guidance_scale = in.guidanceScale;
+  params.audio_cover_strength = in.audioCoverStrength;
+  params.cover_noise_strength = in.coverNoiseStrength;
+  params.edit_plan.reserve(in.editOperations.size());
+  for (const auto& operation : in.editOperations) {
+    if (const auto* flow = std::get_if<FlowEditInput>(&operation)) {
+      tts_cpp::acestep::FlowEditParams edit;
+      edit.source_caption = flow->sourceCaption;
+      edit.source_lyrics = flow->sourceLyrics;
+      edit.target_caption = flow->targetCaption;
+      edit.target_lyrics = flow->targetLyrics;
+      edit.n_min = flow->nMin;
+      edit.n_max = flow->nMax;
+      edit.n_avg = flow->nAvg;
+      params.edit_plan.emplace_back(std::move(edit));
+      continue;
+    }
+    const auto& repaint = std::get<RepaintInput>(operation);
+    tts_cpp::acestep::RepaintParams edit;
+    edit.caption = repaint.caption;
+    edit.lyrics = repaint.lyrics;
+    edit.start_seconds = repaint.start;
+    edit.end_seconds = repaint.end;
+    edit.strength = repaint.strength;
+    switch (repaint.mode) {
+    case RepaintMode::Conservative:
+      edit.mode = tts_cpp::acestep::RepaintMode::Conservative;
+      break;
+    case RepaintMode::Balanced:
+      edit.mode = tts_cpp::acestep::RepaintMode::Balanced;
+      break;
+    case RepaintMode::Aggressive:
+      edit.mode = tts_cpp::acestep::RepaintMode::Aggressive;
+      break;
+    }
+    params.edit_plan.emplace_back(std::move(edit));
+  }
   // 0 = auto: the engine resolves steps/shift from the DiT model type
   // (turbo -> 8 / shift 3.0, base/sft -> 50 / shift 1.0). Forcing 8/3.0 here
   // would make a base/sft model render with turbo settings and sound wrong.
   params.inference_steps = cfg_.inferenceSteps;
   params.shift = cfg_.shift;
 
-  auto progress = [this](const std::string& stage, int step, int total) -> bool {
-    if (progressSink_) progressSink_(AcestepProgress{stage, step, total});
+  auto progress =
+      [this](const std::string& stage, int step, int total) -> bool {
+    if (progressSink_)
+      progressSink_(AudioGenProgress{stage, step, total});
     return !cancelRequested_.load();
   };
 
   tts_cpp::acestep::GenerateResult result = engine->generate(params, progress);
+  if (cancelRequested_.load()) {
+    throw std::runtime_error("ACE-Step generation cancelled");
+  }
+  hasLyricsScore_ = in.generateLrc;
+  lyricsScore_ = result.metadata.lyrics_score;
+  lrc_ = result.metadata.lrc;
+  hasQualityScore_ = in.computeQualityScore;
+  qualityScore_ = result.metadata.quality_score;
 
   // Peak-normalise before the int16 quantisation, exactly like the music CLI's
   // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float
@@ -166,13 +358,17 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   // ~-0.9 dBFS blast. kMinNormPeak ~= -60 dBFS.
   constexpr float kMinNormPeak = 1e-3F;
   float peak = 0.0F;
-  for (float s : result.pcm) peak = std::fmax(peak, std::fabs(s));
-  const float gain = peak > kMinNormPeak ? 0.9F / peak : 1.0F;
+  for (float s : result.pcm)
+    peak = std::fmax(peak, std::fabs(s));
+  // Edit plans promise exact preservation outside Repaint regions. Applying
+  // whole-track peak normalization here would modify every preserved sample.
+  const float gain =
+      in.editOperations.empty() && peak > kMinNormPeak ? 0.9F / peak : 1.0F;
 
   Output pcm;
   pcm.reserve(result.pcm.size());
   for (float s : result.pcm)
-    pcm.push_back(f32ToI16(s * gain));
+    pcm.push_back(f32ToI16(s * gain, !in.editOperations.empty()));
 
   const auto t1 = std::chrono::steady_clock::now();
   totalTime_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -181,11 +377,12 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   channels_ = result.channels;
   audioDurationMs_ =
       (sampleRate_ > 0 && channels_ > 0)
-          ? (static_cast<double>(totalSamples_) / channels_ / sampleRate_) * 1000.0
+          ? (static_cast<double>(totalSamples_) / channels_ / sampleRate_) *
+                1000.0
           : 0.0;
-  realTimeFactor_ = audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
+  realTimeFactor_ =
+      audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
 
-  jobInProgress_.store(false);
   return pcm;
 }
 
@@ -196,7 +393,19 @@ qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {
   stats.emplace_back("totalTimeMs", totalTime_);
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
+  // The *resolved* backend, so a useGPU request that silently fell back to the
+  // CPU is visible to callers (gpu-smoke.test.js asserts on these).
+  stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
+  stats.emplace_back("backendId", backendIdFromName(backendName_));
+  stats.emplace_back(
+      "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
+  if (hasLyricsScore_) {
+    stats.emplace_back("lyricsScore", lyricsScore_);
+  }
+  if (hasQualityScore_) {
+    stats.emplace_back("qualityScore", qualityScore_);
+  }
   return stats;
 }
 
-}  // namespace qvac::audiogenggml::acestep
+} // namespace qvac::audiogenggml::acestep

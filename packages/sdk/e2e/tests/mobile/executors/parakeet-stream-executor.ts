@@ -1,4 +1,4 @@
-import type { TestResult } from '@tetherto/qvac-test-suite/mobile'
+import type { TestResult } from '@qvac/test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import {
@@ -63,6 +63,12 @@ export class MobileParakeetStreamExecutor extends ModelAssetExecutor<typeof para
       const modelId = await this.resources.ensureLoaded('parakeet-eou')
       const bytes = await this.loadAudioBytes(p.audioFileName)
       return runParakeetStreamEou(modelId, bytes, p)
+    }
+
+    if (testId === 'parakeet-stream-unified-happy') {
+      const modelId = await this.resources.ensureLoaded('parakeet-unified')
+      const bytes = await this.loadAudioBytes(p.audioFileName)
+      return runParakeetStreamHappy(modelId, bytes, p)
     }
 
     const modelId = await this.resources.ensureLoaded('parakeet-tdt')

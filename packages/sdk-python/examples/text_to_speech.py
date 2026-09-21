@@ -15,8 +15,6 @@ import asyncio
 import sys
 import wave
 
-from _common import print_progress
-
 from tetherto.qvac_sdk import (
     Client,
     TextToSpeechRequest,
@@ -27,6 +25,17 @@ from tetherto.qvac_sdk import (
 from tetherto.qvac_sdk.models import TTS_MULTILINGUAL_SUPERTONIC3_Q8_0
 
 SUPERTONIC_SAMPLE_RATE = 44100
+
+
+def print_progress(p) -> None:
+    """Print model download progress; pass as `on_progress=` to `load_model`."""
+    line = (
+        f"▸ Downloading {p.percentage:.0f}% "
+        f"({p.downloaded / 1e6:.1f}/{p.total / 1e6:.1f} MB)"
+    )
+    print(line, end="\r" if sys.stderr.isatty() else "\n", file=sys.stderr)
+    if p.percentage >= 100:
+        print(file=sys.stderr)
 
 
 def write_wav(samples, sample_rate, path) -> None:

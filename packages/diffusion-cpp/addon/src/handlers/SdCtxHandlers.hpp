@@ -82,20 +82,24 @@ struct SdCtxConfig {
 
   // -- Memory management -----------------------------------------------------
   bool mmap = false;         // enable_mmap:           memory-map the GGUF file
-  bool offloadToCpu = false; // offload_params_to_cpu: keep weights in RAM, load
-                             // per-layer to GPU
+  bool offloadToCpu = false; // legacy compatibility: maps params to CPU
+  std::string backendSpec; // runtime module assignment, e.g. diffusion=vulkan0
+  std::string
+      paramsBackendSpec;      // parameter residency: cpu, disk, or assignments
+  std::string maxVramSpec;    // graph-cut VRAM budget in GiB or assignments
+  bool streamLayers = false;  // layer residency/prefetch on top of maxVramSpec
   std::string device = "gpu"; // "cpu" or "gpu" -- selects compute backend
   // Optional GPU pick when device == "gpu": a device index, "integrated", or
   // "dedicated" (the discrete GPU with the most VRAM). Empty = let the backend
   // choose. Resolved to a concrete ggml device backend name in SdModel::load().
   std::string mainGpu;
-  bool keepClipOnCpu =
-      false; // keep_clip_on_cpu:      keep CLIP encoder in CPU RAM
-  bool keepVaeOnCpu =
-      false; // keep_vae_on_cpu:       keep VAE decoder in CPU RAM
-  // Upstream defaults to true to save memory for pure text-to-image, but the
-  // addon supports image-conditioned jobs through a reusable context. Keep the
-  // encoder available so img2img/fusion/hires paths can encode input images.
+  bool vaeAutoCpuFallback = false; // preflight oversized VAE GPU graphs
+  float vaeAutoCpuFallbackMemoryRatio = 0.9f;
+  // Addon-level contract: when true, encoder-dependent jobs (e.g. LTX
+  // reference conditioning) are rejected before dispatch. The 2026-08-11
+  // engine always keeps VAE encoder weights (its sd_ctx_params_t has no
+  // vae_decode_only), so this no longer saves memory; it is parsed for
+  // config-surface stability and addon-side validation only.
   bool vaeDecodeOnly = false;
 
   // -- Precision -------------------------------------------------------------
@@ -115,8 +119,12 @@ struct SdCtxConfig {
   //   EPS_PRED        -> SD1.x
   //   V_PRED          -> SD2.x
   //   FLOW_PRED       -> SD3 (flow matching)
-  //   FLUX2_FLOW_PRED -> FLUX.2 [klein]
   prediction_t prediction = PREDICTION_COUNT; // auto
+  // prediction='flux2_flow' is accepted for config-surface stability: the
+  // engine auto-detects FLUX.2 from the weights (no prediction override
+  // exists for it any more), and this flag keeps driving the addon's FLUX.2
+  // in-context reference handling (ref_images / fusion mode).
+  bool flux2Requested = false;
 
   // -- LoRA (Low-Rank Adaptation) apply mode ---------------------------------
   lora_apply_mode_t loraApplyMode = LORA_APPLY_AUTO;
@@ -164,10 +172,10 @@ struct SdCtxConfig {
   std::string backendsDir; // directory containing DL backend .so modules
 
   // -- Internal --------------------------------------------------------------
-  // Upstream defaults to true, which frees model weight buffers after each
-  // generate_image_internal() call. The addon reuses a single sd_ctx across
-  // multiple generations, so freeing params after the first run causes a
-  // use-after-free SIGSEGV on the second run (including cancel-then-rerun).
+  // Historical knob from engines whose sd_ctx_params_t had
+  // free_params_immediately. The 2026-08-11 engine keeps params resident for
+  // the sd_ctx lifetime on its own, so this is parsed for config-surface
+  // stability but no longer forwarded.
   bool freeParamsImmediately = false;
 };
 
@@ -184,9 +192,35 @@ using SdCtxHandlersMap = std::unordered_map<std::string, SdCtxHandlerFn>;
 /** All supported load-time config keys and their handlers. */
 extern const SdCtxHandlersMap SD_CTX_HANDLERS;
 
+/** True when a params_backend assignment contains the disk backend. */
+bool paramsBackendSpecUsesDisk(const std::string& spec);
+/**
+ * True when the final whole-spec params_backend default differs from CPU.
+ *
+ * The engine accepts a bare backend name and assignments to "*", "all", or
+ * "default" as whole-spec defaults. The last default wins, so any of these
+ * entries can replace the "*=cpu" that offload_to_cpu contributes. Callers use
+ * the final value so an equivalent CPU default does not produce an error.
+ */
+bool paramsBackendSpecOverridesCpuDefault(const std::string& spec);
+/**
+ * True when a max_vram spec syntactically declares a non-zero budget.
+ *
+ * Repeated defaults and backend assignments follow the engine's last-write-wins
+ * order. This does not resolve the selected runtime backend or automatic
+ * negative budgets because the engine determines those from the initialized
+ * backend and its free memory. An unparseable value reads as non-zero because
+ * the engine rejects it with a specific error.
+ */
+bool maxVramSpecHasNonZeroBudget(const std::string& spec);
+/** Prepends the offload_to_cpu default before explicit module assignments. */
+std::string
+effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu);
+
 /**
  * Apply SD_CTX_HANDLERS to configMap, writing results into config.
- * Unknown keys are silently ignored (forward compatibility).
+ * Unknown keys are silently ignored (forward compatibility), except for the
+ * removed CPU-placement options, which throw with migration guidance.
  */
 void applySdCtxHandlers(
     SdCtxConfig& config,

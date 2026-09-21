@@ -35,36 +35,28 @@ env:
   NAME_SUFFIX: "-mono"
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+  fork-approval:
     permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -111,11 +103,11 @@ jobs:
 
   detect-changes:
     needs:
+      - fork-approval
       - authorize
-      - label-gate
     runs-on: ubuntu-latest
     environment: release
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true')
+    if: (needs.authorize.outputs.allowed == 'true')
     outputs:
       schema_changed: ${{ steps.filter.outputs.schema }}
       client_changed: ${{ steps.filter.outputs.client }}
@@ -125,7 +117,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Fetch PR head commits
@@ -177,7 +169,7 @@ jobs:
           fi
 
   publish-logic:
-    needs: [authorize]
+    needs: [fork-approval, authorize]
     runs-on: ubuntu-latest
     if: needs.authorize.outputs.allowed == 'true'
     outputs:
@@ -228,12 +220,12 @@ jobs:
 
   publish-schema-gpr:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+      (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -245,7 +237,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Configure npm for GitHub Package Registry
@@ -265,13 +257,13 @@ jobs:
 
   publish-schema-npm:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
       - release-merge-guard-schema
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped'))
+      (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.schema_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-schema.result == 'success' || needs.release-merge-guard-schema.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -296,7 +288,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Configure npm for GitHub Package Registry
@@ -308,21 +300,21 @@ jobs:
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           workdir: ${{ env.PKG_DIR }}/shared
           tag: ${{ inputs.npm_tag }}
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: ${{ env.PKG_DIR }}/shared
 
   publish-schema:
     name: Publish Schema (meta)
-    needs: [authorize, publish-schema-gpr, publish-schema-npm]
+    needs: [fork-approval, authorize, publish-schema-gpr, publish-schema-npm]
     if: |
       needs.authorize.outputs.allowed == 'true' &&
       (needs.publish-schema-gpr.result == 'success' || needs.publish-schema-gpr.result == 'skipped') &&
@@ -344,11 +336,11 @@ jobs:
 
   lint-and-test:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true')
+      (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true')
     permissions:
       contents: read
       packages: read
@@ -360,7 +352,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Checkout PR head
@@ -415,13 +407,13 @@ jobs:
 
   publish-client-gpr:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
       - lint-and-test
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
+      (needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && (needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_tmp == 'true'))
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -433,7 +425,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Configure npm for package registries
@@ -455,14 +447,14 @@ jobs:
 
   publish-client-npm:
     needs:
+      - fork-approval
       - authorize
       - detect-changes
       - publish-logic
       - lint-and-test
       - release-merge-guard-client
-      - label-gate
     if: |-
-      needs.label-gate.outputs.authorised == 'true' && (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped'))
+      (always() && needs.authorize.outputs.allowed == 'true' && needs.detect-changes.outputs.client_changed == 'true' && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard-client.result == 'success' || needs.release-merge-guard-client.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -487,7 +479,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Configure npm for package registries
@@ -501,14 +493,14 @@ jobs:
 
       - name: Determine dist-tag
         id: dist-tag-2
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           workdir: ${{ env.PKG_DIR }}/client
           tag: ${{ inputs.npm_tag }}
 
       - name: Publish to NPM Package Registry
         id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           tag: ${{ steps.dist-tag-2.outputs.tag }}
           workdir: ${{ env.PKG_DIR }}/client

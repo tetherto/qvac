@@ -5,7 +5,7 @@ import {
   type Expectation,
   type HandlerFn,
   type ExtractTest
-} from '@tetherto/qvac-test-suite'
+} from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   diffusionTests,

@@ -45,6 +45,15 @@ public:
             InvalidArgument,
             "Batch prompt id must be a non-empty string when provided");
       }
+      // A caller id shaped like an auto-minted one could collide with a mint
+      // (`batch-N`) in another in-flight group, silently rerouting that
+      // group's streamed chunks, so the prefix is reserved.
+      if (pid.rfind(kMintPrefix, 0) == 0) {
+        throw StatusError(
+            InvalidArgument,
+            "Batch prompt id prefix '" + std::string{kMintPrefix} +
+                "' is reserved for auto-minted ids: " + pid);
+      }
     } else {
       pid = mint();
     }
@@ -68,12 +77,17 @@ public:
   }
 
 private:
+  /// Namespace for auto-minted ids; `resolveAndTrack` rejects caller ids
+  /// carrying it, so mints can never collide with a caller id in another
+  /// in-flight group.
+  static constexpr std::string_view kMintPrefix = "batch-";
+
   /// Process-wide monotonic counter for auto-minted ids. Skipped numbers
   /// (on rejected/failed batches) are harmless: ids only need uniqueness
   /// within an accepted batch, enforced per-call by `resolveAndTrack`.
   static std::string mint() {
     static std::atomic<uint64_t> next{0};
-    return "batch-" + std::to_string(next.fetch_add(1) + 1);
+    return std::string{kMintPrefix} + std::to_string(next.fetch_add(1) + 1);
   }
 
   // `std::set` (RB-tree) beats `unordered_set` at the small batch sizes

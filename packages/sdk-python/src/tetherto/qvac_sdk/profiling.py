@@ -3,10 +3,18 @@
 Ports the JS SDK's `profiling/envelope.ts` + the per-call slice of
 `client/rpc/rpc-client.ts`'s profiled send path: the request carries
 `__profiling: {enabled, id, includeServer}`, and the worker (when asked)
-attaches `__profiling: {id, server?, delegation?, operation?}` to its reply.
+attaches `__profiling: {id, server?, operation?}` to its reply.
 `profiled_call()` wraps one unary call, measuring the client-side wall time
 and surfacing the server's breakdown; the envelope helpers are exported for
 callers composing their own instrumented flows.
+
+Intentional divergence: the JS SDK's top-level process-wide `profiler` object
+(`enable`/`disable`, aggregation, `exportTable`/`exportJSON`/`exportSummary`) is
+deliberately not ported. It is not a Client-API capability, and meaningful value
+would require instrumenting the full unary *and* streaming client -- `profiled_call`
+covers unary calls only, whereas the main inference workload is streaming. Python
+therefore exposes the per-call envelope + `profiled_call`, and callers aggregate
+the returned `ProfilingReport`s themselves.
 """
 
 from __future__ import annotations
@@ -61,7 +69,6 @@ class ProfilingReport:
     request_type: str
     total_ms: float
     server: dict[str, Any] | None = None
-    delegation: dict[str, Any] | None = None
     operation: dict[str, Any] | None = None
 
 
@@ -87,7 +94,6 @@ async def profiled_call(
         request_type=str(payload.get("type", "")),
         total_ms=total_ms,
         server=response_meta.get("server"),
-        delegation=response_meta.get("delegation"),
         operation=response_meta.get("operation"),
     )
     return strip_profiling_meta(response), report

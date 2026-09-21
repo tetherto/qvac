@@ -18,7 +18,7 @@ import type {
 // External mode synchronously composes the OpenAI-compatible language-model
 // surface with QVAC's native files, transcription, and speech capabilities.
 // Language models also resolve QVAC file references through the caller-managed
-// `qvac serve openai` endpoint.
+// `qvac serve --openai` endpoint.
 export function createExternalQvac(options: QvacExternalOptions = {}): QvacProvider {
   const apiKey = options.apiKey ?? DEFAULT_API_KEY
   const headers = mergeHeaders(DEFAULT_HEADERS, options.headers)

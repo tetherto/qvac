@@ -19,7 +19,6 @@
 
 namespace {
 
-constexpr int T_TOK = 148; // LIBERO v4 fixture: 128 image + 20 text tokens
 constexpr int IMAGE_TOKEN_ID = 151655; // Qwen3-VL placeholder
 constexpr int MERGED_GRID = 8;         // 256/16/2 per image
 
@@ -39,26 +38,30 @@ TEST(GrootM4_7, MRopePositionsMatchPytorch) {
   qvac_vla_safetensors_lite::Reader act;
   ASSERT_NO_THROW(act.open(actPath));
 
-  // visual_pos_masks [1,148] — 1 at image-token positions.
+  // visual_pos_masks [1,nTok] — 1 at image-token positions. The prompt length
+  // is per-embodiment (LIBERO 148, DROID 280, real_g1 145), so take it from the
+  // oracle rather than a constant: a hardcoded length turns every other
+  // embodiment's fixture into an assert instead of a parity check.
   const std::vector<float> vpm =
       act.readF32("text_model_input.call0.kwargs.visual_pos_masks");
-  ASSERT_EQ(vpm.size(), static_cast<size_t>(T_TOK));
+  const int tTok = static_cast<int>(vpm.size());
+  ASSERT_GT(tTok, 0);
 
-  // position_ids [3,1,148] — axis-major (temporal, height, width).
+  // position_ids [3,1,nTok] — axis-major (temporal, height, width).
   const std::vector<float> expPos =
       act.readF32("text_model_input.call0.kwargs.position_ids");
-  ASSERT_EQ(expPos.size(), static_cast<size_t>(3 * T_TOK));
+  ASSERT_EQ(expPos.size(), static_cast<size_t>(3 * tTok));
 
   // Synthesize langTokens: image id at image positions, distinct text ids else.
-  std::vector<int32_t> tokens(T_TOK);
-  for (int t = 0; t < T_TOK; ++t) {
+  std::vector<int32_t> tokens(tTok);
+  for (int t = 0; t < tTok; ++t) {
     tokens[t] = (vpm[t] > 0.5f) ? IMAGE_TOKEN_ID : (1000 + t);
   }
 
-  std::vector<int32_t> got(static_cast<size_t>(T_TOK) * 4);
+  std::vector<int32_t> got(static_cast<size_t>(tTok) * 4);
   qvac_lib_infer_vla_ggml::grootDeriveMRopePositions(
       tokens.data(),
-      T_TOK,
+      tTok,
       IMAGE_TOKEN_ID,
       MERGED_GRID,
       MERGED_GRID,
@@ -68,15 +71,17 @@ TEST(GrootM4_7, MRopePositionsMatchPytorch) {
   int mismatches = 0;
   int firstBad = -1;
   for (int ax = 0; ax < 3; ++ax) {
-    for (int t = 0; t < T_TOK; ++t) {
-      const int expv = static_cast<int>(expPos[ax * T_TOK + t]);
-      const int gotv = got[ax * T_TOK + t];
+    for (int t = 0; t < tTok; ++t) {
+      const int expv = static_cast<int>(expPos[ax * tTok + t]);
+      const int gotv = got[ax * tTok + t];
       if (expv != gotv) {
-        if (firstBad < 0)
-          firstBad = ax * T_TOK + t;
+        if (firstBad < 0) {
+          firstBad = ax * tTok + t;
+        }
         ++mismatches;
       }
     }
   }
-  EXPECT_EQ(mismatches, 0) << "first mismatch at flat idx " << firstBad;
+  EXPECT_EQ(mismatches, 0) << "first mismatch at flat idx " << firstBad
+                           << " of " << tTok << " tokens";
 }

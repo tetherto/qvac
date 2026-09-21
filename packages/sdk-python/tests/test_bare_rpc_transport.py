@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from _worker_env import BARE_BIN, WORKER_AVAILABLE
+from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
 
-from tetherto.qvac_sdk.bare_rpc_transport import BARE_RPC_AVAILABLE, BareRpcTransport
+from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
 from tetherto.qvac_sdk.methods import (
     bci_transcribe_stream,
     completion_stream,
@@ -47,17 +47,11 @@ SDK_DIR = os.environ.get(
     "QVAC_POC_SDK_DIR",
     str(Path(__file__).resolve().parent.parent.parent / "sdk"),
 )
-WORKER_PATH = f"{SDK_DIR}/dist/server/worker.js"
 AUDIO_FIXTURE = f"{SDK_DIR}/e2e/assets/audio/transcription-short-wav.wav"
 NEURAL_FIXTURE = f"{SDK_DIR}/e2e/assets/neural/neural-not-too-controversial.bin"
 
 pytestmark = [
     pytest.mark.asyncio,
-    pytest.mark.skipif(
-        not BARE_RPC_AVAILABLE,
-        reason="bare_rpc not installed -- install the 'bare-rpc' extra "
-        "(`pip install -e '.[bare-rpc]'`) to run these tests",
-    ),
     pytest.mark.skipif(
         not WORKER_AVAILABLE,
         reason=f"no built SDK worker + Bare runtime found (worker={WORKER_PATH!r}, bare={BARE_BIN!r}) -- run scripts/build_worker.py, or set QVAC_POC_SDK_DIR",
@@ -86,7 +80,7 @@ async def test_load_model_and_completion_stream(transport) -> None:
             # Qwen3 is a thinking model: the worker reserves context for the
             # reasoning trace, so the metadata-default budget overflows even a
             # tiny prompt. Give it an explicit window (matches the SDK e2e).
-            "modelConfig": {"n_ctx": 2048},
+            "modelConfig": {"ctx_size": 2048},
         }
     )
     load_response = await load_model(transport, load_request)
@@ -100,7 +94,7 @@ async def test_load_model_and_completion_stream(transport) -> None:
             "history": [{"role": "user", "content": "Say hello in five words."}],
             "stream": True,
             # Bound + seed the generation: Qwen3's thinking trace otherwise
-            # rambles nondeterministically and can outgrow n_ctx mid-stream,
+            # rambles nondeterministically and can outgrow ctx_size mid-stream,
             # surfacing as a flaky CONTEXT_OVERFLOW.
             "generationParams": {"predict": 512, "temp": 0, "seed": 42},
         }
@@ -180,8 +174,8 @@ def _wav_to_s16le_mono_16k(path: str) -> bytes:
 @pytest.mark.heavy
 async def test_transcribe_stream_duplex(transport) -> None:
     """Parakeet's streaming session only decodes when fed at roughly real-time
-    cadence (see transcription-parakeet's live-stream-simulation.test.js /
-    duplex-streaming tests) -- chunks are paced with a real `asyncio.sleep`
+    cadence (see asr-ggml's parakeet-live-stream-simulation.test.js /
+    parakeet-duplex-streaming tests) -- chunks are paced with a real `asyncio.sleep`
     between writes, matching the SDK e2e runner's `writeInChunks(delayMs)`."""
     load_request = LoadModelRequest.model_validate(
         {
@@ -355,7 +349,7 @@ async def test_completion_orchestrate_without_tools(transport) -> None:
             "type": "loadModel",
             "modelSrc": QWEN3_600M_INST_Q4.src,
             "modelType": "llamacpp-completion",
-            "modelConfig": {"n_ctx": 2048},
+            "modelConfig": {"ctx_size": 2048},
         }
     )
     load_response = await load_model(transport, load_request)
@@ -391,7 +385,7 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
             "type": "loadModel",
             "modelSrc": QWEN3_600M_INST_Q4.src,
             "modelType": "llamacpp-completion",
-            "modelConfig": {"n_ctx": 4096, "tools": True},
+            "modelConfig": {"ctx_size": 4096, "tools": True},
         }
     )
     load_response = await load_model(transport, load_request)
@@ -421,7 +415,15 @@ async def test_completion_orchestrate_runs_the_tool_loop(transport) -> None:
                 "handler": get_secret_code,
             }
         ],
-        generation_params={"predict": 512, "temp": 0, "seed": 42},
+        # reasoning_budget 0 keeps thinking off: with it on, a 0.6B model can
+        # spend the whole predict budget in <think> and never emit the tool
+        # call, which is the loop under test (QVAC-24318).
+        generation_params={
+            "predict": 512,
+            "temp": 0,
+            "seed": 42,
+            "reasoning_budget": 0,
+        },
     )
     async for _event in run.events:
         pass
@@ -448,7 +450,7 @@ async def test_completion_orchestrate_cancel_stops_generation(transport) -> None
             "type": "loadModel",
             "modelSrc": QWEN3_600M_INST_Q4.src,
             "modelType": "llamacpp-completion",
-            "modelConfig": {"n_ctx": 2048},
+            "modelConfig": {"ctx_size": 2048},
         }
     )
     load_response = await load_model(transport, load_request)

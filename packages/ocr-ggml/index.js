@@ -11,6 +11,35 @@ const ocr_ggml_1 = require("./ocr-ggml");
 const error_1 = require("./lib/error");
 Object.defineProperty(exports, "QvacErrorAddonOcrGgml", { enumerable: true, get: function () { return error_1.QvacErrorAddonOcrGgml; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_1.ERR_CODES; } });
+const main_gpu_1 = require("./lib/main-gpu");
+const DOCTR_INTERNAL_LANG_LIST = ["en"];
+/**
+ * Native language-validation failure messages (see the EasyOCR pipeline's
+ * lang.cpp): "Received unsupported languages for the OCR addon: [...]" and
+ * "<X> is only compatible with English, try langList=...". Used to map
+ * create-time failures to ERR_CODES.UNSUPPORTED_LANGUAGE.
+ */
+const NATIVE_LANGUAGE_ERROR = /unsupported languages|only compatible with english/i;
+// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, in the
+// @qvac/fabric dependency (prebuilds/<host>/qvac__fabric). We deliberately do
+// not copy them into this addon to avoid duplicating tens of MB per fabric
+// consumer. On desktop, resolve the single @qvac/fabric install and load the
+// backends from there. On mobile the package tree isn't resolvable at runtime
+// (the worklet runs from a packed bundle), so fall back to this addon's own
+// prebuilds, where the mobile packaging stages the backends. The native side
+// appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
+function resolveBackendsDir() {
+    try {
+        const fabricPkg = require.resolve("@qvac/fabric/package");
+        const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
+        if (fs.existsSync(fabricPrebuilds))
+            return fabricPrebuilds;
+    }
+    catch {
+        // Mobile worklets cannot resolve the @qvac/fabric package tree.
+    }
+    return path.join(__dirname, "prebuilds");
+}
 /**
  * GGML-backed OCR implementation.
  *
@@ -97,24 +126,38 @@ class OcrGgml {
                 adds: "pathRecognizer",
             });
         }
-        if (!Array.isArray(this.params.langList) || this.params.langList.length === 0) {
+        const isDoctr = this.params.pipelineType === "doctr";
+        if (this.params.langList === undefined && !isDoctr) {
             throw new error_1.QvacErrorAddonOcrGgml({
                 code: error_1.ERR_CODES.MISSING_REQUIRED_PARAMETER,
                 adds: "langList (non-empty array)",
             });
         }
-        const SUPPORTED_LANGUAGES = new Set(["en"]);
-        const hasSupported = this.params.langList.some((l) => SUPPORTED_LANGUAGES.has(l));
-        if (!hasSupported) {
+        if (this.params.langList !== undefined &&
+            (!Array.isArray(this.params.langList) || this.params.langList.length === 0)) {
             throw new error_1.QvacErrorAddonOcrGgml({
-                code: error_1.ERR_CODES.UNSUPPORTED_LANGUAGE,
-                adds: `none of the requested languages are supported: ${this.params.langList.join(", ")}`,
+                code: error_1.ERR_CODES.MISSING_REQUIRED_PARAMETER,
+                adds: "langList (non-empty array)",
             });
+        }
+        const selectors = ["main-gpu", "main_gpu", "gpuDevice"];
+        if (selectors.filter((key) => this.params[key] !== undefined).length > 1) {
+            throw new TypeError("Use only one of main-gpu, main_gpu, or gpuDevice");
+        }
+        const rawMainGpu = this.params["main-gpu"] !== undefined
+            ? this.params["main-gpu"] : this.params.main_gpu;
+        const mainGpu = typeof rawMainGpu === "string"
+            ? (/^[+-]?\d+$/.test(rawMainGpu) ? Number(rawMainGpu) : rawMainGpu.toLowerCase())
+            : rawMainGpu;
+        if (mainGpu !== undefined && mainGpu !== "dedicated" && mainGpu !== "integrated" &&
+            !(typeof mainGpu === "number" && Number.isInteger(mainGpu) &&
+                mainGpu >= main_gpu_1.MIN_MAIN_GPU_INDEX && mainGpu <= main_gpu_1.MAX_MAIN_GPU_INDEX)) {
+            throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
         }
         const configurationParams = {
             pathDetector: this.params.pathDetector,
             pathRecognizer: this.params.pathRecognizer,
-            langList: this.params.langList,
+            langList: this.params.langList ?? DOCTR_INTERNAL_LANG_LIST,
         };
         // Forward optional config knobs only when explicitly set so the C++
         // defaults (in OcrConfig) win otherwise.
@@ -129,6 +172,8 @@ class OcrGgml {
             "pipelineType",
             "backendDevice",
             "gpuDevice",
+            "main-gpu",
+            "main_gpu",
         ];
         for (const field of optionalFields) {
             if (this.params[field] !== undefined) {
@@ -138,10 +183,38 @@ class OcrGgml {
         configurationParams.backendsDir =
             this.params.backendsDir !== undefined
                 ? this.params.backendsDir
-                : path.join(__dirname, "prebuilds");
+                : resolveBackendsDir();
         this.logger.info("Creating ocr-ggml addon");
-        this.addon = this._createAddon(configurationParams);
-        await this.addon.activate();
+        try {
+            this.addon = this._createAddon(configurationParams);
+        }
+        catch (err) {
+            // Native instance creation loads the models and validates langList.
+            // Wrap its failures with a stable code — language-validation failures
+            // keep the public UNSUPPORTED_LANGUAGE code, everything else is a
+            // weight-load error — while preserving the native message.
+            const message = (0, error_1.errorMessage)(err);
+            throw new error_1.QvacErrorAddonOcrGgml({
+                code: NATIVE_LANGUAGE_ERROR.test(message)
+                    ? error_1.ERR_CODES.UNSUPPORTED_LANGUAGE
+                    : error_1.ERR_CODES.FAILED_TO_LOAD_WEIGHTS,
+                adds: message,
+                cause: err,
+            });
+        }
+        try {
+            await this.addon.activate();
+        }
+        catch (err) {
+            try {
+                await this.addon.destroy();
+            }
+            catch (cleanupErr) {
+                this.logger.warn("ocr-ggml: cleanup after failed activation failed: " + (0, error_1.errorMessage)(cleanupErr));
+            }
+            this.addon = null;
+            throw err;
+        }
         this.state.configLoaded = true;
         this.state.weightsLoaded = true;
         // Capture the backend device the C++ pipeline actually resolved (Vulkan vs

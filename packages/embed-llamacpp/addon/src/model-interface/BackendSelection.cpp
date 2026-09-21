@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <optional>
+#include <string_view>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -54,43 +56,117 @@ struct DeviceDescription {
   }
 };
 
+std::string lowerCopy(const char* value) {
+  if (value == nullptr) {
+    return {};
+  }
+  std::string lower(value);
+  std::ranges::transform(lower, lower.begin(), [](unsigned char c) {
+    return static_cast<char>(std::tolower(c));
+  });
+  return lower;
+}
+
+bool hasBackendFamily(
+    std::string_view deviceName, std::string_view registryName,
+    std::string_view family) {
+  if (registryName == family) {
+    return true;
+  }
+  if (family == "opencl") {
+    return deviceName == "gpuopencl" || deviceName.starts_with("opencl");
+  }
+  return deviceName.starts_with(family);
+}
+
+// Accept Metal device prefixes alongside ggml's MTL registry identity.
+bool hasMetalFamily(
+    std::string_view deviceName, std::string_view registryName) {
+  const auto hasMetalPrefix = [](std::string_view name) {
+    return name.starts_with("mtl") || name.starts_with("metal");
+  };
+  return hasMetalPrefix(deviceName) || registryName == "mtl" ||
+         registryName == "metal";
+}
+
+// Same identity source as eligibility, so a device admitted by its registry
+// name is also bucketed and filtered as OpenCL.
+bool isOpenClDevice(
+    const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  return hasBackendFamily(
+      lowerCopy(bckI.ggml_backend_dev_name(dev)),
+      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
+      "opencl");
+}
+
+std::string
+deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  const char* namePtr = bckI.ggml_backend_dev_name(dev);
+  const char* registryPtr =
+      reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr;
+  const std::string name = namePtr != nullptr ? namePtr : "unnamed";
+  const std::string registry =
+      registryPtr != nullptr ? registryPtr : "unknown registry";
+  return name + " (" + registry + ")";
+}
+
+bool isEligibleGpuDevice(
+    const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const enum ggml_backend_dev_type type = bckI.ggml_backend_dev_type(dev);
+  if (type != GGML_BACKEND_DEVICE_TYPE_GPU &&
+      type != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+    return false;
+  }
+
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  const std::string registryName =
+      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
+  const std::string deviceName = lowerCopy(bckI.ggml_backend_dev_name(dev));
+  if (hasBackendFamily(deviceName, registryName, "cuda") ||
+      hasBackendFamily(deviceName, registryName, "rpc")) {
+    return true;
+  }
+  if (hasBackendFamily(deviceName, registryName, "opencl")) {
+    return lowerCopy(bckI.ggml_backend_dev_description(dev)).find("adreno") !=
+           std::string::npos;
+  }
+  return hasBackendFamily(deviceName, registryName, "vulkan") ||
+         hasMetalFamily(deviceName, registryName);
+}
+
 void emplaceIfValidDevice(
     const BackendInterface& bckI, std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends, const ggml_backend_reg_t reg,
-    const DeviceDescription& devDescr,
-    const enum ggml_backend_dev_type backendTypeEnum) {
-  if (bckI.ggml_backend_reg_name(reg) != std::string("RPC")) {
-    auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
+    std::vector<std::string>& openClBackends, const DeviceDescription& devDescr,
+    const enum ggml_backend_dev_type backendTypeEnum, const bool isOpenCl) {
+  auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
-      std::string text = string_format(
-          "Emplacing backend: gpuBackend = %s", gpuBackend.c_str());
-      bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
+    std::string text =
+        string_format("Emplacing backend: gpuBackend = %s", gpuBackend.c_str());
+    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
 #endif
-    };
+  };
 
-    const bool isOpenCl =
-        devDescr.gpuBackend.find("opencl") != std::string::npos;
-    const bool isAdreno =
-        devDescr.gpuDescription.find("adreno") != std::string::npos;
-    if (isOpenCl && isAdreno) {
-      logEmplaceGpuBackend(devDescr.gpuBackend);
-      openClBackends.emplace_back(devDescr.gpuBackend);
-    } else if (!isOpenCl) {
-      logEmplaceGpuBackend(devDescr.gpuBackend);
-      if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
-        gpuBackends.emplace_back(devDescr.gpuBackend);
-      } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU) {
-        igpuBackends.emplace_back(devDescr.gpuBackend);
-      }
+  const bool isAdreno =
+      devDescr.gpuDescription.find("adreno") != std::string::npos;
+  if (isOpenCl && isAdreno) {
+    logEmplaceGpuBackend(devDescr.gpuBackend);
+    openClBackends.emplace_back(devDescr.gpuBackend);
+  } else if (!isOpenCl) {
+    logEmplaceGpuBackend(devDescr.gpuBackend);
+    if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU) {
+      gpuBackends.emplace_back(devDescr.gpuBackend);
+    } else if (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      igpuBackends.emplace_back(devDescr.gpuBackend);
     }
   }
 }
 
 bool shouldProcessDevice(
     const enum ggml_backend_dev_type backendTypeEnum,
-    const DeviceDescription& devDescr,
-    const std::optional<MainGpuType> mainGpuType) {
+    const std::optional<MainGpuType> mainGpuType, const bool isOpenCl) {
   const bool anyGpu = !mainGpuType.has_value() &&
                       (backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
                        backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU);
@@ -100,7 +176,6 @@ bool shouldProcessDevice(
   const bool dedicatedGpu = mainGpuType.has_value() &&
                             mainGpuType.value() == MainGpuType::Dedicated &&
                             backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU;
-  const bool isOpenCl = devDescr.gpuBackend.find("opencl") != std::string::npos;
   return anyGpu || integratedGpu || dedicatedGpu || isOpenCl;
 }
 
@@ -109,13 +184,23 @@ void tryEmplaceDevice(
     std::optional<MainGpuType> mainGpuType,
     std::vector<std::string>& gpuBackends,
     std::vector<std::string>& igpuBackends,
-    std::vector<std::string>& openClBackends) {
+    std::vector<std::string>& openClBackends,
+    std::vector<std::string>& rejectedDevices) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
-  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
-  if (shouldProcessDevice(backendTypeEnum, devDescr, mainGpuType)) {
+  // Shared by the type filter and the bucket choice so the two cannot disagree.
+  const bool isOpenCl = isOpenClDevice(bckI, dev);
+  const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
+                         backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
+  // Record a refused GPU before the main-gpu type filter so the CPU-fallback
+  // warning names it even when `integrated`/`dedicated` skips its type.
+  if (isGpuType && !isEligibleGpuDevice(bckI, dev)) {
+    rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+    return;
+  }
+  if (shouldProcessDevice(backendTypeEnum, mainGpuType, isOpenCl)) {
 #ifndef NDEBUG
     bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "New GPU device", nullptr);
 #endif
@@ -124,9 +209,9 @@ void tryEmplaceDevice(
         gpuBackends,
         igpuBackends,
         openClBackends,
-        reg,
         devDescr,
-        backendTypeEnum);
+        backendTypeEnum,
+        isOpenCl);
   } else {
 #ifndef NDEBUG
     bckI.llamaLogCallback(
@@ -203,6 +288,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
   std::vector<std::string> openClBackends;
+  std::vector<std::string> rejectedDevices;
 
   if (preferredBackendType == BackendType::GPU) {
     bool loopAllDevices = true;
@@ -221,7 +307,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               std::nullopt,
               gpuBackends,
               igpuBackends,
-              openClBackends);
+              openClBackends,
+              rejectedDevices);
           loopAllDevices = false;
         } else {
           std::string errorMsg = string_format(
@@ -237,7 +324,13 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     for (size_t i = 0; loopAllDevices && i < bckI.ggml_backend_dev_count();
          ++i) {
       ::tryEmplaceDevice(
-          bckI, i, gpuType, gpuBackends, igpuBackends, openClBackends);
+          bckI,
+          i,
+          gpuType,
+          gpuBackends,
+          igpuBackends,
+          openClBackends,
+          rejectedDevices);
     }
   }
 
@@ -259,6 +352,19 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     return {BackendType::GPU, igpuBackends.front()};
   }
 
+  if (preferredBackendType == BackendType::GPU && !rejectedDevices.empty() &&
+      bckI.llamaLogCallback != nullptr) {
+    std::string message = "No eligible GPU backend found; rejected ";
+    for (size_t index = 0; index < rejectedDevices.size(); ++index) {
+      if (index > 0) {
+        message += ", ";
+      }
+      message += rejectedDevices[index];
+    }
+    message += "; falling back to CPU";
+    bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, message.c_str(), nullptr);
+  }
+
   bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
   return {BackendType::CPU, "none"};
 };
@@ -274,23 +380,112 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
       .ggml_backend_dev_description = ggml_backend_dev_description,
       .ggml_backend_dev_name = ggml_backend_dev_name,
       .ggml_backend_dev_type = ggml_backend_dev_type,
+      .ggml_backend_dev_get_props = ggml_backend_dev_get_props,
       .llamaLogCallback = llamaLogcallback};
   return backend_selection::chooseBackend(preferredBackendType, bckI, mainGpu);
 }
 
 size_t
 backend_selection::getEffectiveGpuDeviceCount(const BackendInterface& bckI) {
-  size_t gpuCount = 0;
-  size_t igpuCount = 0;
+  return getSplitDeviceSelection(bckI).devices.size();
+}
+
+backend_selection::SplitDeviceSelection
+backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
+  SplitDeviceSelection result;
+  std::vector<SplitDevice> rpc;
+  std::vector<SplitDevice> discrete;
+  std::vector<SplitDevice> integrated;
+  std::unordered_set<std::string> seenDiscrete;
+
   const size_t totalDevices = bckI.ggml_backend_dev_count();
   for (size_t i = 0; i < totalDevices; ++i) {
     ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
-    enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
-    if (devType == GGML_BACKEND_DEVICE_TYPE_GPU) {
-      ++gpuCount;
-    } else if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
-      ++igpuCount;
+    const enum ggml_backend_dev_type devType = bckI.ggml_backend_dev_type(dev);
+    if (devType != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        devType != GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      continue;
+    }
+    const size_t sourceGpuIndex = result.sourceGpuCount++;
+    if (!isEligibleGpuDevice(bckI, dev)) {
+      result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+      continue;
+    }
+    // Copy each returned string before the next interface call: the pointers
+    // are not guaranteed to outlive it.
+    ggml_backend_dev_props props{};
+    bckI.ggml_backend_dev_get_props(dev, &props);
+    // Raw id, compared byte for byte like fabric's strcmp: a CUDA virtual
+    // device keeps its `-vN` suffix and stays distinct from its parent.
+    const std::string deviceId = props.device_id != nullptr
+                                     ? std::string(props.device_id)
+                                     : std::string();
+    const char* name = bckI.ggml_backend_dev_name(dev);
+    // An empty name would join into a leading or trailing comma and make the
+    // whole --device list unparseable, so it is skipped like a null one.
+    if (name == nullptr || *name == '\0') {
+      result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+      continue;
+    }
+    const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+    const std::string registryName =
+        lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr);
+    const std::string deviceName = lowerCopy(name);
+    SplitDevice selected{
+        .name = name,
+        .handle = dev,
+        .sourceGpuIndex = sourceGpuIndex,
+        .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
+        .isRpc = hasBackendFamily(deviceName, registryName, "rpc")};
+    if (selected.isRpc) {
+      rpc.emplace_back(std::move(selected));
+      continue;
+    }
+    // Keep the first integrated GPU plus every later one whose backend registry
+    // HANDLE matches the last kept one's. Identity, not name: one device seen
+    // by two backends is a duplicate, several devices from one backend are not.
+    if (devType == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+      if (integrated.empty() ||
+          reg == bckI.ggml_backend_dev_backend_reg(integrated.back().handle)) {
+        integrated.emplace_back(std::move(selected));
+      }
+      continue;
+    }
+    if (deviceId.empty() || seenDiscrete.insert(deviceId).second) {
+      discrete.emplace_back(std::move(selected));
     }
   }
-  return gpuCount > 0 ? gpuCount : igpuCount;
+  result.devices = std::move(rpc);
+  auto& local = discrete.empty() ? integrated : discrete;
+  result.devices.insert(
+      result.devices.end(),
+      std::make_move_iterator(local.begin()),
+      std::make_move_iterator(local.end()));
+  return result;
+}
+
+backend_selection::SplitDeviceSelection
+backend_selection::getSplitDeviceSelection() {
+  BackendInterface bckI{
+      .ggml_backend_dev_count = ggml_backend_dev_count,
+      .ggml_backend_dev_backend_reg = ggml_backend_dev_backend_reg,
+      .ggml_backend_dev_get = ggml_backend_dev_get,
+      .ggml_backend_reg_name = ggml_backend_reg_name,
+      .ggml_backend_dev_description = ggml_backend_dev_description,
+      .ggml_backend_dev_name = ggml_backend_dev_name,
+      .ggml_backend_dev_type = ggml_backend_dev_type,
+      .ggml_backend_dev_get_props = ggml_backend_dev_get_props,
+      .llamaLogCallback = nullptr};
+  return getSplitDeviceSelection(bckI);
+}
+
+std::vector<std::string>
+backend_selection::getSplitDeviceNames(const BackendInterface& bckI) {
+  const SplitDeviceSelection selection = getSplitDeviceSelection(bckI);
+  std::vector<std::string> names;
+  names.reserve(selection.devices.size());
+  for (const SplitDevice& device : selection.devices) {
+    names.push_back(device.name);
+  }
+  return names;
 }

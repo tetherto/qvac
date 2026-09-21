@@ -1,0 +1,25 @@
+{
+  "include": ["src/**/*", "examples/**/*"],
+  "exclude": [
+    "src/adapters/database/hyperspec/**/*.js",
+    "src/adapters/database/hyperspec/**/*.json"
+  ],
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "target": "ES2022",
+    "module": "esnext",
+    "types": [],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@qvac/rag": ["./src/index.ts"]
+    },
+    "noEmit": true,
+    "esModuleInterop": true,
+    "erasableSyntaxOnly": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "moduleDetection": "force"
+  }
+}

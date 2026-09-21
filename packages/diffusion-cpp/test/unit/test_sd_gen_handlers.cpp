@@ -9,8 +9,8 @@
  *   4.  cache_preset   – pair<mode,threshold> map (all 4 presets / unknown)
  *   5.  parseVaeTileSize – C++20 from_chars + string_view
  *                         (int / "WxH" / bad format / wrong type)
- *   6.  SdImageBatch   – RAII wrapper: pixel buffers freed on scope exit,
- *                        release(i) for early per-image free, and
+ *   6.  SdImageBatch   – RAII wrapper: the engine-owned batch is released
+ *                        once via free_sd_images() on scope exit, with
  *                        exception safety during iteration
  *   7.  IModelAsyncLoad removed – SdModel no longer implements it
  */
@@ -390,16 +390,15 @@ TEST(SdGenHandlers_Upscale, WrongTypeThrows) {
 
 namespace {
 
-// Minimal replica of the SdImageBatch RAII class used in SdModel.cpp.
+// Minimal replica of the SdImageBatch RAII class used in SdModel.cpp: the
+// engine owns the array and its pixel buffers, so the ONLY deallocation is
+// one free_sd_images() call in the destructor (no per-image early release —
+// addon-side free() of engine memory can cross allocator/CRT boundaries on
+// Windows prebuilds).
 class SdImageBatchTest {
 public:
   SdImageBatchTest(sd_image_t* data, int count) : data_(data), count_(count) {}
-  ~SdImageBatchTest() {
-    for (int i = 0; i < count_; ++i) {
-      free(data_[i].data); // nullptr-safe
-    }
-    free(data_);
-  }
+  ~SdImageBatchTest() { free_sd_images(data_, count_); }
 
   SdImageBatchTest(const SdImageBatchTest&) = delete;
   SdImageBatchTest& operator=(const SdImageBatchTest&) = delete;
@@ -408,10 +407,6 @@ public:
 
   [[nodiscard]] int count() const { return count_; }
   [[nodiscard]] const sd_image_t& operator[](int i) const { return data_[i]; }
-  void release(int i) {
-    free(data_[i].data);
-    data_[i].data = nullptr;
-  }
 
 private:
   sd_image_t* const data_;
@@ -444,12 +439,19 @@ TEST(SdImageBatch, DestructorFreesAllBuffersOnNormalExit) {
   } // destructor fires here
 }
 
-TEST(SdImageBatch, ReleaseNullsPointerSoDestructorSkipsIt) {
-  SdImageBatchTest batch(makeFakeImages(2), 2);
-  batch.release(0);                  // free pixel buf for image 0 early
-  EXPECT_EQ(batch[0].data, nullptr); // release() sets data to nullptr
-  EXPECT_NE(batch[1].data, nullptr); // image 1 still valid
-  // destructor calls free(nullptr) for slot 0 (no-op) and frees slot 1
+TEST(SdImageBatch, NullArrayAndNullPixelSlotsAreSafe) {
+  // free_sd_images tolerates a null array and null per-image data pointers;
+  // the wrapper must be safe to destroy in both states (failure paths hand
+  // it {nullptr, 0}; the engine may null individual slots).
+  {
+    SdImageBatchTest empty(nullptr, 0);
+  } // destructor must be a no-op
+  sd_image_t* arr = makeFakeImages(2);
+  free(arr[0].data);
+  arr[0].data = nullptr; // simulate an already-consumed slot
+  {
+    SdImageBatchTest batch(arr, 2);
+  } // frees slot 1 + the array, skips slot 0
 }
 
 TEST(SdImageBatch, DestructorFiresEvenWhenExceptionThrown) {
@@ -472,20 +474,6 @@ TEST(SdImageBatch, DestructorFiresEvenWhenExceptionThrown) {
 
   EXPECT_TRUE(destructorRan);
   // If SdImageBatchTest destructor did NOT run, ASan would report leaks above.
-}
-
-TEST(SdImageBatch, EarlyReleaseAllowsImmediateMemoryRecovery) {
-  // Simulates the production loop: encode → release → next image
-  sd_image_t* arr = makeFakeImages(4);
-  SdImageBatchTest batch(arr, 4);
-
-  for (int i = 0; i < batch.count(); ++i) {
-    // "process" image i
-    EXPECT_NE(batch[i].data, nullptr);
-    batch.release(i); // pixel buffer freed immediately
-    EXPECT_EQ(batch[i].data, nullptr);
-  }
-  // destructor: all data_[i].data are nullptr → only the array itself is freed
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

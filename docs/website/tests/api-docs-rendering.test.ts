@@ -277,4 +277,22 @@ describe('single-page template', () => {
     expect(mdx).toContain('### `oldThing`')
     expect(mdx).toContain('> ⚠️ **Deprecated**: Use newThing() instead.')
   })
+
+  it('renders a prototype callout for prototype-only functions', () => {
+    const prototypeFn: ApiFunction = {
+      ...minimalFn,
+      name: 'earlyThing',
+      prototype: 'Not production grade; use foo() instead in production.',
+    }
+    const mdx = env
+      .render('single-page.njk', {
+        ...renderArgs,
+        functions: [prototypeFn],
+      })
+      .trim()
+    expect(mdx).toContain('### `earlyThing`')
+    expect(mdx).toContain(
+      '> 🧪 **Prototype only**: Not production grade; use foo() instead in production.',
+    )
+  })
 })

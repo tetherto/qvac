@@ -1,0 +1,36 @@
+# Specialized GitHub Actions runner labels for QVAC addon CI.
+# Edit this file, then run: node .github/scripts/sync-runner-names.mjs
+#
+# ubuntu-latest is intentionally omitted; keep it hardcoded as GitHub's alias.
+#
+# FORMAT CONTRACT: a flat `key: label # comment` list, one entry per line.
+# The parser (.github/scripts/lib/runner-names.mjs) is line-based, not YAML —
+# do NOT quote values, nest maps, or use lists here (it fails loudly). If real
+# YAML is ever needed, swap the parser at the same time.
+#
+# SCOPE: this catalog governs only where jobs RUN (runs-on / matrix.runner).
+# It does NOT manage `os:` matrix values or `matrix.os == '...'` conditionals —
+# those are frozen logical identities decoupled from the runner label (a
+# self-hosted row pairs e.g. `os: macos-14` with `runner: qvac-macos26-arm64-gpu`).
+# Bumping a label here never requires an `os` edit, and vice versa. See
+# docs/ci/SELF-HOSTED-RUNNERS.md.
+
+# GitHub-hosted (pinned images)
+macos_ios: macos-14 # iOS Device Farm build host
+macos_15: macos-15 # macOS 15 hosted (prebuilds ios/darwin arm)
+macos_15_intel: macos-15-intel # macOS 15 Intel hosted (darwin x64 prebuilds/cpp)
+macos_15_large: macos-15-large # macOS 15 large hosted (darwin x64 integration)
+ubuntu_2204: ubuntu-22.04 # Ubuntu 22.04 hosted x64
+ubuntu_2204_arm: ubuntu-22.04-arm # Ubuntu 22.04 hosted arm64
+ubuntu_2404: ubuntu-24.04 # Ubuntu 24.04 hosted x64
+ubuntu_2404_arm: ubuntu-24.04-arm # Ubuntu 24.04 hosted arm64
+ubuntu_2604: ubuntu-26.04 # Ubuntu 26.04 hosted x64
+
+# Self-hosted
+linux_ubuntu2204_x64: qvac-ubuntu2204-x64 # Self-hosted Ubuntu 22.04 x64 CPU
+linux_ubuntu2204_x64_gpu: qvac-ubuntu2204-x64-gpu # Self-hosted Ubuntu 22.04 x64 GPU
+linux_ubuntu2404_x64: qvac-ubuntu2404-x64 # Self-hosted Ubuntu 24.04 x64 CPU
+linux_ubuntu2404_x64_gpu: qvac-ubuntu2404-x64-gpu # Self-hosted Ubuntu 24.04 x64 GPU
+macos_arm64_gpu: qvac-macos26-arm64-gpu # Self-hosted Apple Silicon GPU/Metal
+win_2025_x64: qvac-win25-x64 # Self-hosted Windows Server 2025 x64 CPU
+win_2025_x64_gpu: qvac-win25-x64-gpu # Self-hosted Windows Server 2025 x64 GPU

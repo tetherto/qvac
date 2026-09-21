@@ -9,6 +9,7 @@ on:
       - tmp-*
     paths:
       - "packages/cli/**"
+      - ".github/workflows/trigger-reusable-lib-cli.yml"
   workflow_dispatch:
     inputs:
       custom_input_1:
@@ -33,26 +34,6 @@ permissions:
   contents: read
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
   release-merge-guard:
     name: Release Merge Guard
     if: >-
@@ -74,6 +55,12 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    # Workspace SDK compiles in-repo inference + SDK; keep a cap so a hung
+    # bun install cannot sit on the runner indefinitely.
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -83,8 +70,48 @@ jobs:
         with:
           node-version: 22
 
+      # Match SDK pod policy: in-repo SDK on main/tmp/feature, published on
+      # release-* (packages/cli/README.md "How CI tests the CLI/SDK pair").
+      # sdk-source:workspace needs bun (builds inference + SDK) and GPR
+      # (@tetherto/*) via GITHUB_TOKEN.
+      - name: Setup Bun
+        if: ${{ !startsWith(github.ref_name, 'release-') }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: latest
+
+      - name: Configure npm registries
+        if: ${{ !startsWith(github.ref_name, 'release-') }}
+        shell: node {0}
+        env:
+          GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+
+          if (!process.env.GPR_TOKEN) {
+            console.log('::error::GITHUB_TOKEN is empty — cannot read @tetherto GPR packages');
+            process.exit(1);
+          }
+
+          const lines = [
+            'registry=https://registry.npmjs.org/',
+            '@qvac:registry=https://registry.npmjs.org/',
+            '@tetherto:registry=https://npm.pkg.github.com/',
+            `//npm.pkg.github.com/:_authToken=${process.env.GPR_TOKEN}`,
+          ];
+          const npmrc = lines.join('\n') + '\n';
+          const target = path.join(process.env.GITHUB_WORKSPACE, '.npmrc');
+          fs.writeFileSync(target, npmrc, 'utf8');
+          console.log(`::notice::.npmrc configured at ${target} (@tetherto → GPR via GITHUB_TOKEN)`);
+
       - name: Install dependencies
         run: npm install
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Link workspace SDK
+        if: ${{ !startsWith(github.ref_name, 'release-') }}
+        run: npm run sdk-source:workspace
         working-directory: ${{ env.WORKDIR }}
 
       - name: Run format
@@ -120,14 +147,13 @@ jobs:
       gpr_tag: ${{ steps.logic.outputs.gpr_tag }}
     steps:
       - id: logic
-        uses: tetherto/qvac-actions/npm-publish-logic@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-publish-logic@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
 
   publish-main-gpr-dev:
     needs:
       - build
       - publish-logic
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_main == 'true')
+    if: (needs.publish-logic.outputs.publish_main == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -161,9 +187,8 @@ jobs:
       - build
       - publish-logic
       - release-merge-guard
-      - label-gate
     if: >-
-      needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+      (needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
     runs-on: ubuntu-latest
     environment: npm
     outputs:
@@ -194,14 +219,14 @@ jobs:
 
       - name: Determine dist-tag
         id: dist-tag
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           workdir: ${{ env.WORKDIR }}
           tag: ${{ inputs.npm_tag }}
 
       - name: Publish to NPM
         id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@38693d9315c5fb6bba1354d8d1ef9823bf6c10a3 # 0.1.0
+        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
         with:
           tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: ${{ env.WORKDIR }}
@@ -221,8 +246,7 @@ jobs:
     needs:
       - build
       - publish-logic
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_feature == 'true')
+    if: (needs.publish-logic.outputs.publish_feature == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -255,8 +279,7 @@ jobs:
     needs:
       - build
       - publish-logic
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (needs.publish-logic.outputs.publish_tmp == 'true')
+    if: (needs.publish-logic.outputs.publish_tmp == 'true')
     runs-on: ubuntu-latest
     environment: release
     permissions:

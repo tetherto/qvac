@@ -1,58 +1,21 @@
 cmake_minimum_required(VERSION 3.25)
 
-# Include config file to override options (must be before option() calls)
+# Include config file to override options (must be before option() calls).
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/config.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/config.cmake)
 endif()
 
-option(BUILD_TESTING "Build tests" OFF)
+# Shared addon build helpers. See docs/architecture/ADDON-CMAKE-TEMPLATE.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+qvac_addon_preproject()
 option(USE_BERGAMOT "Enable Bergamot backend support" ON)
 # Off by default: Adreno 830 ggml-opencl M%4 assertion (QVAC-17790)
 option(USE_OPENCL "Prefer/allow OpenCL backend for GPU inference" OFF)
 
-if(BUILD_TESTING)
-  list(APPEND VCPKG_MANIFEST_FEATURES "tests")
-endif()
-
-find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
-find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
-
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
-set(VCPKG_INSTALL_OPTIONS --clean-after-build)
-
-# Android STL configuration must be set before project()
-if(DEFINED ENV{ANDROID_NDK} OR DEFINED ENV{ANDROID_NDK_HOME})
-  set(ANDROID_STL c++_shared)
-endif()
-
 project(translation-nmtcpp
   LANGUAGES C CXX)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++)
-endif()
-
-find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.valgrind.supp
-               ${CMAKE_CURRENT_SOURCE_DIR}/.valgrind.supp COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/tools/lint-cpp/hooks/pre-commit
-               ${CMAKE_CURRENT_SOURCE_DIR}/.git/hooks/pre-commit COPYONLY)
-
-set(CMAKE_CXX_STANDARD 20)
-
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-message(STATUS ${CMAKE_CXX_COMPILER_ID})
-if(WIN32)
-  add_definitions( -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNOGDI )
-endif()
+qvac_addon_project_setup(VALGRIND_SUPP PRE_COMMIT_HOOK)
 
 # Required by Tokenizers
 if(ANDROID)
@@ -62,7 +25,6 @@ endif()
 
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/BlobsStream.hpp")
 
-find_package(ggml CONFIG REQUIRED)
 find_package(absl CONFIG QUIET)
 find_package(protobuf CONFIG REQUIRED)
 
@@ -136,23 +98,11 @@ if(USE_BERGAMOT)
   find_package(bergamot-translator CONFIG REQUIRED)
 endif()
 
-bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building translation-nmtcpp with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+# ggml runtime is the shared @qvac/fabric prebuild (dynamically linked, loaded
+# once per process); sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE.
+qvac_addon_use_fabric()
 
-set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
-  endforeach()
-endif()
-
-add_bare_module(translation-nmtcpp EXPORTS ${BACKEND_DL_LIBS})
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_options(${translation-nmtcpp}_module PRIVATE -Wl,--exclude-libs,ALL)
-endif()
+add_bare_module(translation-nmtcpp EXPORTS)
 
 target_sources(
   ${translation-nmtcpp}
@@ -194,14 +144,6 @@ if("${CMAKE_SYSTEM_PROCESSOR}" MATCHES "^(arm|aarch64|ARM64)")
   )
 endif()
 
-target_compile_definitions(
-  ${translation-nmtcpp}
-  PRIVATE
-    JS_LOGGER
-)
-
-target_compile_definitions(${translation-nmtcpp} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
-
 # Add bergamot compile definition if enabled
 if(USE_BERGAMOT)
   target_compile_definitions(
@@ -227,12 +169,7 @@ if(DEFINED SENTENCEPIECE_INCLUDE_DIRS)
   )
 endif()
 
-# Link core dependencies
-target_link_libraries(
-  ${translation-nmtcpp}
-  PRIVATE
-    ggml::ggml
-)
+qvac_addon_link_fabric(${translation-nmtcpp} ${qvac_fabric_target})
 
 # When using Bergamot, we configured SPM_PROTOBUF_PROVIDER=package, which means sentencepiece
 # uses external protobuf (from vcpkg) instead of its built-in protobuf-lite.
@@ -271,6 +208,9 @@ if(USE_BERGAMOT)
       bergamot-translator::bergamot-translator
   )
 endif()
+
+qvac_addon_finalize(${translation-nmtcpp} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+
 if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(addon/tests)

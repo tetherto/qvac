@@ -15,6 +15,14 @@ from collections.abc import AsyncIterable, AsyncIterator
 
 from .._transport import Transport
 from . import (
+    AssessModelFitRequest,
+    AssessModelFitResponse,
+    AudioEditStreamRequest,
+    AudioEditStreamResponse,
+    AudioGenStreamRequest,
+    AudioGenStreamResponse,
+    AudioUnderstandRequest,
+    AudioUnderstandResponse,
     BatchCompletionStreamRequest,
     BatchCompletionStreamResponse,
     BciTranscribeRequest,
@@ -44,6 +52,8 @@ from . import (
     GetLoadedModelInfoResponse,
     GetModelInfoRequest,
     GetModelInfoResponse,
+    GetSystemResourcesRequest,
+    GetSystemResourcesResponse,
     HeartbeatRequest,
     HeartbeatResponse,
     LoadModelRequest,
@@ -63,8 +73,6 @@ from . import (
     PluginInvokeResponse,
     PluginInvokeStreamRequest,
     PluginInvokeStreamResponse,
-    ProvideRequest,
-    ProvideResponse,
     RagProgressResponse,
     RagRequest,
     RagResponse,
@@ -72,8 +80,6 @@ from . import (
     ResumeResponse,
     StateRequest,
     StateResponse,
-    StopProvideRequest,
-    StopProvideResponse,
     SuspendRequest,
     SuspendResponse,
     TextToSpeechRequest,
@@ -90,9 +96,46 @@ from . import (
     UnloadModelResponse,
     UpscaleStreamRequest,
     UpscaleStreamResponse,
+    VectorIndexRequest,
+    VectorIndexResponse,
     VideoStreamRequest,
     VideoStreamResponse,
+    WorldSceneStreamRequest,
+    WorldSceneStreamResponse,
+    WorldStepStreamRequest,
+    WorldStepStreamResponse,
 )
+
+
+async def assess_model_fit(
+    transport: Transport, params: AssessModelFitRequest
+) -> AssessModelFitResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return AssessModelFitResponse.model_validate(await transport.call(payload))
+
+
+async def audio_edit_stream(
+    transport: Transport, params: AudioEditStreamRequest
+) -> AsyncIterator[AudioEditStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioEditStreamResponse.model_validate(chunk)
+
+
+async def audio_gen_stream(
+    transport: Transport, params: AudioGenStreamRequest
+) -> AsyncIterator[AudioGenStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioGenStreamResponse.model_validate(chunk)
+
+
+async def audio_understand(
+    transport: Transport, params: AudioUnderstandRequest
+) -> AsyncIterator[AudioUnderstandResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioUnderstandResponse.model_validate(chunk)
 
 
 async def batch_completion_stream(
@@ -228,6 +271,13 @@ async def get_model_info(
     return GetModelInfoResponse.model_validate(await transport.call(payload))
 
 
+async def get_system_resources(
+    transport: Transport, params: GetSystemResourcesRequest
+) -> GetSystemResourcesResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return GetSystemResourcesResponse.model_validate(await transport.call(payload))
+
+
 async def heartbeat(
     transport: Transport, params: HeartbeatRequest
 ) -> HeartbeatResponse:
@@ -311,11 +361,6 @@ async def plugin_invoke_stream(
         yield PluginInvokeStreamResponse.model_validate(chunk)
 
 
-async def provide(transport: Transport, params: ProvideRequest) -> ProvideResponse:
-    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    return ProvideResponse.model_validate(await transport.call(payload))
-
-
 async def rag(transport: Transport, params: RagRequest) -> RagResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return RagResponse.model_validate(await transport.call(payload))
@@ -346,13 +391,6 @@ async def resume(transport: Transport, params: ResumeRequest) -> ResumeResponse:
 async def state(transport: Transport, params: StateRequest) -> StateResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return StateResponse.model_validate(await transport.call(payload))
-
-
-async def stop_provide(
-    transport: Transport, params: StopProvideRequest
-) -> StopProvideResponse:
-    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    return StopProvideResponse.model_validate(await transport.call(payload))
 
 
 async def suspend(transport: Transport, params: SuspendRequest) -> SuspendResponse:
@@ -415,6 +453,13 @@ async def upscale_stream(
         yield UpscaleStreamResponse.model_validate(chunk)
 
 
+async def vector_index(
+    transport: Transport, params: VectorIndexRequest
+) -> VectorIndexResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return VectorIndexResponse.model_validate(await transport.call(payload))
+
+
 async def video_stream(
     transport: Transport, params: VideoStreamRequest
 ) -> AsyncIterator[VideoStreamResponse]:
@@ -423,7 +468,27 @@ async def video_stream(
         yield VideoStreamResponse.model_validate(chunk)
 
 
+async def world_scene_stream(
+    transport: Transport, params: WorldSceneStreamRequest
+) -> AsyncIterator[WorldSceneStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield WorldSceneStreamResponse.model_validate(chunk)
+
+
+async def world_step_stream(
+    transport: Transport, params: WorldStepStreamRequest
+) -> AsyncIterator[WorldStepStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield WorldStepStreamResponse.model_validate(chunk)
+
+
 __all__ = [
+    "assess_model_fit",
+    "audio_edit_stream",
+    "audio_gen_stream",
+    "audio_understand",
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",
@@ -440,6 +505,7 @@ __all__ = [
     "finetune_with_progress",
     "get_loaded_model_info",
     "get_model_info",
+    "get_system_resources",
     "heartbeat",
     "load_model",
     "load_model_with_progress",
@@ -450,12 +516,10 @@ __all__ = [
     "ocr_stream",
     "plugin_invoke",
     "plugin_invoke_stream",
-    "provide",
     "rag",
     "rag_with_progress",
     "resume",
     "state",
-    "stop_provide",
     "suspend",
     "text_to_speech",
     "text_to_speech_stream",
@@ -464,5 +528,8 @@ __all__ = [
     "translate",
     "unload_model",
     "upscale_stream",
+    "vector_index",
     "video_stream",
+    "world_scene_stream",
+    "world_step_stream",
 ]

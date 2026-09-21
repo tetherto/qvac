@@ -1,5 +1,5 @@
 import { batchCompletion } from '@qvac/sdk'
-import { ValidationHelpers, type Expectation, type TestResult } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { batchCompletionTests } from '../../batch-completion-tests.js'
 import type { ResourceManager } from '../resource-manager.js'
@@ -223,8 +223,9 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<typeof batchC
         continue
       }
 
+      const haystack = text.toLowerCase()
       for (const expected of expectedStrings) {
-        if (!text.includes(expected)) {
+        if (!haystack.includes(expected.toLowerCase())) {
           missing.push(`${id}:${expected}`)
         }
       }
@@ -237,7 +238,8 @@ export class BatchCompletionExecutor extends AbstractModelExecutor<typeof batchC
         continue
       }
 
-      if (!expectedStrings.some((expected) => text.includes(expected))) {
+      const haystack = text.toLowerCase()
+      if (!expectedStrings.some((expected) => haystack.includes(expected.toLowerCase()))) {
         missing.push(`${id}:one of [${expectedStrings.join(', ')}]`)
       }
     }

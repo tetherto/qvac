@@ -1,6 +1,6 @@
 import { ocr, type OCRTextBlock } from '@qvac/sdk'
 import * as path from 'node:path'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { ocrTests } from '../../../ocr-tests.js'
 
@@ -8,6 +8,8 @@ interface OcrParams {
   imageFileName: string
   paragraph?: boolean
   streaming?: boolean
+  /** ResourceManager dep to OCR with. Defaults to the EasyOCR `ocr` resource. */
+  resource?: string
 }
 
 export class OcrExecutor extends AbstractModelExecutor<typeof ocrTests> {
@@ -23,7 +25,7 @@ export class OcrExecutor extends AbstractModelExecutor<typeof ocrTests> {
   ) as never
 
   private async runOcr(p: OcrParams) {
-    const ocrModelId = await this.resources.ensureLoaded('ocr')
+    const ocrModelId = await this.resources.ensureLoaded(p.resource ?? 'ocr')
     const imagePath = path.resolve(process.cwd(), 'assets/images', p.imageFileName)
 
     const { blocks, blockStream, stats } = ocr({

@@ -2,9 +2,9 @@
 # Verify which GGML backends and BLAS paths are actually shipped with @qvac/ocr-ggml.
 #
 # Unlike upstream EasyOcr-ggml (which builds ggml as a submodule and inspects
-# build/third_party/ggml/...), this package consumes ggml from `qvac-fabric`
-# via vcpkg. The runtime artefacts live under `prebuilds/<host>/qvac__ocr-ggml/`,
-# bundled by `bare-make install`.
+# build/third_party/ggml/...), this package consumes ggml from the
+# `@qvac/fabric` npm runtime. The runtime artefacts live under
+# `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`.
 #
 # Outputs four sections:
 #   1. Shipped backend libraries — which `libggml-*.so` files were installed
@@ -33,11 +33,11 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# bare-module install path: prebuilds/<host>/qvac__ocr-ggml/
+# Fabric backend path: node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/
 # `host` is set by cmake-bare based on the runtime platform; on x64 Linux it
 # is `linux-x64`, on Apple Silicon `darwin-arm64`, etc.
 HOST_GUESS="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed -E 's/^x86_64$/x64/;s/^aarch64$/arm64/')"
-BACKENDS_DIR="${BACKENDS_DIR:-${REPO_ROOT}/prebuilds/${HOST_GUESS}/qvac__ocr-ggml}"
+BACKENDS_DIR="${BACKENDS_DIR:-${REPO_ROOT}/node_modules/@qvac/fabric/prebuilds/${HOST_GUESS}/qvac__fabric}"
 
 print_section() {
     echo
@@ -49,8 +49,8 @@ print_section() {
 if [[ ! -d "${BACKENDS_DIR}" ]]; then
     echo "error: backends directory not found: ${BACKENDS_DIR}" >&2
     echo "" >&2
-    echo "Run 'bare-make generate && bare-make build && bare-make install'" >&2
-    echo "first, or override BACKENDS_DIR=/abs/path/to/prebuilds/<host>/qvac__ocr-ggml" >&2
+    echo "Run 'npm install' to install @qvac/fabric," >&2
+    echo "or override BACKENDS_DIR=/abs/path/to/@qvac/fabric/prebuilds/<host>/qvac__fabric" >&2
     exit 1
 fi
 
@@ -63,17 +63,17 @@ echo
 ls -lh "${BACKENDS_DIR}"/libggml-*.so 2>/dev/null || \
     echo "(no libggml-*.so files — only the static CPU backend was linked)"
 
-# Also show the bare addon itself
+# Also show Fabric's shared bare runtime.
 echo
-echo "Addon module:"
-ls -lh "${BACKENDS_DIR}"/*.bare 2>/dev/null || \
-    echo "(no .bare module — did 'bare-make install' run?)"
+echo "Fabric runtime:"
+ls -lh "${BACKENDS_DIR}"/../qvac__fabric.bare 2>/dev/null || \
+    echo "(no qvac__fabric.bare module — did 'npm install' run?)"
 
 # ----------------------------------------------------------------------------
 # 2. Linked dependencies (ldd)
 # ----------------------------------------------------------------------------
 print_section "2. Linked dependencies (ldd)"
-for lib in "${BACKENDS_DIR}"/libggml-*.so "${BACKENDS_DIR}"/*.bare; do
+for lib in "${BACKENDS_DIR}"/libggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare; do
     [[ -e "${lib}" ]] || continue
     echo
     echo "--- ${lib##*/} ---"
@@ -102,7 +102,7 @@ check_symbol() {
     fi
 }
 
-ALL_LIBS=("${BACKENDS_DIR}"/libggml-*.so "${BACKENDS_DIR}"/*.bare)
+ALL_LIBS=("${BACKENDS_DIR}"/libggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare)
 check_symbol "tinyBLAS (GGML_LLAMAFILE=ON)" "llamafile_sgemm"  "${ALL_LIBS[@]}"
 check_symbol "external BLAS (GGML_BLAS)"    "cblas_sgemm"      "${ALL_LIBS[@]}"
 check_symbol "Vulkan backend"               "vkCreateInstance" "${ALL_LIBS[@]}"
@@ -111,19 +111,20 @@ check_symbol "CUDA backend"                 "cudaMalloc"       "${ALL_LIBS[@]}"
 check_symbol "Metal backend"                "MTLCreateSystemDefaultDevice" "${ALL_LIBS[@]}"
 
 # ----------------------------------------------------------------------------
-# 4. vcpkg port summary
+# 4. npm runtime summary
 # ----------------------------------------------------------------------------
-print_section "4. vcpkg port summary (ggml provider)"
-VCPKG_LOCK="${REPO_ROOT}/vcpkg-configuration.json"
-VCPKG_MANIFEST="${REPO_ROOT}/vcpkg.json"
-echo "manifest:         ${VCPKG_MANIFEST}"
-echo "configuration:    ${VCPKG_LOCK}"
+print_section "4. @qvac/fabric runtime summary"
+PACKAGE_MANIFEST="${REPO_ROOT}/package.json"
+FABRIC_MANIFEST="${REPO_ROOT}/node_modules/@qvac/fabric/package.json"
+echo "consumer manifest: ${PACKAGE_MANIFEST}"
+echo "fabric manifest:   ${FABRIC_MANIFEST}"
 echo
-echo "Declared ggml provider (from vcpkg.json):"
-grep -A 4 'qvac-fabric' "${VCPKG_MANIFEST}" 2>/dev/null | sed 's/^/  /' || \
-    echo "  (vcpkg.json not readable)"
+echo "Declared Fabric dependency (from package.json):"
+grep -A 1 '"@qvac/fabric"' "${PACKAGE_MANIFEST}" 2>/dev/null | sed 's/^/  /' || \
+    echo "  (package.json not readable)"
 
 echo
-echo "Tip: to confirm the exact version that built, look in"
-echo "     build/_vcpkg/vcpkg/info/qvac-fabric_*.list"
+echo "Installed Fabric version:"
+grep '"version"' "${FABRIC_MANIFEST}" 2>/dev/null | head -1 | sed 's/^/  /' || \
+    echo "  (@qvac/fabric is not installed)"
 echo

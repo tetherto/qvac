@@ -27,7 +27,11 @@ std::string sniffGgufArchitecture(const std::string& ggufPath);
 //   "pi05"    → Pi05Model
 //   "groot"   → GrootModel
 // Any other value throws std::runtime_error with the offending arch name.
+// `embodiment` selects a multi-embodiment GR00T GGUF's embodiment by tag or
+// numeric cat_id, optionally overriding its camera count (unset = the GGUF's
+// default); ignored by the other architectures.
 std::unique_ptr<IVlaModel> createVlaModelFromGguf(
-    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir);
+    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
+    const VlaEmbodimentRequest& embodiment = {});
 
 } // namespace qvac_lib_infer_vla_ggml

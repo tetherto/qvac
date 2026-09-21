@@ -37,6 +37,53 @@ test('getLatestApprovals — returns empty array for empty input', t => {
   t.alike(getLatestApprovals([]), [])
 })
 
+test('getLatestApprovals — a later COMMENTED review does not mask an approval', t => {
+  const reviews = [
+    { user: { login: 'alice' }, state: 'APPROVED', submitted_at: '2024-01-01T10:00:00Z' },
+    { user: { login: 'alice' }, state: 'COMMENTED', submitted_at: '2024-01-02T10:00:00Z' }
+  ]
+  const result = getLatestApprovals(reviews)
+  t.is(result.length, 1)
+  t.is(result[0].state, 'APPROVED')
+})
+
+test('getLatestApprovals — a later CHANGES_REQUESTED review does supersede an approval', t => {
+  const reviews = [
+    { user: { login: 'alice' }, state: 'APPROVED', submitted_at: '2024-01-01T10:00:00Z' },
+    { user: { login: 'alice' }, state: 'CHANGES_REQUESTED', submitted_at: '2024-01-02T10:00:00Z' }
+  ]
+  const result = getLatestApprovals(reviews)
+  t.is(result.length, 1)
+  t.is(result[0].state, 'CHANGES_REQUESTED')
+})
+
+test('getLatestApprovals — a later DISMISSED review does supersede an approval', t => {
+  const reviews = [
+    { user: { login: 'alice' }, state: 'APPROVED', submitted_at: '2024-01-01T10:00:00Z' },
+    { user: { login: 'alice' }, state: 'DISMISSED', submitted_at: '2024-01-02T10:00:00Z' }
+  ]
+  const result = getLatestApprovals(reviews)
+  t.is(result.length, 1)
+  t.is(result[0].state, 'DISMISSED')
+})
+
+test('getLatestApprovals — ignores PENDING reviews with a null submitted_at', t => {
+  const reviews = [
+    { user: { login: 'alice' }, state: 'APPROVED', submitted_at: '2024-01-01T10:00:00Z' },
+    { user: { login: 'alice' }, state: 'PENDING', submitted_at: null }
+  ]
+  const result = getLatestApprovals(reviews)
+  t.is(result.length, 1)
+  t.is(result[0].state, 'APPROVED')
+})
+
+test('getLatestApprovals — drops a user whose only review is COMMENTED', t => {
+  const reviews = [
+    { user: { login: 'alice' }, state: 'COMMENTED', submitted_at: '2024-01-01T10:00:00Z' }
+  ]
+  t.alike(getLatestApprovals(reviews), [])
+})
+
 // checkApproved
 test('checkApproved — approved when codeowner + total threshold met', t => {
   t.ok(checkApproved({ maintainer: 1, teamLead: 0, other: 1 }, 2))
@@ -164,6 +211,49 @@ test('buildApprovalCounts — ignores CHANGES_REQUESTED in final count', async t
   const counts = await buildApprovalCounts(mockOctokit, 'org', 'repo', reviews, { maintainer: 'a', teamLead: 'b' })
   // alice's most recent review is APPROVED
   t.is(counts.other, 1)
+})
+
+test('buildApprovalCounts — keeps the approval when the approver comments afterwards', async t => {
+  const reviews = [
+    { user: { login: 'alice' }, state: 'APPROVED', submitted_at: '2024-01-01T00:00:00Z' },
+    { user: { login: 'alice' }, state: 'COMMENTED', submitted_at: '2024-01-02T00:00:00Z' }
+  ]
+
+  const mockOctokit = makeMockOctokit(async ({ team_slug: slug }) => {
+    if (slug === 'maintainers') return { data: [{ login: 'alice' }] }
+    return { data: [] }
+  })
+
+  const teams = { maintainer: 'maintainers', teamLead: 'team-leads' }
+  const counts = await buildApprovalCounts(mockOctokit, 'org', 'repo', reviews, teams)
+
+  t.is(counts.maintainer, 1, 'approval survives a later comment')
+  t.ok(checkApproved(counts, 1), 'gate stays open')
+})
+
+test('buildApprovalCounts — comment timing does not change the outcome', async t => {
+  const makeReviews = (approvedAt, commentedAt) => [
+    { user: { login: 'alice' }, state: 'APPROVED', submitted_at: approvedAt },
+    { user: { login: 'alice' }, state: 'COMMENTED', submitted_at: commentedAt }
+  ]
+
+  const mockOctokit = makeMockOctokit(async ({ team_slug: slug }) => {
+    if (slug === 'maintainers') return { data: [{ login: 'alice' }] }
+    return { data: [] }
+  })
+
+  const teams = { maintainer: 'maintainers', teamLead: 'team-leads' }
+
+  const commentLast = await buildApprovalCounts(
+    mockOctokit, 'org', 'repo', makeReviews('2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z'), teams
+  )
+  const commentFirst = await buildApprovalCounts(
+    mockOctokit, 'org', 'repo', makeReviews('2024-01-02T00:00:00Z', '2024-01-01T00:00:00Z'), teams
+  )
+
+  t.alike(commentLast, commentFirst, 'same counts regardless of comment order')
+  t.ok(checkApproved(commentLast, 1))
+  t.ok(checkApproved(commentFirst, 1))
 })
 
 test('buildApprovalCounts — returns zeros when no approvals', async t => {

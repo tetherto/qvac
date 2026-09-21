@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.dts.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["test/types/native-abort-signal.ts"]
+}

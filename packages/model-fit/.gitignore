@@ -1,0 +1,20 @@
+.vs/
+build/
+dist/
+node_modules/
+prebuilds/
+
+test/integration/all.js
+test/model/
+test/results/
+.npmrc
+package-lock.json
+.cache/
+.idea/
+.DS_Store
+logs/
+*.gguf
+*.log
+.clang-tidy
+# Added by lint-cpp
+.clang-format

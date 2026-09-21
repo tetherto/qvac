@@ -1,0 +1,6 @@
+{
+  "//": "Temporary blanket silence of require-await. Blanket-off hides genuinely missing awaits, so once @qvac/inference is merged into main this must be removed and replaced with per-line `// lunte-disable-line require-await` on the intentional async-signature cases. Doing that inlining before the merge would churn every file and make porting changes from main painful.",
+  "rules": {
+    "require-await": "off"
+  }
+}

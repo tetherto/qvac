@@ -16,9 +16,6 @@ on:
     paths:
       - "packages/fabric/**"
       - ".github/workflows/*fabric*.yml"
-      - "vcpkg-overlays/triplets/**"
-      - "vcpkg-overlays/toolchains/**"
-      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
   workflow_call:
 
@@ -29,31 +26,14 @@ permissions:
   id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
+  fork-approval:
     permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
   ci-router:
     name: CI Router (label detection)
     runs-on: ubuntu-latest
@@ -76,15 +56,23 @@ jobs:
         uses: ./.github/actions/ci-router
 
   authorize:
+    needs: [fork-approval]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+      statuses: read
     outputs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
-      - name: Checkout
+      - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Authorize
         id: auth
         uses: ./.github/actions/authorize-pr
@@ -93,10 +81,10 @@ jobs:
 
   sanity-checks:
     needs:
+      - fork-approval
       - authorize
       - ci-router
-      - label-gate
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -108,7 +96,7 @@ jobs:
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Fetch PR head and target branch
@@ -191,23 +179,72 @@ jobs:
 
   cpp-lint:
     needs:
+      - fork-approval
       - authorize
       - ci-router
-      - label-gate
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/fabric
+      # Land ROCm on the base-branch workflow before a follow-up PR requests
+      # qvac-fabric[hip-backend]. pull_request_target loads this YAML from
+      # main, so cpp-lint would otherwise fail at find_dependency(hip).
+      include-rocm-sdk: true
 
-  detect-native-changes:
-    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.label-gate.outputs.authorised == 'true' && needs.authorize.outputs.allowed == 'true'
+  detect-fabric-stack:
+    if: needs.authorize.outputs.allowed == 'true'
     needs:
+      - fork-approval
       - authorize
       - ci-router
-      - label-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
+    steps:
+      - name: Checkout repository (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Detect fabric-stack PR
+        id: detect
+        uses: tetherto/qvac/.github/actions/detect-fabric-stack@6620d695d3a07cafe3931182e7844dde376a23f8
+
+  fabric-stack-matrix:
+    needs: [detect-fabric-stack]
+    if: needs.detect-fabric-stack.outputs.fabric_stack == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      consumers: ${{ steps.set.outputs.consumers }}
+    steps:
+      - name: Checkout fabric-consumers manifest (PR head)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          sparse-checkout: .github/fabric-consumers.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Read npm_runtime consumers
+        id: set
+        shell: bash
+        run: |
+          CONSUMERS=$(jq -c '.npm_runtime' .github/fabric-consumers.json)
+          echo "consumers=$CONSUMERS" >> "$GITHUB_OUTPUT"
+
+  detect-native-changes:
+    if: needs.ci-router.outputs.run_prebuilds == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -227,11 +264,14 @@ jobs:
           workdir: packages/fabric
 
   prebuild-artifact-reuse:
-    if: needs.label-gate.outputs.authorised == 'true' && needs.detect-native-changes.outputs.native_changed == 'false'
+    if: |
+      needs.detect-native-changes.outputs.native_changed == 'false' &&
+      needs.detect-fabric-stack.outputs.fabric_stack != 'true'
     needs:
+      - fork-approval
       - detect-native-changes
+      - detect-fabric-stack
       - sanity-checks
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -254,6 +294,7 @@ jobs:
           workflow-file: on-pr-fabric.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-fabric
 
   prebuild:
     permissions:
@@ -262,17 +303,16 @@ jobs:
       pull-requests: write
       id-token: write
     needs:
+      - fork-approval
       - authorize
       - ci-router
       - sanity-checks
       - detect-native-changes
       - prebuild-artifact-reuse
-      - label-gate
     if: |
       always() &&
       needs.sanity-checks.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
-      needs.label-gate.outputs.authorised == 'true' &&
       needs.authorize.outputs.allowed == 'true' &&
       (needs.detect-native-changes.outputs.native_changed == 'true' || needs.prebuild-artifact-reuse.outputs.reuse_hit != 'true')
     uses: ./.github/workflows/prebuilds-fabric.yml
@@ -282,11 +322,11 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
   prebuild-artifact-save:
-    if: always() && needs.label-gate.outputs.authorised == 'true' && needs.prebuild.result == 'success'
+    if: always() && needs.prebuild.result == 'success'
     needs:
+      - fork-approval
       - prebuild
       - detect-native-changes
-      - label-gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -304,18 +344,109 @@ jobs:
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
 
+  fabric-prebuilds-publish:
+    # Must stay downstream of prebuild: this artifact's name matches the
+    # `fabric-*` glob reusable-prebuilds' merge job uses to collect the matrix
+    # uploads, so publishing it earlier would fold the bundle into itself.
+    needs:
+      - fork-approval
+      - prebuild
+      - prebuild-artifact-reuse
+    if: |
+      always() &&
+      (needs.prebuild.result == 'success' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Download merged prebuilds bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds-fabric
+          path: fabric-prebuilds-staging
+
+      - name: Publish fabric-prebuilds for npm-runtime consumers
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
+
+  fabric-npm-consumer-smoke:
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - detect-fabric-stack
+      - fabric-stack-matrix
+      - fabric-prebuilds-publish
+    if: |
+      always() &&
+      needs.detect-fabric-stack.outputs.fabric_stack == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      needs.fabric-prebuilds-publish.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        consumer: ${{ fromJson(needs.fabric-stack-matrix.outputs.consumers) }}
+    uses: ./.github/workflows/fabric-stack-npm-consumer-smoke.yml
+    secrets: inherit
+    with:
+      consumer: ${{ matrix.consumer }}
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+  publish-prebuild-status:
+    # Posts qvac/prebuild-fabric for Merge Guard's verify-prebuilds; mirrors this flow's build-status.
+    needs: [prebuild, prebuild-artifact-reuse, ci-router]
+    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      # Trusted base-branch checkout of only the prebuild-status scripts (never
+      # PR head code), so publish logic is a single, unit-tested source.
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Publish prebuild status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREBUILD_RESULT: ${{ needs.prebuild.result }}
+          REUSE_HIT: ${{ needs.prebuild-artifact-reuse.outputs.reuse_hit }}
+          # A skipped prebuild is only a pass when ci-router succeeded and chose
+          # not to build (no label); a skip from an upstream failure fails closed.
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
+          # Stamps this on-pr run's URL into target_url so Merge Guard can reject a
+          # status from a superseded (e.g. pre-label) run whose timestamp looks fresh.
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/prebuild-fabric
+        run: node .github/scripts/prebuild-status/publish.mjs
+
   merge-guard:
     needs:
       [
         authorize,
         ci-router,
-        label-gate,
         sanity-checks,
         cpp-lint,
+        detect-fabric-stack,
         detect-native-changes,
         prebuild-artifact-reuse,
         prebuild,
         prebuild-artifact-save,
+        fabric-prebuilds-publish,
+        fabric-npm-consumer-smoke,
       ]
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
@@ -325,3 +456,8 @@ jobs:
       # label) don't produce a compiled artifact, and a native-unchanged PR reuses a
       # prior prebuild instead of rebuilding.
       build-status: ${{ needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true' }}
+      # A skipped consumer smoke is a pass only when it was never meant to run:
+      # a non-stack PR, or a PR without the prebuilds label (nothing to overlay).
+      # A skip caused by failed detection, an empty matrix, or a failed
+      # fabric-prebuilds publish means no npm consumer was tested at all.
+      integration-tests-status: ${{ needs.fabric-npm-consumer-smoke.result == 'success' || (needs.fabric-npm-consumer-smoke.result == 'skipped' && needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.fabric_stack != 'true' || needs.ci-router.outputs.run_prebuilds != 'true')) }}

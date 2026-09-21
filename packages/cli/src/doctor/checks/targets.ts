@@ -1,5 +1,5 @@
-import { DEFAULT_HOSTS } from '../constants.js'
-import type { Check } from '../check.js'
+import { DEFAULT_HOSTS } from '@/doctor/constants'
+import type { Check } from '@/doctor/check'
 
 // Deploy targets — the full matrix of platforms the SDK can deploy to,
 // which is a superset of CLI hosts (adds Android + iOS via BareKit).

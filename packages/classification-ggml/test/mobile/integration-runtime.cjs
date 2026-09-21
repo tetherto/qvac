@@ -38,8 +38,9 @@ if (_bareHost && typeof _bareHost.on === 'function') {
     if (!_integrationFatalError) return
     console.error('[integration-runner] FATAL: failing run due to an earlier unhandled error.')
     if (typeof _bareHost.exit === 'function') _bareHost.exit(1)
-    else if (typeof globalThis.process !== 'undefined' && globalThis.process.exit)
+    else if (typeof globalThis.process !== 'undefined' && globalThis.process.exit) {
       globalThis.process.exit(1)
+    }
   })
 }
 

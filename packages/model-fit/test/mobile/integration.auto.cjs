@@ -1,0 +1,15 @@
+'use strict'
+require('./integration-runtime.cjs')
+
+// AUTO-GENERATED FILE. Run `npm run test:mobile:generate` to update.
+// Each function mirrors a single file under test/integration/.
+
+/* global runIntegrationModule */
+
+async function runFitStubTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit-stub.test.js', options)
+}
+
+async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit.test.js', options)
+}

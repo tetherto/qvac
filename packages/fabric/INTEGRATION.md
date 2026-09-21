@@ -251,3 +251,41 @@ readelf -d prebuilds/<host>/<addon>.bare | grep NEEDED   # → NEEDED qvac__fabr
 | 4 | `binding.js` | `require('@qvac/fabric')` **before** `require.addon()` |
 | 5 | Companion lib | `qvac__fabric@0.bare` installed in `prebuilds/<host>/<addon>/` (plus backend `.so` on Linux/Android) |
 | 6 | Build | `npm run build` succeeds; `readelf -d` shows `NEEDED qvac__fabric@0.bare`; consumer `.bare` is small (no embedded ggml/llama) |
+
+---
+
+## Fabric-stack PRs (parallel `qvac-fabric` development)
+
+When developing `qvac-fabric` on a test branch in `qvac-fabric-llm.cpp`, open a qvac PR
+that includes:
+
+1. A vcpkg overlay port at `vcpkg-overlays/ports/qvac-fabric/` pointing at that branch
+   or SHA, plus the `vcpkg-configuration.json` edit that registers that directory as an
+   overlay for each package meant to build against it. The port on its own changes no
+   build; registering it is what swaps the registry version for the branch under test.
+2. Updates to `packages/fabric` (and any direct vcpkg consumers that need coordinated
+   bumps).
+3. Optional consumer addon changes that call new fabric APIs.
+
+CI runs automatically on PR open/sync:
+
+- **Direct vcpkg consumers** — every package whose `vcpkg.json` still lists the
+  `qvac-fabric` port — pick up the overlay at compile time when the PR updates
+  that package's `vcpkg-configuration.json` (covered by the existing
+  `packages/<pkg>/**` path filters).
+- **`packages/fabric`** builds `@qvac/fabric` prebuilds and publishes a
+  `fabric-prebuilds` artifact.
+- **npm-runtime consumers** (see `.github/fabric-consumers.json`) overlay that
+  artifact into `node_modules/@qvac/fabric` before `bare-make generate`, so headers
+  and the shared runtime match the unreleased engine — no dev npm publish required.
+
+Author checklist:
+
+| Step | Action |
+|------|--------|
+| Overlay | Keep `vcpkg-overlays/ports/qvac-fabric/portfile.cmake` REF in sync with the `qvac-fabric-llm.cpp` branch under test |
+| Lockstep | Run `verify-qvac-fabric-lockstep` — every `packages/*/vcpkg.json` that still lists `qvac-fabric` must satisfy `version>=` |
+| Combined PR | When changing consumer code *and* fabric APIs, ensure both `on-pr-fabric` and the consumer `on-pr-*` workflow run. The `vcpkg-configuration.json` edit is the trigger — it sits under the consumer's own `packages/<pkg>/**` path filter, whereas a change confined to `vcpkg-overlays/` starts nothing |
+| Manifest | When a package migrates to `@qvac/fabric`, add it to `npm_runtime` in `.github/fabric-consumers.json` — that list drives the consumer smoke matrix |
+
+See `docs/architecture/qips/fabric-stack-ci.md` for the full CI design.

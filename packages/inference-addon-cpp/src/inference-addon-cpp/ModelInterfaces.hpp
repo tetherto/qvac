@@ -41,6 +41,22 @@ struct IModelAsyncLoad {
       std::unique_ptr<std::basic_streambuf<char>>&& streambuf) = 0;
 };
 
+/// Whole-model cancellation: stop every job in flight at the time of the
+/// call. Point-in-time semantics: a model that applies the cancel later (on
+/// its own worker, between decode steps) must pin the affected set when
+/// cancel() is invoked and must not sweep jobs it is handed afterward — the
+/// scheduler dispatches cancel() under its admission lock and awaits exactly
+/// the jobs that were in flight at dispatch, so a late application that kills
+/// a job admitted after cancel() returned would end a job nobody cancelled
+/// and nobody awaited.
+///
+/// Implementations must be quick — request the stop, do not wait for jobs to
+/// end — and must not call back into the scheduler: cancel() may run under
+/// the scheduler's admission lock (the same restriction jobStarting already
+/// carries), so blocking here stalls every slot release and admission, and a
+/// scheduler call would self-deadlock on that lock. A throw rejects the
+/// cancellation: the scheduler lets it escape to the caller and does not
+/// await jobs a failed cancel never reached.
 struct IModelCancel {
   virtual ~IModelCancel() = default;
   IModelCancel() = default;
@@ -91,6 +107,14 @@ struct IModelJobStats {
 
 /// Per-job cancellation: cancel just the in-flight call admitted under @p id.
 /// A no-op when the id is unknown (already finished, or never admitted).
+/// Same obligations as IModelCancel::cancel(): be quick (record the request,
+/// do not wait for the job to end) and never call back into the scheduler.
+/// Duplicate delivery must be safe: the scheduler may cancel the same
+/// still-active id more than once — an immediate retry after a mid-batch
+/// failure re-covers ids the failed call already reached — so repeated calls
+/// for a live id are idempotent (re-record or ignore, never an error). This
+/// is what lets the scheduler promise that retrying a rejected cancel is
+/// always safe.
 struct IModelCancelById {
   virtual ~IModelCancelById() = default;
   IModelCancelById() = default;

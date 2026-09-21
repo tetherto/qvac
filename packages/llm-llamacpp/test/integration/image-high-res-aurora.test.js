@@ -5,6 +5,9 @@
 // With per-test flushing (see _image-common.js) we preserve data
 // from earlier iterations even when the final run OOMs.
 
+// prestage-uses: multimodal-default — setupMultimodalInference() default in _image-common.js
+// prestage-ignore: SmolVLM2-500M-Video-Instruct-Q8_0.gguf — opt-in via QVAC_VLM_MODEL=smolvlm2 only
+// prestage-ignore: mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf — opt-in via QVAC_VLM_MODEL=smolvlm2 only
 const { runPerImageBackendTests } = require('./_image-common.js')
 
 runPerImageBackendTests({

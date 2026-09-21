@@ -78,6 +78,7 @@ const IMAGE_CASES = {
   }
 }
 
+// prestage-set: vlm-perf-gemma4
 const GEMMA4_MODEL = {
   perfLabel: 'gemma4-vl',
   llmModel: {
@@ -100,6 +101,7 @@ const GEMMA4_MODEL = {
   ctxFor: (imageCase) => imageCase.gemmaCtxSize
 }
 
+// prestage-set: vlm-perf-qwen35
 const QWEN35_MODEL = {
   perfLabel: 'qwen3.5-vl',
   llmModel: {

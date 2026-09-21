@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 #include <stdexcept>
 #include <vector>
 
@@ -207,6 +208,29 @@ struct GrootModelInternal {
   std::string embodiment_tag;
   int embodiment_cat_id = -1;
 
+  // Multi-embodiment table (empty on v1 single-embodiment GGUFs). `tags`/
+  // `cat_ids` are the full tag -> cat_id map; `stored_cat_ids` lists which
+  // cat_ids are physically stored, in weight-tensor row order, with parallel
+  // `stored_num_cameras`. The load-time selection is resolved into
+  // `selected_*` below (see grootResolveEmbodiment / grootSliceEmbodiment).
+  std::vector<std::string> embodiment_tags;
+  std::vector<int> embodiment_cat_ids;
+  std::vector<int> embodiment_stored_cat_ids;
+  std::vector<int> embodiment_stored_num_cameras;
+  std::string selected_embodiment_tag;
+  int selected_cat_id = -1;
+  int selected_row = -1; // row of selected_cat_id in embodiment_stored_cat_ids
+  // The file's top-level groot.num_cameras. `num_cameras` above holds the
+  // SELECTED embodiment's count and is rewritten by setEmbodiment, so the
+  // resolver's fallback has to read this untouched copy instead.
+  int gguf_default_num_cameras = 0;
+  // Absolute path of the GGUF these weights came from. Kept for
+  // grootFillEmbodimentRow: after load the file is the only remaining source of
+  // the unselected embodiment rows (the GPU path's host staging is released and
+  // its rank-3 tensors' data pointers nulled), so a later setEmbodiment
+  // re-reads the wanted row from disk.
+  std::string gguf_path;
+
   // weight pointers — all owned by `ctx_w` below.
   GrootVisionWeights vision{};
   GrootTextWeights text{};
@@ -279,6 +303,42 @@ struct GrootModelInternal {
   struct ggml_context* ctx_wt = nullptr;
   ggml_backend_buffer_t buf_wt = nullptr;
   bool wt_ready = false;
+
+  // Holds the selected embodiment's sliced 2-D/1-D CategorySpecificLinear
+  // tensors, materialized from the multi-embodiment rank-3/2 GGUF tensors at
+  // load (grootSliceEmbodiment). Null on v1 GGUFs (already 2-D on disk). Freed
+  // before ctx_w, like buf_wt/ctx_wt.
+  struct ggml_context* ctx_emb = nullptr;
+  ggml_backend_buffer_t buf_emb = nullptr;
+  // One entry per staged embodiment tensor (7 weights + 7 biases), recorded by
+  // grootSliceEmbodiment so a row can be re-read later: `dst` is the sliced
+  // ctx_emb tensor the graphs consume, `file_offset` the absolute byte offset
+  // of the source tensor's row 0 in the GGUF, `row_bytes` one row's size (row
+  // is the outermost axis, so each row's block is contiguous). Empty on v1
+  // GGUFs.
+  struct GrootEmbRowSlice {
+    struct ggml_tensor* dst = nullptr;
+    size_t file_offset = 0;
+    size_t row_bytes = 0;
+  };
+  std::vector<GrootEmbRowSlice> emb_slices;
+  // Serializes setEmbodiment against infer: infer runs on the framework's
+  // JobRunner worker thread while setEmbodiment is called from the JS thread,
+  // and setEmbodiment rewrites the very weights infer reads.
+  std::mutex embodiment_mutex;
+  // GPU path only: 32-byte-per-tensor PLACEHOLDER block for the
+  // multi-embodiment rank-3 CategorySpecificLinear weights — not their bytes.
+  // Giving them a non-null `data` is the whole mechanism that keeps every
+  // shipped row's dead weight out of the GPU weight buffer, and it is all that
+  // is needed, because only one row survives load and it is read from the file
+  // directly into buf_emb. Freed as soon as the alloc has run. Empty on v1 /
+  // CPU paths. See grootStageEmbodimentRowsHost.
+  std::vector<uint8_t> emb_host_bytes;
+  // The ctx_w tensors pointed at emb_host_bytes. Kept so those pointers can be
+  // nulled once the alloc has consumed them — the tensors themselves outlive
+  // the block in ctx_w and are orphaned (nothing ever reads them), so a null
+  // deref beats a read of a 32-byte slot if that ever changes.
+  std::vector<struct ggml_tensor*> emb_host_tensors;
   struct ggml_tensor* wt_se_l1 = nullptr; // state_encoder layer1/layer2
   struct ggml_tensor* wt_se_l2 = nullptr;
   struct ggml_tensor* wt_ae_w1 = nullptr; // action_encoder w1/w2/w3
@@ -312,6 +372,11 @@ struct GrootModelInternal {
       ggml_backend_buffer_free(buf_wt);
       buf_wt = nullptr;
     }
+    // buf_emb backs ctx_emb's sliced embodiment tensors; same ordering.
+    if (buf_emb != nullptr) {
+      ggml_backend_buffer_free(buf_emb);
+      buf_emb = nullptr;
+    }
     if (gguf != nullptr) {
       gguf_free(gguf);
       gguf = nullptr;
@@ -323,6 +388,10 @@ struct GrootModelInternal {
     if (ctx_wt != nullptr) {
       ggml_free(ctx_wt);
       ctx_wt = nullptr;
+    }
+    if (ctx_emb != nullptr) {
+      ggml_free(ctx_emb);
+      ctx_emb = nullptr;
     }
     if (ctx_w != nullptr) {
       ggml_free(ctx_w);
@@ -428,14 +497,101 @@ static void grootSchedFree(GrootSched& s) {
   s = {};
 }
 
+// Upper sanity bound on how many embodiment rows a multi-embodiment GGUF may
+// store. The full trained set is 17 rows today; 64 leaves room to grow while
+// still rejecting a garbage row count before it sizes a host allocation or
+// drives a row search. Checked against both the file's declared tensor
+// dimension (staging + slicing) and its metadata table (resolution).
+static constexpr int64_t GROOT_MAX_SANE_STORED_EMBODIMENTS = 64;
+
 // alloc+copy weight loader (GPU path). Allocates a backend buffer of `buft` for
 // every tensor metadata in ctx_w, then streams each tensor's bytes from the
 // GGUF file into it via ggml_backend_tensor_set. Direct port of pi05's
 // pi05LoadWeightsAllocCopy. Returns false so the caller can fall back to CPU.
+// GPU path only: point the seven multi-embodiment CategorySpecificLinear
+// weight+bias tensors (rank-3/2, all shipped rows) at a small placeholder block
+// so the following GPU alloc skips them
+// (ggml_backend_alloc_ctx_tensors_from_buft only allocates tensors with data ==
+// nullptr). Only the load-time-selected row is ever used, and
+// grootSliceEmbodiment reads it from the file, so this keeps every row's dead
+// weight out of VRAM without ever materialising the bank in host RAM either —
+// the placeholder holds no tensor data and the loader skips these tensors in
+// its copy loop. No-op (leaves tensors on the normal GPU path) on v1 GGUFs,
+// whose weights are already rank-2, if any tensor is absent, or without a
+// usable ship-set table. Returns true if the tensors were staged.
+static bool grootStageEmbodimentRowsHost(GrootModelInternal& m) {
+  static const char* prefixes[7] = {
+      "embodiment.state_encoder.layer1",
+      "embodiment.state_encoder.layer2",
+      "embodiment.action_encoder.w1",
+      "embodiment.action_encoder.w2",
+      "embodiment.action_encoder.w3",
+      "embodiment.action_decoder.layer1",
+      "embodiment.action_decoder.layer2"};
+  struct ggml_tensor* ts[14];
+  for (int i = 0; i < 7; ++i) {
+    ts[2 * i] = ggml_get_tensor(
+        m.ctx_w, (std::string(prefixes[i]) + ".weight").c_str());
+    ts[2 * i + 1] =
+        ggml_get_tensor(m.ctx_w, (std::string(prefixes[i]) + ".bias").c_str());
+    if (ts[2 * i] == nullptr || ts[2 * i + 1] == nullptr) {
+      return false; // unexpected layout — leave everything on the GPU path
+    }
+  }
+  // Staging only pays off when there are unselected rows to keep out of VRAM.
+  // A v1 GGUF (rank-2 on disk) and a one-row ship set both have ne[2] == 1, so
+  // both stay on the normal GPU upload path. Tested on ne[2] rather than
+  // ggml_n_dims because that collapses a one-row tensor's trailing singleton.
+  if (ts[0]->ne[2] <= 1) {
+    return false;
+  }
+  // The host block below is sized from all 14 tensors' declared dimensions, so
+  // every row dim has to be bounded BEFORE anything is allocated: checking
+  // ts[0] alone would still let a malformed later weight or bias declare an
+  // arbitrary row count and drive the allocation. This is the same invariant
+  // grootSliceEmbodiment enforces (table row count sane, selected row in range,
+  // every tensor's row dim == the table's), hoisted ahead of the allocation —
+  // grootResolveEmbodiment already ran, so both the table and the row are
+  // known.
+  const int64_t nStored =
+      static_cast<int64_t>(m.embodiment_stored_cat_ids.size());
+  if (m.selected_row < 0 || nStored <= 0) {
+    return false; // no row to slice — leave everything on the GPU path
+  }
+  for (int i = 0; i < 7; ++i) {
+    grootCheckEmbodimentSliceShape(
+        ts[2 * i]->ne[2], ts[2 * i + 1]->ne[1], nStored, m.selected_row);
+  }
+  // The staged tensors' BYTES are never read: grootSliceEmbodiment allocates
+  // fresh row-shaped tensors in ctx_emb and fills them straight from the file
+  // (grootFillEmbodimentRow), so the full bank never has to exist in host RAM.
+  // All this staging needs is a non-null `data`, which is the sole property
+  // ggml_backend_alloc_ctx_tensors_from_buft tests to decide what to allocate.
+  // So hand out distinct 32-byte placeholder slots rather than ggml_nbytes(t)
+  // each: on the 17-row ship set a real block would be ~340MB of disk read,
+  // ~340MB of fread copying and a ~340MB transient allocation per load, all of
+  // it discarded unread. The loader must therefore SKIP these tensors in its
+  // copy loop — it nulls the pointers as soon as the alloc has run so that a
+  // stray read faults instead of running off a 32-byte slot.
+  constexpr size_t kPlaceholderSlot = 32;
+  m.emb_host_bytes.assign(kPlaceholderSlot * std::size(ts), 0);
+  size_t off = 0;
+  for (struct ggml_tensor* t : ts) {
+    t->data = m.emb_host_bytes.data() + off; // excludes t from GPU alloc
+    off += kPlaceholderSlot;
+  }
+  m.emb_host_tensors.assign(std::begin(ts), std::end(ts));
+  return true;
+}
+
 static bool grootLoadWeightsAllocCopy(
     GrootModelInternal& m, const char* path, gguf_context* gguf,
     ggml_backend_buffer_type_t buft, size_t dataOffset,
     int64_t nTensorsInGguf) {
+  // Keep the multi-embodiment rank-3 weights host-resident (out of VRAM); the
+  // alloc below then skips them and the copy loop fills their host data
+  // instead.
+  grootStageEmbodimentRowsHost(m);
   ggml_backend_buffer_t buf =
       ggml_backend_alloc_ctx_tensors_from_buft(m.ctx_w, buft);
   if (buf == nullptr) {
@@ -451,12 +607,25 @@ static bool grootLoadWeightsAllocCopy(
   ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
   m.bufs_w.push_back(buf);
 
+  // The placeholder pointers have served their only purpose (keeping these
+  // tensors out of the alloc above). Null them before the copy loop so the loop
+  // can recognise them, and so any later read of these orphaned rank-3 tensors
+  // faults instead of running off a 32-byte slot. Nothing consumes their bytes:
+  // grootSliceEmbodiment reads the selected row from the file.
+  for (struct ggml_tensor* t : m.emb_host_tensors) {
+    if (t != nullptr) {
+      t->data = nullptr;
+    }
+  }
+  std::vector<uint8_t>().swap(m.emb_host_bytes);
+
   FILE* f = std::fopen(path, "rb");
   if (f == nullptr) {
     return false;
   }
   std::vector<uint8_t> readBuf;
   int nCopied = 0;
+  int nSkipped = 0;
   for (int64_t i = 0; i < nTensorsInGguf; i++) {
     const char* name = gguf_get_tensor_name(gguf, i);
     struct ggml_tensor* t = ggml_get_tensor(m.ctx_w, name);
@@ -465,6 +634,18 @@ static bool grootLoadWeightsAllocCopy(
     }
     const size_t off = dataOffset + gguf_get_tensor_offset(gguf, i);
     const size_t nbytes = ggml_nbytes(t);
+    // Embodiment rows staged by grootStageEmbodimentRowsHost: excluded from the
+    // alloc above, then nulled, so they are the only tensors left with neither
+    // a backend buffer nor data. Their bytes are dead — grootSliceEmbodiment
+    // reads the one selected row straight from the file — so skip them entirely
+    // rather than reading the whole bank (~340MB on the 17-row ship set) to
+    // discard it. Skipping also keeps readBuf sized to the largest UPLOADED
+    // tensor: these are the biggest tensors in the file, so counting them would
+    // strand that capacity for the rest of the load.
+    if (t->buffer == nullptr && t->data == nullptr) {
+      nSkipped++;
+      continue;
+    }
     if (readBuf.size() < nbytes) {
       readBuf.resize(nbytes);
     }
@@ -488,7 +669,9 @@ static bool grootLoadWeightsAllocCopy(
   QLOG_IF(
       Priority::INFO,
       "grootLoadModel: alloc+copy buffer ready, " + std::to_string(nCopied) +
-          " tensors, backend='" + (bname != nullptr ? bname : "?") + "'");
+          " tensors uploaded, " + std::to_string(nSkipped) +
+          " unselected embodiment rows skipped, backend='" +
+          (bname != nullptr ? bname : "?") + "'");
   return true;
 }
 
@@ -530,23 +713,6 @@ static struct ggml_tensor* grootHostCopyTensor(
   return h;
 }
 
-std::vector<int> ggufGetI32ArrOr(
-    struct gguf_context* g, const char* key, std::vector<int> dflt) {
-  const int64_t idx = gguf_find_key(g, key);
-  if (idx < 0) {
-    return dflt;
-  }
-  if (gguf_get_kv_type(g, idx) != GGUF_TYPE_ARRAY) {
-    return dflt;
-  }
-  if (gguf_get_arr_type(g, idx) != GGUF_TYPE_INT32) {
-    return dflt;
-  }
-  const size_t n = gguf_get_arr_n(g, idx);
-  const int32_t* data = static_cast<const int32_t*>(gguf_get_arr_data(g, idx));
-  return std::vector<int>(data, data + n);
-}
-
 float ggufGetF32Or(struct gguf_context* g, const char* key, float dflt) {
   const int64_t idx = gguf_find_key(g, key);
   if (idx < 0) {
@@ -558,7 +724,196 @@ float ggufGetF32Or(struct gguf_context* g, const char* key, float dflt) {
   return gguf_get_val_f32(g, idx);
 }
 
+std::vector<std::string> ggufGetStrArrOr(
+    struct gguf_context* g, const char* key, std::vector<std::string> dflt) {
+  const int64_t idx = gguf_find_key(g, key);
+  if (idx < 0 || gguf_get_kv_type(g, idx) != GGUF_TYPE_ARRAY ||
+      gguf_get_arr_type(g, idx) != GGUF_TYPE_STRING) {
+    return dflt;
+  }
+  const size_t n = gguf_get_arr_n(g, idx);
+  std::vector<std::string> out;
+  out.reserve(n);
+  for (size_t i = 0; i < n; ++i) {
+    out.emplace_back(gguf_get_arr_str(g, idx, i));
+  }
+  return out;
+}
+
 } // namespace
+
+// Externally visible (declared in groot.hpp) rather than sharing the anonymous
+// namespace above, so the corrupt-metadata path is unit-testable.
+std::vector<int> ggufGetI32ArrOr(
+    struct gguf_context* g, const char* key, std::vector<int> dflt) {
+  const int64_t idx = gguf_find_key(g, key);
+  if (idx < 0) {
+    return dflt; // key absent — legitimately an older/v1 GGUF
+  }
+  // Present but unreadable is corruption, not an older file: falling back to
+  // the default would silently discard a ship-set table the tensors are still
+  // shaped for, and the mismatch only surfaces much later (see
+  // grootCheckV1EmbodimentRank).
+  if (gguf_get_kv_type(g, idx) != GGUF_TYPE_ARRAY) {
+    throw std::runtime_error(
+        std::string("ggufGetI32ArrOr: '") + key +
+        "' is present but is not an array");
+  }
+  if (gguf_get_arr_type(g, idx) != GGUF_TYPE_INT32) {
+    throw std::runtime_error(
+        std::string("ggufGetI32ArrOr: '") + key +
+        "' is present but is not an int32 array (type " +
+        std::to_string(static_cast<int>(gguf_get_arr_type(g, idx))) + ")");
+  }
+  const size_t n = gguf_get_arr_n(g, idx);
+  const int32_t* data = static_cast<const int32_t*>(gguf_get_arr_data(g, idx));
+  return std::vector<int>(data, data + n);
+}
+
+void grootCheckV1EmbodimentRank(int64_t weightRowDim) {
+  if (weightRowDim > 1) {
+    throw std::runtime_error(
+        "grootCheckV1EmbodimentRank: embodiment weights store " +
+        std::to_string(weightRowDim) +
+        " rows but no readable groot.embodiment.stored_cat_ids table — cannot "
+        "tell which row to use");
+  }
+}
+
+void grootCheckEmbodimentCount(size_t declaredCount, size_t tableRows) {
+  if (declaredCount != tableRows) {
+    throw std::runtime_error(
+        "grootCheckEmbodimentCount: groot.embodiment.count is " +
+        std::to_string(declaredCount) + " but the stored_cat_ids table holds " +
+        std::to_string(tableRows) + " rows");
+  }
+}
+
+size_t
+grootEmbodimentRowOffset(size_t fileOffset, int rowIndex, size_t rowBytes) {
+  const size_t rows = static_cast<size_t>(rowIndex);
+  const size_t rowOff = rows * rowBytes;
+  if ((rowBytes != 0 && rowOff / rowBytes != rows) ||
+      fileOffset > SIZE_MAX - rowOff) {
+    throw std::runtime_error(
+        "grootEmbodimentRowOffset: embodiment row offset overflows for row " +
+        std::to_string(rowIndex));
+  }
+  return fileOffset + rowOff;
+}
+
+// The seven per-embodiment weights whose transposed copies live in ctx_wt, in
+// the fixed order the wt_* members are declared. Shared by the alloc and fill
+// halves below so the two can never drift out of correspondence.
+static void
+grootEmbodimentWeightSrcs(GrootModelInternal& m, struct ggml_tensor* srcs[7]) {
+  srcs[0] = m.embodiment.state_encoder_layer1.weight;
+  srcs[1] = m.embodiment.state_encoder_layer2.weight;
+  srcs[2] = m.embodiment.action_encoder_w1.weight;
+  srcs[3] = m.embodiment.action_encoder_w2.weight;
+  srcs[4] = m.embodiment.action_encoder_w3.weight;
+  srcs[5] = m.embodiment.action_decoder_layer1.weight;
+  srcs[6] = m.embodiment.action_decoder_layer2.weight;
+}
+
+// Host scratch one transpose pass needs: the largest of the seven weights,
+// since the pass reuses one src/dst buffer pair across all of them.
+static size_t grootTransposedScratchBytes(GrootModelInternal& m) {
+  struct ggml_tensor* srcs[7];
+  grootEmbodimentWeightSrcs(m, srcs);
+  size_t maxNb = 0;
+  for (struct ggml_tensor* s : srcs) {
+    if (s != nullptr) {
+      maxNb = std::max(maxNb, ggml_nbytes(s));
+    }
+  }
+  return maxNb;
+}
+
+// Fill (or refill) the transposed copies from the CURRENT embodiment weights.
+// Split out of the allocation below because setEmbodiment swaps the source
+// row's values without changing any shape: the ctx_wt tensors and buf_wt stay
+// exactly as allocated at load and only their contents are rewritten.
+//
+// `src8`/`dst8` are caller-owned scratch, each at least
+// grootTransposedScratchBytes(m). Taking them pre-sized rather than growing
+// them here is what makes the refill infallible once it starts writing:
+// setEmbodiment allocates them BEFORE it commits the new embodiment row, so a
+// bad_alloc can only happen while the model is still wholly on the previous
+// embodiment. A short buffer is a programming error and is rejected before the
+// first write.
+// `need` is the scratch size the caller sized src8/dst8 from. It is passed in
+// rather than recomputed here so that the only step that can reject the buffers
+// happens BEFORE setEmbodiment commits a new row — recomputing it here would
+// put the one fallible check on the far side of the first write, and a throw
+// there would leave buf_emb on the new row while ctx_wt still held the old
+// row's transposes.
+static void grootFillTransposedWeights(
+    GrootModelInternal& m, std::vector<uint8_t>& src8,
+    std::vector<uint8_t>& dst8, size_t need) {
+  struct ggml_tensor* srcs[7];
+  grootEmbodimentWeightSrcs(m, srcs);
+  struct ggml_tensor* dsts[7] = {
+      m.wt_se_l1,
+      m.wt_se_l2,
+      m.wt_ae_w1,
+      m.wt_ae_w2,
+      m.wt_ae_w3,
+      m.wt_ad_l1,
+      m.wt_ad_l2};
+  if (src8.size() < need || dst8.size() < need) {
+    throw std::runtime_error(
+        "grootFillTransposedWeights: scratch buffers are smaller than the "
+        "largest embodiment weight");
+  }
+  // dst[ii + nIn*oi] = src[oi + nOut*ii] — plain 2-D element transpose, typed
+  // on the element width so each element is an inline load/store. A std::memcpy
+  // of a RUNTIME size (2 bytes for F16, 4 for F32) can't be folded into a move,
+  // and at HIDDEN_SIZE=1024 most of these matrices are ~1024x1024, so the
+  // untyped version cost ~5M out-of-line calls per refill — on setEmbodiment's
+  // path, under the embodiment_mutex, on the JS thread.
+  auto transpose = [](auto* dst, const auto* src, int64_t nOut, int64_t nIn) {
+    for (int64_t oi = 0; oi < nOut; ++oi) {
+      for (int64_t ii = 0; ii < nIn; ++ii) {
+        dst[oi * nIn + ii] = src[ii * nOut + oi];
+      }
+    }
+  };
+  for (int i = 0; i < 7; ++i) {
+    struct ggml_tensor* s = srcs[i];
+    const int64_t nOut = s->ne[0];
+    const int64_t nIn = s->ne[1];
+    const size_t es = ggml_type_size(s->type);
+    const size_t nb = ggml_nbytes(s);
+    // CPU mmap path: tensors carry a host `data` pointer but no backend buffer,
+    // so read it directly; GPU path: pull the device-resident bytes to host.
+    if (s->buffer != nullptr) {
+      ggml_backend_tensor_get(s, src8.data(), 0, nb);
+    } else {
+      std::memcpy(src8.data(), s->data, nb);
+    }
+    // grootMaterializeTransposedWeights admits only F32/F16 sources, so the
+    // element width is 4 or 2; anything else would be a caller bug.
+    if (es == sizeof(uint32_t)) {
+      transpose(
+          reinterpret_cast<uint32_t*>(dst8.data()),
+          reinterpret_cast<const uint32_t*>(src8.data()),
+          nOut,
+          nIn);
+    } else if (es == sizeof(uint16_t)) {
+      transpose(
+          reinterpret_cast<uint16_t*>(dst8.data()),
+          reinterpret_cast<const uint16_t*>(src8.data()),
+          nOut,
+          nIn);
+    } else {
+      throw std::runtime_error(
+          "grootFillTransposedWeights: unsupported element size " +
+          std::to_string(es));
+    }
+    ggml_backend_tensor_set(dsts[i], dst8.data(), 0, nb);
+  }
+}
 
 // Materialize transposed ([in,out]) copies of the seven CategorySpecificLinear
 // weights once at load, so the state/DiT graphs can use plain grootLinear
@@ -568,15 +923,8 @@ float ggufGetF32Or(struct gguf_context* g, const char* key, float dflt) {
 // results bit-identical to the runtime cont. On any unexpected shape/type the
 // function bails and leaves wt_ready=false → infer() keeps the original path.
 static bool grootMaterializeTransposedWeights(GrootModelInternal& m) {
-  struct ggml_tensor* srcs[7] = {
-      m.embodiment.state_encoder_layer1.weight,
-      m.embodiment.state_encoder_layer2.weight,
-      m.embodiment.action_encoder_w1.weight,
-      m.embodiment.action_encoder_w2.weight,
-      m.embodiment.action_encoder_w3.weight,
-      m.embodiment.action_decoder_layer1.weight,
-      m.embodiment.action_decoder_layer2.weight,
-  };
+  struct ggml_tensor* srcs[7];
+  grootEmbodimentWeightSrcs(m, srcs);
   for (struct ggml_tensor* s : srcs) {
     if (s == nullptr || ggml_n_dims(s) != 2 || !ggml_is_contiguous(s) ||
         (s->type != GGML_TYPE_F32 && s->type != GGML_TYPE_F16)) {
@@ -612,40 +960,450 @@ static bool grootMaterializeTransposedWeights(GrootModelInternal& m) {
     return false;
   }
   ggml_backend_buffer_set_usage(m.buf_wt, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
-  std::vector<uint8_t> src8, dst8;
-  for (int i = 0; i < 7; ++i) {
-    struct ggml_tensor* s = srcs[i];
-    const int64_t nOut = s->ne[0];
-    const int64_t nIn = s->ne[1];
-    const size_t es = ggml_type_size(s->type);
-    const size_t nb = ggml_nbytes(s);
-    src8.resize(nb);
-    dst8.resize(nb);
-    // CPU mmap path: tensors carry a host `data` pointer but no backend buffer,
-    // so read it directly; GPU path: pull the device-resident bytes to host.
-    if (s->buffer != nullptr) {
-      ggml_backend_tensor_get(s, src8.data(), 0, nb);
-    } else {
-      std::memcpy(src8.data(), s->data, nb);
-    }
-    // dst[ii + nIn*oi] = src[oi + nOut*ii] — plain 2-D element transpose.
-    for (int64_t oi = 0; oi < nOut; ++oi) {
-      for (int64_t ii = 0; ii < nIn; ++ii) {
-        std::memcpy(
-            &dst8[static_cast<size_t>(oi * nIn + ii) * es],
-            &src8[static_cast<size_t>(ii * nOut + oi) * es],
-            es);
-      }
-    }
-    ggml_backend_tensor_set(*dsts[i], dst8.data(), 0, nb);
-  }
+  const size_t scratch = grootTransposedScratchBytes(m);
+  std::vector<uint8_t> src8(scratch);
+  std::vector<uint8_t> dst8(scratch);
+  grootFillTransposedWeights(m, src8, dst8, scratch);
   m.wt_ready = true;
   return true;
 }
 
+// Copy embodiment row `rowIndex` into the sliced ctx_emb tensors, from the GGUF
+// file. The file (not the rank-3 ctx_w tensors) is the source because those
+// sources do not survive load on the GPU path: their host staging is released
+// and their data pointers nulled once the first row is sliced. Reading them
+// back from disk instead keeps the unselected rows out of both VRAM and host
+// RAM at the cost of one row's worth of I/O (~20MB on the 17-row ship set),
+// which is what makes setEmbodiment cheap enough to be worth having.
+//
+// Each row's block is contiguous (row = outermost ggml axis), so the byte
+// offset is rowIndex * one-row size, and one row's size is exactly the dst's
+// nbytes. Caller must have validated rowIndex against the table
+// (grootSliceEmbodiment).
+//
+// ALL 14 blocks are read into host memory before ANY tensor is written, so a
+// failure partway through cannot leave the model mixing two embodiments'
+// weights while selected_* still names the old one. Only the write pass touches
+// the model, and it cannot fail. The staging costs one row, ~20MB on the 17-row
+// ship set, held for the duration of the call.
+static void grootFillEmbodimentRow(GrootModelInternal& m, int rowIndex) {
+  size_t total = 0;
+  for (const GrootModelInternal::GrootEmbRowSlice& sl : m.emb_slices) {
+    total += sl.row_bytes; // sum of live allocations: cannot overflow
+  }
+  std::vector<uint8_t> staged(total);
+
+  FILE* f = std::fopen(m.gguf_path.c_str(), "rb");
+  if (f == nullptr) {
+    throw std::runtime_error(
+        "grootFillEmbodimentRow: cannot reopen '" + m.gguf_path + "'");
+  }
+  size_t stagedOff = 0;
+  for (const GrootModelInternal::GrootEmbRowSlice& sl : m.emb_slices) {
+    // Bounded rather than trusted, since row_bytes derives from GGUF-declared
+    // dims. Wrapped in a try so the FILE* is closed on the throw path.
+    size_t off = 0;
+    try {
+      off = grootEmbodimentRowOffset(sl.file_offset, rowIndex, sl.row_bytes);
+    } catch (...) {
+      std::fclose(f);
+      throw;
+    }
+#ifdef _WIN32
+    const int seekErr = _fseeki64(f, static_cast<int64_t>(off), SEEK_SET);
+#else
+    const int seekErr = fseeko(f, static_cast<off_t>(off), SEEK_SET);
+#endif
+    if (seekErr != 0 ||
+        std::fread(staged.data() + stagedOff, 1, sl.row_bytes, f) !=
+            sl.row_bytes) {
+      std::fclose(f);
+      throw std::runtime_error(
+          "grootFillEmbodimentRow: short read for embodiment row " +
+          std::to_string(rowIndex) + " of '" + m.gguf_path + "'");
+    }
+    stagedOff += sl.row_bytes;
+  }
+  std::fclose(f);
+
+  stagedOff = 0;
+  for (const GrootModelInternal::GrootEmbRowSlice& sl : m.emb_slices) {
+    ggml_backend_tensor_set(sl.dst, staged.data() + stagedOff, 0, sl.row_bytes);
+    stagedOff += sl.row_bytes;
+  }
+}
+
+// Slice the seven CategorySpecificLinear tensors to one embodiment row, so the
+// pre-transpose + graph builders below operate on plain 2-D/1-D weights exactly
+// as they do for a v1 single-embodiment GGUF. Multi GGUFs store them with the
+// row (category) dim kept: weight ne=[out,in,n_stored] (row = OUTERMOST ggml
+// axis → each row's [out,in] block is contiguous), bias ne=[out,n_stored]. We
+// allocate fresh 2-D/1-D tensors in ctx_emb and fill them with row `rowIndex`
+// via grootFillEmbodimentRow, which setEmbodiment reuses to swap rows later.
+// v1 GGUFs (rowIndex -1, weights already sliced on disk) are left untouched.
+// Throws on a malformed multi GGUF — the fallback path can't consume a stored
+// weight, so this must be fatal rather than silently degrade.
+static void grootSliceEmbodiment(GrootModelInternal& m, int rowIndex) {
+  GrootLinearWeights* lins[7] = {
+      &m.embodiment.state_encoder_layer1,
+      &m.embodiment.state_encoder_layer2,
+      &m.embodiment.action_encoder_w1,
+      &m.embodiment.action_encoder_w2,
+      &m.embodiment.action_encoder_w3,
+      &m.embodiment.action_decoder_layer1,
+      &m.embodiment.action_decoder_layer2};
+
+  // Whether there is a row to slice comes from the resolver's decision, NOT
+  // from the tensors' apparent rank: a one-row ship set stores ne=[out,in,1]
+  // and ggml_n_dims collapses that trailing singleton, so a rank test would
+  // read a perfectly valid one-row multi GGUF as an already-sliced v1 weight
+  // and reject it. grootCheckEmbodimentSliceShape does the metadata-vs-tensor
+  // agreement check below instead.
+  if (rowIndex < 0 || lins[0]->weight == nullptr) {
+    // No row to slice means the resolver saw no ship-set table, i.e. this must
+    // be a v1 GGUF whose weights are already one embodiment. Assert that rather
+    // than assume it — see grootCheckV1EmbodimentRank for why the alternative
+    // is a process abort on the first infer rather than a load failure.
+    if (rowIndex < 0 && lins[0]->weight != nullptr) {
+      grootCheckV1EmbodimentRank(lins[0]->weight->ne[2]);
+    }
+    return;
+  }
+  const int64_t nStored =
+      static_cast<int64_t>(m.embodiment_stored_cat_ids.size());
+
+  struct ggml_init_params ip{
+      ggml_tensor_overhead() * 16 + 256, nullptr, /*no_alloc=*/true};
+  m.ctx_emb = ggml_init(ip);
+  if (m.ctx_emb == nullptr) {
+    throw std::runtime_error("grootSliceEmbodiment: ctx_emb alloc failed");
+  }
+
+  // Validate + allocate dst tensors, recording each one's source row geometry
+  // in the GGUF so grootFillEmbodimentRow can (re-)read any row later.
+  const size_t dataOffset = gguf_get_data_offset(m.gguf);
+  m.emb_slices.clear();
+  m.emb_slices.reserve(14);
+  auto recordSlice = [&](struct ggml_tensor* src, struct ggml_tensor* dst) {
+    const int64_t ti = gguf_find_tensor(m.gguf, ggml_get_name(src));
+    if (ti < 0) {
+      throw std::runtime_error(
+          std::string("grootSliceEmbodiment: '") + ggml_get_name(src) +
+          "' is not a GGUF tensor");
+    }
+    m.emb_slices.push_back(
+        {dst,
+         dataOffset + gguf_get_tensor_offset(m.gguf, ti),
+         ggml_nbytes(dst)});
+  };
+  for (GrootLinearWeights* l : lins) {
+    struct ggml_tensor* w = l->weight;
+    struct ggml_tensor* b = l->bias;
+    if (w == nullptr || b == nullptr) {
+      throw std::runtime_error(
+          "grootSliceEmbodiment: missing multi-embodiment weight/bias tensor");
+    }
+    // Row dims vs the embodiment table; also bounds rowIndex and nStored.
+    grootCheckEmbodimentSliceShape(w->ne[2], b->ne[1], nStored, rowIndex);
+    // weight: ne=[out,in,n_stored] → dst ne=[out,in].
+    if (!ggml_is_contiguous(w) || w->ne[3] != 1 ||
+        (w->type != GGML_TYPE_F32 && w->type != GGML_TYPE_F16)) {
+      throw std::runtime_error(
+          "grootSliceEmbodiment: malformed multi-embodiment weight tensor");
+    }
+    struct ggml_tensor* wd =
+        ggml_new_tensor_2d(m.ctx_emb, w->type, w->ne[0], w->ne[1]);
+    recordSlice(w, wd);
+    l->weight = wd;
+    // bias: ne=[out,n_stored] → dst ne=[out].
+    if (!ggml_is_contiguous(b) || b->ne[2] != 1 || b->ne[3] != 1 ||
+        (b->type != GGML_TYPE_F32 && b->type != GGML_TYPE_F16)) {
+      throw std::runtime_error(
+          "grootSliceEmbodiment: malformed multi-embodiment bias tensor");
+    }
+    struct ggml_tensor* bd = ggml_new_tensor_1d(m.ctx_emb, b->type, b->ne[0]);
+    recordSlice(b, bd);
+    l->bias = bd;
+  }
+
+  ggml_backend_buffer_type_t buft =
+      ggml_backend_get_default_buffer_type(m.backend);
+  m.buf_emb = ggml_backend_alloc_ctx_tensors_from_buft(m.ctx_emb, buft);
+  if (m.buf_emb == nullptr) {
+    throw std::runtime_error("grootSliceEmbodiment: buf_emb alloc failed");
+  }
+  ggml_backend_buffer_set_usage(m.buf_emb, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
+
+  grootFillEmbodimentRow(m, rowIndex);
+}
+
+// Runs grootSliceEmbodiment's two table-vs-tensor agreement checks EARLY, from
+// the load path, before mustGet demands that every model tensor exist.
+//
+// Both checks read nothing but ggml `ne` extents, which a GGUF declares in its
+// tensor-info block. Hoisting them here is therefore not just fail-fast: it is
+// what makes them reachable from a metadata-only GGUF of a few KB, written with
+// gguf_init_empty + gguf_add_tensor, instead of demanding a purpose-built
+// multi-GB fixture carrying every shared weight. The rejections a corrupt file
+// gets are unchanged.
+//
+// Probes the first embodiment linear only. The per-tensor loop in
+// grootSliceEmbodiment still checks all seven, and is also the path
+// setEmbodiment re-enters later, so both stay. An absent probe tensor is left
+// for mustGet to name — a missing weight is its error to report, not a rank
+// mismatch.
+static void grootCheckEmbodimentTensorRankEarly(GrootModelInternal& m) {
+  struct ggml_tensor* w =
+      ggml_get_tensor(m.ctx_w, "embodiment.state_encoder.layer1.weight");
+  struct ggml_tensor* b =
+      ggml_get_tensor(m.ctx_w, "embodiment.state_encoder.layer1.bias");
+  if (w == nullptr || b == nullptr) {
+    return;
+  }
+  // selected_row < 0 means the resolver found no usable ship-set table, so the
+  // weights have to already be one row.
+  if (m.selected_row < 0) {
+    grootCheckV1EmbodimentRank(w->ne[2]);
+    return;
+  }
+  grootCheckEmbodimentSliceShape(
+      w->ne[2],
+      b->ne[1],
+      static_cast<int64_t>(m.embodiment_stored_cat_ids.size()),
+      m.selected_row);
+}
+
+// Upper sanity bound on a resolved embodiment's camera count. Real GR00T
+// embodiments use 2 (LIBERO) to 4 (DROID); 64 is a generous ceiling that still
+// rejects a garbage/uninitialised metadata value before it reaches the graph.
+static constexpr int GROOT_MAX_SANE_NUM_CAMERAS = 64;
+
+// Largest selectable embodiment id. A cat_id indexes GR00T's
+// CategorySpecificLinear bank, whose category dim the architecture fixes at
+// `max_num_embodiments` = 32, so 0..31 is the whole id space — anything above
+// it cannot name a row in any conversion of any checkpoint. Bounding it here
+// keeps an out-of-range id a named error instead of a "not in this ship set"
+// one, and stops a caller's id from having to survive an int32 narrowing on the
+// way in.
+static constexpr int GROOT_MAX_EMBODIMENT_CAT_ID = 31;
+
+void grootCheckEmbodimentSliceShape(
+    int64_t weightRowDim, int64_t biasRowDim, int64_t nStored, int rowIndex) {
+  if (nStored <= 0 || nStored > GROOT_MAX_SANE_STORED_EMBODIMENTS) {
+    throw std::runtime_error(
+        "grootCheckEmbodimentSliceShape: embodiment table declares " +
+        std::to_string(nStored) + " stored rows (expected 1.." +
+        std::to_string(GROOT_MAX_SANE_STORED_EMBODIMENTS) + ")");
+  }
+  if (rowIndex < 0 || rowIndex >= nStored) {
+    throw std::runtime_error(
+        "grootCheckEmbodimentSliceShape: selected row " +
+        std::to_string(rowIndex) + " is out of range for " +
+        std::to_string(nStored) + " stored rows");
+  }
+  if (weightRowDim != nStored || biasRowDim != nStored) {
+    throw std::runtime_error(
+        "grootCheckEmbodimentSliceShape: embodiment table says " +
+        std::to_string(nStored) + " stored rows but the tensors carry " +
+        std::to_string(weightRowDim) + " (weight) / " +
+        std::to_string(biasRowDim) + " (bias) — GGUF metadata/tensor mismatch");
+  }
+}
+
+GrootEmbodimentSelection grootResolveEmbodiment(
+    const std::vector<std::string>& tags, const std::vector<int>& catIds,
+    const std::vector<int>& storedCatIds,
+    const std::vector<int>& storedNumCameras, const std::string& bakedTag,
+    int bakedCatId, const std::string& defaultTag,
+    const VlaEmbodimentRequest& request, int defaultNumCameras) {
+  const bool isMulti = !storedCatIds.empty();
+  // A tag and a cat_id are two spellings of one selection, so honouring a
+  // precedence between them would silently hand back the embodiment the caller
+  // did not name. Reject instead.
+  if (!request.tag.empty() && request.cat_id >= 0) {
+    throw std::runtime_error(
+        "grootResolveEmbodiment: request carries both a tag ('" + request.tag +
+        "') and a cat_id (" + std::to_string(request.cat_id) +
+        ") — pass exactly one");
+  }
+  if (request.num_cameras > GROOT_MAX_SANE_NUM_CAMERAS) {
+    throw std::runtime_error(
+        "grootResolveEmbodiment: requested num_cameras " +
+        std::to_string(request.num_cameras) + " is out of range (1.." +
+        std::to_string(GROOT_MAX_SANE_NUM_CAMERAS) + ")");
+  }
+  if (request.cat_id > GROOT_MAX_EMBODIMENT_CAT_ID) {
+    throw std::runtime_error(
+        "grootResolveEmbodiment: requested cat_id " +
+        std::to_string(request.cat_id) + " is out of range (0.." +
+        std::to_string(GROOT_MAX_EMBODIMENT_CAT_ID) + ")");
+  }
+  // Explicit tag wins, else the GGUF default — but a cat_id request resolves
+  // numerically and must not fall back to the default tag.
+  const std::string wantTag =
+      !request.tag.empty() ? request.tag
+                           : (request.cat_id >= 0 ? std::string() : defaultTag);
+
+  GrootEmbodimentSelection sel{};
+  // The count the GGUF itself knows for the selected embodiment; 0 = unknown,
+  // which only an explicit request.num_cameras can rescue (see below).
+  int knownCams = 0;
+
+  if (!isMulti) {
+    // v1 single-embodiment GGUF: only the baked entry is selectable, by either
+    // spelling of it.
+    if (!request.tag.empty() && request.tag != bakedTag) {
+      throw std::runtime_error(
+          "grootResolveEmbodiment: GGUF is single-embodiment ('" + bakedTag +
+          "'); cannot select '" + request.tag + "'");
+    }
+    if (request.cat_id >= 0 && request.cat_id != bakedCatId) {
+      throw std::runtime_error(
+          "grootResolveEmbodiment: GGUF is single-embodiment (cat_id " +
+          std::to_string(bakedCatId) + "); cannot select cat_id " +
+          std::to_string(request.cat_id));
+    }
+    sel.tag = bakedTag;
+    sel.cat_id = bakedCatId;
+    sel.row = -1; // no slice; weights are already 2-D on disk
+    knownCams = defaultNumCameras;
+  } else {
+    // A ship set larger than any converter can emit means a corrupt table;
+    // reject it here rather than let it drive a row search and, on the GPU
+    // path, a host allocation sized from the matching tensor dimension.
+    if (storedCatIds.size() >
+        static_cast<size_t>(GROOT_MAX_SANE_STORED_EMBODIMENTS)) {
+      throw std::runtime_error(
+          "grootResolveEmbodiment: embodiment table declares " +
+          std::to_string(storedCatIds.size()) + " stored rows (max " +
+          std::to_string(GROOT_MAX_SANE_STORED_EMBODIMENTS) + ")");
+    }
+    // Resolve wantTag -> cat_id via the full map (fall back to the baked cat_id
+    // when the map is absent and wantTag is the baked tag).
+    if (tags.size() != catIds.size()) {
+      throw std::runtime_error(
+          "grootResolveEmbodiment: malformed embodiment table — tags (" +
+          std::to_string(tags.size()) + ") and cat_ids (" +
+          std::to_string(catIds.size()) + ") length mismatch");
+    }
+    int wantCatId = request.cat_id;
+    if (wantCatId < 0) {
+      for (size_t i = 0; i < tags.size(); ++i) {
+        if (tags[i] == wantTag) {
+          wantCatId = catIds[i];
+          break;
+        }
+      }
+      if (wantCatId < 0 && wantTag == bakedTag) {
+        wantCatId = bakedCatId;
+      }
+      if (wantCatId < 0) {
+        throw std::runtime_error(
+            "grootResolveEmbodiment: unknown embodiment tag '" + wantTag + "'");
+      }
+    }
+    // Selection by cat_id still reports a tag, so hparams stays readable and a
+    // caller can round-trip id -> tag. Many tags alias one cat_id; the first in
+    // the map is the canonical spelling. A cat_id absent from the map (possible
+    // on a ship set converted from a checkpoint whose tag map is narrower than
+    // its trained rows) gets a synthetic name rather than an empty one.
+    std::string reportTag = wantTag;
+    if (reportTag.empty()) {
+      for (size_t i = 0; i < catIds.size(); ++i) {
+        if (catIds[i] == wantCatId) {
+          reportTag = tags[i];
+          break;
+        }
+      }
+      if (reportTag.empty()) {
+        reportTag = "cat_id_" + std::to_string(wantCatId);
+      }
+    }
+    // cat_id -> stored row.
+    int row = -1;
+    for (size_t i = 0; i < storedCatIds.size(); ++i) {
+      if (storedCatIds[i] == wantCatId) {
+        row = static_cast<int>(i);
+        break;
+      }
+    }
+    if (row < 0) {
+      throw std::runtime_error(
+          "grootResolveEmbodiment: embodiment '" + reportTag + "' (cat_id " +
+          std::to_string(wantCatId) +
+          ") is not stored in this GGUF's ship set");
+    }
+    sel.tag = reportTag;
+    sel.cat_id = wantCatId;
+    sel.row = row;
+    // Per-row num_cameras is authoritative for a multi GGUF — NOT the top-level
+    // default, which describes only the default embodiment. A stored count of 0
+    // means this embodiment's view count was unknown at conversion time
+    // (num_cameras is a data-config property, absent from the checkpoint), and
+    // inheriting a different embodiment's count would build the wrong
+    // image-token layout and infer silently wrong. Such a row is runnable only
+    // if the caller states the count.
+    knownCams = row < static_cast<int>(storedNumCameras.size())
+                    ? storedNumCameras[row]
+                    : 0;
+  }
+  if (request.num_cameras > 0) {
+    // The caller's count wins even when the GGUF has one: counts are stored per
+    // cat_id, so tags aliasing one cat_id share a count and a rig with a
+    // different view count has no other way to be run. Log the disagreement so
+    // a mistyped override is visible in the run log.
+    if (knownCams > 0 && knownCams != request.num_cameras) {
+      QLOG_IF(
+          Priority::WARNING,
+          "grootResolveEmbodiment: embodiment '" + sel.tag +
+              "' overrides the GGUF's num_cameras " +
+              std::to_string(knownCams) + " with " +
+              std::to_string(request.num_cameras));
+    }
+    sel.num_cameras = request.num_cameras;
+  } else {
+    if (knownCams <= 0) {
+      throw std::runtime_error(
+          "grootResolveEmbodiment: embodiment '" + sel.tag + "' (cat_id " +
+          std::to_string(sel.cat_id) +
+          ") has no known num_cameras in this GGUF — pass an explicit "
+          "num_cameras to select it");
+    }
+    sel.num_cameras = knownCams;
+  }
+  if (sel.num_cameras <= 0 || sel.num_cameras > GROOT_MAX_SANE_NUM_CAMERAS) {
+    throw std::runtime_error(
+        "grootResolveEmbodiment: num_cameras for embodiment '" + sel.tag +
+        "' is unknown/invalid — this embodiment needs an explicit num_cameras");
+  }
+  return sel;
+}
+
+// Resolve `request` (unset = the GGUF's default) against this model's
+// embodiment tables. Shared by the load path and setEmbodiment so both apply
+// identical rules — in particular the camera fallback reads the file's own
+// num_cameras
+// (`gguf_default_num_cameras`), not the currently selected embodiment's count,
+// which setEmbodiment overwrites.
+static GrootEmbodimentSelection grootResolveForModel(
+    GrootModelInternal& m, const VlaEmbodimentRequest& request) {
+  const std::string defaultTag =
+      ggufGetStrOr(m.gguf, "groot.embodiment.default", m.embodiment_tag);
+  return grootResolveEmbodiment(
+      m.embodiment_tags,
+      m.embodiment_cat_ids,
+      m.embodiment_stored_cat_ids,
+      m.embodiment_stored_num_cameras,
+      m.embodiment_tag,
+      m.embodiment_cat_id,
+      defaultTag,
+      request,
+      m.gguf_default_num_cameras);
+}
+
 static std::unique_ptr<GrootModelInternal> grootLoadModel(
-    const std::string& ggufPath, bool forceCpu,
-    const std::string& backendsDir) {
+    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
+    const VlaEmbodimentRequest& embodiment = {}) {
   vla_backend_selection::loadBackendsOnce(backendsDir);
   auto m = std::make_unique<GrootModelInternal>();
 
@@ -698,6 +1456,8 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
     throw std::runtime_error(
         "grootLoadModel: gguf_init_from_file failed for " + ggufPath);
   }
+  // Kept for grootFillEmbodimentRow (setEmbodiment re-reads a row from here).
+  m->gguf_path = ggufPath;
 
   const std::string arch = ggufGetStrOr(m->gguf, "general.architecture", "");
   if (arch != "groot") {
@@ -746,6 +1506,9 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
   m->max_state_dim = ggufGetU32Or(m->gguf, "groot.max_state_dim", 132);
   m->max_action_dim = ggufGetU32Or(m->gguf, "groot.max_action_dim", 132);
   m->num_cameras = ggufGetU32Or(m->gguf, "groot.num_cameras", 2);
+  // num_cameras is rewritten per selected embodiment (here and in
+  // setEmbodiment); keep the file's own value as the resolver's fallback.
+  m->gguf_default_num_cameras = m->num_cameras;
   m->action_horizon = ggufGetU32Or(m->gguf, "groot.action_horizon", 40);
   m->num_inference_timesteps =
       ggufGetU32Or(m->gguf, "groot.num_inference_timesteps", 4);
@@ -821,6 +1584,53 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
         "convert_groot_dit_to_gguf.py");
   }
 
+  // ── Multi-embodiment table + load-time selection ─────────────────────────
+  // Multi GGUFs carry a tag -> cat_id map and a stored-row table; v1 GGUFs
+  // carry neither (empty vectors) and fall back to the single baked embodiment.
+  m->embodiment_tags = ggufGetStrArrOr(m->gguf, "groot.embodiment.tags", {});
+  m->embodiment_cat_ids =
+      ggufGetI32ArrOr(m->gguf, "groot.embodiment.cat_ids", {});
+  m->embodiment_stored_cat_ids =
+      ggufGetI32ArrOr(m->gguf, "groot.embodiment.stored_cat_ids", {});
+  m->embodiment_stored_num_cameras =
+      ggufGetI32ArrOr(m->gguf, "groot.embodiment.stored_num_cameras", {});
+  // groot.embodiment.count is redundant with the table's length — the row count
+  // is always derived from stored_cat_ids, never from this key. Cross-check it
+  // anyway so a file whose two records disagree is a named load error rather
+  // than a file that loads while advertising a row count it doesn't have.
+  if (!m->embodiment_stored_cat_ids.empty()) {
+    const size_t nRows = m->embodiment_stored_cat_ids.size();
+    // Defaulting to nRows makes an absent key a no-op rather than a mismatch.
+    grootCheckEmbodimentCount(
+        static_cast<size_t>(ggufGetU32Or(
+            m->gguf, "groot.embodiment.count", static_cast<uint32_t>(nRows))),
+        nRows);
+  }
+  // Pick the wanted embodiment: an explicit tag/cat_id wins, else the GGUF
+  // default, else the single baked tag (v1). Resolution + all error paths live
+  // in the pure grootResolveEmbodiment (unit-tested in
+  // test_groot_embodiment_resolve.cpp).
+  const GrootEmbodimentSelection sel = grootResolveForModel(*m, embodiment);
+  m->selected_embodiment_tag = sel.tag;
+  m->selected_cat_id = sel.cat_id;
+  m->selected_row = sel.row;
+  m->num_cameras = sel.num_cameras;
+  // Log the resolved selection so a '' (GGUF-default) load is observable — the
+  // caller cannot otherwise tell which embodiment the default picked.
+  QLOG_IF(
+      Priority::INFO,
+      "grootLoadModel: embodiment '" + m->selected_embodiment_tag +
+          "' (cat_id " + std::to_string(m->selected_cat_id) + ", " +
+          (m->selected_row < 0
+               ? "single-embodiment GGUF"
+               : "stored row " + std::to_string(m->selected_row)) +
+          ", num_cameras " + std::to_string(m->num_cameras) + ")");
+
+  // Reject a table/tensor rank disagreement now that the row is resolved,
+  // before the GPU upload below stages rows off the back of those same extents
+  // and long before mustGet requires the rest of the model to exist.
+  grootCheckEmbodimentTensorRankEarly(*m);
+
   // GPU path: allocate a device buffer and stream the weights into it. Runs
   // BEFORE the tensor-pointer population below so a failed upload can reopen
   // ctx_w on CPU without leaving any m->vision/text/dit pointers dangling into
@@ -846,6 +1656,13 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
       m->has_gpu = false;
       const char* cpuName = ggml_backend_name(m->backend_cpu);
       m->backend_name = cpuName != nullptr ? cpuName : "CPU";
+      // Drop the embodiment-row staging bookkeeping before it outlives its
+      // purpose: those tensors live in the ctx_w freed just below, and the CPU
+      // path reads the selected row from the mmap instead. Reachable with the
+      // placeholder block still allocated, since an alloc failure returns
+      // before the loader gets to release it.
+      m->emb_host_tensors.clear();
+      std::vector<uint8_t>().swap(m->emb_host_bytes);
       // Reopen the GGUF with no_alloc=false so tensor data is mmapped
       // host-side.
       gguf_free(m->gguf);
@@ -1050,6 +1867,26 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
       getLinear("embodiment.action_decoder.layer1");
   m->embodiment.action_decoder_layer2 =
       getLinear("embodiment.action_decoder.layer2");
+
+  // Multi-embodiment GGUFs store these with the row dim kept; slice the
+  // load-time-selected row down to plain 2-D/1-D weights before anything below
+  // consumes them. No-op on v1 GGUFs (already 2-D).
+  grootSliceEmbodiment(*m, m->selected_row);
+
+  // Drop the record of the GPU-path staged rank-3 tensors. grootLoadWeights-
+  // AllocCopy already nulled their data and freed the placeholder block once
+  // the alloc had run, so this only releases the bookkeeping; the idempotent
+  // null below also covers the CPU path, where staging never ran. Those rank-3
+  // tensors are orphaned from here on — m->embodiment.* now point at the sliced
+  // ctx_emb tensors — so a null deref beats a read of the wrong bytes if
+  // anything ever walks ctx_w again.
+  for (struct ggml_tensor* t : m->emb_host_tensors) {
+    if (t != nullptr) {
+      t->data = nullptr;
+    }
+  }
+  m->emb_host_tensors.clear();
+  std::vector<uint8_t>().swap(m->emb_host_bytes);
 
   // Pre-transpose the CategorySpecificLinear weights (best-effort; falls back
   // to the runtime-transpose path if the shapes/types are unexpected).
@@ -1914,8 +2751,9 @@ struct ggml_tensor* grootBuildVisionBlockGraph(
 // ── GrootModel ────────────────────────────────────────────────────────────
 
 GrootModel::GrootModel(
-    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir)
-    : impl_(grootLoadModel(ggufPath, forceCpu, backendsDir)) {
+    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
+    const VlaEmbodimentRequest& embodiment)
+    : impl_(grootLoadModel(ggufPath, forceCpu, backendsDir, embodiment)) {
   hparams_.chunk_size = impl_->action_horizon;
   hparams_.action_dim = impl_->max_action_dim;
   hparams_.max_action_dim = impl_->max_action_dim;
@@ -1924,6 +2762,8 @@ GrootModel::GrootModel(
                                      // consumer-side, no fixed length yet
   hparams_.vision_image_size = impl_->vision_image_size;
   hparams_.num_cameras = impl_->num_cameras;
+  hparams_.selected_embodiment_tag = impl_->selected_embodiment_tag;
+  hparams_.selected_embodiment_cat_id = impl_->selected_cat_id;
   hparams_.state_input_mode = VlaHparamsGeneric::StateInputMode::Continuous;
   // Images arrive pre-patchified from Gr00tPolicy (see infer()'s contract),
   // not as raw pixels — the JS validator branches on this.
@@ -1968,6 +2808,69 @@ std::string GrootModel::backendName() const {
 
 bool GrootModel::hasGpu() const { return impl_ && impl_->has_gpu; }
 
+void GrootModel::setEmbodiment(const VlaEmbodimentRequest& request) {
+  GrootModelInternal& m = *impl_;
+  const std::lock_guard<std::mutex> embodimentGuard(m.embodiment_mutex);
+  // Same resolver, same error surface as the ctor: an unknown tag/cat_id, one
+  // outside the ship set, or an embodiment with no known camera count and no
+  // override throws and leaves the currently loaded row untouched (nothing has
+  // been written yet).
+  const GrootEmbodimentSelection sel = grootResolveForModel(m, request);
+  if (m.emb_slices.empty()) {
+    // No staged slices means the tensors were never rank-3, i.e. a v1 GGUF with
+    // one baked embodiment: there is no row to swap in. Tested WITHOUT also
+    // requiring sel.row >= 0, because on a v1 GGUF the resolver returns row -1,
+    // so a row-conditioned check let setEmbodiment(bakedTag) "succeed" as a
+    // silent no-op — and a numCameras override then rewrote
+    // hparams_.num_cameras on a model that cannot honour it. Every doc site
+    // says a single-embodiment model is rejected; this is what makes that true.
+    throw std::runtime_error(
+        "GrootModel::setEmbodiment: this GGUF stores a single embodiment row");
+  }
+  if (sel.row != m.selected_row) {
+    // All-or-nothing, and that hinges on every allocation AND every check
+    // happening BEFORE the first write: the transpose scratch is sized and
+    // validated here, grootFillEmbodimentRow reads all 14 blocks into its own
+    // buffer before committing any, and the refill below then only copies and
+    // calls ggml_backend_tensor_set. So a throwing switch leaves the previous
+    // embodiment whole and consistent with the selected_* metadata, which is
+    // updated after both. `scratch` is handed to the refill rather than
+    // recomputed there, so no rejection is left on the far side of the write.
+    std::vector<uint8_t> src8;
+    std::vector<uint8_t> dst8;
+    size_t scratch = 0;
+    if (m.wt_ready) {
+      scratch = grootTransposedScratchBytes(m);
+      src8.resize(scratch);
+      dst8.resize(scratch);
+    }
+    grootFillEmbodimentRow(m, sel.row);
+    // The pre-transposed copies are derived from the row that was just
+    // replaced, so they have to be rebuilt. Shapes are identical across rows,
+    // so ctx_wt / buf_wt are reused as allocated at load — only the contents
+    // change. If the load-time materialization bailed (wt_ready=false), infer()
+    // transposes at runtime from the new row and there is nothing to refresh.
+    if (m.wt_ready) {
+      grootFillTransposedWeights(m, src8, dst8, scratch);
+    }
+  }
+  m.selected_embodiment_tag = sel.tag;
+  m.selected_cat_id = sel.cat_id;
+  m.selected_row = sel.row;
+  m.num_cameras = sel.num_cameras;
+  hparams_.num_cameras = sel.num_cameras;
+  hparams_.selected_embodiment_tag = sel.tag;
+  hparams_.selected_embodiment_cat_id = sel.cat_id;
+  QLOG_IF(
+      Priority::INFO,
+      "GrootModel::setEmbodiment: embodiment '" + m.selected_embodiment_tag +
+          "' (cat_id " + std::to_string(m.selected_cat_id) + ", " +
+          (m.selected_row < 0
+               ? "single-embodiment GGUF"
+               : "stored row " + std::to_string(m.selected_row)) +
+          ", num_cameras " + std::to_string(m.num_cameras) + ")");
+}
+
 bool GrootModel::infer(
     const float** images, int nImages, int imgWidth, int imgHeight,
     const float* state, int stateDim, const int32_t* langTokens,
@@ -1994,6 +2897,10 @@ bool GrootModel::infer(
       noise == nullptr) {
     return false;
   }
+  // Held for the whole inference: setEmbodiment rewrites buf_emb/buf_wt (the
+  // CategorySpecificLinear weights read below) and runs on the JS thread while
+  // this runs on the framework's JobRunner worker.
+  const std::lock_guard<std::mutex> embodimentGuard(m.embodiment_mutex);
   const auto tStart = std::chrono::steady_clock::now();
 
   // ── Derived fixture dimensions ─────────────────────────────────────────

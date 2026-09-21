@@ -7,11 +7,10 @@ const FakeDL = require('../mocks/loader.fake.js')
 // The real index.js eagerly loads the C++ binding via require('./marian') → require('./binding')
 // → require.addon(), which fails when the native addon is not built (e.g. in sanity-checks CI).
 // These tests only verify JS-level behavior (ModelTypes enum and constructor guard),
-// so we replicate the relevant logic from index.js here.
+// so we replicate the relevant logic from index.js here. Like index.js, the mock
+// no longer extends BaseInference — infer-base >= 0.5.0 removed it.
 
-const BaseInference = require('@qvac/infer-base/WeightsProvider/BaseInference')
-
-class MockTranslationNmtcpp extends BaseInference {
+class MockTranslationNmtcpp {
   static ModelTypes = {
     IndicTrans: 'IndicTrans',
     Bergamot: 'Bergamot'
@@ -21,7 +20,6 @@ class MockTranslationNmtcpp extends BaseInference {
     { loader, diskPath, modelName, params, logger = null, exclusiveRun = true, ...args },
     config = {}
   ) {
-    super({ logger, exclusiveRun, ...args })
     const { modelType } = config
 
     if (modelType === 'Opus') {

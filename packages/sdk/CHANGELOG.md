@@ -1,5 +1,893 @@
 # Changelog
 
+## [0.19.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.19.1
+
+QVAC SDK 0.19.1 is a patch on the 0.19 line. Completion stats now report prompt-processing throughput, `deleteCache({ auto: true })` reclaims automatic KV caches without touching named ones, and `assessModelFit` can refuse a model from a computed floor when no calibration applies. Mobile `withQvacSDK` bundles no longer pull in the desktop-only fit subprocess, and `@qvac/rag` `^0.8.1` is the floor so Windows TurboVec installs the fixed package.
+
+`@qvac/sdk`, `@qvac/inference`, and `tetherto-qvac-sdk` all ship at 0.19.1. Install `@qvac/sdk` and `@qvac/inference` together at this version.
+
+## New APIs
+
+### Prompt-processing throughput
+
+`CompletionStats.promptTokensPerSecond` is the addon's prefill (prompt-processing) rate. `tokensPerSecond` remains decode throughput. Both fields are optional; they appear on `completionStats` events and on the aggregated `final.stats` for single and batch completions. The Python client models include the same field.
+
+```typescript
+const run = completion({ modelId, history, stream: true })
+const stats = await run.stats
+
+stats?.tokensPerSecond // decode throughput
+stats?.promptTokensPerSecond // prompt-processing (prefill) throughput
+```
+
+### Reclaim automatic KV caches
+
+`deleteCache({ auto: true })` drops every automatic cache that no in-flight turn is holding. Named, caller-owned caches are left alone. `{ all: true }` still deletes everything, including named caches.
+
+```typescript
+import { deleteCache } from '@qvac/sdk'
+
+await deleteCache({ auto: true })
+```
+
+### Computed floor when no calibration applies
+
+On platforms without a calibration fixture, `assessModelFit` used to return `unknown` even when the artifact plus KV cache already exceeded the budget. It now falls back to a computed floor (artifact bytes plus the llama.cpp KV cache at the narrowest default width). Over budget is `likely-too-large`; otherwise the verdict stays `unknown`. This path never returns `likely-fits`.
+
+Android compares the floor to the `system-memory` budget. iOS compares it to the `process-memory` budget, which now uses the per-process allowance from `bare-os`. Discrete GPUs without coefficients stay `unknown`.
+
+New result fields: `evidence` (`calibration` | `computed-only`) and `floorBytes`.
+
+```typescript
+import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
+
+const result = await assessModelFit({
+  models: [
+    {
+      model: QWEN3_8B_INST_Q4_K_M,
+      workload: { kind: 'llm', contextTokens: 8192 }
+    }
+  ]
+})
+
+result.verdict // "likely-fits" | "likely-too-large" | "unknown"
+result.evidence // "calibration" | "computed-only"
+result.floorBytes
+
+if (result.evidence === 'computed-only' && result.verdict === 'unknown') {
+  // uncalibrated, not a near-miss
+}
+```
+
+The assess-model-fit doc now includes a platform support matrix and a table of every `unknown` reason.
+
+## Features
+
+iOS `sample.memory.processAvailableBytes` is sourced from `bare-os` `availableMemory()` so the `process-memory` budget can form. Other platforms leave that metric unavailable.
+
+## Bug Fixes
+
+`withQvacSDK` mobile bundles defer `bare-runtime/spawn` and `@qvac/model-fit/process`, so expo prebuild no longer fails looking for a `bare-posix` android-arm64 prebuild that does not exist. Desktop advisory fit is unchanged.
+
+`@qvac/inference` now requires `@qvac/rag` `^0.8.1`. 0.8.0 could not open a TurboVec workspace on Windows.
+
+## [0.19.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.19.0
+
+QVAC SDK 0.19.0 is the first release after `@qvac/inference` became the in-process engine. You can assess whether a model will fit before downloading it, generate MiniMax music, and transcribe with Parakeet Unified. Delegated DHT inference is gone, `no_mmap` is `load_mode`, and batch translations return an array instead of a newline-joined string. `@qvac/bare-sdk` is no longer part of the lockstep pipeline.
+
+## Breaking Changes
+
+### Inference Is the In-Process Engine
+
+The SDK worker and Bare in-process path now sit on `@qvac/inference`. `@qvac/bare-sdk` is a thin re-export and is no longer versioned with the SDK. Import lifecycle helpers from `@qvac/sdk/worker-lifecycle`. The worker entry is `dist/src/worker/index.js`. `./commands` and `./worker-core` are gone; importing them throws with migration guidance. `./onnx-tts/plugin` remains as an alias of the TTS plugin.
+
+**Before:**
+
+```typescript
+import { … } from "@qvac/sdk/worker-core";
+const worker = "<sdk_root>/dist/server/worker.js";
+```
+
+**After:**
+
+```typescript
+import { … } from "@qvac/sdk/worker-lifecycle";
+const worker = "<sdk_root>/dist/src/worker/index.js";
+```
+
+`@qvac/sdk` now depends on `@qvac/inference@^0.19.0`. Install both at 0.19.0.
+
+### Delegated Inference Removed
+
+Provider mode and DHT delegation are gone. Models load and run locally only.
+
+**Before:**
+
+```typescript
+await startQVACProvider({ firewall })
+const id = await loadModel({ modelSrc, delegate: { providerPublicKey } })
+await heartbeat({ delegate: { providerPublicKey } })
+await stopQVACProvider()
+```
+
+**After:**
+
+```typescript
+const id = await loadModel({ modelSrc })
+await heartbeat()
+```
+
+Removed: `startQVACProvider`, `stopQVACProvider`, `loadModel`/`heartbeat` `delegate` options, `hasActiveProviders` on unload, `isDelegated`/`providerInfo` on loaded-model info, profiler `origin` / `resourceOrigin`, and the provider/delegate error classes. Python `load_model(delegate=...)` is also gone.
+
+### no_mmap Became load_mode
+
+`modelConfig.no_mmap` is replaced by `load_mode`. Do not keep a boolean under the new key.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelSrc: MODEL,
+  modelType: 'llm',
+  modelConfig: { ctx_size: 2048, no_mmap: true }
+})
+```
+
+**After:**
+
+```typescript
+await loadModel({
+  modelSrc: MODEL,
+  modelType: 'llm',
+  modelConfig: { ctx_size: 2048, load_mode: 'none' }
+})
+```
+
+| Before           | After                                    |
+| ---------------- | ---------------------------------------- |
+| `no_mmap: true`  | `load_mode: "none"`                      |
+| `no_mmap: false` | omit `load_mode`, or `load_mode: "mmap"` |
+| omitted          | omitted (addon default `mmap`)           |
+
+The same mapping applies to `deviceDefaults.llm` and `deviceDefaults["llamacpp-completion"]`. `load_mode` also accepts `"mlock"`, `"mmap+mlock"`, and `"dio"`.
+
+### Batch Translations Return an Array
+
+A `translate` call with several strings used to join results with `\n`. It now returns `translations: string[]`. Streaming emits one whole translation per token, in input order.
+
+**Before:**
+
+```typescript
+const result = translate({
+  modelId,
+  text: ['Good morning', 'Good night'],
+  stream: false
+})
+const translations = (await result.text).split('\n')
+```
+
+**After:**
+
+```typescript
+const result = translate({
+  modelId,
+  text: ['Good morning', 'Good night'],
+  stream: false
+})
+const translations = await result.translations
+```
+
+### n_discarded Dropped
+
+`modelConfig.n_discarded` is no longer accepted. Context overflow now reports `requiredTokens`, `cachedTokens`, `promptTokens`, and `ctxSize` on `ContextOverflowError`.
+
+### MiniMax Python Config Types
+
+AudioGen load-config generated names are engine-specific. ACE-Step classes gained an `Acestep` infix; MiniMax has its own `Minimax` types. Update Python imports accordingly.
+
+### Language Detection Package Rename
+
+`@qvac/langdetect-text-cld2` is removed. Import from `@qvac/langdetect-text`. `detectOne` is synchronous.
+
+### e2e Test Suite Package Rename
+
+SDK e2e depends on `@qvac/test-suite` instead of `@qvac/qvac-test-suite`. Update imports and Metro resolvers. The old package remains installable for 0.10.x pins.
+
+## New APIs
+
+### assessModelFit
+
+`assessModelFit` estimates whether a set of models will fit before you download them. The same function is exported from `@qvac/sdk` and `@qvac/inference`.
+
+```typescript
+import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
+
+const result = await assessModelFit({
+  models: [{ model: QWEN3_8B_INST_Q4_K_M, workload: { kind: 'llm', contextTokens: 8192 } }],
+  execution: 'sequential',
+  policy: 'interactive-v1'
+})
+
+result.verdict // "likely-fits" | "likely-too-large" | "unknown"
+result.basis // "system-memory" | "process-memory" | "device-memory" | "device-budget"
+result.budget?.availableBytes // headroom before the policy reserve
+```
+
+On a discrete GPU, `basis` is `device-memory` (Linux VRAM) or `device-budget` (Windows DXGI). Integrated GPUs stay on `system-memory` because they allocate from RAM. Multi-GPU machines require `likely-fits` on the smallest usable card and `likely-too-large` on the largest; in between the verdict is `unknown`. VM display adapters are not counted as GPUs. The reserve is 20% of `budget.availableBytes`, capped at 2 GiB on desktop and 1 GiB on mobile. iOS uses per-process memory and may return `unknown` when that metric is missing. Catalog resource profiles (`getModelResourceProfile`) back the estimator; an unknown checksum is `undefined`, not a guess.
+
+### MiniMax Music Generation
+
+AudioGen can load MiniMax (`engine: "minimax"`) alongside ACE-Step.
+
+```typescript
+const modelId = await loadModel({
+  modelType: 'audiogen',
+  modelConfig: {
+    engine: 'minimax',
+    lmModelSrc: '/models/mm3-lm-q8.gguf',
+    synthModelSrc: '/models/mm3-synth-q8.gguf'
+  }
+})
+
+const run = audioGen({
+  modelId,
+  caption: 'warm cinematic piano',
+  maxFrames: 250,
+  inferenceSteps: 12,
+  cfgScale: 1.8
+})
+```
+
+`audioGen` results now include `diagnostics` (`selectedBackend`, `selectedDevice`, optional `fallback.reason` when a GPU request landed on CPU). Progress `total` may be `0` for indeterminate stages.
+
+### Parakeet Unified Transcription
+
+```typescript
+import { loadModel, transcribe, PARAKEET_UNIFIED_0_6B_Q8_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: PARAKEET_UNIFIED_0_6B_Q8_0,
+  modelType: 'parakeet-transcription'
+})
+const text = await transcribe({ modelId, audioChunk: 'audio.wav' })
+```
+
+### Hugging Face Download Checksums
+
+Hugging Face HTTP downloads are verified against the Hub SHA-256. `requireHttpChecksum` and `requireSecureTransport` can also be set globally or per `loadModel` / `downloadAsset` call. Plain HTTP to a private origin is unchanged unless you opt in.
+
+```typescript
+await loadModel({
+  modelSrc: 'https://huggingface.co/org/repo/resolve/main/model.gguf',
+  modelType: 'llamacpp-completion',
+  requireHttpChecksum: true,
+  requireSecureTransport: true
+})
+```
+
+### Worker Startup Timeout
+
+`rpcInitTimeoutMs` (config file) and `QVAC_RPC_INIT_TIMEOUT_MS` control the worker handshake. A timeout whose worker already exited attaches `WorkerStartupError` as `cause`, with `exitCode`, `exitSignal`, and `stderrTail`, so you can tell a dead worker from a slow one.
+
+### Tensor Split and Flash Attention
+
+llama.cpp loads accept `split-mode: "tensor"` and `flash-attn: "on"` in `modelConfig`.
+
+### Injected TurboVec RAG Index
+
+Set `ragTurbovec: true` in `qvac.config.json`. Embedding plugins can supply a `turbovecIndexProvider` with `create` / `load`.
+
+### Config Schema Descriptions
+
+Every `modelConfig` field now carries a description, exported from `@qvac/sdk/schemas`. `configSchemaForModelType("whisper")` (or `"llm"`, `"tts-ggml"`, `"diffusion"`, …) returns that type's schema so tools such as `qvac configure` can document options without a per-addon list.
+
+## Features
+
+Qwen3.8 tool calls go through the Qwen parser. Darwin-arm64 calibration uses a persistent-based fit with an audio guard. Desktop calibration for `assessModelFit` covers darwin-x64, linux-arm64, and win32-x64, including integrated GPUs; AMD linux stays `unknown`. `@qvac/tts-ggml` 0.8.0 can select CUDA on linux-x64 NVIDIA without a new backend key. `@qvac/diffusion-cpp` is `^0.21.0`. `@qvac/bci-whispercpp` is `0.8.0`.
+
+## Bug Fixes
+
+A worker RPC init timeout now preserves the exit signal instead of dropping it. Expo prebuild refreshes iOS addon links. `ContextOverflowError` reports how many tokens the request needed versus the effective `ctx_size` / parallel ceiling.
+
+## Model Changes
+
+This release adds Parakeet Unified 0.6B transcription constants and Qwen3.8 Flash Next 177B multimodal shards.
+
+### Added Models
+
+```text
+MMPROJ_QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_F16
+PARAKEET_UNIFIED_0_6B_F16
+PARAKEET_UNIFIED_0_6B_Q4_0
+PARAKEET_UNIFIED_0_6B_Q8_0
+QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD
+QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD
+```
+
+## [0.18.2]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.2
+
+QVAC SDK 0.18.2 bumps `@qvac/diffusion-cpp` to `^0.18.0`.
+
+## [0.18.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.1
+
+QVAC SDK 0.18.1 adds human-readable descriptions on every llamacpp `modelConfig` field and exports those schemas from `@qvac/sdk/schemas`. CLI, typed-client, and Python generators can now surface what each completion and embedding option means. The CosyVoice3 companion-set cache key also changes, so the first load after upgrade uses a new companion cache folder. Load APIs are otherwise unchanged.
+
+## New APIs
+
+### Config schemas at `@qvac/sdk/schemas`
+
+`@qvac/sdk/schemas` exports `llamacppCompletionConfigSchema`, `llamacppEmbeddingConfigSchema`, and `modelSourceSchema`. Field `.describe()` text comes from the addon README / `index.d.ts` (or an existing SDK description) and is written into `contract/schema.json`. The same descriptions land on the generated Python pydantic fields.
+
+```typescript
+import { llamacppCompletionConfigSchema } from '@qvac/sdk/schemas'
+
+llamacppCompletionConfigSchema.shape.ctx_size.description
+// "Context window size in tokens; `0` uses the model's trained context length. Default 1024."
+```
+
+The internal schema identifiers are unchanged.
+
+## Bug Fixes
+
+### CosyVoice3 companion cache folder
+
+CosyVoice3 companion files still download with the LLM, as in 0.18.0. The companion-set cache key for `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` changed, so the first load after upgrading fills a new cache folder. Later loads reuse that folder. Speech APIs and `pace` / `instruct` rules are unchanged.
+
+## [0.18.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.18.0
+
+QVAC SDK 0.18.0 adds VisionPsy Nano multimodal constants, Audio8 and CosyVoice3 TTS engines, Indic Conformer transcription, and ACE-Step cover generation from a source track. One loaded LLM can now serve several completions at once, sharded GGUFs load directly from disk, and `loadModel` can fall back to a backup source when the origin fails. The dynamic `toolsMode` config is removed, and CosyVoice3 `pace` is restricted to `slow` | `moderate` | `fast`.
+
+## Breaking Changes
+
+### Dynamic toolsMode Removed
+
+`TOOLS_MODE`, `ToolsMode`, and the `toolsMode` load-config field are gone. Tools are always prepended after the system message (the previous static default). Passing `toolsMode` to `loadModel` now fails validation instead of being ignored. Drop the key from existing configs.
+
+**Before:**
+
+```typescript
+import { loadModel, TOOLS_MODE } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: QWEN3_1_7B_INST_Q4,
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, tools: true, toolsMode: TOOLS_MODE.dynamic }
+})
+```
+
+**After:**
+
+```typescript
+import { loadModel } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: QWEN3_1_7B_INST_Q4,
+  modelType: 'llm',
+  modelConfig: { ctx_size: 4096, tools: true }
+})
+```
+
+Existing automatic KV-cache prefixes that were primed under dynamic tools mode are not reusable; the next turn rebuilds the prefix.
+
+### CosyVoice3 Pace Values
+
+`textToSpeech` `pace` no longer accepts engine-specific strings such as `'very fast'`. Use `'slow'`, `'moderate'`, or `'fast'`.
+
+**Before:**
+
+```typescript
+textToSpeech({ modelId, text, pace: 'very fast' })
+```
+
+**After:**
+
+```typescript
+textToSpeech({ modelId, text, pace: 'fast' })
+```
+
+## New APIs
+
+### Continuous Batching
+
+One loaded LLM can run several `completion` calls at once. A new request takes a free slot without waiting for the whole batch to drain. Cancelling one request leaves the others running, and each result reports its own timings. Single-slot models and fine-tuning stay one-at-a-time.
+
+```typescript
+const runs = prompts.map((p) => completion({ modelId, history: p, stream: true }))
+const outputs = await Promise.all(runs.map((r) => r.final))
+
+await cancel({ requestId: runs[0].requestId })
+```
+
+### loadModel fallbackSrc
+
+If the primary `modelSrc` cannot be fetched, `loadModel` retries from `fallbackSrc` (URL or local path) so callers do not have to build their own origin failover.
+
+```typescript
+import { loadModel, LLAMA_3_2_1B_INST_Q4_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: LLAMA_3_2_1B_INST_Q4_0,
+  fallbackSrc: 'https://mirror.example.com/llama-3.2-1b-instruct-q4_0.gguf'
+})
+```
+
+### AudioGen Cover From a Source Track
+
+AudioGen can now generate a cover from source audio, not only a text caption. Pass `taskType: "cover-nofsq"` with `sourceAudio` (path or stereo 48 kHz f32le PCM) and optional `referenceAudio` for timbre.
+
+```typescript
+const cover = audioGen({
+  modelId,
+  caption: 'orchestral arrangement with dramatic strings',
+  lyrics: '[Instrumental]',
+  taskType: 'cover-nofsq',
+  sourceAudio: '/path/to/source.wav',
+  referenceAudio: '/path/to/reference.mp3',
+  audioCoverStrength: 1,
+  coverNoiseStrength: 0.75
+})
+```
+
+### CosyVoice3 TTS
+
+Load CosyVoice3 with `ttsEngine: "cosyvoice3"`. Companion files download with the LLM; `instruct` accepts exactly one of dialect, emotion, or pace.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
+  modelConfig: {
+    ttsEngine: 'cosyvoice3',
+    instruct: { dialect: 'cantonese' },
+    seed: 42
+  }
+})
+const result = textToSpeech({
+  modelId,
+  text: 'Hey there!',
+  stream: false,
+  emotion: 'happy'
+})
+```
+
+### Audio8 TTS
+
+Audio8 is a multilingual LM + codec stack with optional zero-shot cloning via reference audio and matching transcript.
+
+```typescript
+await loadModel({
+  modelSrc: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
+  modelConfig: {
+    ttsEngine: 'audio8',
+    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
+    audio8CodecEncoderModelSrc: TTS_CODEC_ENCODER_AUDIO8_Q8_0,
+    referenceAudioSrc: 'file:///path/to/voice.wav',
+    referenceText: 'Exactly what the recording says.'
+  }
+})
+```
+
+### Streaming Transcription Stats
+
+`transcribeStream` sessions now expose `stats` after the stream ends (`audioDuration`, `realTimeFactor`).
+
+```typescript
+const session = await transcribeStream({ modelId })
+for await (const event of session) {
+  // streamed events
+}
+const stats = await session.stats
+console.log(stats?.audioDuration, stats?.realTimeFactor)
+```
+
+### Vision image_no_upscale
+
+VisionPsy (and other llama.cpp multimodal loads) can set `image_no_upscale: "on"` in `modelConfig` so the projector does not upscale tiles.
+
+```typescript
+await loadModel({
+  modelType: 'llm',
+  modelSrc: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
+  modelConfig: {
+    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
+    image_no_upscale: 'on'
+  }
+})
+```
+
+## Features
+
+### Indic Conformer Transcription
+
+Parakeet Indic Conformer CTC models are in the registry (`PARAKEET_INDIC_CONFORMER_CTC_*`). They use the existing unified ASR transcription path.
+
+### OCR pipelineType Inference
+
+Doctr OCR models no longer require `langList`. EasyOCR still defaults to `['en']` when `langList` is omitted, and explicit lists are forwarded unchanged.
+
+### NMT Timing Units
+
+Translation stats (`totalTime` and related fields) are true milliseconds, matching the documented schema. Values that previously looked like `1.5` are now `1500`.
+
+## Bug Fixes
+
+Sharded llama.cpp models load by pointing the addon at the on-disk files instead of concatenating shards in memory, so large split GGUFs start faster and fine-tuning a sharded model works.
+
+Tool definitions are kept out of the primed KV-cache prefix, so changing tools across turns does not reuse a prefix that baked the old tool list.
+
+Audio-format constants no longer require the optional `@qvac/decoder-audio` package to be installed.
+
+## Model Changes
+
+This release adds VisionPsy Nano (base and Flash) multimodal constants, Indic Conformer transcription weights, Audio8 codec + LM constants, CosyVoice3 companions, and Qwen3-8 27B multimodal shards. `TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0` is updated.
+
+### Added Models
+
+```text
+MMPROJ_QWEN3_8_27B_MULTIMODAL_F16
+MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1
+PARAKEET_INDIC_CONFORMER_CTC_F16
+PARAKEET_INDIC_CONFORMER_CTC_Q4_0
+PARAKEET_INDIC_CONFORMER_CTC_Q8_0
+QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL
+QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL
+TTS_CODEC_DECODER_AUDIO8_FP16
+TTS_CODEC_DECODER_AUDIO8_Q8_0
+TTS_CODEC_ENCODER_AUDIO8_FP16
+TTS_CODEC_ENCODER_AUDIO8_Q8_0
+TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32
+TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16
+TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32
+TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0
+TTS_LM_MULTILINGUAL_AUDIO8_FP16
+TTS_LM_MULTILINGUAL_AUDIO8_Q8_0
+VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M
+VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M_1
+VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
+VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1
+```
+
+### Updated Models
+
+```text
+TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0
+```
+
+## [0.17.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.1
+
+QVAC SDK 0.17.1 is a patch cut focused on Python packaging and release lockstep. It ships self-contained per-platform `tetherto-qvac-sdk` wheels on the GitHub release, keeps thin wheels on PyPI, makes the embedded Python examples runnable without shared helpers, and publishes `@qvac/inference` together with `@qvac/sdk`, `@qvac/bare-sdk`, and `tetherto-qvac-sdk` at the same version. It also fixes Windows fat-wheel builds and a dropped `bare-rpc` stream teardown.
+
+## Features
+
+### Self-Contained Python Wheels on the GitHub Release
+
+`tetherto-qvac-sdk` now builds per-platform "fat" wheels that bundle a platform-matched Bare runtime for turnkey installs from the `sdk-v*` GitHub release assets. PyPI continues to publish thin wheels; use the release asset URL with `pip install … -f` when you want the self-contained path.
+
+## Bug Fixes
+
+### Windows Fat-Wheel Build and bare-rpc Stream Teardown
+
+Fat-wheel builds on Windows failed because `subprocess` launched `npm` without resolving `npm.cmd`. The build script now resolves `npm` via `shutil.which`. Separately, peer STREAM DESTROY frames from `bare-rpc` invoked async `OutgoingStream.destroy` without scheduling it; the Python transport now schedules that coroutine on the RPC task set so the outgoing stream actually closes.
+
+## Docs
+
+### Standalone Python Examples
+
+The embedded Python examples no longer depend on a shared `_common.py` helper. Each example is self-contained so the docs snippets and local runs stay aligned.
+
+## Release Packaging
+
+This cut also folds `@qvac/inference` into the same `publish-sdk.yml` release path as the other lockstep packages, so a `release-sdk-*` push ships inference / sdk / bare-sdk / python together (including `inference-v*` tags) instead of relying on a standalone inference publish workflow.
+
+## [0.17.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.17.0
+
+QVAC SDK 0.17.0 adds music generation through AudioGen (ACE-Step), Parler-TTS, Wan 2.2 video, and local system-resource diagnostics. It unifies Whisper and Parakeet behind a single ASR addon, adds DeepSeek DSML tool-call parsing, GR00T multi-embodiment selection, backend diagnostics, and opt-in profiler resource gauges. It also removes legacy ONNX OCR constants, tightens automatic KV cache disk use, and refreshes the model registry.
+
+## Breaking Changes
+
+### Legacy ONNX OCR Constants Removed
+
+Legacy ONNX OCR model constants are no longer exported. Use the GGML-OCR equivalents that already ship in the SDK.
+
+**Before:**
+
+```typescript
+import { OCR_CRAFT_DETECTOR, OCR_LATIN_RECOGNIZER } from '@qvac/sdk'
+```
+
+**After:**
+
+```typescript
+import { OCR_CRAFT, OCR_LATIN } from '@qvac/sdk'
+```
+
+Migration notes:
+
+- `OCR_CRAFT_DETECTOR` → `OCR_CRAFT`, `OCR_LATIN_RECOGNIZER` → `OCR_LATIN`
+- `OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL` → `OCR_DOCTR`, `OCR_DETECTOR_DB_MOBILENET_V3_LARGE` → `OCR_DOCTR_1`
+- Non-Latin per-script recognizers have no GGML replacement today. Track GGML-OCR coverage before upgrading if you depend on those scripts.
+
+### Wan 2.2 Single-Expert Validation
+
+Wan 2.2 A14B-only options such as `high_noise_steps` are rejected for single-expert models like TI2V-5B before generation starts. Omit `high_noise_*` and `moe_boundary` options for TI2V-5B and use the single-expert parameters instead.
+
+## New APIs
+
+### AudioGen Music Generation
+
+You can now generate music from a text caption through the unified SDK surface. Load the ACE-Step stack (text encoder, language model, DiT, and VAE), then stream progress and receive PCM audio. Generation is cancellable via the shared `cancel` API.
+
+```typescript
+import {
+  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+  AUDIOGEN_VAE_BF16,
+  audioGen,
+  cancel,
+  loadModel
+} from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelType: 'audiogen',
+  modelConfig: {
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16
+  }
+})
+
+const run = audioGen({ modelId, caption: 'ambient electronic music' })
+stopButton.onclick = () => cancel({ requestId: run.requestId })
+
+for await (const progress of run.progressStream) {
+  console.log(progress.stage, progress.step, progress.total)
+}
+
+const { pcm, sampleRate, channels } = await run.audio
+```
+
+### Parler-TTS
+
+Parler-TTS models are available through the public text-to-speech API, including description-conditioned voice controls and emotion options.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
+  modelConfig: {
+    ttsEngine: 'parler',
+    voice: 'Laura',
+    seed: 42
+  }
+})
+
+const result = textToSpeech({
+  modelId,
+  text: 'Hey, how are you doing today?',
+  inputType: 'text',
+  stream: false,
+  emotion: 'happy'
+})
+
+const audio = await result.buffer
+```
+
+### Local System Resources
+
+`getSystemResources` reports locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Metrics use `supported`, `unavailable`, `unverified`, or `failed` status and do not reserve memory or guarantee a model can load.
+
+```typescript
+import { getSystemResources } from '@qvac/sdk'
+
+const resources = await getSystemResources({ sample: true })
+
+if (resources.capabilities.memory.totalBytes.status === 'supported') {
+  console.log(resources.capabilities.memory.totalBytes.value)
+}
+
+if (resources.sample?.cpu.status === 'supported') {
+  console.log(resources.sample.cpu.value)
+}
+```
+
+### DSML Tool Calls for DeepSeek V3.2 / V4
+
+DeepSeek V3.2 and V4 emit tool calls in DSML (DeepSeek Markup Language). The SDK now parses that dialect so tool calls surface on `toolCallStream` instead of leaking raw markup into content. Set `toolDialect: "dsml"` explicitly, or let the SDK auto-detect it from DeepSeek V3.2 / V4 model ids.
+
+```typescript
+const result = completion({
+  modelId,
+  history: [{ role: 'user', content: "What's the weather in Tokyo?" }],
+  stream: true,
+  tools,
+  toolDialect: 'dsml' // optional — auto-detected for deepseek-v4 / deepseek-v3.2
+})
+
+for await (const evt of result.toolCallStream) {
+  if (evt.type === 'toolCall') console.log(evt.call.name, evt.call.arguments)
+}
+```
+
+### Emitted vs Generated Token Counts
+
+Completion stats now distinguish decode length from what was actually emitted. Prefer `emittedTokens` for OpenAI-compatible usage accounting; keep using `generatedTokens` for length / KV-cache budget decisions. Serve endpoints prefer `emittedTokens` when present.
+
+```typescript
+const stats = await result.stats
+// Decode count — length / KV-cache budget decisions
+stats?.generatedTokens
+// Addon-streamed non-empty pieces — prefer for OpenAI usage accounting
+stats?.emittedTokens
+```
+
+### Context-Boundary Termination
+
+Streamed completions that fill the model context window now finish with a length stop instead of stalling forever. Generation-time context exhaustion maps to a terminal `length` outcome; incomplete KV-cache turns are rolled back.
+
+### GR00T Multi-Embodiment Selection
+
+Multi-embodiment GR00T GGUFs can select an embodiment at load and switch at runtime without a full reload via `vlaSetEmbodiment`. `vlaHparams` reports the resolved embodiment tag and category id.
+
+```typescript
+import { loadModel, vlaHparams, vlaSetEmbodiment, GROOT_MULTI_Q8_VF16 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: GROOT_MULTI_Q8_VF16,
+  modelType: 'ggml-vla',
+  modelConfig: { embodiment: 'libero_sim' }
+})
+
+const { hparams } = await vlaHparams({ modelId })
+hparams.selectedEmbodimentTag // 'libero_sim'
+
+const { hparams: refreshed } = await vlaSetEmbodiment({
+  modelId,
+  embodiment: 24
+})
+refreshed.numCameras // camera count follows the new embodiment
+```
+
+### Backend Diagnostics Contract
+
+When the profiler is enabled, backend-selection events can report which backend was chosen and why a fallback occurred, so you can see selection and fallback reasons without digging through logs.
+
+```typescript
+import { profiler } from '@qvac/sdk'
+
+profiler.enable({ mode: 'verbose' })
+profiler.onRecord((event) => {
+  if (event.backend?.fallback) {
+    console.log(
+      `Selected ${event.backend.selectedBackend} after fallback:`,
+      event.backend.fallback.reason
+    )
+  }
+})
+```
+
+### Opt-In Profiler Resource Gauges
+
+Pass `includeResourceGauges: true` when enabling the profiler to attach per-event resource gauge snapshots to the exported profile.
+
+```typescript
+import { profiler } from '@qvac/sdk'
+
+profiler.enable({
+  mode: 'verbose',
+  includeResourceGauges: true
+})
+
+const profile = profiler.exportJSON()
+console.log(profile.recentEvents?.map((event) => event.resources))
+```
+
+## Features
+
+### Worker Resource Collector
+
+The worker now hosts independent CPU and GPU collectors that cache inventory and sample on demand. Missing or ambiguous metrics normalize to explicit statuses without affecting model loading.
+
+### Unified ASR Addon
+
+Whisper and Parakeet transcription now run through the unified `@qvac/asr-ggml` addon. Existing transcription callers keep the same SDK contract; adapters normalize segments, VAD scores, end-of-turn sources, and runtime stats back to the stable surface while dependencies and examples move onto the shared ASR package.
+
+### Wan 2.2 Video Support
+
+Wan 2.2 single-expert and dual-expert model layouts are wired through `@qvac/diffusion-cpp`, including a runnable TI2V-5B text-to-video example.
+
+## Bug Fixes
+
+Declaration output now emits NodeNext-compatible `.js` specifiers for internal references, so model constants resolve under `moduleResolution: "NodeNext"`.
+
+`clearPlugins` now finishes cleanup even when a plugin's `releaseLogger` throws, so a failing logger teardown cannot leave plugins half-cleared.
+
+Automatic KV caches under `~/.qvac/kv-cache` are bounded with a 24-hour idle TTL and a 4 GiB least-recently-used quota. Caller-owned named caches are left alone; empty hash directories from rename/rollback/failed-prime paths are pruned.
+
+## Model Changes
+
+This release refreshes registry constants (including CosyVoice3, LTX 2.3, Wan 2.2, and Gemma), adds AudioGen (ACE-Step) and GR00T multi-embodiment constants, and removes legacy ONNX OCR exports.
+
+### Added Models
+
+```text
+ABOT_WORLD_0_5B_LF_VAE
+ABOT_WORLD_0_5B_LF_VAE_F16
+ABOT_WORLD_0_5B_Q8_0
+AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0
+AUDIOGEN_ACESTEP_V15_SFT_Q8_0
+AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M
+AUDIOGEN_ACESTEP_V15_TURBO_Q8_0
+AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0
+AUDIOGEN_VAE_BF16
+DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD
+GEMMA_3_12B_Q4_K_XL
+GROOT_MULTI_Q5_VF16
+GROOT_MULTI_Q8_VF16
+GROOT_Q5_VF16_1
+GROOT_Q8_VF16_1
+LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS
+LTX_2_3_22B_Q2_K
+LTX_2_3_22B_Q5_K_M
+LTX_2_3_VAE
+LTX_2_3_VAE_1
+MMPROJ_OCR_3B_MULTIMODAL_F16
+MMPROJ_OCR_3B_MULTIMODAL_Q8_0
+MOE_35B_INST_IQ2_XXS
+MOE_35B_INST_Q4_K_M
+MOE_35B_INST_Q8_0
+OCR_3B_MULTIMODAL_Q4_0
+TTS_COSYVOICE3_FLOW_COSYVOICE_FP32
+TTS_COSYVOICE3_HIFT_COSYVOICE_FP32
+TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0
+TTS_COSYVOICE3_TOKENIZER_COSYVOICE
+TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1
+TTS_COSYVOICE3_VOICE_COSYVOICE
+TTS_COSYVOICE3_VOICE_COSYVOICE_1
+TTS_COSYVOICE3_VOICE_COSYVOICE_2
+UMT5_XXL_ENC_Q8_0
+WAN2_2_TI2V_5B_Q5_K_S
+WAN_2_2_COMFYUI_REPACKAGED_VAE
+```
+
+### Removed Models
+
+```text
+OCR_ARABIC_RECOGNIZER
+OCR_BENGALI_RECOGNIZER
+OCR_CRAFT_DETECTOR
+OCR_CYRILLIC_RECOGNIZER
+OCR_DETECTOR_DB_MOBILENET_V3_LARGE
+OCR_DETECTOR_DB_RESNET50
+OCR_DEVANAGARI_RECOGNIZER
+OCR_JAPANESE_RECOGNIZER
+OCR_KANNADA_RECOGNIZER
+OCR_KOREAN_RECOGNIZER
+OCR_LATIN_RECOGNIZER
+OCR_LATIN_RECOGNIZER_1
+OCR_RECOGNIZER_CRNN_MOBILENET_V3_SMALL
+OCR_RECOGNIZER_PARSEQ
+OCR_TAMIL_RECOGNIZER
+OCR_TELUGU_RECOGNIZER
+OCR_THAI_RECOGNIZER
+OCR_ZH_SIM_RECOGNIZER
+OCR_ZH_TRA_RECOGNIZER
+```
+
 ## [0.16.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.16.0

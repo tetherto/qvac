@@ -652,6 +652,100 @@ function _loadMobileUrlConfig() {
   return urlConfig
 }
 
+// The Device Farm pre_test phase pushes models here; we copy from here instead
+// of downloading from presigned S3. Android uses adb into /data/local/tmp
+// (app-scoped dirs reject adb writes on Android 11+). iOS uses
+// pymobiledevice3 apps push into the app's Documents dir, exposed as
+// global.testDir. Host side: scripts/generate-prestage-block.js.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
+
+function prestagedModelDir() {
+  if (platform === 'android') return PRESTAGED_MODEL_DIR
+  if (platform === 'ios') return iosPrestagedModelDir()
+  return null
+}
+
+function readPrestagedModel(modelName) {
+  const stagedDir = prestagedModelDir()
+  if (!stagedDir) return null
+  try {
+    const src = path.join(stagedDir, modelName)
+    const sizePath = `${src}.size`
+    if (!fs.existsSync(src) || !fs.existsSync(sizePath)) return null
+    const expectedSize = Number(fs.readFileSync(sizePath, 'utf8').trim())
+    if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) return null
+    if (fs.statSync(src).size !== expectedSize) return null
+    return { src, expectedSize }
+  } catch (_) {}
+  return null
+}
+
+function prestagedModelPath(modelName) {
+  const staged = readPrestagedModel(modelName)
+  return staged ? staged.src : null
+}
+
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into the model dir spends that whole budget for nothing. Hardlink instead:
+// same inode, zero bytes. On Android the staging dir is a different filesystem,
+// so link() fails EXDEV and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  // Same path in and out — the staged file IS the destination (a caller whose
+  // model dir is testDir itself). Deleting first would destroy the staged model
+  // and leave both link() and copy() failing ENOENT; the copy this replaced was
+  // a harmless no-op here.
+  if (path.resolve(src) === path.resolve(dest)) return 'link'
+
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(
+      `[prestage] hardlink failed on ${platform} (${err.message}); falling back to a byte copy`
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
+// The host pushes an exact byte-count sidecar with each model. Require both the
+// staged source and the materialised destination to match it so truncated
+// adb/app transfers fall through to the network download.
+function copyPrestagedModel(modelName, destPath, minBytes = 1024 * 1024) {
+  const staged = readPrestagedModel(modelName)
+  if (!staged || staged.expectedSize < minBytes) return false
+  try {
+    const dir = path.dirname(destPath)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    const how = linkOrCopySync({ src: staged.src, dest: destPath })
+    if (fs.statSync(destPath).size === staged.expectedSize) {
+      console.log(
+        `[prestage] Using pre-staged model ${modelName} (${how === 'link' ? 'hardlinked' : 'copied'})`
+      )
+      return true
+    }
+    fs.unlinkSync(destPath)
+  } catch (err) {
+    console.log(`[prestage] staging of ${modelName} failed: ${err.message}`)
+    try {
+      fs.unlinkSync(destPath)
+    } catch (_) {}
+  }
+  return false
+}
+
 /**
  * Ensures an EasyOCR GGUF model is available and returns its path.
  * On desktop: uses env vars (OCR_GGML_DETECTOR / OCR_GGML_RECOGNIZER) or defaults.
@@ -690,6 +784,10 @@ async function ensureModelPath(modelName) {
   const destPath = path.join(GGML_MODELS_DIR, filename)
   if (fs.existsSync(destPath)) {
     console.log(`   Model cached: ${filename}`)
+    return destPath
+  }
+
+  if (copyPrestagedModel(filename, destPath)) {
     return destPath
   }
 
@@ -755,6 +853,10 @@ async function ensureDoctrModels() {
   for (const [key, { filename, urlKey }] of Object.entries(mobileModels)) {
     const destPath = path.join(GGML_MODELS_DIR, filename)
     if (fs.existsSync(destPath)) {
+      paths[key] = destPath
+      continue
+    }
+    if (copyPrestagedModel(filename, destPath)) {
       paths[key] = destPath
       continue
     }
@@ -1347,6 +1449,9 @@ module.exports = {
   getImagePath,
   ensureModelPath,
   ensureDoctrModels,
+  copyPrestagedModel,
+  linkOrCopySync,
+  prestagedModelPath,
   GGML_MODELS_DIR,
   formatOCRPerformanceMetrics,
   safeUnload,

@@ -152,7 +152,8 @@ test(
       'constructor description + emotion throws'
     )
 
-    // Wrong-engine guard: parler-only options on supertonic throw.
+    // Wrong-engine guard. emotion is cross-engine now, so supertonic reports it
+    // has no emotion control; the description/template fields stay parler-only.
     t.exception(
       () =>
         new TTSGgml({
@@ -160,8 +161,18 @@ test(
           files: { supertonicModel: download.path },
           emotion: 'happy'
         }),
-      /parler-only/,
+      /does not support `emotion`/,
       'emotion on a supertonic instance throws'
+    )
+    t.exception(
+      () =>
+        new TTSGgml({
+          engine: TTSGgml.ENGINE_SUPERTONIC,
+          files: { supertonicModel: download.path },
+          pitch: 'high'
+        }),
+      /parler-only/,
+      'a parler-only template field on a supertonic instance still throws'
     )
 
     const model = await loadParlerTTS({
@@ -251,16 +262,19 @@ test(
         happy.data.samples.every((v, i) => v === sad.data.samples[i])
       t.ok(!identical, 'happy vs sad conditioning produces different audio (same seed/text)')
 
-      // Invalid emotion is rejected with the valid list (validated natively,
-      // so the failure surfaces on the response, not on run() itself).
-      const bad = await model.run({ input: text, emotion: 'angry' })
+      // Invalid emotion is rejected with the valid list. The canonical
+      // vocabulary is mirrored in JS now, so this fails on run() itself --
+      // before any native dispatch -- rather than on the response.
       let badMsg = ''
       try {
-        await bad.await()
+        await model.run({ input: text, emotion: 'angry' })
       } catch (e) {
         badMsg = String((e && e.message) || e)
       }
-      t.ok(/valid:/.test(badMsg), `invalid emotion rejects listing valid values (got: ${badMsg})`)
+      t.ok(
+        /invalid emotion/i.test(badMsg) && /anger/.test(badMsg),
+        `invalid emotion rejects listing valid values (got: ${badMsg})`
+      )
     } finally {
       try {
         await model.unload()
@@ -430,8 +444,8 @@ test(
     const streamed = flatten(chunks)
 
     // Batch reference (same seed/text, no streaming = whole-utterance decode).
-    // The engine proves the streamed float PCM is bit-identical to batch, so the
-    // int16 the addon emits must match sample-for-sample end to end.
+    // The engine keeps the streamed float PCM equal to batch up to accumulation
+    // order, so the int16 the addon emits must match end to end within an LSB.
     const batch = await synth({})
     const batchOut = flatten(batch)
 
@@ -441,9 +455,12 @@ test(
       const d = Math.abs(streamed[i] - batchOut[i])
       if (d > maxDiff) maxDiff = d
     }
-    // CPU decode is bit-identical (0); on Metal a last-ULP float diff can flip an
-    // int16 LSB, so allow a tiny tolerance there (the engine test pins the bound).
-    const tol = useGPU ? 32 : 0
+    // CPU decode matches batch up to an int16 LSB: since ggml-speech
+    // 2026-09-09#1 the x86-Linux and Apple-silicon GEMMs go through tinyBLAS,
+    // whose accumulation order differs between the streamed and batch graph
+    // shapes (observed max diff 1 on the linux-x64 CI lanes). On Metal a
+    // last-ULP float diff can flip more; the engine test pins that bound.
+    const tol = useGPU ? 32 : 2
     t.ok(maxDiff <= tol, `streamed int16 matches batch within ${tol} (max diff ${maxDiff})`)
   }
 )

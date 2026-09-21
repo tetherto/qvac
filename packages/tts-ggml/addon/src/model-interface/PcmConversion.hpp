@@ -10,7 +10,7 @@ namespace qvac::ttsggml {
 
 // Full-scale magnitude for signed 16-bit PCM. Float samples in [-1, 1] map onto
 // [-32767, 32767]; -32768 is left unused so the mapping stays symmetric. Shared
-// by both engines so the float->int16 conversion can't drift between them.
+// by every engine so the float->int16 conversion can't drift between them.
 inline constexpr float kInt16PcmScale = 32767.0f;
 
 inline std::vector<int16_t> pcmFloatToInt16(const float* pcm, std::size_t samples) {

@@ -36,9 +36,9 @@ links cited below contain the canonical license text.
 
 3. ggml (MIT License)
    https://github.com/ggml-org/ggml
-   Consumed at build time via `qvac-fabric`'s vcpkg port. The dynamic
-   backend shared libraries shipped under `prebuilds/` (CPU, Vulkan,
-   OpenCL, …) are ggml's outputs and inherit ggml's MIT license.
+   Consumed at runtime through `@qvac/fabric`. The dynamic backend shared
+   libraries it ships (CPU, Vulkan, OpenCL, …) are ggml's outputs and inherit
+   ggml's MIT license.
 
 4. OpenCV (Apache License 2.0)
    https://github.com/opencv/opencv

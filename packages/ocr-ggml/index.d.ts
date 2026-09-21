@@ -25,8 +25,13 @@ export interface OcrGgmlParams {
      *   - doctr:   doctr recognition model (e.g. `crnn_mobilenet_v3_small.gguf`)
      */
     pathRecognizer: string;
-    /** Languages handled by the recognizer (e.g. `['en']`, `['en', 'fr']`). */
-    langList: string[];
+    /**
+     * Languages handled by the recognizer (e.g. `['en']`, `['en', 'fr']`).
+     * Required for `easyocr` (validated by the native pipeline against the
+     * loaded recognizer's character set); optional for `doctr`, which is
+     * language-agnostic and ignores it.
+     */
+    langList?: string[];
     /** Pipeline backing the addon. Default: `'easyocr'`. */
     pipelineType?: OcrGgmlPipelineType;
     /** Detection magnification ratio (easyocr only). Default: 1.5. */
@@ -53,7 +58,11 @@ export interface OcrGgmlParams {
      *   - `< 0`: leave GGML's CPU backend default unchanged
      */
     nThreads?: number;
-    /** Directory holding ggml backend shared libraries. Default: `<package>/prebuilds`. */
+    /**
+     * Directory holding ggml backend shared libraries. Default: `@qvac/fabric`'s
+     * `prebuilds/` (desktop), falling back to this package's `prebuilds/` on
+     * mobile where the package tree isn't resolvable from the packed worklet.
+     */
     backendsDir?: string;
     /**
      * Requested ggml backend device. Default: `'cpu'`.
@@ -88,6 +97,16 @@ export interface OcrGgmlParams {
      * the README).
      */
     gpuDevice?: number;
+    /**
+     * Raw ggml registry index (integer number/string), or a GPU class (case-insensitive).
+     * An unavailable/excluded in-range device or absent class falls back to CPU.
+     * Out-of-range indices warn and use the default dedicated-first selection.
+     * Requires a GPU backendDevice; CPU remains the default. Cannot be combined
+     * with gpuDevice or main_gpu. Adreno Vulkan safety checks still apply.
+     */
+    "main-gpu"?: number | string;
+    /** Alias for main-gpu; provide only one spelling. */
+    main_gpu?: number | string;
 }
 export type { BackendInfo, OcrGgmlRunOptions };
 export interface OcrGgmlArgs {
@@ -134,7 +153,8 @@ export interface RuntimeStats {
     /** Number of detected boxes (aligned + unaligned). */
     numBoxes: number;
     /**
-     * Whether inference ran on a GPU (Vulkan) device (`1`) or the CPU (`0`).
+     * Whether inference ran on a GPU device (`1`) — Vulkan, Metal, or OpenCL —
+     * or on the CPU (`0`).
      * `RuntimeStats` values are numeric only, so this flag is the in-stats signal
      * for the selected backend; richer string detail (name, fallback reason) is
      * available via {@link OcrGgml.getBackendInfo}.

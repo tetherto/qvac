@@ -279,6 +279,10 @@ After all writers are indexers:
 
 ## Operations
 
+### Rotating Model Blob Cores
+
+Follow the [model blob-core rotation runbook](BLOB_CORE_ROTATION.md).
+
 ### Adding an Indexer
 
 Full walkthrough: add **Server 2** to a running **Server 1** cluster.
@@ -411,7 +415,9 @@ For production, configure `QVAC_INDEXER_KEYS` so CI clients connect directly to 
 QVAC_INDEXER_KEYS=<indexer1-z32-public-key>,<indexer2-z32-public-key>
 ```
 
-The RPC client picks a random indexer from the list on each connection attempt and only accepts peers whose public key matches the configured keys.
+When a live model sync contains at least one new model, the client queries each configured indexer for available space on its registry `--storage` filesystem and selects the indexer with the most space. Metadata-only and deprecation-only syncs retain the normal random selection. In all cases, the client only accepts peers whose public key matches the configured keys.
+
+Capacity-aware selection assumes that registry storage, `MODEL_DRIVES_STORAGE`, and `TEMP_STORAGE` reside on the same attached filesystem on each indexer. Hugging Face ingestion may temporarily require approximately twice the artifact size because the downloaded cache is copied into temporary ingestion storage.
 
 If `QVAC_INDEXER_KEYS` is not set, the client falls back to topic-based discovery (backward compatible).
 
@@ -433,6 +439,23 @@ node scripts/bin.js sync-models \
 ```
 
 The sync script adds new models and updates metadata for existing models. Licenses are auto-created from `data/licenses/` when needed.
+
+### Filling Fit Blobs
+
+Records ingested before `@qvac/registry-schema` 0.4.0 carry no `fitBlobBinding`, the pointer to a weightless description of the artifact. Filling it is a manual operation, run through the **Fill Fit Blobs (Registry-server)** workflow or, on a node, with the script directly:
+
+```bash
+npm run fill:fit-blobs -- --dry-run --filter unsloth/Qwen3
+npm run fill:fit-blobs -- --filter unsloth/Qwen3
+```
+
+The script is only the RPC client. The indexer that answers reads the artifact from its own blob cores, or downloads it from the record's source and checks it against the recorded hash, writes the description to its active blob core, and appends the pointer.
+
+Run it in batches. A filter is a case-sensitive substring match on the record path, so a publisher prefix or an S3 directory covers one family at a time, and a record whose blocks the indexer no longer holds costs a full artifact download. The report's `Downloaded` count is how many took that path.
+
+`--force` re-fills records that already carry a pointer. It is for replacing descriptions built by older code, and the workflow rejects it without a filter or a limit.
+
+The workflow re-runs the selection as a dry run afterwards and fails when more records select than the fill skipped. That means the pointers did not persist, and the first thing to check is the schema version installed on the indexers: below 0.4.0 the record has no field to encode, so a fill reports success and writes nothing. The retries in that step exist because each run connects to a randomly chosen indexer and an appended pointer takes time to reach the view on the node that answers.
 
 ### Verifying Replication Health
 
@@ -686,17 +709,18 @@ Use Holepunch's pre-built [Grafana dashboard](https://grafana.com/grafana/dashbo
 
 ### Environment Variables
 
-| Variable                   | Description                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------ |
-| `QVAC_AUTOBASE_KEY`        | Autobase bootstrap key (auto-generated on first run)                                       |
-| `QVAC_REGISTRY_CORE_KEY`   | Registry view key (auto-generated on first run)                                            |
-| `QVAC_ADDITIONAL_INDEXERS` | Comma-separated writer local keys to promote to indexers                                   |
-| `QVAC_REMOVE_INDEXERS`     | Comma-separated writer local keys to remove from quorum (one-shot, clean up after restart) |
-| `QVAC_ALLOWED_WRITER_KEYS` | Comma-separated hex keys allowed to call add-model RPC                                     |
-| `QVAC_INDEXER_KEYS`        | Comma-separated z32 indexer public keys for authenticated CI RPC connections (see below)   |
-| `QVAC_BLIND_PEER_KEYS`     | Comma-separated blind peer public keys for replication                                     |
-| `QVAC_PRIMARY_KEY`         | Optional: Deterministic key generation (testing only)                                      |
-| `QVAC_WRITER_PRIMARY_KEY`  | Optional: Deterministic writer key (testing only)                                          |
+| Variable                    | Description                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| `QVAC_AUTOBASE_KEY`         | Autobase bootstrap key (auto-generated on first run)                                       |
+| `QVAC_REGISTRY_CORE_KEY`    | Registry view key (auto-generated on first run)                                            |
+| `QVAC_ADDITIONAL_INDEXERS`  | Comma-separated writer local keys to promote to indexers                                   |
+| `QVAC_REMOVE_INDEXERS`      | Comma-separated writer local keys to remove from quorum (one-shot, clean up after restart) |
+| `QVAC_ALLOWED_WRITER_KEYS`  | Comma-separated hex keys allowed to call add-model RPC                                     |
+| `QVAC_INDEXER_KEYS`         | Comma-separated z32 indexer public keys for authenticated CI RPC connections (see below)   |
+| `QVAC_BLIND_PEER_KEYS`      | Comma-separated blind peer public keys for replication                                     |
+| `QVAC_BLOB_CORE_GENERATION` | Generation suffix for the active model blob core; unset uses the legacy `models` core      |
+| `QVAC_PRIMARY_KEY`          | Optional: Deterministic key generation (testing only)                                      |
+| `QVAC_WRITER_PRIMARY_KEY`   | Optional: Deterministic writer key (testing only)                                          |
 
 ### Command Reference
 

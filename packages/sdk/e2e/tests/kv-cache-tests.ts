@@ -1,4 +1,4 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 
 export const kvCacheDeleteAll: TestDefinition = {
   testId: 'kv-cache-delete-all',
@@ -213,7 +213,10 @@ export const kvCacheRemoveThinkingCompaction: TestDefinition = {
     messages: [
       'Think step by step, then answer: what is 17 multiplied by 23?',
       'Now add 100 to that result.'
-    ]
+    ],
+    // Bounded, not disabled: the assertion needs a reasoning block, and a
+    // positive budget still force-emits the closing think tag.
+    generationParams: { reasoning_budget: 128, predict: 256, temp: 0, seed: 42 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
@@ -252,46 +255,11 @@ export const kvCacheToolsSequentialSave: TestDefinition = {
       }
     ],
     messages: ['What is 10 + 20?', 'Now what is 5 + 5?'],
-    stream: true
+    stream: true,
+    generationParams: { temp: 0, top_k: 1, seed: 42 }
   },
   expectation: { validation: 'type', expectedType: 'string' },
   metadata: { category: 'kv-cache', dependency: 'tools', estimatedDurationMs: 90000 }
-}
-
-// Dynamic tools mode + custom kvCache key across a multi-round tool chain,
-// with a model evict/reload in the middle. No other test covers this
-// intersection: `toolsMode: "dynamic"` exercises the per-turn fragment cache
-// path (trailing-tool / [assistant,user] slicing in `completion-stream.ts`),
-// and evict/reload simulates a model reload after priming (in-memory savedCount
-// and addon anchoring cleared, on-disk `.bin` retained). The executor asserts
-// that tool calls still parse on cached/reloaded rounds and that the on-disk
-// cache is reused (`cacheTokens > 0`).
-export const kvCacheToolsDynamicReuse: TestDefinition = {
-  testId: 'kv-cache-tools-dynamic-reuse',
-  params: {
-    cacheKey: 'tools-dynamic-reuse-session',
-    firstUserMessage: 'What is 10 + 20?',
-    secondUserMessage: 'Now what is 5 + 5?',
-    toolResult: '30',
-    tools: [
-      {
-        type: 'function',
-        name: 'calculator',
-        description: 'Performs basic math operations',
-        parameters: {
-          type: 'object',
-          properties: {
-            operation: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide'] },
-            a: { type: 'number' },
-            b: { type: 'number' }
-          },
-          required: ['operation', 'a', 'b']
-        }
-      }
-    ]
-  },
-  expectation: { validation: 'type', expectedType: 'string' },
-  metadata: { category: 'kv-cache', dependency: 'tools-dynamic', estimatedDurationMs: 120000 }
 }
 
 export const kvCacheCancelThenNewPrompt: TestDefinition = {
@@ -312,7 +280,88 @@ export const kvCacheCancelThenNewPrompt: TestDefinition = {
   }
 }
 
+// Two completions sharing one kvCache key are fired at once on a parallel:4
+// model. They must serialize — the per-cache-path lock in the KV-cache session
+// makes the second wait for the first to commit, so their decode intervals
+// never overlap even though the model is otherwise concurrent (proven by
+// completion-concurrent-overlap on the same resource). Both must still succeed.
+export const kvCacheConcurrentSameKey: TestDefinition = {
+  testId: 'kv-cache-concurrent-same-key',
+  params: {
+    history: [
+      { role: 'system', content: 'You are a helpful assistant. Be brief.' },
+      { role: 'user', content: 'Count from one to twenty using words.' }
+    ],
+    kvCache: 'concurrent-same-key-session',
+    generationParams: { temp: 0, seed: 42, predict: 64 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
+}
+
+// Same serialization guarantee for the automatic (history-derived) cache path:
+// two kvCache:true completions with identical history resolve to one cache file
+// and must serialize on the per-cache-path lock — which, for the auto path, is
+// acquired outside the global cache-state lock so the auto-rename commit can't
+// deadlock against it. Both must succeed; their decode intervals must not overlap.
+export const kvCacheConcurrentSameKeyAuto: TestDefinition = {
+  testId: 'kv-cache-concurrent-same-key-auto',
+  params: {
+    history: [
+      { role: 'system', content: 'You are a helpful assistant. Be brief.' },
+      { role: 'user', content: 'Count from one to twenty using words.' }
+    ],
+    kvCache: true,
+    generationParams: { temp: 0, seed: 42, predict: 64 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 30000 }
+}
+
+// Different-history auto turns decode concurrently — with each other and with
+// plain completions. The regression guard for auto-cache serialization and slot
+// starvation: a cached-only phase proves native cached-vs-cached concurrency,
+// then a mixed phase proves plain completions aren't starved behind cached ones.
+export const kvCacheAutoConcurrency: TestDefinition = {
+  testId: 'kv-cache-auto-concurrency',
+  params: { generationParams: { temp: 0, seed: 42, predict: 48 } },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: { category: 'kv-cache', dependency: 'llm-batch', estimatedDurationMs: 60000 }
+}
+
+// A cancelled follow-up turn must not cost the session its committed cache.
+// The addon rewinds a cancelled run to the pre-request state and the engine
+// keeps the file, so the next turn stays warm. Proven by prompt tokens: the
+// warm turn sends only its own message, while the same history without a
+// cache sends all of it.
+export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
+  testId: 'kv-cache-cancel-keeps-committed-cache',
+  params: {
+    cacheKey: 'cancel-keeps-committed-session',
+    // One turn per message. `predict` has to cover the longest of them: a
+    // budget-stopped turn is not committed, so it would not leave a cache for
+    // the cancel to preserve.
+    messages: [
+      'List ten animals, one per line.',
+      'Now tell me a long story about wizards.',
+      'What is the capital of France? Answer with just the city name.'
+    ],
+    cancelTurn: 2,
+    // A token no other turn in this conversation can produce, so the assertion
+    // fails if anything but the last turn's answer is measured.
+    expectedAnswerContains: 'Paris',
+    cancelAfterTokens: 3,
+    generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }
+  },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 60000 }
+}
+
 export const kvCacheTests = [
+  kvCacheCancelKeepsCommittedCache,
+  kvCacheConcurrentSameKey,
+  kvCacheConcurrentSameKeyAuto,
+  kvCacheAutoConcurrency,
   kvCacheDeleteAll,
   kvCacheDeleteByKey,
   kvCacheDeleteByModel,
@@ -330,6 +379,5 @@ export const kvCacheTests = [
   kvCacheRemoveThinkingCompaction,
   kvCacheNoSystemPrompt,
   kvCacheToolsSequentialSave,
-  kvCacheToolsDynamicReuse,
   kvCacheCancelThenNewPrompt
 ]

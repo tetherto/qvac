@@ -7,6 +7,10 @@ async function runBergamot (options = {}) { // eslint-disable-line no-unused-var
   return runIntegrationModule('../integration/bergamot.test.js', options)
 }
 
+async function runEsmDefaultExport (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/esm-default-export.test.js', options)
+}
+
 async function runIndictrans (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/indictrans.test.js', options)
 }

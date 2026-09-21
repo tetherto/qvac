@@ -1,6 +1,6 @@
 import { loadModel, transcribe } from '@qvac/sdk'
 import * as path from 'node:path'
-import { ValidationHelpers, type TestResult, type Expectation } from '@tetherto/qvac-test-suite'
+import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { configReloadTests } from '../../../config-reload-tests.js'
 
@@ -82,7 +82,7 @@ export class ConfigReloadExecutor extends AbstractModelExecutor<typeof configRel
       await loadModel({
         modelId: whisperModelId,
         modelType: 'llamacpp-completion',
-        modelConfig: { n_ctx: 2048 }
+        modelConfig: { ctx_size: 2048 }
       } as never)
       return { passed: false, output: 'Expected error for model type mismatch' }
     } catch (error) {

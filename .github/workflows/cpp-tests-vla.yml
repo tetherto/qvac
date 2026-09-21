@@ -15,21 +15,46 @@ on:
         type: string
         required: false
         default: "packages/vla-ggml"
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref (branch/tag/SHA) to test"
+        description: "Git ref (branch/tag/SHA) to test; defaults to the ref used to launch the workflow"
         type: string
         required: false
-        default: "main"
       workdir:
         description: "Working directory"
         type: string
         required: false
         default: "packages/vla-ggml"
 
+# The group is spelled out rather than using github.workflow, which in a called
+# workflow resolves to the CALLER's name -- that would collide with the caller's
+# own group and with the on-merge cache workflow's. Not keyed on github.ref alone
+# either: under pull_request_target that is the base branch, so every in-flight PR
+# would share one group. PR number keeps them independent; github.ref serialises
+# the events that write the cache.
+concurrency:
+  group: cpp-tests-vla-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   run-cpp-tests:
+    needs: runner_names
+    # GR00T GGUFs from S3 plus the full addon-test suite (including the
+    # embodiment sweep) exceed the 30-minute default on a cold cache.
+    timeout-minutes: 60
     runs-on: ${{ matrix.runner || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-cpp-tests
@@ -45,23 +70,22 @@ jobs:
           - os: ubuntu-24.04
             platform: linux
             arch: x64
-            runner: qvac-ubuntu2404-x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
           - os: macos-14
             platform: darwin
             arch: arm64
-            runner: qvac-macos26-arm64-gpu
+            runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
           - os: macos-15-intel
+            runner: ${{ needs.runner_names.outputs.macos_15_intel }}
             platform: darwin
             arch: x64
           - os: windows-2025
             platform: windows
             arch: x64
-            runner: qvac-win25-x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
 
     env:
       WORKDIR: ${{ inputs.workdir }}
-      # Keep vcpkg cache under the package directory in a monorepo
-      VCPKG_BINARY_SOURCES: ${{ format('clear;files,{0}/{1}/vcpkg/cache,readwrite', github.workspace, inputs.workdir) }}
       GIT_TERMINAL_PROMPT: "0"
 
     steps:
@@ -91,14 +115,14 @@ jobs:
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure scoped registry for @tetherto and @qvac packages
         working-directory: ${{ env.WORKDIR }}
         env:
           GPR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GIT_PAT: ${{ secrets.PAT_TOKEN }}
+          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
@@ -126,6 +150,22 @@ jobs:
         run: |
           npm install
 
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }}
+          arch: ${{ matrix.arch }}
+
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
@@ -134,19 +174,23 @@ jobs:
         shell: bash
         run: echo "VULKAN_SDK=/opt/vulkansdk/x86_64" >> $GITHUB_ENV
 
-      # vla requests qvac-fabric[hip-backend] (linux-x64), which requires ROCm at
-      # build time — install it so the addon's C++ tests build with HIP.
-      - if: ${{ matrix.os == 'ubuntu-24.04' }}
-        name: Setup ROCm SDK for HIP cross-compile
-        uses: ./.github/actions/setup-rocm
-
       - name: Setup vcpkg
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@98990f3d11736a1ae88feddc514d14d78d7abdc7
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
+
+      # Resolves to a host-wide directory on self-hosted runners (shared by every
+      # runner instance on the box, survives the workspace wipe) and to the
+      # workspace on GitHub-hosted ones, where actions/cache below carries it.
+      # Must come after setup-vcpkg, which writes VCPKG_BINARY_SOURCES itself.
+      - name: Point vcpkg at its binary cache
+        uses: ./.github/actions/vcpkg-binary-cache-dir
+        with:
+          workdir: ${{ env.WORKDIR }}
+          trusted: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) }}
 
       - name: Cleanup vcpkg
         shell: bash
@@ -161,31 +205,32 @@ jobs:
           echo "CMAKE_GENERATOR=Visual Studio 17 2022" >> $env:GITHUB_ENV
           echo "CMAKE_GENERATOR_PLATFORM=x64" >> $env:GITHUB_ENV
 
-      - name: Create vcpkg cache location (package-local)
-        shell: bash
-        run: mkdir -p "${{ env.WORKDIR }}/vcpkg/cache"
+      # Exports TOOLCHAIN_FINGERPRINT for the cache key below. Must run before
+      # both cache steps. See the action for why the key cannot omit it.
+      - name: Fingerprint the toolchain
+        uses: ./.github/actions/vcpkg-toolchain-fingerprint
 
-      - name: Get vcpkg cache (package-local)
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      # Restore only. The save sits below the build because a run that
+      # restores from the host layer compiles nothing, and would otherwise
+      # save an EMPTY entry over the shared key, making every other host
+      # rebuild. Seen as `Sent 208 of 208` on a warm windows box.
+      - name: Get vcpkg cache (restore)
+        id: vcpkg-cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
-          # NOTE: don't include workspace-root 'vcpkg/ports/**' here — the
-          # microsoft/vcpkg clone (pinned to 2025.12.12 above) drops ~4000
-          # port directories into the workspace root, and hashing them on
-          # NTFS exceeds the 120s template-eval cap on qvac-win25-x64.
-          # The pinned microsoft/vcpkg branch is effectively a constant,
-          # so it doesn't need to participate in the cache key.
+          # Deliberately no workspace-root 'vcpkg/ports/**': hashing the
+          # microsoft/vcpkg port tree on NTFS exceeded the 120s template-eval
+          # cap on qvac-win25-x64, and the pinned clone is a constant anyway.
           key: >-
-            cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
+            cpp-tests-v6-vla-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-${{
               hashFiles(
                 format('{0}/vcpkg.json', inputs.workdir),
                 format('{0}/vcpkg-configuration.json', inputs.workdir),
-                format('{0}/vcpkg/ports/**', inputs.workdir),
-                'vcpkg.json',
-                'vcpkg-configuration.json'
+                'vcpkg-overlays/triplets/**',
+                'vcpkg-overlays/toolchains/**'
               )
-            }}
-          path: ${{ github.workspace }}/${{ env.WORKDIR }}/vcpkg/cache
-          restore-keys: cpp-tests-v4-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}-
+            }}-${{ env.TOOLCHAIN_FINGERPRINT }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
 
       - if: ${{ matrix.platform == 'darwin' }}
         name: Use Apple clang for Apple platform builds
@@ -216,6 +261,68 @@ jobs:
       # every milestone (the older v1/v2/v3 fixtures were the pre-migration DROID
       # dims). Developers can run the same tests against the unquantized
       # groot.gguf locally for tighter f32 parity.
+      # Workspace -> host ONLY. vcpkg already wrote this run's compiled archives
+      # to the host layer (it is `write` there for trusted events); this adds the
+      # ones that came from the keyed entry rather than from a compile, so a
+      # trusted run warms a cold host even when it builds nothing.
+      #
+      # The host -> workspace direction is deliberately absent. The host path has
+      # no package component, so copying it in would put every addon's archives
+      # into this package's entry and every PR leg would download the union.
+      # Nothing is lost by dropping it: a trusted run cannot read the host layer,
+      # so if its keyed entry is gone it compiles and the save recreates the
+      # entry from that build.
+      #
+      # Temp-then-mv because other instances read this dir concurrently; umask
+      # 000 because 1777 on the root is not inherited by vcpkg's bucket dirs.
+      - name: Sync the host and workspace vcpkg caches
+        if: >-
+          env.VCPKG_CACHE_PERSISTENT == 'true' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository)
+        shell: bash
+        run: |
+          set +e
+          host_dir=$(echo "${VCPKG_BINARY_SOURCES}" | tr ';' '\n' | grep '^files,' | head -n 1 | cut -d, -f2)
+          ws_dir="${VCPKG_CACHE_DIR}"
+          # Windows hands these over with backslashes, which this shell cannot
+          # traverse; cygpath is present in the runner's Git bash.
+          if command -v cygpath > /dev/null 2>&1; then
+            host_dir=$(cygpath -u "${host_dir}" 2>/dev/null || echo "${host_dir}")
+            ws_dir=$(cygpath -u "${ws_dir}" 2>/dev/null || echo "${ws_dir}")
+          fi
+          echo "sync: host=${host_dir} workspace=${ws_dir}"
+          [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || { echo "sync: no host dir"; exit 0; }
+          [ "${host_dir}" = "${ws_dir}" ] && exit 0
+          mkdir -p "${ws_dir}"
+          umask 000
+
+          sync_dir() {
+            find "$1" -type f 2>/dev/null | while read -r f; do
+              out="$2/${f#$1/}"
+              [ -f "$out" ] && continue
+              mkdir -p "$(dirname "$out")" 2>/dev/null
+              tmp="$out.tmp.$$"
+              cp "$f" "$tmp" 2>/dev/null && mv -f "$tmp" "$out" 2>/dev/null
+              rm -f "$tmp" 2>/dev/null
+            done
+          }
+          sync_dir "${ws_dir}" "${host_dir}"
+
+          echo "sync: host=$(find "${host_dir}" -type f 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -type f 2>/dev/null | wc -l)"
+          exit 0
+
+      # Only trusted events may write the shared cache (see .github/AGENTS.md),
+      # and only when there are archives to write: hashFiles is empty for an
+      # empty directory.
+      - name: Save vcpkg cache (trusted contexts)
+        if: >-
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) &&
+          hashFiles(format('{0}/vcpkg/cache/**', env.WORKDIR)) != ''
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+          path: ${{ env.WORKDIR }}/vcpkg/cache
+
       - name: Configure AWS credentials via OIDC (GR00T parity)
         if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
         uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
@@ -223,17 +330,37 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
 
+      # The multi-embodiment GGUF carries every shipped embodiment row, so it is
+      # ~300 MB heavier than the v1 single-embodiment file and every leg below
+      # re-fetched it on each run. Cache it on the self-hosted runners like
+      # integration-test-vla.yml does, keyed on this workflow (the file that
+      # pins the S3 paths) and namespaced away from that workflow's cache so a
+      # restore-keys prefix hit can't cross-populate model/vla. A prefix hit
+      # reports cache-hit 'false', so the download still runs and only an exact
+      # key match skips it; a wrong or truncated restore surfaces as the
+      # Groot-SKIPPED failure below rather than a silent pass.
+      - name: Cache GR00T parity artefacts
+        id: groot-cache
+        if: ${{ runner.environment != 'github-hosted' && !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
+        uses: ./.github/actions/cache-models
+        with:
+          package: vla-ggml
+          cache-key-suffix: cpp-groot
+          paths: |
+            ${{ env.WORKDIR }}/model/vla/groot
+            ${{ env.WORKDIR }}/test/groot-oracle
+          # Keyed on the composite that defines the artefact set, not on this
+          # workflow file, so unrelated edits here stop churning the key.
+          hash-files-glob: .github/actions/download-vla-groot-parity/action.yml
+
+      # Shared with on-merge-model-cache-vla.yml so the seeded cache and the
+      # artefacts the C++ tests need cannot drift.
       - name: Download GR00T parity artefacts from S3
-        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') }}
-        working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p model/vla/groot test/groot-oracle
-          S3_BASE="s3://${{ secrets.MODEL_S3_BUCKET }}/qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14"
-          aws s3 cp "$S3_BASE/groot-q8_vf16.gguf"          model/vla/groot/groot-q8_vf16.gguf
-          aws s3 cp "$S3_BASE/activations_v4.safetensors"  test/groot-oracle/activations_v4.safetensors
-          ls -la model/vla/groot/ test/groot-oracle/
+        if: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && steps.groot-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/download-vla-groot-parity
+        with:
+          model-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
+          workdir: ${{ env.WORKDIR }}
 
       - name: Run C++ tests
         id: cpp-tests
@@ -242,6 +369,14 @@ jobs:
         env:
           GROOT_TEST_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
           GROOT_TEST_ACTIVATIONS_V4: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_v4.safetensors', github.workspace, env.WORKDIR) || '' }}
+          # Per-embodiment sweep parity (all 17 stored rows). Reads embodiment.*
+          # + groot.embodiment.* out of the MULTI q8_vf16 GGUF (embodiment.*
+          # ships F16, untouched by quantization) — a different file from
+          # GROOT_TEST_GGUF above, since this is the only oracle dumped from the
+          # multi checkpoint. Gated on the same non-intel-mac condition;
+          # GrootEmbodimentSweep skips cleanly when unset.
+          GROOT_TEST_SWEEP_GGUF: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/model/vla/groot/groot-multi-q8_vf16.gguf', github.workspace, env.WORKDIR) || '' }}
+          GROOT_TEST_SWEEP_ACTIVATIONS: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_sweep.safetensors', github.workspace, env.WORKDIR) || '' }}
         run: |
           set -euo pipefail
 
@@ -250,11 +385,12 @@ jobs:
             exit 1
           fi
 
-          cd build/test/unit/
-          ./addon-test --gtest_output=xml:cpp-test-results.xml
+          # test:cpp:run applies fabric-boundary ASAN_OPTIONS via scripts/run-cpp-tests.js.
+          # pipefail: a failing addon-test exit code propagates through tee.
+          npm run test:cpp:run 2>&1 | tee build/test/unit/test-output.log
 
-          if [ -f cpp-test-results.xml ]; then
-            test_count=$(grep -c '<testcase' cpp-test-results.xml || echo "0")
+          if [ -f build/test/unit/cpp-test-results.xml ]; then
+            test_count=$(grep -c '<testcase' build/test/unit/cpp-test-results.xml || echo "0")
             if [ "$test_count" -eq 0 ]; then
               echo "ERROR: No tests were executed! Test count: $test_count"
               exit 1
@@ -265,6 +401,27 @@ jobs:
             exit 1
           fi
 
+          # The GR00T parity tests GTEST_SKIP when their env vars are unset, so
+          # a credentials/download/naming regression would turn the whole suite
+          # into a no-op behind a green check. When the artefacts ARE staged,
+          # every Groot* test must actually run.
+          if [ -n "${GROOT_TEST_GGUF:-}" ]; then
+            if grep -q '^\[  SKIPPED \] Groot' build/test/unit/test-output.log; then
+              echo "ERROR: GR00T artefacts are staged but Groot tests were skipped:"
+              grep '^\[  SKIPPED \] Groot' build/test/unit/test-output.log
+              exit 1
+            fi
+          fi
+
+          if [ -n "${GROOT_TEST_SWEEP_GGUF:-}" ]; then
+            sweep_rows=$(grep -c '\[GrootEmbodimentSweep\]' build/test/unit/test-output.log || true)
+            if [ "${sweep_rows:-0}" -eq 0 ]; then
+              echo "ERROR: GROOT_TEST_SWEEP_GGUF is set but the multi-embodiment sweep produced no rows"
+              exit 1
+            fi
+            echo "Multi-embodiment sweep validated $sweep_rows embodiment row(s)"
+          fi
+
       - name: Archive Test Results
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
@@ -273,3 +430,41 @@ jobs:
           path: |
             ${{ env.WORKDIR }}/build/test/unit/cpp-test-results.xml
           retention-days: 30
+
+      - name: Parse GR00T embodiment sweep results to Step Summary
+        if: ${{ always() && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        continue-on-error: true
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          # Extract embodiment sweep results from test output on Linux only.
+          # Fallback gracefully if parsing fails (sweep may have been skipped).
+          set +e
+
+          if [ ! -f "build/test/unit/test-output.log" ]; then
+            echo "## GR00T Multi-Embodiment Sweep" >> "$GITHUB_STEP_SUMMARY"
+            echo "Test output not found (sweep may have been skipped on this runner)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Count sweep results. grep -c already prints 0 and exits 1 on no
+          # match, so swallow the exit code with `|| true` — a `|| echo 0` here
+          # would append a second 0 and yield a non-numeric "0\n0".
+          sweep_count=$(grep -c "\[GrootEmbodimentSweep\]" "build/test/unit/test-output.log" || true)
+
+          if [ "$sweep_count" -eq 0 ]; then
+            echo "## GR00T Multi-Embodiment Sweep" >> "$GITHUB_STEP_SUMMARY"
+            echo "No sweep results found in test output" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "## GR00T Multi-Embodiment Sweep Results"
+            echo ""
+            echo "**Test:** GrootEmbodimentSweep ($sweep_count embodiment rows validated against PyTorch oracle)"
+            echo ""
+            echo "**Results:**"
+            echo ""
+            grep "\[GrootEmbodimentSweep\]" "build/test/unit/test-output.log" | head -17
+          } >> "$GITHUB_STEP_SUMMARY"
+

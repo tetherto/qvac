@@ -10,7 +10,9 @@ set(TEST_SOURCES
   translation_tests.cpp
   nmt_model_wrapper_test_indic.cpp
   nmt_test.cpp
+  nmt_loader_test.cpp
   test_nmt_lazy_init_backend.cpp
+  nmt_gpu_selection_test.cpp
   backend_env.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/TranslationModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/nmt.cpp
@@ -43,13 +45,12 @@ target_compile_options(
     -g)
 
 # Disable POSIX regex in gtest - clang cross-compilation target doesn't find regex.h properly
-target_compile_definitions(addon-test PRIVATE GTEST_HAS_POSIX_RE=0)
-
-# Under GGML_BACKEND_DL the backend modules (libqvac-ggml-*.so) live in the ggml
-# lib dir, which ggml's default loader doesn't search. Inject that dir so the
-# test env (backend_env.cpp) preloads the backends before any test runs.
 target_compile_definitions(
-  addon-test PRIVATE GGML_BACKEND_DIR="$<TARGET_FILE_DIR:ggml::ggml>")
+  addon-test
+  PRIVATE
+    GTEST_HAS_POSIX_RE=0
+    QVAC_TRANSLATION_NMTCPP_TESTING
+)
 
 if(NOT WIN32)
   target_compile_options(
@@ -96,7 +97,8 @@ target_link_libraries(
   addon-test
   PRIVATE
     ${SENTENCEPIECE_TARGET}
-    ggml::ggml
+    qvac-fabric::headers
+    ${qvac_fabric_target}_module
     protobuf::libprotobuf
     GTest::gtest
     GTest::gtest_main
@@ -111,6 +113,16 @@ if(USE_BERGAMOT)
   )
 endif()
 
+# Stage the shared Fabric runtime and its dlopen'd ggml backends beside the
+# test binary. backend_env.cpp uses GGML_BACKEND_DIR to preload them.
+qvac_addon_stage_fabric_for_test(addon-test ${qvac_fabric_target})
+
+# AddressSanitizer on the test executable, kept in a deliberately LIMITED form.
+# addon-test dynamically links the shared @qvac/fabric runtime
+# (qvac__fabric@0.bare), and the shipped fabric prebuild is not
+# ASan-instrumented. See packages/classification-ggml/test/unit/CMakeLists.txt
+# for the full rationale. scripts/run-cpp-tests.js sets ASAN_OPTIONS for local/CI
+# runs: alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1.
 if(NOT WIN32)
   target_link_libraries(
     addon-test

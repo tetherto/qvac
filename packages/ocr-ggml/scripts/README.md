@@ -5,21 +5,22 @@ repository workflow and are **not** shipped to npm consumers.
 
 ## `check_ggml_backends.sh`
 
-Diagnostic that reports which ggml backends and BLAS paths actually shipped
-in this build. Run **after** `bare-make install`:
+Diagnostic that reports which ggml backends and BLAS paths are shipped by the
+installed `@qvac/fabric` runtime. Run after `npm install`:
 
 ```bash
 bash scripts/check_ggml_backends.sh
 ```
 
-By default it inspects `prebuilds/<host>/qvac__ocr-ggml/` — override with the
-`BACKENDS_DIR` environment variable to point at any other install prefix.
+By default it inspects
+`node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/` — override with the
+`BACKENDS_DIR` environment variable to point at another Fabric backend folder.
 
 Sections it prints:
 
 1. **Shipped backend libraries** — `libggml-cpu.so`, `libggml-vulkan.so`,
-   `libggml-opencl.so`, … (whichever ones `qvac-fabric[gpu-backends]`
-   produced for this triplet).
+   `libggml-opencl.so`, … (whichever ones `@qvac/fabric` produced for this
+   triplet).
 2. **Linked dependencies (`ldd`)** — confirms what each shared lib pulls in
    from the host (e.g. `libvulkan.so.1`, `libOpenCL.so.1`).
 3. **Compile-time markers (`strings`)** — checks for canonical symbols:
@@ -28,8 +29,7 @@ Sections it prints:
      unless `Pipeline` is routed through the scheduler API)
    - `vkCreateInstance` / `clCreateContext` / `cudaMalloc` /
      `MTLCreateSystemDefaultDevice` → presence of each GPU backend
-4. **vcpkg port summary** — declared `qvac-fabric` version + a hint at
-   where to find the resolved version in the build tree.
+4. **npm runtime summary** — declared and installed `@qvac/fabric` versions.
 
 This script does not invoke the addon at runtime — for runtime backend
 selection, instantiate `OcrGgml` and watch the `[OCR MODEL]` log lines

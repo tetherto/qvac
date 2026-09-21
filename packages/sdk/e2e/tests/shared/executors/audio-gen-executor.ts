@@ -1,0 +1,333 @@
+import {
+  audioEdit,
+  audioGen,
+  audioUnderstand,
+  AUDIOGEN_INPUT_CHANNELS,
+  AUDIOGEN_INPUT_SAMPLE_RATE,
+  type AudioEditClientParams,
+  type AudioGenClientParams,
+  type AudioGenProgress,
+  type AudioGenResult,
+  type AudioUnderstandClientParams
+} from '@qvac/sdk'
+import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/test-suite'
+import { AbstractModelExecutor } from './abstract-model-executor.js'
+import type { ResourceManager } from '../resource-manager.js'
+import {
+  audioEditEmptyPipelineError,
+  audioEditPipeline,
+  audioGenAugmentedCaption,
+  audioGenCoverMissingSourceError,
+  audioGenCoverNofsq,
+  audioGenEmptyCaptionError,
+  audioGenFrozenCodes,
+  audioGenHappy,
+  audioGenLegoMissingTrackError,
+  audioGenReferenceAudio,
+  audioGenShortDuration,
+  audioGenSimpleModeConflictError,
+  audioGenTests,
+  audioUnderstandClip
+} from '../../audio-gen-tests.js'
+
+type AudioGenParams = Omit<AudioGenClientParams, 'modelId'>
+type ReferenceAudioParams = AudioGenParams & { referenceAudioFileName: string }
+type SourceTone = { seconds: number; frequency: number }
+type CoverToneParams = AudioGenParams & { sourceTone: SourceTone }
+type EditToneParams = Omit<AudioEditClientParams, 'modelId' | 'sourceAudio'> & {
+  sourceTone: SourceTone
+}
+type UnderstandToneParams = Omit<AudioUnderstandClientParams, 'modelId' | 'sourceAudio'> & {
+  sourceTone: SourceTone
+}
+const VALIDATION_MUST_PRECEDE_RPC_MODEL_ID = 'must-not-reach-audiogen-model-lookup'
+
+export interface AudioGenExecutorOptions {
+  /**
+   * Maps a bundled `assets/audio` file name to an absolute path on this
+   * platform. Injected as an option rather than through a `resolveParams()`
+   * subclass override (the `NodeDiffusionExecutor` pattern) on purpose: only
+   * one string field needs resolving, AudioGen e2e is desktop-only today, and
+   * `audioGen()` takes file paths directly, so there is no per-platform byte
+   * loading to subclass for. Switch to the subclass pattern if a second
+   * platform starts running these tests.
+   */
+  resolveAudioAsset?: (fileName: string) => string
+}
+
+export class AudioGenExecutor extends AbstractModelExecutor<typeof audioGenTests> {
+  pattern = /^audio-(gen|edit|understand)-/
+
+  protected handlers = {
+    [audioGenHappy.testId]: this.runGeneration.bind(this),
+    [audioGenShortDuration.testId]: this.runGeneration.bind(this),
+    [audioGenAugmentedCaption.testId]: this.runGeneration.bind(this),
+    [audioGenFrozenCodes.testId]: this.runGeneration.bind(this),
+    [audioGenReferenceAudio.testId]: this.runReferenceGeneration.bind(this),
+    [audioGenCoverNofsq.testId]: this.runCoverGeneration.bind(this),
+    [audioEditPipeline.testId]: this.runEdit.bind(this),
+    [audioUnderstandClip.testId]: this.runUnderstand.bind(this),
+    [audioGenEmptyCaptionError.testId]: this.runValidationError.bind(this),
+    [audioGenCoverMissingSourceError.testId]: this.runValidationError.bind(this),
+    [audioGenLegoMissingTrackError.testId]: this.runValidationError.bind(this),
+    [audioGenSimpleModeConflictError.testId]: this.runValidationError.bind(this),
+    [audioEditEmptyPipelineError.testId]: this.runEditValidationError.bind(this)
+  } as never
+
+  constructor(
+    resources: ResourceManager,
+    private readonly options: AudioGenExecutorOptions = {}
+  ) {
+    super(resources)
+  }
+
+  private async runGeneration(
+    params: AudioGenParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('audiogen-turbo')
+    return this.collectRun(() => audioGen({ modelId, ...params }), 'generated', expectation)
+  }
+
+  private async runEdit(params: EditToneParams, expectation: Expectation): Promise<TestResult> {
+    const { sourceTone, ...edit } = params
+    const modelId = await this.resources.ensureLoaded('audiogen-turbo')
+    return this.collectRun(
+      () =>
+        audioEdit({
+          modelId,
+          ...edit,
+          sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+        }),
+      'edited',
+      expectation
+    )
+  }
+
+  /**
+   * Drains one `audioUnderstand()` run. The reverse pipeline yields a
+   * description instead of PCM, so it validates the LM's metadata and the
+   * recovered code count rather than a sample count.
+   */
+  private async runUnderstand(
+    params: UnderstandToneParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const { sourceTone, ...understandParams } = params
+    const modelId = await this.resources.ensureLoaded('audiogen-turbo')
+    try {
+      const run = audioUnderstand({
+        modelId,
+        ...understandParams,
+        sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+      })
+      const progressPromise = collectStageTimings(run.progressStream)
+      const [description, stats, progressReport] = await Promise.all([
+        run.description,
+        run.stats,
+        progressPromise
+      ])
+      const progress = progressReport.ticks
+      const valid =
+        description.caption.length > 0 &&
+        description.audioCodes.length > 0 &&
+        progress.length > 0 &&
+        stats !== undefined
+
+      if (!valid) {
+        return {
+          passed: false,
+          output:
+            `Invalid understand output: caption=${description.caption.length}, ` +
+            `codes=${description.audioCodes.length}, progress=${progress.length}, ` +
+            `stats=${String(stats !== undefined)}`
+        }
+      }
+
+      const backend = `backend=${stats?.backendId ?? '?'}/${stats?.backendDevice ?? '?'}`
+      return ValidationHelpers.validate(
+        `described "${description.caption}" as ${description.bpm} BPM ${description.keyscale} ` +
+          `with ${description.audioCodes.length} codes, ${progress.length} progress ticks and ` +
+          `stats [${backend} stages: ${progressReport.summary}]`,
+        expectation
+      )
+    } catch (error) {
+      return {
+        passed: false,
+        output: `audioUnderstand failed: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
+
+  /**
+   * Drains one AudioGen run (generation or edit) and validates the audio,
+   * progress, and stats it produced. `verb` labels the output line so the
+   * test's `contains` expectation can tell the two apart.
+   */
+  private async collectRun(
+    start: () => AudioGenResult,
+    verb: 'generated' | 'edited',
+    expectation: Expectation
+  ): Promise<TestResult> {
+    try {
+      const run = start()
+      const progressPromise = collectStageTimings(run.progressStream)
+      const [audio, stats, progressReport] = await Promise.all([
+        run.audio,
+        run.stats,
+        progressPromise
+      ])
+      const progress = progressReport.ticks
+      const sampleCount = audio.pcm.byteLength / ((audio.bitsPerSample / 8) * audio.channels)
+      const valid =
+        sampleCount > 0 &&
+        audio.sampleRate > 0 &&
+        audio.channels > 0 &&
+        audio.bitsPerSample > 0 &&
+        progress.length > 0 &&
+        stats !== undefined
+
+      if (!valid) {
+        return {
+          passed: false,
+          output:
+            `Invalid AudioGen output: samples=${sampleCount}, sampleRate=${audio.sampleRate}, ` +
+            `channels=${audio.channels}, progress=${progress.length}, stats=${String(stats !== undefined)}`
+        }
+      }
+
+      // Report the resolved backend: the same generation costs ~3s on macOS and
+      // ~600s on the Ubuntu GPU runner, which no amount of contention explains.
+      const backend = `backend=${stats?.backendId ?? '?'}/${stats?.backendDevice ?? '?'}`
+      const timing = `rtf=${stats?.realTimeFactor ?? '?'} totalMs=${stats?.totalTimeMs ?? '?'}`
+      return ValidationHelpers.validate(
+        `${verb} ${sampleCount} samples at ${audio.sampleRate} Hz with ` +
+          `${progress.length} progress ticks and stats ` +
+          `[${backend} ${timing} stages: ${progressReport.summary}]`,
+        expectation
+      )
+    } catch (error) {
+      return {
+        passed: false,
+        output: `AudioGen failed: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
+
+  private async runReferenceGeneration(
+    params: ReferenceAudioParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const { referenceAudioFileName, ...generation } = params
+    if (!this.options.resolveAudioAsset) {
+      return {
+        passed: false,
+        output: 'AudioGenExecutor needs resolveAudioAsset to locate bundled reference audio'
+      }
+    }
+    return this.runGeneration(
+      { ...generation, referenceAudio: this.options.resolveAudioAsset(referenceAudioFileName) },
+      expectation
+    )
+  }
+
+  private async runCoverGeneration(
+    params: CoverToneParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const { sourceTone, ...generation } = params
+    return this.runGeneration(
+      {
+        ...generation,
+        sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+      },
+      expectation
+    )
+  }
+
+  private async runValidationError(
+    params: AudioGenParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    return this.expectClientValidationError(
+      () => audioGen({ modelId: VALIDATION_MUST_PRECEDE_RPC_MODEL_ID, ...params }),
+      expectation
+    )
+  }
+
+  private async runEditValidationError(
+    params: EditToneParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const { sourceTone, ...edit } = params
+    return this.expectClientValidationError(
+      () =>
+        audioEdit({
+          modelId: VALIDATION_MUST_PRECEDE_RPC_MODEL_ID,
+          ...edit,
+          sourceAudio: synthesizeStereoTone(sourceTone.seconds, sourceTone.frequency)
+        }),
+      expectation
+    )
+  }
+
+  private async expectClientValidationError(
+    start: () => AudioGenResult,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const expectedFragment =
+      expectation.validation === 'throws-error' ? expectation.errorContains : 'caption'
+    try {
+      const run = start()
+      await run.audio
+      return { passed: false, output: 'Expected AudioGen validation to fail' }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (
+        !message.toLowerCase().includes(expectedFragment.toLowerCase()) ||
+        message.includes(VALIDATION_MUST_PRECEDE_RPC_MODEL_ID)
+      ) {
+        return {
+          passed: false,
+          output: `Expected client ${expectedFragment} validation before model lookup, received: ${message}`
+        }
+      }
+      return ValidationHelpers.validate(message, expectation)
+    }
+  }
+}
+
+/**
+ * Raw interleaved stereo 48 kHz Float32 LE PCM: the in-memory form
+ * `audioGen()` / `audioEdit()` accept for `referenceAudio` / `sourceAudio`.
+ */
+function synthesizeStereoTone(seconds: number, frequency: number) {
+  const frames = Math.round(AUDIOGEN_INPUT_SAMPLE_RATE * seconds)
+  const pcm = new Float32Array(frames * AUDIOGEN_INPUT_CHANNELS)
+  for (let frame = 0; frame < frames; frame++) {
+    const sample = 0.1 * Math.sin((2 * Math.PI * frequency * frame) / AUDIOGEN_INPUT_SAMPLE_RATE)
+    pcm[frame * AUDIOGEN_INPUT_CHANNELS] = sample
+    pcm[frame * AUDIOGEN_INPUT_CHANNELS + 1] = sample
+  }
+  return new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength)
+}
+
+/**
+ * Wall time spent per pipeline stage, from the gaps between progress ticks.
+ * `cover-nofsq` renders one second of audio in ~1.5s on the same Ubuntu runner
+ * where `short-duration` needs ~307s for one second, so the cost sits in a
+ * stage rather than in the models or the host.
+ */
+async function collectStageTimings(events: AsyncIterable<AudioGenProgress>) {
+  const ticks: AudioGenProgress[] = []
+  const elapsedByStage = new Map<string, number>()
+  let previous = Date.now()
+  for await (const event of events) {
+    const now = Date.now()
+    elapsedByStage.set(event.stage, (elapsedByStage.get(event.stage) ?? 0) + (now - previous))
+    previous = now
+    ticks.push(event)
+  }
+  const summary = Array.from(elapsedByStage, ([stage, ms]) => `${stage}:${(ms / 1000).toFixed(1)}s`)
+  return { ticks, summary: summary.join(' ') }
+}

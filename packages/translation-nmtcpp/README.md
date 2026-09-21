@@ -27,9 +27,15 @@ This library simplifies the process of running various translation models within
       - [Bergamot](#bergamot)
     - [5. Load Model](#5-load-model)
     - [6. Run the Model](#6-run-the-model)
-    - [7. Batch Translation (Bergamot Only)](#7-batch-translation-bergamot-only)
+    - [7. Batch Translation](#7-batch-translation)
     - [8. Unload the Model](#8-unload-the-model)
+    - [9. Pivot Translation (Bergamot)](#9-pivot-translation-bergamot)
     - [Additional Features](#additional-features)
+  - [API Reference](#api-reference)
+    - [Methods](#methods)
+    - [RuntimeStats](#runtimestats)
+    - [Errors](#errors)
+    - [Subpath exports](#subpath-exports)
   - [Quickstart Example](#quickstart-example)
     - [1. Create a New Project](#1-create-a-new-project)
     - [2. Install Required Dependencies](#2-install-required-dependencies)
@@ -107,6 +113,17 @@ Install the main translation package via npm:
 npm i @qvac/translation-nmtcpp
 ```
 
+Local model files require no downloader integration. To use automatic model
+downloads, install the integration for the selected source:
+
+```bash
+# Bergamot downloads from the Firefox CDN
+npm i bare-fetch
+
+# IndicTrans downloads from the QVAC model registry
+npm i @qvac/registry-client
+```
+
 ## Usage
 
 The library provides a straightforward and intuitive workflow for translating text. Irrespective of the chosen model, the workflow remains the same:
@@ -135,7 +152,6 @@ For Indic language translations (English ↔ Hindi, Bengali, Tamil, etc.):
 const model = new TranslationNmtcpp({
   files: { model: './models/ggml-indictrans2-en-indic-dist-200M.bin' },
   params: {
-    mode: 'full',
     srcLang: 'eng_Latn',   // Source language (ISO 15924 code)
     dstLang: 'hin_Deva'    // Target language (ISO 15924 code)
   },
@@ -184,7 +200,6 @@ const model = new TranslationNmtcpp({
     dstVocab: path.join(modelDir, fileNames.dstVocabName)
   },
   params: {
-    mode: 'full',
     srcLang,   // Source language (ISO 639-1 code)
     dstLang    // Target language (ISO 639-1 code)
   },
@@ -278,15 +293,23 @@ const backendSettings = {
 }
 ```
 
-The three GPU control keys each accept a camelCase alias alongside the snake_case primary. Snake_case mirrors the C-struct field names; camelCase matches the `ocr-onnx` sibling addon convention. When both forms are present in the same config object, **snake_case takes precedence**.
+The three GPU control keys each accept a camelCase alias alongside the snake_case primary. Snake_case mirrors the C-struct field names; camelCase matches the sibling addon convention. When both forms are present in the same config object, **snake_case takes precedence**.
 
 | Key | Alias | Type | Description |
 |-----|-------|------|-------------|
 | `use_gpu` | `useGPU` | boolean | Enable GPU inference. When `false` (default), only the CPU backend is used. Bergamot is CPU-only by design — this flag is effectively a no-op for Bergamot. |
-| `gpu_backend` | `gpuBackend` | string | Case-insensitive **substring** match against the ggml device name (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When set, the selector runs a single explicit pass and picks the first non-CPU device whose name contains the substring. When unset, the default gated selection runs (see [Backends](#backends)). Explicit `"opencl"` bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
+| `gpu_backend` | `gpuBackend` | string | Case-insensitive **substring** match against eligible Vulkan, Metal, OpenCL, or CUDA device names (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When unset, the default gated selection runs (see [Backends](#backends)). Any explicit selector that resolves to OpenCL bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
 | `gpu_device` | `gpuDevice` | int | Ordinal within the matching devices. Defaults to `0` (first match). Example: `{gpu_backend: "vulkan", gpu_device: 1}` picks the second Vulkan adapter. |
 | `backendsDir` | — | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). Defaults to `<package>/prebuilds` when unset, which is where `npm install` places the shipped prebuilds. Must be an absolute path; paths with `..` segments or unresolvable symlinks are rejected with a warning and fall back to the default prebuilds directory. |
 | `openclCacheDir` | — | string | **Android only.** Writable directory the OpenCL backend uses for its JIT kernel cache (forwarded via `GGML_OPENCL_CACHE_DIR`). Must be an absolute path; paths with `..` segments are rejected. The OpenCL backend falls back to a non-writable relative path if this is unset, which `ggml_abort()`s during init inside the app sandbox — always provide an app-writable path when exercising OpenCL on Android. |
+
+GPU execution is limited to Vulkan, Metal/MTL, OpenCL, and CUDA devices reported as GPU or integrated GPU. RPC, ROCm/HIP, SYCL, MUSA, and unknown backend families fall back to CPU — RPC because translation has no split-mode support and cannot execute over it. CUDA is admitted ahead of its planned Fabric build so that build does not require another selector change. An explicit selector only narrows this eligible set; it cannot enable an unsupported family.
+
+Within the eligible set, dedicated GPUs are ordered ahead of integrated ones, registry order preserved within each class, and `gpu_device` is an ordinal into that ordered list.
+
+OpenCL is admitted as a family, not narrowed to Adreno. The selector inspects only the device and registry name, never the vendor or description, so any GPU or integrated-GPU OpenCL device is eligible. What gates it is the build-time `USE_OPENCL` guard, which exists because Adreno is the only OpenCL target this package has been validated on; an explicit `gpu_backend` selector bypasses that guard as an informed opt-in.
+
+ACCEL and META devices are never selected. Translation runs on the single selected compute device plus CPU — it exposes no layer or tensor split mode, so no secondary accelerator is added to the backend list.
 
 > **Tip:** Use `model.getActiveBackendName()` after `load()` to confirm which backend actually took the request — see [Additional Features](#additional-features). The GGML scheduler silently falls back to CPU when no usable GPU ICD is registered, and this is the only way to detect that.
 
@@ -303,7 +326,7 @@ const TranslationNmtcpp = require('@qvac/translation-nmtcpp')
 ```javascript
 const model = new TranslationNmtcpp({
   files: { model: './models/ggml-indictrans2-en-indic-dist-200M.bin' },
-  params: { mode: 'full', srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
+  params: { srcLang: 'eng_Latn', dstLang: 'hin_Deva' },
   config: {
     modelType: TranslationNmtcpp.ModelTypes.IndicTrans,
     ...generationParams,
@@ -321,7 +344,7 @@ const model = new TranslationNmtcpp({
     srcVocab: './models/bergamot-en-it/vocab.enit.spm',
     dstVocab: './models/bergamot-en-it/vocab.enit.spm'
   },
-  params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
+  params: { srcLang: 'en', dstLang: 'it' },
   config: {
     modelType: TranslationNmtcpp.ModelTypes.Bergamot,
     beamsize: 4
@@ -375,11 +398,9 @@ try {
 }
 ```
 
-### 7. Batch Translation (Bergamot Only)
+### 7. Batch Translation
 
-For translating multiple texts efficiently, use the `runBatch()` method instead of calling `run()` multiple times.
-
-> **Important:** `runBatch()` is only available with the **Bergamot backend**. IndicTrans2 models should use sequential `run()` calls.
+For translating multiple texts efficiently, use the `runBatch()` method instead of calling `run()` multiple times. It is supported by **both backends**: Bergamot processes the batch natively in a single call, and IndicTrans2 runs the batch through the GGML pipeline with per-text pre/post-processing.
 
 ```javascript
 // Array of texts to translate (English)
@@ -408,9 +429,9 @@ try {
 | Method | Input | Output | Backend Support |
 |--------|-------|--------|-----------------|
 | `run(text)` | Single string | `QVACResponse` with streaming | All (IndicTrans, Bergamot) |
-| `runBatch(texts)` | Array of strings | Array of strings | **Bergamot only** |
+| `runBatch(texts)` | Array of strings | Array of strings | All (IndicTrans, Bergamot) |
 
-> **Note:** `runBatch()` is significantly faster when translating multiple texts as it processes them in a single batch operation. See [`examples/batch.example.js`](examples/batch.example.js) for a complete example with Bergamot.
+> **Note:** `runBatch()` is significantly faster when translating multiple texts as it processes them in a single batch operation. `run()` and `runBatch()` share one exclusive queue — a batch waits for an in-flight `run()` to finish and vice versa. See [`examples/batch.example.js`](examples/batch.example.js) for a complete Bergamot example; the IndicTrans2 batch path is exercised end-to-end by [`test/integration/indictrans.test.js`](test/integration/indictrans.test.js).
 
 ### 8. Unload the Model
 
@@ -423,11 +444,84 @@ try {
 }
 ```
 
+### 9. Pivot Translation (Bergamot)
+
+Bergamot models are trained per language pair, mostly to/from English. For a
+pair with no direct model (e.g. Spanish → Italian), chain two models through
+an English pivot: the **primary** model translates source → pivot (es→en) and
+the **pivot** model translates pivot → target (en→it). Both stages run inside
+the native `PivotTranslationModel` — a single `run()`/`runBatch()` call spans
+the whole chain.
+
+```javascript
+const model = new TranslationNmtcpp({
+  files: {
+    // primary model: source → pivot (es → en)
+    model: './models/bergamot-es-en/model.esen.intgemm.alphas.bin',
+    srcVocab: './models/bergamot-es-en/vocab.esen.spm',
+    dstVocab: './models/bergamot-es-en/vocab.esen.spm',
+    // pivot model: pivot → target (en → it)
+    pivotModel: './models/bergamot-en-it/model.enit.intgemm.alphas.bin',
+    pivotSrcVocab: './models/bergamot-en-it/vocab.enit.spm',
+    pivotDstVocab: './models/bergamot-en-it/vocab.enit.spm'
+  },
+  params: { srcLang: 'es', dstLang: 'it' },
+  config: {
+    modelType: TranslationNmtcpp.ModelTypes.Bergamot,
+    // Optional generation parameters for the pivot (en→it) stage; the
+    // top-level config keys apply to the primary (es→en) stage.
+    pivotConfig: { beamsize: 4 }
+  }
+})
+```
+
+- **Files.** `pivotModel` (plus `pivotSrcVocab` / `pivotDstVocab`) select the
+  second-stage model. When they are omitted the instance translates directly
+  with the primary model only.
+- **Configuration.** `config.pivotConfig` carries per-stage options for the
+  pivot model; the remaining `config` keys configure the primary model.
+- **Lifecycle.** `load()` loads both stages and `unload()` frees both — there
+  is no separate pivot lifecycle to manage.
+- **Batch behavior.** `runBatch()` pivots the whole array: the batch is
+  translated source → pivot, then the intermediate batch pivot → target, and
+  the final array is returned in input order.
+
+See [`examples/pivot.example.js`](examples/pivot.example.js) for a complete
+runnable example (es→en→it with auto-downloaded models).
+
 ### Additional Features
 
-- **Cancel:** Translation can be cancelled mid-inference
-- **Progress Tracking:** Monitor loading progress with a callback function
-- **Performance Stats:** Measure inference time with the `stats` option
+- **Cancellation:** an in-flight translation can be cancelled through the
+  response returned by `run()`. `response.cancel()` asks the native runner to
+  stop the current job and fires the `onCancel` callbacks; the response then
+  settles once the native side acknowledges — depending on timing, `await()`
+  may reject or resolve with the output produced so far. The model stays
+  loaded and reusable after a cancel:
+
+  ```javascript
+  const response = await model.run(longText)
+  response.onCancel(() => console.log('translation cancelled'))
+
+  // e.g. cancel when the user navigates away
+  await response.cancel()
+
+  try {
+    await response.await()
+  } catch (err) {
+    // a cancelled job may settle as an error — no final result
+  }
+
+  // the instance is still usable:
+  const next = await model.run('Thank you')
+  ```
+
+  Note: `runBatch()` resolves with the final array only and does not expose a
+  cancellation handle.
+
+- **Performance Stats:** construct the model with `opts: { stats: true }` to
+  receive [`RuntimeStats`](#runtimestats) on `response.stats` once the
+  translation finishes (see the [API Reference](#api-reference)).
+
 - **Active Backend Inspection:** `model.getActiveBackendName()` returns the name of the backend that `load()` actually selected for inference, or a sentinel when no GPU backend is active. Useful for confirming `use_gpu` / `gpu_backend` selection actually took effect (the GGML scheduler silently falls back to CPU when no usable GPU ICD is registered):
 
   ```javascript
@@ -439,13 +533,119 @@ try {
 
   Sentinels: `"Unloaded"` (not yet loaded), `"Bergamot-CPU"` (Bergamot backend — CPU-only by design, independent of `use_gpu`), `"CPU"` (GGML backend but only the CPU device registered).
 
+  `model.getActiveBackendDescription()` complements the name with the
+  human-readable device description of the active GPU backend (e.g.
+  `'NVIDIA GeForce RTX 5070'`), or `''` when no GPU backend is loaded.
+
 For a complete working example that brings all these steps together, see the [Quickstart Example](#quickstart-example) below.
+
+## API Reference
+
+The package's CommonJS default export is the `TranslationNmtcpp` class.
+TypeScript declarations ship with the package (`index.d.ts`).
+
+### `new TranslationNmtcpp({ files, params, config, logger?, opts? })`
+
+| Field | Type | Required | Description |
+|---|---|:-:|---|
+| `files.model` | `string` | ✓ | path to the model weights file |
+| `files.srcVocab` / `files.dstVocab` | `string` | Bergamot | vocabulary file paths |
+| `files.pivotModel` / `files.pivotSrcVocab` / `files.pivotDstVocab` | `string` | | second-stage model for [pivot translation](#9-pivot-translation-bergamot) |
+| `params.srcLang` / `params.dstLang` | `string` | ✓ | language codes (ISO 639-1 for Bergamot, ISO 15924 for IndicTrans2) |
+| `config.modelType` | `'IndicTrans'` \| `'Bergamot'` | ✓ | backend selection (`TranslationNmtcpp.ModelTypes`) |
+| `config.pivotConfig` | `object` | | per-stage options for the pivot model |
+| `config.*` | | | generation + [backend/GPU settings](#backend--gpu-settings) |
+| `logger` | `object \| null` | | `{ info, warn, error, debug }` — receives C++ log lines (see [Logging](#logging)) |
+| `opts.stats` | `boolean` | | populate `response.stats` with [`RuntimeStats`](#runtimestats) after each run (default `false`) |
+
+### Methods
+
+- `load(): Promise<void>` — loads the model (both stages for pivot setups);
+  reloads if already loaded. Rejects after `destroy()`.
+- `run(input: string): Promise<TranslationResponse>` — translates one text.
+  Jobs are serialized through completion: the next `run()`/`runBatch()`
+  starts only after the previous response has settled.
+- `runBatch(texts: string[]): Promise<string[]>` — translates an array in one
+  native batch; shares the serialization queue with `run()`.
+- `unload(): Promise<void>` — frees the native instance; the model can be
+  `load()`ed again.
+- `destroy(): Promise<void>` — unloads and marks the instance permanently
+  destroyed (`load()` afterwards rejects; create a new instance instead).
+- `getState(): { configLoaded, weightsLoaded, destroyed }` — lifecycle flags;
+  `configLoaded`/`weightsLoaded` are both `true` after a successful `load()`.
+- `getActiveBackendName(): string` — resolved compute backend or a sentinel
+  (see [Additional Features](#additional-features)).
+- `getActiveBackendDescription(): string` — human-readable GPU device
+  description, `''` when not on a GPU backend.
+
+### `TranslationResponse`
+
+`run()` resolves with a `TranslationResponse` — the streaming
+[`QVACResponse`](#glossary) surface (`onUpdate`, `onFinish`, `onError`,
+`onCancel`, `iterate`, `await`, `cancel`) plus a typed `stats` property.
+
+### `RuntimeStats`
+
+Populated on `response.stats` when the model was constructed with
+`opts: { stats: true }` (otherwise `stats` stays `{}`):
+
+| Field | Unit | Backends |
+|---|---|---|
+| `totalTokens` | count | all |
+| `totalTime` | **seconds** | all |
+| `decodeTime` | **seconds** | all |
+| `encodeTime` | **seconds** | GGML/IndicTrans only |
+| `TTFT` | **milliseconds** | GGML/IndicTrans only |
+| `TPS` | tokens/second | all |
+
+> Pivot translations may emit keys prefixed with the model name
+> (e.g. `"BERGAMOT : ->TPS"`); the table above models the non-pivot shape.
+
+### Errors
+
+Native-facing failures reject with a structured `QvacErrorAddonMarian`
+(extends `QvacErrorBase` from `@qvac/error`; the original error is preserved
+as `cause`). The class and the `ERR_CODES` map are exported from the
+`lib/error` subpath:
+
+```javascript
+const { QvacErrorAddonMarian, ERR_CODES } = require('@qvac/translation-nmtcpp/lib/error')
+```
+
+Allocated code range `8001..9000`:
+
+| Code | Name | Thrown when |
+|---|---|---|
+| 8001 | `FAILED_TO_LOAD_WEIGHTS` | loading weights into the native instance failed |
+| 8002 | `FAILED_TO_CANCEL` | cancelling an in-flight job failed |
+| 8003 | `FAILED_TO_APPEND` | submitting a job to the native runner failed |
+| 8004 | `FAILED_TO_GET_STATUS` | reserved |
+| 8005 | `FAILED_TO_DESTROY` | releasing the native instance failed |
+| 8006 | `FAILED_TO_ACTIVATE` | native activation (model load) failed |
+| 8007 | `FAILED_TO_RESET` | reserved |
+| 8008 | `FAILED_TO_PAUSE` | reserved |
+| 8009 | `FAILED_TO_GET_BACKEND_NAME` | querying the active backend name failed |
+
+Parameter/lifecycle misuse (missing `load()`, `load()` after `destroy()`,
+non-array `runBatch` input) rejects with a plain `Error` carrying an
+explanatory message.
+
+### Subpath exports
+
+| Import | Purpose |
+|---|---|
+| `@qvac/translation-nmtcpp` | the `TranslationNmtcpp` class (default export) |
+| `@qvac/translation-nmtcpp/marian` | low-level `TranslationInterface` wrapper over the native binding (advanced use) |
+| `@qvac/translation-nmtcpp/addonLogging` | `setLogger` / `releaseLogger` — process-wide C++ log bridge shared by all instances |
+| `@qvac/translation-nmtcpp/lib/error` | `QvacErrorAddonMarian` + `ERR_CODES` |
+| `@qvac/translation-nmtcpp/lib/bergamot-model-fetcher` | Firefox CDN model downloader (see [Model Registry](#model-registry)) |
+| `@qvac/translation-nmtcpp/lib/indictrans-model-fetcher` | QVAC-registry model downloader (see [Model Registry](#model-registry)) |
 
 ## Quickstart Example
 
 This quickstart demonstrates **Bergamot model** inference (English → Italian translation).
 
-> **Other Model Types:** For IndicTrans2 models, refer to [Section 2: Create the args object](#2-create-the-args-object) for model-specific configuration.
+> **Other Model Types:** For IndicTrans2 models, refer to [Section 2: Create the constructor arguments](#2-create-the-constructor-arguments) for model-specific configuration.
 
 Follow these steps to run the Quickstart Example:
 
@@ -498,7 +698,7 @@ async function main () {
       srcVocab: path.join(modelDir, fileNames.srcVocabName),
       dstVocab: path.join(modelDir, fileNames.dstVocabName)
     },
-    params: { mode: 'full', srcLang, dstLang },
+    params: { srcLang, dstLang },
     config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
   })
 
@@ -560,6 +760,70 @@ For more detailed examples covering different use cases, refer to the `examples/
 | [pivot.example.js](examples/pivot.example.js) | Pivot translation (e.g., es→en→it) via Bergamot | Bergamot |
 | [quickstart.js](examples/quickstart.js) | Bergamot backend quickstart | Bergamot |
 
+## Model Registry
+
+Model weights are plain local files as far as this addon is concerned — you
+pass paths via `files`. Two helper modules (and the higher-level
+[`@qvac/inference`](../inference) package) obtain those files for you:
+
+### Bergamot Models (Firefox Translations)
+
+Bergamot weights are published by Mozilla's
+[firefox-translations-models](https://github.com/mozilla/firefox-translations-models)
+project. `lib/bergamot-model-fetcher` resolves and downloads a language pair
+from the Firefox CDN (using Remote Settings metadata) into a local directory.
+Automatic downloads require `bare-fetch`:
+
+```bash
+npm i bare-fetch
+```
+
+```javascript
+const {
+  ensureBergamotModelFiles,   // download (or reuse) the files for a pair
+  getBergamotFileNames,       // expected file names for a pair
+  hasBergamotModelFiles       // check a directory for a usable model
+} = require('@qvac/translation-nmtcpp/lib/bergamot-model-fetcher')
+
+const dir = await ensureBergamotModelFiles('en', 'it', './models/bergamot-en-it')
+const names = getBergamotFileNames('en', 'it')
+// → { modelName: 'model.enit.intgemm.alphas.bin', srcVocabName: 'vocab.enit.spm', … }
+```
+
+Pinned snapshots of the same Bergamot artifacts (plus metadata) are also
+hosted in the QVAC model registry for CI and `@qvac/inference` consumption.
+
+### IndicTrans2 Models
+
+IndicTrans2 GGML weights are hosted in the QVAC model registry.
+`lib/indictrans-model-fetcher` downloads them through `@qvac/registry-client`
+(peer-to-peer, checksum-verified). Install the registry client before using
+automatic downloads:
+
+```bash
+npm i @qvac/registry-client
+```
+
+```javascript
+const {
+  INDICTRANS_MODELS,           // registry catalog keyed by model key
+  ensureIndicTransModelFile,   // download (or reuse) a model file
+  getIndicTransFileName        // filename for a model key
+} = require('@qvac/translation-nmtcpp/lib/indictrans-model-fetcher')
+
+const modelPath = await ensureIndicTransModelFile('en-indic-200M-q4_0', './models')
+```
+
+### Key Pattern
+
+IndicTrans2 fetcher keys follow `{direction}-{size}-{quantization}` — e.g.
+`en-indic-200M-q4_0` → `ggml-indictrans2-en-indic-dist-200M-q4_0.bin`. The
+underlying registry paths follow
+`qvac_models_compiled/ggml/indictrans2/{quant}/{model}/{date}/{file}`.
+
+Applications that prefer not to manage files at all can use
+[`@qvac/inference`](../inference), which loads registry-hosted NMT models
+(engine `nmtcpp-translation`) and drives this addon internally.
 
 ## Supported Languages
 
@@ -683,10 +947,31 @@ bare-make generate -D USE_BERGAMOT=OFF
 
 ### Compute backend selection
 
-At runtime, the addon picks a ggml compute device using the `use_gpu`, `gpu_backend`, and `gpu_device` config keys described in [Backend & GPU Settings](#backend--gpu-settings). When `use_gpu` is true and `gpu_backend` is **not** set, the selector falls back to a default gated pass:
+For IndicTrans2, `config['main-gpu']` (alias `main_gpu`) accepts a raw ggml
+registry index (integer or integer string), `'dedicated'`, or `'integrated'`.
+Class names are case-insensitive; negative indices use the out-of-range fallback. Set `use_gpu: true` (or
+`useGPU: true`) to enable GPU execution; the selector does not enable it.
+Numeric indices refer to the original registry, before backend filtering or
+GPU ordering. An in-range unsupported device falls back to CPU rather than
+selecting a different GPU. An out-of-range index logs a warning and uses
+normal automatic selection, which prefers dedicated GPUs before integrated
+GPUs across eligible backends. Class selectors require a GPU of the requested
+class and otherwise fall back to CPU. All selections retain Translation's
+backend allowlist, RPC exclusion, and automatic OpenCL build guard.
+
+Use only one of `main-gpu` and `main_gpu`. Combining either with
+`gpu_backend`, `gpu_device`, `gpuBackend`, or `gpuDevice` is rejected.
+Legacy selectors retain their backend-filtered ordinal meanings when used
+without `main-gpu`. Bergamot remains CPU-only.
+
+```javascript
+config: { modelType: 'IndicTrans', use_gpu: true, 'main-gpu': 'dedicated' }
+```
+
+At runtime, the addon picks a ggml compute device using the `use_gpu`, `gpu_backend`, and `gpu_device` config keys described in [Backend & GPU Settings](#backend--gpu-settings). When `use_gpu` is true and `gpu_backend` is **not** set, the selector uses the following gated passes within each GPU class (dedicated before integrated). An explicit legacy `gpu_device` retains the historical backend-first ordering:
 
 1. If built with `USE_OPENCL=ON`, prefer an OpenCL device first.
-2. Otherwise (and as a fallback in the `ON` case) pick any non-CPU device. When `USE_OPENCL=OFF` (the default), OpenCL-named devices are also excluded from the fallback — the OpenCL backend still loads as a shared library but is never selected automatically.
+2. Otherwise (and as a fallback in the `ON` case) pick an eligible Vulkan, Metal, or CUDA device. When `USE_OPENCL=OFF` (the default), OpenCL devices are excluded from the fallback — the OpenCL backend still loads as a shared library but is never selected automatically.
 
 An explicit `config.gpu_backend: 'opencl'` always bypasses the `USE_OPENCL` guard and selects OpenCL directly. The flag gates *automatic* selection only; caller-explicit requests are honored.
 
@@ -694,7 +979,7 @@ An explicit `config.gpu_backend: 'opencl'` always bypasses the `USE_OPENCL` guar
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `USE_OPENCL` | `OFF` | When `ON`, the runtime selector prefers OpenCL over other non-CPU devices when `use_gpu` is true and `gpu_backend` is unset. Off by default because the Adreno 830 q4_0 transpose path in `ggml-opencl` aborts on NMT tensors whose second dimension isn't a multiple of 4 (see [QVAC-17790 root-cause analysis](./nmtcpp-android-opencl-crash.md)). Callers that still want OpenCL can opt in per model via `config.gpu_backend: 'opencl'` regardless of this flag. |
+| `USE_OPENCL` | `OFF` | When `ON`, the runtime selector prefers OpenCL over other non-CPU devices when `use_gpu` is true and `gpu_backend` is unset. Off by default because the Adreno 830 q4_0 transpose path in `ggml-opencl` aborts on NMT tensors whose second dimension isn't a multiple of 4. Callers that still want OpenCL can opt in per model via `config.gpu_backend: 'opencl'` regardless of this flag. |
 
 ```bash
 # Default build (OpenCL not auto-selected)
@@ -740,7 +1025,7 @@ const logger = {
 
 const model = new TranslationNmtcpp({
   files: { model: './models/bergamot-en-it/model.enit.intgemm.alphas.bin', srcVocab: '...', dstVocab: '...' },
-  params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
+  params: { srcLang: 'en', dstLang: 'it' },
   config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot },
   logger
 })
@@ -753,7 +1038,7 @@ To suppress all C++ logs, either omit the `logger` parameter or set it to `null`
 ```javascript
 const model = new TranslationNmtcpp({
   files: { model: './models/bergamot-en-it/model.enit.intgemm.alphas.bin', srcVocab: '...', dstVocab: '...' },
-  params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
+  params: { srcLang: 'en', dstLang: 'it' },
   config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
 })
 ```
@@ -828,6 +1113,8 @@ npm run test:all           # Run both JavaScript and C++ tests
 
 ## Resources
 
+- **Architecture Documentation** – Layered architecture, components, and design decisions. [docs/architecture.md](docs/architecture.md)
+- **Detailed Data Flows** – Loading/translation/batch sequence diagrams. [docs/data-flows-detailed.md](docs/data-flows-detailed.md)
 - **Pear Platform** – Decentralized platform for deploying apps. [pears.com](https://pears.com/)
 - **Bare Runtime Docs** – For running QVAC apps in a lightweight environment. [docs.pears.com/bare](https://docs.pears.com/reference/bare-overview.html)
 - **IndicTrans2 Model** – Pretrained multilingual translation models. [AI4Bharat/IndicTrans2](https://github.com/AI4Bharat/IndicTrans2)
@@ -869,11 +1156,18 @@ npm run build
 
 ### Code Style
 
-This project uses [StandardJS](https://standardjs.com/) for JavaScript linting:
+JavaScript is checked with [Prettier](https://prettier.io/)
+(`prettier-config-holepunch`) and [lunte](https://www.npmjs.com/package/lunte);
+the TypeScript sources under `src/` are linted with ESLint. The published
+JavaScript (`index.js`, `marian.js`, `addonLogging.js`, `lib/`) is generated
+from `src/` — edit the TypeScript and regenerate:
 
 ```bash
-npm run lint        # Check for lint errors
-npm run lint:fix    # Auto-fix lint errors
+npm run lint            # prettier --check + lunte + eslint + type checks
+npm run lint:ts:fix     # auto-fix ESLint issues in src/**/*.ts
+npm run format          # prettier --write for JS files
+npm run build:ts        # regenerate the published JS + .d.ts from src/
+npm run check:generated # verify generated output is committed and in sync
 ```
 
 ### Running Tests

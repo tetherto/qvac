@@ -5,13 +5,13 @@ import {
   readNpmPackageLockAtRef,
   type PackageLockFile,
   type ReadNpmPackageLockAtRefOptions
-} from './npm-lockfile.js'
+} from '@/verify/deps/npm-lockfile'
 import {
   collectNativePackages,
   type NativePackage,
   type UnclassifiedPackage
-} from './native-packages.js'
-import { LockfileNotFoundAtRefError, type LockfilePackage } from './lockfile.js'
+} from '@/verify/deps/native-packages'
+import { LockfileNotFoundAtRefError, type LockfilePackage } from '@/verify/deps/lockfile'
 
 export interface VerifyDepsOptions {
   projectRoot: string

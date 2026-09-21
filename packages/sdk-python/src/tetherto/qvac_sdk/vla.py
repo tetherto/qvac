@@ -33,6 +33,12 @@ VLA_DEFAULT_IMAGE_SIZE = 512
 
 _VLA_RUN_HANDLER = "vlaRun"
 _VLA_HPARAMS_HANDLER = "vlaHparams"
+_VLA_SET_EMBODIMENT_HANDLER = "vlaSetEmbodiment"
+
+# Tag string, numeric cat_id (0..31), or a dict like {"catId": 3, "numCameras": 2}.
+# Mirrors the JS SDK's VlaEmbodimentSelector; validated by the plugin's request
+# schema, so it travels as-is.
+VlaEmbodimentSelector = str | int | dict[str, Any]
 
 
 class NumpyNotInstalledError(ImportError):
@@ -63,6 +69,14 @@ class VlaHparams(BaseModel):
     vision_image_size: int = Field(alias="visionImageSize", ge=0)
     num_cameras: int | None = Field(alias="numCameras", default=None, gt=0)
     state_input_mode: str | None = Field(alias="stateInputMode", default=None)
+    image_input_mode: str | None = Field(alias="imageInputMode", default=None)
+    image_patch_elems: int | None = Field(alias="imagePatchElems", default=None, ge=0)
+    selected_embodiment_tag: str | None = Field(
+        alias="selectedEmbodimentTag", default=None
+    )
+    selected_embodiment_cat_id: int | None = Field(
+        alias="selectedEmbodimentCatId", default=None, ge=0, le=31
+    )
 
 
 class _VlaHparamsResponse(BaseModel):
@@ -70,6 +84,12 @@ class _VlaHparamsResponse(BaseModel):
 
     hparams: VlaHparams
     backend_name: str | None = Field(alias="backendName", default=None)
+
+
+class _VlaSetEmbodimentResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    hparams: VlaHparams
 
 
 class _VlaRunResponse(BaseModel):
@@ -300,14 +320,36 @@ async def vla_hparams(
     return parsed.hparams, parsed.backend_name
 
 
+async def vla_set_embodiment(
+    transport: Transport, *, model_id: str, embodiment: VlaEmbodimentSelector
+) -> VlaHparams:
+    """Switch a loaded multi-embodiment GR00T model to another embodiment in
+    the same GGUF -- no reload. Mirrors JS's `vlaSetEmbodiment()`. Returns the
+    refreshed hparams: `num_cameras` follows the new embodiment, so re-size
+    buffers before the next `vla()` call. Rejects for a non-GR00T or
+    single-embodiment model, an unknown tag or cat_id, or while an inference
+    response is still pending."""
+    wire_request = {
+        "type": "vlaSetEmbodiment",
+        "modelId": model_id,
+        "embodiment": embodiment,
+    }
+    result = await invoke_plugin(
+        transport, model_id, _VLA_SET_EMBODIMENT_HANDLER, params=wire_request
+    )
+    return _VlaSetEmbodimentResponse.model_validate(result).hparams
+
+
 __all__ = [
     "NUMPY_AVAILABLE",
     "NumpyNotInstalledError",
     "VLA_DEFAULT_IMAGE_SIZE",
+    "VlaEmbodimentSelector",
     "VlaHparams",
     "VlaRunResult",
     "vla",
     "vla_hparams",
     "vla_pad_state",
     "vla_preprocess_image",
+    "vla_set_embodiment",
 ]

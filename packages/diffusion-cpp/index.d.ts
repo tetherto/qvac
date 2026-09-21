@@ -20,8 +20,8 @@ export interface Addon {
 export type SamplerMethod = 'euler' | 'euler_a' | 'heun' | 'dpm2' | 'dpm++2m' | 'dpm++2mv2' | 'dpm++2s_a' | 'lcm' | 'ipndm' | 'ipndm_v' | 'ddim_trailing' | 'tcd' | 'res_multistep' | 'res_2s';
 export type WeightType = 'auto' | 'f32' | 'f16' | 'bf16' | 'q2_k' | 'q3_k' | 'q4_0' | 'q4_1' | 'q4_k' | 'q5_0' | 'q5_1' | 'q5_k' | 'q6_k' | 'q8_0';
 export type RngType = 'cpu' | 'cuda' | 'std_default';
-export type ScheduleType = 'discrete' | 'karras' | 'exponential' | 'ays' | 'gits' | 'sgm_uniform' | 'simple' | 'lcm' | 'smoothstep' | 'kl_optimal' | 'bong_tangent';
-export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux_flow' | 'flux2_flow';
+export type ScheduleType = 'discrete' | 'karras' | 'exponential' | 'ays' | 'gits' | 'sgm_uniform' | 'simple' | 'lcm' | 'smoothstep' | 'kl_optimal' | 'bong_tangent' | 'ltx2';
+export type PredictionType = 'auto' | 'eps' | 'v' | 'edm_v' | 'flow' | 'flux2_flow';
 export type LoraApplyMode = 'auto' | 'immediately' | 'at_runtime';
 export type CacheMode = 'disabled' | 'easycache' | 'ucache' | 'dbcache' | 'taylorseer' | 'cache-dit';
 export interface SdConfig {
@@ -31,14 +31,21 @@ export interface SdConfig {
     type?: WeightType;
     rng?: RngType;
     sampler_rng?: RngType;
-    clip_on_cpu?: boolean;
-    vae_on_cpu?: boolean;
+    vae_auto_cpu_fallback?: boolean;
+    vae_auto_cpu_fallback_memory_ratio?: number;
     vae_decode_only?: boolean;
     vae_tiling?: boolean;
     flash_attn?: boolean;
     diffusion_fa?: boolean;
     mmap?: boolean;
     offload_to_cpu?: boolean;
+    control_net_cpu?: never;
+    clip_on_cpu?: never;
+    vae_on_cpu?: never;
+    backend?: string;
+    params_backend?: string;
+    max_vram?: number | string;
+    stream_layers?: boolean;
     prediction?: PredictionType;
     flow_shift?: number;
     diffusion_conv_direct?: boolean;

@@ -1,5 +1,660 @@
 # Changelog
 
+## [0.53.2] - 2026-09-17
+
+This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. It is a packaging change: the addon's own API is untouched, so consumers on the `0.53.x` line pick it up without a range change of their own. llama.cpp, ggml, mtmd and libcommon are now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer, which drops the addon binary from tens of MB to ~3.2 MB.
+
+### Changed
+
+- The llama.cpp / ggml / mtmd / libcommon runtime and its compute backends are now provided by the `@qvac/fabric` npm dependency (`^0.16.1`) instead of the statically-linked `qvac-fabric` vcpkg port. The engine is dynamically linked as `qvac__fabric@0.bare` and loaded once per process, so a host that also runs another fabric consumer (`@qvac/embed-llamacpp`, `@qvac/ocr-ggml`, …) shares a single copy of it rather than one per addon. `@qvac/fabric` carries the prebuilt runtime inside its own tarball, so run `npm install` before `bare-make generate`/`build` and do not prune the dependency at runtime.
+- On desktop the addon resolves the single `@qvac/fabric` install and loads the ggml backend modules from `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`, falling back to this addon's own `prebuilds/` on mobile, where the package tree is not resolvable from the packed worklet bundle. Correspondingly, the native `BACKENDS_SUBDIR` moved from `<host>/llm-llamacpp` to `<host>/qvac__fabric`.
+- The addon's C++ runtime comes from fabric as well, not just its llama layer. On Linux the module links `-nostdlib++` and records a `DT_VERNEED` on fabric's `QVAC_FABRIC_ABI_1` version node, so `__cxa_throw`, `__gxx_personality_v0` and the `std::` typeinfo objects resolve to fabric's copy rather than to the GNU `libstdc++` that `bare`'s executable puts in the process' global lookup scope, ahead of a `dlopen`'d module's own `DT_NEEDED` chain. Without that pin an exception thrown inside fabric — a llama load setting only fabric can reject, say — crosses the seam carrying typeinfo from a different runtime, stops matching its typed catch, and surfaces as a package-level "Unknown error" a long way from the link that caused it. `qvac_addon_finalize` reads the linked module with `readelf` and fails the build if any C++ runtime symbol is imported without that requirement. The version node is why there is a floor here at all, and it sits at `^0.16.1` rather than `^0.16.0` because 0.16.0 stamped that node on every ELF target — including Android, where fabric exports no C++ ABI to pin to. A module built against it recorded the version need anyway and then failed its `dlopen` on device, so every addon reported `ADDON_NOT_FOUND` before any model work. macOS, Windows, Android and iOS already share one runtime with the addon. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md`.
+- The module exports only the `bare_*` entry points the runtime resolves by name. Its own and its dependencies' typeinfo, and the whole of `inference-addon-cpp`, are no longer exported: `bare` loads modules `RTLD_LOCAL` so nothing could reach them anyway, and the addon and fabric now form a closed unit exposing plain C by construction rather than by the loader flags of whichever host loads them.
+- Finetuning is unaffected as an API but now resolves its training entry points (`llama_opt_*`, `ggml_opt_*`, `common_opt_sft_dataset_init`) from the shared runtime rather than from objects linked into this addon.
+- `CMakeLists.txt` now builds on the shared `cmake/qvac-addon` template, replacing the hand-rolled preamble (vcpkg triplet overlay, libc++ flags, lint-cpp config sync, Windows lean-header defines, `--exclude-libs,ALL`, `JS_LOGGER`/`BACKENDS_SUBDIR`, the manual `GGML_AVAILABLE_BACKENDS` staging loop). This also picks up the Android 16 KB page-size link flags and the Apple compiler-rt `force_load` that the template applies to every addon.
+- The C++ test binary and the optional `BUILD_CLI` tool link the shared runtime too. Neither gets the runtime wiring `add_bare_module()` gives the `.bare` module, so both stage `qvac__fabric` and its `dlopen`'d backends next to the binary and rpath them in. The test binary explicitly preloads the backends from that directory, since a `GGML_BACKEND_DL` build registers none on its own.
+- `scripts/run-cpp-tests.js` now sets the ASan relaxations the C++ suite needs against a non-ASan, `-static-libstdc++` fabric prebuild (`alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1`) instead of relying on the CI workflow to export them, so a local run and a CI run behave the same. An explicit `ASAN_OPTIONS` in the environment still wins, and `LSAN_OPTIONS` keeps pointing at the checked-in suppressions file for anyone who re-enables leak detection.
+
+### Removed
+
+- `qvac-fabric` from `vcpkg.json`, along with the `find_package(llama)` and `find_package(OpenSSL)` calls it required. The addon's remaining vcpkg dependencies are `picojson`, `nlohmann-json`, `concurrentqueue`, `qvac-lib-inference-addon-cpp` and `qvac-lint-cpp`.
+- The `vk-profiling` build feature, and the `VK_PROFILING` CMake option and `vk-profiling` prebuild input behind it. Vulkan profiling is now a property of the shared runtime, selected when building `@qvac/fabric`.
+
+## [0.53.1] - 2026-09-16
+
+### Fixed
+
+- On-disk single-file and sharded models now use the same
+  `common_init_from_params` loading path as `llama-server`. Sharded paths are
+  normalized to the first shard so fabric can discover the complete split set,
+  and `tensor_buft_overrides` is padded before initialization so automatic
+  GPU/CPU placement receives its required writable output buffer. Streamed
+  model loading remains unchanged. Tensor-split architecture support is now
+  validated by fabric instead of a duplicated addon denylist (QVAC-25039).
+
+## [0.53.0] - 2026-09-15
+
+### Added
+
+- Tool calls are now constrained by the chat template's native tool grammar:
+  when a prompt carries tool definitions the sampler applies the grammar the
+  template computes, so malformed tool-call markup and schema-invalid
+  arguments cannot be generated. A load-time or per-request `grammar` /
+  `json_schema` still takes precedence over the tool grammar.
+- Chat-template `additional_stops` are plumbed through per request alongside the
+  load-time antiprompts. No template shipped by a qvac package populates the
+  field, so this is inert for those models; a user-supplied model whose
+  template does populate it will now stop on those strings. Template stops are
+  matched **byte-for-byte**, matching llama-server; the load-time `antiprompt`
+  list keeps its case-insensitive matching. A template stop is a protocol
+  delimiter, so folding its case would let a `</ASSISTANT>` the template never
+  emits truncate ordinary content.
+- `RuntimeStats.toolDefinitionsDropped` reports renders that provably left the
+  supplied tool definitions out — because the template rejected them, because
+  the prompt was rendered without a Jinja template, or because the template
+  rendered successfully while leaving them out. That last case is the quiet
+  one, and it is decided from the prompt that was produced rather than from
+  what the template is capable of: it covers both a template with no tools
+  branch at all and one whose tool block is guarded on a conversation shape
+  this request did not have. Every such drop is decided by rendering the same
+  inputs again with the tools removed and comparing: only a byte-identical
+  prompt counts as an omission. That is what makes conversation text unable to
+  mask a drop — the ordinary multi-turn tool loop replays the call by name, so
+  a tool name in the prompt proves nothing — and equally what stops a
+  definition the template emitted in some transformed form from being reported
+  as dropped. A template that cannot render at all without its tools leaves the
+  question unanswerable, and is reported as not dropped. The counter reads in
+  one direction: non-zero means the definitions were dropped, while 0 is
+  **not** a promise that the model saw all of them, because a template that
+  renders only some of the tools still changes the render. It is a per-request
+  figure: a job reports what happened to its own render, not what happened
+  across whatever else was in flight beside it.
+- `generationParams.tool_choice` (`"auto"` | `"none"` | `"required"` | a declared
+  function name) controls whether a tool call is forced, allowed or disabled for
+  a request that declares tools; a function name restricts the call to it.
+  `"required"` and a function name now fail with `InvalidArgument` rather than
+  silently answering in prose when the demand cannot be honoured. Known limit:
+  the eager grammar these produce admits an unbounded `<think>` prefix on a
+  reasoning model, so `n_predict` can be spent before the tool call is
+  reached. Cap the reasoning channel with a positive `reasoning_budget`, which
+  forces the block closed at the cap, or disable it with `reasoning_budget: 0`,
+  when a call has to be emitted within a tight token budget.
+  A rejected `tool_choice` is now refused before any of the request's media is
+  staged on the multimodal context, so a bad value costs only the caller's own
+  request — previously the stray bitmap made the *next* multimodal request fail
+  in `mtmd_tokenize` with more bitmaps than markers.
+- Tool definitions in a prompt are validated before rendering, and three
+  further cases now fail with `InvalidArgument` alongside the existing
+  duplicate-name check, because each one leaves a declared tool unreachable:
+  - a tool named `auto`, `none` or `required`. Those are the `tool_choice` mode
+    words and are matched before any function lookup, so such a tool would be
+    advertised in the prompt and yet never be selectable by name.
+  - a tool with an empty name, which is unselectable for the same reason from
+    both directions: `tool_choice: ""` is rejected outright by the JS layer,
+    and natively an empty choice is read as `"auto"`.
+  - two tool names that fold to the same grammar rule — `get_weather` and
+    `get-weather`, say. Every tool grammar names its rules after the tool, so
+    both names resolve to whichever rule was registered last: under `"auto"` or
+    `"required"` both tools stay advertised while only one argument schema
+    constrains decoding, and the caller receives a well-formed call against the
+    wrong schema with nothing in the response to indicate it. This was a
+    warning in earlier pre-release builds of this feature.
+- A `mmproj-no-audio` load config option (`mmproj_no_audio` also accepted),
+  taking `0`/`off`/`false` or `1`/`on`/`true`; anything else is rejected with
+  `InvalidArgument`. It drops the projector's audio encoder while keeping its
+  vision encoder, and is forwarded to the vision context as `skip_audio`. It is
+  independent of `mmproj_use_gpu`, which selects the backend rather than the
+  modality.
+
+### Changed
+
+- **Multimodal projectors now skip their audio encoder by default.** The addon
+  sets `mmproj-no-audio` to `true` during load normalization, so an
+  audio-capable mmproj loads vision-only unless the new option is passed
+  explicitly as `0`/`off`/`false`. Vision behaviour is unchanged; a caller
+  relying on audio input from a combined projector must now opt back in.
+- `qvac-fabric` dependency bumped `10549.0.0#1` -> `10549.1.0`. No API change for this package; the runtime changes as follows since `v10549.0.0`:
+  - Fixed an out-of-bounds tensor write in the MoE copy path. The used-expert scan ran unbounded, so a ubatch whose `ids` tensor had zero rows read past its own bitset and aborted on `GGML_ASSERT(offset <= nbytes ...)`. Reached with the persistent MoE expert cache — on by default under `--fit` — at `-c 65536` and above ([#260](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/260)).
+  - Fixed uninitialized ggml views after oversized MoE cache banks and context tensors ([#263](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/263)).
+  - `mtmd` gained the audio-encoder skip this release's `mmproj-no-audio` option drives ([#261](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/261)).
+  - Native MTP shares compute buffers and synchronizes draft catch-up before the target runs, now also on Vulkan and Metal and preserved across scheduler rebuilds ([#253](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/253)).
+  - qwen4exp correctness backports: `seq_cp`, block position keying, mtmd input, a CUDA abort, KV-unified NaN collapse, and indexer-cache `ext.x`/`ext.y` restore on state reload. Tensor parallelism is enabled and `-sm tensor` is now declared unsupported for the arch ([#255](https://github.com/tetherto/qvac-fabric-llm.cpp/pull/255)).
+
+### Fixed
+
+- `RuntimeStats.avgConcurrentSeq` is now a token-weighted mean rather than a
+  per-step one, so it measures how much traffic shared the backend instead of
+  how finely the scheduler sliced its work. The previous step-weighted mean
+  rose the more a co-resident prefill was throttled, which meant removing the
+  one-token-per-step prefill clamp read as a concurrency regression even
+  though the backend decoded exactly the same sequences over the same tokens.
+- The continuous-batching MTMD smoke test now pairs the image with a
+  *generating* text request instead of a one-word answer. Paired with a
+  one-word answer the text slot finished after ~2 decode steps while the image
+  still had a dozen media segments to encode, so the only way to clear the
+  co-residency bar was for the text slot to be starved — which is exactly what
+  the media-barrier prefill clamp used to do, and exactly what this test is
+  meant to catch.
+- A tool grammar applied for one request no longer leaks into a following
+  request that carries no tools on the same loaded model, and no longer leaves
+  its lazy-grammar triggers attached to a later per-request `grammar` or
+  `json_schema`.
+- A chat-template grammar the sampler rejects no longer stays resident in the
+  loaded model's sampling parameters, and a failing per-request restore can no
+  longer terminate the process.
+- `reasoning_budget` now takes effect on a model whose family has a known
+  reasoning channel but whose active chat template does not expose thinking
+  tags — a manual `chat_template` override, or a GGUF whose embedded template
+  omits them. Reasoning *detection* has always fallen back to the model-family
+  table in that case while the reasoning-budget sampler read the template's
+  tags alone, so the cap was silently inert. Both now come from one source.
+  With tools this also restores the guarantee the tool grammar depends on: the
+  budget sampler is what keeps a lazy tool grammar from arming inside the
+  reasoning block, so without it a `<tool_call>` written inside `<think>`
+  constrained the rest of the reasoning to tool-call syntax.
+- `reasoning_budget` is now enforced on every request, not only the first, for
+  models whose chat template force-opens the reasoning channel (a prompt ending
+  in `<think>`). The reasoning-budget matcher is stateful and survives a
+  request; it re-arms on its own when the *model* emits the opening tag, which
+  is why the Qwen3 family was unaffected, but a force-opened channel gives it no
+  tag to re-arm on and the second request onwards ran uncapped.
+- A failed multimodal request no longer costs the *next* one its turn. Media is
+  staged on the model's vision context and consumed when the prompt is
+  tokenized, so a request that failed in between — an invalid per-request
+  `grammar` or `json_schema`, among others — left its image behind, and the
+  following image request was then rejected outright for carrying more images
+  than its prompt had markers.
+- An empty string in a chat template's `additional_stops` no longer ends every
+  generation after a single token. Only relevant to a user-supplied template
+  that emits one, since no template shipped by a qvac package populates the
+  field at all.
+- `RuntimeStats.thinkingBlockDiscards` on a completed job is now that job's own
+  count rather than a batch-wide total. Both it and the new
+  `toolDefinitionsDropped` were read from the scheduler's shared accumulator,
+  which is copied into every job's terminal snapshot — so with several requests
+  in flight each one was told the sum of all of them. Only the per-job
+  (`jobEnded`) figures change; a whole-model `runtimeStats()` read is still the
+  aggregate it always was.
+- Upstream chat-template render errors and sampler-rebuild failures are
+  sanitised and length-capped before they reach the log, as caller-supplied
+  values already were. A model-supplied template controls that text, so it
+  could previously forge log lines or, for a large template, write one very
+  large record per failing request.
+- A sequence in the generation phase no longer throttles concurrently prefilling sequences to one prompt token per decode step. `MultiRequestBatcher` fed every active slot a single shared chunk size, computed as the minimum `remainingToFeed()` across them; a generating slot reports `1`, so as soon as any one request started generating, every request still feeding its prompt was cut to one token per step and needed roughly as many decode steps to reach its first token as its prompt had tokens. Slots are now budgeted individually and water-filled against the batch capacity, so a generating slot takes its one token while a concurrent prefill keeps its full micro-batch. On a `parallel: 4` model answering six concurrent requests, time to first token for the stalled group drops from ~1710 ms to ~308 ms, aggregate throughput rises ~25% and wall clock falls ~21%. Peak batch size is unchanged — the sum of the per-slot budgets is bounded by the same `batch.capacity()` the shared chunk was. Note that a step taken while a large prefill is co-resident now carries more tokens, so an already-generating sequence sees a correspondingly larger spread in per-token latency.
+
+## [0.52.1] - 2026-09-14
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.0.0` -> `10549.0.0#1` (`LLAMA_OPENSSL=OFF`, so native prebuilds do not link OpenSSL; no API change for this package).
+
+## [0.52.0] - 2026-09-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549; no API change for this package).
+
+## [0.51.0] - 2026-09-08
+
+### Fixed
+
+- Two separate still images of equal size passed in one request are no longer fused into a single two-frame video chunk on temporal-merge-capable models (Qwen-VL). `clip_encode` was writing a two-frame embedding into a buffer sized for one frame and aborting the process with `Output buffer size mismatch` (exit 134). Fixed in `qvac-fabric`, whose dependency is bumped `10297.1.1` -> `10297.1.2`; temporal merge is now opt-in per bitmap, so only real video frames merge.
+
+## [0.50.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.49.x` adopt the new build floor deliberately rather than automatically.
+
+## [0.49.1] - 2026-09-02
+
+### Fixed
+
+- `flash-attn` values other than the literal `'on'` are no longer treated as flash-attention-*off* by the
+  KV-cache policy. The predicate behind the q8_0 KV-cache auto-default and the Adreno 800+/Vulkan crash
+  guard was an exact string comparison against `'on'`, so `'enabled'`, `'true'` and `'1'` — all documented
+  and accepted on `LlamaConfig['flash-attn']` — silently skipped both. Values are now matched against
+  qvac-fabric's own three-way vocabulary (`is_truthy` / `is_falsey` / `is_autoy`) under both the
+  `flash-attn` and `flash_attn` spellings.
+
+  Concretely, with `flash-attn` set to `'enabled'`, `'true'` or `'1'` on a Metal or non-Adreno Vulkan GPU:
+  the KV cache now defaults to q8_0 as it already did for `'on'` (roughly halving KV-cache memory), and the
+  Adreno 800+/Vulkan quantized-KV combination is now rejected with `InvalidArgument` instead of reaching
+  the driver bug it guards against.
+
+- `flash-attn: 'auto'` now arms the Adreno 800+/Vulkan crash guard. A quantized `cache-type-k`/`-v` makes
+  qvac-fabric promote AUTO to ENABLED, so the coopmat1 driver crash was reachable with a value the guard
+  did not recognise. Callers get a clean `InvalidArgument` instead.
+
+  `'auto'` deliberately continues **not** to trigger the q8_0 KV-cache auto-default, and still resolves to
+  f16 unless `cache-type-k`/`-v` is set explicitly. Quantizing the V cache would force qvac-fabric to
+  promote AUTO to ENABLED and skip the runtime capability probe, which is precisely what this package
+  documents `'auto'` as preserving — *"`'auto'` lets qvac-fabric decide"*. A caller who wants both should
+  set `cache-type-k`/`-v` alongside it, or use `'on'`.
+
+- `split-mode: 'tensor'` + `flash-attn: 'auto'` now takes the q8_0 KV-cache default. It is the one mode
+  where the exclusion above does not apply: qvac-fabric promotes AUTO to ENABLED for tensor mode
+  unconditionally and before any KV type is read, so there is no capability probe to preserve, and
+  withholding q8_0 cost 2× the KV cache for nothing. Tensor mode also force-disables auto-fit, so nothing
+  was trimming `ctx_size` to absorb it.
+
+- Supplying **both** `flash-attn` and `flash_attn` is now rejected with `InvalidArgument`, implementing the
+  contract `index.d.ts` already published and matching what `split-mode` and `mmproj-use-gpu` already do.
+  Both spellings are dispatched to qvac-fabric as `--flash-attn` and which one wins is unspecified, so the
+  KV guards could read one value while qvac-fabric applied the other — leaving the Adreno crash guard
+  closed on a configuration that reaches the driver bug.
+
+- An unrecognised `flash-attn` value is now rejected with `InvalidArgument` naming the accepted spellings,
+  rather than falling out of every set and surfacing later as an unrelated error — typically the Adreno
+  quantized-KV message, which misattributes a simple typo. Matching is case-sensitive, as qvac-fabric's own
+  predicates are; the addon no longer accepts values qvac-fabric would reject. This also covers the empty
+  string, which suppressed the `'on'` default and reached the argument parser as a valueless flag.
+
+- On a BitNet model, an explicit truthy `flash-attn` now arms the q8_0 KV-cache default for every spelling,
+  not just `'on'`. BitNet's flash-attention force-off applies only when the key is unset, so setting it at
+  all has always opted out of that default; previously `'true'` silently did not. Behaviour with
+  `flash-attn` unset is unchanged — BitNet still forces it off and the q8_0 default stays closed.
+
+### Known follow-ups
+
+- **`packages/model-fit` must widen in lockstep and has not yet.** Its `flashEnabled` predicate
+  (`addon/src/fit/LlamaLoadConfig.cpp`) is still pinned to exact `"on"`, with a comment reserving the
+  widening for `llm-llamacpp` "first so both move together" — this is that move. Until it lands, `model-fit`
+  projects f16 where this addon now applies q8_0 (over-estimating KV by ~2× and trimming `ctx_size` further
+  than needed), and its Adreno 800+/Vulkan guard reports as supported a configuration this addon now
+  rejects. `model-fit`'s own CHANGELOG statement that *"`flash-attn` is recognised as enabled on `on` only,
+  as `llm-llamacpp` does"* is stale as of this entry. Tracked in
+  [#4223](https://github.com/tetherto/qvac/pull/4223), open as of this release.
+
+- **Grok on a GPU backend fails to load, and this change does not fix it.** qvac-fabric force-disables flash
+  attention for Grok, then rejects the quantized V cache the q8_0 default just applied, so context creation
+  returns null with no addon-side explanation. Pre-existing and unrelated to the value vocabulary — the
+  addon lifted qvac-fabric's spellings without lifting its architecture overrides. Needs `grok` added to the
+  q8_0 skip conditions or to the flash-attention force-off branch alongside BitNet.
+
+### Documentation
+
+- `flash-attn` now has a row in the README config table — it had none, despite being a documented, typed
+  field on `LlamaConfig`. The KV-cache auto-default section states which spellings count as "flash
+  attention on", why `'auto'` keeps `f16`, and that tensor mode is the exception; `docs/multi-gpu.md` notes
+  that `split-mode: 'tensor'` accepts `'auto'`, and that it is the one place `'auto'` does not preserve
+  qvac-fabric's capability probe. All spellings are documented as lower-case only.
+
+- The documented default is now *"`'on'`, except when finetuning or on a BitNet model"* in both the README
+  row and the `LlamaConfig` field doc. Both previously named only finetuning.
+
+## [0.49.0] - 2026-08-31
+
+### Added
+
+- `split-mode: 'tensor'` enables qvac-fabric's meta-device tensor parallelism, splitting weights
+  and KV cache across all visible GPUs. **EXPERIMENTAL and desktop-only** (still rejected on
+  Android/iOS with the other multi-GPU parameters). Three constraints, all enforced up front with
+  `InvalidArgument` rather than surfacing as an opaque native failure:
+  - Requires flash attention — a falsey `flash-attn` is rejected. qvac-fabric treats `off`,
+    `disabled`, `false` and `0` as equivalent, and all four are rejected under both the
+    `flash-attn` and `flash_attn` spellings. Leaving it unset is fine; it already defaults to `on`.
+  - Disables auto-fit, which qvac-fabric does not implement for this mode: `gpu_layers` then
+    defaults to every layer and `ctx_size` to the model's trained context, so **set `ctx_size`
+    explicitly for large models** or the load can OOM. The override is applied after argument
+    parsing, so an explicit `fit: 'on'` cannot silently re-enable it. Logged at WARNING.
+  - Unavailable for some architectures (Mamba/Jamba-family, BitNet, Grok, T5, DeepSeek-V2/3.2,
+    MiniMax, Qwen3-Next and others as of qvac-fabric v10297.1.1); rejected before loading with
+    the architecture named. `deepseek4`, `qwen35` and `qwen35moe` were unsupported at v10297.0.0
+    and are supported from v10297.1.0.
+
+  Tensor mode pins its own `--device` list. qvac-fabric selects devices for this mode with no
+  device-type filter and no deduplication, so left alone it splits weights and KV cache onto the
+  integrated GPU of any discrete + integrated host and shards a dual-registered GPU twice. The
+  addon enumerates devices itself — discrete when present, otherwise integrated, deduplicated by
+  the backend-reported `device_id` (PCI bus id), not by description: two identical cards report
+  identical descriptions. `layer` and `row` are unchanged and still let qvac-fabric choose.
+
+  **Not selectable through the SDK yet:** `@qvac/inference`'s config schema still enumerates
+  `none`/`layer`/`row`, so `'tensor'` is reachable only via direct addon `loadModel`.
+
+  Unrelated to `split-mode: 'row'`, which needs split buffers no shipped backend provides and is
+  still degraded to `'layer'`. `examples/multiGpuBenchmark.js` now benchmarks the new mode
+  alongside the existing three. See `docs/multi-gpu.md`.
+
+- `flash-attn` (and the `flash_attn` alias) is now a narrowed field on `LlamaConfig` rather than
+  reaching callers only through the `[key: string]` escape hatch, making the tensor-mode
+  requirement visible at compile time. Propagating it to the SDK schema is separate SDK-pod work.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader).
+
+## [0.48.0] - 2026-08-31
+
+### Removed
+
+- Sliding-context support. `n_discarded` is no longer consumed, so it reaches
+  qvac-fabric's own argument parser and fails model load as an unknown option.
+- `contextSlides` from the runtime stats snapshot and from `RuntimeStats` in the
+  type declarations.
+
+### Changed
+
+- A generation that fills the context window now stops with
+  `stopReason=contextOverflow` and still returns what it produced. A batched
+  sequence that fills its window reports the same, where it previously reported
+  `sequenceLimit`, which is the per-sequence cap and not what was hit.
+- Reasoning-block compaction rewinds to a boundary and re-decodes the tokens it
+  keeps, instead of removing the thinking span and shifting the tail down over
+  it. No `seq_add` remains in the addon.
+- A reasoning close marker that tokenizes to several pieces is now supported;
+  the policy previously refused it.
+- `generatedTokens` is counted where tokens are committed rather than read from
+  qvac-fabric's performance counters, which key on batch size rather than
+  meaning. A batched request that stops on EOG reports one less than before, and
+  one that stops on the prediction limit reports one more, so the batched and
+  single-prompt paths now agree at both boundaries. `TPS` shifts with it.
+- `generationParams` with a key the addon does not read now throws instead of
+  being silently ignored. Only own keys are read and forwarded.
+
+### Fixed
+
+- Time to first token on the batched path is stamped from the token the caller
+  actually receives, so a `predict: 1` request no longer returns output while
+  reporting `TTFT` 0.
+- Compaction replay runs outside the scheduler mutex, so a reasoning turn no
+  longer stalls co-tenant slots or blocks a cross-thread `cancel()` for the
+  length of the replay.
+- A multimodal reasoning turn that ends through EOS substitution now seeds the
+  close marker for replay, so the compacted cache cannot be left holding an
+  unbalanced thinking block.
+
+## [0.47.0] - 2026-08-24
+
+### Added
+
+- Load configuration now accepts `load_mode` (`none`, `mmap`, `mlock`, `mmap+mlock`, `dio`) so callers can select the qvac-fabric model loading path explicitly.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with chat-template, sampling and load-mode API changes).
+- Load-fit normalization now validates load modes locally so fabric-thrown exceptions do not cross the native boundary on Windows.
+
+### Fixed
+
+- Reasoning-budget stop detection now preserves every template-provided thinking
+  end tag, so Qwen3-Coder and DeepSeek tool-call openers can end reasoning
+  without forced-close text corrupting the tool call.
+
+## [0.46.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.45.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (fixes MoE models
+  emitting garbage on Adreno 830 OpenCL, and re-enables the GPU MoE kernels that
+  were falling back to CPU; no API change for this package).
+
+## [0.44.0] - 2026-08-17
+
+### Added
+
+- `image_no_upscale` in the addon load config — an idefics3-style preprocessing
+  override forwarded to the vision context, accepting `"on"` or `"off"`. Left
+  unset, the model's own GGUF value is used unchanged. This is what separates the
+  VisionPsy Flash checkpoint from the base one, whose mmprojs are otherwise
+  indistinguishable: a Flash checkpoint loaded without it silently runs base
+  preprocessing, which changes the image token count and so moves both accuracy
+  and encode time.
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule), which is what supplies
+  `image_no_upscale` on `common_params` and `mtmd_context_params`.
+
+## [0.43.0] - 2026-08-14
+
+This release removes the Qwen3-only dynamic tools feature behind
+`tools_compact`. Regular static tool calling remains supported and continues to
+use the fixed Qwen3 chat template.
+
+### Breaking Changes
+
+- The `tools_compact` load option is no longer supported. Configurations that
+  pass it now fail model loading as an unsupported option; remove the key and
+  keep tool definitions in the normal prompt flow.
+- Tool definitions are no longer added mid-conversation and trimmed from the KV
+  cache after a tool-call chain. This removes the Qwen3-specific cache behavior
+  that depended on context-sliding anchor bookkeeping.
+
+### Changed
+
+- Qwen3 tool calling now always uses the fixed chat template, so tool definitions
+  remain in the prompt throughout the conversation. General context sliding,
+  M-RoPE sliding, reasoning-block compaction, and static tool calling are
+  unchanged.
+
+### Removed
+
+- The `nPastBeforeTools` and `toolsTrimmed` runtime debug statistics, which only
+  reported dynamic tool compaction state, have been removed.
+
+### Pull Requests
+
+- [#3373](https://github.com/tetherto/qvac/pull/3373) - QVAC-22567 feat[bc]:
+  remove dynamic tools (tools_compact) from llm-llamacpp addon
+
+## [0.42.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0`.
+
+- **`split-mode: 'row'` is no longer effective on any shipped backend.** Row
+  split needs a backend exposing `ggml_backend_split_buffer_type`, and at
+  qvac-fabric v10069 only SYCL still does — CUDA dropped it and moved tensor
+  parallelism to a separate `LLAMA_SPLIT_MODE_TENSOR` this package does not
+  expose. Vulkan, Metal and OpenCL never provided it. qvac-fabric also stopped
+  treating `row` as `layer` on those backends and now **fails the model load**
+  with `device <name> does not support split buffers`, so the addon degrades
+  `row` -> `layer` itself before loading and logs a `WARNING`. Models keep
+  loading and `row` keeps behaving like `layer` as it did on Vulkan/Metal
+  before, but the fallback is now explicit rather than implicit in qvac-fabric.
+  Callers who set `split-mode: 'row'` for real tensor parallelism no longer get
+  it. See `docs/multi-gpu.md`.
+
+## [0.41.0] - 2026-08-07
+
+### Changed
+
+- Migrated the runtime wrapper and type declarations to TypeScript. Sources now
+  live under `src/` and the published root JavaScript entrypoints (`index.js`,
+  `addon.js`, `batchHandler.js`, `addonLogging.js`) and their `.d.ts`
+  declarations are generated from them and committed. Runtime behaviour and the
+  CommonJS export shape are unchanged.
+- The package is exported with `export =` rather than a default export, which
+  gives CommonJS consumers a real construct signature (`import LlmLlamacpp =
+  require('@qvac/llm-llamacpp')` previously failed with TS2351). A consequence
+  is that `import LlmLlamacpp from '@qvac/llm-llamacpp'` now requires
+  `esModuleInterop` or `allowSyntheticDefaultImports`; without either,
+  TypeScript reports TS1259.
+- `addon` is a public member of the published type instead of `protected`. An
+  interface cannot express `protected`, and the property was already public at
+  runtime, so this widens what the declarations support rather than changing
+  behaviour.
+- `BatchResponse.on` accepts the inherited `EventEmitter` event map in addition
+  to the `"output"` overload. Callback types for `"output"` are unchanged, but
+  an unrecognised event name no longer fails to compile.
+- `./addonLogging` additionally exports `setLogger` and `releaseLogger` as named
+  bindings, so ESM named imports resolve. The default export is unchanged.
+
+## [0.40.0] - 2026-08-06
+
+One model instance can now serve several requests at once. Every `run()` call is
+admitted as its own job by a native multi-job scheduler and decodes alongside
+whatever else is in flight, so concurrent callers share the batch engine instead
+of queueing behind each other. Terminal stats become per-job, cancellation
+becomes per-job, and a new admission policy lets a caller choose between failing
+fast and being queued.
+
+### Added
+
+- Concurrent top-level `run()` calls on one instance at `parallel >= 2`. Each
+  call streams to its own response, routed by the job id minted at admission; a
+  batch `run([...])` is admitted as one job whose prompts occupy up to N slots.
+- `rejectWhenBusy`, the admission policy, as `opts.rejectWhenBusy` per instance
+  and `runOptions.rejectWhenBusy` per call. A refusal throws an `Error` carrying
+  `code === 'RUN_BUSY'`, so callers branch on the code rather than matching the
+  message. The default follows `parallel`: `true` at `1`, preserving the
+  sequential fail-fast behaviour, `false` at `>= 2`. A batch derives ONE group
+  policy from its items — items that disagree are refused with a `TypeError`.
+- `activeSlots()` on the addon surface, reporting the requests occupying or
+  waiting for a continuous-batching slot. Slots, not jobs, are the currency
+  admission is measured in: one batch job of N prompts consumes up to N of them,
+  so a job count alone under-reports a full pool.
+- Per-job terminal stats. A job's `JobEnded` now overrides `TTFT`, `TPS`,
+  `generatedTokens` and `promptTokens` with that job's own observed figures,
+  while `ppTPS`, `CacheTokens`, `contextSlides`, `thinkingBlockDiscards`,
+  `avgConcurrentSeq` and `backendDevice` stay model-level.
+- `stopReason` for a single prompt that runs through the batch engine, which
+  previously omitted the key that the sequential path always reported.
+- Targeted cancellation: `response.cancel()` stops only that call's job or
+  group and leaves concurrent jobs decoding. A cancel that arrives while the
+  group's prompts are still queued settles it immediately instead of waiting for
+  an unrelated job to free a slot.
+
+### Changed
+
+- `parallel` now accepts `1..256` instead of `1..1024`. 256 is the engine's own
+  `LLAMA_MAX_SEQ`; a larger value used to spawn the whole eager thread pool and
+  only then fail the model load, where llama.cpp swallows the real reason into a
+  log line.
+- `parallel` also sizes the scheduler's worker pool one-to-one, and those OS
+  threads are created eagerly at load and held for the model's lifetime. A large
+  `parallel` is a standing resource commitment even while idle.
+- A `parallel` too large for `ctx_size` to leave room per slot — or a
+  `batch_size` smaller than `parallel` — is now refused as an `InvalidArgument`
+  naming the knobs involved, instead of escaping the load as an unmapped
+  `std::invalid_argument`.
+- A prefill-only request without `saveCacheToDisk` and a `cacheKey` is rejected
+  with `InvalidArgument` on a parallel model: its warmed state lives in a
+  context concurrent jobs cannot reach. Load with `parallel: 1` for live-only
+  cache warming.
+- `qvac-lib-inference-addon-cpp` dependency floor moves `1.2.4` -> `1.3.3` for
+  the multi-job scheduler.
+
+### Pull Requests
+
+- [#3445](https://github.com/tetherto/qvac/pull/3445) - Multi-job queue at
+  addon-cpp and LLM (Needed for LLM Continuous Batching Optimizations)
+
+## [0.39.4] - 2026-08-04
+
+Internal refactor of how JS configuration is parsed into C++. Generation,
+finetune, and load config now use a shared, declarative handler-registry pattern
+(the same approach diffusion-cpp uses). No change to accepted config keys,
+spellings, or defaults, apart from the edge cases below.
+
+### Changed
+
+- Sending both the hyphen and underscore spelling of `image-max-tokens` or
+  `image-min-tokens` in the same load config is now accepted (the underscore
+  spelling wins) instead of failing the load. Previously the second spelling was
+  forwarded to llama.cpp and rejected.
+- In rare multi-error cases, the specific `InvalidArgument` message that surfaces
+  first may differ from before: a generation request that sets conflicting
+  `grammar`/`json_schema` alongside another invalid field, or a finetune request
+  that omits a required field and also sends a malformed optional. Accept/reject
+  behavior is unchanged in these cases.
+
+### Pull Requests
+
+- [#3491](https://github.com/tetherto/qvac/pull/3491) - chore[api]: adopt
+  handler-registry pattern for config parsing
+
+## [0.39.3] - 2026-08-04
+
+This release makes DeepSeek V4 cache recovery safe when requests are cancelled
+or generation ends before a reasoning block closes. It also adds a supported
+string-based `no_mmap` configuration and makes thinking-block compaction
+default-on only for the Qwen3 reasoning family.
+
+### Fixed
+
+- DeepSeek V4 text inference now uses full-state checkpoints for request
+  cancellation, optional thinking-block compaction, and interrupted terminal
+  stops. When `remove_thinking_from_context` is enabled, it restores the
+  checkpoint instead of attempting unsafe compressed-cache edits.
+- Multimodal continuous-batch drivers now honor the per-request
+  `remove_thinking_from_context` override and keep their compactor state in
+  sync.
+- `no_mmap: 'true'` now disables memory-mapped model loading by setting the
+  native model parameter directly, rather than forwarding an unsupported
+  command-line argument.
+
+### Changed
+
+- Thinking-block compaction now defaults to `false` for non-Qwen models.
+  Qwen3, Qwen3.5, Qwen3.6, and their MoE variants retain the default-on
+  behavior; callers can override the setting for any model per request.
+
+### Pull Requests
+
+- [#3634](https://github.com/tetherto/qvac/pull/3634) - fix: recover DeepSeek
+  V4 checkpoints
+
+## [0.39.2] - 2026-07-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+- Qwen3.5-VL cache-stress coverage now creates deterministic cache pressure
+  with measured, bounded prefill chunks while preserving normal EOS behavior.
+
+## [0.39.1] - 2026-07-29
+
+Extends LoRA finetuning to the b9840 model families: Qwen3.5/3.6 and Gemma-4, dense and
+mixture-of-experts. These architectures were previously rejected outright — `finetune()` threw
+`Finetuning is not supported for architecture: <arch>`. MoE models additionally need their expert FFN
+tensors targeted, so four expert LoRA target modules are now accepted. Complements the fabric-side
+training fixes already pinned via `qvac-fabric` 9840.0.1.
+
+### Added
+
+- Qwen3.5/3.6 dense (`qwen35`), Qwen3.x MoE (`qwen35moe`) and Gemma-4 (`gemma4`) are now supported
+  finetuning architectures — the allowlist grows from `gemma3`, `qwen3`, `bitnet` to six entries.
+- Four MoE expert LoRA target modules accepted in `loraModules`: `ffn_gate_exps`, `ffn_up_exps`,
+  `ffn_down_exps`, `ffn_gate_up_exps`. Required to train MoE experts at all — targeting only the dense
+  FFN names leaves expert weights untouched.
+- Integration coverage: `finetuning-archs` finetunes Qwen3.5-0.8B (desktop + mobile) and Gemma-4-E2B
+  (desktop), plus a pause/resume cycle on the new dense architecture; `finetuning-moe` covers
+  Qwen3.6-35B-A3B and Gemma-4-26B-A4B, opt-in behind `QVAC_RUN_MOE_FINETUNE=true` because those models
+  are ~20–27 GB. C++ unit tests lock backend selection for the new architectures and the expert-target
+  bit mapping.
+- `QVAC_QWEN35_MTMD_SIZE` (`0.8b` | `2b`) selects the model size for the Qwen3.5 multimodal
+  cache-stress test.
+
+### Changed
+
+- `docs/finetuning.md` model-format requirements now list the real architecture allowlist and document
+  the MoE expert LoRA targets.
+
+### Pull Requests
+
+- [#3509](https://github.com/tetherto/qvac/pull/3509) - b9840 finetuning (Qwen3.5/3.6 + Gemma-4, dense + MoE)
+
+## [0.39.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1`. This fixes MoE/GDN LoRA
+  finetuning: weight repacking is disabled for training loads (backward ops cannot
+  read repacked layouts), the Metal `acc`/`set` threadgroup dispatch now covers rows
+  wider than one threadgroup, and training on MoE / hybrid / recurrent architectures
+  seeds the backward pass from a down-scaled loss so gradients stay within fp32
+  range (persisted with the optimizer state). No API change for this package.
+
 ## [0.38.2] - 2026-07-23
 
 Adds **Unlimited-OCR**, a DeepSeek-OCR-derived 3B OCR vision-language model, as a supported OCR model alongside LightON OCR-2. Full-page document parsing with `<|det|>` layout regions and HTML table reconstruction — useful for invoices, forms, and scanned reports.

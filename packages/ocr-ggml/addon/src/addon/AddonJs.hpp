@@ -17,9 +17,16 @@
 //       width/height/data) plus per-call options (paragraph, rotationAngles,
 //       boxMarginMultiplier) and submits an `OcrInput` job.
 
+#include <algorithm>
 #include <array>
+#include <cctype>
+#include <cmath>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <span>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -46,15 +53,10 @@ namespace {
 
 js_value_t*
 createArrayFromElements(js_env_t* env, std::span<js_value_t*> elements) {
-  js_value_t* jsArray = nullptr;
-  js_create_array_with_length(env, elements.size(), &jsArray);
-  js_set_array_elements(
-      env,
-      jsArray,
-      const_cast<const js_value_t**>(elements.data()),
-      elements.size(),
-      0);
-  return jsArray;
+  auto array =
+      qvac_lib_inference_addon_cpp::js::Array::create(env, elements.size());
+  array.set(env, std::span<js_value_t* const>{elements});
+  return array;
 }
 
 // Mirrors @qvac/ocr-onnx's `getJsArrayFromOutput`. Output schema for each
@@ -121,6 +123,72 @@ private:
 std::string
 getPath(js_env_t* env, qvac_lib_inference_addon_cpp::js::String path) {
   return path.as<std::string>(env);
+}
+
+bool isMainGpuRegistryIndex(double value) {
+  return std::isfinite(value) && std::trunc(value) == value &&
+         value >= std::numeric_limits<int>::min() &&
+         value <= std::numeric_limits<int>::max();
+}
+
+std::optional<int> parseMainGpuRegistryIndex(const std::string& value) {
+  const size_t start =
+      !value.empty() && (value[0] == '+' || value[0] == '-') ? 1 : 0;
+  if (value.size() <= start ||
+      !std::all_of(value.begin() + start, value.end(), [](unsigned char ch) {
+        return ch >= '0' && ch <= '9';
+      })) {
+    return std::nullopt;
+  }
+  try {
+    return std::stoi(value);
+  } catch (const std::out_of_range&) {
+    return std::nullopt;
+  }
+}
+
+void applyMainGpu(
+    js_env_t* env, qvac_lib_inference_addon_cpp::js::Object& params,
+    OcrConfig& config) {
+  using namespace qvac_lib_inference_addon_cpp;
+  auto* canonical = params.getProperty(env, "main-gpu");
+  auto* alias = params.getProperty(env, "main_gpu");
+  const bool hasCanonical = !js::is<js::Undefined>(env, canonical);
+  const bool hasAlias = !js::is<js::Undefined>(env, alias);
+  if (!hasCanonical && !hasAlias)
+    return;
+  if ((hasCanonical && hasAlias) ||
+      !js::is<js::Undefined>(env, params.getProperty(env, "gpuDevice"))) {
+    throw StatusError{
+        general_error::InvalidArgument,
+        "Use only one of main-gpu, main_gpu, or gpuDevice"};
+  }
+  auto* raw = hasCanonical ? canonical : alias;
+  if (js::is<js::Number>(env, raw)) {
+    const double value = js::Number::fromValue(raw).as<double>(env);
+    if (isMainGpuRegistryIndex(value)) {
+      config.mainGpu = static_cast<int>(value);
+      return;
+    }
+  } else if (js::is<js::String>(env, raw)) {
+    auto value = js::String::fromValue(raw).as<std::string>(env);
+    std::ranges::transform(value, value.begin(), [](unsigned char ch) {
+      return static_cast<char>(std::tolower(ch));
+    });
+    if (value == "dedicated" || value == "integrated") {
+      config.mainGpu = value == "dedicated" ? MainGpuClass::DEDICATED
+                                            : MainGpuClass::INTEGRATED;
+      return;
+    }
+    if (const auto index = parseMainGpuRegistryIndex(value)) {
+      config.mainGpu = *index;
+      return;
+    }
+  }
+  throw StatusError{
+      general_error::InvalidArgument,
+      "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+      "'integrated'"};
 }
 
 // Optional `params.backendDevice` ('cpu' | 'vulkan' | 'metal' | 'opencl').
@@ -235,6 +303,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       env, args1.getProperty<js::Array>(env, "langList"));
 
   OcrConfig config;
+  applyMainGpu(env, args1, config);
 
   if (auto optMagRatio = args1.getOptionalProperty<js::Number>(env, "magRatio");
       optMagRatio) {

@@ -1,0 +1,51 @@
+name: Verify Generated Wrappers
+
+# Callers gate publish on this job, so publish never runs tsc itself.
+#
+# Separate from the sanity-checks copy of this check because sanity-checks only
+# runs on pull_request_target, while on-merge-*.yml also publishes on
+# workflow_dispatch and on pushes to release-*/feature-*/tmp-* -- events that
+# never open a PR.
+#
+# The privileges below are deliberately minimal: everything this runs is
+# untrusted third-party code, which is the whole reason it does not live in the
+# publish job.
+
+on:
+  workflow_call:
+    inputs:
+      workdir:
+        description: "Package directory containing package.json (e.g. packages/ocr-ggml)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-generated:
+    name: Verify generated wrappers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.workdir }}
+        run: npm install --ignore-scripts --package-lock=false
+
+      # Not --if-present: a renamed or typo'd script must fail the gate rather
+      # than silently pass it.
+      - name: Verify generated wrappers match src
+        working-directory: ${{ inputs.workdir }}
+        run: npm run check:generated

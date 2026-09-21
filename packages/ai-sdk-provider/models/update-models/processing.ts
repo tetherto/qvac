@@ -28,6 +28,14 @@ export function extractModelName(registryPath: string): string {
 }
 
 export function processRegistryModel(model: QVACModelEntry): ProcessedModel | null {
+  // Retired models must not re-enter the catalog under a live engine (the
+  // registry client only filters them server-side from 0.6.x on, and the
+  // QVACModelEntry type does not declare the field).
+  if ((model as QVACModelEntry & { deprecated?: boolean }).deprecated) {
+    console.warn(`⚠️  Skipping deprecated model: ${model.path}`)
+    return null
+  }
+
   const engine = resolveCanonicalEngine(model.engine)
   if (!engine) {
     console.warn(`⚠️  Skipping model with unknown engine "${model.engine}": ${model.path}`)

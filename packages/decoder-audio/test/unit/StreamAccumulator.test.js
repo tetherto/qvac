@@ -6,7 +6,7 @@ const { QvacErrorDecoderAudio, ERR_CODES } = require('../../utils/error.js')
 
 const TARGET_BUFFER_SIZE = 64000
 
-function createTestAccumulator (onChunk, onFinish) {
+function createTestAccumulator(onChunk, onFinish) {
   return createStreamAccumulator({
     onChunk: onChunk || (() => {}),
     onFinish: onFinish || (() => {})
@@ -15,9 +15,7 @@ function createTestAccumulator (onChunk, onFinish) {
 
 test('processData accumulates and emits chunks at target size', async (t) => {
   const chunks = []
-  const accumulator = createTestAccumulator(
-    chunk => chunks.push(new Uint8Array(chunk))
-  )
+  const accumulator = createTestAccumulator((chunk) => chunks.push(new Uint8Array(chunk)))
 
   await accumulator.processData(Buffer.alloc(1000, 0x42))
   t.is(chunks.length, 0)
@@ -36,9 +34,7 @@ test('processData accumulates and emits chunks at target size', async (t) => {
 
 test('processData handles multiple small chunks correctly', async (t) => {
   const chunkSizes = []
-  const accumulator = createTestAccumulator(
-    chunk => chunkSizes.push(chunk.length)
-  )
+  const accumulator = createTestAccumulator((chunk) => chunkSizes.push(chunk.length))
 
   const smallChunkSize = Math.floor(TARGET_BUFFER_SIZE / 3) + 1
   await accumulator.processData(Buffer.alloc(smallChunkSize))
@@ -54,8 +50,10 @@ test('finish emits remaining data and calls onFinish', async (t) => {
   const chunks = []
   let finishCalled = false
   const accumulator = createTestAccumulator(
-    chunk => chunks.push(chunk.length),
-    () => { finishCalled = true }
+    (chunk) => chunks.push(chunk.length),
+    () => {
+      finishCalled = true
+    }
   )
 
   await accumulator.processData(Buffer.alloc(100))
@@ -70,8 +68,10 @@ test('finish handles empty buffer correctly', async (t) => {
   const chunks = []
   let finishCalled = false
   const accumulator = createTestAccumulator(
-    chunk => chunks.push(chunk.length),
-    () => { finishCalled = true }
+    (chunk) => chunks.push(chunk.length),
+    () => {
+      finishCalled = true
+    }
   )
 
   await accumulator.finish()
@@ -123,7 +123,9 @@ test('propagates callback errors', async (t) => {
 
   const finishErrorAccumulator = createTestAccumulator(
     () => {},
-    () => { throw new Error('Finish error') }
+    () => {
+      throw new Error('Finish error')
+    }
   )
 
   await t.exception(async () => {
@@ -133,9 +135,7 @@ test('propagates callback errors', async (t) => {
 
 test('handles concurrent processData calls', async (t) => {
   const chunks = []
-  const accumulator = createTestAccumulator(
-    chunk => chunks.push(chunk.length)
-  )
+  const accumulator = createTestAccumulator((chunk) => chunks.push(chunk.length))
 
   await Promise.all([
     accumulator.processData(Buffer.alloc(30000)),
@@ -149,29 +149,25 @@ test('handles concurrent processData calls', async (t) => {
 
 test('preserves data integrity across chunks', async (t) => {
   const receivedData = []
-  const accumulator = createTestAccumulator(
-    chunk => receivedData.push(...chunk)
-  )
+  const accumulator = createTestAccumulator((chunk) => receivedData.push(...chunk))
 
-  const pattern1 = Buffer.alloc(32000, 0xAA)
-  const pattern2 = Buffer.alloc(32000, 0xBB)
-  const pattern3 = Buffer.alloc(16000, 0xCC)
+  const pattern1 = Buffer.alloc(32000, 0xaa)
+  const pattern2 = Buffer.alloc(32000, 0xbb)
+  const pattern3 = Buffer.alloc(16000, 0xcc)
 
   await accumulator.processData(pattern1)
   await accumulator.processData(pattern2)
   await accumulator.processData(pattern3)
   await accumulator.finish()
 
-  t.is(receivedData.filter(b => b === 0xAA).length, 32000)
-  t.is(receivedData.filter(b => b === 0xBB).length, 32000)
-  t.is(receivedData.filter(b => b === 0xCC).length, 16000)
+  t.is(receivedData.filter((b) => b === 0xaa).length, 32000)
+  t.is(receivedData.filter((b) => b === 0xbb).length, 32000)
+  t.is(receivedData.filter((b) => b === 0xcc).length, 16000)
 })
 
 test('handles large data with multiple while loop iterations', async (t) => {
   const chunks = []
-  const accumulator = createTestAccumulator(
-    chunk => chunks.push(chunk.length)
-  )
+  const accumulator = createTestAccumulator((chunk) => chunks.push(chunk.length))
 
   await accumulator.processData(Buffer.alloc(TARGET_BUFFER_SIZE * 2.5))
   t.is(chunks.length, 2)

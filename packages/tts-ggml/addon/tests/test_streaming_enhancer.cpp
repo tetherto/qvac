@@ -1,6 +1,7 @@
 // Unit tests for StreamingEnhancer — the stateful wrapper that lets the
-// Chatterbox native chunk-streaming path emit LavaSR-enhanced audio chunk by
-// chunk (overlap-reprocess with look-ahead margin + crossfade).
+// Chatterbox, Parler and CosyVoice3 native chunk-streaming paths emit
+// LavaSR-enhanced audio chunk by chunk (overlap-reprocess with look-ahead
+// margin + crossfade).
 //
 // The real enhancer is injected as a transform, so these exercise the
 // streaming bookkeeping (windowing, hold-back, crossfade, compaction) in
@@ -18,9 +19,28 @@
 
 #include "model-interface/StreamingEnhancer.hpp"
 
+using qvac::ttsggml::enhancerContextSamples;
+using qvac::ttsggml::enhancerCrossfadeSamples;
 using qvac::ttsggml::StreamingEnhancer;
 
 namespace {
+
+constexpr int kNativeRate = 24000;
+constexpr int kEnhancedRate = 48000;
+constexpr float kToneHz = 180.0f;
+
+// Hops matching streamChunkTokens 25 and 5 at the CosyVoice3 token rate.
+constexpr std::size_t kOneSecondHop = 24000;
+constexpr std::size_t kFifthSecondHop = 4800;
+
+constexpr float kShortUtteranceSeconds = 5.0f;
+constexpr float kLongUtteranceSeconds = 30.0f;
+
+// Each window re-feeds context + margin + crossfade (8192 + 8192 + 256) around
+// the committed hop, so amplification settles near 1 + 16640/hop.
+constexpr double kMaxAmplificationAtOneSecondHops = 1.8;
+constexpr double kMinAmplificationAtFifthSecondHops = 4.0;
+constexpr double kAmplificationTolerance = 0.05;
 
 // Shift-invariant linear upsample-by-2 (24k -> 48k stand-in). Temporal support
 // is 1 input sample (out[2k+1] reads in[k+1]); the last sample clamps. This is
@@ -82,6 +102,22 @@ std::vector<float> streamChunks(
   const auto tail = se.flush();
   out.insert(out.end(), tail.begin(), tail.end());
   return out;
+}
+
+// Total input the enhancer is handed, divided by the utterance length: the
+// factor by which overlap-reprocess multiplies a single batch pass.
+double reprocessAmplification(float seconds, std::size_t hop) {
+  std::size_t processed = 0;
+  StreamingEnhancer se(
+      [&processed](const std::vector<float>& block) {
+        processed += block.size();
+        return upsample2(block);
+      },
+      kNativeRate,
+      kEnhancedRate);
+  const auto in = sine(kToneHz, seconds, kNativeRate);
+  streamChunks(se, in, hop);
+  return static_cast<double>(processed) / static_cast<double>(in.size());
 }
 
 } // namespace
@@ -211,4 +247,134 @@ TEST(StreamingEnhancer, MemoryStaysBounded) {
   ASSERT_EQ(streamed.size(), batch.size());
   for (std::size_t i = 0; i < batch.size(); ++i)
     ASSERT_FLOAT_EQ(streamed[i], batch[i]) << "mismatch at sample " << i;
+}
+
+TEST(StreamingEnhancer, MarginHelpersReproduceDefaultsAt24k) {
+  // Chatterbox feeds 24 kHz and relies on the constructor defaults, so the
+  // helpers must reproduce the pre-scaling constants exactly there.
+  EXPECT_EQ(enhancerContextSamples(24000), 8192);
+  EXPECT_EQ(enhancerCrossfadeSamples(24000), 256);
+}
+
+TEST(StreamingEnhancer, MarginHelpersScaleWithInputRate) {
+  // The margins must span a fixed duration, not a fixed sample count: at
+  // Parler's 44.1 kHz the 24 kHz defaults would cover only ~0.19 s of the
+  // enhancer's ~0.34 s receptive field.
+  EXPECT_GT(enhancerContextSamples(44100), 8192);
+  const double seconds24 =
+      static_cast<double>(enhancerContextSamples(24000)) / 24000.0;
+  const double seconds44 =
+      static_cast<double>(enhancerContextSamples(44100)) / 44100.0;
+  EXPECT_NEAR(seconds44, seconds24, 1e-4);
+  const double fade24 =
+      static_cast<double>(enhancerCrossfadeSamples(24000)) / 24000.0;
+  const double fade44 =
+      static_cast<double>(enhancerCrossfadeSamples(44100)) / 44100.0;
+  EXPECT_NEAR(fade44, fade24, 1e-4);
+}
+
+TEST(StreamingEnhancer, ScaledMarginsKeepBatchParityAt44k) {
+  // The Parler wiring: 44.1 kHz in, rate-derived margins, streamed output must
+  // still match the one-shot transform sample for sample.
+  const auto in = sine(180.0f, 3.0f, 44100);
+  StreamingEnhancer se(upsample2, 44100, 88200); // margins derived from 44.1k
+  const auto streamed = streamChunks(se, in, /*chunk=*/4410);
+
+  const auto batch = upsample2(in);
+  ASSERT_EQ(streamed.size(), batch.size());
+  for (std::size_t i = 0; i < batch.size(); ++i)
+    ASSERT_FLOAT_EQ(streamed[i], batch[i]) << "mismatch at sample " << i;
+}
+
+TEST(StreamingEnhancer, DefaultMarginsScaleWithInputRate) {
+  // Behavioural proof that the constructor derives its margins rather than
+  // pinning 8192: 0.3 s at 44.1 kHz (13230 samples) is inside the derived
+  // ~0.34 s margin, so nothing may finalize before flush. With the old 24 kHz
+  // default of 8192 this input would have been long enough to emit early.
+  const auto in = sine(300.0f, 0.3f, 44100);
+  ASSERT_GT(in.size(), 8192u) << "input must exceed the pre-scaling default";
+  ASSERT_LT(in.size(), static_cast<std::size_t>(enhancerContextSamples(44100)));
+
+  StreamingEnhancer se(upsample2, 44100, 88200);
+  const auto early = se.feed(in.data(), in.size());
+  EXPECT_TRUE(early.empty()) << "nothing should finalize within the margin";
+
+  const auto tail = se.flush();
+  const auto batch = upsample2(in);
+  ASSERT_EQ(tail.size(), batch.size());
+  for (std::size_t i = 0; i < batch.size(); ++i)
+    ASSERT_FLOAT_EQ(tail[i], batch[i]) << "mismatch at sample " << i;
+}
+
+TEST(StreamingEnhancer, ProductionRatioTracksBatchAt44kTo48k) {
+  // The rate pair Parler actually ships: 44.1 kHz -> 48 kHz. Non-integral, so
+  // alignQ_ == 147 and the grid-snapping path is exercised (the 88200 parity
+  // test above collapses to alignQ_ == 1). Index mapping rounds, so assert
+  // near-parity like NonIntegerRatioTracksBatch does.
+  const int inRate = 44100, outRate = 48000;
+  const auto in = sine(200.0f, 3.0f, inRate);
+  auto fn = linearResampler(inRate, outRate);
+  const auto batch = fn(in);
+
+  StreamingEnhancer se(fn, inRate, outRate); // margins derived from 44.1k
+  const auto streamed = streamChunks(se, in, /*chunk=*/4410);
+
+  ASSERT_NEAR(
+      static_cast<double>(streamed.size()),
+      static_cast<double>(batch.size()),
+      4.0);
+  const std::size_t cmp = std::min(streamed.size(), batch.size());
+  double maxDiff = 0.0;
+  for (std::size_t i = 0; i < cmp; ++i) {
+    ASSERT_TRUE(std::isfinite(streamed[i]));
+    maxDiff = std::max(
+        maxDiff, std::fabs(static_cast<double>(streamed[i] - batch[i])));
+  }
+  EXPECT_LT(maxDiff, 1e-3) << "streamed resample drifts from batch";
+}
+
+TEST(StreamingEnhancer, ApplySizesMarginsFromInputRate) {
+  // apply() takes an inRate, so it must size its margins from it. Counting the
+  // transform invocations discriminates: an input inside the derived 44.1 kHz
+  // margin is enhanced as a single window, whereas fixed 24 kHz margins would
+  // finalize part of it on the feed and re-enhance the tail on the flush.
+  const auto in = sine(180.0f, 0.3f, 44100);
+  ASSERT_GT(in.size(), 8192u) << "input must exceed the pre-scaling default";
+  ASSERT_LT(in.size(), static_cast<std::size_t>(enhancerContextSamples(44100)));
+
+  int windows = 0;
+  auto counted = [&windows](const std::vector<float>& w) {
+    ++windows;
+    return upsample2(w);
+  };
+  const auto applied = StreamingEnhancer::apply(counted, in, 44100, 88200);
+  EXPECT_EQ(windows, 1) << "margins did not scale to the 44.1 kHz input rate";
+
+  const auto batch = upsample2(in);
+  ASSERT_EQ(applied.size(), batch.size());
+  for (std::size_t i = 0; i < batch.size(); ++i)
+    ASSERT_FLOAT_EQ(applied[i], batch[i]) << "mismatch at sample " << i;
+}
+
+TEST(StreamingEnhancer, ReprocessCostDoesNotGrowWithUtteranceLength) {
+  const double shortUtterance =
+      reprocessAmplification(kShortUtteranceSeconds, kOneSecondHop);
+  const double longUtterance =
+      reprocessAmplification(kLongUtteranceSeconds, kOneSecondHop);
+
+  EXPECT_LT(longUtterance, kMaxAmplificationAtOneSecondHops);
+  EXPECT_NEAR(shortUtterance, longUtterance, kAmplificationTolerance)
+      << "overlap-reprocess must cost a constant factor of a batch pass, not "
+         "one that grows with utterance length";
+}
+
+TEST(StreamingEnhancer, ReprocessCostRisesAsHopsShrink) {
+  const double oneSecondHops =
+      reprocessAmplification(kLongUtteranceSeconds, kOneSecondHop);
+  const double fifthSecondHops =
+      reprocessAmplification(kLongUtteranceSeconds, kFifthSecondHop);
+
+  EXPECT_LT(oneSecondHops, kMaxAmplificationAtOneSecondHops);
+  EXPECT_GT(fifthSecondHops, kMinAmplificationAtFifthSecondHops)
+      << "the fixed per-window context + margin dominates once hops are small";
 }

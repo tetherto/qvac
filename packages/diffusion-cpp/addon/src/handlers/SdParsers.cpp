@@ -152,6 +152,7 @@ scheduler_t parseScheduler(const std::string& name) {
       {"smoothstep", SMOOTHSTEP_SCHEDULER},
       {"kl_optimal", KL_OPTIMAL_SCHEDULER},
       {"bong_tangent", BONG_TANGENT_SCHEDULER},
+      {"ltx2", LTX2_SCHEDULER},
   };
   if (auto it = schedulers.find(name); it != schedulers.end()) {
     return it->second;
@@ -160,7 +161,8 @@ scheduler_t parseScheduler(const std::string& name) {
       general_error::InvalidArgument,
       "scheduler: unknown value '" + name +
           "'. Valid: discrete, karras, exponential, ays, gits, "
-          "sgm_uniform, simple, lcm, smoothstep, kl_optimal, bong_tangent");
+          "sgm_uniform, simple, lcm, smoothstep, kl_optimal, bong_tangent, "
+          "ltx2");
 }
 
 sd_cache_mode_t parseCacheMode(const std::string& name) {

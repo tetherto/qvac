@@ -20,7 +20,6 @@ inputs:
   workdir:
     description: "Directory containing package.json (default '.')"
     default: "."
-    type: string
   name-suffix:
     description: "Optional suffix to append to package name (e.g. -mono)"
     required: false
@@ -206,7 +205,6 @@ runs:
           transcription-whispercpp
           onnx-vad
           embed-llamacpp
-          ocr-onnx
         )
 
         if printf '%s\n' "${ALWAYS_PUBLISH_REPOS[@]}" | grep -qx "$REPO_SHORT_NAME"; then

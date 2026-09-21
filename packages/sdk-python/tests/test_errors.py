@@ -93,6 +93,43 @@ def test_context_overflow_reconstructs_optional_numbers():
     assert "context window" in str(err)
 
 
+def test_context_overflow_reconstructs_warm_cache_fields():
+    err = reconstruct_error(
+        _envelope(
+            name="CONTEXT_OVERFLOW",
+            typedFields={
+                "promptTokens": 31,
+                "cachedTokens": 8170,
+                "requiredTokens": 8201,
+                "ctxSize": 8192,
+                "modelId": "m-2",
+            },
+        )
+    )
+    assert isinstance(err, ContextOverflowError)
+    assert err.prompt_tokens == 31
+    assert err.cached_tokens == 8170
+    assert err.required_tokens == 8201
+    assert err.ctx_size == 8192
+
+
+def test_context_overflow_direct_default_is_equality_neutral():
+    # The guards trigger at equality, so the default must not say "exceeds".
+    err = ContextOverflowError(ctx_size=512, required_tokens=512)
+    assert "exceeds" not in str(err)
+    assert err.required_tokens == 512
+    assert err.ctx_size == 512
+
+
+def test_context_overflow_direct_warm_fields_are_kept():
+    err = ContextOverflowError(
+        31, 8192, "m-1", cached_tokens=8170, required_tokens=8201
+    )
+    assert err.cached_tokens == 8170
+    assert err.required_tokens == 8201
+    assert err.prompt_tokens == 31
+
+
 def test_context_overflow_tolerates_missing_typed_fields():
     # Older workers ship no typedFields at all; reconstruction must not
     # blow up or mask the original error.

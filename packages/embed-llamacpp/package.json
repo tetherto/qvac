@@ -1,6 +1,6 @@
 {
   "name": "@qvac/embed-llamacpp",
-  "version": "0.29.0",
+  "version": "0.41.3",
   "description": "bert addon for qvac",
   "addon": true,
   "engines": {
@@ -10,7 +10,7 @@
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js addon.js addonLogging.js index.d.ts addon.d.ts addonLogging.d.ts",
+    "check:generated": "npm run build:ts && npm run test:types:consumer && git diff --exit-code -- index.js index.mjs addon.js addonLogging.js idMapIndex.js idMapIndex.mjs index.d.ts addon.d.ts addonLogging.d.ts idMapIndex.d.ts test/types/consumer-cjs.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy embed-llamacpp prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
@@ -29,10 +29,10 @@
     "test:prestage": "node --test scripts/__tests__/*.test.js",
     "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:prestage",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
-    "test:cpp:run": "PROJECT_ROOT=$(pwd) && cd build/test/unit/ && LSAN_OPTIONS=suppressions=$PROJECT_ROOT/.lsan-suppressions.txt ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp:run": "node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
-    "coverage:cpp:run": "PROJECT_ROOT=$(pwd) && cd build/test/unit/ && LSAN_OPTIONS=suppressions=$PROJECT_ROOT/.lsan-suppressions.txt LLVM_PROFILE_FILE=default.profraw ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "coverage:cpp:run": "LLVM_PROFILE_FILE=default.profraw node scripts/run-cpp-tests.js",
     "coverage:cpp:summary": "cd build/test/unit && llvm-cov report ./addon-test --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
     "coverage:cpp:report": "cd build/test/unit/ && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
     "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
@@ -40,7 +40,8 @@
     "test:mobile:generate": "npm run generate:benchmark-shards && bare ./scripts/generate-mobile-integration-tests.js",
     "test:mobile:validate": "npm run generate:benchmark-shards && node scripts/validate-mobile-tests.js",
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
-    "test:types": "npm run typecheck && npm run check:generated",
+    "test:types": "npm run typecheck && npm run test:types:consumer && npm run check:generated",
+    "test:types:consumer": "tsc -p test/types/tsconfig.cjs.json",
     "test:dts": "npm run test:types",
     "benchmarks": "./benchmarks/run-benchmarks.sh",
     "performance:install": "cd ./benchmarks/performance && npm install",
@@ -51,10 +52,14 @@
   "files": [
     "binding.js",
     "index.js",
+    "index.mjs",
     "addon.js",
     "addonLogging.js",
     "addonLogging.d.ts",
     "addon.d.ts",
+    "idMapIndex.js",
+    "idMapIndex.mjs",
+    "idMapIndex.d.ts",
     "prebuilds",
     "index.d.ts",
     "LICENSE",
@@ -72,8 +77,9 @@
   "devDependencies": {
     "@types/node": "^24.2.1",
     "bare-crypto": "^1.15.3",
+    "bare-subprocess": "^6.1.0",
     "brittle": "^3.4.0",
-    "cmake-bare": "^1.7.1",
+    "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -82,10 +88,16 @@
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
     "typescript": "^5.9.2",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.63.0",
+    "cmake-npm": "^1.1.0",
+    "bare-process": "^4.2.2",
+    "bare-https": "^3.0.0",
+    "bare-os": "^3.6.2",
+    "bare-url": "^2.1.6"
   },
   "dependencies": {
-    "@qvac/infer-base": "^0.4.0",
+    "@qvac/fabric": "^0.16.1",
+    "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-path": "^3.0.0"
@@ -94,8 +106,15 @@
     "./package": "./package.json",
     ".": {
       "types": "./index.d.ts",
+      "import": "./index.mjs",
       "default": "./index.js"
     },
+    "./idMapIndex": {
+      "types": "./idMapIndex.d.ts",
+      "import": "./idMapIndex.mjs",
+      "default": "./idMapIndex.js"
+    },
+    "./idMapIndex.js": "./idMapIndex.js",
     "./addonLogging": {
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"

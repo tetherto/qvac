@@ -15,6 +15,11 @@ env:
   PKG_DIR: packages/inference-addon-cpp
 
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   authorize-js-tests:
     runs-on: ubuntu-latest
     permissions:
@@ -24,12 +29,11 @@ jobs:
       allowed: ${{ steps.auth.outputs.allowed }}
     steps:
       # SHA-bound fork approval. Reads the `qvac/fork-verified` commit status that
-      # the sibling pull_request_target label-gate records on the EXACT SHA a
-      # merge/release member approved. Gating self-hosted fork runs on this status
-      # (not a stale label) is what stops a draft->ready / close->reopen flip — or
-      # any later push — from running a new, unapproved SHA. Read-only: no secrets,
-      # `statuses: read` only. See .cursor/rules/devops/github-actions.mdc
-      # "CI trust policy for fork PRs".
+      # fork-approval records on the PR head after fork-ci environment approval.
+      # Gating self-hosted fork runs on this status (not a stale label) is what stops
+      # a draft->ready / close->reopen flip — or any later push — from running a new,
+      # unapproved SHA. Read-only: no secrets, `statuses: read` only. See
+      # .github/AGENTS.md and docs/ci/LABELS.md define the trust policy for fork PRs.
       - name: Resolve SHA-bound fork approval
         id: approved
         env:
@@ -66,7 +70,7 @@ jobs:
             exit 0
           fi
 
-          # Internal same-repo PRs are trusted without 'verified', but desktop
+          # Internal same-repo PRs are trusted without fork-ci, but desktop
           # tests remain opt-in behind their dedicated capacity-control label.
           if [ "$IS_FORK" = "false" ]; then
             echo "allowed=$HAS_RUN_LABEL" >> "$GITHUB_OUTPUT"
@@ -74,43 +78,44 @@ jobs:
           fi
 
           # External fork: require the tier run-label AND a SHA-bound approval on
-          # the CURRENT head. A stale 'verified' label cannot authorise a new SHA
-          # via a draft->ready / close->reopen flip, and a fork synchronize has no
-          # approved status until re-review — both fail closed here.
+          # the CURRENT head (`qvac/fork-verified` commit status). A stale tier
+          # label cannot authorise a new SHA via a draft->ready / close->reopen
+          # flip, and a fork synchronize has no approved status until re-review —
+          # both fail closed here.
           if [ "$HAS_RUN_LABEL" = "true" ] && [ "$HAS_APPROVED_SHA" = "true" ]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "::notice::JS tests require 'run-desktop-addon-tests'; external forks also require a SHA-bound 'verified' approval on the current commit."
+          echo "::notice::JS tests require 'run-desktop-addon-tests'; external forks also require a SHA-bound fork-ci approval (\`qvac/fork-verified\`) on the current commit. Approving fork-ci does not restart this run — approve first, then apply the label, or re-run this workflow if the label is already present. See docs/ci/LABELS.md."
           echo "allowed=false" >> "$GITHUB_OUTPUT"
 
   run-js-tests:
-    needs: authorize-js-tests
+    needs: [runner_names, authorize-js-tests]
     if: needs.authorize-js-tests.outputs.allowed == 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: qvac-ubuntu2204-x64
+          - runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
             platform: linux
             arch: x64
             name: linux-x64-asan
             asan: true
             run_tests: true
-          - runner: qvac-macos26-arm64-gpu
+          - runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
             platform: darwin
             arch: arm64
             name: darwin-arm64
             asan: false
             run_tests: true
-          - runner: macos-15-large
+          - runner: ${{ needs.runner_names.outputs.macos_15_large }}
             platform: darwin
             arch: x64
             name: darwin-x64
             asan: false
             run_tests: true
-          - runner: qvac-win25-x64
+          - runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
             platform: win32
             arch: x64
             name: win32-x64

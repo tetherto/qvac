@@ -1,10 +1,19 @@
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import type { ToolDialect } from '@qvac/sdk'
 
 interface GenerationParams {
   temp?: number
   seed?: number
   predict?: number
+}
+
+interface JsonSchemaResponseFormat {
+  type: 'json_schema'
+  json_schema: {
+    name: string
+    schema: Record<string, unknown>
+    strict?: boolean
+  }
 }
 
 interface BatchPrompt {
@@ -15,6 +24,7 @@ interface BatchPrompt {
     attachments?: Array<{ path: string }>
   }>
   generationParams?: GenerationParams
+  responseFormat?: JsonSchemaResponseFormat
   tools?: Array<{
     type: 'function'
     name: string
@@ -66,12 +76,31 @@ function createBatchCompletionTest(
 }
 
 const deterministic: GenerationParams = { temp: 0, seed: 42, predict: 16 }
+const markerDeterministic: GenerationParams = { ...deterministic, predict: 32 }
 const visionDeterministic: GenerationParams = {
   temp: 0,
   seed: 42,
-  predict: 48
+  predict: 128
 }
 const ELEPHANT_IMAGE_TERMS = ['elephant', 'tusk', 'trunk']
+
+function markerResponseFormat(marker: string) {
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name: 'BatchMarker',
+      strict: true,
+      schema: {
+        type: 'object',
+        properties: {
+          marker: { type: 'string', enum: [marker] }
+        },
+        required: ['marker'],
+        additionalProperties: false
+      }
+    }
+  } satisfies JsonSchemaResponseFormat
+}
 
 export const batchCompletionBasic = createBatchCompletionTest(
   'batch-completion-basic',
@@ -79,22 +108,34 @@ export const batchCompletionBasic = createBatchCompletionTest(
     prompts: [
       {
         id: 'first',
-        history: [{ role: 'user', content: 'Reply with only the word BANANA.' }],
-        generationParams: deterministic
+        history: [
+          {
+            role: 'user',
+            content: 'Return the JSON object required by the response schema.'
+          }
+        ],
+        generationParams: markerDeterministic,
+        responseFormat: markerResponseFormat('first')
       },
       {
         id: 'second',
-        history: [{ role: 'user', content: 'Reply with only the word GRAPE.' }],
-        generationParams: deterministic
+        history: [
+          {
+            role: 'user',
+            content: 'Return the JSON object required by the response schema.'
+          }
+        ],
+        generationParams: markerDeterministic,
+        responseFormat: markerResponseFormat('second')
       }
     ],
     stream: false,
     expectedById: {
-      first: ['BANANA'],
-      second: ['GRAPE']
+      first: ['"first"'],
+      second: ['"second"']
     }
   },
-  { validation: 'contains-all', contains: ['BANANA', 'GRAPE'] }
+  { validation: 'contains-all', contains: ['"first"', '"second"'] }
 )
 
 export const batchCompletionStreaming = createBatchCompletionTest(
@@ -106,29 +147,31 @@ export const batchCompletionStreaming = createBatchCompletionTest(
         history: [
           {
             role: 'user',
-            content: 'Reply with only the word BANANA.'
+            content: 'Return the JSON object required by the response schema.'
           }
         ],
-        generationParams: deterministic
+        generationParams: markerDeterministic,
+        responseFormat: markerResponseFormat('stream-first')
       },
       {
         id: 'stream-second',
         history: [
           {
             role: 'user',
-            content: 'Reply with only the word GRAPE.'
+            content: 'Return the JSON object required by the response schema.'
           }
         ],
-        generationParams: deterministic
+        generationParams: markerDeterministic,
+        responseFormat: markerResponseFormat('stream-second')
       }
     ],
     stream: true,
     expectedById: {
-      'stream-first': ['BANANA'],
-      'stream-second': ['GRAPE']
+      'stream-first': ['"stream-first"'],
+      'stream-second': ['"stream-second"']
     }
   },
-  { validation: 'contains-all', contains: ['BANANA', 'GRAPE'] }
+  { validation: 'contains-all', contains: ['"stream-first"', '"stream-second"'] }
 )
 
 export const batchCompletionEmptyRejected = createBatchCompletionTest(

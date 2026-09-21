@@ -38,27 +38,6 @@ permissions:
   id-token: write
 
 jobs:
-  label-gate:
-    name: Authorise (label-gate)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    outputs:
-      authorised: ${{ steps.gate.outputs.authorised }}
-    steps:
-      - name: Checkout (label-gate action only)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/label-gate
-          sparse-checkout-cone-mode: false
-      - name: Run label-gate
-        id: gate
-        uses: ./.github/actions/label-gate
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-
   context:
     runs-on: ubuntu-latest
     outputs:
@@ -87,7 +66,6 @@ jobs:
   prebuild:
     needs:
       - context
-      - label-gate
     permissions:
       contents: write
       packages: write
@@ -99,14 +77,13 @@ jobs:
       repository: ${{ needs.context.outputs.repository }}
       ref: ${{ needs.context.outputs.ref }}
 
-    if: needs.label-gate.outputs.authorised == 'true' && !inputs.prebuild_package
+    if: ${{ !inputs.prebuild_package }}
 
   desktop-benchmarks:
     needs:
       - context
       - prebuild
-      - label-gate
-    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.include_desktop != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+    if: ${{ !cancelled() && (needs.context.outputs.include_desktop != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -124,8 +101,7 @@ jobs:
     needs:
       - context
       - prebuild
-      - label-gate
-    if: ${{ !cancelled() && needs.label-gate.outputs.authorised == 'true' && (needs.context.outputs.run_mobile != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
+    if: ${{ !cancelled() && (needs.context.outputs.run_mobile != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
       contents: read
       packages: read
@@ -143,8 +119,7 @@ jobs:
       - context
       - desktop-benchmarks
       - mobile-benchmarks
-      - label-gate
-    if: needs.label-gate.outputs.authorised == 'true' && (always())
+    if: (always())
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -154,7 +129,7 @@ jobs:
         with:
           repository: ${{ needs.context.outputs.repository }}
           ref: ${{ needs.context.outputs.ref }}
-          token: ${{ secrets.PAT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # No merge-multiple: same-platform runners can emit identically named
       # rtf-benchmark-*.json files, so merging into one directory would clobber
@@ -178,19 +153,34 @@ jobs:
           pattern: perf-report-bci-whispercpp-*
           path: benchmark-artifacts/mobile
 
+      # EXPECTED_DESKTOP_DEVICES is empty when the desktop leg was skipped
+      # (include_desktop=false) or died before producing the reusable
+      # workflow's output — the gate only arms when the desktop matrix
+      # actually ran. When armed, a device with zero rows fails this step
+      # AFTER the report files are written, so the steps below still publish
+      # the incomplete report.
       - name: Generate consolidated benchmark report
+        env:
+          EXPECTED_DESKTOP_DEVICES: ${{ needs.desktop-benchmarks.outputs.rtf_expected_devices }}
         run: |
+          expect_args=()
+          if [ -n "$EXPECTED_DESKTOP_DEVICES" ]; then
+            expect_args=(--expect-devices "$EXPECTED_DESKTOP_DEVICES")
+          fi
           node scripts/perf-report/aggregate-bci-rtf.js \
             --dir benchmark-artifacts \
             --manual-dir packages/bci-whispercpp/benchmarks/manual-results \
             --output benchmark-artifacts/bci-performance-findings.md \
             --output-json benchmark-artifacts/bci-performance-findings.json \
-            --output-html benchmark-artifacts/bci-performance-findings.html
+            --output-html benchmark-artifacts/bci-performance-findings.html \
+            "${expect_args[@]}"
 
       - name: Add summary
+        if: ${{ !cancelled() }}
         run: cat benchmark-artifacts/bci-performance-findings.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload consolidated benchmark report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: bci-performance-findings

@@ -22,6 +22,13 @@
   },
   {
     "collection": "platform",
+    "from": "addons/audiogen-ggml/index.mdx",
+    "to": "platform/addons/audiogen-ggml/index.mdx",
+    "fromUrl": "/addons/audiogen-ggml",
+    "toUrl": "/platform/addons/audiogen-ggml"
+  },
+  {
+    "collection": "platform",
     "from": "addons/diffusion-cpp/index.mdx",
     "to": "platform/addons/diffusion-cpp/index.mdx",
     "fromUrl": "/addons/diffusion-cpp",
@@ -51,9 +58,9 @@
   {
     "collection": "platform",
     "from": "addons/ocr-onnx/index.mdx",
-    "to": "platform/addons/ocr-onnx/index.mdx",
+    "to": "platform/addons/index.mdx",
     "fromUrl": "/addons/ocr-onnx",
-    "toUrl": "/platform/addons/ocr-onnx"
+    "toUrl": "/platform/addons"
   },
   {
     "collection": "platform",
@@ -82,6 +89,34 @@
     "to": "platform/addons/tts-ggml/index.mdx",
     "fromUrl": "/addons/tts-ggml",
     "toUrl": "/platform/addons/tts-ggml"
+  },
+  {
+    "collection": "platform",
+    "from": "index.mdx",
+    "to": "platform/index.mdx",
+    "fromUrl": "/",
+    "toUrl": "/platform"
+  },
+  {
+    "collection": "provider",
+    "from": "cli/http-server/connection.mdx",
+    "to": "provider/http-server/connection.mdx",
+    "fromUrl": "/cli/http-server/connection",
+    "toUrl": "/provider/http-server/connection"
+  },
+  {
+    "collection": "provider",
+    "from": "cli/http-server/index.mdx",
+    "to": "provider/http-server/index.mdx",
+    "fromUrl": "/cli/http-server",
+    "toUrl": "/provider/http-server"
+  },
+  {
+    "collection": "provider",
+    "from": "cli/http-server/integration.mdx",
+    "to": "provider/http-server/integration.mdx",
+    "fromUrl": "/cli/http-server/integration",
+    "toUrl": "/provider/http-server/integration"
   },
   {
     "collection": "sdk",
@@ -124,6 +159,13 @@
     "to": "sdk/ai-capabilities/multimodal.mdx",
     "fromUrl": "/ai-capabilities/multimodal",
     "toUrl": "/sdk/ai-capabilities/multimodal"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/music-generation.mdx",
+    "to": "sdk/ai-capabilities/music-generation.mdx",
+    "fromUrl": "/ai-capabilities/music-generation",
+    "toUrl": "/sdk/ai-capabilities/music-generation"
   },
   {
     "collection": "sdk",
@@ -196,25 +238,11 @@
     "toUrl": "/sdk/ai-capabilities/voice-assistant"
   },
   {
-    "collection": "provider",
-    "from": "cli/http-server/connection.mdx",
-    "to": "provider/http-server/connection.mdx",
-    "fromUrl": "/cli/http-server/connection",
-    "toUrl": "/provider/http-server/connection"
-  },
-  {
-    "collection": "provider",
-    "from": "cli/http-server/index.mdx",
-    "to": "provider/http-server/index.mdx",
-    "fromUrl": "/cli/http-server",
-    "toUrl": "/provider/http-server"
-  },
-  {
-    "collection": "provider",
-    "from": "cli/http-server/integration.mdx",
-    "to": "provider/http-server/integration.mdx",
-    "fromUrl": "/cli/http-server/integration",
-    "toUrl": "/provider/http-server/integration"
+    "collection": "sdk",
+    "from": "ai-capabilities/world-simulation.mdx",
+    "to": "sdk/ai-capabilities/world-simulation.mdx",
+    "fromUrl": "/ai-capabilities/world-simulation",
+    "toUrl": "/sdk/ai-capabilities/world-simulation"
   },
   {
     "collection": "sdk",
@@ -245,18 +273,11 @@
     "toUrl": "/sdk/configuration/plugins/write-custom-plugin"
   },
   {
-    "collection": "platform",
-    "from": "index.mdx",
-    "to": "platform/index.mdx",
-    "fromUrl": "/",
-    "toUrl": "/platform"
-  },
-  {
     "collection": "sdk",
     "from": "installation.mdx",
-    "to": "sdk/installation.mdx",
+    "to": "sdk/js-ts-sdk.mdx",
     "fromUrl": "/installation",
-    "toUrl": "/sdk/installation"
+    "toUrl": "/sdk/js-ts-sdk"
   },
   {
     "collection": "sdk",
@@ -264,6 +285,20 @@
     "to": "sdk/index.mdx",
     "fromUrl": "/introduction",
     "toUrl": "/sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "js-ts-sdk.mdx",
+    "to": "sdk/js-ts-sdk.mdx",
+    "fromUrl": "/js-ts-sdk",
+    "toUrl": "/sdk/js-ts-sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "models/assess-model-fit.mdx",
+    "to": "sdk/models/assess-model-fit.mdx",
+    "fromUrl": "/models/assess-model-fit",
+    "toUrl": "/sdk/models/assess-model-fit"
   },
   {
     "collection": "sdk",
@@ -289,16 +324,23 @@
   {
     "collection": "sdk",
     "from": "p2p-capabilities/delegated-inference.mdx",
-    "to": "sdk/p2p-capabilities/delegated-inference.mdx",
+    "to": "sdk/index.mdx",
     "fromUrl": "/p2p-capabilities/delegated-inference",
-    "toUrl": "/sdk/p2p-capabilities/delegated-inference"
+    "toUrl": "/sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "python-sdk.mdx",
+    "to": "sdk/python-sdk.mdx",
+    "fromUrl": "/python-sdk",
+    "toUrl": "/sdk/python-sdk"
   },
   {
     "collection": "sdk",
     "from": "quickstart.mdx",
-    "to": "sdk/quickstart.mdx",
+    "to": "sdk/js-ts-sdk.mdx",
     "fromUrl": "/quickstart",
-    "toUrl": "/sdk/quickstart"
+    "toUrl": "/sdk/js-ts-sdk"
   },
   {
     "collection": "sdk",

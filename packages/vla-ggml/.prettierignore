@@ -8,3 +8,7 @@ package-lock.json
 test/unit/all.js
 test/integration/all.js
 test/results
+index.js
+addon.js
+lib
+*.d.ts

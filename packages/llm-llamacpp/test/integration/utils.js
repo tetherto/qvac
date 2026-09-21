@@ -66,7 +66,7 @@ function urlHost(url) {
   }
 }
 
-async function downloadFileOnce(url, dest, opts = {}) {
+function downloadFileOnce(url, dest, opts = {}) {
   const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
   return new Promise((resolve, reject) => {
     let settled = false
@@ -416,24 +416,76 @@ function resetDownloadCount() {
 // 11+, so they cannot be used for host pre-staging.
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 
+// iOS Device Farm pre-staging: the device's network to huggingface.co is just as
+// unreliable as Android's, but the macOS host has solid network. The pre_test
+// phase downloads each model on the host and pushes it into the app's data
+// container via `pymobiledevice3 apps push <bundle> <file> Documents/<name>`
+// (host->device AFC/house_arrest; works because the test app is dev-signed with
+// get-task-allow=true). On-device that Documents dir is exposed as
+// global.testDir — the same directory the WDIO before-hook drops testFilter.txt
+// into (see test/mobile/integration-runtime.cjs), so the app can always read it.
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
+
 function prestagedModelDir(modelName) {
-  if (os.platform() !== 'android') return null
+  const platform = os.platform()
+  let stagedDir = null
+  if (platform === 'android') stagedDir = PRESTAGED_MODEL_DIR
+  else if (platform === 'ios') stagedDir = iosPrestagedModelDir()
+  if (!stagedDir) return null
+
   try {
-    const p = path.join(PRESTAGED_MODEL_DIR, modelName)
-    if (fs.existsSync(p) && fs.statSync(p).size > 0) return PRESTAGED_MODEL_DIR
+    const p = path.join(stagedDir, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return stagedDir
   } catch (_) {}
   return null
 }
 
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into modelDir spends that whole budget for nothing (the gemma shard stages
+// 4.45 GB and was killed mid-copy). Hardlink instead: same inode, zero bytes.
+// On Android the staging dir is a different filesystem, so link() fails EXDEV
+// and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  // Same path in and out — the staged file IS the destination (a caller whose
+  // model dir is testDir itself). Deleting first would destroy the staged model
+  // and leave both link() and copy() failing ENOENT; the copy this replaced was
+  // a harmless no-op here.
+  if (path.resolve(src) === path.resolve(dest)) return 'link'
+
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(
+      `[prestage] hardlink failed on ${os.platform()} (${err.message}); ` +
+        'falling back to a byte copy'
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
 async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
-  fs.copyFileSync(path.join(stagedDir, modelName), modelPath)
+  const how = linkOrCopySync({ src: path.join(stagedDir, modelName), dest: modelPath })
   const res = await verifyModelFileOnce(modelPath, entry)
   if (!res.ok) {
     try {
       fs.unlinkSync(modelPath)
     } catch (_) {}
-    throw new Error(`[prestage] copied model ${modelName} failed integrity: ${res.reason}`)
+    const verb = how === 'link' ? 'hardlinked' : 'copied'
+    throw new Error(`[prestage] ${verb} model ${modelName} failed integrity: ${res.reason}`)
   }
+  return how
 }
 
 // The standalone default modelDir assignment is patched by the mobile test
@@ -465,17 +517,20 @@ async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, do
     } catch (_) {}
   }
 
-  // Pre-staged path: copy the host-staged model from the read-only staging dir
-  // into the normal (app-private, WRITABLE) modelDir, then return modelDir. The
-  // copy is a fast local operation (no network). Returning a writable dir is
-  // essential — tests write sibling files next to the model (sliding-context
-  // caches, finetuning checkpoints via path.join(modelDir, ...)), which would
-  // fail if we returned the read-only /data/local/tmp staging dir directly.
+  // Pre-staged path: materialise the host-staged model in the normal
+  // (app-private, WRITABLE) modelDir, then return modelDir. Returning a
+  // writable dir is essential: tests write sibling files next to the model
+  // (session caches, finetuning checkpoints via path.join(modelDir, ...)),
+  // which would fail if we returned Android's read-only /data/local/tmp
+  // staging dir directly.
   const staged = prestagedModelDir(modelName)
   if (staged) {
     fs.mkdirSync(dir, { recursive: true })
-    console.log(`[prestage] Using pre-staged model ${modelName} (copying into writable modelDir)`)
-    await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    const how = await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    console.log(
+      `[prestage] Using pre-staged model ${modelName} (` +
+        `${how === 'link' ? 'hardlinked' : 'copied'} into writable modelDir)`
+    )
     return [modelName, dir]
   }
 
@@ -785,12 +840,20 @@ function setupParams(modelDir, overrides = {}) {
   const { testId = 'pause-resume', datasetSize, ...finetuneOverrides } = overrides
   const trainDatasetPath = path.join(modelDir, `train_${testId}.jsonl`)
   const checkpointDir = path.join(modelDir, `test_${testId}`)
+  // Scope the LoRA-adapter output dir per testId and wipe it up front. It was
+  // previously a single shared `finetune-output/` dir, so back-to-back finetunes
+  // (e.g. the two models in the archs loop, or a prior run on a persistent
+  // runner) wrote to the same path — a finetune that failed to produce an
+  // adapter would leave the previous run's `trained-lora-adapter.gguf` for the
+  // inference phase to load, yielding a spurious pass or a confusing failure.
+  const outputParametersDir = path.resolve(modelDir, `finetune-output_${testId}`)
   createPauseResumeTestDataset(trainDatasetPath, datasetSize)
   cleanupCheckpoints(checkpointDir)
+  cleanupCheckpoints(outputParametersDir)
 
   return {
     trainDatasetDir: trainDatasetPath,
-    outputParametersDir: path.resolve(modelDir, 'finetune-output'),
+    outputParametersDir,
     learningRate: 1e-5,
     lrMin: 1e-8,
     loraModules: 'attn_q,attn_k,attn_v,attn_o',
@@ -863,8 +926,11 @@ function parsePauseCheckpointMetadata(pauseCheckpointPath) {
     }
   }
   return {
-    epoch: meta.epoch != null ? parseInt(meta.epoch, 10) : undefined,
-    global_step: meta.global_step != null ? parseInt(meta.global_step, 10) : undefined
+    epoch: meta.epoch !== null && meta.epoch !== undefined ? parseInt(meta.epoch, 10) : undefined,
+    global_step:
+      meta.global_step !== null && meta.global_step !== undefined
+        ? parseInt(meta.global_step, 10)
+        : undefined
   }
 }
 
@@ -912,8 +978,96 @@ async function handleEarlyCompletion(
   return result
 }
 
-async function verifyFinalStatus(t, model, result = null) {
+function verifyFinalStatus(t, model, result = null) {
   t.ok(result, 'Result must be provided')
+}
+
+// Assert a finetune stat is a finite number IF present. Only null/undefined
+// counts as "absent" — a NaN value must FAIL. NaN is the exact symptom of a
+// broken backward op (the reason these finetune suites exist), so we must NOT
+// early-return on it as an earlier version did (which hid regressions).
+function assertFiniteMetricIfPresent(t, stats, key, id) {
+  const v = stats?.[key]
+  if (v === null || v === undefined) return
+  t.is(typeof v, 'number', `[${id}] ${key} should be a number when present`)
+  t.ok(Number.isFinite(v), `[${id}] ${key} should be finite (not NaN/Inf), got: ${v}`)
+}
+
+// Resolve once a finetune handle has emitted at least `minSteps` progress
+// events; reject on timeout. Used by suites that pause/resume mid-training.
+function waitForProgress(handle, minSteps = 2, timeoutMs = 600_000) {
+  return new Promise((resolve, reject) => {
+    let count = 0
+    const timer = setTimeout(() => {
+      handle.removeListener('stats', onStats)
+      reject(
+        new Error(
+          `waitForProgress: no progress after ${timeoutMs}ms (received ${count}/${minSteps} steps)`
+        )
+      )
+    }, timeoutMs)
+    const onStats = () => {
+      if (++count >= minSteps) {
+        clearTimeout(timer)
+        handle.removeListener('stats', onStats)
+        resolve()
+      }
+    }
+    handle.on('stats', onStats)
+  })
+}
+
+// Load a base model with a trained LoRA adapter and run a short generation to
+// confirm the adapter is usable. Single source of truth for what were three
+// copy-pasted copies (archs / moe / pause-resume finetune suites). The only real
+// differences between them were `gpuLayers` — MoE uses partial offload, the
+// dense suites use full '999' — and whether inference stats are logged.
+async function runLoraInference(
+  t,
+  { id, modelPath, loraAdapterPath, gpuLayers = '999', forceCpuDevice = false, logStats = false }
+) {
+  // Required lazily so merely importing utils.js (e.g. from a manifest script)
+  // does not eagerly load the native addon — only callers that run inference do.
+  const LlmLlamacpp = require('./../../index.js')
+  // Guard: the adapter must exist before we try to verify it. A soft-failed
+  // COMPLETED assertion does not abort the test (safeTest only catches throws),
+  // so without this a missing/stale adapter would be silently loaded — fail loud.
+  t.ok(
+    fs.existsSync(loraAdapterPath),
+    `[${id}] trained LoRA adapter must exist at ${loraAdapterPath}`
+  )
+  t.comment(`[${id}] Running inference with LoRA adapter: ${loraAdapterPath}`)
+  const inferModel = new LlmLlamacpp({
+    files: { model: [modelPath] },
+    config: {
+      gpu_layers: gpuLayers,
+      ctx_size: '512',
+      device: forceCpuDevice ? 'cpu' : 'gpu',
+      predict: '32',
+      lora: loraAdapterPath
+    },
+    logger: console,
+    opts: { stats: true }
+  })
+  try {
+    await inferModel.load()
+    const response = await inferModel.run([{ role: 'user', content: 'Hello' }])
+    let generated = ''
+    await response
+      .onUpdate((token) => {
+        generated += token
+      })
+      .await()
+    t.ok(generated.length > 0, `[${id}] LoRA inference should produce output`)
+    t.comment(
+      `[${id}] LoRA inference output (${generated.length} chars): ${generated.slice(0, 100)}`
+    )
+    if (logStats) {
+      t.comment(`[${id}] LoRA inference stats: ${JSON.stringify(response.stats)}`)
+    }
+  } finally {
+    await inferModel.unload().catch(() => {})
+  }
 }
 
 const test = require('brittle')
@@ -940,6 +1094,7 @@ module.exports = {
   sha256File,
   resetVerificationCache,
   copyPrestagedModel,
+  linkOrCopySync,
   getDownloadCount,
   resetDownloadCount,
   getMediaPath,
@@ -959,6 +1114,9 @@ module.exports = {
   verifyPauseCheckpoint,
   handleEarlyCompletion,
   verifyFinalStatus,
+  assertFiniteMetricIfPresent,
+  waitForProgress,
+  runLoraInference,
   safeTest,
   downloadFileWithRetries
 }

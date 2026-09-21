@@ -136,15 +136,15 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Run AI models locally, without relying on third-party APIs, SaaS, or cloud infrastructure.',
     angle: 315,
-    href: '/sdk/quickstart',
+    href: '/sdk/js-ts-sdk#quickstart',
   },
   {
     id: 'p2p',
     name: 'Peer-to-peer',
     description:
-      'Delegate inference to peers and build AI systems that work across P2P networks.',
+      'Fetch models from peers and connect across NATs with blind relays over P2P networks.',
     angle: 45,
-    href: '/sdk/p2p-capabilities/delegated-inference',
+    href: '/sdk/p2p-capabilities/blind-relays',
   },
   {
     id: 'cross-platform',
@@ -152,7 +152,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Consistent developer experience across hardware, operating systems, and JavaScript runtimes — write code once, run it everywhere.',
     angle: 90,
-    href: '/sdk/installation#supported-environments',
+    href: '/sdk/system-requirements#supported-environments',
   },
   {
     id: 'pluggable',
@@ -180,9 +180,9 @@ export const DEFAULT_FEATURES: Feature[] = [
   },
   {
     id: 'unified',
-    name: 'Unified JS/TS interface',
+    name: 'Unified interface',
     description:
-      'Use one typed JavaScript SDK to run multiple AI capabilities from a single npm package.',
+      'Use one JS/TS or Python SDK client to run multiple AI capabilities.',
     angle: 270,
     href: '/sdk',
   },

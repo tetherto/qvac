@@ -1,0 +1,212 @@
+---
+title: System requirements
+icon: Stethoscope
+description: Host requirements for running the SDK and CLI, validated by `qvac doctor`.
+schemaType: TechArticle
+---
+
+## Overview
+
+Minimum host requirements for running the SDK and CLI. These are worker-level — all SDK clients (JS/TS and Python) drive the same worker, so the requirements below apply regardless of which client you use.
+
+You can validate your environment against the machine-checkable subset with:
+
+```bash
+qvac doctor
+```
+
+Use `--json` for machine-readable output and `--quiet` to set the exit code only (`0` when all required checks pass, `1` otherwise).
+
+## Supported environments
+
+| Platform | Min Version | Architecture | GPU API/Backend | Notes |
+|----------|-------------|-----|-----|-------|
+| macOS | 14.0+ | arm64 | Metal | Arch x64 supports CPU inference only; Intel iGPU acceleration not supported |
+| iOS | 17.0+ | arm64 | Metal | Requires Expo |
+| Linux | Ubuntu 22+ | arm64, x64 | Vulkan `>= 1.4` | Vulkan is required for GPU inference. If not available, it falls back to CPU. |
+| Android | 12+ | arm64 | Vulkan, OpenCL (Adreno 700+) | Requires Expo |
+| Windows | 10+ | x64 | Vulkan `>= 1.4` | Vulkan is required even for CPU-only inference |
+
+## Environment setup
+
+Host-level toolchain and driver setup that the QVAC worker relies on. Client install commands (`npm i @qvac/sdk`, `pip install tetherto-qvac-sdk`, Expo plugin wiring, …) live on each client page — see [JS/TS SDK](/sdk/js-ts-sdk) and [Python SDK](/sdk/python-sdk).
+
+### Linux
+
+Requirements:
+
+- Ubuntu 22 requires [g++](https://github.com/gcc-mirror/gcc) `>= 13`.
+- Vulkan runtime `>= 1.4`: Vulkan loader + a GPU driver with Vulkan support.
+- `libatomic.so.1`: required by the Linux `rocksdb-native` prebuilds used by the SDK's storage dependencies, including for CPU-only inference. Minimal container images may not include it.
+
+On Debian or Ubuntu, install the atomic runtime with:
+
+```bash
+sudo apt update
+sudo apt install -y libatomic1
+```
+
+In a container build running as root, omit `sudo`. A missing library can prevent the worker from starting before any model loads; see [missing libatomic at startup](/sdk/troubleshooting#startup-failure-missing-libatomicso1).
+
+On desktop Linux distributions (e.g., Ubuntu Desktop), these requirements are typically satisfied out of the box.
+
+<Callout type="info">
+On PCs, the Vulkan runtime is usually installed along with the GPU drivers. In other words, _if you've installed the correct driver for your GPU (with Vulkan support), you typically don't need to install anything else._
+</Callout>
+
+To verify it, install Vulkan tools and run `vulkaninfo`:
+
+<Tabs>
+<Tab value="debian" label="Debian/Ubuntu" default>
+
+```bash
+sudo apt update
+sudo apt install -y vulkan-tools
+vulkaninfo --summary
+```
+</Tab>
+<Tab value="fedora" label="Fedora/RHEL">
+
+```bash
+sudo dnf install -y vulkan-tools vulkan-devel
+vulkaninfo --summary
+```
+</Tab>
+</Tabs>
+
+In minimalist/headless installations (e.g., Ubuntu Server), you may need to manually install the Vulkan loader, and ensure a Vulkan-capable GPU driver (ICD) is installed. The exact packages vary by distro and GPU vendor. For example:
+
+<Tabs>
+<Tab value="debian" label="Debian/Ubuntu (Intel/AMD via Mesa)" default>
+
+```bash
+sudo apt update
+sudo apt install -y libvulkan1 mesa-vulkan-drivers
+vulkaninfo --summary
+```
+</Tab>
+<Tab value="fedora" label="Fedora">
+
+```bash
+sudo dnf install -y vulkan-loader mesa-vulkan-drivers
+vulkaninfo --summary
+```
+</Tab>
+</Tabs>
+
+Ensure QVAC can detect the GPU Vulkan driver by adding your user to the `render` and `video` groups:
+
+```bash
+sudo usermod -aG render,video $USER
+```
+
+### Windows
+
+Requirement:
+- Vulkan runtime `>= 1.4`: Vulkan loader + a GPU driver with Vulkan support.
+
+This requirement is typically satisfied out of the box after installing the correct GPU vendor drivers. To verify it, [install Vulkan SDK](https://vulkan.lunarg.com) and run:
+
+```powershell
+vulkaninfo --summary
+```
+
+### Mobile (iOS / Android)
+
+Mobile is supported by the JS/TS SDK via Expo. See [JS/TS SDK — Expo setup](/sdk/js-ts-sdk#expo) for the full flow.
+
+<Callout type="info">
+  Due to limitations with `llamacpp`, QVAC currently does not run on emulators.
+  You **must** use a physical device.
+</Callout>
+
+## Scope
+
+The `qvac` CLI itself runs on desktops only. The SDK additionally targets Android and iOS via Expo/BareKit; those appear here as **deploy targets** with host-toolchain checks (`adb`, `xcodebuild`) but never cause a non-zero exit.
+
+## Required
+
+| Requirement | Notes |
+| --- | --- |
+| Node.js `>= 18.0.0` | Node 18 is end-of-life; prefer `>= 20`. Matches `engines.node` of `@qvac/cli`. |
+| Supported CLI host | `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. The CLI cannot run on mobile; those are deploy targets only. |
+| Total RAM `>= 2 GB` (recommended `>= 4 GB`) | Below 4 GB, most LLMs will fail to load. |
+
+## Recommended
+
+| Requirement | When it is needed |
+| --- | --- |
+| Available RAM `>= 2 GB` | Needed when loading a model. Checked via `os.availableMemory()` on Node 22+, falling back to `os.freemem()` on older Nodes. |
+| QVAC inference backends use Metal on macOS (always present) or Vulkan >=1.4 on Linux and Windows. In Windows, you must have Vulkan >= 1.4 even for using just CPU inference. |
+| Free disk `>= 5 GB` in the working directory | Model artifacts are typically multi-GB per model. Uses `fs.statfsSync` (Node 18.15+) with a   POSIX `df` fallback. |
+
+## Deploy targets
+
+These checks are informational. They never cause `qvac doctor` to exit non-zero, because cross-bundling is always supported via bare-pack prebuilt binaries. What is checked here is the host toolchain needed to install/deploy to each target class.
+
+| Target | Check | Status when missing |
+| --- | --- | --- |
+| `darwin-{arm64,x64}`, `linux-{arm64,x64}`, `win32-x64` | Listed under "Desktop"; native host flagged with `(native)`. | Always `pass` — cross-bundling is built in. |
+| `android-arm64` | `adb --version` | `warn` — install [Android platform tools](https://developer.android.com/tools/releases/platform-tools) to deploy to devices. |
+| `ios-arm64` + simulators | `xcodebuild -version` (macOS only) | `warn` on macOS without Xcode, `info` on non-macOS hosts. |
+
+## Optional tools
+
+<Callout type="info">
+  This section applies to the JS/TS client — the tools listed here are checked by `qvac doctor`, which today only covers the JS/TS stack. Python users can ignore it unless they also run the JS/TS SDK.
+</Callout>
+
+Only required if you use the corresponding feature. The checker warns when they are missing but does not fail.
+
+| Tool | Required for |
+| --- | --- |
+| `ffmpeg` | Microphone capture, transcription examples, and the built-in audio decoder. Install from [ffmpeg.org](https://ffmpeg.org/download.html). |
+| [Bare](https://bare.pears.com) runtime | Running the SDK under Bare directly. |
+| [Bun](https://bun.sh) | Building the SDK from source or running the monorepo development workflow. |
+
+## Project
+
+<Callout type="info">
+  This section applies to the JS/TS client — the check below runs against `@qvac/sdk` in a Node.js/Bun project layout. Python users can ignore it unless they also run the JS/TS SDK.
+</Callout>
+
+| Check | Notes |
+| --- | --- |
+| `@qvac/sdk` resolvable from project | Resolved with `require.resolve('@qvac/sdk/package.json')` rooted at the working directory; hoisted installs (monorepos, Yarn/Bun workspaces) are correctly detected. |
+
+## Exit codes
+
+- `0` — all required checks passed. Warnings, skips, and informational rows may still be present.
+- `1` — one or more required checks failed (unsupported Node version, unsupported CLI host, insufficient total RAM, ...). See the printed hints for remediation steps.
+
+## JSON schema
+
+```ts
+interface DoctorReport {
+  ok: boolean;
+  platform: string;       // e.g. "darwin"
+  arch: string;           // e.g. "arm64"
+  nodeVersion: string;    // e.g. "20.19.5"
+  sections: Array<{
+    id: 'runtime' | 'hardware' | 'targets' | 'tools' | 'project';
+    title: string;
+    checks: Array<{
+      id: string;
+      label: string;
+      status: 'pass' | 'warn' | 'fail' | 'skip' | 'info';
+      severity: 'required' | 'recommended' | 'informational';
+      value?: string;
+      detail?: string;
+      hint?: string;
+    }>;
+  }>;
+}
+```
+
+### Status semantics
+
+- `pass` — check ran and the requirement is satisfied.
+- `warn` — recommended requirement not met, or a deploy-target toolchain is missing; does not cause a non-zero exit.
+- `fail` — required check not met; causes exit code `1`.
+- `skip` — the check could not be executed on this host (missing Node API and no fallback, etc.).
+- `info` — informational row with no pass/fail judgment (e.g. iOS deploy target on a non-macOS host).

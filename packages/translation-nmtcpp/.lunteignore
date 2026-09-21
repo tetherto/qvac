@@ -11,3 +11,8 @@ test/results
 third-party
 addon
 *.d.ts
+index.js
+marian.js
+addonLogging.js
+lib
+src

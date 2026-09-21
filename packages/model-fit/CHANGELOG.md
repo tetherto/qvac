@@ -1,0 +1,545 @@
+# Changelog
+
+## [Unreleased]
+
+### Added
+
+- A fit stub is documented and covered as an accepted `modelPath`, single-file
+  and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
+  tokenizer tables and no data section, which the registry serves in place of
+  the artefact. It projects the same plan as the full file, and needs no padding
+  out to the artefact length. Two fabric behaviours make that work and both are
+  covered — 10549.0.0 skips the file-bounds check under no_alloc, and the vocab
+  load it does *not* skip is satisfied by `tokenizer.ggml.model = none` plus a
+  surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
+  that reports failure as an absent projection rather than an error, is asserted
+  on the same files. No API change.
+
+## [0.12.2] - 2026-09-18
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.0` -> `^0.16.1`. Another hard floor: Android consumers built against `0.16.0` fail to load. That release named the ELF version node `QVAC_FABRIC_ABI_1` on every ELF target, so an Android addon records a `DT_VERNEED` that bionic cannot satisfy — `dlopen` fails and `bare` reports `ADDON_NOT_FOUND: Cannot find addon '.'` from `binding.js` before any model work. `0.16.1` names the node only where fabric owns the C++ runtime (Linux embedding libc++); Android keeps the anonymous node it had through `0.15.0`. An Android binary linked against `0.16.0` keeps the versioned imports and still fails, so this package has to be rebuilt. A caret on a `0.x` version locks the minor, so `^0.16.0` could still resolve `0.16.0`. Released as a patch rather than a minor so consumers already tracking the `0.12.x` line pick this up without a range change of their own. Linux binaries built against `0.16.0` are unaffected. Desktop was unaffected. No API change. Rationale: fabric `0.16.1` ([#4566](https://github.com/tetherto/qvac/pull/4566)).
+
+## [0.12.1] - 2026-09-17
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.15.0` -> `^0.16.0`. Another hard floor, for the reason the last one turned out not to be enough on its own: `0.15.0` exported the C++ runtime, but nothing bound this addon to it. `bare`'s executable links GNU `libstdc++.so.6`, which puts a second complete C++ runtime in the process' **global** lookup scope — searched ahead of a `dlopen`'d module's own `DT_NEEDED` chain — so `__cxa_throw`, `__gxx_personality_v0` and the `std::` typeinfo objects resolved from libstdc++ while fabric's exports went unused. `0.16.0` names its version node `QVAC_FABRIC_ABI_1`, which makes this module record a `DT_VERNEED` that libstdc++ cannot satisfy, and that is what completes the pin. A caret on a `0.x` version locks the minor, so `^0.15.0` could not have resolved `0.16.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.12.x` line pick this up without a range change of their own.
+- The build now proves the pin instead of assuming it: `qvac_addon_finalize` reads the linked module with `readelf` and fails if any C++ runtime symbol is imported without the `QVAC_FABRIC_ABI_1` requirement. That check exists because the built ELF is the only place the invariant is observable — paired with a fabric that does not stamp the node, this module links and loads exactly as before and merely stops matching typed catches.
+- The module now exports the two `bare_*` entry points the runtime resolves by name and nothing else, down from about 1985 symbols: its own and nlohmann's typeinfo, and the whole of `inference-addon-cpp`, are no longer exported. `bare` loads modules `RTLD_LOCAL`, so nothing could reach those anyway; the addon and fabric are now a closed unit exposing plain C by construction rather than by the loader flags of whichever host loads them.
+
+### Fixed
+
+- The Linux fix `0.11.1` recorded takes effect only now. A llama load setting that only fabric can reject — an unknown `cache-type-k`, say — did keep escaping the fitter's handler, because with the runtime unpinned the addon still resolved its typeinfo from the host's libstdc++ rather than from fabric. The `LlamaLoadConfig` unit case added in `0.11.1` passes either way: `qvac_addon_stage_fabric_for_test` produces test executables that link no libstdc++, so fabric's is the only C++ runtime in those processes and the interposition cannot happen there. Coverage for the seam has to run in a host that owns a GNU C++ runtime, which is `bare`. Linux only; macOS, Windows, Android and iOS already share one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4519](https://github.com/tetherto/qvac/pull/4519)).
+
+## [0.12.0] - 2026-09-16
+
+This release adds a non-blocking way to run the memory-fit preflight. Callers that run the fit in the same process as their inference — the mobile advisory check today — no longer stall their JS loop for the duration of the probe.
+
+### New APIs
+
+#### `fitParamsAsync(config)`
+
+Takes the same config as `fitParams` and resolves to the same result, but runs `common_fit_params` on a worker thread. Validation failures reject instead of throwing. Backend registration still happens on the calling thread before the fit is queued, so the ggml registry sees the same ordering as the synchronous path, and fits remain serialised process-wide.
+
+```js
+const { fitParamsAsync } = require('@qvac/model-fit')
+
+const plan = await fitParamsAsync({ modelPath: '/abs/path/model.gguf' })
+```
+
+`llamaConfigFitAsync` on the private binding gives the load-config fitter used by the process runner and `@qvac/inference` the same worker-thread shape.
+
+### Pull Requests
+
+- [#4495](https://github.com/tetherto/qvac/pull/4495) - QVAC-25156 feat[api]: add fitParamsAsync to @qvac/model-fit
+
+## [0.11.1] - 2026-09-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.11.x` line pick this up without a range change of their own.
+
+### Fixed
+
+- On Linux, a llama load setting that only fabric can reject — an unknown
+  `cache-type-k`, say — now surfaces as an invalid argument naming the setting
+  and carrying fabric's message. It previously escaped the fitter's handler
+  entirely: the addon and `qvac__fabric@0.bare` each statically linked their own
+  libc++, so each had its own `std::exception` typeinfo, and RTTI matches
+  typeinfo by address, so `parseGenericConfig`'s `catch (const std::exception&)`
+  never matched a throw that came from inside fabric. Fabric now owns the one
+  C++ runtime in the process and this addon imports it
+  (`qvac_addon_import_fabric_cxx_runtime`). The unit suite covers the boundary
+  directly, and distinguishes a `catch` that matched by type from one that only
+  caught `...`. See `arch/qips/linux-fabric-libcxx-ownership.md`
+  ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
+## [0.11.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own.
+- The fitter projects memory for models it does not itself run, so 10549.1.0 matters to it only where the projection must agree with the loader — and the MoE expert-cache fixes change what the loader tolerates at large context.
+
+### Added
+
+- `fit()` results now carry a per-device memory projection, and `@qvac/model-fit/process` gains the matching surface ([#4174](https://github.com/tetherto/qvac/pull/4174)). Landed after `0.10.0` with no version bump of its own, so this release is what publishes it.
+
+### Breaking
+
+- GPU devices are filtered to the supported backends and `split-mode: 'row'` is dropped ([#4330](https://github.com/tetherto/qvac/pull/4330)). A caller passing `'row'` no longer receives a degraded-to-`'layer'` projection; the value is rejected. This matches `@qvac/llm-llamacpp` and `@qvac/embed-llamacpp`, which made the same change, so the fitter and the loaders agree on what is accepted. Landed after `0.10.0` with no version bump of its own.
+
+### Fixed
+
+- `flash-attn` is now recognised as enabled on every spelling qvac-fabric
+  accepts — `on`, `enabled`, `true` and `1` — matching `@qvac/llm-llamacpp`.
+  This supersedes the 0.6.0 entry below pinning it to `on` only: that pinning
+  was correct while the loader also required exact `on`, and became an
+  over-estimate of KV memory once the loader widened. Values are matched by
+  calling `common_arg_utils::is_truthy` / `is_falsey` / `is_autoy` directly
+  rather than mirroring the sets, so the two packages cannot drift again.
+
+- The Adreno 800+/Vulkan quantized-KV guard now also fires for
+  `flash-attn: 'auto'`, matching the loader. Fabric promotes AUTO to ENABLED
+  for a quantized V cache, so the fitter previously reported as supported a
+  configuration the loader rejects with `InvalidArgument`. The q8_0 KV
+  auto-default deliberately still does *not* fire for `'auto'` — quantizing V
+  is what triggers that promotion, which skips the capability probe `'auto'`
+  exists to run.
+
+- An unrecognised or mixed-case `flash-attn` value is rejected up front, naming
+  the accepted spellings, instead of falling through the guards and reaching
+  fabric's parser afterwards. On Adreno 800+ Vulkan with a quantized KV cache
+  the old order surfaced a typo as an unsupported-hardware verdict. Matching is
+  case-sensitive, as fabric's own predicates are.
+
+## [0.10.0] - 2026-09-10
+
+### Fixed
+
+- The addon failed to compile against the published shared runtime. `common_fit_params` gained a ninth parameter, `prefetch_weights_auto`, in `qvac-fabric` 10549.0.0, and the call site was updated for it in #4154 — but the `@qvac/fabric` range was left at `^0.10.0`, which resolves a build carrying the previous eight-parameter signature. Every build outside the PR-validation path therefore failed with `no matching function for call to 'invokeLlamaFit'`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.10.0` -> `^0.13.0`, which carries `qvac-fabric` `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.10.0` would not have resolved `0.13.0` on its own.
+- Also ships the pnpm+nx monorepo foundation (#3543), which landed after `0.9.0` with no version bump of its own.
+
+## [0.9.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.8.x` adopt the new build floor deliberately rather than automatically.
+
+## [0.8.0] - 2026-08-29
+
+### Fixed
+
+- Mobile integration test bundling. The two raw-fitter cases in
+  `test/integration/fit.test.js` reached the private `binding-internal.js`
+  surface, which the mobile test framework does not shim into its generated
+  `backend/` tree, so `bare-pack` failed with `MODULE_NOT_FOUND` and no mobile
+  suite could build on either platform. Those cases now live in
+  `test/integration/fit-internal.test.js`, which is excluded from the generated
+  mobile suite via `scripts/mobile-integration-exclusions.js`. Both still run on
+  desktop; no assertion changed. Broken since 0.6.0.
+
+- `bare-url` is now declared. `test/mobile/integration-runtime.cjs` requires it
+  and nothing in this package listed it.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader; no API change for this package).
+
+## [0.7.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+### Fixed
+
+- Load-fit config normalization now uses the b10297 `load_mode` field, accepts
+  `load-mode` directly, and preserves legacy `no-mmap` behavior without relying
+  on the removed `common_params::use_mmap` member.
+
+## [0.6.0] - 2026-08-22
+
+### Added
+
+- Disposable-process protocol v2, carrying an explicit
+  `loadKind: 'completion' | 'embedding'` so the runner can select the matching
+  normalization policy internally. `encodeFitLlamaProcessRequest(loadKind,
+  config)` encodes it; `parseFitProcessResponse` answers both versions.
+  Protocol v1 is unchanged and still accepted.
+
+- Fit-relevant completion and embedding load normalization — backend selection,
+  context/batch settings, split policy, flash/KV defaults, SWA and CPU
+  placement — so a raw llama load config can be projected the way the addon
+  that will run it would resolve it. This duplicates `llm-llamacpp` and
+  `embed-llamacpp` for now; shared ownership can be revisited separately.
+
+- `FitLlamaResult` and `FitLlamaReason` in `./process`, adding the
+  `unsupported-config` outcome for a configuration the normalization cannot
+  represent (mobile, streaming, sharded, multimodal, finetune, LoRA, RoPE/YaRN,
+  unknown keys). The result is advisory and must never be used to deny a load.
+
+  Deliberately a separate type: `fitParams()` cannot produce that outcome, so
+  `FitResult` and `FitReason` are unchanged and existing low-level consumers
+  narrow nothing new. Every `FitResult` is assignable to `FitLlamaResult`.
+
+### Changed
+
+- Raw load-parameter normalization stays private to the disposable process
+  runner. `./binding.js`, which is a public export, now re-exports `paramsFit`
+  explicitly rather than the whole addon, and the runner reaches the load-config
+  fitter through the unexported `./binding-internal.js`. The package root
+  continues to expose only the existing low-level `fitParams()` API.
+
+- The C++ unit targets behind `BUILD_TESTING` now run in CI via
+  `cpp-tests-model-fit.yml` and the `test:cpp` scripts, and their translation
+  units are linted, so the normalization above is covered by the PR gate rather
+  than by a local step.
+
+### Fixed
+
+These are all divergences between what this package projected and what the load
+would actually do. Each was found by review of the normalization above and is
+fixed against the behaviour of `llm-llamacpp` / `embed-llamacpp`:
+
+- `llama_model_params::devices` is a NULL-terminated list, and neither list this
+  package built carried the terminator. The single-GPU list read one element
+  past its allocation on every fit; the CPU path passed an empty vector, which
+  is not the same as an empty list — `common_model_params_to_llama` forwards
+  only a non-empty one — so fabric fell back to default device selection,
+  enumerating every GPU and skipping the host-memory check that is the only real
+  constraint on a CPU load.
+
+- The CPU path no longer pins `n_gpu_layers` to 0. The addons leave the field
+  alone, and forcing it made `common_fit_params` abort when the projection
+  needed to adjust it.
+
+- An unset embedding context is pinned to the model's trained context, and an
+  oversized one is capped rather than rejected, matching
+  `embed-llamacpp`. Leaving it at 0 invited the fitter to report a reduced
+  context, and a correspondingly reduced memory figure, for a load that runs at
+  the full trained context.
+
+- `flash-attn` is recognised as enabled on `on` only, as `llm-llamacpp` does.
+  Accepting any truthy spelling fired the q8_0 KV auto-default where the real
+  load keeps f16, under-estimating KV memory by roughly 2x.
+
+- `ctx-size: '0'` no longer becomes a 4096 context floor. Fabric encodes "do not
+  reduce the context" as `UINT32_MAX` in a signed field, and clamping that at
+  zero inverted the one configuration that explicitly forbids reduction.
+
+- Conflicting key aliases (`gpu-layers`/`n-gpu-layers`,
+  `kv-offload`/`no-kv-offload`, `op-offload`/`no-op-offload`) are rejected
+  instead of resolved by hash-bucket order, which made the verdict depend on
+  internal hashing rather than on the request.
+
+- `no-host` is a valueless flag upstream, so `no-host: 'false'` now reports
+  `unsupported-config` instead of projecting the opposite weight placement.
+  `host`, `extra-bufts` and `no-extra-bufts` leave the supported set for the
+  same reason: qvac-fabric registers no such option, so no load can express
+  them.
+
+### Pull Requests
+
+- [#3930](https://github.com/tetherto/qvac/pull/3930) - QVAC-22630 feat[api]:
+  add config normalization to model-fit addon
+
+## [0.5.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.4.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+### Pull Requests
+
+- [#3929](https://github.com/tetherto/qvac/pull/3929) - QVAC-23195 fix: bump
+  qvac-fabric to 10069.1.1 across consumers
+
+## [0.3.0] - 2026-08-18
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor moves `1.2.1` -> `1.3.3`,
+  bringing this package onto the same shared-runtime floor every other addon
+  consumer already builds against. `model-fit` was the last one left behind.
+
+  No source change is needed here. The addon uses only the header-only JS
+  boundary (`inference-addon-cpp/Errors.hpp`, `JsInterface.hpp`, `JsUtils.hpp`)
+  and its binding is synchronous — it never constructs an `AddonCpp`, a
+  scheduler or an `OutputQueue` — so 1.3.0's two breaking changes (the
+  `JobRunner` -> `SingleJobScheduler` rename with the `JobRunner.hpp` forwarding
+  header removed, and `OutputQueue::clear()` returning job-tagged entries) reach
+  nothing this package compiles.
+
+  What the floor does pick up is the run of lifecycle fixes released between the
+  two versions: the `dlclose()` self-pin that makes `Worklet.terminate()` safe on
+  Android bionic (1.2.2), the `JsLogger` teardown and re-`setLogger` crash fixes
+  and their concurrent-env ownership hardening (1.2.3, 1.2.4), and the
+  `JsAsyncTask` teardown-thread and capture-release fixes (1.3.2, 1.3.3). The
+  first three matter to `model-fit` in particular: it is designed to run in a
+  short-lived isolated worklet, which is exactly the load/terminate cycle those
+  fixes cover.
+
+### Pull Requests
+
+- [#3926](https://github.com/tetherto/qvac/pull/3926) - chore[notask]: bump
+  model-fit to inference-addon-cpp 1.3.3
+
+## [0.2.1] - 2026-08-18
+
+Records a fix that was left out of `0.2.0`. It merged (#3890) before the
+`model-fit-v0.2.0` tag was cut, so the code already shipped in `0.2.0` — this
+release carries no source change of its own, only the entry that should have
+been in that one.
+
+### Fixed
+
+- Reject a successful fit whose context could not be resolved. `runFit` already
+  rewrote a fitted `nCtx` of 0 — llama's encoding for "use the trained context"
+  — to the model's declared context length, but when that GGUF metadata was
+  itself unavailable the zero survived and the caller was handed a `SUCCESS`
+  carrying `nCtx: 0`: a verdict with no load plan it could replay. Such a result
+  is now `ERROR` / `model-unreadable`, which is what the missing metadata
+  actually means. The resolution moved out of `runFit` into
+  `detail::finalizeFitContext` (`addon/src/fit/FitResultContext.cpp`) so it can
+  be tested without a model, covered by a new `ModelFitContextUnit` test built
+  under `BUILD_TESTING`.
+
+- Reject a malformed successful response in the process codec.
+  `parseFitProcessResponse` accepted a `completed` result with `status: 0` and a
+  non-positive `nCtx`, so a child that answered with an unresolved context put
+  it straight into a supervisor's hands. Defence in depth rather than a live
+  path: with the fix above the runner can no longer produce one.
+
+### Pull Requests
+
+- [#3890](https://github.com/tetherto/qvac/pull/3890) - QVAC-22630 fix: reject
+  unresolved successful fit contexts
+
+## [0.2.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.1.0] - 2026-08-12
+
+### Added
+
+- Initial release of `@qvac/model-fit`, a memory-fit **preflight** addon that
+  wraps llama.cpp's `llama_params_fit` C API to project — without loading any
+  weights — whether a GGUF model fits available device memory, and if so with
+  what offload plan (layers / context / tensor split). Intended to run in a
+  short-lived isolated worklet before handing a model to `@qvac/llm-llamacpp`.
+  (The wrapped entry point became `common_fit_params` before this first
+  publish — see *Changed* below.)
+- `reason` on the result — `fits`, `does-not-fit`, `model-unreadable` or
+  `no-backend-device`. `status` alone could not separate "this hardware cannot
+  run it" from "the model could not be read", which left the documented
+  proceed-on-unknown path impossible to diagnose.
+- `buftOverrides` on the result: the tensor placement the fitter selected. These
+  were previously discarded, so a `SUCCESS` could depend on placement the real
+  load would not reproduce.
+- `FitResult` is now a discriminated union on `status`, with the plan valid only
+  on `SUCCESS`, plus a consumer type test (`test/types/`) that checks branch
+  narrowing and exhaustiveness — the dts check previously only compiled the
+  declaration itself.
+- `NOTICE` and `LICENSE`, which `package.json` already listed in `files`.
+
+- Coverage for what the fitter does under memory pressure. `llama_params_fit`
+  assumes host memory is unlimited, so an unsatisfiable device margin is met by
+  moving every layer to the host rather than by reporting `FAILURE` — `fits`
+  stays true, and the plan rather than the flag is the admission signal. Driven
+  by the margin rather than by model size, which keeps it deterministic across
+  runners with different VRAM.
+- Coverage for the `FAILURE` verdict, which turns out to require a pinned
+  constraint. Unpinned, the fitter always has the host to fall back on, so it
+  answers even an unsatisfiable margin with `SUCCESS` and zero offload; pinning
+  `nGpuLayers` makes offload a hard requirement and produces a real "won't fit".
+  Documented, because it means `fits` alone is not an admission signal.
+- Documented two crash paths inside `llama_params_fit` that this addon cannot
+  contain: a `ggml_abort()` in `graph_reserve` on a large `nCtx`, and the
+  Windows divide-by-zero. Both terminate the process.
+- `nDevices` and `nGpuDevices` on the result — the device inventory the
+  projection was actually made against. Zero registered devices now returns
+  `ERROR` instead of a verdict. `maxDevices` is a build-time bound and must not
+  be read as a detection result.
+- `@qvac/model-fit/process`, a boundary for running a projection in a child that
+  can be thrown away. The subpath exports a versioned NDJSON codec
+  (`encodeFitProcessRequest`, `parseFitProcessResponse`) and resolves a private
+  one-shot runner to spawn with a Bare executable. It exists because the crash
+  paths above terminate whoever calls the fitter, so the only way to survive
+  them is to ask the question from a process that is expendable. Spawning and
+  supervision are deliberately left to the caller.
+- The runner answers with one line on stdout, and that line rather than the exit
+  code is the result: `completed` for a projection, `invocation-error` for a
+  request that threw or never reached the fitter, and no line at all when native
+  code aborted. A missing or unparseable line is a failure whatever the status —
+  exit 0 does not prove delivery, and exit 2 arrives both with and without a
+  response. The outcome table in the README is the full contract.
+- The addon is loaded only once a request has parsed, so a malformed or oversized
+  request costs a spawn and never backend registration. The runner imposes no
+  timeout of its own; bounding and cancelling the child is the supervisor's job.
+- Two platform constraints a supervisor has to honour. On Windows the child's
+  stdio must be created as overlapped pipes (`stdio: ['overlapped', ...]`), or
+  the runner — itself a libuv program handed synchronous handles — never
+  observes the request and hangs with no output and no diagnostic; the flag is a
+  no-op elsewhere, so set it unconditionally. On darwin a cold child recompiles
+  the embedded Metal library during backend discovery, which costs roughly ten
+  seconds against a quarter of a second on linux and Windows, so a deadline must
+  be sized for discovery rather than for the projection.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0`, joining the rest of
+  the addon consumers on the b10069 rebase. `common/fit.h` is unchanged between
+  the two, so `common_fit_params` keeps its signature and behaviour here.
+
+- The JS API is now generated from TypeScript. `src/index.ts` is the single
+  hand-written copy; root `index.js` and `index.d.ts` are emitted by
+  `npm run build:ts` and committed, matching `@qvac/embed-llamacpp`. Previously
+  the runtime, the JSDoc and the declarations were three files kept in sync by
+  hand, and they had already drifted: `index.d.ts` and the README carried
+  `reason`, `nDevices`, `nGpuDevices`, `buftOverrides` and the placement fields
+  while the JSDoc `@returns` still described the older, smaller result object.
+  `npm run check:generated` rebuilds and fails on any difference from what is
+  committed, so the same drift cannot recur silently. No runtime behaviour
+  changes.
+
+- Reject a relative `modelPath`. The API documented the field as absolute but
+  only checked that it was a non-empty string, so a relative path resolved
+  against the process working directory — which nothing in a worklet controls,
+  making the same call name a different file, or no file, depending on where the
+  host was launched. Enforced in the wrapper and again in `runFit`, so
+  `./binding.js` cannot bypass it. Matches `files.model` in
+  `@qvac/embed-llamacpp`. The path is still not required to exist: a missing
+  model remains the documented `ERROR` / `model-unreadable` outcome.
+
+- Bound `nCtxMin` by the model's declared `context_length`. The `nCtx` guard was
+  bypassable through the floor: `nCtxMin <= nCtx` is only checked when `nCtx` is
+  concrete, and `nCtx: 0` is the documented way to let the fitter choose, so
+  `{ nCtx: 0, nCtxMin: 75000000 }` reached `common_fit_params` unchecked. An
+  explicit floor above the declared length now throws. The 4096 default is
+  clamped to the declared length instead of throwing, since it is this package's
+  value rather than the caller's — and a floor above the top of the reduction
+  range constrained nothing anyway.
+
+- Correct the package description: this addon wraps `common_fit_params`, not
+  `llama_params_fit`, since the fabric 9840.1.1 port below.
+
+- Bump `qvac-fabric` to 9840.1.1, in lockstep with the rest of the monorepo, and
+  port to the API the fitter now lives behind. Upstream moved it out of the core
+  llama ABI into libcommon (ggml-org/llama.cpp#22171, "move fit params
+  implementation to libcommon"): `llama_params_fit` in `llama.h` became
+  `common_fit_params` in `common/fit.h`, and `llama_params_fit_status` became
+  `common_params_fit_status`. The parameter list and the 0/1/2 status values are
+  unchanged, so this is a rename plus linking `llama::llama-common`. Worth
+  knowing: fabric's `llama.h` still carries the old declaration, so the previous
+  version compiled and linked and failed only at `dlopen` with
+  `undefined symbol: llama_params_fit`.
+
+- Default `backendsDir` to this package's own `prebuilds` directory when the
+  caller does not pass one, mirroring `@qvac/llm-llamacpp`'s addon.js. Since
+  9840 the ggml backends ship as separate shared libraries rather than static
+  archives, and ggml's default search path (executable directory, cwd) does not
+  cover an npm package's prebuilds — so the CPU backend never loaded and every
+  fit failed with "no CPU backend found". An explicitly passed `backendsDir`
+  still wins, including a bad one, so a caller's stated intent fails loudly
+  rather than being silently replaced.
+
+- `model-fit` is now covered by the `verify-qvac-fabric-lockstep` action, which
+  checks a hardcoded file list that did not include it. The gate was passing
+  vacuously while this package sat on 8828.1.2. (`ocr-ggml`, `vla-ggml` and
+  `fabric` are still absent from that list.)
+
+### Fixed
+
+- Register ggml backends before fitting. `llama_params_fit` only reads ggml's
+  global device registry and never populates it, so without an explicit
+  `llama_backend_init()` the fitter could project against an empty device list
+  and still report `SUCCESS`. Every fit now loads the packaged backends (new
+  optional `backendsDir`, `BACKENDS_SUBDIR` appended) or falls back to ggml's
+  default search path, then initialises the llama backend. Registration is
+  never undone: `llama_backend_free()` is not the inverse of
+  `llama_backend_init()` — it releases the process-global IQ dequantisation
+  tables shared by every llama consumer, which would corrupt inference running
+  concurrently in `@qvac/llm-llamacpp` (which reference-counts to avoid exactly
+  that). Leaving the backends registered is free, since ggml's registry
+  de-duplicates.
+
+- Validate `backendsDir` before it reaches `ggml_backend_load_all_from_path`,
+  which `dlopen`s every backend library it finds there. It must now be an
+  absolute path, and is canonicalised (collapsing `..`, following symlinks) and
+  required to resolve to an existing directory — so resolution never depends on
+  the process working directory, and the directory scanned is the real one
+  rather than an alias. Documented as application-controlled input in
+  `index.d.ts` and the README.
+
+- Reject an unsatisfiable `LLAMA_SPLIT_MODE_NONE` placement. NONE puts the whole
+  model on one GPU, and llama then requires `mainGpu` to index its device list;
+  with no GPU registered it rejects every index, the default 0 included. The
+  fitter performs that load internally, so the whole call came back as a bare
+  `ERROR`/"failed to load model" — indistinguishable from a genuine "does not
+  fit" and impossible for a caller to act on. A pinned NONE is now rejected up
+  front when no GPU is registered, or when `mainGpu` is past the ones that are.
+  Only NONE is checked, since it is the only mode under which llama reads
+  `mainGpu`; the checks live in `runFit` rather than the binding because the
+  valid range is unknown until backends are registered.
+
+- Serialise fit calls process-wide. `llama.h` documents `llama_params_fit` as
+  not thread safe because it mutates global llama logger state, and this addon's
+  C++ statics are shared across worklets, so concurrent callers now block. This
+  also keeps two backend registrations from overlapping, which is what allows
+  the unconditional setup above to stay correct without reference counting.
+
+- Validate numeric arguments as safe integers within the range of the
+  `uint32_t`/`int32_t` they are narrowed to, and check `nUbatch <= nBatch`
+  and `nCtxMin <= nCtx`. Previously only finiteness was checked, so fractions
+  truncated and negatives wrapped — `marginMiB: -1` became a margin nothing
+  could satisfy. Enforced in the native binding as well as the JS wrapper,
+  since `./binding.js` is a public export that bypasses the wrapper.
+
+- Accept a negative `nGpuLayers`. `llama.h` defines it as "a negative value
+  means all layers" — it is the llama default, and what upstream's fit-params
+  prints back as `-ngl -1` — so rejecting it turned documented input into an
+  error. The internal "not pinned" marker is now a separate flag rather than an
+  `INT32_MIN` sentinel, which also frees that value for real use. The same
+  applies when reading the result: a negative `nGpuLayers` means the fitter
+  never rewrote the field, which is what happens on a host with no accelerator.
+- Default `nCtxMin` to 4096 when unset — upstream's own
+  `common_params::fit_params_min_ctx` default — and resolve a fitted context of 0 to the
+  model's trained context (read from GGUF KV metadata, no weights loaded), so a
+  `SUCCESS` never reports `nCtx: 0`. An explicitly requested context remains a
+  hard constraint and is now asserted to come back unchanged.
+
+- Reject an `nCtx` above the context length the model declares. llama.cpp only
+  warns, because RoPE scaling lets a caller exceed the trained length — but this
+  addon exposes none of those knobs, so the model's own declared length is the
+  most it can legitimately be asked for, and a YaRN-extended model already
+  reports its extended figure there. This also keeps the values that reproduce
+  the documented abort out of llama's hands, though it is a guard against
+  nonsense input rather than a fix: the fault is KV-cache placement, which a
+  large model on a small device can still hit at an ordinary context.
+
+- Remove the Windows-only `__try/__except` around `llama_params_fit`. It existed
+  to contain an integer divide-by-zero on the Windows GPU runner, but the root
+  cause was the missing backend registration fixed above: with no device
+  registered, a count reached a division as zero. With `llama_backend_init()` in
+  place, win32 CI returns a real projection and the SEH filter never fires.
+  Removing it also resolves the objection that resuming after a structured
+  exception leaves llama's global logger pointing at a dead stack frame.

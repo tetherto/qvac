@@ -14,7 +14,7 @@ inline constexpr const char* ADDON_ID = "Diffusion";
 inline constexpr const char* CANCELLED = "Cancelled";
 inline constexpr const char* JOB_CANCELLED_MESSAGE = "Job cancelled";
 
-// Convenience factory so the four cancel sites stay perfectly in sync.
+// Convenience factory so the cancellation sites stay perfectly in sync.
 inline qvac_errors::StatusError makeCancelledError() {
   return qvac_errors::StatusError(ADDON_ID, CANCELLED, JOB_CANCELLED_MESSAGE);
 }

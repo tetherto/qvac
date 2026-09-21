@@ -119,8 +119,8 @@ TEST(SdVidGenHandlers_Dimensions, MultiplesOfSixteenAccepted) {
 TEST(SdVidGenHandlers_Dimensions, NonMultipleOfSixteenRejected) {
   expectThrows("width", num(831));
   expectThrows("height", num(479));
-  expectThrows("width", num(1));  // not a multiple of 16
-  expectThrows("width", num(8));  // multiple of 8 but not 16
+  expectThrows("width", num(1));   // not a multiple of 16
+  expectThrows("width", num(8));   // multiple of 8 but not 16
   expectThrows("height", num(24)); // multiple of 8 but not 16
 }
 
@@ -176,27 +176,22 @@ TEST(SdVidGenHandlers_IntCoercion, AcceptsIntegerDoubles) {
 }
 
 // -----------------------------------------------------------------------------
-// 4. video_frames (Wan requires n = 4*k + 1, n >= 5)
+// 4. video_frames (model-specific temporal packing is validated later)
 // -----------------------------------------------------------------------------
 
-TEST(SdVidGenHandlers_VideoFrames, AcceptsValidTemporallyPackedCounts) {
+TEST(
+    SdVidGenHandlers_VideoFrames,
+    AcceptsPositiveCountsForModelAwareValidation) {
   EXPECT_EQ(applyOne("video_frames", num(5)).videoFrames, 5);
+  EXPECT_EQ(applyOne("video_frames", num(6)).videoFrames, 6);
   EXPECT_EQ(applyOne("video_frames", num(9)).videoFrames, 9);
   EXPECT_EQ(applyOne("video_frames", num(13)).videoFrames, 13);
+  EXPECT_EQ(applyOne("video_frames", num(22)).videoFrames, 22);
   EXPECT_EQ(applyOne("video_frames", num(33)).videoFrames, 33);
   EXPECT_EQ(applyOne("video_frames", num(81)).videoFrames, 81);
 }
 
-TEST(SdVidGenHandlers_VideoFrames, RejectsNonFourKPlusOne) {
-  expectThrows("video_frames", num(6));  // 4k + 2
-  expectThrows("video_frames", num(7));  // 4k + 3
-  expectThrows("video_frames", num(8));  // 4k
-  expectThrows("video_frames", num(32)); // 4k
-  expectThrows("video_frames", num(34)); // 4k + 2
-}
-
-TEST(SdVidGenHandlers_VideoFrames, RejectsBelowMinimum) {
-  expectThrows("video_frames", num(1));
+TEST(SdVidGenHandlers_VideoFrames, RejectsNonPositiveCounts) {
   expectThrows("video_frames", num(0));
   expectThrows("video_frames", num(-1));
 }
@@ -377,6 +372,34 @@ TEST(SdVidGenHandlers_VaceStrength, AcceptsInRange) {
 TEST(SdVidGenHandlers_VaceStrength, OutOfRangeRejected) {
   expectThrows("vace_strength", num(-0.5));
   expectThrows("vace_strength", num(1.5));
+}
+
+TEST(SdVidGenHandlers_LtxIngredients, ParsesLoraAndStgSettings) {
+  EXPECT_EQ(
+      applyOne("lora", str("/tmp/ingredients.safetensors")).loraPath,
+      "/tmp/ingredients.safetensors");
+  EXPECT_FLOAT_EQ(applyOne("lora_strength", num(1.4)).loraStrength, 1.4f);
+  EXPECT_FLOAT_EQ(applyOne("stg_scale", num(1.0)).stgScale, 1.0f);
+  EXPECT_EQ(applyOne("stg_block", num(29)).stgBlock, 29);
+  ASSERT_TRUE(applyOne("reference_downscale_factor", num(1.0))
+                  .referenceDownscaleFactor.has_value());
+  EXPECT_FLOAT_EQ(
+      applyOne("reference_downscale_factor", num(1.0))
+          .referenceDownscaleFactor.value(),
+      1.0f);
+}
+
+TEST(SdVidGenHandlers_LtxIngredients, RejectsInvalidStrengthAndStg) {
+  expectThrows("lora_strength", num(-0.1));
+  expectThrows("lora_strength", num(10.1));
+  expectThrows("stg_scale", num(-0.1));
+  expectThrows("stg_scale", num(10.1));
+  expectThrows("stg_block", num(-1));
+  expectThrows("reference_downscale_factor", num(0.5));
+  expectThrows("reference_downscale_factor", num(2.0));
+  EXPECT_ANY_THROW(applyOne(
+      "reference_downscale_factor",
+      num(std::numeric_limits<double>::quiet_NaN())));
 }
 
 // -----------------------------------------------------------------------------

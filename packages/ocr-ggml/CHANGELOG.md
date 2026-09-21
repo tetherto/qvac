@@ -6,9 +6,170 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Add `main-gpu` (alias `main_gpu`) to select a GPU by raw registry index or
+  `dedicated` / `integrated` class when a GPU backend is requested. Unavailable
+  classes and refused devices fall back to CPU; out-of-range indices warn and
+  use automatic selection. Cannot be combined with `gpuDevice`.
+
+## [0.24.3] - 2026-09-18
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.0` -> `^0.16.1`. Another hard floor: Android consumers built against `0.16.0` fail to load. That release named the ELF version node `QVAC_FABRIC_ABI_1` on every ELF target, so an Android addon records a `DT_VERNEED` that bionic cannot satisfy — `dlopen` fails and `bare` reports `ADDON_NOT_FOUND: Cannot find addon '.'` from `binding.js` before any model work. `0.16.1` names the node only where fabric owns the C++ runtime (Linux embedding libc++); Android keeps the anonymous node it had through `0.15.0`. An Android binary linked against `0.16.0` keeps the versioned imports and still fails, so this package has to be rebuilt. A caret on a `0.x` version locks the minor, so `^0.16.0` could still resolve `0.16.0`. Released as a patch rather than a minor so consumers already tracking the `0.24.x` line pick this up without a range change of their own. Linux binaries built against `0.16.0` are unaffected. Desktop was unaffected. No API change. Rationale: fabric `0.16.1` ([#4566](https://github.com/tetherto/qvac/pull/4566)).
+
+## [0.24.2] - 2026-09-17
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.15.0` -> `^0.16.0`. Another hard floor, for the reason the last one turned out not to be enough on its own: `0.15.0` exported the C++ runtime, but nothing bound this addon to it. `bare`'s executable links GNU `libstdc++.so.6`, which puts a second complete C++ runtime in the process' **global** lookup scope — searched ahead of a `dlopen`'d module's own `DT_NEEDED` chain — so `__cxa_throw`, `__gxx_personality_v0` and the `std::` typeinfo objects resolved from libstdc++ while fabric's exports went unused. `0.16.0` names its version node `QVAC_FABRIC_ABI_1`, which makes this module record a `DT_VERNEED` that libstdc++ cannot satisfy, and that is what completes the pin. A caret on a `0.x` version locks the minor, so `^0.15.0` could not have resolved `0.16.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.24.x` line pick this up without a range change of their own.
+- The build now proves the pin instead of assuming it: `qvac_addon_finalize` reads the linked module with `readelf` and fails if any C++ runtime symbol is imported without the `QVAC_FABRIC_ABI_1` requirement. That check exists because the built ELF is the only place the invariant is observable — paired with a fabric that does not stamp the node, this module links and loads exactly as before and merely stops matching typed catches.
+- The module now exports the two `bare_*` entry points the runtime resolves by name and nothing else, down from about 1985 symbols: its own and nlohmann's typeinfo, and the whole of `inference-addon-cpp`, are no longer exported. `bare` loads modules `RTLD_LOCAL`, so nothing could reach those anyway; the addon and fabric are now a closed unit exposing plain C by construction rather than by the loader flags of whichever host loads them.
+- The EasyOCR and DocTR pipelines define no `std::exception` handler of their own, so no behavioural change is expected here — for this package the release is the completed link model and the floor. Linux only; macOS, Windows, Android and iOS already share one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4519](https://github.com/tetherto/qvac/pull/4519)).
+
+## [0.24.1] - 2026-09-16
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.14.0` -> `^0.15.0`. This is a hard floor rather than a courtesy bump: on Linux this addon's module and its C++ test binaries no longer embed a libc++ of their own — they link `-nostdlib++` and resolve the C++ runtime from `qvac__fabric@0.bare`, which first exports it in `0.15.0`. Paired with an older fabric the module still links, because ELF shared objects tolerate undefined symbols, and then fails to load on the first missing typeinfo. A caret on a `0.x` version locks the minor, so `^0.14.0` could not have resolved `0.15.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.24.x` line pick this up without a range change of their own.
+- One C++ runtime per process means one copy of every `std::` typeinfo, and RTTI matches typeinfo by address rather than by name. Where this addon surfaces an exception raised inside the shared runtime, it now arrives with its own message, because `JSCATCH`'s `catch (const std::exception&)` arm matches the throw instead of falling through to the catch-all that reports `INTERNAL_ERROR` / `"Unknown error"`. The EasyOCR and DocTR pipelines define no `std::exception` handler of their own, so no behavioural change is expected here — for this package the release is the link model and the floor. Linux only; macOS, Windows, Android and iOS already shared one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4477](https://github.com/tetherto/qvac/pull/4477)).
+
+## [0.24.0] - 2026-09-15
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.13.0` -> `^0.14.0`, which carries `qvac-fabric` `10549.0.0#1` -> `10549.1.0` (an out-of-bounds tensor write in the MoE copy path, uninitialized ggml views after oversized MoE cache banks, the `mtmd` audio-encoder skip, native MTP compute-buffer sharing, and qwen4exp correctness backports). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.13.0` would not have resolved `0.14.0` on its own. No API change for this package.
+- OCR inference touches none of 10549.1.0's MoE, multimodal-projector or speculative-decoding paths, so the bump keeps this package on the current shared runtime rather than a superseded one.
+- Also ships two changes that landed after `0.23.0` with no version bump of their own, neither of which alters shipped code: the iOS test-harness work in [#4399](https://github.com/tetherto/qvac/pull/4399) (hardlinked pre-staged models, iOS crash-report capture — `test/` only) and the agent-configuration unification in [#4353](https://github.com/tetherto/qvac/pull/4353) (`.agent/` only).
+
+## [0.23.0] - 2026-09-10
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.10.0` -> `^0.13.0`, which carries `qvac-fabric` `10297.1.2` -> `10549.0.0` (upstream llama.cpp b10549). This package consumes the shared runtime via npm rather than building the vcpkg port, so the range bump is what picks up the new fabric. A caret on a `0.x` version locks the minor, so `^0.10.0` would not have resolved `0.13.0` on its own. No API change for this package.
+- Also ships work that landed after `0.22.0` with no version bump of its own: removal of the co-load smoke workflows, actions and code (#4345), and the pnpm+nx monorepo foundation (#3543).
+
+## [0.22.0] - 2026-09-07
+
+### Fixed
+
+- Route OCR JS array construction through `js::Array::set` so the addon compiles against libjs 1.32's `js_set_array_elements` const placement. Requires `qvac-lib-inference-addon-cpp` 1.4.0 and libjs 1.32 headers (`bare-headers` >= 1.32).
+
+## [0.21.0] - 2026-08-29
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10297.0.0` -> `10297.1.1` (MTP drafter, pipeline-parallel ACCEL fix, Metal optimisations, Qwen4-Next support and fit host-memory budgeting, plus the Qwen4-Next perf follow-ups and the Vulkan top-k radix-select shader; no API change for this package).
+
+## [0.20.0] - 2026-08-24
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.2.0` -> `10297.0.0` (b10297 rebase with updated llama.cpp/ggml runtime; no API change for this package).
+
+### Fixed
+
+- Declared the runtime modules used by the published integration and mobile test files.
+
+## [0.19.0] - 2026-08-20
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.1` -> `10069.2.0` (TurboVec CPU
+  support from the fabric runtime; no API change for this package).
+
+## [0.18.0] - 2026-08-18
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.1.0` -> `10069.1.1` (Adreno OpenCL MoE
+  repack fix; no API change for this package).
+
+## [0.17.0] - 2026-08-17
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10069.0.0` -> `10069.1.0` (VisionPsy Nano
+  support and its Flash preprocessing rule; no API change for this package).
+
+## [0.16.0] - 2026-08-11
+
+### Added
+
+- `langList` is now optional for the language-agnostic DocTR pipeline
+  (`pipelineType: 'doctr'`). An explicitly provided list is still validated
+  and forwarded unchanged.
+- New runnable examples: `examples/doctr.js` and `examples/backend-device.js`.
+
+### Changed
+
+- Language validation is deferred to the native pipeline, which checks the
+  requested languages against its registry and the loaded recognizer's
+  character set — Latin-only lists such as `['fr']` with `latin_g2.gguf` now
+  load. Native language-validation failures still reject `load()` with
+  `ERR_CODES.UNSUPPORTED_LANGUAGE`, now carrying the native error message.
+- Other model-creation failures (e.g. a bad model file) reject `load()` with
+  `ERR_CODES.FAILED_TO_LOAD_WEIGHTS`, preserving the native error message.
+- Documentation refresh: `canvasSize`, `OCR_DOCTR_FUSED_CONV`, `backendIsGpu`
+  (all GPU backends incl. OpenCL), vendored model converter, registry-hosted
+  models via `@qvac/inference`, supported platforms, error codes, corrected
+  repository layout, and DocTR in the package description/keywords.
+
+### Fixed
+
+- `load()` no longer leaks the native instance and the C++ → JS logger bridge
+  when activation fails.
+- Removed unconditional native-loading console diagnostics from `binding.js`.
+- `bare-fs` and `bare-path` are now runtime dependencies (required at import
+  time by the published entrypoints).
+- Examples and the README read `RuntimeStats` from `response.stats` instead of
+  the `response.await()` result.
+
+### Pull Requests
+
+- [#3740](https://github.com/tetherto/qvac/pull/3740) - fix[api]: address
+  ocr-ggml package-review findings
+
+## [0.15.0] - 2026-08-10
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.1.1` -> `10069.0.0` (b10069 rebase; no
+  API change for this package).
+
+### Pull Requests
+
+- [#3621](https://github.com/tetherto/qvac/pull/3621) - Sync all addons with
+  fabric v10069.0.0
+
+## [0.14.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
+## [0.13.1] - 2026-07-30
+
 ### Changed
 
 - Migrated the runtime wrapper and type declarations to TypeScript. Sources now live under `src/` and the published root JavaScript entrypoints (`index.js`, `ocr-ggml.js`, `addonLogging.js`, `lib/error.js`) and `.d.ts` declarations are generated from them and committed. Public API, CommonJS export shape, and OCR output are unchanged.
+- `qvac-fabric` dependency bumped `9840.0.1` -> `9840.1.1`, picking up the
+  Vulkan strided `CONCAT` addressing fix with no API change for this package.
+
+## [0.13.0] - 2026-07-28
+
+### Changed
+
+- `qvac-fabric` dependency bumped `9840.0.0` → `9840.0.1` (training weight-repack
+  disable, Metal `acc`/`set` threadgroup dispatch fix, and MoE/hybrid training
+  loss scaling; no API change for this package).
 
 ## [0.12.2] - 2026-07-21
 

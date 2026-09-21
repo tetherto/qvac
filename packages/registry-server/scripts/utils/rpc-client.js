@@ -8,6 +8,9 @@ const IdEnc = require('hypercore-id-encoding')
 const cenc = require('compact-encoding')
 const { ENV_KEYS } = require('../../shared/constants')
 
+const CAPACITY_CONNECTION_TIMEOUT_MS = 10000
+const CAPACITY_RPC_TIMEOUT_MS = 5000
+
 /**
  * Derive a dedicated RPC discovery key from the autobase key.
  * Must match the derivation in registry-service.js.
@@ -172,6 +175,122 @@ async function connectToRegistry({
   })
 }
 
+async function connectToRegistryByCapacity({
+  config,
+  logger = console,
+  storage = './temp-client-storage',
+  timeout = 30000,
+  primaryKey = null,
+  indexerKeys = null,
+  connectionTimeout = CAPACITY_CONNECTION_TIMEOUT_MS,
+  capacityTimeout = CAPACITY_RPC_TIMEOUT_MS,
+  connect = connectToRegistry
+}) {
+  const resolvedIndexerKeys = indexerKeys || config.getIndexerKeys()
+  const peerKeys = [
+    ...new Set(resolvedIndexerKeys.map((key) => IdEnc.normalize(IdEnc.decode(key))))
+  ]
+
+  if (peerKeys.length === 0) {
+    logger.warn('RPC Client: No indexer keys configured; using legacy peer selection')
+    return connect({ config, logger, storage, timeout, primaryKey, indexerKeys })
+  }
+
+  const candidates = []
+
+  for (const peerKey of peerKeys) {
+    let probe = null
+    try {
+      probe = await connect({
+        config,
+        logger,
+        storage,
+        timeout: connectionTimeout,
+        primaryKey,
+        targetPeer: peerKey,
+        indexerKeys: [peerKey]
+      })
+
+      const response = await probe.rpc.request(
+        'get-storage-capacity',
+        {},
+        {
+          timeout: capacityTimeout
+        }
+      )
+      const availableBytes = parseAvailableBytes(response?.availableBytes)
+      if (availableBytes === null) throw new Error('Invalid storage capacity response')
+
+      candidates.push({ peerKey, availableBytes })
+    } catch (err) {
+      const errorCode = getErrorCode(err)
+      if (errorCode === 'ERR_WRITER_UNAUTHORIZED') {
+        logger.warn(
+          { peer: peerKey, error: err.message, code: errorCode },
+          'RPC Client: Capacity probe authorization failed'
+        )
+        throw err
+      }
+
+      logger.warn(
+        { peer: peerKey, error: err.message, code: errorCode },
+        'RPC Client: Capacity probe failed'
+      )
+    } finally {
+      if (probe) await probe.cleanup()
+    }
+  }
+
+  const winner = selectPeerByCapacity(candidates)
+  if (!winner) {
+    logger.warn('RPC Client: Capacity selection unavailable; using legacy peer selection')
+    return connect({ config, logger, storage, timeout, primaryKey, indexerKeys })
+  }
+
+  logger.info(
+    { peer: winner.peerKey, availableBytes: winner.availableBytes.toString() },
+    'RPC Client: Selected indexer with most available storage'
+  )
+
+  return connect({
+    config,
+    logger,
+    storage,
+    timeout,
+    primaryKey,
+    targetPeer: winner.peerKey,
+    indexerKeys: [winner.peerKey]
+  })
+}
+
+function parseAvailableBytes(value) {
+  if (typeof value === 'bigint' && value >= 0n) return value
+  if (typeof value === 'string' && /^\d+$/.test(value)) return BigInt(value)
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value)
+  return null
+}
+
+function selectPeerByCapacity(candidates) {
+  const valid = candidates
+    .map((candidate) => ({
+      ...candidate,
+      availableBytes: parseAvailableBytes(candidate.availableBytes)
+    }))
+    .filter((candidate) => candidate.availableBytes !== null)
+
+  valid.sort((a, b) => {
+    if (a.availableBytes > b.availableBytes) return -1
+    if (a.availableBytes < b.availableBytes) return 1
+    return a.peerKey.localeCompare(b.peerKey)
+  })
+
+  return valid[0] || null
+}
+
+function getErrorCode(err) {
+  return err?.cause?.code || err?.code || null
+}
+
 function getKeyPairFromEnv() {
   const publicKeyHex = process.env[ENV_KEYS.QVAC_WRITER_PUBLIC_KEY]
   const secretKeyHex = process.env[ENV_KEYS.QVAC_WRITER_SECRET_KEY]
@@ -233,6 +352,11 @@ async function updateModelMetadata({
 }
 
 module.exports = {
+  CAPACITY_CONNECTION_TIMEOUT_MS,
+  CAPACITY_RPC_TIMEOUT_MS,
   connectToRegistry,
+  connectToRegistryByCapacity,
+  parseAvailableBytes,
+  selectPeerByCapacity,
   updateModelMetadata
 }

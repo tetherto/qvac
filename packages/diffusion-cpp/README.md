@@ -1,15 +1,17 @@
 # diffusion-cpp
 
-Native C++ addon for image, video, and ESRGAN inference through
+Native C++ addon for image, video, interactive world-walk, and ESRGAN
+inference through
 [qvac-ext-stable-diffusion.cpp](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp),
 built for the Bare Runtime.
 
-The package exposes three JS entry points:
+The package exposes four JS entry points:
 
 | API                    | Entry point                                 | Use case                                                                        |
 | ---------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
 | `ImgStableDiffusion`   | `@qvac/diffusion-cpp`                       | Text-to-image, image-to-image, FLUX.2 reference fusion, optional ESRGAN upscale |
 | `VideoStableDiffusion` | `@qvac/diffusion-cpp/video` or named export | Wan and LTX text-to-video / image-to-video                                      |
+| `WorldStableDiffusion` | `@qvac/diffusion-cpp/world`                 | ABot-World interactive walk: block-by-block generation under keyboard input     |
 | `EsrganUpscaler`       | named export from `@qvac/diffusion-cpp`     | Standalone PNG/JPEG upscaling                                                   |
 
 ## Table of Contents
@@ -28,6 +30,7 @@ The package exposes three JS entry points:
   - [Video Files](#video-files)
   - [Video Parameters](#video-parameters)
 - [LTX-2 Text-to-Video With Audio](#ltx-2-text-to-video-with-audio)
+- [ABot-World Interactive Walk](#abot-world-interactive-walk)
 - [ESRGAN Upscaler](#esrgan-upscaler)
 - [Response Streams and Stats](#response-streams-and-stats)
 - [Cancellation and Unload](#cancellation-and-unload)
@@ -47,6 +50,7 @@ The package exposes three JS entry points:
 | Wan 2.1                      | text-to-video, image-to-video          | Single diffusion expert; I2V requires CLIP vision                                 |
 | Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video                          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
 | LTX-2 / LTXAV                | text-to-video + audio                  | Gemma text encoder, video VAE, audio VAE, embedding connectors                    |
+| ABot-World                   | interactive world walk                 | Causal block-by-block generation under keyboard input; see [ABot-World guide](docs/abot-world.md) |
 | ESRGAN                       | upscale                                | Standalone or post-generation image upscale                                       |
 
 ## Supported Platforms
@@ -98,6 +102,7 @@ by the examples.
 | `./scripts/download-model-wan-14b.sh` | Wan larger T2V variant        |
 | `./scripts/download-model-wan-i2v.sh` | Wan 2.1 I2V 14B + CLIP vision |
 | `./scripts/download-model-ltx.sh`     | LTX-2.3 video + audio files   |
+| `./scripts/download-model-abot.sh`    | ABot-World set into `test/model/abot` (from the [P2P model registry](docs/abot-world.md), no credentials) |
 
 The FLUX.2 [klein] default image example uses:
 
@@ -135,8 +140,10 @@ Downloads are resumable where supported by the script.
 | `bare examples/img2vid-wan.js`               | Wan 2.1 image-to-video                      |
 | `npm run generate:video`                     | Wan text-to-video                           |
 | `npm run generate:ltx`                       | LTX-2.3 text-to-video with audio            |
+| `npm run generate:ltx-coffee`                | 9-second LTX Ingredients coffee example     |
 | `npm run generate:esrgan`                    | Image generation followed by ESRGAN upscale |
 | `bare examples/standalone-esrgan-upscale.js` | Standalone ESRGAN upscale                   |
+| `npm run walk:world`                         | ABot-World browser demo (generate + walk a world) |
 
 Outputs are written to `packages/diffusion-cpp/output/`.
 
@@ -194,7 +201,7 @@ All file paths must be absolute.
 | `files.model`                   |      yes | Main model. All-in-one checkpoint for SD, diffusion model for split layouts |
 | `files.clipL`                   |       no | CLIP-L text encoder for SD3 / split layouts                                 |
 | `files.clipG`                   |       no | CLIP-G text encoder for SDXL / SD3                                          |
-| `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3 / FLUX.1                                        |
+| `files.t5Xxl`                   |       no | T5-XXL text encoder for SD3                                                 |
 | `files.llm`                     |       no | Qwen3 LLM text encoder for FLUX.2 [klein]                                   |
 | `files.vae`                     |       no | Separate VAE                                                                |
 | `files.esrgan`                  |       no | ESRGAN model for post-generation upscale                                    |
@@ -217,14 +224,16 @@ argument.
 | `type`                  | weight type                               | auto              | Override weight quantization                                              |
 | `rng`                   | `'cpu'                                    | 'cuda'            | 'std_default'`                                                            | `'cuda'`                         | Context RNG; `cuda` means Philox and is not GPU-specific |
 | `sampler_rng`           | RNG type                                  | auto              | Sampler RNG override                                                      |
-| `clip_on_cpu`           | boolean                                   | `false`           | Force CLIP/text encoder to CPU                                            |
-| `vae_on_cpu`            | boolean                                   | `false`           | Force VAE to CPU                                                          |
 | `vae_decode_only`       | boolean                                   | `false`           | Load only VAE decoder weights; leave false for img2img/fusion/hires paths |
 | `vae_tiling`            | boolean                                   | `false`           | Tile VAE decode to reduce peak VRAM                                       |
 | `flash_attn`            | boolean                                   | `false`           | Enable flash attention globally                                           |
 | `diffusion_fa`          | boolean                                   | `true`            | Enable diffusion-model flash attention; important for FLUX/LTX memory use |
 | `mmap`                  | boolean                                   | backend default   | Memory-map weights when supported                                         |
 | `offload_to_cpu`        | boolean                                   | backend default   | Keep weights on CPU/offload as supported by backend                       |
+| `backend`               | string                                    | auto              | Runtime backend for all modules or per-module assignments                 |
+| `params_backend`        | string                                    | runtime backend   | Parameter residency on a backend, CPU RAM, or disk                        |
+| `max_vram`              | number \| string                          | `0`               | VRAM budget in GiB for graph-cut segmented execution                      |
+| `stream_layers`         | boolean                                   | `false`           | Stream diffusion layers from CPU RAM when graph cutting is active         |
 | `prediction`            | prediction type                           | auto              | Required for FLUX img2img/fusion routing; use `'flux2_flow'` for FLUX.2   |
 | `flow_shift`            | number                                    | model default     | Flow-matching noise schedule shift                                        |
 | `diffusion_conv_direct` | boolean                                   | `true`            | Use direct convolution in diffusion model                                 |
@@ -238,7 +247,70 @@ pinned through `sd_ctx_params_t.backend`. If an explicit request cannot be
 satisfied (`'integrated'` with no integrated GPU, `'dedicated'` with no discrete
 GPU, or an out-of-range index), the addon falls back to CPU instead of silently
 choosing another GPU. Mobile targets reject `main-gpu` because they are
-single-GPU devices.
+single-GPU devices. An explicit `backend` assignment takes precedence over
+`main-gpu`.
+
+`backend` controls where graphs execute. `params_backend` controls where model
+weights remain between uses. For example, `backend: 'diffusion=cuda0,te=cpu'`
+runs the diffusion model on CUDA and the text encoder on CPU.
+
+`params_backend: 'diffusion=cpu'` keeps diffusion weights in CPU RAM and stages
+them to the runtime backend. `params_backend: 'diffusion=disk'` reloads those
+weights from the model file on demand and releases them after use — on every
+job, not only the first — so a disk-backed module also disables eager weight
+loading for the whole context. Disk is not selected automatically.
+
+`offload_to_cpu: true` supplies a `*=cpu` default. An explicit `params_backend`
+entry written in `module=backend` form overrides that default **for that module
+only**: `params_backend: 'te=disk'` with `offload_to_cpu: true` keeps TE weights
+on disk while other parameters remain in CPU RAM.
+
+A bare entry or an assignment to `*`, `all`, or `default` sets the whole-spec
+default rather than a per-module override, and the last default wins. For
+example, `params_backend: 'cuda0'` with `offload_to_cpu: true` puts every module
+on `cuda0` and offloads nothing. The addon logs when the final whole-spec default
+differs from CPU. Equivalent defaults such as `all=cpu` do not produce an error.
+Write `params_backend: 'diffusion=cuda0'` to move one module and leave the rest
+offloaded.
+
+A nonzero `max_vram` enables graph-cut segmentation even without
+`stream_layers`. Positive values cap the VRAM budget in GiB. Negative values
+use detected free VRAM while reserving the absolute value as headroom, and `0`
+disables graph cutting. Backend assignments such as
+`max_vram: 'cuda0=6,vulkan0=4'` apply one budget per device.
+
+`stream_layers` adds diffusion-layer prefetch and eviction only when graph
+cutting is active and the diffusion parameter backend is CPU, for example:
+
+```js
+config: {
+  backend: 'cuda0',
+  params_backend: 'diffusion=cpu',
+  max_vram: -1,
+  stream_layers: true
+}
+```
+
+It does not stream from disk. Use `params_backend: 'diffusion=disk'` for
+on-demand reads from the model file.
+
+`stream_layers` is forwarded to the engine as configured; the engine itself
+skips streaming when its prerequisites are unmet. The addon reports the cases
+it can prove before engine initialization: `max_vram` is unset, `0`, or an
+all-zero assignment such as `'cuda0=0'`. Per-backend and automatic negative
+budgets are resolved by the engine using the selected runtime backend and its
+free memory. That message, and the `main-gpu` and `params_backend` notices above,
+are the only diagnostics emitted at the default `verbosity: 0`; set
+`verbosity: 2` to also see the effective `backend`, `params_backend` and
+`max_vram` assignments the addon passes to the engine.
+
+The 16-case Linux hardware matrix is available in
+`scripts/validate-layer-streaming.sh`. It expects the MiniMax-H3 files under
+`/home/shared/models/minimax-h3-q2` by default. Override that location with
+`H3_MODELS_DIR`. The runtime backend defaults to `vulkan0`; override it with
+`BACKEND`, for example `BACKEND=cuda0`. Then run the script from the package
+directory. Each case requires a non-empty AVI and checks the engine log for the
+expected graph-cut, streaming, CPU RAM, or disk behavior.
 
 ### Image Generation Parameters
 
@@ -423,6 +495,47 @@ backend runs one process on one device with optional CPU offload. Use dimensions
 that are multiples of 32 for this TI2V model so the emitted AVI dimensions match
 the requested dimensions.
 
+## MiniMax-H3 Text-to-Audio-Video
+
+MiniMax-H3 is supported for prompt-only video generation. Download the matching
+FL2VA denoiser, Qwen3-VL text encoder, video VAE, and audio VAE:
+
+```sh
+./scripts/download-model-minimax-h3.sh --q4
+```
+
+Set `H3_MODELS_DIR` when running `npm run generate:h3-coffee` with model files
+stored outside the package.
+
+The initial integration intentionally rejects init images, control frames, and
+reference images. Use a 32-pixel spatial grid and a `17*k + 5` frame count.
+H3 is distilled: `cfg_scale` must be `1.0`, and the output stream is always
+24 FPS with its native stereo audio.
+
+```js
+const VideoStableDiffusion = require('@qvac/diffusion-cpp/video')
+const model = new VideoStableDiffusion({
+  files: {
+    model: '/models/minimax-h3/minimax_h3_fl2va_pruned-Q4_K.gguf',
+    llm: '/models/minimax-h3/qwen3vl_32b_minimax_h3-Q4_K_M.gguf',
+    vae: '/models/minimax-h3/vae/minimax_h3_video_vae_fp16.safetensors',
+    audioVae: '/models/minimax-h3/vae/minimax_h3_audio_vae_fp32.safetensors'
+  },
+  config: { device: 'gpu', diffusion_fa: true, offload_to_cpu: true }
+})
+await model.load()
+const response = await model.run({
+  mode: 'txt2vid',
+  prompt: 'A cinematic close-up of a person enjoying coffee in warm morning light.',
+  width: 960,
+  height: 544,
+  video_frames: 124,
+  fps: 24,
+  steps: 8,
+  cfg_scale: 1.0
+})
+```
+
 ## LTX-2 Text-to-Video With Audio
 
 ```js
@@ -466,6 +579,64 @@ const response = await model.run({
 LTX distilled variants are designed for low step counts and low CFG values.
 For full dev weights, use higher steps and a larger CFG.
 
+## ABot-World Interactive Walk
+
+ABot-World is a causal world model: it generates video **block-by-block under
+live keyboard input** instead of one batch call, exposed via
+`@qvac/diffusion-cpp/world` (`WorldStableDiffusion`). Worlds are created
+natively from a prompt + first-frame image (`createScene()`), then walked with
+WASD/IJKL (`step()`), streaming decoded PNG/JPEG frames. The four model files
+ship in the QVAC P2P registry.
+
+```bash
+# models (P2P registry, no credentials) + browser demo
+npm install -g @qvac/registry-client   # then see docs/abot-world.md for the 4 downloads
+export ABOT_MODELS_DIR=~/abot-models ABOT_KV_CACHE=1
+npm run walk:world                     # open http://127.0.0.1:8787
+```
+
+```js
+const WorldStableDiffusion = require('@qvac/diffusion-cpp/world')
+
+const world = new WorldStableDiffusion({
+  files: { model: ditGguf, taehv: taehvGguf, scene: scenePack },
+  config: { seed: 42, kvCache: true }
+})
+await world.load()
+const response = await world.step({ W: true }) // one generated block forward
+await response
+  .onUpdate((data) => {
+    if (data instanceof Uint8Array) frames.push(data) // PNG/JPEG frames
+  })
+  .await()
+await world.unload()
+```
+
+**Hardware requirements** (interactive walk, Q8 DiT + KV cache):
+
+| tier | GPU | host RAM | disk | measured |
+|---|---|---|---|---|
+| minimum @ 832x480 | 24 GB card, **>= 20 GB VRAM free** (16.3 GB steady + ~2.7 GB transient at block 0) | 8 GB | 14 GB | RTX 5090: 1.78 s/block |
+| low-VRAM @ 448x256 | ~6 GB | 8 GB | 14 GB | laptop RTX 4050 |
+| optimal | RTX 5090-class, dedicated (no co-tenant VRAM); optional dual-GPU split `ABOT_BACKEND="diffusion=cuda0,vae=cuda1"` | 16 GB | NVMe | 6.7-6.8 fps generation |
+
+**Performance vs the PyTorch reference** (same 5090, same walk): the QVAC build
+generates **6.7 fps vs ~28.5 fps** for the reference's fp8 Triton pipeline —
+about **4.2x slower per block**, the main known trade-off of this
+implementation today. In exchange it starts 36x faster (first frame in 1.5 s vs
+~54 s), uses 14x less host RAM (3.1 GB vs 43.6 GB peak), one CPU core instead
+of two-plus, 14 GB on disk instead of ~38 GB, and needs no Python runtime.
+
+**Model fidelity**: the weights are converted to GGUF (DiT and umT5 at Q8_0,
+VAE and taehv at F16), so outputs are **not bit-exact** vs the PyTorch
+reference — parity is held by cosine-similarity gates instead (golden walk
+replays 0.993-0.99995, scene packs >= 0.997, ~32-38 dB walk-level PSNR), and
+walks are visually indistinguishable in validation.
+
+Full guide — building, the demo server (local and over-SSH playback), the world
+API for app developers, resolutions, performance details and troubleshooting:
+**[docs/abot-world.md](docs/abot-world.md)**.
+
 ## ESRGAN Upscaler
 
 ```js
@@ -508,6 +679,16 @@ by 4x; two passes scale by 16x.
 All three wrappers return a `QvacResponse`.
 
 - Progress updates are JSON strings like `{"step":1,"total":20,"elapsed_ms":...}`.
+  The stream is multi-phase: sampler sequences (one per image batch item /
+  video expert, `total` = its step count) and, when `vae_tiling` is enabled,
+  VAE tile passes (`total` = tile count). Each sequence restarts at
+  `step: 0`, so a bar renderer should key on `total` changes rather than
+  assume a single monotonic sequence. Model weights normally load eagerly at
+  `load()`, so generation emits no loader ticks. Two configurations load
+  lazily instead and do emit loader ticks inside generation: mobile targets,
+  and any `params_backend` naming `disk` for one or more modules — the latter
+  on every job, since disk-backed weights are released after each phase. In
+  those cases the first job's `conditionerMs` also absorbs weight-load time.
 - Image generation and ESRGAN emit PNG `Uint8Array` values.
 - Video generation emits one MJPG AVI `Uint8Array`.
 - If `opts.stats` is enabled, a `stats` event is emitted before completion.
@@ -544,6 +725,10 @@ During ESRGAN upscale, cancellation is honored between repeat passes.
 - Wan dimensions must be multiples of 16; LTX dimensions must be multiples of 32.
 - Wan frame counts use `(4*k + 1)`; LTX frame counts use `(8*k + 1)`.
 - LTX audio is muxed into AVI as IEEE-float PCM at 48 kHz.
+- On Linux the shipped prebuild must not hard-link any GPU loader
+  (`libvulkan`/`libOpenCL`/`libcuda`) — an integration test asserts this. For
+  local custom builds that legitimately do (e.g. `SD_CUDA=ON`), skip it with
+  `QVAC_SKIP_PREBUILD_LINK_CHECK=true`.
 
 ## Credits
 

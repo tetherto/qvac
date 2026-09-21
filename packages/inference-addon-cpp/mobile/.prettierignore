@@ -1,0 +1,10 @@
+node_modules
+build
+dist
+prebuilds
+coverage
+package-lock.json
+**/*.auto.cjs
+# Generated: reformatting would register as drift against the desktop source.
+test/integration
+generated

@@ -12,7 +12,7 @@ export async function resolveToolDialect(sdkModelId: string): Promise<ToolDialec
 
   try {
     const info = await getLoadedModelInfo({ modelId: sdkModelId })
-    if (!info.isDelegated && info.toolDialect !== undefined) {
+    if (info.toolDialect !== undefined) {
       // Only cache a real resolution: caching the fallback would pin the model
       // to hermes for the process even after a transient RPC failure recovers,
       // re-leaking markup for a native-dialect model on every later turn.

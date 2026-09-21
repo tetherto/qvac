@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
+option(ENABLE_CUDA "Enable CUDA GPU acceleration (needs nvcc on the build host)" OFF)
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -9,6 +10,10 @@ endif()
 
 if(ENABLE_VULKAN)
   list(APPEND VCPKG_MANIFEST_FEATURES "vulkan")
+endif()
+
+if(ENABLE_CUDA)
+  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
@@ -59,10 +64,19 @@ if((ANDROID OR UNIX) AND NOT APPLE)
 endif()
 
 set(BACKEND_DL_LOOSE_SOS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
-  if(VCPKG_INSTALLED_PATH AND EXISTS "${VCPKG_INSTALLED_PATH}/lib")
+if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ENABLE_CUDA))
+  if(NOT VCPKG_INSTALLED_PATH OR NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib")
+    message(WARNING "audiogen-ggml: VCPKG_INSTALLED_PATH "
+      "('${VCPKG_INSTALLED_PATH}') has no lib/ dir; skipping loose "
+      "ggml backend module pickup -- the runtime may fail to find "
+      "Vulkan / OpenCL / CUDA backends.")
+  else()
     file(GLOB BACKEND_DL_LOOSE_SOS
-      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so")
+      "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-*.so"
+      "${VCPKG_INSTALLED_PATH}/lib/qvac-speech-ggml-*.dll")
+    foreach(_lib IN LISTS BACKEND_DL_LOOSE_SOS)
+      message(STATUS "audiogen-ggml: will stage ggml backend ${_lib}")
+    endforeach()
   endif()
 endif()
 
@@ -86,6 +100,15 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/acestep/AcestepModel.cpp
 )
+
+if(NOT ANDROID AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  target_sources(
+    ${audiogen-ggml}
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/addon/src/model-interface/minimax/MinimaxModel.cpp
+  )
+  target_compile_definitions(${audiogen-ggml} PRIVATE AUDIOGEN_HAS_MINIMAX=1)
+endif()
 
 target_include_directories(
   ${audiogen-ggml}

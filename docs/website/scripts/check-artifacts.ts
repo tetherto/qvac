@@ -153,13 +153,17 @@ function corpusPages(text: string): string[] {
   return [...text.matchAll(/^# .*\((\/[^)\s]*)\)$/gm)].map((match) => match[1]);
 }
 
-/** Next.js error pages, which have no place in the documentation set. */
-const NOT_PAGES = ['/404', '/_not-found'];
+/**
+ * Routes that are not documentation pages: Next.js error pages, and the
+ * standalone app routes the site serves beside the docs. Neither is written
+ * in MDX, so neither has a Markdown twin or a place in the agent corpora.
+ */
+const NOT_PAGES = ['/404', '/_not-found', '/keet'];
 
 /**
  * Every page of the build, by the URL it is served at: whatever directory
  * holds an `index.html`. Read that way rather than by the shape of the path,
- * because a line's own index (`/sdk/v0.16`) carries a dot like a file does.
+ * because a line's own index (`/sdk/v0.18`) carries a dot like a file does.
  */
 function pageUrls(served: Set<string>): string[] {
   return [...served]

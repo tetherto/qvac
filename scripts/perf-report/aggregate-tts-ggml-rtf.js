@@ -7,8 +7,9 @@
  *
  * GGML backend notes:
  *   - engines: chatterbox, chatterbox-mtl, supertonic, supertonic-mtl, supertonic3
- *   - GPU backends: vulkan (linux/win32/android), metal (darwin/ios),
- *     opencl (Adreno android, manual / off the default cascade)
+ *   - GPU backends: vulkan (linux/win32/Mali android), metal (darwin/ios),
+ *     opencl (Adreno android, e.g. Samsung Galaxy S25), cuda (linux-x64
+ *     lanes whose prebuild bundles it; wins the cascade over vulkan)
  *   - canonical reports are tagged `addon: 'tts-ggml'`
  *
  * Usage:
@@ -22,9 +23,9 @@
 const fs = require('fs')
 const path = require('path')
 
-const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl']
+const SUPPORTED_GPU_BACKENDS = ['vulkan', 'metal', 'opencl', 'cuda']
 const VALID_ENGINES = ['chatterbox', 'chatterbox-mtl', 'supertonic', 'supertonic-mtl', 'supertonic2', 'supertonic3']
-const VALID_BACKENDS = ['cpu', 'gpu', 'vulkan', 'metal', 'opencl', 'mobile-accelerated']
+const VALID_BACKENDS = ['cpu', 'gpu', 'cuda', 'vulkan', 'metal', 'opencl', 'mobile-accelerated']
 const VALID_VARIANTS = ['q4', 'q4_0', 'q8_0', 'f16', 'f32', 'english', 'mtl']
 const VALID_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'nl', 'pl', 'tr', 'sv', 'da', 'fi', 'no', 'el', 'ms', 'sw', 'ar', 'ko']
 const NOISY_STDDEV_RATIO = 0.15
@@ -35,7 +36,8 @@ function parseArgs (argv) {
     input: '',
     output: '',
     jsonOutput: '',
-    manualDir: path.resolve('packages/tts-ggml/benchmarks/manual-results')
+    manualDir: path.resolve('packages/tts-ggml/benchmarks/manual-results'),
+    expectDevices: []
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -52,6 +54,9 @@ function parseArgs (argv) {
       i++
     } else if (arg === '--manual-dir' && next) {
       args.manualDir = next
+      i++
+    } else if (arg === '--expect-devices' && next) {
+      args.expectDevices = next.split(',').map(device => device.trim()).filter(Boolean)
       i++
     }
   }
@@ -89,16 +94,39 @@ function formatMaybeInteger (value) {
   return String(Math.round(Number(value)))
 }
 
-// tts-cpp's GPU backend cascade: Vulkan on linux/win32/android, Metal on
-// darwin/ios. OpenCL (Adreno android) only appears when an explicit hint
-// carries it (manual drops / dedicated runners), so it passes through the
-// hint branch. CUDA is not supported on any platform.
-function normalizeBackend (platformName, useGPU, backendHint) {
+const BACKEND_BY_ID = { 0: 'cpu', 1: 'metal', 2: 'cuda', 3: 'vulkan', 4: 'opencl' }
+
+const ADRENO_GPU_RE = /adreno/i
+const ADRENO_DEVICE_NAME_RE = /(?:samsung|galaxy)[\s_-]*(?:galaxy[\s_-]*)?s25(?![0-9])/i
+const ADRENO_ANDROID_BACKEND = 'opencl'
+const PLACEHOLDER_BACKEND_HINTS = new Set(['gpu', 'mobile-accelerated'])
+const GUESSED_ANDROID_GPU_HINTS = new Set(['', 'vulkan', 'gpu', 'mobile-accelerated'])
+const HAND_AUTHORED_BACKEND_SOURCES = new Set(['manual'])
+const MANUAL_SOURCE = 'manual'
+
+function isAdrenoDevice (gpuModel, deviceName) {
+  return ADRENO_GPU_RE.test(String(gpuModel || '')) ||
+    ADRENO_DEVICE_NAME_RE.test(String(deviceName || ''))
+}
+
+function isHandAuthoredBackend (source, backendHint) {
+  return Boolean(backendHint) && HAND_AUTHORED_BACKEND_SOURCES.has(String(source || ''))
+}
+
+function needsAdrenoCorrection (source, backendHint, gpuModel, deviceName) {
+  return !isHandAuthoredBackend(source, backendHint) && isAdrenoDevice(gpuModel, deviceName)
+}
+
+function normalizeBackend (platformName, useGPU, backendHint, adreno) {
+  const platform = String(platformName || '').toLowerCase()
   const hint = String(backendHint || '').toLowerCase()
-  if (hint && hint !== 'gpu' && hint !== 'mobile-accelerated') return hint
+  if (adreno && useGPU && platform === 'android' && GUESSED_ANDROID_GPU_HINTS.has(hint)) {
+    return ADRENO_ANDROID_BACKEND
+  }
+  if (hint && !PLACEHOLDER_BACKEND_HINTS.has(hint)) return hint
   if (!useGPU) return 'cpu'
 
-  switch (String(platformName || '').toLowerCase()) {
+  switch (platform) {
     case 'android': return 'vulkan'
     case 'ios':
     case 'darwin': return 'metal'
@@ -106,6 +134,13 @@ function normalizeBackend (platformName, useGPU, backendHint) {
     case 'win32': return hint || 'vulkan'
     default: return hint || 'gpu'
   }
+}
+
+function resolveMobileBackend (backendId, platformName, useGPU, backendHint, adreno) {
+  if (typeof backendId === 'number' && BACKEND_BY_ID[backendId]) {
+    return BACKEND_BY_ID[backendId]
+  }
+  return normalizeBackend(platformName, useGPU, backendHint, adreno)
 }
 
 function humanizeSourceFile (sourceFile) {
@@ -227,6 +262,8 @@ function expandCanonicalReport (report, sourceFile) {
         deviceLabel: device.name,
         useGPU: parsed.useGPU,
         backendHint: parsed.backendHint,
+        backendId: toNumberOrNull(m.backend_id),
+        gpuModel: device.gpu || null,
         labels: { device: device.name, runner: device.runner, label: `${platformFamily}-streaming-${parsed.variant}` },
         summary: {
           ttfaMs: { mean: toNumberOrNull(m.ttfa_ms) },
@@ -253,6 +290,7 @@ function expandCanonicalReport (report, sourceFile) {
         runnerLabel: device.runner,
         useGPU: parsed.useGPU,
         backendHint: parsed.backendHint,
+        backendId: toNumberOrNull(m.backend_id),
         label: [
           `${platformFamily}-${parsed.variant || 'q4'}`,
           parsed.language ? `lang=${parsed.language}` : '',
@@ -322,7 +360,7 @@ function buildLabel (report) {
   return String(label || '')
 }
 
-function normalizeDesktopRecord (report, sourceFile) {
+function normalizeDesktopRecord (report, sourceFile, source = 'desktop-ci') {
   const summary = report.summary || {}
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
@@ -331,14 +369,24 @@ function normalizeDesktopRecord (report, sourceFile) {
   const memory = memoryFromSummary(summary)
   const platformName = report.platformName || ''
   const useGPU = Boolean(report.requested && report.requested.useGPU)
-  const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || '')
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || ''
+  const gpuModel = (report.labels && report.labels.gpuModel) || (report.device && report.device.gpu) || null
+  const backendHint = (report.labels && report.labels.backend) || ''
+  // Like resolveMobileBackend, the observed backend (summary.backendId /
+  // labels.activeBackend) beats the matrix hint: a lane pinned to CUDA via
+  // TTS_CPP_GPU_BACKEND runs entries whose hints still say vulkan.
+  const backendId = toNumberOrNull(summary.backendId)
+  const activeBackend = String((report.labels && report.labels.activeBackend) || '').toLowerCase()
+  const backend = (backendId !== null && BACKEND_BY_ID[backendId]) ||
+    activeBackend ||
+    normalizeBackend(platformName, useGPU, backendHint,
+      needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel))
   const numThreads = report.requested && report.requested.numThreads !== undefined
     ? report.requested.numThreads
     : (report.config && report.config.numThreads !== undefined ? report.config.numThreads : null)
 
   return {
-    source: 'desktop-ci',
+    source,
     device: deviceLabel || report.platform || 'unknown',
     platform: report.platform || 'unknown',
     platformFamily: platformName || 'unknown',
@@ -376,7 +424,7 @@ function normalizeDesktopRecord (report, sourceFile) {
   }
 }
 
-function normalizeMobileRecord (record, sourceFile) {
+function normalizeMobileRecord (record, sourceFile, source = 'mobile-ci') {
   const summary = record.summary || {}
   const rtf = summary.rtf || {}
   const wallMs = summary.wallMs || {}
@@ -385,10 +433,11 @@ function normalizeMobileRecord (record, sourceFile) {
   const memory = memoryFromSummary(summary)
   const platformFamily = String(record.platformName || record.deviceFarmPlatform || '').toLowerCase()
   const useGPU = Boolean(record.useGPU)
-  const backend = normalizeBackend(platformFamily, useGPU, record.backendHint)
+  const backend = resolveMobileBackend(record.backendId, platformFamily, useGPU, record.backendHint,
+    needsAdrenoCorrection(source, record.backendHint, record.gpuModel, record.deviceLabel))
 
   return {
-    source: 'mobile-ci',
+    source,
     device: record.deviceLabel || humanizeSourceFile(record.sourceFile || sourceFile),
     platform: record.platform || platformFamily || 'unknown',
     platformFamily: platformFamily || 'unknown',
@@ -429,9 +478,12 @@ function normalizeMobileRecord (record, sourceFile) {
 function normalizeManualRecord (record, sourceFile) {
   const platformFamily = String(record.platformFamily || record.platform || '').toLowerCase()
   const useGPU = record.gpu ? record.gpu === 'gpu' : Boolean(record.useGPU)
+  const source = record.source || MANUAL_SOURCE
+  const adreno = needsAdrenoCorrection(source, record.backend,
+    record.gpuModel || record.gpu_model, record.device)
 
   return {
-    source: record.source || 'manual',
+    source,
     device: record.device || humanizeSourceFile(sourceFile),
     platform: record.platform || 'unknown',
     platformFamily: platformFamily || 'unknown',
@@ -449,7 +501,7 @@ function normalizeManualRecord (record, sourceFile) {
       DEFAULT_ENHANCER_VARIANT,
     denoiser: (record.model && record.model.denoiser) || record.denoiser || 'none',
     gpu: useGPU ? 'gpu' : 'cpu',
-    backend: normalizeBackend(platformFamily, useGPU, record.backend),
+    backend: normalizeBackend(platformFamily, useGPU, record.backend, adreno),
     gpuModel: record.gpuModel || record.gpu_model || null,
     label: String(record.label || ''),
     numThreads: record.numThreads !== undefined ? record.numThreads : null,
@@ -483,8 +535,11 @@ function normalizeStreamingRecord (report, sourceFile, source) {
   const chunkCount = summary.chunkCount || {}
   const platformName = report.platformName || ''
   const useGPU = Boolean((report.requested && report.requested.useGPU) || report.useGPU)
-  const backend = normalizeBackend(platformName, useGPU, (report.labels && report.labels.backend) || report.backendHint || '')
   const deviceLabel = (report.labels && (report.labels.device || report.labels.runner)) || report.deviceLabel || ''
+  const gpuModel = (report.labels && report.labels.gpuModel) || report.gpuModel
+  const backendHint = (report.labels && report.labels.backend) || report.backendHint || ''
+  const backend = resolveMobileBackend(report.backendId, platformName, useGPU, backendHint,
+    needsAdrenoCorrection(source, backendHint, gpuModel, deviceLabel))
 
   return {
     source: source || 'desktop-ci',
@@ -573,19 +628,19 @@ function loadManualRecords (manualDir) {
     const items = Array.isArray(payload) ? payload : (payload.records || [payload])
     for (const item of items) {
       if (isStreamingReport(item)) {
-        streaming.push(normalizeStreamingRecord(item, file, 'manual'))
+        streaming.push(normalizeStreamingRecord(item, file, MANUAL_SOURCE))
         continue
       }
 
       let record
       if (isDesktopArtifact(item)) {
-        record = normalizeDesktopRecord(item, file)
+        record = normalizeDesktopRecord(item, file, MANUAL_SOURCE)
       } else if (isMobileExtractedArtifact(item)) {
-        record = normalizeMobileRecord(item, file)
+        record = normalizeMobileRecord(item, file, MANUAL_SOURCE)
       } else {
         record = normalizeManualRecord(item, file)
       }
-      record.source = 'manual'
+      record.source = MANUAL_SOURCE
       records.push(record)
     }
   }
@@ -666,13 +721,26 @@ function formatEnhancerCell (enhancer, enhancerVariant) {
   return `${name}/${variant}`
 }
 
-function renderMarkdown (records, streamingRecords) {
+// Same silent-loss guard as aggregate-asr-ggml-rtf.js: the desktop matrix jobs
+// tolerate step failures, so a lane can lose its rtf-results artifact without
+// failing the run. The summarize workflow passes the matrix's device list via
+// --expect-devices; a device with zero desktop rows makes the report loudly
+// incomplete. Mobile and manual rows never satisfy the expectation.
+function missingExpectedDevices (records, expectedDevices) {
+  const reporting = new Set(
+    records.filter(r => r.source === 'desktop-ci').map(r => r.device)
+  )
+  return expectedDevices.filter(device => !reporting.has(device))
+}
+
+function renderMarkdown (records, streamingRecords, expectedDevices = []) {
   const lines = []
   const gpuCoverage = new Set(
     records.filter(r => r.gpu === 'gpu').map(r => r.backend).filter(Boolean)
   )
   const missingBackends = SUPPORTED_GPU_BACKENDS.filter(b => !gpuCoverage.has(b))
   const noisyCount = records.filter(r => r.noisy === true).length
+  const missingDevices = missingExpectedDevices(records, expectedDevices)
 
   lines.push('## GGML TTS Performance Findings')
   lines.push('')
@@ -757,6 +825,12 @@ function renderMarkdown (records, streamingRecords) {
   lines.push('### Coverage')
   lines.push('')
   lines.push(`- Rows aggregated: ${records.length}` + (streamingRecords && streamingRecords.length > 0 ? ` (+ ${streamingRecords.length} streaming row(s))` : ''))
+  if (expectedDevices.length > 0) {
+    lines.push(`- Expected desktop devices reporting: ${expectedDevices.length - missingDevices.length}/${expectedDevices.length}`)
+    if (missingDevices.length > 0) {
+      lines.push(`- MISSING desktop devices (lane ran without an rtf-results artifact, or never ran): ${missingDevices.join(', ')} — this report is INCOMPLETE`)
+    }
+  }
   lines.push(`- GPU backends covered: ${Array.from(gpuCoverage).sort().join(', ') || 'none'}`)
   lines.push(`- GPU backends still missing: ${missingBackends.join(', ') || 'none'}`)
   if (noisyCount > 0) {
@@ -783,7 +857,7 @@ function main () {
 
   const records = sortRecords(dedupeRecords(fromArtifacts.records.concat(fromManual.records)))
   const streaming = sortRecords(dedupeRecords(fromArtifacts.streaming.concat(fromManual.streaming)))
-  const markdown = renderMarkdown(records, streaming)
+  const markdown = renderMarkdown(records, streaming, args.expectDevices)
 
   if (args.output) {
     const outputPath = path.resolve(args.output)
@@ -798,6 +872,14 @@ function main () {
   }
 
   process.stdout.write(markdown)
+
+  // Fail only after every output is written: the incomplete report must stay
+  // inspectable (later workflow steps upload it with `if: !cancelled()`).
+  const missing = missingExpectedDevices(records, args.expectDevices)
+  if (missing.length > 0) {
+    console.error(`::error title=TTS report is missing benchmark device(s)::No desktop rows from: ${missing.join(', ')}. The lane lost its rtf-results artifact, its runner label changed, or it never ran — the consolidated report is incomplete.`)
+    process.exitCode = 1
+  }
 }
 
 if (require.main === module) {
@@ -813,5 +895,6 @@ module.exports = {
   expandCanonicalReport,
   memoryFromSummary,
   dedupeRecords,
-  renderMarkdown
+  renderMarkdown,
+  missingExpectedDevices
 }

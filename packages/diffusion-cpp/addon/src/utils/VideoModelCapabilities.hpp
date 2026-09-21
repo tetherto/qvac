@@ -12,6 +12,10 @@ namespace qvac_lib_inference_addon_sd {
  */
 struct VideoModelCapabilities {
   int spatialAlignment = 16;
+  int frameCountStride = 4;
+  int frameCountOffset = 1;
+  int minimumVideoFrames = 5;
+  bool isMiniMaxH3 = false;
 };
 
 /**

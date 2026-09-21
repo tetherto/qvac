@@ -1,0 +1,30 @@
+diff --git a/node_modules/fumadocs-ui/dist/components/sidebar/base.js b/node_modules/fumadocs-ui/dist/components/sidebar/base.js
+index 466d90b..473a8a7 100644
+--- a/node_modules/fumadocs-ui/dist/components/sidebar/base.js
++++ b/node_modules/fumadocs-ui/dist/components/sidebar/base.js
+@@ -2,7 +2,6 @@
+ import { __exportAll } from "../../_virtual/_rolldown/runtime.js";
+ import { cn } from "../../utils/cn.js";
+ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible.js";
+-import { ScrollArea, ScrollViewport } from "../ui/scroll-area.js";
+ import Link from "fumadocs-core/link";
+ import { usePathname } from "fumadocs-core/framework";
+ import { jsx, jsxs } from "react/jsx-runtime";
+@@ -107,12 +106,13 @@ function SidebarContent({ mode: allowedMode = "full", children }) {
+ 	});
+ }
+ function SidebarViewport({ area, viewport, children }) {
+-	return /* @__PURE__ */ jsx(ScrollArea, {
++	return /* @__PURE__ */ jsx("div", {
+ 		...area,
+-		className: cn("min-h-0 flex-1", area?.className),
+-		children: /* @__PURE__ */ jsx(ScrollViewport, {
++		className: cn("min-h-0 flex-1 overflow-hidden", area?.className),
++		children: /* @__PURE__ */ jsx("div", {
++			"data-sidebar-scroller": "",
+ 			...viewport,
+-			className: cn("*:flex! *:flex-col! *:gap-0.5! p-4 overscroll-contain mask-[linear-gradient(to_bottom,transparent,white_12px,white_calc(100%-12px),transparent)]", viewport?.className),
++			className: cn("flex flex-col gap-0.5 size-full overflow-y-auto fd-scroll-container p-4 overscroll-contain mask-[linear-gradient(to_bottom,transparent,white_12px,white_calc(100%-12px),transparent)]", viewport?.className),
+ 			children
+ 		})
+ 	});

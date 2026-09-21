@@ -10,3 +10,8 @@ test/integration/all.js
 test/results
 third-party
 addon
+index.js
+marian.js
+addonLogging.js
+lib
+*.d.ts

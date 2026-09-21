@@ -1,0 +1,92 @@
+/// <reference types="bare" />
+
+// Public API: the operations, engine lifecycle and explicit plugin assembly, and
+// the value-clean surface (schemas / types / consts / errors / model registry)
+// re-exported from `./surface`.
+export {
+  batchCompletion,
+  completion,
+  deleteCache,
+  loadModel,
+  downloadAsset,
+  heartbeat,
+  unloadModel,
+  transcribe,
+  transcribeStream,
+  bciTranscribe,
+  bciTranscribeStream,
+  embed,
+  finetune,
+  translate,
+  cancel,
+  ragChunk,
+  ragIngest,
+  ragSaveEmbeddings,
+  ragSearch,
+  ragDeleteEmbeddings,
+  ragReindex,
+  ragListWorkspaces,
+  ragCloseWorkspace,
+  ragDeleteWorkspace,
+  createVectorIndex,
+  loadVectorIndex,
+  type VectorIndex,
+  textToSpeech,
+  textToSpeechStream,
+  getModelInfo,
+  getLoadedModelInfo,
+  getSystemResources,
+  assessModelFit,
+  loggingStream,
+  subscribeServerLogs,
+  type ServerLogHandler,
+  ocr,
+  invokePlugin,
+  invokePluginStream,
+  diffusion,
+  type DiffusionProgressTick,
+  audioGen,
+  audioEdit,
+  audioUnderstand,
+  classify,
+  video,
+  type VideoProgressTick,
+  upscale,
+  worldCreateScene,
+  worldStep,
+  type WorldStepResult,
+  type WorldStepProgressTick,
+  type WorldSceneResult,
+  type WorldSceneResultWithPack,
+  modelRegistryList,
+  modelRegistrySearch,
+  modelRegistryGetModel,
+  type ModelRegistrySearchParams,
+  suspend,
+  resume,
+  state,
+  vla,
+  vlaHparams,
+  vlaSetEmbodiment,
+  vlaPreprocessImage,
+  vlaPadState,
+  VLA_DEFAULT_IMAGE_SIZE,
+  type FinetuneHandle
+} from '@/api/index'
+
+// Engine lifecycle and explicit plugin assembly. No plugins are registered by
+// default: an app assembles the engines it needs via `plugins([...])` or the
+// `registerPlugin`/`registerPlugins` primitives, then calls the operations.
+export { close } from '@/dispatch'
+export {
+  plugins,
+  registerPlugin,
+  registerPlugins,
+  getPlugin,
+  hasPlugin,
+  getAllPlugins,
+  unregisterPlugin
+} from '@/plugins/index'
+
+// The value-clean surface (also published as `@qvac/inference/surface`).
+export * from '@/surface'

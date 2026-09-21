@@ -35,6 +35,7 @@ js_value_t* qvacLibInferVlaExports(js_env_t* env, js_value_t* exports) {
   // (0/1) but the perf reporter wants the human-readable backend name; the
   // hparams object is needed JS-side for input validation.
   V("getVlaHparams", qvac_lib_infer_vla_ggml::getVlaHparams)
+  V("setVlaEmbodiment", qvac_lib_infer_vla_ggml::setVlaEmbodiment)
   V("getVlaBackendName", qvac_lib_infer_vla_ggml::getVlaBackendName)
   V("setVerbosity", qvac_lib_infer_vla_ggml::setVerbosity)
 #undef V

@@ -41,14 +41,11 @@ try {
     stream: false
   })
 
-  const translatedText = await result.text
-  const translations = translatedText.split('\n')
+  const translations = await result.translations
 
   console.log('▸ Translations:')
   translations.forEach((translation, i) => {
-    if (i < texts.length) {
-      console.log(`  ${i + 1}. ${texts[i]} -> "${translation}"`)
-    }
+    console.log(`  ${i + 1}. ${texts[i]} -> "${translation}"`)
   })
 
   await unloadModel({ modelId })

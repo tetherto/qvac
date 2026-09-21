@@ -4,6 +4,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <exception>
 #include <list>
 #include <map>
 #include <memory>
@@ -44,12 +45,26 @@ namespace qvac_lib_inference_addon_cpp {
 /// model cannot know ids it never received): the job is unlinked in O(1) via
 /// queuedIndex_, its slot and exclusivity released, and a "Job cancelled" error
 /// queued as its terminal event. In-flight cancellation routes to the model:
-/// cancel(id) via cancelById(), cancelAll() via the whole-model cancel(),
-/// falling back to per-id cancel of the in-flight snapshot on models that
-/// only implement cancelById (teardown cancels the same way); that
+/// cancel(id) via cancelById(), cancelAll() via per-id cancel of the
+/// in-flight snapshot, falling back to the whole-model cancel() on models
+/// that only implement it (teardown prefers the whole-model switch); that
 /// id -> internal-slot mapping is the model's concern. cancelJobs(liveJobIds())
 /// is the snapshot form the JS binding uses for cancel-all, so jobs admitted
-/// after the cancel was requested survive it. Dequeue announces the
+/// after the cancel was requested survive it — on a per-id model; the
+/// whole-model fallback is indiscriminate, so there a job that became
+/// in-flight by dispatch time is swept (and awaited) with the targets.
+///
+/// Every cancel entry point returns only once each job it delivered a
+/// model-side cancel for has fully left the scheduler (its slot released), so
+/// a returned cancel means "the job is gone": activeJobs() no longer counts
+/// it and an immediate follow-up admission cannot be spuriously refused as
+/// busy. This is the guarantee SingleJobScheduler gives by construction
+/// (ProcessingSync::waitInactive) and matters for models that apply a per-id
+/// cancel on their own worker, later than the cancelById() call. It obliges
+/// the model to eventually end a cancelled job, and forbids calling a cancel
+/// entry point from a scheduler worker (it would wait on itself); cancels
+/// that reach no model (unsupported surface) still return immediately — there
+/// is nothing whose completion could be awaited. Dequeue announces the
 /// job to the model (IModelJobLifecycle::jobStarting) under the same lock the
 /// cancel paths take, so every cancel finds each admitted job either still
 /// queued (dropped here) or already announced (cancellable model-side) — never
@@ -83,6 +98,9 @@ class MultiJobScheduler final : public IJobScheduler {
 
   mutable std::mutex mtx_;
   mutable std::condition_variable workCv_;
+  /// Signalled on every slot release, for cancel callers blocked in
+  /// awaitJobsGone() until their cancelled jobs have left the scheduler.
+  mutable std::condition_variable jobsGoneCv_;
   std::list<PendingJob> queued_;
   /// id -> queued_ node, so cancelling a not-yet-started job unlinks it in O(1)
   /// instead of scanning the queue. Ids are unique across the scheduler, so
@@ -105,6 +123,13 @@ class MultiJobScheduler final : public IJobScheduler {
   std::vector<std::thread> workers_;
   std::atomic_bool running_{false};
   unsigned readyCount_{0};
+  /// Which scheduler (if any) owns the current thread as a worker. Tags every
+  /// worker in workerLoop() so the cancel paths can fail fast instead of
+  /// deadlocking when called from a worker of this same scheduler (the wait
+  /// in awaitJobsGone needs that worker to release its own job's slot).
+  /// thread_local, so a worker of another scheduler instance is not
+  /// mistaken for one of ours.
+  inline static thread_local const MultiJobScheduler* tlWorkerOwner_ = nullptr;
 
   void runResult(std::any&& output, JobId id) {
     outputQueue_->queueResult(std::move(output), id);
@@ -123,6 +148,7 @@ class MultiJobScheduler final : public IJobScheduler {
       exclusiveActive_ = false;
     }
     lock.unlock();
+    jobsGoneCv_.notify_all();
   }
 
   /// Unlink @p id if still queued, releasing its slot and exclusivity. Caller
@@ -160,6 +186,29 @@ class MultiJobScheduler final : public IJobScheduler {
     return dropped;
   }
 
+  /// Publish the "Job cancelled" terminal for every id in @p ids, tolerating
+  /// per-id publication failures: each id is already irreversibly unlinked
+  /// from the queue, so every remaining terminal must still be attempted
+  /// when one publication throws (queueException enqueues the event, then
+  /// the consumer callback's notify() may throw). Returns the first failure
+  /// instead of throwing so the caller decides — the cancel entry points
+  /// rethrow it, the destructor must swallow it (a destructor throw is
+  /// std::terminate).
+  [[nodiscard]] std::exception_ptr publishCancelledTerminals(
+      const std::vector<JobId>& ids, const char* reason) const noexcept {
+    std::exception_ptr firstFailure;
+    for (const JobId id : ids) {
+      try {
+        outputQueue_->queueException(std::runtime_error(reason), id);
+      } catch (...) {
+        if (firstFailure == nullptr) {
+          firstFailure = std::current_exception();
+        }
+      }
+    }
+    return firstFailure;
+  }
+
   /// Snapshot of the in-flight ids, for the per-id cancel fallback when the
   /// model has no whole-model cancel(). jobStarting is announced under mtx_,
   /// so every id snapshotted here is already known to the model.
@@ -168,9 +217,33 @@ class MultiJobScheduler final : public IJobScheduler {
     return {inFlight_.begin(), inFlight_.end()};
   }
 
+  /// Block until none of @p ids is still admitted (queued or in flight).
+  /// Called by the cancel paths after a model-side cancel was issued, so the
+  /// model is already unwinding these jobs; the workers' slot releases
+  /// notify. Ids never recur once gone (monotonic minting), so the predicate
+  /// can only flip false -> true. Must not run on a scheduler worker: the
+  /// wait needs that worker to release the job's slot.
+  void awaitJobsGone(const std::vector<JobId>& ids) const {
+    if (tlWorkerOwner_ == this) {
+      throw std::logic_error(
+          "IJobScheduler cancel entry point called from a scheduler worker "
+          "thread; it would deadlock waiting on its own job's departure");
+    }
+    std::unique_lock lock(mtx_);
+    jobsGoneCv_.wait(lock, [this, &ids] {
+      for (const JobId id : ids) {
+        if (inFlight_.count(id) != 0 || queuedIndex_.count(id) != 0) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
   /// Worker body. Per-job input/id are copied onto the stack while the lock is
   /// held, then process() runs unlocked so cancel() and peer workers progress.
   void workerLoop() {
+    tlWorkerOwner_ = this;
     {
       std::lock_guard lock(mtx_);
       ++readyCount_;
@@ -230,12 +303,15 @@ class MultiJobScheduler final : public IJobScheduler {
           return;
         }
         released = true;
-        std::lock_guard relock(mtx_);
-        --admittedCount_;
-        inFlight_.erase(job.id);
-        if (job.exclusive) {
-          exclusiveActive_ = false;
+        {
+          std::lock_guard relock(mtx_);
+          --admittedCount_;
+          inFlight_.erase(job.id);
+          if (job.exclusive) {
+            exclusiveActive_ = false;
+          }
         }
+        jobsGoneCv_.notify_all();
       };
 
       try {
@@ -315,12 +391,30 @@ public:
     // for the model to finish on its own. Fall back to per-id cancellation
     // when the model has no whole-model cancel(). Cancel only while a job is
     // in flight — an idle scheduler's model may already be destroyed.
+    // Cancellation may throw (a throw rejects it, see IModelCancel) and this
+    // destructor is noexcept: swallow the failure — escaping here would be
+    // std::terminate. On the per-id path each id keeps its own attempt, so
+    // one failing cancel does not abandon the remaining jobs. Jobs whose
+    // cancel never landed simply run to their natural end before the joins
+    // below, which is teardown's semantic anyway.
     if (!jobsInFlight.empty()) {
       if (cancel_ != nullptr) {
-        cancel_->cancel();
+        try {
+          cancel_->cancel();
+        } catch (...) {
+          QLOG(logger::Priority::WARNING,
+              "Model cancel() threw during scheduler teardown; waiting for "
+              "in-flight jobs to end on their own");
+        }
       } else if (cancelById_ != nullptr) {
         for (const JobId id : jobsInFlight) {
-          cancelById_->cancelById(id);
+          try {
+            cancelById_->cancelById(id);
+          } catch (...) {
+            QLOG(logger::Priority::WARNING,
+                "Model cancelById() threw during scheduler teardown; waiting "
+                "for that job to end on its own");
+          }
         }
       }
     }
@@ -333,11 +427,10 @@ public:
       return; // never started, nothing was admitted
     }
     // Workers are gone; fail whatever never started so no accepted job ends
-    // without a terminal event.
-    for (const JobId id : dropQueued()) {
-      outputQueue_->queueException(
-          std::runtime_error("Job cancelled: scheduler destroyed"), id);
-    }
+    // without a terminal event. Publication failures are swallowed: every
+    // terminal is still attempted, and a destructor throw would terminate.
+    static_cast<void>(publishCancelledTerminals(
+        dropQueued(), "Job cancelled: scheduler destroyed"));
   }
 
   std::optional<JobId> runJob(std::any input) override {
@@ -390,6 +483,9 @@ public:
     }
     if (cancelById_ != nullptr) {
       cancelById_->cancelById(id);
+      // The model may apply the cancel later, on its own worker; only the
+      // job's departure makes "cancel returned" mean "job gone".
+      awaitJobsGone({id});
       return;
     }
     QLOG(logger::Priority::WARNING,
@@ -397,20 +493,38 @@ public:
   }
 
   void cancelAll() override {
-    for (const JobId id : dropQueued()) {
-      outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
+    if (const std::exception_ptr failure =
+            publishCancelledTerminals(dropQueued(), "Job cancelled")) {
+      // Every dropped terminal was attempted; reject before cancelling
+      // in-flight work the caller now cannot assume was reached.
+      std::rethrow_exception(failure);
     }
-    if (cancel_ != nullptr) {
-      cancel_->cancel();
-      return;
+    // Await only this snapshot: jobs admitted while the wait runs are not
+    // cancelled and must not extend it. Per-id cancellation is preferred
+    // whenever the model offers it: the scheduler owns the exact in-flight
+    // id set, so delivery is precise and point-in-time by construction. The
+    // whole-model cancel is the fallback for models offering nothing finer;
+    // it is indiscriminate, so it is dispatched under the same lock as the
+    // snapshot: a worker needs mtx_ to dequeue a job into inFlight_, so no
+    // job admitted after the snapshot can be collaterally swept into this
+    // cancel while it is still being dispatched.
+    std::vector<JobId> inFlightSnapshot;
+    {
+      std::lock_guard lock(mtx_);
+      inFlightSnapshot.assign(inFlight_.begin(), inFlight_.end());
+      if (cancelById_ == nullptr && cancel_ != nullptr) {
+        cancel_->cancel();
+      }
     }
     if (cancelById_ != nullptr) {
-      // No whole-model cancel (a per-job-context model may have no global
-      // stop switch): the scheduler owns the id set, cancel each in-flight
-      // job individually.
-      for (const JobId id : inFlightIds()) {
+      for (const JobId id : inFlightSnapshot) {
         cancelById_->cancelById(id);
       }
+      awaitJobsGone(inFlightSnapshot);
+      return;
+    }
+    if (cancel_ != nullptr) {
+      awaitJobsGone(inFlightSnapshot);
       return;
     }
     QLOG(logger::Priority::WARNING, "Model does not support cancellation (of all jobs in a single-call)");
@@ -427,35 +541,75 @@ public:
     return ids;
   }
 
-  /// Per-id (the default loop) when the model supports cancelById; otherwise
-  /// drop the still-queued ids and issue one whole-model cancel() for the
-  /// in-flight remainder — indiscriminate, but the only cancel such a model
-  /// offers.
+  /// One lock pass drops every still-queued snapshot id BEFORE any in-flight
+  /// cancel is issued or awaited: awaiting a cancel releases that job's slot,
+  /// and a queued snapshot id still undropped at that moment would win the
+  /// freed slot and run despite having been cancelled while queued. Only then
+  /// are the in-flight targets cancelled — per id when the model offers
+  /// cancelById, else via one whole-model cancel() (indiscriminate, but the
+  /// only cancel such a model offers), dispatched under the same lock as the
+  /// in-flight snapshot so no job admitted afterward can be collaterally
+  /// swept into it while it is still in flight — and awaited until they
+  /// leave. The whole-model path awaits every job that cancel actually
+  /// swept (the full in-flight snapshot), not just the requested targets: a
+  /// non-target job it cancelled still holds a slot, and returning before
+  /// that job leaves would let activeJobs() spuriously refuse an immediate
+  /// follow-up admission — the guarantee every cancel entry point gives is
+  /// scoped to the jobs it delivered a cancel for, target or not.
   void cancelJobs(const std::vector<JobId>& ids) override {
-    if (cancelById_ != nullptr) {
-      IJobScheduler::cancelJobs(ids);
-      return;
-    }
     std::vector<JobId> dropped;
-    bool anyInFlight = false;
+    std::vector<JobId> inFlightTargets;
+    std::vector<JobId> sweptInFlight;
+    std::exception_ptr cancelFailure;
     {
       std::lock_guard lock(mtx_);
       for (const JobId id : ids) {
         if (dropQueuedJob(id)) {
           dropped.push_back(id);
         } else if (inFlight_.count(id) != 0) {
-          anyInFlight = true;
+          inFlightTargets.push_back(id);
+        }
+      }
+      if (!inFlightTargets.empty() && cancelById_ == nullptr &&
+          cancel_ != nullptr) {
+        sweptInFlight.assign(inFlight_.begin(), inFlight_.end());
+        try {
+          cancel_->cancel();
+        } catch (...) {
+          // The queued targets are already unlinked — irreversibly, no
+          // worker can ever run them — so their terminal errors must go
+          // out even though the cancel itself failed. Park the failure,
+          // publish below, rethrow after.
+          cancelFailure = std::current_exception();
         }
       }
     }
-    for (const JobId id : dropped) {
-      outputQueue_->queueException(std::runtime_error("Job cancelled"), id);
+    const std::exception_ptr publishFailure =
+        publishCancelledTerminals(dropped, "Job cancelled");
+    if (cancelFailure != nullptr) {
+      // Rethrow before any await: the model-side cancel was not delivered,
+      // so waiting on the swept snapshot could wait on jobs nothing will
+      // ever end.
+      std::rethrow_exception(cancelFailure);
     }
-    if (!anyInFlight) {
+    if (publishFailure != nullptr) {
+      // Every dropped terminal was attempted (publishCancelledTerminals
+      // continues past failures); reject before dispatching or awaiting
+      // anything further.
+      std::rethrow_exception(publishFailure);
+    }
+    if (inFlightTargets.empty()) {
+      return;
+    }
+    if (cancelById_ != nullptr) {
+      for (const JobId id : inFlightTargets) {
+        cancelById_->cancelById(id);
+      }
+      awaitJobsGone(inFlightTargets);
       return;
     }
     if (cancel_ != nullptr) {
-      cancel_->cancel();
+      awaitJobsGone(sweptInFlight);
       return;
     }
     QLOG(logger::Priority::WARNING, "Model does not support cancellation");

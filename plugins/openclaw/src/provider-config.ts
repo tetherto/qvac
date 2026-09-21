@@ -1,4 +1,16 @@
-import { dirname, join } from 'node:path'
+import { randomBytes } from 'node:crypto'
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -6,14 +18,24 @@ import {
   resolveModelConstant as resolveSharedModelConstant,
   type QvacCatalogEntry
 } from '@qvac/ai-sdk-provider/models'
-import type { ModelProviderConfig } from 'openclaw/plugin-sdk/provider-model-shared'
+import type { OpenClawConfig } from 'openclaw/plugin-sdk/plugin-entry'
+
+// openclaw 2026.8.1 dropped `plugin-sdk/config-types` from its exports map and
+// stopped shipping declarations for `plugin-sdk/provider-model-shared`, so the
+// two provider-config types are no longer importable by name. Derive them from
+// `OpenClawConfig` instead -- it is exported, typed, and already the entry this
+// plugin imports `definePluginEntry` from. Deriving rather than re-declaring
+// keeps these in step with upstream's real shape, and survives the next
+// internal reshuffle of where the types happen to live.
+type ModelProviderConfig = NonNullable<NonNullable<OpenClawConfig['models']>['providers']>[string]
+type SecretProviderConfig = NonNullable<NonNullable<OpenClawConfig['secrets']>['providers']>[string]
 
 export interface ResolvedOptions {
   readonly model: string
   readonly host: string
   readonly port: number
   readonly baseUrl: string
-  readonly apiKey: string
+  readonly apiKeyFile: string
   readonly qvacCommand: string
   readonly serviceRuntime: string
   readonly serviceEntrypoint: string
@@ -26,7 +48,7 @@ export interface ResolvedOptions {
   readonly timeoutSeconds: number
 }
 
-export type RawOptions = Partial<Record<keyof ResolvedOptions, unknown>>
+export type RawOptions = Partial<Record<keyof ResolvedOptions | 'apiKey', unknown>>
 
 export interface OpenClawCost {
   readonly input: number
@@ -59,7 +81,7 @@ export interface OpenClawLocalService {
 
 export interface OpenClawProvider {
   readonly baseUrl: string
-  readonly apiKey: string
+  readonly apiKey: QvacApiKeyRef
   readonly api: 'openai-completions'
   readonly timeoutSeconds: number
   readonly localService: OpenClawLocalService
@@ -77,6 +99,20 @@ export interface OpenClawConfigLike {
     readonly mode?: OpenClawModelsMode
     readonly providers?: Record<string, ModelProviderConfig>
   }
+  readonly secrets?: {
+    readonly providers?: Record<string, SecretProviderConfig>
+    readonly defaults?: {
+      readonly env?: string
+      readonly file?: string
+      readonly exec?: string
+    }
+    readonly resolution?: {
+      readonly maxProviderConcurrency?: number
+      readonly maxRefsPerProvider?: number
+      readonly maxBatchBytes?: number
+    }
+    readonly [key: string]: unknown
+  }
 }
 
 type OpenClawModelsMode = 'merge' | 'replace'
@@ -92,6 +128,9 @@ export interface QvacProviderAuthResult {
     readonly models: {
       readonly mode: OpenClawModelsMode
       readonly providers: Record<string, ModelProviderConfig>
+    }
+    readonly secrets: {
+      readonly providers: Record<string, SecretProviderConfig>
     }
   }
   readonly defaultModel: string
@@ -117,8 +156,19 @@ export interface QvacServeModel {
   }
 }
 
+export interface QvacApiKeyRef {
+  readonly source: 'file'
+  readonly provider: 'qvac_key_file'
+  readonly id: 'value'
+}
+
 export interface QvacProviderRegistration {
   readonly pluginConfig?: Record<string, unknown>
+  readonly runtime?: {
+    readonly state: {
+      resolveStateDir(): string
+    }
+  }
   registerProvider(provider: {
     readonly id: string
     readonly label: string
@@ -133,17 +183,6 @@ export interface QvacProviderRegistration {
         readonly config: OpenClawConfigLike
       }): Promise<OpenClawConfigLike>
     }>
-    resolveSyntheticAuth(context: {
-      readonly provider: string
-      readonly providerConfig?: unknown
-    }): {
-      readonly apiKey: 'custom-local'
-      readonly source: string
-      readonly mode: 'api-key'
-    }
-    shouldDeferSyntheticProfileAuth(context: {
-      readonly resolvedApiKey?: string
-    }): boolean | undefined
     readonly catalog: {
       readonly order: 'simple'
       run(): Promise<{ provider: OpenClawProvider }>
@@ -176,12 +215,35 @@ export interface QvacProviderRegistration {
   }): void
 }
 
+const QVAC_SECRET_PROVIDER_ID = 'qvac_key_file'
+
+export function resolveQvacApiKeyFile(stateDir: string): string {
+  return join(stateDir, 'plugins', 'qvac', 'api-key')
+}
+
+function resolveFallbackOpenClawStateDir(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir()
+): string {
+  const override = env['OPENCLAW_STATE_DIR']?.trim()
+  if (override) {
+    if (override === '~') return home
+    if (override.startsWith('~/')) return join(home, override.slice(2))
+    return resolve(override)
+  }
+
+  const current = join(home, '.openclaw')
+  if (existsSync(current)) return current
+  const legacy = join(home, '.clawdbot')
+  return existsSync(legacy) ? legacy : current
+}
+
 export const DEFAULT_OPTIONS: ResolvedOptions = {
   model: 'qwen3.5-9b',
   host: '127.0.0.1',
   port: 11434,
   baseUrl: 'http://127.0.0.1:11434/v1',
-  apiKey: 'custom-local',
+  apiKeyFile: resolveQvacApiKeyFile(resolveFallbackOpenClawStateDir()),
   qvacCommand: 'qvac',
   serviceRuntime: process.execPath,
   serviceEntrypoint: join(dirname(fileURLToPath(import.meta.url)), 'local-service.js'),
@@ -258,6 +320,104 @@ function coerceString(option: string, value: unknown): string {
   return value
 }
 
+export function normalizeApiKey(value: unknown, option: string): string {
+  const normalized = coerceString(option, value).trim()
+  if (
+    normalized.length < 32 ||
+    normalized.length > 128 ||
+    normalized.startsWith('-') ||
+    !/^[A-Za-z0-9_-]+$/.test(normalized)
+  ) {
+    throw new TypeError(`${option} must be 32-128 base64url characters and cannot start with "-"`)
+  }
+  return normalized
+}
+
+// base64url includes `-`, and `normalizeApiKey` rejects a leading one so a
+// stored key can never be mistaken for a CLI flag. A raw draw therefore fails
+// its own validator about once in 64. Redrawing keeps every position uniform;
+// rewriting the first character would bias it and shrink the keyspace.
+export function generateApiKey(): string {
+  for (;;) {
+    const candidate = randomBytes(32).toString('base64url')
+    if (!candidate.startsWith('-')) return candidate
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error
+}
+
+function assertRegularKeyFile(keyFile: string): void {
+  try {
+    if (!lstatSync(keyFile).isFile()) {
+      throw new TypeError(`QVAC API key path must be a regular file: ${keyFile}`)
+    }
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') return
+    throw error
+  }
+}
+
+function restrictExistingKeyFile(keyFile: string): void {
+  try {
+    chmodSync(keyFile, 0o600)
+  } catch (error) {
+    if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+  }
+}
+
+function writePrivateKeyFile(keyFile: string, apiKey: string, exclusive: boolean): void {
+  const descriptor = openSync(keyFile, exclusive ? 'wx' : 'w', 0o600)
+  try {
+    writeFileSync(descriptor, apiKey, 'utf8')
+  } finally {
+    closeSync(descriptor)
+  }
+  chmodSync(keyFile, 0o600)
+}
+
+export function ensureApiKeyFile(keyFile: string, configuredApiKey?: string): string {
+  const keyDir = dirname(keyFile)
+  mkdirSync(keyDir, { recursive: true, mode: 0o700 })
+  chmodSync(keyDir, 0o700)
+  assertRegularKeyFile(keyFile)
+  restrictExistingKeyFile(keyFile)
+
+  if (configuredApiKey !== undefined) {
+    const normalized = normalizeApiKey(configuredApiKey, 'apiKey')
+    writePrivateKeyFile(keyFile, normalized, false)
+    return normalized
+  }
+
+  try {
+    const raw = readFileSync(keyFile, 'utf8')
+    const normalized = normalizeApiKey(raw, 'stored QVAC API key')
+    if (raw !== normalized) writePrivateKeyFile(keyFile, normalized, false)
+    return normalized
+  } catch (error) {
+    // A stored key that no longer parses is unusable, and it is a locally
+    // generated secret with no external copy — so re-onboarding replaces it in
+    // place (over the already-validated regular-file path) instead of leaving the
+    // user to delete the file by hand. Read failures (EACCES, …) still propagate.
+    if (error instanceof TypeError) {
+      const replacement = generateApiKey()
+      writePrivateKeyFile(keyFile, replacement, false)
+      return replacement
+    }
+    if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+  }
+
+  const generated = generateApiKey()
+  try {
+    writePrivateKeyFile(keyFile, generated, true)
+    return generated
+  } catch (error) {
+    if (!isNodeError(error) || error.code !== 'EEXIST') throw error
+    return ensureApiKeyFile(keyFile)
+  }
+}
+
 function coerceNumber(option: string, value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) throw new TypeError(`${option} must be a finite number`)
@@ -271,50 +431,69 @@ function coerceBoolean(option: string, value: unknown): boolean {
   throw new TypeError(`${option} must be a boolean`)
 }
 
-export function resolveOptions(raw: RawOptions = {}): ResolvedOptions {
+function resolveOptionsWithApiKey(raw: RawOptions): {
+  options: ResolvedOptions
+  configuredApiKey: string | undefined
+} {
   const host = raw.host === undefined ? DEFAULT_OPTIONS.host : coerceString('host', raw.host)
   const port = raw.port === undefined ? DEFAULT_OPTIONS.port : coerceNumber('port', raw.port)
   const baseUrl =
     raw.baseUrl === undefined ? `http://${host}:${port}/v1` : coerceString('baseUrl', raw.baseUrl)
   return {
-    model: raw.model === undefined ? DEFAULT_OPTIONS.model : coerceString('model', raw.model),
-    host,
-    port,
-    baseUrl,
-    apiKey: raw.apiKey === undefined ? DEFAULT_OPTIONS.apiKey : coerceString('apiKey', raw.apiKey),
-    qvacCommand:
-      raw.qvacCommand === undefined
-        ? DEFAULT_OPTIONS.qvacCommand
-        : coerceString('qvacCommand', raw.qvacCommand),
-    serviceRuntime:
-      raw.serviceRuntime === undefined
-        ? DEFAULT_OPTIONS.serviceRuntime
-        : coerceString('serviceRuntime', raw.serviceRuntime),
-    serviceEntrypoint:
-      raw.serviceEntrypoint === undefined
-        ? DEFAULT_OPTIONS.serviceEntrypoint
-        : coerceString('serviceEntrypoint', raw.serviceEntrypoint),
-    cwd: raw.cwd === undefined ? DEFAULT_OPTIONS.cwd : coerceString('cwd', raw.cwd),
-    ctxSize:
-      raw.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', raw.ctxSize),
-    reasoningBudget:
-      raw.reasoningBudget === undefined
-        ? DEFAULT_OPTIONS.reasoningBudget
-        : coerceNumber('reasoningBudget', raw.reasoningBudget),
-    tools: raw.tools === undefined ? DEFAULT_OPTIONS.tools : coerceBoolean('tools', raw.tools),
-    readyTimeoutMs:
-      raw.readyTimeoutMs === undefined
-        ? DEFAULT_OPTIONS.readyTimeoutMs
-        : coerceNumber('readyTimeoutMs', raw.readyTimeoutMs),
-    idleStopMs:
-      raw.idleStopMs === undefined
-        ? DEFAULT_OPTIONS.idleStopMs
-        : coerceNumber('idleStopMs', raw.idleStopMs),
-    timeoutSeconds:
-      raw.timeoutSeconds === undefined
-        ? DEFAULT_OPTIONS.timeoutSeconds
-        : coerceNumber('timeoutSeconds', raw.timeoutSeconds)
+    configuredApiKey: raw.apiKey === undefined ? undefined : normalizeApiKey(raw.apiKey, 'apiKey'),
+    options: {
+      model: raw.model === undefined ? DEFAULT_OPTIONS.model : coerceString('model', raw.model),
+      host,
+      port,
+      baseUrl,
+      apiKeyFile:
+        raw.apiKeyFile === undefined
+          ? DEFAULT_OPTIONS.apiKeyFile
+          : coerceString('apiKeyFile', raw.apiKeyFile),
+      qvacCommand:
+        raw.qvacCommand === undefined
+          ? DEFAULT_OPTIONS.qvacCommand
+          : coerceString('qvacCommand', raw.qvacCommand),
+      serviceRuntime:
+        raw.serviceRuntime === undefined
+          ? DEFAULT_OPTIONS.serviceRuntime
+          : coerceString('serviceRuntime', raw.serviceRuntime),
+      serviceEntrypoint:
+        raw.serviceEntrypoint === undefined
+          ? DEFAULT_OPTIONS.serviceEntrypoint
+          : coerceString('serviceEntrypoint', raw.serviceEntrypoint),
+      cwd: raw.cwd === undefined ? DEFAULT_OPTIONS.cwd : coerceString('cwd', raw.cwd),
+      ctxSize:
+        raw.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', raw.ctxSize),
+      reasoningBudget:
+        raw.reasoningBudget === undefined
+          ? DEFAULT_OPTIONS.reasoningBudget
+          : coerceNumber('reasoningBudget', raw.reasoningBudget),
+      tools: raw.tools === undefined ? DEFAULT_OPTIONS.tools : coerceBoolean('tools', raw.tools),
+      readyTimeoutMs:
+        raw.readyTimeoutMs === undefined
+          ? DEFAULT_OPTIONS.readyTimeoutMs
+          : coerceNumber('readyTimeoutMs', raw.readyTimeoutMs),
+      idleStopMs:
+        raw.idleStopMs === undefined
+          ? DEFAULT_OPTIONS.idleStopMs
+          : coerceNumber('idleStopMs', raw.idleStopMs),
+      timeoutSeconds:
+        raw.timeoutSeconds === undefined
+          ? DEFAULT_OPTIONS.timeoutSeconds
+          : coerceNumber('timeoutSeconds', raw.timeoutSeconds)
+    }
   }
+}
+
+export function resolveOptions(raw: RawOptions = {}): ResolvedOptions {
+  return resolveOptionsWithApiKey(raw).options
+}
+
+function prepareOptions(raw: RawOptions): ResolvedOptions {
+  const { options, configuredApiKey } = resolveOptionsWithApiKey(raw)
+  ensureApiKeyFile(options.apiKeyFile, configuredApiKey)
+  return options
 }
 
 export function createQvacServeModels(options: ResolvedOptions): Record<string, QvacServeModel> {
@@ -337,7 +516,11 @@ export function createQvacServeModels(options: ResolvedOptions): Record<string, 
 export function createOpenClawProvider(options: ResolvedOptions): OpenClawProvider {
   return {
     baseUrl: options.baseUrl,
-    apiKey: options.apiKey,
+    apiKey: {
+      source: 'file',
+      provider: QVAC_SECRET_PROVIDER_ID,
+      id: 'value'
+    },
     api: 'openai-completions',
     timeoutSeconds: options.timeoutSeconds,
     localService: {
@@ -346,6 +529,8 @@ export function createOpenClawProvider(options: ResolvedOptions): OpenClawProvid
         options.serviceEntrypoint,
         '--qvac-command',
         options.qvacCommand,
+        '--api-key-file',
+        options.apiKeyFile,
         '--model',
         options.model,
         '--host',
@@ -372,7 +557,7 @@ export function createQvacSetupResult(
   config: OpenClawConfigLike,
   rawOptions: RawOptions = {}
 ): QvacProviderAuthResult {
-  const options = resolveOptions(rawOptions)
+  const options = prepareOptions(rawOptions)
   const defaultModel = `qvac/${options.model}`
   return {
     profiles: [],
@@ -390,6 +575,16 @@ export function createQvacSetupResult(
         providers: {
           ...config.models?.providers,
           qvac: createOpenClawProvider(options)
+        }
+      },
+      secrets: {
+        providers: {
+          ...config.secrets?.providers,
+          [QVAC_SECRET_PROVIDER_ID]: {
+            source: 'file',
+            path: options.apiKeyFile,
+            mode: 'singleValue'
+          }
         }
       }
     },
@@ -416,6 +611,10 @@ export function applyQvacSetupConfig(
       ...config.models,
       mode: setup.models.mode,
       providers: setup.models.providers
+    },
+    secrets: {
+      ...config.secrets,
+      providers: setup.secrets.providers
     }
   }
 }
@@ -425,7 +624,9 @@ export function registerQvacProvider(
   rawOptions: RawOptions = {}
 ): void {
   const pluginConfig = api.pluginConfig ?? {}
-  const mergedOptions = () => ({ ...pluginConfig, ...rawOptions })
+  const stateDir = api.runtime?.state.resolveStateDir() ?? resolveFallbackOpenClawStateDir()
+  const apiKeyFile = resolveQvacApiKeyFile(stateDir)
+  const mergedOptions = () => ({ apiKeyFile, ...pluginConfig, ...rawOptions })
   api.registerModelCatalogProvider?.({
     provider: 'qvac',
     kinds: ['text'],
@@ -450,13 +651,6 @@ export function registerQvacProvider(
         runNonInteractive: async ({ config }) => applyQvacSetupConfig(config, mergedOptions())
       }
     ],
-    resolveSyntheticAuth: () => ({
-      apiKey: 'custom-local',
-      source: 'qvac plugin (synthetic local key)',
-      mode: 'api-key'
-    }),
-    shouldDeferSyntheticProfileAuth: ({ resolvedApiKey }) =>
-      resolvedApiKey === 'custom-local' || resolvedApiKey === 'qvac-local',
     catalog: {
       order: 'simple',
       // lunte-disable-next-line require-await

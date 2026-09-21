@@ -7,6 +7,7 @@ import {
   extractInternalLinks,
   contentPathsOfLink,
 } from '../scripts/lib/link-validator'
+import { getDocumentedSoftware } from '../src/lib/versions'
 
 const TESTS_DIR = path.dirname(fileURLToPath(import.meta.url))
 const WEBSITE_DIR = path.resolve(TESTS_DIR, '..')
@@ -54,33 +55,33 @@ describe('extractInternalLinks', () => {
 
 describe('contentPathsOfLink', () => {
   it("resolves a same-collection link in the reader's own line", () => {
-    expect(contentPathsOfLink('/sdk/quickstart', 'sdk/v0.16/index.mdx')[0])
-      .toBe('sdk/v0.16/quickstart')
+    expect(contentPathsOfLink('/sdk/quickstart', 'sdk/v0.18/index.mdx')[0])
+      .toBe('sdk/v0.18/quickstart')
   })
 
   it('resolves a link from the current line inside the group', () => {
-    expect(contentPathsOfLink('/sdk/quickstart', 'sdk/(v0.17)/index.mdx')[0])
-      .toBe('sdk/(v0.17)/quickstart')
+    expect(contentPathsOfLink('/sdk/quickstart', 'sdk/(v0.19)/index.mdx')[0])
+      .toBe('sdk/(v0.19)/quickstart')
   })
 
   it('resolves a link arriving from another collection in the current line', () => {
     expect(contentPathsOfLink('/sdk/quickstart', 'platform/index.mdx')[0])
-      .toBe('sdk/(v0.17)/quickstart')
+      .toBe('sdk/(v0.19)/quickstart')
   })
 
   it('leaves a link that names its version alone', () => {
-    expect(contentPathsOfLink('/sdk/v0.16/quickstart', 'platform/index.mdx'))
-      .toEqual(['sdk/v0.16/quickstart'])
+    expect(contentPathsOfLink('/sdk/v0.18/quickstart', 'platform/index.mdx'))
+      .toEqual(['sdk/v0.18/quickstart'])
   })
 
   it('leaves a link to an unversioned collection alone', () => {
-    expect(contentPathsOfLink('/platform/addons', 'sdk/v0.16/index.mdx'))
+    expect(contentPathsOfLink('/platform/addons', 'sdk/v0.18/index.mdx'))
       .toEqual(['platform/addons'])
   })
 
   it('points a link at a page missing from the line, so the check fails', () => {
-    const [inLine] = contentPathsOfLink('/sdk/nowhere', 'sdk/v0.16/index.mdx')
-    expect(inLine).toBe('sdk/v0.16/nowhere')
+    const [inLine] = contentPathsOfLink('/sdk/nowhere', 'sdk/v0.18/index.mdx')
+    expect(inLine).toBe('sdk/v0.18/nowhere')
     expect(fs.existsSync(path.join(DOCS_BASE, `${inLine}.mdx`))).toBe(false)
   })
 })
@@ -105,7 +106,9 @@ describe('docs link integrity', () => {
   // cut, so its links get the stricter reading: each one must exist inside
   // the line of the page carrying it, with no fallback.
   it('resolves every SDK link inside its own line', () => {
-    const lines = ['v0.16', '(v0.17)']
+    const lines = (getDocumentedSoftware('/sdk')?.versions ?? []).map(
+      (version) => version.folder,
+    )
     const offenders: string[] = []
 
     for (const line of lines) {

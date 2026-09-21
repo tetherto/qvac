@@ -18,6 +18,7 @@
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "model-interface/BCITypes.hpp"
+#include "model-interface/WhisperGpuSelection.hpp"
 
 namespace qvac_lib_inference_addon_bci {
 
@@ -49,12 +50,14 @@ static bool shouldAbortWhisper(void* userData) {
          cancelRequested->load(std::memory_order_relaxed);
 }
 
-#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+#if defined(__ANDROID__) || defined(__linux__)
 namespace {
-// Android and desktop linux-arm64 prebuilds ship ggml with
-// `GGML_BACKEND_DL=ON`, so no backend is statically registered. dlopen the
-// per-arch CPU + GPU `.so` modules once per process; otherwise whisper_init
-// aborts on a NULL CPU device.
+// Android, desktop linux-arm64, and linux-x64-with-CUDA builds ship ggml
+// with `GGML_BACKEND_DL=ON`, so no backend is statically registered. dlopen
+// the per-arch CPU + GPU `.so` modules once per process; otherwise
+// whisper_init aborts on a NULL CPU device. On static linux-x64 builds the
+// scan finds no modules and the statically registered backends stay in
+// charge, so calling this unconditionally on Linux is safe.
 void ensureBackendsLoaded(const std::string& backendsDir) {
   static std::once_flag flag;
   std::call_once(flag, [&]() {
@@ -62,9 +65,9 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
       QLOG(
           qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
           "configurationParams.backendsDir not set; falling back to "
-          "ggml_backend_load_all() (default search path). CPU / Vulkan / "
-          "OpenCL registration may fail inside an APK with default "
-          "compressed-native-libs packaging.");
+          "ggml_backend_load_all() (default search path). Backend "
+          "registration may fail on hybrid GGML_BACKEND_DL builds, whose "
+          "modules live next to the addon, not the host executable.");
       ggml_backend_load_all();
       return;
     }
@@ -78,13 +81,12 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
 #endif
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-        std::string("loading ggml backends from: ") +
-            variantsDir.string());
+        std::string("loading ggml backends from: ") + variantsDir.string());
     ggml_backend_load_all_from_path(variantsDir.string().c_str());
   });
 }
 } // namespace
-#endif // __ANDROID__ || linux-arm64
+#endif // __ANDROID__ || __linux__
 
 BCIModel::BCIModel(BCIConfig config)
     : cfg_(std::move(config)), neuralProcessor_() {}
@@ -120,19 +122,23 @@ void BCIModel::loadEmbedderIfNeeded() {
   }
 
   if (neuralProcessor_.loadEmbedderWeights(embedderPath)) {
-    QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-         "Loaded BCI embedder weights from: " + embedderPath);
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        "Loaded BCI embedder weights from: " + embedderPath);
   } else {
     throw qvac_errors::bci_error::makeStatus(
         qvac_errors::bci_error::Code::EmbedderWeightsNotFound,
         "BCI embedder weights not found at: " + embedderPath +
-        ". This file is required for neural signal preprocessing. "
-        "Generate it with: python3 scripts/convert-model.py --checkpoint <ckpt>");
+            ". This file is required for neural signal preprocessing. "
+            "Generate it with: python3 scripts/convert-model.py --checkpoint "
+            "<ckpt>");
   }
 }
 
 namespace {
 constexpr int K_NO_GPU_DEVICE = -1;
+
+void logSilentCpuFallbackWarning();
 
 std::string toLowerCopy(std::string value) {
   std::transform(
@@ -191,17 +197,53 @@ int adrenoOpenclGpuDeviceIndex() {
 } // namespace
 
 void BCIModel::load() {
-  if (ctx_) return;
+  if (ctx_)
+    return;
 
-#if defined(__ANDROID__) || (defined(__linux__) && defined(__aarch64__))
+#if defined(__ANDROID__) || defined(__linux__)
   ensureBackendsLoaded(cfg_.backendsDir);
 #endif
 
   whisper_context_params contextParams = toWhisperContextParams(cfg_);
 
+  // Resolve the raw registry identity before translating to Whisper's
+  // GPU/IGPU ordinal. An excluded explicit target falls back only to CPU.
+  if (contextParams.use_gpu && !cfg_.whisperContextCfg.contains("gpu_device")) {
+    const auto devices = main_gpu::registryDevices();
+    const auto selected =
+        main_gpu::select(devices, main_gpu::parse(cfg_.whisperContextCfg));
+    if (selected.outOfRange) {
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          "main-gpu registry index is out of range; using normal GPU "
+          "selection");
+    }
+    contextParams.use_gpu = selected.whisperIndex >= 0;
+    if (contextParams.use_gpu) {
+      contextParams.gpu_device = selected.whisperIndex;
+    } else if (!selected.refused.empty()) {
+      std::string message =
+          "GPU execution requested but no eligible device is available; "
+          "falling back to CPU. Refused GPU-type devices:";
+      for (const auto& identity : selected.refused) {
+        message += " [" + identity + "]";
+      }
+      QLOG(
+          qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+          message.c_str());
+    } else if (std::ranges::none_of(devices, [](const auto& device) {
+                 return device.whisperIndex >= 0;
+               })) {
+      // Selection clears use_gpu, so backend reporting cannot recover the
+      // original request. Keep the existing diagnostic for an empty GPU
+      // registry.
+      logSilentCpuFallbackWarning();
+    }
+  }
+
   // Steer to the Adreno OpenCL device when present (see
   // adrenoOpenclGpuDeviceIndex) to avoid the Adreno Vulkan compute crash.
-  if (contextParams.use_gpu) {
+  if (contextParams.use_gpu && cfg_.whisperContextCfg.contains("gpu_device")) {
     const int adrenoOpenclDeviceIndex = adrenoOpenclGpuDeviceIndex();
     if (adrenoOpenclDeviceIndex >= 0 &&
         adrenoOpenclDeviceIndex != contextParams.gpu_device) {
@@ -225,10 +267,12 @@ void BCIModel::load() {
   }
   const auto modelPath = std::get<std::string>(modelPathIt->second);
 
-  QLOG(qvac_lib_inference_addon_cpp::logger::Priority::INFO,
-       "Loading BCI model from: " + modelPath);
+  QLOG(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "Loading BCI model from: " + modelPath);
 
-  auto* rawCtx = whisper_init_from_file_with_params(modelPath.c_str(), contextParams);
+  auto* rawCtx =
+      whisper_init_from_file_with_params(modelPath.c_str(), contextParams);
   if (rawCtx == nullptr) {
     throw qvac_errors::bci_error::makeStatus(
         qvac_errors::bci_error::Code::FailedToLoadModel,
@@ -450,10 +494,12 @@ static void onNewSegment(
     [[maybe_unused]] whisper_context* ctx, whisper_state* state, int nNew,
     void* userData) {
   auto* bci = static_cast<BCIModel*>(userData);
-  if (bci == nullptr || state == nullptr) return;
+  if (bci == nullptr || state == nullptr)
+    return;
 
   const int nSegments = whisper_full_n_segments_from_state(state);
-  if (nNew <= 0 || nSegments <= 0) return;
+  if (nNew <= 0 || nSegments <= 0)
+    return;
   const int startIndex = std::max(0, nSegments - nNew);
 
   for (int i = startIndex; i < nSegments; i++) {
@@ -477,16 +523,19 @@ static void onNewSegment(
 }
 
 void BCIModel::warmup() {
-  if (!ctx_) return;
+  if (!ctx_)
+    return;
 
   std::vector<float> silentAudio(K_WARMUP_SAMPLE_COUNT, 0.0F);
   whisper_full_params params = toWhisperFullParams(cfg_);
   params.new_segment_callback = nullptr;
   params.new_segment_callback_user_data = nullptr;
 
-  whisper_full(ctx_.get(), params,
-               silentAudio.data(),
-               static_cast<int>(silentAudio.size()));
+  whisper_full(
+      ctx_.get(),
+      params,
+      silentAudio.data(),
+      static_cast<int>(silentAudio.size()));
 }
 
 int BCIModel::injectNeuralMelAndRunWhisper(
@@ -618,11 +667,10 @@ void BCIModel::process(const Input& rawNeuralData) {
 
 std::any BCIModel::process(const std::any& input) {
   AnyInput modelInput;
-  if (auto* anyInput = std::any_cast<AnyInput>(
-          const_cast<std::any*>(&input))) {
+  if (auto* anyInput = std::any_cast<AnyInput>(const_cast<std::any*>(&input))) {
     modelInput = std::move(*anyInput);
-  } else if (auto* inputVector = std::any_cast<Input>(
-                 const_cast<std::any*>(&input))) {
+  } else if (
+      auto* inputVector = std::any_cast<Input>(const_cast<std::any*>(&input))) {
     modelInput.input = std::move(*inputVector);
   } else {
     throw qvac_errors::StatusError(
@@ -660,9 +708,7 @@ std::any BCIModel::process(const std::any& input) {
   return output_;
 }
 
-void BCIModel::saveLoadParams(const BCIConfig& config) {
-  setConfig(config);
-}
+void BCIModel::saveLoadParams(const BCIConfig& config) { setConfig(config); }
 
 void BCIModel::cancel() const {
   cancelRequested_.store(true, std::memory_order_relaxed);
@@ -671,7 +717,7 @@ void BCIModel::cancel() const {
 bool BCIModel::configContextIsChanged(
     const BCIConfig& oldCfg, const BCIConfig& newCfg) {
   const std::vector<std::string> contextKeys = {
-      "model", "use_gpu", "flash_attn", "gpu_device"};
+      "model", "use_gpu", "flash_attn", "gpu_device", "main-gpu", "main_gpu"};
   return std::ranges::any_of(contextKeys, [&](const std::string& key) {
     const auto oldIt = oldCfg.whisperContextCfg.find(key);
     const auto newIt = newCfg.whisperContextCfg.find(key);
@@ -689,7 +735,8 @@ void BCIModel::resetContext() { ctx_.reset(); }
 void BCIModel::setConfig(const BCIConfig& config) {
   bool contextChanged = configContextIsChanged(cfg_, config);
   cfg_ = config;
-  if (contextChanged) reload();
+  if (contextChanged)
+    reload();
 }
 
 } // namespace qvac_lib_inference_addon_bci

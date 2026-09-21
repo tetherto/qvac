@@ -199,8 +199,11 @@ async function main () {
       config: { ...baseConfig, 'split-mode': 'layer', 'tensor-split': tensorSplit }
     },
     {
-      label: 'Tensor parallelism (row)',
-      config: { ...baseConfig, 'split-mode': 'row', 'tensor-split': tensorSplit }
+      // ctx_size is already pinned in baseConfig, which matters here: auto-fit
+      // is disabled in tensor mode, so an unset ctx_size would default to the
+      // model's full trained context and skew the comparison (or OOM).
+      label: 'Tensor parallelism (tensor, meta device)',
+      config: { ...baseConfig, 'split-mode': 'tensor', 'tensor-split': tensorSplit }
     }
   ]
 

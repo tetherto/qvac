@@ -1,0 +1,16 @@
+{
+  "dependencies": [
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.4.0"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    }
+  ]
+}

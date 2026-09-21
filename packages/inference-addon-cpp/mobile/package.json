@@ -1,0 +1,45 @@
+{
+  "name": "inference-addon-cpp-mobile-tests",
+  "version": "0.1.0",
+  "private": true,
+  "addon": true,
+  "description": "On-device (iOS/Android) integration test addon for inference-addon-cpp",
+  "scripts": {
+    "build": "bare-make generate && bare-make build && bare-make install",
+    "test": "node scripts/run-desktop-tests.js",
+    "test:mobile:generate": "node scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'skip android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'skip android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'skip android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'skip ios sim'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'skip ios x64 sim'",
+    "lint": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\""
+  },
+  "files": [
+    "addon.js",
+    "binding.js",
+    "index.js",
+    "prebuilds",
+    "test/integration",
+    "test/mobile"
+  ],
+  "exports": {
+    "./package": "./package.json",
+    ".": "./index.js",
+    "./addon.js": "./addon.js",
+    "./binding.js": "./binding.js"
+  },
+  "repository": {
+    "type": "git"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "bare-thread": "^1.2.4",
+    "brittle": "^3.16.3"
+  },
+  "devDependencies": {
+    "cmake-bare": "^1.5.2",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0"
+  }
+}

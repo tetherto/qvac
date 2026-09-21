@@ -119,3 +119,19 @@ async def test_translate_threads_request_id():
     )
     _ = [token async for token in run.token_stream]
     assert transport.sent["requestId"] == "req-9"
+    assert run.request_id == "req-9"
+
+
+async def test_translate_generates_and_exposes_request_id():
+    transport = FakeTransport(stream=_chunks(["x"]))
+    run = api.translate(
+        transport,
+        model_id="m-1",
+        text="hello",
+        model_type="nmt",
+    )
+    _ = [token async for token in run.token_stream]
+    # An omitted request_id is generated, threaded on the wire, and exposed on the
+    # handle so `cancel(request_id=...)` can target it -- same as completion.
+    assert run.request_id
+    assert transport.sent["requestId"] == run.request_id

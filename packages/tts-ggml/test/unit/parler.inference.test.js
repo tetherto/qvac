@@ -65,7 +65,7 @@ test('Parler: parlerModel file path alone routes to parler engine', (t) => {
 test('Parler: invalid engine error message lists parler', (t) => {
   t.exception(
     () => new TTSGgml({ engine: 'parakeet' }),
-    /'chatterbox', 'supertonic' or 'parler'/,
+    /'chatterbox', 'supertonic', 'cosyvoice3', 'parler' or 'audio8'/,
     'engine validation message includes parler'
   )
 })
@@ -183,24 +183,67 @@ test('Parler: constructor guards reject conflicting / unsupported options', (t) 
       createMockedParlerModel({
         files: {
           parlerModel: './models/parler-mini-v1-q8_0.gguf',
-          lavasrEnhancer: '/abs/enh.gguf'
-        }
-      }),
-    /LavaSR/,
-    'enhancer throws'
-  )
-  t.exception(
-    () =>
-      createMockedParlerModel({
-        files: {
-          parlerModel: './models/parler-mini-v1-q8_0.gguf',
           lavasrDenoiser: '/abs/den.gguf'
         },
         extra: { streamChunkTokens: 40 }
       }),
-    /not supported with the parler engine/,
-    'denoiser + streaming throws the parler-specific error, not the Chatterbox one'
+    /denoiser is not yet supported with native chunk streaming/,
+    'denoiser + native chunk streaming throws'
   )
+})
+
+test('Parler: LavaSR enhancer forwards to params', (t) => {
+  const model = createMockedParlerModel({
+    files: {
+      parlerModel: './models/parler-mini-v1-q8_0.gguf',
+      lavasrEnhancer: '/abs/enh.gguf'
+    }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.engineType, TTSGgml.ENGINE_PARLER)
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf', 'enhancer path reaches the addon')
+  t.absent(params.lavasrDenoiserPath, 'no denoiser key when only the enhancer is set')
+})
+
+test('Parler: LavaSR denoiser forwards to params on the batch path', (t) => {
+  const model = createMockedParlerModel({
+    files: {
+      parlerModel: './models/parler-mini-v1-q8_0.gguf',
+      lavasrEnhancer: '/abs/enh.gguf',
+      lavasrDenoiser: '/abs/den.gguf'
+    }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf')
+  t.is(params.lavasrDenoiserPath, '/abs/den.gguf', 'denoiser path reaches the addon')
+})
+
+test('Parler: enhancer combines with native chunk streaming', (t) => {
+  const model = createMockedParlerModel({
+    files: {
+      parlerModel: './models/parler-mini-v1-q8_0.gguf',
+      lavasrEnhancer: '/abs/enh.gguf'
+    },
+    extra: { streamChunkTokens: 43 }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf')
+  t.is(params.streamChunkTokens, 43, 'streaming + enhancer is accepted')
+})
+
+test('Parler: enhancer accepts a non-native outputSampleRate while streaming', (t) => {
+  // StreamingEnhancer resamples inside its overlap windows, so the requested
+  // rate survives chunk seams; the addon enforces the same rule in C++.
+  const model = createMockedParlerModel({
+    files: {
+      parlerModel: './models/parler-mini-v1-q8_0.gguf',
+      lavasrEnhancer: '/abs/enh.gguf'
+    },
+    extra: { streamChunkTokens: 43, config: { outputSampleRate: 24000 } }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.outputSampleRate, 24000)
+  t.is(params.lavasrEnhancerPath, '/abs/enh.gguf')
 })
 
 test('Parler: streamChunkTokens / streamFirstChunkTokens forward to params', (t) => {
@@ -235,8 +278,8 @@ test('Parler: parler-only options on other engines throw', (t) => {
         files: { supertonicModel: './models/supertonic.gguf' },
         emotion: 'happy'
       }),
-    /parler-only/,
-    'emotion on supertonic throws'
+    /does not support `emotion`/,
+    'emotion is cross-engine now, so supertonic reports it has no emotion control'
   )
   t.exception(
     () =>
@@ -245,8 +288,8 @@ test('Parler: parler-only options on other engines throw', (t) => {
         files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' },
         temperature: 0.8
       }),
-    /parler-only/,
-    'temperature on chatterbox throws'
+    /parler\/audio8-only/,
+    'temperature on chatterbox throws (audio8 samples too, so it is shared)'
   )
 })
 
@@ -314,8 +357,13 @@ test('Parler: per-call fields on other engines throw', async (t) => {
   await model.load()
   await t.exception(
     model.run({ type: 'text', input: 'x', emotion: 'happy' }),
-    /parler-only/,
+    /does not support `emotion`/,
     'per-call emotion on supertonic rejects'
+  )
+  await t.exception(
+    model.run({ type: 'text', input: 'x', voice: 'Laura', pitch: 'high' }),
+    /parler-only/,
+    'per-call description/template fields stay parler-only'
   )
   await model.unload()
 })

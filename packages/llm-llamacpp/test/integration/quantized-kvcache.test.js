@@ -208,7 +208,12 @@ async function runHeadDimSmoke(t, modelInfo, label) {
   t.ok(f16, `${label} head_dim=${modelInfo.headDim} f16 baseline completed`)
   t.ok(tbq3pq3, `${label} head_dim=${modelInfo.headDim} TBQ/PQ cache completed`)
 
-  if (f16?.kvCacheMiB != null && tbq3pq3?.kvCacheMiB != null) {
+  if (
+    f16?.kvCacheMiB !== null &&
+    f16?.kvCacheMiB !== undefined &&
+    tbq3pq3?.kvCacheMiB !== null &&
+    tbq3pq3?.kvCacheMiB !== undefined
+  ) {
     const pct = (tbq3pq3.kvCacheMiB / f16.kvCacheMiB) * 100
     t.ok(
       tbq3pq3.kvCacheMiB + MEM_EPSILON_MIB < f16.kvCacheMiB,

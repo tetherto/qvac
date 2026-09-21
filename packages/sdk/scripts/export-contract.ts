@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { contractDir, renderContractFiles } from '@/scripts/contract/build-contract'
+import { contractDir, renderContractFiles } from './contract/build-contract'
 
 const checkOnly = process.argv.includes('--check')
 

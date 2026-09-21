@@ -1,0 +1,18 @@
+[
+  "runMobilePerfTinyCpuTest",
+  "runMobilePerfTinyGpuTest",
+  "runMobilePerfSweepCpuTest",
+  "runMobilePerfSweepGpuTest",
+  "runParakeetMobilePerfCtcCpuTest",
+  "runParakeetMobilePerfCtcGpuTest",
+  "runParakeetMobilePerfTdtCpuTest",
+  "runParakeetMobilePerfTdtGpuTest",
+  "runParakeetMobilePerfUnifiedCpuTest",
+  "runParakeetMobilePerfUnifiedGpuTest",
+  "runParakeetMobilePerfEouCpuTest",
+  "runParakeetMobilePerfEouGpuTest",
+  "runParakeetMobilePerfSortformerCpuTest",
+  "runParakeetMobilePerfSortformerGpuTest",
+  "runParakeetMobilePerfSortformerStreamingCpuTest",
+  "runParakeetMobilePerfSortformerStreamingGpuTest"
+]

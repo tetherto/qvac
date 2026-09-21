@@ -30,9 +30,10 @@ const { Router, encode: encodeDispatch } = schema.hyperdispatchSpec
 const RegistryDatabase = schema.RegistryDatabase
 const ReseedTracker = require('./reseed-tracker')
 const { QVAC_MAIN_REGISTRY } = schema
-const { getFileMetadata } = require('../utils/file-metadata')
+const { getFileMetadata, calculateFileChecksum } = require('../utils/file-metadata')
 const { parseCanonicalSource, resolveS3Bucket } = require('./source-helpers')
 const { isGGUFSource, isFirstShard, extractGGUFMetadata } = require('./gguf-helpers')
+const { writeFitBlob, supportsFitBlob } = require('./fit-blob')
 const { addModelRequestSchema } = require('./model-schema')
 const { ZodError } = require('zod')
 
@@ -113,9 +114,15 @@ class RegistryService extends ReadyResource {
     this.ackThreshold = opts.ackThreshold ?? 0
     this.autobaseBootstrap = opts.autobaseBootstrap || null
     this.blindPeerKeys = Array.isArray(opts.blindPeerKeys) ? opts.blindPeerKeys : []
+    this.storagePath = opts.storagePath || this.config.getRegistryStorage?.() || null
+    this._statfs = opts.statfs || fsPromises.statfs
     this.skipStorageCheck = opts.skipStorageCheck ?? false
     this.clearAfterReseed = opts.clearAfterReseed ?? false
     this.compactionIntervalMs = opts.compactionIntervalMs ?? 60 * 60 * 1000
+    this.blobCoreGeneration = this.config.getBlobCoreGeneration(opts.blobCoreGeneration)
+    this.activeBlobCoreLabel = this.blobCoreGeneration
+      ? `${BLOB_CORE_NAME}-${this.blobCoreGeneration}`
+      : BLOB_CORE_NAME
 
     this.view = null
     this.base = null
@@ -346,7 +353,15 @@ class RegistryService extends ReadyResource {
     // because `writable: true` would create a local core with the wrong key.
     if (this.base.isIndexer || this.base.localWriter) {
       try {
-        await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+        const { core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
+        this.logger.info(
+          {
+            generation: this.blobCoreGeneration,
+            label: this.activeBlobCoreLabel,
+            key: IdEnc.normalize(core.key)
+          },
+          'RegistryService: active blob core ready'
+        )
       } catch (err) {
         this.logger.warn(
           { err: err.message },
@@ -647,6 +662,28 @@ class RegistryService extends ReadyResource {
       }
     })
 
+    rpc.respond('fill-fit-blobs', async (options = {}) => {
+      if (this.metrics) this.metrics.recordRpcRequest('fill-fit-blobs')
+      try {
+        ensureWriterAccess()
+
+        if (!this.opened) await this.ready()
+        await this._ensureIndexer()
+
+        const report = await this.fillFitBlobs(options || {})
+
+        this.logger.info(
+          { selected: report.selected, filled: report.filled, replaced: report.replaced },
+          'RPC: fill-fit-blobs completed'
+        )
+
+        return { success: true, report }
+      } catch (err) {
+        if (this.metrics) this.metrics.recordRpcError('fill-fit-blobs')
+        throw err
+      }
+    })
+
     rpc.respond('put-license', async (licenseRecord) => {
       if (this.metrics) this.metrics.recordRpcRequest('put-license')
       try {
@@ -755,6 +792,21 @@ class RegistryService extends ReadyResource {
       }
     })
 
+    rpc.respond('get-storage-capacity', async () => {
+      if (this.metrics) this.metrics.recordRpcRequest('get-storage-capacity')
+      try {
+        ensureWriterAccess()
+
+        if (!this.opened) await this.ready()
+        await this._ensureIndexer()
+
+        return await this._getStorageCapacity()
+      } catch (err) {
+        if (this.metrics) this.metrics.recordRpcError('get-storage-capacity')
+        throw err
+      }
+    })
+
     // lunte-disable-next-line require-await
     rpc.respond('ping', async () => {
       if (this.metrics) this.metrics.recordRpcRequest('ping')
@@ -776,6 +828,23 @@ class RegistryService extends ReadyResource {
     if (!remoteKeyHex) return false
     const keys = this.config.getAllowedWriterKeys()
     return keys.has(remoteKeyHex)
+  }
+
+  async _getStorageCapacity() {
+    try {
+      if (!this.storagePath) throw new Error('Registry storage path is unavailable')
+
+      const stats = await this._statfs(this.storagePath, { bigint: true })
+      const availableBytes = BigInt(stats.bavail) * BigInt(stats.bsize)
+
+      return { availableBytes: availableBytes.toString() }
+    } catch (err) {
+      this.logger.error({ error: err.message }, 'Failed to read registry storage capacity')
+
+      const capacityError = new Error('Registry storage capacity is unavailable')
+      capacityError.code = 'ERR_STORAGE_CAPACITY_UNAVAILABLE'
+      throw capacityError
+    }
   }
 
   _validateAddModelRequest(entry) {
@@ -840,8 +909,9 @@ class RegistryService extends ReadyResource {
         )
       }
 
-      const { blobs, core } = await this._getOrCreateBlobsCore(BLOB_CORE_NAME)
+      const { blobs, core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
       const pointer = await this._uploadFileToHyperblobs(blobs, localPath)
+      const fitBlob = await this._uploadFitBlob(blobs, localPath, outputDir)
 
       await this._mirrorBlobCore(core)
 
@@ -851,7 +921,8 @@ class RegistryService extends ReadyResource {
         metadata,
         pointer,
         core.key,
-        ggufMetadata
+        ggufMetadata,
+        fitBlob
       )
 
       await this._appendOperation(DISPATCH_PUT_MODEL, modelData)
@@ -1057,6 +1128,13 @@ class RegistryService extends ReadyResource {
       throw new Error('Invalid HuggingFace URL')
     }
 
+    // Download into an ephemeral per-model cache dir under outputDir
+    // (the parent of localPath) instead of the shared HF hub cache
+    // (~/.cache/huggingface). addModel()'s `finally` removes outputDir after
+    // each ingest, so this reclaims the download instead of letting the HF
+    // cache grow unbounded and fill the disk.
+    const cacheDir = path.join(path.dirname(localPath), '.hf-cache')
+
     // Isolated undici pool for this single download. Destroyed in `finally`
     // so no parked socket can leak into the next download and trigger
     // ECONNRESET from a half-closed remote.
@@ -1077,6 +1155,7 @@ class RegistryService extends ReadyResource {
             repo: parsed.repo,
             path: parsed.hfPath,
             revision: parsed.revision,
+            cacheDir,
             accessToken: hfToken,
             fetch: dispatcherFetch,
             // Force LFS over xet — the xet CAS bridge has been unreliable
@@ -1261,7 +1340,33 @@ class RegistryService extends ReadyResource {
     return writeStream.id
   }
 
-  _buildModelEntry(request, sourceInfo, metadata, pointer, blobsCoreKey, ggufMetadata = null) {
+  async _uploadFitBlob(blobs, localPath, outputDir) {
+    const fitBlob = await writeFitBlob(localPath, outputDir)
+    if (!fitBlob) {
+      return null
+    }
+
+    try {
+      const pointer = await this._uploadFileToHyperblobs(blobs, fitBlob.path)
+      return { pointer, size: fitBlob.size, sha256: fitBlob.sha256 }
+    } catch (err) {
+      this.logger.warn(
+        { path: localPath, error: err.message },
+        'Failed to upload fit blob; model is added without one'
+      )
+      return null
+    }
+  }
+
+  _buildModelEntry(
+    request,
+    sourceInfo,
+    metadata,
+    pointer,
+    blobsCoreKey,
+    ggufMetadata = null,
+    fitBlob = null
+  ) {
     const tags = Array.isArray(request.tags) ? request.tags.filter(Boolean) : []
 
     const entry = {
@@ -1286,6 +1391,17 @@ class RegistryService extends ReadyResource {
 
     if (ggufMetadata) {
       entry.ggufMetadata = JSON.stringify(ggufMetadata)
+    }
+
+    if (fitBlob) {
+      entry.fitBlobBinding = {
+        coreKey: blobsCoreKey,
+        blockOffset: fitBlob.pointer.blockOffset,
+        blockLength: fitBlob.pointer.blockLength,
+        byteOffset: fitBlob.pointer.byteOffset,
+        byteLength: fitBlob.pointer.byteLength,
+        sha256: fitBlob.sha256
+      }
     }
 
     if (request.deprecated !== undefined) {
@@ -1314,6 +1430,168 @@ class RegistryService extends ReadyResource {
 
   get registryCoreKey() {
     return this.view ? this.view.publicKey : null
+  }
+
+  /**
+   * Streams the artifact out of the blob core the record names, taking only
+   * blocks this node already holds. `wait: false` fails immediately on a core
+   * another writer owns, and on one whose blocks were cleared after mirroring.
+   */
+  async _readArtifactFromBlobs(model, localPath) {
+    const core = this.blobsStore.get({ key: IdEnc.decode(model.blobBinding.coreKey) })
+    await core.ready()
+
+    try {
+      const blobs = new Hyperblobs(core)
+      await blobs.ready()
+      await pipeline(
+        blobs.createReadStream(model.blobBinding, { wait: false }),
+        createWriteStream(localPath)
+      )
+    } finally {
+      await core.close().catch(() => {})
+    }
+  }
+
+  /**
+   * The canonical URL a record was ingested from. A record keeps the protocol
+   * and the path, so an S3 source is bucket-less and takes its bucket from the
+   * environment.
+   */
+  _canonicalSourceOf(model) {
+    if (model.source === 's3') return `s3:///${model.path}`
+    if (model.source === 'hf') return `https://huggingface.co/${model.path}`
+    throw new Error(`unsupported source protocol: ${model.source}`)
+  }
+
+  /**
+   * Downloads the artifact from the record's source. The source is mutable, so
+   * the download stands in for the recorded weights only while it still hashes
+   * to what the record binds.
+   */
+  async _downloadArtifactForFill(model, localPath) {
+    const sourceInfo = parseCanonicalSource(this._canonicalSourceOf(model))
+    await this._downloadArtifact(sourceInfo, localPath)
+
+    const checksum = await calculateFileChecksum(localPath)
+    if (checksum !== model.blobBinding.sha256) {
+      throw new Error(
+        `source now hashes to ${checksum}, the record binds ${model.blobBinding.sha256}`
+      )
+    }
+  }
+
+  async _loadArtifactForFill(model, localPath) {
+    try {
+      await this._readArtifactFromBlobs(model, localPath)
+      return 'core'
+    } catch (err) {
+      this.logger.info(
+        { path: model.path, error: err.message },
+        'Artifact not readable locally, falling back to the source'
+      )
+      await this._downloadArtifactForFill(model, localPath)
+      return 'source'
+    }
+  }
+
+  /**
+   * Gives records a weightless description. A record that already carries a
+   * pointer is left alone unless `force`, which rebuilds the description and
+   * rewrites the pointer only when the bytes differ.
+   *
+   * Weights are read from the blob core the record names, and from the record's
+   * source when this node holds none of it. They are never re-uploaded. This
+   * does not repair a wrong artifact: re-ingest the model instead, which
+   * regenerates the weights and the description together.
+   *
+   * Every selected record is staged in `TEMP_STORAGE` one at a time, so that
+   * volume has to fit the largest model in the registry.
+   */
+  async fillFitBlobs({ filter = null, limit = null, dryRun = false, force = false } = {}) {
+    const models = await this.listModels()
+    const candidates = models.filter((model) => {
+      if (model.fitBlobBinding && !force) return false
+      if (!supportsFitBlob(model.path)) return false
+      if (filter && !model.path.includes(filter)) return false
+      return true
+    })
+
+    const selected = limit ? candidates.slice(0, limit) : candidates
+    const report = {
+      considered: models.length,
+      selected: selected.length,
+      filled: 0,
+      replaced: 0,
+      unchanged: 0,
+      downloaded: 0,
+      skipped: []
+    }
+
+    if (dryRun) {
+      report.paths = selected.map((model) => model.path)
+      return report
+    }
+
+    const tempBase = this.config.getTempStorage()
+
+    for (const model of selected) {
+      const pathHash = crypto.createHash('sha256').update(model.path).digest('hex').slice(0, 32)
+      const outputDir = path.join(tempBase, `fit-${pathHash}`)
+
+      try {
+        await fsPromises.mkdir(outputDir, { recursive: true })
+        const localPath = path.join(outputDir, path.basename(model.path))
+        const origin = await this._loadArtifactForFill(model, localPath)
+        if (origin === 'source') report.downloaded++
+
+        const fitBlob = await writeFitBlob(localPath, outputDir)
+        if (!fitBlob) {
+          report.skipped.push({ path: model.path, reason: 'no metadata region' })
+          continue
+        }
+
+        if (model.fitBlobBinding?.sha256 === fitBlob.sha256) {
+          report.unchanged++
+          continue
+        }
+
+        const { blobs, core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
+        const pointer = await this._uploadFileToHyperblobs(blobs, fitBlob.path)
+
+        await this._mirrorBlobCore(core)
+
+        await this._appendOperation(DISPATCH_PUT_MODEL, {
+          ...model,
+          fitBlobBinding: {
+            coreKey: core.key,
+            blockOffset: pointer.blockOffset,
+            blockLength: pointer.blockLength,
+            byteOffset: pointer.byteOffset,
+            byteLength: pointer.byteLength,
+            sha256: fitBlob.sha256
+          }
+        })
+
+        if (model.fitBlobBinding) {
+          report.replaced++
+        } else {
+          report.filled++
+        }
+        this.logger.info({ path: model.path, size: fitBlob.size }, 'Filled fit blob')
+      } catch (err) {
+        report.skipped.push({ path: model.path, reason: err.message })
+        this.logger.warn({ path: model.path, error: err.message }, 'Fit blob fill failed')
+      } finally {
+        await fsPromises.rm(outputDir, { recursive: true, force: true }).catch(() => {})
+      }
+    }
+
+    if (report.filled > 0 || report.replaced > 0) {
+      this._scheduleTotalsRefresh()
+    }
+
+    return report
   }
 
   async listModels(query = {}) {

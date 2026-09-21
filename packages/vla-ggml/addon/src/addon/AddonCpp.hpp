@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <any>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -45,8 +46,9 @@ public:
   // path rather than relative to process CWD (required on mobile).
   explicit VlaModel(
       const std::string& ggufPath, bool forceCpu = false,
-      std::string backendsDir = {})
-      : model_(createVlaModelFromGguf(ggufPath, forceCpu, backendsDir)) {
+      std::string backendsDir = {}, const VlaEmbodimentRequest& embodiment = {})
+      : model_(createVlaModelFromGguf(
+            ggufPath, forceCpu, backendsDir, embodiment)) {
     // Canonical `backendDevice` encoding used across the inference addons
     // (LlamaModel, BertModel): 0 = CPU, 1 = GPU. Captured at load time so
     // `runtimeStats()` can report it without re-querying ggml.
@@ -66,6 +68,55 @@ public:
   // sentinel values ("none", "unknown") are passed through.
   std::string backendName() const { return model_->backendName(); }
 
+  // Switch the active embodiment on the loaded model (multi-embodiment GR00T
+  // only; throws otherwise). Called from the JS thread.
+  //
+  // Refuses while an inference is in flight, and that refusal — not the model's
+  // embodiment mutex — is what makes the switch correct. The mutex SERIALIZES a
+  // switch against the worker thread's process(), but it cannot reorder them: a
+  // switch dispatched after runJob() was accepted but before process() reaches
+  // infer() would win the mutex, and inference would then read the NEW weights
+  // with input already validated against the OLD hparams. infer() derives its
+  // whole layout from nImages, so a DROID row run against LIBERO's 2 buffers
+  // returns plausible actions for an embodiment the caller never selected — no
+  // error, no log. index.js has its own friendlier check on _hasActiveResponse,
+  // but the guard has to exist HERE too: the SDK plugin, the Python bindings
+  // and any direct test harness reach the binding without going through it.
+  void setEmbodiment(const VlaEmbodimentRequest& embodiment) {
+    if (jobsInFlight_.load(std::memory_order_acquire) != 0) {
+      // PUBLIC ERROR-CODE CONTRACT: the JS wrapper matches "an inference job is
+      // in flight" to report JOB_ALREADY_RUNNING rather than blaming the config
+      // (see NATIVE_ERR_MARKERS in src/index.ts) — keep that substring
+      // verbatim.
+      throw std::runtime_error(
+          "VlaModel::setEmbodiment: an inference job is in flight — await the "
+          "in-flight run() response before switching embodiment");
+    }
+    model_->setEmbodiment(embodiment);
+  }
+
+  // Dispatch bookkeeping for the guard above. The framework version this addon
+  // builds against exposes no in-flight predicate of its own (its AddonCpp has
+  // only runJob/cancelJob), so the count is tracked here, where both ends are
+  // visible: noteJobDispatched() is called by the runJob binding BEFORE the job
+  // is handed over (so no switch can slip into the gap between acceptance and
+  // the increment), released again if the job was refused, and cleared by
+  // process() once inference has consumed the weights. VLA implements no
+  // IModelCancel, so an accepted job always reaches process() and the count
+  // cannot be stranded.
+  //
+  // acq_rel on both, not plain release: the count is read on one thread and
+  // written on two (dispatch on the JS thread, completion on the worker), so
+  // each update has to both publish itself to the guard's acquire load and see
+  // every update that came before it. A release-only RMW gives the first half
+  // and not the second.
+  void noteJobDispatched() {
+    jobsInFlight_.fetch_add(1, std::memory_order_acq_rel);
+  }
+  void noteJobSettled() {
+    jobsInFlight_.fetch_sub(1, std::memory_order_acq_rel);
+  }
+
   // ─── IModel interface ─────────────────────────────────────────────────────
 
   [[nodiscard]] std::string getName() const final { return "VlaModel"; }
@@ -77,6 +128,10 @@ public:
   // Float32Array. Stats are emitted separately by OutputQueue::queueJobEnded
   // calling our runtimeStats().
   std::any process(const std::any& input) final {
+    // Release the in-flight count however this returns: a throwing process()
+    // still ends the job, and a count stranded by an early return would block
+    // every later setEmbodiment for the model's lifetime.
+    const JobInFlightGuard settled(*this);
     const VlaInput* in = std::any_cast<VlaInput>(&input);
     if (in == nullptr) {
       throw std::invalid_argument("VlaModel::process: input is not a VlaInput");
@@ -110,6 +165,19 @@ public:
   }
 
 private:
+  // Releases one in-flight job on destruction, so process() clears the count on
+  // every exit path including a throw.
+  class JobInFlightGuard {
+  public:
+    explicit JobInFlightGuard(VlaModel& owner) : owner_(owner) {}
+    ~JobInFlightGuard() { owner_.noteJobSettled(); }
+    JobInFlightGuard(const JobInFlightGuard&) = delete;
+    JobInFlightGuard& operator=(const JobInFlightGuard&) = delete;
+
+  private:
+    VlaModel& owner_;
+  };
+
   // Real inference path. Validates input shape, builds the image-pointer
   // vector, copies the bool mask, runs IVlaModel::infer, and captures the
   // timing into lastTiming_ for runtimeStats().
@@ -181,6 +249,10 @@ private:
   std::unique_ptr<IVlaModel> model_;
   VlaTimingGeneric lastTiming_{};
   int64_t runtimeBackendDevice_ = 0;
+  // Jobs accepted by the scheduler and not yet finished in process(). Written
+  // from the JS thread (dispatch) and the worker thread (completion), read by
+  // setEmbodiment on the JS thread — hence atomic.
+  std::atomic<int> jobsInFlight_{0};
 };
 
 } // namespace qvac_lib_infer_vla_ggml

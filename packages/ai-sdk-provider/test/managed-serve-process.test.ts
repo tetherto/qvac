@@ -1,13 +1,26 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
 import { ServeExitedError, ServeStartTimeoutError } from '../src/managed/errors.js'
 import { isProcessAlive } from '../src/managed/registry.js'
-import { allocateFreePort, spawnServe, stopServe } from '../src/managed/serve-process.js'
-import { fakeServeSkip as skip, makeFakeServe, setBehavior } from './helpers/fake-serve.js'
+import {
+  allocateFreePort,
+  cliSupportsApiKeyFile,
+  spawnServe,
+  stopServe,
+  writeApiKeyFile
+} from '../src/managed/serve-process.js'
+import {
+  fakeServeSkip as skip,
+  makeFakeServe,
+  setArgvFile,
+  setBehavior
+} from './helpers/fake-serve.js'
+
+const API_KEY = 'managed-test-key'
 
 test(
   'spawnServe brings up a healthy serve, reports coordinates, then stopServe terminates it',
@@ -18,6 +31,7 @@ test(
     try {
       const port = await allocateFreePort('127.0.0.1')
       const serve = await spawnServe({
+        apiKey: API_KEY,
         configPath: 'unused.json',
         port,
         serveBinPath: fake.binPath,
@@ -29,7 +43,9 @@ test(
       assert.equal(serve.baseURL, `http://127.0.0.1:${port}/v1`)
       assert.equal(isProcessAlive(serve.pid), true)
 
-      const res = await fetch(`${serve.baseURL}/models`)
+      const res = await fetch(`${serve.baseURL}/models`, {
+        headers: { authorization: `Bearer ${API_KEY}` }
+      })
       assert.equal(res.status, 200)
 
       await stopServe(serve.child)
@@ -45,6 +61,40 @@ test(
   }
 )
 
+test('spawnServe launches the serve with --openai --no-default', { skip }, async () => {
+  const fake = await makeFakeServe()
+  const dir = await mkdtemp(join(tmpdir(), 'qvac-argv-'))
+  const argvFile = join(dir, 'argv.json')
+  setBehavior('healthy')
+  setArgvFile(argvFile)
+  try {
+    const port = await allocateFreePort('127.0.0.1')
+    const serve = await spawnServe({
+      apiKey: API_KEY,
+      configPath: 'unused.json',
+      port,
+      serveBinPath: fake.binPath,
+      startTimeoutMs: 10_000
+    })
+
+    const argv = JSON.parse(await readFile(argvFile, 'utf8')) as string[]
+
+    // Bare `--openai` would also mount the QVAC surface; this provider only
+    // speaks /v1/*, so the pair has to stay together.
+    assert.equal(argv[0], 'serve')
+    assert.equal(argv[1], '--openai')
+    assert.equal(argv[2], '--no-default')
+    assert.equal(argv.includes('openai'), false)
+
+    await stopServe(serve.child)
+  } finally {
+    setArgvFile(undefined)
+    setBehavior(undefined)
+    await fake.cleanup()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test(
   'spawnServe throws ServeStartTimeoutError when the serve never gets healthy',
   { skip },
@@ -54,6 +104,7 @@ test(
     try {
       await assert.rejects(
         spawnServe({
+          apiKey: API_KEY,
           configPath: 'unused.json',
           port: await allocateFreePort('127.0.0.1'),
           serveBinPath: fake.binPath,
@@ -81,6 +132,7 @@ test(
     try {
       await assert.rejects(
         spawnServe({
+          apiKey: API_KEY,
           configPath: 'unused.json',
           port: await allocateFreePort('127.0.0.1'),
           serveBinPath: fake.binPath,
@@ -105,6 +157,7 @@ test('stopServe escalates to SIGKILL when SIGTERM is ignored', { skip }, async (
   setBehavior('ignore-sigterm')
   try {
     const serve = await spawnServe({
+      apiKey: API_KEY,
       configPath: 'unused.json',
       port: await allocateFreePort('127.0.0.1'),
       serveBinPath: fake.binPath,
@@ -133,6 +186,7 @@ test(
     let workerPid = 0
     try {
       const serve = await spawnServe({
+        apiKey: API_KEY,
         configPath: 'unused.json',
         port: await allocateFreePort('127.0.0.1'),
         serveBinPath: fake.binPath,
@@ -173,3 +227,27 @@ test(
     }
   }
 )
+
+test('the serve credential is kept out of argv when the CLI can read it from a file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'qvac-serve-key-'))
+  try {
+    const configPath = join(dir, 'qvac.config.json')
+    const keyPath = writeApiKeyFile(configPath, API_KEY)
+
+    assert.equal(await readFile(keyPath, 'utf8'), API_KEY)
+    assert.equal((await stat(keyPath)).mode & 0o777, 0o600)
+
+    // A recovery respawn reuses the same path, where `mode` on write is ignored.
+    await writeFile(keyPath, 'stale', { mode: 0o644 })
+    writeApiKeyFile(configPath, API_KEY)
+    assert.equal((await stat(keyPath)).mode & 0o777, 0o600)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a serve binary we cannot version keeps the argv credential form', () => {
+  // An older CLI rejects `--api-key-file` outright and would never start, so an
+  // unversionable binary must not be handed the newer flag.
+  assert.equal(cliSupportsApiKeyFile('/opt/custom/qvac'), false)
+})

@@ -6,111 +6,130 @@ Single source of truth for every label that affects CI behaviour in this repo.
 
 ---
 
-## `verified` — secret-bearing CI authorisation
+## External fork authorization — `fork-ci` environment (not a label)
 
-This is the **single** label that gates every privileged PR job in the repo. The legacy `verify` label has been retired — `verified` is now the only authorisation label CI reads.
-
-| | |
-|---|---|
-| **Purpose** | Authorise the `label-gate` composite action so that secret-bearing jobs (sanity-checks, prebuilds, publish, deploy, etc.) are allowed to run on a PR. |
-| **Who can apply** | Active member of `@tetherto/qvac-internal-dev`, `@tetherto/qvac-internal-merge`, `@tetherto/qvac-internal-release`, or `@tetherto/qvac-collabora`. See [TEAMS.md](TEAMS.md). |
-| **What it gates** | Every secret-bearing workflow under `.github/workflows/` (108 workflows as of QVAC-18612). Specifically, every job downstream of `needs: [..., label-gate]` whose `if:` includes `needs.label-gate.outputs.authorised == 'true'`. |
-| **Behaviour on `synchronize`** | When a non-trusted actor pushes new commits to a verified PR, `label-gate` strips the label automatically. A trusted actor must re-apply it after reviewing the new commits. This prevents authorisation from silently inheriting across content changes by an untrusted contributor. |
-| **Behaviour on apply by non-trusted actor** | The label is stripped immediately and the gate denies. This avoids a "look, it's verified" social signal that doesn't actually mean the PR is authorised. |
-| **Approval bot tier** | Recognised as **tier 1** by `approval-check-worker`. |
-| **Stage selection** | On every [label-gated addon workflow](#granular-ci-routing-labels), `verified` authorises the PR and runs the baseline verified checks (`sanity-checks`, `cpp-lint`, and `ts-checks` where present) only — it no longer triggers the full pipeline by itself. Each expensive stage additionally needs its [granular routing label](#granular-ci-routing-labels). |
-| **Implementation** | [`.github/actions/label-gate/README.md`](../../.github/actions/label-gate/README.md) — full trust model, exit policy, and test coverage. |
-
-### When CI is blocked by `label-gate`
-
-If your PR's secret-bearing jobs are skipping with a `label-gate.outputs.authorised != 'true'` condition, ask any member of the trusted teams above to apply `verified`. There is intentionally no self-service path — the whole point of the gate is that someone other than the PR author signs off.
-
----
-
-## Granular CI-routing labels
-
-The label-gated addon PR workflows use a shared **[`ci-router`](../../.github/actions/ci-router/action.yml)** composite action that reads the PR's labels and selects which expensive stages run, so routine PRs stay cheap and a reviewer can opt a PR into the heavy matrix on demand. Because the routing (and prebuild caching) lives in shared composite actions read from the repo's default branch, the behaviour is **identical across every workflow below** and a single change propagates to all of them.
-
-**Wired in today** (`verified` = authorise-only; stages selected by the granular labels):
-
-- `on-pr-llm-llamacpp.yml`
-- `on-pr-embed-llamacpp.yml`
-- `on-pr-vla.yml`
-- `on-pr-tts-ggml.yml`
-- `on-pr-diffusion-cpp.yml`
-- `on-pr-ocr-ggml.yml`
-- `on-pr-transcription-parakeet.yml`
-- `on-pr-translation-nmtcpp.yml`
-- `on-pr-transcription-whispercpp.yml`
-- `on-pr-classification-ggml.yml`
-- `on-pr-bci-whispercpp.yml`
-- `on-pr-ocr-onnx.yml`
-- `on-pr-onnx.yml`
-- `on-pr-decoder-audio.yml`
-- `on-pr-fabric.yml`
-
-All active addon PR workflows are now wired onto the shared composites. Two shapes intentionally wire only a subset of stages: `onnx` and `fabric` are prebuild-only libraries (no integration-test stages), and `decoder-audio` has no native build so it wires routing only (no `prebuilds` / native-change / reuse stages).
-
-> **Security invariant** — every stage below *also* requires `verified` (the trust gate). A granular label on its own — without `verified` — triggers **nothing**, so an untrusted contributor can never self-route into a secret-bearing job. `verified` alone authorises the PR and runs the baseline verified checks (`sanity-checks`, `cpp-lint`, and `ts-checks` where present), but no longer runs the full pipeline.
-
-| Label | Runs | Pulls in prebuilds? |
-|---|---|---|
-| `prebuilds` | The multi-platform prebuild matrix, or a cache restore when native files are unchanged (see below). | — |
-| `run-cpp-addon-tests` | C++ unit tests. Builds the addon itself, so it does **not** depend on the prebuild matrix. | No |
-| `run-desktop-addon-tests` | Desktop integration tests. | Yes (implied) |
-| `run-mobile-addon-tests` | Mobile (Android / iOS via AWS Device Farm) integration tests. | Yes (implied) |
-
-Labels combine freely — e.g. `verified` + `run-desktop-addon-tests` + `run-mobile-addon-tests` builds prebuilds once and then runs both test suites. A manual `workflow_dispatch` run bypasses routing and runs everything.
-
-> **Prebuild caching** — when a PR changes no native files (`*.cpp` / `*.hpp` / `*.c` / `*.h`, any `CMakeLists.txt`, `vcpkg.json` / `vcpkg-configuration.json`, anything under package-local `vcpkg/`, or anything under repo-root `vcpkg-overlays/`), the prebuild matrix is skipped and binaries are **reused from the PR's most recent prior run** that carries a matching marker artifact (`prebuilds-cache-pr-<number>-<native_hash>`). This artifact-based reuse works under `pull_request_target`, where `actions/cache` writes are rejected. The marker is scoped by **PR number**, so a PR can only ever reuse its own prebuilds — no cross-PR reuse. The first run on a PR always builds; any native change moves the hash and forces a fresh build. Implemented by the shared [`detect-native-changes`](../../.github/actions/detect-native-changes/action.yml), [`prebuild-artifact-reuse`](../../.github/actions/prebuild-artifact-reuse/action.yml), and [`prebuild-artifact-save`](../../.github/actions/prebuild-artifact-save/action.yml) composites.
-
----
-
-## No `release` label — npm publish authorisation lives in the `npm` environment
-
-There is **intentionally no `release` (or similar) label** for authorising npm publishes. Publish authorisation is a single reviewer click on the dedicated `npm` GitHub Actions environment, scoped only to the `publish-*` jobs that consume `NPM_TOKEN` / OIDC. This keeps the publish gate visible in the GitHub Actions UI rather than buried in a label state, and it pairs with each package's npm Trusted Publisher configuration.
-
-The legacy `release` environment is kept for backwards-compatibility while the `verified` flow rolls out; its reviewer requirement will be removed once the `npm` environment owns the publish gate end-to-end.
-
----
-
-## `license-override` — license compliance gate override
-
-The license compliance gate ([`license-compliance.yml`](../../.github/workflows/license-compliance.yml), delegating to the org's `public-reusable-license.yml`) classifies each newly added PR dependency against the org license policy. A **High** finding (an unknown or review-required license, or a shipped component missing attribution) blocks the check once the gate is enforcing.
+Secret-bearing CI on **external fork PRs** is gated by the GitHub Actions **`fork-ci` environment**, not by a PR label.
 
 | | |
 |---|---|
-| **Purpose** | Downgrade the targeted **High** finding to a warning **for this PR only**, so the check does not block while a maintainer accepts a one-off. |
-| **Who can apply** | A Tier-1 reviewer (see [TEAMS.md](TEAMS.md)) after an actual compliance review — not the PR author self-serving. |
-| **What it does NOT do** | It cannot override a **Critical** finding (a disallowed license such as AGPL/SSPL/GPL on a runtime/shipped path). Those must be removed/replaced, or the org policy changed. |
-| **Durable alternative** | For a decision that should persist across PRs, record it in [`.github/license-allowlist.yml`](../../.github/license-allowlist.yml) (CODEOWNERS-reviewed) instead of relying on the label. The label is a stop-gap; the allowlist is the audit trail. |
-| **Current stage** | The gate runs in **warn-only** (shadow) mode today, so nothing blocks yet and the label is a no-op in practice — it is wired now so it is ready when the check is promoted to required. |
+| **Mechanism** | The `fork-approval` job in each privileged `pull_request_target` workflow pauses until a member of `@tetherto/qvac-internal-merge` or `@tetherto/qvac-internal-release` approves the run in the GitHub Actions UI. |
+| **Per-commit** | Each new push starts a fresh workflow run that must be re-approved. After approval, the run records a `qvac/fork-verified` commit status on the PR head SHA (used by unprivileged `pull_request` self-hosted jobs such as `pr-test-inference-addon-cpp*`). |
+| **Internal PRs** | Same-repo PRs skip the environment gate (empty environment) and run without an approval prompt. |
+| **Implementation** | `fork-approval` job calls [`.github/workflows/reusable-fork-approval.yml`](../../.github/workflows/reusable-fork-approval.yml) from each privileged workflow. The `authorize` / `resolve-config` job runs **after** `fork-approval`, checks out `authorize-pr` from the **default branch only**, and `authorize-pr` reads the `qvac/fork-verified` status on the current head SHA as belt-and-suspenders. |
+| **Ops verification** | Run `node .github/scripts/verify-fork-ci-environment.mjs` (requires `gh` auth with environments read) to confirm required reviewers are configured on the `fork-ci` environment. |
+
+There is **no self-service path** for external contributors — a merge/release team member must approve the workflow run.
+
+### Ordering matters: approve `fork-ci` **before** applying stage labels
+
+Two different workflow families react to a fork PR, and only one of them waits for you:
+
+- **`pull_request_target`** workflows (`on-pr-*`) contain the `fork-approval` job. They pause on the `fork-ci` environment and resume the moment you approve.
+- **`pull_request`** workflows that run on self-hosted runners (`pr-test-inference-addon-cpp*`) never see the environment prompt. Their `authorize` job reads the `qvac/fork-verified` commit status at run time, and that status does not exist until `fork-approval` has been approved.
+
+Writing a commit status is not a `pull_request` event, so approving `fork-ci` does **not** wake up a `pull_request` run that already finished. If you apply `run-cpp-addon-tests` first and approve second, the native tests report skipped and stay skipped — the PR looks green without ever having run them.
+
+Do this instead, in order:
+
+1. Approve the `fork-ci` deployment on the pending `on-pr-*` run and wait for `fork-approval` to go green (this is what writes `qvac/fork-verified` on the head SHA).
+2. Then apply the stage label (`run-cpp-addon-tests`, `run-desktop-addon-tests`, …). The `labeled` event starts a fresh `pull_request` run that now finds the status.
+
+If the label was already applied, re-run the `pull_request` workflow instead of toggling the label — `authorize` re-queries the status API on every run.
+
+Each new push invalidates all of this: `qvac/fork-verified` is bound to a single head SHA, so the next commit needs a fresh approval and a fresh label/re-run cycle.
+
+---
+
+## `verified` label — retired for CI gating
+
+The `verified` label is **no longer used to authorize CI**. It may still appear on legacy PRs or docs; do not apply it expecting jobs to start. Use the **`fork-ci` environment approval** on the workflow run instead.
 
 ---
 
 ## Other CI-relevant labels
 
-The following labels are recognised by CI workflows but are not part of the `label-gate` flow.
-
 | Label | Purpose | Triggered by | Notes |
 |---|---|---|---|
-| `verified` | Canonical authorisation label — see the [`verified` section above](#verified--secret-bearing-ci-authorisation) for the full trust model. | `label-gate` composite action plus the `public-pr.yml`, `public-reusable-npm.yml`, `pr-test-inference-addon-cpp*.yml`, and `pr-models-validation-registry-server.yml` non-secret gates. | Replaces the legacy `verify` label, which was retired in favour of a single authorisation ceremony. |
-| `prebuilds` | Addon CI routing — run the prebuild matrix, or reuse a prior run's prebuilds when native files are unchanged. Requires `verified`. | shared `ci-router` on the [label-gated addon workflows](#granular-ci-routing-labels) | Part of the granular routing scheme — see [Granular CI-routing labels](#granular-ci-routing-labels). |
-| `run-cpp-addon-tests` | Addon CI routing — run the C++ unit tests. Requires `verified`. | shared `ci-router` on the [label-gated addon workflows](#granular-ci-routing-labels) | Does not pull in prebuilds (the cpp-test job builds the addon itself). |
-| `run-desktop-addon-tests` | Addon CI routing — run desktop integration tests. Requires `verified`; implies `prebuilds`. | shared `ci-router` on the [label-gated addon workflows](#granular-ci-routing-labels) | See [Granular CI-routing labels](#granular-ci-routing-labels). |
-| `run-mobile-addon-tests` | Addon CI routing — run mobile (Device Farm) integration tests. Requires `verified`; implies `prebuilds`. | shared `ci-router` on the [label-gated addon workflows](#granular-ci-routing-labels) | See [Granular CI-routing labels](#granular-ci-routing-labels). |
-| `safe-to-test` | SDK pod security gate — reviewer has audited `packages/sdk/` package + workflow changes from a fork PR. | `pr-checks-sdk-pod.yml` | Org-wide secret authorisation is now handled by `verified`; `safe-to-test` remains in use for SDK pod check-running. |
+| `safe-to-test` | SDK pod security gate — reviewer has audited `packages/sdk/` package + workflow changes from a fork PR. | `pr-checks-sdk-pod.yml`, SDK e2e workflows (`authorize-pr` with `label: safe-to-test`) | Org-wide fork secret access is handled by `fork-ci`; this label remains for SDK-pod-specific checks. |
 | `staging` | Deploys the PR to the staging environment for smoke testing. | Staging deploy workflows | Apply when a PR needs out-of-band testing on real infrastructure. |
 | `publish` | Triggers a GitHub Packages publish from the PR (pre-release / dev build). | Publish workflows | Use sparingly; consumes a published version slot. |
 | `docs-deploy` | Marks docs as ready for production deploy. | Docs deploy workflows | Set when the docs changes are ready to go live alongside PR merge. |
-| `tier1`, `tier2` | Approval-bot review-tier groupings. | `approval-check-worker.yml` | The bot uses these to compute whether a PR has met its required approval tier. `verified` counts as tier 1. |
-| `test-e2e-smoke` | Runs the smoke E2E suite (currently SDK-only). | E2E test workflows | Faster subset; prefer for PR feedback. |
-| `test-e2e-full` | Runs the full E2E suite (currently SDK-only). | E2E test workflows | Long-running; use for release branches and major changes. |
-| `e2e-tested` | Set automatically by the E2E workflow once a run has completed against the PR. | E2E workflows | Status indicator only; does not pass/fail by itself — see linked run. |
+| `tier1`, `tier2` | Approval-bot review-tier groupings. | `approval-check-worker.yml` | The bot uses these to compute whether a PR has met its required approval tier. |
+| `test-e2e-smoke` | Runs the smoke E2E suite **plus the tests the pull request touched** (currently SDK-only). | E2E test workflows | Faster subset; prefer for PR feedback. See [Smoke runs cover the tests a PR touched](#smoke-runs-cover-the-tests-a-pr-touched). |
+| `test-e2e-full` | Runs the full E2E suite (currently SDK-only). | E2E workflows | Long-running; use for release branches and major changes. |
+| `test-e2e-rerun-failed` | Re-runs only the tests that failed on the last smoke/full run, on the platforms where they failed. | `on-pr-test-sdk.yml` | Self-clearing — removed as soon as the run consumes it, so it can be applied again for each attempt. See [Re-running failed SDK e2e tests](#re-running-failed-sdk-e2e-tests). |
+| `e2e-tested` | Set automatically once a **base** E2E run has completed against the PR. | E2E workflows | Status indicator only; does not pass/fail by itself — see linked run. A `test-e2e-rerun-failed` run never sets it. |
 | `NLP` | Marks PRs touching `packages/llm-llamacpp/` or `packages/embed-llamacpp/`. | Routing in approval workflows | Casing matters: it's `NLP`, not `nlp`. |
-| `license-override` | Downgrades a **High** license-compliance finding to a warning for this PR only, so the [license gate](#license-override--license-compliance-gate-override) does not block. **Critical** findings (a disallowed license on a runtime/shipped path) can never be overridden. | `license-compliance.yml` (→ `public-reusable-license.yml`) | One-off stop-gap. The durable, auditable record is an entry in [`.github/license-allowlist.yml`](../../.github/license-allowlist.yml). Apply only after a real compliance review. |
+| `prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`, `run-mobile-addon-tests` | Select expensive CI stages on addon PR workflows. | `ci-router` composite in `on-pr-*` workflows | External forks can use these after `fork-ci` approval; internal same-repo PRs skip the fork-ci gate. |
+
+> **`run-mobile-addon-tests` no longer starts a standalone mobile suite.** Per-addon
+> mobile (AWS Device Farm) tests are now **on-demand only** — run them from
+> **Actions → `Mobile Integration Tests (<addon>)` → Run workflow**, choosing the
+> platform, device(s) and an optional test filter. See
+> [MOBILE-ON-DEMAND.md](./MOBILE-ON-DEMAND.md). The label is kept for a possible
+> future re-enable; do not rely on it to launch a per-addon mobile run.
 
 Standard GitHub labels (`bug`, `documentation`, `enhancement`, `good first issue`, `help wanted`, `question`, `wontfix`, `duplicate`, `invalid`) and Dependabot/CodeQL labels (`dependencies`, `javascript`, `github_actions`) are unchanged.
+
+---
+
+## Re-running failed SDK e2e tests
+
+`test-e2e-smoke`, `test-e2e-full`, and the release-branch auto-run are **base runs**. Each one records its per-platform failure set into a single hidden state comment on the PR (`sdk-e2e-base-state`), and posts a visible **QVAC E2E — base run recorded** summary alongside it.
+
+`test-e2e-rerun-failed` consumes that record and re-runs **only** those tests, **only** on the platforms that had failures. One failure on Windows and one on Linux means two tests on two runners; macOS, Android, and iOS never start.
+
+| | |
+|---|---|
+| **Needs a new commit?** | No. The rerun always tests the current PR HEAD, so it verifies a pushed fix or, on an unchanged commit, checks for flakiness. The PR comment says which. |
+| **Anchoring** | Always the last **base** run, never the previous rerun. Every attempt re-runs the same set until a new smoke/full run replaces the base — so a later fix cannot quietly break a test an earlier rerun had already turned green. |
+| **Re-applying** | The label is removed automatically once the run picks it up. Just add it again for the next attempt — GitHub only fires `labeled` when the label is absent, which is why it has to come back off. |
+| **`e2e-tested`** | Never applied by a rerun. A partial run does not verify the suite; only a base run can mark the PR as e2e-tested. |
+| **Base run still in flight** | Rejected. The base failure set is not known until every family finishes, so the rerun refuses rather than planning from a stale record. Wait for the **base run recorded** comment. Reruns run in their own concurrency group, so labelling early cannot cancel the base run. |
+| **No base recorded / base fully green** | Nothing runs, and a PR comment says why. Apply `test-e2e-smoke` or `test-e2e-full` first. |
+| **Base run cancelled or died** | The previously recorded base is kept, not wiped, and the "in flight" mark is ignored once the run is no longer running. |
+| **Test renamed or deleted since the base** | Warned in the job summary. If that leaves a platform with zero tests to run, the rerun **fails** rather than reporting a green summary that verified nothing. |
+
+Implementation: [`on-pr-test-sdk.yml`](../../.github/workflows/on-pr-test-sdk.yml) plus the `sdk-e2e-base-state`, `sdk-e2e-resolve-rerun`, and `sdk-e2e-verify-rerun` actions.
+
+---
+
+## Smoke runs cover the tests a PR touched
+
+The smoke suite is a fraction of the SDK e2e catalog, and a test belongs to it only if someone tagged it `suites: ['smoke']`. Tests a PR adds or changes are therefore invisible to a smoke run unless the author remembered a manual filter, so a green smoke run routinely says nothing about the tests the PR actually touched.
+
+`test-e2e-smoke` now runs **the smoke suite plus the tests the PR touched**. Nothing to configure; `test-e2e-full` is unchanged and still runs everything.
+
+A PR comment reports what happened: tests touched, how many smoke already covered, how many the run added and at what runtime cost, and any changed file the mapper could not attribute. To get the same answer before pushing, run the mapper — it is the code CI runs, so it reports against today's catalog rather than a number written down here:
+
+```bash
+cd packages/sdk/e2e
+node scripts/impacted-tests.mjs --base main --head HEAD
+```
+
+Six relations connect a changed file to testIds:
+
+| Changed file | Resolved via |
+|---|---|
+| `tests/*-tests.ts`, `tests/test-definitions.ts` | the testIds it declares — narrowed to the changed lines when they name tests, widened to the whole file otherwise |
+| `tests/**/executors/*.ts` | the executor's `pattern` regex |
+| anything else under `tests/` | the import graph, via the executors that reach it |
+| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the SDK model contract → the resource constants naming those models → the tests depending on those resources |
+| `packages/sdk/src/client/api/*.ts` | the functions it exports, and the executors importing them |
+| a handler module registered in `packages/inference/src/registry.ts` | the same way, via the operation the registry binds it to. Operations dispatched to a plugin rather than a module are left to the engine relation |
+
+The last three relations are the only ones that reach outside `packages/sdk/e2e/`. It needs no table: the plugin directory name *is* the engine id the SDK loads by, the contract is regenerated and checked by `contract:check`, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper.
+
+Deliberate limits:
+
+- **Source with no declared link to a test is out of scope.** A PR touching only `packages/sdk/src/**` or the parts of inference that are neither an engine nor a registered handler maps to nothing and gets a plain smoke run. Inventing a link — a hand-kept `path -> category` table — would rot without anything failing.
+- **Lifecycle handlers legitimately pull in most of the catalog.** Changing `unload-model` or `cancelHandler` resolves to ~500 tests, because every test loads and cancels. That is real coverage rather than a bug, and it is still bounded by `test-e2e-full`; the comment reports the size so it is never a surprise.
+- **An engine or handler nothing exercises is reported, not silently empty.** It appears in the comment's unmapped list, so the gap shows up the first time someone changes it.
+- **Unattributable files are reported, not expanded.** `tests/*/consumer.ts`, `fixtures/`, and `assets/` map to no single test — a consumer change formally touches every test on its platform. The comment lists these files so they get a human look, and nothing is added for them.
+- **The impact set is never truncated.** It is bounded by the catalog, so extending a smoke run can never cost more than `test-e2e-full` would; capping it would only reduce coverage while pushing the author to the more expensive option. The comment states the added runtime so a broad change is visible.
+- **The mapper never blocks e2e.** If it fails, the smoke run proceeds unchanged and the comment says the analysis was unavailable.
+
+Implementation: [`impacted-tests.mjs`](../../packages/sdk/e2e/scripts/impacted-tests.mjs), the `sdk-e2e-report-impacted` action, and `--include` in `@qvac/test-suite`.
 
 ---
 
@@ -122,13 +141,10 @@ Some commands look like labels but are actually comment triggers handled by `app
 |---|---|
 | `/review` (or a comment containing `review`) | Asks the approval bot to recompute the PR's approval state and post a status update. |
 
-If you previously thought "review" was a label, it's not — it's an issue/PR comment that the worker reacts to.
-
 ---
 
 ## See also
 
 - [`docs/ci/SELF-HOSTED-RUNNERS.md`](SELF-HOSTED-RUNNERS.md) — Manual Workspace Cleanup, `working-directory: .`, and `runner.environment` on `qvac-*` workflows.
 - [`docs/ci/TEAMS.md`](TEAMS.md) — who is in `qvac-internal-dev` / `merge` / `release` / `qvac-external`, and what they can do.
-- [`.github/actions/label-gate/README.md`](../../.github/actions/label-gate/README.md) — full `label-gate` trust model and configuration reference.
 - [`docs/gitflow.md`](../gitflow.md) — branch model and release flow.

@@ -79,11 +79,23 @@ export async function buildAppOctokit (owner, repo) {
   return new Octokit({ auth: installToken })
 }
 
+// Review states that change a user's effective review on a PR.
+// GitHub does not let a COMMENTED review supersede an earlier APPROVED or
+// CHANGES_REQUESTED one, and a PENDING review has not been submitted yet
+// (its submitted_at is null). Only these states are decisive.
+export const DECISIVE_REVIEW_STATES = new Set([
+  'APPROVED',
+  'CHANGES_REQUESTED',
+  'DISMISSED'
+])
+
 export function getLatestApprovals (reviews) {
   const byUser = Object.create(null)
   for (const review of reviews) {
     const username = review.user && review.user.login
     if (!username) continue
+    // Skip non-decisive states so a later comment cannot mask an approval.
+    if (!DECISIVE_REVIEW_STATES.has(review.state)) continue
     if (!byUser[username] || review.submitted_at > byUser[username].submitted_at) {
       byUser[username] = review
     }
@@ -273,5 +285,6 @@ export const helpers = {
   getTeamMembers,
   upsertPrComment,
   MIN_CODEOWNER_APPROVALS,
-  ROLE_DISPLAY
+  ROLE_DISPLAY,
+  DECISIVE_REVIEW_STATES
 }

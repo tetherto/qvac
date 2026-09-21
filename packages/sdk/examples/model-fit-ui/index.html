@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>assessModelFit — estimate vs. reality</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      body {
+        margin: 0 auto;
+        padding: 2rem 1.5rem 4rem;
+        max-width: 62rem;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 1.15rem;
+        margin: 0 0 0.25rem;
+      }
+      p.sub {
+        margin: 0 0 1.5rem;
+        opacity: 0.7;
+        font-size: 0.9rem;
+      }
+      #basis {
+        margin: 0 0 1.5rem;
+        padding: 0.75rem 1rem;
+        border-left: 3px solid currentColor;
+        font-size: 0.9rem;
+        white-space: pre-wrap;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.5rem 0.6rem;
+        border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+        vertical-align: top;
+      }
+      th {
+        font-weight: 600;
+        opacity: 0.7;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      td.num {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .verdict {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .fits {
+        color: #1a7f37;
+      }
+      .too-large {
+        color: #b3261e;
+      }
+      .unknown {
+        opacity: 0.65;
+      }
+      .reason {
+        display: block;
+        opacity: 0.7;
+        font-size: 0.8rem;
+        margin-top: 0.2rem;
+      }
+      button {
+        font: inherit;
+        padding: 0.35rem 0.7rem;
+        cursor: pointer;
+      }
+      td button[title] {
+        padding: 0 0.3rem;
+        margin-left: 0.25rem;
+        opacity: 0.6;
+      }
+      .bar {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin: 1.25rem 0;
+      }
+      .bar label {
+        font-size: 0.9rem;
+        opacity: 0.8;
+      }
+      code {
+        font-size: 0.85em;
+      }
+      td.detail blockquote {
+        margin: 0.5rem 0 0;
+        padding: 0.5rem 0.75rem;
+        border-left: 2px solid rgba(128, 128, 128, 0.5);
+        opacity: 0.85;
+        font-style: italic;
+      }
+      td.detail {
+        background: rgba(128, 128, 128, 0.08);
+        font-size: 0.85rem;
+      }
+      td.detail dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.15rem 1rem;
+        margin: 0 0 0.75rem;
+      }
+      td.detail dt {
+        opacity: 0.6;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+        letter-spacing: 0.04em;
+        padding-top: 0.15rem;
+      }
+      td.detail dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      td.detail h4 {
+        margin: 0.5rem 0 0.2rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        opacity: 0.6;
+      }
+      td.detail ul {
+        margin: 0;
+        padding-left: 1.1rem;
+      }
+      td.detail li {
+        margin: 0.1rem 0;
+        opacity: 0.85;
+      }
+      td.detail pre {
+        max-height: 22rem;
+        overflow: auto;
+        background: rgba(128, 128, 128, 0.12);
+        padding: 0.6rem;
+        font-size: 0.75rem;
+        margin: 0.4rem 0 0;
+      }
+      td.detail summary {
+        cursor: pointer;
+        opacity: 0.7;
+        margin-top: 0.6rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>assessModelFit — estimate vs. reality</h1>
+    <p class="sub">
+      <strong>Estimate</strong> reads catalog metadata and one memory sample: no download, no load.
+      <strong>Run</strong> loads the model for real and generates a few tokens, so the verdict can
+      be checked against what happens. Each row is judged on its own, not as one co-resident set.
+      <strong>Reality</strong> puts the memory the load actually took next to the predicted range. A
+      <code>likely-too-large</code> that runs means either the OS reclaimed or compressed other
+      memory to make room, or the estimate was off — the measured figure says which.
+    </p>
+
+    <div class="bar">
+      <label
+        >Context <input id="ctx" type="number" value="8192" min="512" step="512" size="6"
+      /></label>
+      <span id="status" class="sub"></span>
+    </div>
+
+    <p id="basis" hidden></p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>On disk</th>
+          <th>Verdict</th>
+          <th>Predicted need</th>
+          <th>Reality</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <script type="module">
+      const GIB = 1024 ** 3
+      const gib = (bytes) => `${(bytes / GIB).toFixed(2)} GiB`
+      const rows = document.getElementById('rows')
+      const status = document.getElementById('status')
+      const basis = document.getElementById('basis')
+      const ctx = document.getElementById('ctx')
+
+      const VERDICT_CLASS = {
+        'likely-fits': 'fits',
+        'likely-too-large': 'too-large',
+        unknown: 'unknown'
+      }
+
+      const models = await (await fetch('/api/models')).json()
+      // What each row was judged against. A per-row estimate reads a fresh
+      // budget, so without this the rows and the header drift apart.
+      const judged = new Map()
+
+      for (const model of models) {
+        const tr = document.createElement('tr')
+        tr.dataset.row = model.name
+        tr.innerHTML = `
+          <td>${model.name}</td>
+          <td class="num">${gib(model.expectedSize)}</td>
+          <td class="verdict" data-cell="verdict">
+            <button data-estimate="${model.name}">Estimate</button>
+          </td>
+          <td class="num" data-cell="predicted">—</td>
+          <td data-cell="reality"><button data-run="${model.name}">${runLabel(model)}</button></td>`
+        rows.append(tr)
+
+        // Holds the whole response for this row, revealed by its own button.
+        const detail = document.createElement('tr')
+        detail.dataset.detail = model.name
+        detail.hidden = true
+        detail.innerHTML = '<td colspan="5" class="detail"></td>'
+        rows.append(detail)
+
+        // And one for the run result: five lines of prose do not fit in a
+        // table cell, so the outcome gets the full width.
+        const ran = document.createElement('tr')
+        ran.dataset.runDetail = model.name
+        ran.hidden = true
+        ran.innerHTML = '<td colspan="5" class="detail"></td>'
+        rows.append(ran)
+      }
+
+      // A click on a row that is not cached costs its whole download, so say so
+      // rather than letting someone start 29 GiB by accident.
+      function runLabel(model) {
+        return model.cached ? 'Run' : `Run · downloads ${gib(model.expectedSize)}`
+      }
+
+      function range(estimate) {
+        const { lowerBoundBytes: lower, upperBoundBytes: upper } = estimate
+        return lower === upper ? gib(upper) : `${gib(lower)} – ${gib(upper)}`
+      }
+
+      // Where the measured load landed against the predicted range. Measured
+      // after load, so it is the persistent part: weights, cache, engine.
+      function compared(taken, said) {
+        if (taken === undefined || said?.lower === undefined) return ''
+        if (taken < said.lower) return 'the estimate overshot'
+        if (taken > said.upper) return 'the estimate undershot'
+        return 'the estimate held'
+      }
+
+      function cell(name, which) {
+        return rows.querySelector(`tr[data-row="${name}"] [data-cell="${which}"]`)
+      }
+
+      function detailCell(name) {
+        return rows.querySelector(`tr[data-detail="${name}"] .detail`)
+      }
+
+      function runDetailCell(name) {
+        return rows.querySelector(`tr[data-run-detail="${name}"] .detail`)
+      }
+
+      function show(name, which) {
+        const row = rows.querySelector(`tr[data-${which}="${name}"]`)
+        if (row) row.hidden = false
+      }
+
+      function dl(pairs) {
+        const wrap = document.createElement('dl')
+        for (const [key, value] of pairs) {
+          const dt = document.createElement('dt')
+          dt.textContent = key
+          const dd = document.createElement('dd')
+          dd.textContent = value
+          wrap.append(dt, dd)
+        }
+        return wrap
+      }
+
+      function list(title, items) {
+        const box = document.createElement('div')
+        const h = document.createElement('h4')
+        h.textContent = `${title} (${items.length})`
+        const ul = document.createElement('ul')
+        for (const item of items) {
+          const li = document.createElement('li')
+          // textContent, not innerHTML: these strings come off the wire.
+          li.textContent = item
+          ul.append(li)
+        }
+        box.append(h, ul)
+        return box
+      }
+
+      // The run laid out: what it cost against what was predicted, what the
+      // engine reported, and what it said. The narrow Reality cell keeps only
+      // a one-line summary and a toggle.
+      function renderRunDetail(name, result, said) {
+        const target = runDetailCell(name)
+        if (!target) return
+        target.replaceChildren()
+
+        const before = result.systemUsedBeforeBytes
+        const after = result.systemUsedAfterLoadBytes
+        const taken = before !== undefined && after !== undefined ? after - before : undefined
+        const stats = result.stats ?? {}
+
+        const pairs = [['outcome', runHeadline(result, said).text]]
+        if (taken !== undefined) pairs.push(['system memory moved', gib(taken)])
+        if (said?.lower !== undefined) {
+          pairs.push([
+            'predicted',
+            range({ lowerBoundBytes: said.lower, upperBoundBytes: said.upper })
+          ])
+          const verdict = compared(taken, said)
+          if (verdict) pairs.push(['comparison', `${verdict} (system-wide figure, ±noise)`])
+        }
+        if (said?.budget) {
+          pairs.push(['budget it was judged against', gib(said.budget.availableAfterReserveBytes)])
+        }
+        pairs.push(['load + generate', `${(result.elapsedMs / 1000).toFixed(1)} s`])
+        if (result.backendDevice) pairs.push(['ran on', result.backendDevice])
+        if (stats.tokensPerSecond)
+          pairs.push(['throughput', `${stats.tokensPerSecond.toFixed(1)} tok/s`])
+        if (stats.timeToFirstToken) {
+          pairs.push(['time to first token', `${stats.timeToFirstToken.toFixed(0)} ms`])
+        }
+        if (stats.generatedTokens !== undefined) {
+          pairs.push([
+            'tokens',
+            `${stats.generatedTokens} generated, ${stats.promptTokens ?? 0} prompt` +
+              (stats.cacheTokens ? `, ${stats.cacheTokens} from cache` : '')
+          ])
+        }
+        target.append(dl(pairs))
+
+        if (result.sample) {
+          const quote = document.createElement('blockquote')
+          quote.textContent = result.sample
+          target.append(quote)
+        }
+        if (result.error) {
+          const err = document.createElement('p')
+          err.className = 'reason'
+          err.textContent = `${result.error} — the full error is on the server console`
+          target.append(err)
+        }
+      }
+
+      // One place decides how a run reads, so the cell and the panel agree.
+      function runHeadline(result, said) {
+        if (!result.ok) {
+          return {
+            cls: 'too-large',
+            text:
+              said?.verdict === 'likely-too-large'
+                ? 'did not run — as the verdict said'
+                : 'did not run'
+          }
+        }
+        if (said?.verdict === 'likely-too-large') {
+          return { cls: 'too-large', text: 'ran anyway — the OS made room for it' }
+        }
+        return { cls: 'fits', text: `ran on ${result.backendDevice ?? 'device'}` }
+      }
+
+      // The whole response for one model, laid out rather than dumped — with the
+      // raw JSON kept underneath for anyone who wants to read the shape.
+      function renderDetail(name, result) {
+        const target = detailCell(name)
+        if (!target) return
+        target.replaceChildren()
+
+        const model = (result.models ?? []).find((entry) => entry.name === name) ?? {}
+        const b = result.budget
+
+        target.append(
+          dl([
+            ['verdict', `${model.verdict ?? '—'}   (combined: ${result.verdict})`],
+            ['basis', result.basis],
+            ['execution', result.execution],
+            ...(model.estimate
+              ? [
+                  ['estimate', range(model.estimate)],
+                  ['estimator', model.estimatorVersion ?? '—']
+                ]
+              : []),
+            ...(b
+              ? [
+                  ['total', gib(b.totalBytes)],
+                  ['in use', gib(b.usedBytes)],
+                  ['free', gib(b.availableBytes)],
+                  ['held back', gib(b.reservedBytes)],
+                  ['budget', gib(b.availableAfterReserveBytes)]
+                ]
+              : [])
+          ])
+        )
+
+        if (model.reasons?.length) target.append(list('model reasons', model.reasons))
+        if (result.reasons?.length) target.append(list('result reasons', result.reasons))
+        if (result.assumptions?.length) target.append(list('assumptions', result.assumptions))
+
+        const raw = document.createElement('details')
+        const summary = document.createElement('summary')
+        summary.textContent = 'raw JSON'
+        const pre = document.createElement('pre')
+        pre.textContent = JSON.stringify(result, null, 2)
+        raw.append(summary, pre)
+        target.append(raw)
+      }
+
+      async function estimate(name) {
+        status.textContent = 'estimating…'
+        const response = await fetch('/api/assess', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ names: [name], contextTokens: Number(ctx.value) })
+        })
+        const result = await response.json()
+
+        const placement = (result.assumptions ?? []).find((line) =>
+          line.includes('assumed to execute on')
+        )
+        basis.hidden = false
+        basis.textContent =
+          `Basis: ${result.basis}` +
+          (result.budget
+            ? ` — ${gib(result.budget.availableAfterReserveBytes)} budget: ` +
+              `${gib(result.budget.availableBytes)} free of ${gib(result.budget.totalBytes)}, ` +
+              `${gib(result.budget.reservedBytes)} held back`
+            : '') +
+          (placement ? `\n${placement}` : '')
+
+        const budget = result.budget
+        for (const model of result.models ?? []) {
+          judged.set(model.name, {
+            verdict: model.verdict,
+            budget,
+            lower: model.estimate?.lowerBoundBytes,
+            upper: model.estimate?.upperBoundBytes
+          })
+          const verdictCell = cell(model.name, 'verdict')
+          verdictCell.className = `verdict ${VERDICT_CLASS[model.verdict] ?? ''}`
+          verdictCell.innerHTML =
+            `${model.verdict} ` +
+            `<button data-estimate="${model.name}" title="Estimate again">↻</button>` +
+            `<button data-details="${model.name}" title="Show the full response">⋯</button>`
+          renderDetail(model.name, result)
+          const predicted = cell(model.name, 'predicted')
+          predicted.textContent = model.estimate ? range(model.estimate) : '—'
+          // An `unknown` always says what is missing; that is the useful part.
+          if (model.verdict === 'unknown' && model.reasons?.length) {
+            const note = document.createElement('span')
+            note.className = 'reason'
+            note.textContent = model.reasons[0]
+            verdictCell.append(note)
+          }
+          // Stamp the budget this row was judged against: free memory moves, so
+          // a row estimated a minute ago answered a different question.
+          if (budget) {
+            const stamp = document.createElement('span')
+            stamp.className = 'reason'
+            stamp.textContent =
+              `judged against a ${gib(budget.availableAfterReserveBytes)} budget ` +
+              `(${gib(budget.availableBytes)} free, ${gib(budget.reservedBytes)} held back)`
+            verdictCell.append(stamp)
+          }
+        }
+        // No combined verdict is shown: it aggregates the models in one call
+        // against one budget, and each row here asks about a single model.
+        status.textContent = ''
+      }
+
+      async function runOne(name, button) {
+        button.disabled = true
+        const target = button.parentElement
+        const startedAt = Date.now()
+        target.textContent = 'loading…'
+
+        // Without this the browser cannot tell a slow download from a stalled
+        // one or a dead worker — all three just sit on "loading…".
+        const ticker = setInterval(async () => {
+          const elapsed = Math.round((Date.now() - startedAt) / 1000)
+          let line = `loading… ${elapsed}s`
+          try {
+            const all = await (await fetch('/api/progress')).json()
+            const p = all[name]
+            if (p) {
+              const quiet = Math.round((Date.now() - p.at) / 1000)
+              line =
+                `downloading ${p.percentage.toFixed(0)}% · ` +
+                `${gib(p.downloaded)} of ${gib(p.total)} · ${elapsed}s` +
+                (quiet > 20 ? ` · no progress for ${quiet}s` : '')
+            }
+          } catch {
+            line = `loading… ${elapsed}s · the server stopped answering`
+          }
+          target.textContent = line
+        }, 1000)
+
+        let result
+        try {
+          const response = await fetch('/api/run', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name, contextTokens: Number(ctx.value) })
+          })
+          result = await response.json()
+        } catch (error) {
+          // A worker shutdown mid-load lands here; say so instead of hanging.
+          target.innerHTML =
+            `<span class="too-large">the run did not report back</span>` +
+            `<span class="reason">the load was interrupted — check the server console</span>`
+          button.disabled = false
+          return
+        } finally {
+          clearInterval(ticker)
+        }
+
+        const said = judged.get(name)
+        const headline = runHeadline(result, said)
+        renderRunDetail(name, result, said)
+        show(name, 'run-detail')
+
+        // The cell stays one line: the outcome, the time, and a toggle back to
+        // the panel. Anything longer wraps into an unreadable column.
+        target.innerHTML =
+          `<span class="${headline.cls}">${headline.text.split(' — ')[0]}</span>` +
+          `<button data-run-details="${name}" title="Show the run in full">⋯</button>` +
+          `<span class="reason">${(result.elapsedMs / 1000).toFixed(1)} s` +
+          (result.stats?.tokensPerSecond
+            ? ` · ${result.stats.tokensPerSecond.toFixed(0)} tok/s`
+            : '') +
+          `</span>`
+        button.disabled = false
+      }
+
+      // A run was compared against the context it ran under, so a new context
+      // retires its panel and Reality cell along with the verdicts.
+      function clearRun(model) {
+        const panel = rows.querySelector(`tr[data-run-detail="${model.name}"]`)
+        if (panel) {
+          panel.hidden = true
+          panel.querySelector('.detail').replaceChildren()
+        }
+        cell(model.name, 'reality').innerHTML =
+          `<button data-run="${model.name}">${runLabel(model)}</button>`
+      }
+
+      // A new context invalidates every verdict on screen, so re-judge each row.
+      // Sequential, so the status line stays coherent.
+      ctx.addEventListener('change', async () => {
+        for (const model of models) {
+          clearRun(model)
+          await estimate(model.name)
+        }
+      })
+
+      rows.addEventListener('click', (event) => {
+        const run = event.target?.dataset?.run
+        if (run) return runOne(run, event.target)
+        const one = event.target?.dataset?.estimate
+        if (one) return estimate(one)
+        const details = event.target?.dataset?.details
+        if (details) {
+          const row = rows.querySelector(`tr[data-detail="${details}"]`)
+          if (row) row.hidden = !row.hidden
+        }
+        const runDetails = event.target?.dataset?.runDetails
+        if (runDetails) {
+          const row = rows.querySelector(`tr[data-run-detail="${runDetails}"]`)
+          if (row) row.hidden = !row.hidden
+        }
+      })
+    </script>
+  </body>
+</html>

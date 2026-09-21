@@ -22,7 +22,6 @@ inputs:
     required: false
   workdir: 
     default: "."
-    type: string
 
 runs:
   using: composite

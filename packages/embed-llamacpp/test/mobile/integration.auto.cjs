@@ -175,6 +175,11 @@ async function runBenchmarkPerfQwen3Embedding06bQ80Bs512FaonTest (options = {}) 
   return runIntegrationModule('../integration/benchmark-perf-qwen3-embedding-06b-q8-0-bs512-faon.test.js', options)
 }
 
+async function runIdMapIndexTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runIdMapIndexTest')) return __FILTERED
+  return runIntegrationModule('../integration/id-map-index.test.js', options)
+}
+
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runModelLoadingTest')) return __FILTERED
   return runIntegrationModule('../integration/model-loading.test.js', options)

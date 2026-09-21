@@ -1,3 +1,52 @@
+## [0.7.0] - 2026-07-31
+
+TypeScript is now the source of truth for `@qvac/infer-base`. `index.ts` and `src/**/*.ts` are compiled with `tsc` into the `index.js` / `src/**/*.js` runtime and the `.d.ts` declarations that ship on npm, so the published types can no longer drift from the implementation. The runtime behaviour and the CommonJS export shape are intentionally unchanged — the only consumer-visible difference is in the declarations.
+
+### Breaking Changes
+
+#### `QvacResponse#getLatest()` is now typed as nullable
+
+`getLatest(): Output` became `getLatest(): Output | null`. The runtime always could return `null` (there is no output until the first `updateOutput()`), so this corrects the declaration rather than changing behaviour. TypeScript consumers that read the result directly now have to narrow it:
+
+```ts
+// Given a `QvacResponse<string>`:
+const latest = response.getLatest()
+
+// Before — this compiled
+const uncheckedLatest: string = latest
+void uncheckedLatest
+
+// After — narrow the result before assigning it
+if (latest !== null) {
+  const checkedLatest: string = latest
+  void checkedLatest
+}
+```
+
+JavaScript consumers are unaffected.
+
+### Fixes
+
+#### The published declarations now type-check without DOM
+
+On 0.6.2 the shipped `.d.ts` files did not compile for a Bare-style consumer - one using `lib: ["ES2022"]` with no DOM and `skipLibCheck: false`. `index.d.ts` and `src/QvacResponse.d.ts` referenced the DOM global `AbortSignal` (`TS2304`), and `bare-events` imports `AbortSignal` from `bare-abort-controller` in its own declarations while listing it only as an optional peer dependency, so it was absent from the install tree (`TS2307`).
+
+Both are fixed. The `signal` option on the `QvacResponse` constructor and on `createJobHandler().start()` is now typed as `AbortSignalLike` - a structural type covering only the members this package touches (`aborted`, `reason`, `addEventListener('abort', ...)`, `removeEventListener('abort', ...)`) - so Bare, DOM, and Node signals are all accepted. And `bare-abort-controller` (`^1.1.2`) is declared in `dependencies` so the `bare-events` declarations resolve. The runtime is unchanged: it already accepted any signal with those four members. The type is re-exported from the package entry:
+
+```ts
+import type { AbortSignalLike } from '@qvac/infer-base'
+```
+
+This widens the accepted input, so existing call sites keep compiling.
+
+## [0.6.2] - 2026-07-29
+
+fix: settle a `QvacResponse` before invoking its listener callbacks, so a listener that throws can no longer strand the response promise. `_end` resolves before emitting `end`, and both failure paths (`_fail` and the abort path) reject before emitting `error`. Previously a throwing `end` / `error` listener left the promise neither resolved nor rejected, hanging every caller awaiting it.
+
+`createJobHandler` now runs `updateStats` under a `try`/`finally` so a failure there still ends the job instead of leaking an active handler.
+
+Listener exceptions still propagate unchanged, and no public API changed — only the order of settling versus emitting.
+
 ## [0.6.1] - 2026-06-12
 
 chore: replace the exact `bare-events` pin (`2.4.2`) with caret `^2.9.1` so it resolves to the latest 2.x at install. No public API change — only the dependency version range is widened. `bare-os` is left untouched (`^3.2.0`).

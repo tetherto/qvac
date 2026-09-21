@@ -66,8 +66,8 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         nav={{ ...base.nav, mode: 'top' }}
         tabMode="navbar"
         links={linkItems}
+        tabs={collectionTabs}
         sidebar={{
-          tabs: collectionTabs,
           // The banner slot is the last child of the sidebar header, so the
           // switcher lands after the collection control and directly above
           // the tree on every viewport, with no conditional layout of ours.
@@ -85,10 +85,10 @@ export default function Layout({ children }: LayoutProps<'/'>) {
           $id: 'latest',
           children: buildCustomTree(source.pageTree),
         }}
-        searchToggle={{
-          components: {
-            lg: <AskAISearchToggleLarge />,
-            sm: <AskAISearchToggleSmall />,
+        slots={{
+          searchTrigger: {
+            full: AskAISearchToggleLarge,
+            sm: AskAISearchToggleSmall,
           },
         }}
       >

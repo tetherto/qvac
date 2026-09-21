@@ -83,7 +83,7 @@ try {
     }
 
     function _trim(text) {
-      if (text == null) return null
+      if (text === null || text === undefined) return null
       const s = String(text)
       if (s.length <= OUTPUT_CAP_CHARS) return s
       return (

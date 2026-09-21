@@ -1,5 +1,320 @@
 # Changelog
 
+## [0.24.0] - 2026-09-15
+
+This release adds explicit model-placement and layer-streaming controls, with
+hardware validation on NVIDIA RTX 5090, AMD Strix Halo, and NVIDIA DGX Spark.
+It also removes deprecated CPU-placement options and the explicit FLUX.1
+compatibility route.
+
+### Added
+
+- `backend`, `params_backend`, `max_vram`, and `stream_layers` configure graph
+  execution, parameter residency, VRAM-budgeted graph cutting, and diffusion
+  layer streaming from CPU RAM.
+- Disk-backed parameter residency remains available through
+  `params_backend`, with effective assignments logged for validation.
+
+### Changed
+
+- `offload_to_cpu` now composes with explicit `params_backend` assignments as
+  a `*=cpu` default, so later per-module assignments override it.
+- The package has pnpm/Nx project configuration and direct build dependencies
+  needed by the monorepo workspace.
+
+### Removed
+
+- Deprecated `control_net_cpu`, `clip_on_cpu`, and `vae_on_cpu` configuration
+  options. Use `backend` for graph execution or `params_backend` to preserve
+  the previous parameter-residency behaviour.
+- The public `flux_flow` prediction route for FLUX.1. FLUX.2 continues to use
+  `flux2_flow`.
+
+### Pull Requests
+
+- [#4372](https://github.com/tetherto/qvac/pull/4372) - QVAC-23754
+  feat[bc]: complete diffusion layer streaming support
+- [#4325](https://github.com/tetherto/qvac/pull/4325) - QVAC-22798 fix[bc]:
+  remove FLUX.1 compatibility
+- [#3543](https://github.com/tetherto/qvac/pull/3543) - QVAC-19792: pnpm+nx
+  monorepo foundation + first nx-affected CI consolidations
+- [#4345](https://github.com/tetherto/qvac/pull/4345) - QVAC-24727 chore:
+  remove co-load smoke workflows, actions and code
+
+## [0.23.0] - 2026-09-07
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.3.3` -> `1.4.0`, which requires libjs 1.32 headers (`bare-headers` >= 1.32). Compile-time only; no API or runtime behaviour change for this package. Released as a minor bump so dependents on `^0.22.x` adopt the new build floor deliberately rather than automatically.
+
+## [0.22.0] - 2026-09-07
+
+This release adds production MiniMax-H3 text-to-audio-video generation. The
+addon detects the H3 model family from its GGUF tensors, applies its native
+sampling contract, and returns synchronised video and audio through the
+existing video API.
+
+### Added
+
+#### MiniMax-H3 prompt-to-video with native audio
+
+- MiniMax-H3 GGUFs are recognised from either their video or audio
+  patch-projector tensors, so renamed compatible model files receive the H3
+  generation path rather than generic video defaults.
+- Text-only H3 requests use the validated native contract: 960x544 frames,
+  124-frame `17*k + 5` grids, 24 FPS, eight distilled sampling steps,
+  discrete scheduling, and `cfg_scale: 1.0`. Unsupported image/reference
+  conditioning and incompatible controls now fail before inference.
+- Generated H3 audio is muxed with video into AVI; container metadata and
+  runtime statistics report the engine's effective playback FPS.
+- H3 model downloaders (Unsloth and RealRebelAI sources) and
+  `examples/generate-video-minimax-h3.js` provide a reproducible
+  prompt-to-audio-video path.
+
+### Changed
+
+- The package-local vcpkg registry baseline selects H3-capable
+  `stable-diffusion-cpp` and GGML revisions.
+- JavaScript/TypeScript video bindings and documentation expose the
+  validated H3 workflow while preserving existing Wan and LTX contracts.
+
+### Pull Requests
+
+- [#3923](https://github.com/tetherto/qvac/pull/3923) - feat(diffusion-cpp):
+  add MiniMax-H3 video generation
+
+## [0.21.1] - 2026-09-07
+
+This release restores ABot-World generation quality. The `2026-08-11` engine
+line shipped in 0.21.0 had dropped the scene-creation prompt-padding zeroing,
+so walks collapsed into blur from the first generated block; the fix lands
+through a new registry revision of the engine, together with a ~1.9x faster
+walk and CI guards that would have caught the regression.
+
+### Fixed
+
+- **ABot-World blur regression.** Scene creation again zeroes every
+  prompt-embedding row past the last real token (the reference's
+  `u[v:] = 0`). The forward-ported engine had kept live pad-token embeddings
+  in all 512 context rows, and the walk DiT cross-attends the full context
+  every block, so generated frames washed out from block 0 while the first
+  decoded frame still looked fine. Delivered via
+  `stable-diffusion-cpp 2026-08-11#1` (qvac-ext-stable-diffusion.cpp#37 /
+  qvac-registry-vcpkg#357). Scene packs written by 0.21.0 carry the defect
+  and must be regenerated.
+- `ABOT_JPEG_QUALITY=85` no longer crashes `examples/world-walk-server.js`
+  at startup: the env value is coerced to a number before it reaches
+  `frameJpegQuality`'s `Number.isInteger` validation. The public API guard is
+  unchanged (`'85'` still throws) and is now pinned by a unit test.
+
+### Changed
+
+- ABot-World walk performance ~1.9x on the engine side: the compute
+  buffer/allocator is retained across the 5-6 graphs per block (also cuts
+  cold start 12 s -> 2.2 s), the masked attention softmax is one fused pass,
+  the per-block action planes are reused, and the taehv decoder uses direct
+  convolution — all byte-identical; the score matmul runs on the tensor-core
+  path (F16 accumulation, ~0.3/255 mean drift, quality unchanged). Measured
+  2.25 s -> 1.28 s/block (~5 -> ~9.4 fps) on an RTX 5090 (Vulkan, Q8, KV
+  cache).
+- `stable-diffusion-cpp` is pinned to `>= 2026-08-11#1` in `vcpkg.json`; the
+  registry baseline is unchanged. The engine logs
+  `scene pack: prompt rows N live / M` when a scene pack is loaded.
+- CI now gates ABot conditioning and frame quality: the world-generation
+  lane asserts the scene pack's live prompt rows form one leading block below
+  half the context and that a different prompt changes the embeddings, and
+  every walk lane asserts a luminance-stddev floor on generated frames (a
+  collapse measures 8-12, healthy 30+); a no-GPU unit lane exercises both
+  guards, including all five PNG row filters. The best-effort registry probe
+  for the unpublished `scene.safetensors` was removed — it only logged a
+  `MODEL_NOT_FOUND` false alarm on every run.
+- `docs/abot-world.md`: a Prompt-behaviour section, refreshed hardware/perf
+  numbers (Vulkan build: 1.28 s/block, 11.5/14.6 GB VRAM, a dedicated 16 GB
+  GPU as the practical minimum), and a Known-issues note on the engine
+  prompt-row log's last-index semantics.
+
+### Pull Requests
+
+- [#4232](https://github.com/tetherto/qvac/pull/4232) - QVAC-21981
+  fix[notask]: gate ABot conditioning regressions and fix ABOT_JPEG_QUALITY
+- [#4139](https://github.com/tetherto/qvac/pull/4139) - QVAC-21981 test:
+  drop the registry probe for the unpublished ABot scene pack
+
+## [0.21.0] - 2026-08-28
+
+This release makes the diffusion addon load on Linux hosts with no graphics
+stack: GPU backends become dynamically loaded modules, so a CPU-only server
+(the reported gh#3853 environment) starts the worker instead of aborting at
+addon load. The native dependency stack moves to the `2026-08-11` engine
+pair.
+
+### Added
+
+#### Dynamic GPU backend loading on desktop Linux (x64/arm64)
+
+- The prebuilt addon (`qvac__diffusion-cpp.bare`) links only
+  libc/libm/libgcc; the Vulkan backend ships as a dlopen'd module
+  (`prebuilds/<target>/qvac__diffusion-cpp/libqvac-diffusion-ggml-vulkan.so`)
+  that loads when a graphics stack is present and is silently absent
+  otherwise — the same hybrid `GGML_BACKEND_DL` + `GGML_CPU_STATIC` layout
+  the package already used on Android and `@qvac/llm-llamacpp` uses on
+  Linux. CPU code generation and performance are unchanged.
+- Regression gates keep it that way: an ELF `DT_NEEDED` forbid-list test
+  over the shipped artifacts (desktop and mobile suites), CI legs that run
+  the full CPU suite on hosts with libvulkan force-removed (linux x64 and
+  arm64, plus a GitHub-hosted CPU-only leg), a linux GPU assertion that the
+  dlopen'd module actually registers with the ggml device registry, and a
+  merge-blocking `verify-prebuild-linking` job wired into the
+  `qvac/prebuild-diffusion-cpp` required status.
+
+### Changed
+
+- `stable-diffusion-cpp` and `ggml` resolve at `2026-08-11` from the
+  `tetherto/qvac-registry-vcpkg` registry. The August engine API is not
+  source-compatible with the previous pin, so the addon internals migrated
+  (`generate_image()`/`upscale()`/`generate_video()` out-parameter results,
+  CPU-residency options mapped onto the engine's `params_backend`
+  assignment spec, FLUX.2 handled via engine auto-detection, reference-image
+  options mapped onto `ref_image_args`); the JavaScript configuration
+  surface is unchanged.
+- Model weights load eagerly at `load()` on desktop, so generation emits
+  only sampler and VAE-tiling progress sequences and weight-load time is
+  reported in `modelLoadMs`; mobile keeps lazy loading to keep `load()`
+  fast on phones. Denoise phase statistics attribute ticks by sampler total
+  with sequence-start accounting, covering multi-expert video, batches and
+  second-order samplers.
+- Engine-owned result batches (images, video frames) are released
+  exclusively through the engine deallocators (`free_sd_images`,
+  `free_sd_audio`), removing an allocator/CRT-boundary hazard on Windows.
+- `SD_CUDA` on Linux configures under the libc++ triplets by pinning nvcc's
+  host compiler to clang, and the CUDA toolkit runtime is not linked into
+  the addon under dynamic backend loading (the CUDA module carries its own
+  dependencies).
+
+### Fixed
+
+- Engine fixes surfaced by this migration, included via the pinned REFs:
+  ABot world-session teardown use-after-free (sd.cpp#32), Windows Wan
+  img2vid crash in the VAE CPU-fallback path plus fallback hardening
+  (sd.cpp#35), hybrid dynamic-backend configure failure on x86 (ggml#61),
+  and an Android OpenCL duplicate-case compile error (ggml#64).
+
+### Pull Requests
+
+- [#3978](https://github.com/tetherto/qvac/pull/3978) - QVAC-23767
+  feat[api]: dynamic GPU backends (GGML_BACKEND_DL) on desktop Linux for
+  diffusion
+- [#4085](https://github.com/tetherto/qvac/pull/4085) - QVAC-23799
+  fix[diffusion-cpp]: point nvcc at clang so SD_CUDA can configure on Linux
+- [#3850](https://github.com/tetherto/qvac/pull/3850) - QVAC-23347 infra:
+  drop redundant publish-time builds, gate wrapper drift in CI
+- [#3852](https://github.com/tetherto/qvac/pull/3852) - QVAC-23466 infra:
+  serve mobile e2e models from an S3 bucket in the Device Farm region
+
+## [0.20.0] - 2026-08-14
+
+This release adds production LTX-2.3 Ingredients IC-LoRA video generation
+with reference-sheet conditioning and validated controls across the JavaScript
+and native addon surfaces.
+
+### Added
+
+#### LTX Ingredients reference-guided video
+
+- LTX video requests accept IC-LoRA adapters, runtime `lora_strength`, and
+  `reference_images`, with validation that rejects unsupported combinations.
+- LTX-2 scheduling is selected by default for LTX models and can be requested
+  explicitly; `stg_scale` and `stg_block` expose skip-layer guidance controls.
+- The `generate:ltx-coffee` example and pinned download workflow provide a
+  reproducible reference-conditioned Ingredients showcase.
+
+### Changed
+
+- `vae_auto_cpu_fallback` and its memory-ratio control expose automatic VAE
+  capacity fallback, while the dependency stack selects exact-stateful VAE
+  behavior for Vulkan.
+- `stable-diffusion-cpp` now resolves at `2026-07-03#7` from the
+  `tetherto/qvac-registry-vcpkg` registry. The package uses registry-backed
+  `stable-diffusion-cpp` and `ggml` dependencies without local overlays.
+- TypeScript declarations and generated bindings, JavaScript and C++ unit
+  tests, addon tests, and registry-backed native builds validate the new
+  request surface and dependency path.
+
+### Pull Requests
+
+- [#3551](https://github.com/tetherto/qvac/pull/3551) - QVAC-22534
+  Feature/ltx lora
+
+## [0.19.0] - 2026-08-12
+
+This release adds ABot-World: a causal, interactive world model
+(Wan2.2-TI2V-5B derivative) that generates video block-by-block under live
+keyboard input. Worlds are created natively from a prompt and a first-frame
+image, then walked in real time — the package's first interactive
+(non-batch) generation surface.
+
+### Added
+
+#### ABot-World interactive walk sessions
+
+- New `@qvac/diffusion-cpp/world` entry point (`WorldStableDiffusion`):
+  `load()` / `step(keys)` / `unload()` sessions that stream decoded PNG or
+  JPEG frames per generated block. `kvCache` enables the per-layer history
+  KV cache (~3.7x fewer frame passes per block, the main speed knob),
+  `frameJpegQuality` selects a lightweight JPEG transport for remote
+  streaming, and a cancelled step rejects with the typed
+  `Diffusion/Cancelled` error at block granularity.
+- Native scene creation via `createScene()`: umT5-XXL encodes the prompt and
+  the Wan2.2 VAE encodes the first-frame image into a loadable scene pack,
+  entirely on-device — no offline extraction tooling.
+- `ActionFlag` named bits for the walk action mask, exported from both the
+  JS layer (`world.step(ActionFlag.W | ActionFlag.L)`) and the native layer,
+  and pinned against `KEY_ORDER` by tests on both sides.
+- Walk-session config is parsed through a validated handler map like every
+  other model in the package: numeric booleans (`kvCache: 1`) parse
+  correctly and invalid values throw typed `InvalidArgument` errors instead
+  of failing silently.
+- Browser demo `examples/world-walk-server.js` (`npm run walk:world`):
+  generate a world from an uploaded image and walk it with WASD/IJKL over a
+  paced MJPEG stream, locally or over an SSH tunnel. A full guide lives in
+  `docs/abot-world.md` — P2P registry model acquisition, hardware
+  requirements, performance versus the PyTorch reference, and
+  troubleshooting.
+- The four-model set (DiT Q8_0, taehv, umT5-XXL Q8_0, Wan2.2 VAE) is
+  published in the QVAC P2P model registry (tag `abot-world`); the
+  integration lanes provision it from there in CI.
+
+### Changed
+
+- `stable-diffusion-cpp` engine floor raised to `2026-07-03#6`, which ships
+  the ABot session C API and the masked-attention formulation compatible
+  with the registry ggml's CUDA kernels.
+- Removed the package-local `ggml` overlay port and the `overlay-ports`
+  entry in `vcpkg-configuration.json`: registry ggml `2026-07-03#4` now
+  builds with position-independent code (Linux CUDA `.bare` linking), so
+  `ggml` and `stable-diffusion-cpp` resolve purely from
+  `tetherto/qvac-registry-vcpkg`.
+
+### Pull Requests
+
+- [#3352](https://github.com/tetherto/qvac/pull/3352) - QVAC-21981
+  feat[api]: ABot-World interactive world sessions (walk + native scene
+  creation)
+- [#3793](https://github.com/tetherto/qvac/pull/3793) - QVAC-21981 fix:
+  drop the ggml overlay port, resolve builds purely from the registry
+
+## [0.18.0] - 2026-08-06
+
+### Changed
+
+- Align `@qvac/infer-base` and `qvac-lib-inference-addon-cpp` dependency floors
+  with the shared addon runtime validated across the live addon consumer set.
+
+### Pull Requests
+
+- [#3567](https://github.com/tetherto/qvac/pull/3567) - QVAC-18397 chore[notask]:
+  test addon-cpp 1.3.3 across consumers
+
 ## [0.17.0] - 2026-07-23
 
 This release adds the validated Wan 2.2 TI2V-5B Turbo Q5_K_S workflow for

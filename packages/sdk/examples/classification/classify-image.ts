@@ -1,5 +1,5 @@
 import fs from 'fs'
-import { startQVACProvider, stopQVACProvider, loadModel, classify, unloadModel } from '@qvac/sdk'
+import { loadModel, classify, unloadModel } from '@qvac/sdk'
 
 /**
  * Classify an image using the bundled MobileNetV3-Small model.
@@ -8,8 +8,6 @@ import { startQVACProvider, stopQVACProvider, loadModel, classify, unloadModel }
  * No modelSrc is needed — the model ships inside @qvac/classification-ggml.
  */
 async function main() {
-  await startQVACProvider({})
-
   const modelId = await loadModel({
     modelType: 'ggml-classification'
   })
@@ -23,7 +21,6 @@ async function main() {
   }
 
   await unloadModel({ modelId })
-  await stopQVACProvider()
 }
 
 main().catch(console.error)

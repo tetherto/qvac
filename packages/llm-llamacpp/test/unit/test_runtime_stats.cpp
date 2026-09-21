@@ -175,22 +175,13 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
   Request reqB = makeStubRequest();
   Request reqC = makeStubRequest();
 
-  // (nPast, nSlides, thinkingDiscards, req)
+  // (nPast, thinkingDiscards, toolsDropped, req)
   stats.accumulateSlot(
-      /*nPast=*/0,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/1,
-      reqA);
+      /*nPast=*/0, /*thinkingDiscards=*/1, /*toolsDropped=*/0, reqA);
   stats.accumulateSlot(
-      /*nPast=*/0,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/0,
-      reqB);
+      /*nPast=*/0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
   stats.accumulateSlot(
-      /*nPast=*/0,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/2,
-      reqC);
+      /*nPast=*/0, /*thinkingDiscards=*/2, /*toolsDropped=*/0, reqC);
 
   EXPECT_EQ(stats.thinkingBlockDiscards, 3);
 }
@@ -198,11 +189,40 @@ TEST(RuntimeStatsAccumulate, AccumulateSlotSumsThinkingDiscards) {
 TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsThinkingDiscards) {
   RuntimeStatsSnapshot stats;
   Request req = makeStubRequest();
-  stats.accumulateSlot(0, 0, 5, req);
+  stats.accumulateSlot(0, 5, 0, req);
   EXPECT_EQ(stats.thinkingBlockDiscards, 5);
 
   stats.reset();
   EXPECT_EQ(stats.thinkingBlockDiscards, 0);
+}
+
+// `toolsDropped` is the per-slot count of renders where the chat template did
+// not carry the tool definitions; the scheduler sums it across the batch into
+// `RuntimeStats.toolDefinitionsDropped`. Mirrors the thinkingDiscards pair
+// above, which is the sibling counter added the same way.
+TEST(RuntimeStatsAccumulate, AccumulateSlotSumsToolDefinitionsDropped) {
+  RuntimeStatsSnapshot stats;
+  Request reqA = makeStubRequest();
+  Request reqB = makeStubRequest();
+  Request reqC = makeStubRequest();
+
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/1, reqA);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, reqB);
+  stats.accumulateSlot(0, /*thinkingDiscards=*/0, /*toolsDropped=*/2, reqC);
+
+  EXPECT_EQ(stats.toolDefinitionsDropped, 3);
+  EXPECT_EQ(stats.thinkingBlockDiscards, 0)
+      << "the two counters must not alias each other";
+}
+
+TEST(RuntimeStatsAccumulate, AccumulateSlotResetClearsToolDefinitionsDropped) {
+  RuntimeStatsSnapshot stats;
+  Request req = makeStubRequest();
+  stats.accumulateSlot(0, 0, 5, req);
+  EXPECT_EQ(stats.toolDefinitionsDropped, 5);
+
+  stats.reset();
+  EXPECT_EQ(stats.toolDefinitionsDropped, 0);
 }
 
 // promptTokens must reflect tokens ACTUALLY prefilled, not the prompt size
@@ -225,10 +245,7 @@ TEST(RuntimeStatsAccumulate, CancelBeforePrefillCountsZeroPromptTokens) {
   // Same call the cancel path makes via accumulateSlotRuntimeStats: nothing
   // was processed, so nPast and the generated vector are empty.
   stats.accumulateSlot(
-      /*nPast=*/0,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/0,
-      req);
+      /*nPast=*/0, /*thinkingDiscards=*/0, /*toolsDropped=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 0);
 }
@@ -249,12 +266,198 @@ TEST(RuntimeStatsAccumulate, CompletedPrefillCountsFullPrompt) {
 
   RuntimeStatsSnapshot stats;
   stats.accumulateSlot(
-      /*nPast=*/42,
-      /*nSlides=*/0,
-      /*thinkingDiscards=*/0,
-      req);
+      /*nPast=*/42, /*thinkingDiscards=*/0, /*toolsDropped=*/0, req);
 
   EXPECT_EQ(stats.promptTokens, 42);
+}
+
+// Per-request observed stats: end-to-end figures as the submitting caller
+// experienced them (queue wait + shared-GPU decode), computed from the
+// request's wall-clock stamps at drain. Distinct from the snapshot rates
+// above, which are whole-scheduler aggregates.
+
+TEST(ObservedRequestStats, ComputesTtftAndObservedTps) {
+  constexpr unsigned maxTokens = 256;
+  std::vector<llama_token> prompt(10, 1);
+  Request req(/*rid=*/0, std::move(prompt), maxTokens);
+  req.pendingPrefillTokens.clear();
+  req.prefillFedCount = 0;
+  ASSERT_TRUE(req.isPrefillComplete());
+
+  const auto enqueued = std::chrono::steady_clock::time_point{};
+  req.firstTokenAt = enqueued + milliseconds(100);
+  req.lastTokenAt = enqueued + milliseconds(1100);
+  req.generatedTokens.assign(11, 7);
+
+  const ObservedRequestStats observed = computeObservedStats(enqueued, req);
+  // Enqueue -> first token.
+  EXPECT_DOUBLE_EQ(observed.ttftMs, 100.0);
+  // 10 inter-token gaps over 1 s = 10 tok/s observed.
+  EXPECT_DOUBLE_EQ(observed.genTps, 10.0);
+  EXPECT_EQ(observed.generatedTokens, 11);
+  EXPECT_EQ(observed.promptTokens, 10);
+}
+
+TEST(ObservedRequestStats, NoSampledTokenYieldsZeroTimingFigures) {
+  constexpr unsigned maxTokens = 256;
+  std::vector<llama_token> prompt(5, 1);
+  Request req(/*rid=*/0, std::move(prompt), maxTokens);
+
+  const ObservedRequestStats observed =
+      computeObservedStats(std::chrono::steady_clock::time_point{}, req);
+  EXPECT_DOUBLE_EQ(observed.ttftMs, 0.0);
+  EXPECT_DOUBLE_EQ(observed.genTps, 0.0);
+  EXPECT_EQ(observed.generatedTokens, 0);
+  // Nothing was fed yet: the partial prefill count is 0.
+  EXPECT_EQ(observed.promptTokens, 0);
+}
+
+TEST(ObservedRequestStats, GroupAggregateAveragesActiveAndSumsCounts) {
+  // Two active requests and one that never sampled a token (cancelled before
+  // generation): rates/TTFT average only over the active two, counts sum over
+  // all three.
+  const std::vector<ObservedRequestStats> group{
+      {.ttftMs = 100.0,
+       .genTps = 10.0,
+       .generatedTokens = 11,
+       .promptTokens = 10},
+      {.ttftMs = 300.0,
+       .genTps = 30.0,
+       .generatedTokens = 31,
+       .promptTokens = 20},
+      {.ttftMs = 0.0, .genTps = 0.0, .generatedTokens = 0, .promptTokens = 5}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(group);
+  EXPECT_DOUBLE_EQ(agg.ttftMs, 200.0);
+  EXPECT_DOUBLE_EQ(agg.genTps, 20.0);
+  EXPECT_EQ(agg.generatedTokens, 42);
+  EXPECT_EQ(agg.promptTokens, 35);
+}
+
+// The two per-slot counters sum like the token counts rather than averaging:
+// a group's caller asked one question, and "two of my renders dropped their
+// tools" is the honest answer to it. Summing is also what leaves a one-item
+// group — the concurrent single-prompt path — reporting its own figure
+// unchanged.
+TEST(ObservedRequestStats, GroupAggregateSumsPerSlotCounters) {
+  const std::vector<ObservedRequestStats> group{
+      {.thinkingBlockDiscards = 2, .toolDefinitionsDropped = 1},
+      {.thinkingBlockDiscards = 3, .toolDefinitionsDropped = 0},
+      {.thinkingBlockDiscards = 0, .toolDefinitionsDropped = 1}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(group);
+  EXPECT_EQ(agg.thinkingBlockDiscards, 5);
+  EXPECT_EQ(agg.toolDefinitionsDropped, 2);
+
+  const ObservedRequestStats single = aggregateObservedStats(
+      {{.thinkingBlockDiscards = 4, .toolDefinitionsDropped = 1}});
+  EXPECT_EQ(single.thinkingBlockDiscards, 4);
+  EXPECT_EQ(single.toolDefinitionsDropped, 1);
+}
+
+TEST(ObservedRequestStats, GroupAggregateOfNothingIsZero) {
+  const ObservedRequestStats agg = aggregateObservedStats({});
+  EXPECT_DOUBLE_EQ(agg.ttftMs, 0.0);
+  EXPECT_DOUBLE_EQ(agg.genTps, 0.0);
+  EXPECT_EQ(agg.generatedTokens, 0);
+  EXPECT_EQ(agg.promptTokens, 0);
+  EXPECT_FALSE(agg.stopReason.has_value());
+}
+
+// The stop reason is per-sequence, so unlike the shared per-context vision
+// counters it can be reported for one request without misattribution. It rides
+// the observed stats so the concurrent path can emit it for a single prompt.
+
+TEST(ObservedRequestStats, CarriesTheFinalizedStopReason) {
+  constexpr unsigned maxTokens = 256;
+  Request req(/*rid=*/0, std::vector<llama_token>{1, 2}, maxTokens);
+  req.pendingPrefillTokens.clear();
+  req.prefillFedCount = 0;
+
+  const ObservedRequestStats observed = computeObservedStats(
+      std::chrono::steady_clock::time_point{},
+      req,
+      GenerationStopReason::PredictionLimit);
+  ASSERT_TRUE(observed.stopReason.has_value());
+  EXPECT_EQ(*observed.stopReason, GenerationStopReason::PredictionLimit);
+}
+
+TEST(ObservedRequestStats, StopReasonIsAbsentWhenNotSupplied) {
+  constexpr unsigned maxTokens = 256;
+  Request req(/*rid=*/0, std::vector<llama_token>{1, 2}, maxTokens);
+
+  const ObservedRequestStats observed =
+      computeObservedStats(std::chrono::steady_clock::time_point{}, req);
+  EXPECT_FALSE(observed.stopReason.has_value());
+}
+
+TEST(ObservedRequestStats, UniformGroupKeepsItsStopReason) {
+  // A one-item group is the concurrent single-prompt path: its reason must
+  // survive aggregation, which is the regression this pins.
+  const std::vector<ObservedRequestStats> lone{
+      {.generatedTokens = 4,
+       .promptTokens = 2,
+       .stopReason = GenerationStopReason::PredictionLimit}};
+  const ObservedRequestStats loneAgg = aggregateObservedStats(lone);
+  ASSERT_TRUE(loneAgg.stopReason.has_value());
+  EXPECT_EQ(*loneAgg.stopReason, GenerationStopReason::PredictionLimit);
+
+  const std::vector<ObservedRequestStats> agreed{
+      {.generatedTokens = 4,
+       .promptTokens = 2,
+       .stopReason = GenerationStopReason::Eos},
+      {.generatedTokens = 6,
+       .promptTokens = 3,
+       .stopReason = GenerationStopReason::Eos}};
+  const ObservedRequestStats agreedAgg = aggregateObservedStats(agreed);
+  ASSERT_TRUE(agreedAgg.stopReason.has_value());
+  EXPECT_EQ(*agreedAgg.stopReason, GenerationStopReason::Eos);
+}
+
+TEST(ObservedRequestStats, MixedGroupReportsNoStopReason) {
+  // One reason cannot describe requests that ended differently, so the group
+  // reports none rather than picking a winner.
+  const std::vector<ObservedRequestStats> mixed{
+      {.generatedTokens = 4,
+       .promptTokens = 2,
+       .stopReason = GenerationStopReason::Eos},
+      {.generatedTokens = 6,
+       .promptTokens = 3,
+       .stopReason = GenerationStopReason::PredictionLimit}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(mixed);
+  EXPECT_FALSE(agg.stopReason.has_value());
+}
+
+TEST(ObservedRequestStats, GroupWithAnUnknownStopReasonReportsNone) {
+  // A request that was never finalized (cancelled, or still unknown) makes the
+  // group's reason indeterminate too.
+  const std::vector<ObservedRequestStats> partial{
+      {.generatedTokens = 4,
+       .promptTokens = 2,
+       .stopReason = GenerationStopReason::Eos},
+      {.generatedTokens = 0, .promptTokens = 3}};
+
+  const ObservedRequestStats agg = aggregateObservedStats(partial);
+  EXPECT_FALSE(agg.stopReason.has_value());
+}
+
+TEST(ObservedRequestStats, SingleTokenHasTtftButNoRate) {
+  constexpr unsigned maxTokens = 256;
+  Request req(/*rid=*/0, std::vector<llama_token>{1, 2}, maxTokens);
+  req.pendingPrefillTokens.clear();
+  req.prefillFedCount = 0;
+
+  const auto enqueued = std::chrono::steady_clock::time_point{};
+  req.firstTokenAt = enqueued + milliseconds(50);
+  req.lastTokenAt = req.firstTokenAt;
+  req.generatedTokens.assign(1, 7);
+
+  const ObservedRequestStats observed = computeObservedStats(enqueued, req);
+  EXPECT_DOUBLE_EQ(observed.ttftMs, 50.0);
+  // A single token spans no interval; no honest rate exists.
+  EXPECT_DOUBLE_EQ(observed.genTps, 0.0);
+  EXPECT_EQ(observed.generatedTokens, 1);
 }
 
 } // namespace

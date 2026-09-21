@@ -4,13 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from 'next-themes';
 import { QRCodeSVG } from 'qrcode.react';
-import { Check, Copy, Download, X } from 'lucide-react';
+import { Check, Copy, Download, ExternalLink, X } from 'lucide-react';
 import { KeetIcon } from '@/components/keet-icon';
 
 // Copy is kept verbatim from the main site (https://qvac.tether.io) modal.
 // `title` is only used for the dialog's accessible label — the modal renders
 // no heading/description, it is purely a container for the two cards.
-const KEET = {
+// Exported so the `/keet/` launcher page (linked from external
+// surfaces like the repo README, where the GitHub Markdown sanitizer strips
+// `keet://` anchors) can share the same room link as the single source of
+// truth.
+export const KEET = {
   title: 'Join QVAC Keet Room!',
   card1: {
     step: 'Step 1',
@@ -41,7 +45,7 @@ const DARK = '#171817';
  * The viewBox is tightened to the bird's bounds so it sits as a centered logo
  * (no surrounding concentric-ring artwork).
  */
-function KeetMascot({ className }: { className?: string }) {
+export function KeetMascot({ className }: { className?: string }) {
   return (
     <svg
       viewBox="78 152 95 104"
@@ -69,6 +73,13 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme !== 'light';
   const [isCopied, setIsCopied] = useState(false);
+
+  const openKeet = useCallback(() => {
+    // Fire-and-forget navigation to the custom scheme. Browsers that have
+    // Keet registered as a handler will open the app; others silently
+    // ignore the navigation, leaving the modal in place as fallback.
+    window.location.href = KEET.card2.roomLink;
+  }, []);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -226,6 +237,15 @@ function KeetModalContent({ onClose }: { onClose: () => void }) {
                   )}
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={openKeet}
+                className="mt-2 flex w-[200px] max-w-full items-center justify-center gap-2 rounded-[8px] px-4 py-[8px] text-[15px] font-medium leading-[22px] transition-opacity hover:opacity-80"
+                style={{ background: accent, color: DARK }}
+              >
+                <ExternalLink className="size-[15px]" />
+                Open in Keet
+              </button>
             </div>
           </div>
         </div>

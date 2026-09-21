@@ -18,11 +18,13 @@ namespace qvac_lib_inference_addon_sd {
  * frames on destruction.
  *
  * Ownership contract (mirrors upstream stable-diffusion.cpp):
- *   - `data` must have been allocated with `malloc()` via the library.
- *   - Each `data[i].data` is a `malloc()`-allocated pixel buffer.
- *   - This class calls `free()` on every frame's pixel buffer and on the
- *     array itself, in that order, on destruction.
- *   - Null `data` and/or zero `count` are both valid no-op states (empty()).
+ *   - The engine owns the array and every frame's pixel buffer; the matching
+ *     deallocator is `free_sd_images()`, called once on destruction. No
+ *     engine allocation is ever passed to the addon's `free()`
+ *     (allocator/CRT boundaries differ on Windows prebuilds and mixing them
+ *     corrupts the heap) — same rule as `SdImageBatch` and the ESRGAN path.
+ *   - Null `data` and/or zero `count` are both valid no-op states (empty();
+ *     `free_sd_images` tolerates both).
  *
  * Copy and move are disabled on purpose: the array is exclusively owned and
  * the whole class is intended to live on a single stack frame for the
@@ -46,14 +48,7 @@ public:
    */
   SdVideoFrames(sd_image_t* data, int count) : data_(data), count_(count) {}
 
-  ~SdVideoFrames() {
-    if (!data_)
-      return;
-    for (int i = 0; i < count_; ++i) {
-      free(data_[i].data);
-    }
-    free(data_);
-  }
+  ~SdVideoFrames() { free_sd_images(data_, count_); }
 
   SdVideoFrames(const SdVideoFrames&) = delete;
   SdVideoFrames& operator=(const SdVideoFrames&) = delete;

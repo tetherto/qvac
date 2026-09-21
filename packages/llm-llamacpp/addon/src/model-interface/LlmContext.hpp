@@ -1,12 +1,14 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
 
+#include "RenderOverrides.hpp"
 #include "SequenceDriver.hpp"
 #include "addon/LlmErrors.hpp"
 #include "common/chat.h"
@@ -15,7 +17,6 @@
 
 using namespace qvac_lib_inference_addon_llama::errors;
 
-struct PromptLayout;
 struct mtmd_context;
 
 struct GenerationParams {
@@ -43,15 +44,19 @@ struct GenerationParams {
   // applied to `params_.reasoning_budget` for the duration of the request and
   // restored on completion.
   std::optional<int> reasoning_budget;
-  // Per-request override for the post-generation thinking-block KV
-  // cache compaction. Default-on at the context level; passing
-  // `false` here opts out for this request (keeps the reasoning block
-  // in the cache), `true` re-affirms the default. Supported on both
-  // pure-attention and recurrent / hybrid-SSM models — recurrent /
-  // hybrid takes the snapshot + restore + replay path documented on
-  // `TextLlmContext::needsRecurrentSnapshot_`; pure-attention takes
-  // the `seq_rm + seq_add` path. Restored at end-of-request.
+  // Per-request override for post-generation thinking-block KV cache
+  // compaction. Contexts default off except the Qwen3 family, which defaults
+  // on. `false` keeps the reasoning block in cache; `true` enables
+  // compaction. Supported on both pure-attention and recurrent / hybrid-SSM
+  // models. Every model rewinds to the reasoning boundary and replays;
+  // `TextLlmContext::needsRecurrentSnapshot_` documents what differs between
+  // them. Restored at end-of-request.
   std::optional<bool> remove_thinking_from_context;
+  // OpenAI-style tool choice for a request that carries tools: "auto"
+  // (default), "none", "required", or the name of one declared function
+  // (restricts the call to that function). Consumed at prompt render time,
+  // not by the sampler, so it is deliberately absent from `hasOverrides()`.
+  std::optional<std::string> tool_choice;
 
   // Reports overrides that need `applyGenerationParamsToContext` (sampler /
   // common_params rebuild). Intentionally excludes
@@ -59,13 +64,20 @@ struct GenerationParams {
   // on `common_params`, and is applied directly via
   // `setRemoveThinkingFromContext` on both the single- prompt and batch paths.
   // Including it here would force a no-op `common_sampler_init` whenever it's
-  // the only override set.
+  // the only override set. `tool_choice` is excluded for the same reason: it
+  // shapes the chat-template render, and the sampler rebuild it needs happens
+  // in `tokenizeChat` when the rendered grammar is applied.
   [[nodiscard]] bool hasOverrides() const {
     return n_predict || temp || top_p || top_k || frequency_penalty ||
            presence_penalty || repeat_penalty || seed || grammar ||
            json_schema || reasoning_budget;
   }
 };
+
+/// The render-time subset of a request's `GenerationParams`.
+inline RenderOverrides renderOverridesFrom(const GenerationParams& p) {
+  return RenderOverrides{.toolChoice = p.tool_choice};
+}
 
 struct CommonSamplerDeleter {
   void operator()(common_sampler* ptr) {
@@ -168,21 +180,70 @@ struct LlmModelContext {
 /// (de)serializer must persist and restore. Any driver implementing
 /// `loadCache`/`saveCache` MUST round-trip all four fields in this order.
 ///
-/// `cacheTokens`/`firstMsgCacheTokens` (physical KV-cell usage) are owned
-/// separately from `nPast`/`firstMsgTokens` (logical positional span) because
-/// multimodal M-RoPE media can occupy more KV cells than its positional span.
-/// Persisting only the two positional fields would lose the media KV-cell
-/// counts and break context shifting after restore. See `getCacheTokens` /
-/// `getFirstMsgCacheTokens` below for the divergence these fields capture.
+/// `cacheTokens` (physical KV-cell usage) is owned separately from `nPast`
+/// (logical positional span) because multimodal M-RoPE media can occupy more
+/// KV cells than its positional span. See `getCacheTokens` below.
+///
+/// Slots 1 and 3 are retired: they carried the first-message counters the
+/// removed sliding-context feature protected. The four-field width stays so a
+/// file written by either build still loads, and this build's readers ignore
+/// them.
+///
+/// They are not written as 0. A build that still slides reads slot 1 as its
+/// protected-prefix boundary and would evict from position 0, silently
+/// dropping the system prompt and tool definitions. Mirroring the live cursor
+/// instead drives its `leftTokens` negative, so it refuses the slide and
+/// reports a context overflow with the cache intact.
+///
+/// That refusal covers the prefill slide only, the generation slide carried no
+/// such guard, so mirroring is the better of the two values we can write, not
+/// a guarantee at every slide site.
 enum class SessionMetadataField : uint8_t {
   NPast = 0,
-  FirstMsgTokens = 1,
+  RetiredFirstMsgTokens = 1,
   CacheTokens = 2,
-  FirstMsgCacheTokens = 3,
+  RetiredFirstMsgCacheTokens = 3,
 };
 
 /// Number of `llama_token` fields in the session metadata contract above.
 inline constexpr size_t SESSION_METADATA_FIELD_COUNT = 4;
+
+/// The wire form of the contract above. Every `saveCache` / `loadCache` goes
+/// through this so the `{nPast, nPast, cacheTokens, cacheTokens}` layout has
+/// one home: a writer that left a retired slot at 0 makes an older,
+/// still-sliding build evict from position 0 instead of protecting the first
+/// message, and that is silent.
+struct SessionMetadata {
+  std::array<llama_token, SESSION_METADATA_FIELD_COUNT> tokens = {};
+
+  /// Reads the two live fields off a context, then mirrors them into the
+  /// retired slots so a downgraded build refuses to slide rather than
+  /// evicting from position 0. See the contract above.
+  static SessionMetadata capture(const class LlmContext& context);
+
+  /// Writes the two live fields back onto a context.
+  void applyTo(class LlmContext& context) const;
+
+  [[nodiscard]] llama_token field(SessionMetadataField which) const {
+    return tokens[static_cast<size_t>(which)];
+  }
+  [[nodiscard]] llama_token nPast() const {
+    return field(SessionMetadataField::NPast);
+  }
+  [[nodiscard]] llama_token cacheTokens() const {
+    return field(SessionMetadataField::CacheTokens);
+  }
+
+  [[nodiscard]] llama_token* data() { return tokens.data(); }
+  [[nodiscard]] const llama_token* data() const { return tokens.data(); }
+  [[nodiscard]] size_t size() const { return tokens.size(); }
+
+  /// A partial header leaves `cacheTokens` at zero, which diverges from
+  /// `nPast` under M-RoPE and breaks later cap checks.
+  [[nodiscard]] static bool isComplete(size_t tokenCount) {
+    return tokenCount >= SESSION_METADATA_FIELD_COUNT;
+  }
+};
 
 class LlmContext { // NOLINT(cppcoreguidelines-special-member-functions)
 public:
@@ -243,11 +304,12 @@ public:
    * The generate response method. It generates the response token by token.
    *
    * @param outputCallback - the output callback.
-   * @return - ok=false for context overflow; cancelled=true when generation
-   * was stopped by user cancellation; rollbackOk=false when a cancellation
-   * or prediction-limit truncation inside reasoning could not restore the
-   * pre-request recurrent state and callers must skip cache persistence for
-   * this request.
+   * @return - cancelled=true when generation was stopped by user cancellation;
+   * rollbackOk=false when a cancellation or prediction-limit truncation inside
+   * reasoning could not restore the pre-request recurrent state and callers
+   * must skip cache persistence for this request. Generation-time context
+   * exhaustion is a successful terminal outcome exposed through runtime stats;
+   * prompt admission overflow still throws before this method runs.
    */
   virtual GenerateResponseResult generateResponse(
       const std::function<void(const std::string&)>& outputCallback) = 0;
@@ -256,6 +318,14 @@ public:
    * The stop method. It stops the model inference.
    */
   virtual void stop() = 0;
+
+  /**
+   * Clears a pending stop request no run consumed. stop() only sets a flag
+   * read at fixed points of the eval loop, so a cancel landing after a run's
+   * last check (its completion tail) survives it; the next run must start
+   * unpoisoned.
+   */
+  virtual void resetStopFlag() = 0;
 
   /**
    * The get context method. It returns the context.
@@ -309,51 +379,29 @@ public:
   virtual void setCacheTokens(llama_pos cacheTokens) { setNPast(cacheTokens); }
 
   /**
-   * Get the number of tokens belonging to the first user message.
-   */
-  [[nodiscard]] virtual llama_pos getFirstMsgTokens() const = 0;
-
-  /**
-   * Set the number of tokens belonging to the first user message.
-   */
-  virtual void setFirstMsgTokens(llama_pos firstMsgTokens) = 0;
-
-  /**
-   * Get physical KV-cache token usage for the protected first message.
-   */
-  [[nodiscard]] virtual llama_pos getFirstMsgCacheTokens() const {
-    return getFirstMsgTokens();
-  }
-
-  /**
-   * Set physical KV-cache token usage for the protected first message.
-   */
-  virtual void setFirstMsgCacheTokens(llama_pos firstMsgCacheTokens) {
-    setFirstMsgTokens(firstMsgCacheTokens);
-  }
-
-  /**
-   * Set the number of tokens to discard when overflowing context.
-   */
-  virtual void setNDiscarded(llama_pos nDiscarded) = 0;
-
-  /**
-   * Get the number of context slides (discards) that have occurred.
-   */
-  [[nodiscard]] virtual int32_t getNSlides() const = 0;
-
-  /**
-   * Reset the slide counter to zero. Called at the start of each inference.
-   */
-  virtual void resetNSlides() = 0;
-
-  /**
    * Number of `<think>` reasoning blocks compacted out of the KV
    * cache during the most recent generation. 0 for contexts without
    * reasoning channel support.
    */
   [[nodiscard]] virtual int32_t getThinkingBlockDiscards() const { return 0; }
   virtual void resetThinkingBlockDiscards() {}
+
+  /**
+   * Number of renders in the most recent request where the chat template
+   * rejected the tool definitions and the prompt was produced without them.
+   * 0 when no tools were sent or the template accepted them.
+   */
+  [[nodiscard]] virtual int32_t getToolDefinitionsDropped() const { return 0; }
+  virtual void resetToolDefinitionsDropped() {}
+
+  /**
+   * Install the per-request render overrides (`json_schema`, `tool_choice`)
+   * consumed by the next `tokenizeChat`. Pass a default-constructed value to
+   * clear. Default no-op for contexts that do not render chat templates.
+   */
+  virtual void setRenderOverrides(RenderOverrides overrides) {
+    (void)overrides;
+  }
 
   /**
    * Why the most recent generation stopped (`None` when no generation
@@ -367,8 +415,8 @@ public:
 
   /**
    * Consume the per-inference user-visible `llama_perf_context` snapshot
-   * if one was captured (currently only by contexts that may run a
-   * recurrent replay decode during thinking-block compaction). Returns
+   * if one was captured (by any context that may run a replay decode
+   * during thinking-block compaction). Returns
    * `std::nullopt` when no snapshot was taken, in which case the caller
    * should fall back to a live `llama_perf_context()` read.
    *
@@ -389,6 +437,25 @@ public:
     return std::nullopt;
   }
 
+  /**
+   * Tokens the most recent single-prompt inference actually generated.
+   *
+   * llama's `n_eval` cannot answer this. It counts decodes whose batch held
+   * exactly one token (`llama-context.cpp`: `n_queued_tokens == 1`), so it
+   * measures batch shape, not meaning. Generation happens to decode one at a
+   * time, which is why the two used to agree, but reasoning compaction now
+   * replays the kept tokens as a batch and those land in `n_p_eval` instead.
+   * Counting where the tokens are produced keeps the stat honest regardless
+   * of how any later cache work is batched.
+   */
+  [[nodiscard]] virtual int32_t lastGeneratedTokenCount() const {
+    return lastGeneratedTokenCount_;
+  }
+
+protected:
+  int32_t lastGeneratedTokenCount_ = 0;
+
+public:
   /**
    * Wall-clock milliseconds spent in the vision encoder (mtmd/CLIP ViT
    * forward + projection) during the most recent inference. 0 for
@@ -465,21 +532,6 @@ public:
    */
   virtual void resetMedia() {};
 
-  /// Validates an incoming prompt against any policy-level constraints
-  /// (size, layout, KV-cache state). Default is a no-op; concrete
-  /// contexts (`TextLlmContext`, `MtmdLlmContext`) override as needed.
-  /// Used by both the legacy single-prompt path and the per-slot
-  /// continuous-batching path before admission.
-  virtual void validatePromptPolicy(
-      const std::vector<common_chat_msg>& chatMsgs,
-      const std::vector<common_chat_tool>& tools, const PromptLayout& layout,
-      bool hasKvCacheContext) const {
-    (void)chatMsgs;
-    (void)tools;
-    (void)layout;
-    (void)hasKvCacheContext;
-  }
-
   /// Loaded multimodal (mmproj) context this LLM context can hand to
   /// per-slot batch drivers, or null for text-only contexts. Used by the
   /// scheduler factory to detect media capability without a `dynamic_cast`.
@@ -513,3 +565,24 @@ protected:
   /// scheduler-assigned slot id at construction.
   llama_seq_id seqId_ = 0;
 };
+
+inline SessionMetadata SessionMetadata::capture(const LlmContext& context) {
+  SessionMetadata metadata;
+  using Field = SessionMetadataField;
+  metadata.tokens[static_cast<size_t>(Field::NPast)] =
+      static_cast<llama_token>(context.getNPast());
+  metadata.tokens[static_cast<size_t>(Field::CacheTokens)] =
+      static_cast<llama_token>(context.getCacheTokens());
+  // Retired here, read as the protected prefix by any build still sliding.
+  // Mirroring the live cursors makes that build's slide guard fail closed.
+  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgTokens)] =
+      metadata.tokens[static_cast<size_t>(Field::NPast)];
+  metadata.tokens[static_cast<size_t>(Field::RetiredFirstMsgCacheTokens)] =
+      metadata.tokens[static_cast<size_t>(Field::CacheTokens)];
+  return metadata;
+}
+
+inline void SessionMetadata::applyTo(LlmContext& context) const {
+  context.setNPast(nPast());
+  context.setCacheTokens(cacheTokens());
+}

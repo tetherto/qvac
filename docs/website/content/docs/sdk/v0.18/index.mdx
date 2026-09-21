@@ -1,0 +1,158 @@
+---
+title: Introduction
+sidebarTitle: Overview
+icon: DoorOpen
+description: Use the SDK to build local and P2P AI applications and systems.
+ogImage: /og-sdk-main.png
+schemaType: TechArticle
+---
+
+## Overview
+
+Install the JS/TS or Python clients in your project. Then, load models and use them to perform AI inference locally.
+
+The SDK has two layers:
+
+- **Worker** — the runtime that actually runs the models. Today the worker ships as the `@qvac/sdk` npm package.
+- **Clients** — per-language APIs that drive the worker. Two clients ship today: JS/TS (`@qvac/sdk` on npm) and Python (`tetherto-qvac-sdk` on PyPI). Same worker, same generated contract, same capabilities.
+
+Pick the client that matches your stack:
+
+<Cards>
+  <Card href="/sdk/js-ts-sdk" title="JS/TS SDK">
+    JS/TS client — `@qvac/sdk` on npm. Runs on Node.js, Bare, and Expo.
+  </Card>
+  <Card href="/sdk/python-sdk" title="Python SDK">
+    Python client — `tetherto-qvac-sdk` on PyPI. Asyncio-native; ships a synchronous notebook facade.
+  </Card>
+</Cards>
+
+{/*
+## Releases
+
+- [Latest version: v0.7.0](https://www.npmjs.com/package/@qvac/sdk)
+- [Release notes for this version](https://github.com/tetherto/qvac-sdk/releases/tag/v0.5.0)
+*/}
+
+## Description
+
+The SDK is cross-platform, type-safe, and pluggable, exposing all QVAC capabilities through a unified interface.
+
+### Key features
+
+- **Cross-platform:** portable code across Linux, macOS, and Windows (JS/TS on Node.js / [Bare runtime](https://bare.pears.com), Python on CPython); Android and iOS via [Expo](https://expo.dev) (TS only).
+- **Pluggable**: build lean apps by including only what you need, and extend the SDK with custom plugins.
+- **Type-safe:** typed APIs in both JavaScript and Python (Pydantic models generated from the same contract).
+- **Unified interface:** multiple AI tasks, one client package per language.
+
+## Functionalities
+
+### AI tasks
+
+{/* <Task name>: <what computation is performed> for <what the developer achieves> via <engine> */}
+{/* <task>: <tech process> for <use case>, via <engine> */}
+
+* [**Text generation:**](/sdk/ai-capabilities/text-generation) LLM inference for text generation and chat via [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp).
+* [**Text embeddings:**](/sdk/ai-capabilities/text-embeddings) vector embedding generation for semantic search, clustering, and retrieval, via `qvac-fabric-llm.cpp`.
+* [**RAG:**](/sdk/ai-capabilities/rag) out-of-the-box retrieval-augmented generation workflow.
+* [**Fine-tuning:**](/sdk/ai-capabilities/fine-tuning) adapting LLMs to domain-specific tasks via LoRA.
+* [**Multimodal:**](/sdk/ai-capabilities/multimodal) LLM inference over text, images, and other media within a single conversation context.
+* [**Batch processing:**](/sdk/ai-capabilities/batch-processing) run multiple LLM prompts concurrently through a single loaded model in one call.
+* [**Image generation:**](/sdk/ai-capabilities/image-generation) text-to-image and image-to-image generation via a customized Diffusion engine.
+* [**Video generation:**](/sdk/ai-capabilities/video-generation) text-to-video and image-to-video generation via a customized Diffusion engine.
+* [**World simulation:**](/sdk/ai-capabilities/world-simulation) turn a first-frame image and navigation controls into a streamed, navigable video via an interactive world model.
+* [**Music generation:**](/sdk/ai-capabilities/music-generation) generate music from text prompts and lyrics via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3).
+* [**Transcription:**](/sdk/ai-capabilities/transcription) automatic speech recognition (ASR) for speech-to-text via a customized Whisper engine or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2).
+* [**Text-to-Speech:**](/sdk/ai-capabilities/text-to-speech) speech synthesis for text-to-speech (TTS) via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml).
+* [**Voice assistant:**](/sdk/ai-capabilities/voice-assistant) real-time voice conversation pipeline chaining transcription, text generation, and text-to-speech.
+* [**Translation:**](/sdk/ai-capabilities/translation) text-to-text neural machine translation (NMT), via `qvac-fabric-llm.cpp` and [Bergamot](https://browser.mt).
+* [**BCI:**](/sdk/ai-capabilities/bci) brain–computer interface (BCI) transcription that decodes multi-channel neural signals into text, via [a customized Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp).
+* [**VLA:**](/sdk/ai-capabilities/vla) vision-language-action that turns camera frames, robot state, and natural-language instruction into action chunks for robot control, via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml).
+* [**OCR:**](/sdk/ai-capabilities/ocr) optical character recognition (OCR) for extracting text from images via ONNX runtime.
+* [**Image classification:**](/sdk/ai-capabilities/image-classification) assigning class labels with confidence scores to images, via [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml).
+
+### P2P capabilities
+
+* **Fetch models:** download AI models from peers via the distributed model registry.
+* [**Blind relays:**](/sdk/p2p-capabilities/blind-relays) connect peers across NATs/firewalls by routing traffic through relay nodes.
+
+### Utilities
+
+* [**Logging:**](/sdk/runtime/logging) visibility into what's happening  during loading, inference, and other operations.
+* [**Profiler:**](/sdk/runtime/profiler) measure and export timing metrics across model loading and inference.
+* [**Download Lifecycle:**](/sdk/models/download-lifecycle) pause and resume model downloads.
+* [**Runtime lifecycle:**](/sdk/runtime/lifecycle) suspend and resume the SDK runtime (e.g., on app background/foreground) and query lifecycle state.
+* [**Cancellation:**](/sdk/runtime/cancellation) cancel any in-flight inference, model load, or download by `requestId`, or broad-cancel by `modelId` for unload/shutdown.
+* [**Sharded models:**](/sdk/models/sharded-models) download a model that is sharded into multiple parts.
+* [**Assess model fit:**](/sdk/models/assess-model-fit) check whether a model is likely to fit in memory before downloading it.
+
+## Flow
+
+Before you can use a model, you need to load it from some location into memory. The flow for performing AI inference is:
+
+1. Load one model into the SDK. You can load multiple models simultaneously by repeating the call.
+2. Perform AI tasks by calling the appropriate SDK functions — e.g., a completion.
+3. When you are done with a model, unload it to release computer resources.
+4. Finally, close the SDK instance.
+
+The concrete API names differ by client — in JS/TS it is `loadModel()` / `completion()` / `unloadModel()` / `close()` (see [API reference](/sdk/reference/api)); in Python it is `load_model` / `completion` / `unload_model` and the `Client()` context manager (see [Python SDK](/sdk/python-sdk)).
+
+## Models
+
+Each [AI task](#ai-tasks) works with different model families, and among the supported ones, you can choose which to use and how to obtain them. Model loading manages the download and caching of models (one or multiple files), and their loading from disk into memory, preparing them for use.
+
+Models can be loaded from three different locations:
+* Local filesystem, by providing a path
+* HTTP server, by providing an HTTP URL
+* Our distributed model registry
+
+SDK packages do not ship with built-in models, **but** their APIs expose constants representing preconfigured models (e.g., `LLAMA_3_2_1B_INST_Q4_0`). Each constant maps a model already published to our model registry. When loading a model, you can provide one of these constants instead of a location, making model retrieval transparent.
+
+<Card href="https://github.com/tetherto/qvac/blob/main/packages/sdk/models/registry/models.ts" title="Model registry index">
+  See the index of models available in our distributed model registry.
+</Card>
+
+For more on querying the model registry, see [`modelRegistryList()`](/sdk/reference/api#modelregistrylist), [`modelRegistrySearch()`](/sdk/reference/api#modelregistrysearch), and [`modelRegistryGetModel()`](/sdk/reference/api#modelregistrygetmodel) (JS/TS), or `model_registry_list` / `_search` / `_get_model` (Python — see [Python SDK — Running examples](/sdk/python-sdk#running-examples) for a runnable script).
+
+For more on loading models in JS/TS, see [`loadModel()` at `@qvac/sdk` API reference](/sdk/reference/api#loadmodel).
+
+## Configuration
+
+<Card href="/sdk/configuration" title="Configuration">
+  Shared options and configuration schema.
+</Card>
+
+### Plugin system
+
+<Cards className="grid-cols-1">
+<Card href="/sdk/configuration/plugins" title="Built-in and custom plugins">
+  Enable and disable built-in AI capabilities, and add new ones via custom plugins.
+  </Card>
+
+  <Card href="/sdk/configuration/plugins/write-custom-plugin" title="Write a custom plugin">
+    Guidelines to ship your custom plugin as a single npm package.
+  </Card>
+</Cards>
+
+## API reference
+
+<Cards>
+  <Card href="/sdk/reference/api" title="JS/TS API reference">
+    `@qvac/sdk` npm package exposes a function-centric, typed JS API.
+  </Card>
+  <Card href="/sdk/python-sdk#api-reference" title="Python API surface">
+    `tetherto-qvac-sdk` re-exports the same contract as an asyncio-native Python surface.
+  </Card>
+</Cards>
+
+## How it works
+
+<Card href="/platform/about/how-it-works" title="How it works">
+  Understand what happens under the hood when you use QVAC SDK in your application
+</Card>
+
+## Other resources
+
+- [SDK landing page](https://qvac.tether.io/dev/sdk/)
+- [`@qvac/sdk` on npm](https://www.npmjs.com/package/@qvac/sdk)
+- [`tetherto-qvac-sdk` on PyPI](https://pypi.org/project/tetherto-qvac-sdk/)

@@ -1,17 +1,19 @@
 // Real SDK tests
-import type { TestDefinition } from '@tetherto/qvac-test-suite'
+import type { TestDefinition } from '@qvac/test-suite'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
 import { embeddingTests } from './embedding-tests.js'
 import { ragTests } from './rag-tests.js'
+import { vectorIndexTests } from './vector-index-tests.js'
 import { translationIndicTransTests } from './translation-indictrans-tests.js'
 import { translationBergamotTests } from './translation-bergamot-tests.js'
 import { translationBergamotCacheTests } from './translation-bergamot-cache-tests.js'
 import { translationLlmTests } from './translation-llm-tests.js'
 import { modelInfoTests } from './model-info-tests.js'
 import { kvCacheTests } from './kv-cache-tests.js'
+import { kvCacheRestartTests } from './kv-cache-restart-tests.js'
 import { errorTests } from './error-tests.js'
 import { toolsTests } from './tools-tests.js'
 import { ocrTests } from './ocr-tests.js'
@@ -28,8 +30,9 @@ import { bciTests } from './bci-tests.js'
 import { visionTests } from './vision-tests.js'
 import { downloadTests } from './download-tests.js'
 import { downloadResilienceTests } from './download-resilience-tests.js'
-import { delegatedInferenceTests } from './delegated-inference-tests.js'
 import { diffusionTests } from './diffusion-tests.js'
+import { worldTests } from './world-tests.js'
+import { audioGenTests } from './audio-gen-tests.js'
 import { finetuneTests } from './finetune-tests.js'
 import { lifecycleTests } from './lifecycle-tests.js'
 import { configTests } from './config-tests.js'
@@ -40,6 +43,7 @@ import { cancellationTests } from './cancellation-tests.js'
 import { vlaTests } from './vla-tests.js'
 import { pluginTests } from './plugin-tests.js'
 import { snapStorageTests } from './snap-storage-tests.js'
+import { systemResourcesTests } from './system-resources-tests.js'
 
 // Model loading tests
 export const modelLoadLlm: TestDefinition = {
@@ -51,6 +55,29 @@ export const modelLoadLlm: TestDefinition = {
     category: 'model',
     dependency: 'none',
     estimatedDurationMs: 60000
+  }
+}
+
+export const modelLoadLlmLoadModeNone: TestDefinition = {
+  testId: 'model-load-llm-load-mode-none',
+  params: { loadMode: 'none' },
+  expectation: { validation: 'type', expectedType: 'string' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
+
+// Asserts the validation code, not the key name: a native --no-mmap error names it too.
+export const modelLoadLlmLegacyNoMmapRejected: TestDefinition = {
+  testId: 'model-load-llm-legacy-no-mmap-rejected',
+  params: { noMmap: true },
+  expectation: { validation: 'throws-error', errorContains: '50010' },
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 1000
   }
 }
 
@@ -68,6 +95,23 @@ export const modelLoadEmbedding: TestDefinition = {
 
 export const modelLoadOcr: TestDefinition = {
   testId: 'model-load-ocr',
+  params: {},
+  expectation: { validation: 'type', expectedType: 'string' },
+  suites: ['smoke'],
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 90000
+  }
+}
+
+// Loads OCR_DOCTR with no explicit pipelineType/detectorModelSrc — the
+// gap that let QVAC-22514 ship: with only OCR_LATIN (EasyOCR) covered, the
+// plugin could assume the EasyOCR pipeline for every recognizer and no e2e
+// test noticed. This exercises the auto pipelineType: "doctr" inference and
+// DBNet detector derivation on the load path.
+export const modelLoadOcrDoctr: TestDefinition = {
+  testId: 'model-load-ocr-doctr',
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
   suites: ['smoke'],
@@ -197,8 +241,11 @@ export const modelLifecycleNmt: TestDefinition = {
 export const tests = [
   // Model tests (first section)
   modelLoadLlm,
+  modelLoadLlmLoadModeNone,
+  modelLoadLlmLegacyNoMmapRejected,
   modelLoadEmbedding,
   modelLoadOcr,
+  modelLoadOcrDoctr,
   modelLoadInvalid,
   modelUnload,
   modelLoadConcurrent,
@@ -227,6 +274,9 @@ export const tests = [
   // RAG tests
   ...ragTests,
 
+  // Vector index tests (embed + TurboVec index, no RAG workspace)
+  ...vectorIndexTests,
+
   // Translation: IndicTrans2 (EN↔HI)
   ...translationIndicTransTests,
 
@@ -250,6 +300,7 @@ export const tests = [
 
   // KV cache tests
   ...kvCacheTests,
+  ...kvCacheRestartTests,
 
   // Error tests
   ...errorTests,
@@ -287,8 +338,11 @@ export const tests = [
   // Diffusion tests
   ...diffusionTests,
 
-  // Delegated inference tests (P2P)
-  ...delegatedInferenceTests,
+  // ABot-World interactive world sessions (desktop GPU only)
+  ...worldTests,
+
+  // Audio generation tests (desktop-only; mobile skips via SkipExecutor)
+  ...audioGenTests,
 
   // Finetuning tests
   ...finetuneTests,
@@ -321,6 +375,9 @@ export const tests = [
 
   // Strict Snap storage-path conformance
   ...snapStorageTests,
+
+  // Local hardware capabilities and on-demand usage sampling
+  ...systemResourcesTests,
 
   // Additional model tests
   modelSwitchLlm,
