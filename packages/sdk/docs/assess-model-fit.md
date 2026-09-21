@@ -42,12 +42,13 @@ would give on this machine, not a model of it, so it outranks `calibration`
 wherever both are available. It carries no `estimate` — the fitter returns a
 plan, not a byte range — so branch on the verdict there rather than on bounds.
 
-It is reachable only for a single candidate, and only where the registry
-publishes a description for that artifact. One fit measures one model against
-the whole machine, and two such answers carry nothing that can be summed under
-one budget, so a set of candidates keeps the calibrated estimate that can be
-aggregated. A model with no published description, and an offline caller, fall
-back the same way.
+It is reachable only for a single candidate with no companion `artifacts`,
+and only where the registry publishes a description for that artifact. One fit
+measures one model against the whole machine, and two such answers carry
+nothing that can be summed under one budget, so a set of candidates keeps the
+calibrated estimate that can be aggregated; so does a candidate whose
+companions' bytes the fitter would not see. A model with no published
+description, and an offline caller, fall back the same way.
 
 The fitter follows the catalog's engine, not the workload: a completion model
 is fitted at `contextTokens`, an embedding model as an embedding load at the

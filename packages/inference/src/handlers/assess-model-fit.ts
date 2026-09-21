@@ -82,12 +82,17 @@ export interface FitLoad {
  * config carries the same device defaults a real load resolves — the fitter
  * answers `unsupported-config` for a load with no `device`. An embedding load
  * has no context setting; the fitter reads the window the model declares.
+ *
+ * A candidate with companion `artifacts` gets no fitter: the estimator counts
+ * their bytes, the fitter reads one file, and a verdict for the model alone
+ * would stand in for the set.
  */
 export function fitLoad(
   candidate: ModelFitCandidate,
   resolveProfile: ProfileResolver = getModelResourceProfile
 ): FitLoad | undefined {
   if (candidate.workload.kind !== 'llm') return undefined
+  if (candidate.artifacts?.length) return undefined
 
   // A model outside the catalog is taken as a completion model, the common
   // case for an `llm` workload.

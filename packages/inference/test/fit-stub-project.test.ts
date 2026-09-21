@@ -104,10 +104,14 @@ test('a projection runs the fitter against the downloaded stub', async function 
   t.is(res.status, 'projected')
   if (res.status !== 'projected') return
 
-  t.is(path.basename(res.stubPath), `${BINDING.sha256}.gguf`)
-  t.alike(seen, [res.stubPath], 'the fitter was pointed at the stub, not at any artifact')
+  t.is(seen.length, 1, 'the fitter ran once')
+  t.is(
+    path.basename(seen[0] ?? ''),
+    `${BINDING.sha256}.gguf`,
+    'pointed at the stub, not at any artifact'
+  )
   t.is(res.fit.verdict, 'fit')
-  t.absent(fs.existsSync(res.stubPath), 'the stub is removed once the fitter has read it')
+  t.absent(fs.existsSync(seen[0] ?? ''), 'the stub is removed once the fitter has read it')
   t.alike(fs.readdirSync(cacheDir), [], 'nothing is left under the staging root')
 })
 

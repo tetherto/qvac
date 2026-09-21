@@ -20,8 +20,7 @@ export interface StubFitInput {
 }
 
 export type StubFitOutcome =
-  /** `stubPath` is where the fitter read the stub; the file is gone by the time this returns. */
-  | { status: 'projected'; stubPath: string; fit: AdvisoryFitOutcome }
+  | { status: 'projected'; fit: AdvisoryFitOutcome }
   | { status: 'no-stub'; reason: FitStubUnavailableReason; message?: string }
 
 export interface StubFitOptions {
@@ -63,7 +62,7 @@ export async function projectFitFromStub(
       options.fit
     )
 
-    return { status: 'projected', stubPath: stub.path, fit }
+    return { status: 'projected', fit }
   } finally {
     // The stub is a per-call payload. Nothing else knows the path, so nothing
     // else could remove it.

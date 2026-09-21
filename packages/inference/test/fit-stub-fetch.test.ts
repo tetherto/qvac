@@ -4,6 +4,8 @@ import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 
+import type { AbortSignal } from 'bare-abort-controller'
+
 import {
   fetchFitStub,
   type FitBlobBinding,
@@ -164,4 +166,53 @@ test('a stub that does not match the recorded digest is rejected', async functio
     t.ok(res.message?.includes('hashes to'), 'the digest mismatch is named')
   }
   t.alike(fs.readdirSync(cacheDir), [], 'the corrupt stub is not kept')
+})
+
+function settle(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(() => resolve(), ms)
+  })
+}
+
+// The download timeout alone leaves the lookup unbounded: a cold worker joins
+// the swarm and waits for the registry view before `getModel` answers.
+test('a registry lookup that does not answer within the budget times out', async function (t) {
+  const cacheDir = tempDir()
+  const started = Date.now()
+
+  const res = await fetchFitStub(REF, {
+    cacheDir,
+    budgetMs: 50,
+    getEntry: () => new Promise(() => {})
+  })
+
+  t.is(res.status, 'unavailable')
+  if (res.status === 'unavailable') t.is(res.reason, 'timed-out')
+  t.ok(Date.now() - started < 2_000, 'returned on the budget, not on the lookup')
+  t.alike(fs.readdirSync(cacheDir), [], 'nothing was staged')
+})
+
+test('a download that outlives the budget is aborted and leaves nothing behind', async function (t) {
+  const cacheDir = tempDir()
+  let aborted = false
+
+  const res = await fetchFitStub(REF, {
+    cacheDir,
+    budgetMs: 50,
+    getEntry: async () => ENTRY,
+    downloadBlob: (_binding, outputFile, signal?: AbortSignal) =>
+      new Promise((_resolve, reject) => {
+        fs.writeFileSync(outputFile, Buffer.from('half'))
+        signal?.addEventListener('abort', () => {
+          aborted = true
+          reject(new Error('Download cancelled'))
+        })
+      })
+  })
+
+  t.is(res.status, 'unavailable')
+  if (res.status === 'unavailable') t.is(res.reason, 'timed-out')
+  t.ok(aborted, 'the download was told to stop')
+  await settle(20)
+  t.alike(fs.readdirSync(cacheDir), [], 'the half-written stub is gone')
 })

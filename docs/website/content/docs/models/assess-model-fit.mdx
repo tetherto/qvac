@@ -78,7 +78,7 @@ What backs the verdict.
 | `calibration` | A two-sided `estimate` from coefficients measured on this platform. | any verdict |
 | `computed-only` | A floor from catalog facts alone — artifact bytes, plus the KV cache for llama.cpp models — reported as `floorBytes`. | `likely-too-large` or `unknown` |
 
-`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable only for a single llama.cpp candidate whose registry record publishes a description; a set of candidates, a model with no description, and an offline caller keep the calibrated estimate.
+`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable only for a single llama.cpp candidate, without companion `artifacts`, whose registry record publishes a description; a set of candidates, a candidate with companions, a model with no description, and an offline caller keep the calibrated estimate.
 
 Read `evidence` alongside the verdict, because the same `unknown` can mean different things:
 - Under `calibration`, the numbers came out too close to call.
@@ -110,7 +110,7 @@ Every `unknown` names its cause here — on the model when the cause is that mod
 
 Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers Android, iOS, `win32-arm64`, audio workloads, and every engine with no estimator yet.
 
-`native-fit` is independent of calibration. Wherever the engine's fitter runs — every platform with a llama.cpp addon, mobile included — a single llama.cpp candidate with a published description gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
+`native-fit` is independent of calibration. Wherever the engine's fitter runs — every platform with a llama.cpp addon, mobile included — a single llama.cpp candidate with a published description and no companion `artifacts` gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
 
 The per-platform calibration matrix, which changes with every release, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
 

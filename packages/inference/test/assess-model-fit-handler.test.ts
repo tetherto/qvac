@@ -61,6 +61,14 @@ test('handler: an embedding model is fitted as an embedding load, without a cont
   if (plan.supported) t.is(plan.loadKind, 'embedding')
 })
 
+// The estimator adds companion bytes; the fitter would read one file and answer
+// for the model alone, so the set must keep the estimate.
+test('handler: a candidate with companion artifacts gets no fitter', (t) => {
+  const candidate: ModelFitCandidate = { ...llm(), artifacts: [MODEL] }
+
+  t.absent(fitLoad(candidate, profileFor(ModelType.llamacppCompletion)))
+})
+
 test('handler: a model outside the catalog is fitted as a completion load', (t) => {
   const load = fitLoad(llm(4096), () => undefined)
 
