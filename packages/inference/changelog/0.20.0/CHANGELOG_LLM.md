@@ -2,7 +2,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.20.0
 
-QVAC Inference 0.20.0 is the engine cut that SDK 0.20.0 will depend on. It adds TranslatePsy-AfriSLM translation, an in-process TurboVec vector index, MiniMax-H3 video, Parakeet Nemotron transcription, and the rest of the AudioGen and TTS surfaces. `loadModel` runs an advisory llama.cpp fit check. Diffusion VAE constant names, CPU flags, `'row'` split, Parakeet `language` codes, and how system prompts combine with KV cache all change.
+QVAC Inference 0.20.0 is the engine cut that SDK 0.20.0 will depend on. It adds TranslatePsy-AfriSLM translation, an in-process TurboVec vector index, MiniMax-H3 video, Parakeet Nemotron transcription, and the rest of the AudioGen and TTS surfaces. ABot-World sessions (`worldCreateScene` / `worldStep`) are on this surface. `loadModel` runs an advisory llama.cpp fit check. Diffusion VAE constant names, CPU flags, `'row'` split, Parakeet `language` codes, and how system prompts combine with KV cache all change.
 
 Publish this package before `@qvac/sdk@0.20.0`. The SDK release points its `@qvac/inference` range at this version.
 
@@ -196,6 +196,34 @@ const result = video({
   cfg_scale: 1
 })
 ```
+
+### ABot-World Sessions
+
+Load a world-mode diffusion model, create a scene once, then step it. Frames stream as they decode.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: ABOT_WORLD_0_5B_Q8_0,
+  modelType: 'sdcpp-generation',
+  modelConfig: {
+    mode: 'world',
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_TAEHV_VAE,
+    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
+    vaeModelSrc: ABOT_WORLD_0_5B_LF_WAN_VAE,
+    world: { kvCache: true, frameJpegQuality: 85 }
+  }
+})
+
+const { stats } = worldCreateScene({ modelId, prompt, image })
+await stats
+
+const { frameStream } = worldStep({ modelId, keys: ['W', 'L'] })
+for await (const frame of frameStream) {
+  render(frame)
+}
+```
+
+Pass `returnPack: true` on create to keep the scene bytes for a later reload.
 
 ### Parakeet Nemotron
 
