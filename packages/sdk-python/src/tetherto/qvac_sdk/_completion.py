@@ -94,7 +94,7 @@ def _normalize_tools(
         if handler is not None:
             handlers[entry["name"]] = handler
         if entry.get("type") != "function":
-            entry = {
+            wrapped = {
                 "type": "function",
                 "name": entry["name"],
                 "description": entry.get("description", ""),
@@ -102,6 +102,12 @@ def _normalize_tools(
                     "parameters", {"type": "object", "properties": {}}
                 ),
             }
+            # Opt-in fields the simplified form may also carry. Dropping them
+            # here would quietly turn a deferred tool into an always-loaded one.
+            for key in ("deferLoading", "group"):
+                if key in entry:
+                    wrapped[key] = entry[key]
+            entry = wrapped
         wire_tools.append(entry)
     return wire_tools, handlers
 
