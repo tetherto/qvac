@@ -18,7 +18,6 @@
 #endif
 
 #include "inference-addon-cpp/Logger.hpp"
-#include "nmt.hpp"
 #include "nmt_utils.hpp"
 
 std::string sanitizePrintableAscii(const std::string& input) {
@@ -194,6 +193,43 @@ bool matchesExplicitSelector(
           nameEqualsCi(backend.registryName(registry), selectorLower));
 }
 
+// "name (registry)" identity used in CPU-fallback logs so operators can trace
+// which GPU-type devices the family allowlist refused. Empty inputs collapse to
+// `unnamed` / `unknown-registry` so the string is never blank.
+std::string
+deviceIdentity(const NmtBackendInterface& backend, ggml_backend_dev_t device) {
+  const char* namePtr = backend.deviceName(device);
+  const ggml_backend_reg_t registry = backend.deviceRegistry(device);
+  const char* regPtr =
+      registry != nullptr ? backend.registryName(registry) : nullptr;
+  const std::string name = namePtr != nullptr ? namePtr : "unnamed";
+  const std::string reg = regPtr != nullptr ? regPtr : "unknown-registry";
+  return name + " (" + reg + ")";
+}
+
+// GPU/IGPU-type registry slots whose family is refused by the allowlist
+// (HIP/ROCm, SYCL, MUSA, RPC, unknown). Presented in the CPU-fallback log so
+// callers see whether their unusable request would have succeeded on a
+// different backend family.
+std::vector<std::string>
+refusedGpuIdentities(const NmtBackendInterface& backend) {
+  std::vector<std::string> refused;
+  const size_t devCount = backend.deviceCount();
+  for (size_t i = 0; i < devCount; ++i) {
+    ggml_backend_dev_t devCur = backend.deviceGet(i);
+    if (devCur == nullptr) {
+      continue;
+    }
+    const enum ggml_backend_dev_type type = backend.deviceType(devCur);
+    if ((type == GGML_BACKEND_DEVICE_TYPE_GPU ||
+         type == GGML_BACKEND_DEVICE_TYPE_IGPU) &&
+        deviceFamily(backend, devCur) == NmtGpuFamily::None) {
+      refused.push_back(deviceIdentity(backend, devCur));
+    }
+  }
+  return refused;
+}
+
 // Eligible devices in selection order: dedicated GPUs first, then integrated
 // ones, registry order preserved within each class.
 std::vector<ggml_backend_dev_t>
@@ -245,7 +281,7 @@ ggml_backend_dev_t selectNth(
 ggml_backend_dev_t
 nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     bool useGpu, const std::string& gpuBackend, int gpuDevice,
-    const char* logPrefix) {
+    const char* logPrefix, const NmtMainGpu& mainGpu, bool legacyGpuSelection) {
   const NmtBackendInterface backend{
       .deviceCount = ggml_backend_dev_count,
       .deviceGet = ggml_backend_dev_get,
@@ -260,25 +296,74 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
   constexpr bool allowDefaultOpenCl = false;
 #endif
   return nmtSelectGpuDevice(
-      backend, useGpu, gpuBackend, gpuDevice, logPrefix, allowDefaultOpenCl);
+      backend,
+      useGpu,
+      gpuBackend,
+      gpuDevice,
+      logPrefix,
+      allowDefaultOpenCl,
+      mainGpu,
+      legacyGpuSelection);
 }
 
 ggml_backend_dev_t
 nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
     const NmtBackendInterface& backend, bool useGpu,
     const std::string& gpuBackend, int gpuDevice, const char* logPrefix,
-    bool allowDefaultOpenCl) {
+    bool allowDefaultOpenCl, const NmtMainGpu& mainGpu,
+    bool legacyGpuSelection) {
   if (!useGpu) {
     return nullptr;
   }
-  std::string gpuBackendLower = gpuBackend;
+  if (const auto* index = std::get_if<int64_t>(&mainGpu)) {
+    if (*index >= 0 && static_cast<uint64_t>(*index) < backend.deviceCount()) {
+      const auto target = backend.deviceGet(static_cast<size_t>(*index));
+      // Resolve before eligibility filtering: an unsupported raw index must
+      // never silently select a different GPU after inventory compaction.
+      if (target != nullptr) {
+        const auto family = deviceFamily(backend, target);
+        if (family != NmtGpuFamily::None &&
+            (allowDefaultOpenCl || family != NmtGpuFamily::OpenCl) &&
+            backend.deviceBufferType(target) != nullptr) {
+          return target;
+        }
+      }
+      const std::string identity =
+          target != nullptr ? deviceIdentity(backend, target) : "null-device";
+      std::ostringstream oss;
+      oss << "main-gpu registry device " << identity
+          << " is ineligible; falling back to CPU";
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
+      return nullptr;
+    }
+    QLOG(
+        qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+        "main-gpu registry index is out of range; using automatic selection");
+  }
+  const bool hasMainGpu = !std::holds_alternative<std::monostate>(mainGpu);
+  // A canonical selector must not inherit a stale legacy filter from an
+  // earlier model configuration or a direct legacy setter call.
+  if (hasMainGpu) {
+    legacyGpuSelection = false;
+    gpuDevice = 0;
+  }
+  std::string gpuBackendLower = hasMainGpu ? "" : gpuBackend;
   std::ranges::transform(
       gpuBackendLower, gpuBackendLower.begin(), [](unsigned char chr) {
         return static_cast<char>(std::tolower(chr));
       });
 
   ggml_backend_dev_t dev = nullptr;
-  const std::vector<ggml_backend_dev_t> eligible = eligibleDevices(backend);
+  std::vector<ggml_backend_dev_t> eligible = eligibleDevices(backend);
+
+  if (const auto* preference = std::get_if<std::string>(&mainGpu)) {
+    const auto wanted = *preference == "integrated"
+                            ? GGML_BACKEND_DEVICE_TYPE_IGPU
+                            : GGML_BACKEND_DEVICE_TYPE_GPU;
+    std::erase_if(eligible, [&](ggml_backend_dev_t device) {
+      return backend.deviceType(device) != wanted;
+    });
+  }
 
   if (!gpuBackendLower.empty()) {
     // Mode 1: explicit gpu_backend filter — the gpuDevice-th eligible device
@@ -331,6 +416,39 @@ nmtSelectGpuDevice( // NOLINT(readability-function-cognitive-complexity)
       QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
     }
     return dev;
+  }
+
+  // Automatic selection prefers a dedicated GPU across backend families.
+  // Explicit legacy ordinals retain the historical OpenCL-first inventory.
+  if (!legacyGpuSelection) {
+    for (const auto type :
+         {GGML_BACKEND_DEVICE_TYPE_GPU, GGML_BACKEND_DEVICE_TYPE_IGPU}) {
+      for (const bool openClPass : {true, false}) {
+        if (openClPass && !allowDefaultOpenCl) {
+          continue;
+        }
+        for (const auto candidate : eligible) {
+          if (backend.deviceType(candidate) == type &&
+              (deviceFamily(backend, candidate) == NmtGpuFamily::OpenCl) ==
+                  openClPass &&
+              backend.deviceBufferType(candidate) != nullptr) {
+            return candidate;
+          }
+        }
+      }
+    }
+    const auto refused = refusedGpuIdentities(backend);
+    if (!refused.empty()) {
+      std::ostringstream oss;
+      oss << "[" << logPrefix
+          << "] GPU execution requested but no eligible device is available; "
+             "falling back to CPU. Refused GPU-type devices:";
+      for (const auto& identity : refused) {
+        oss << " [" << identity << "]";
+      }
+      QLOG(qvac_lib_inference_addon_cpp::logger::Priority::WARNING, oss.str());
+    }
+    return nullptr;
   }
 
   // Mode 2: gated default.

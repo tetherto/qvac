@@ -249,6 +249,32 @@ const TranslationNmtcpp = class TranslationNmtcpp {
     }
     async _load() {
         const otherConfig = { ...this._config };
+        let mainGpu = otherConfig["main-gpu"] ?? otherConfig.main_gpu;
+        if (otherConfig["main-gpu"] !== undefined &&
+            otherConfig.main_gpu !== undefined) {
+            throw new TypeError("Use only one of main-gpu and main_gpu");
+        }
+        if (otherConfig["main-gpu"] !== undefined ||
+            otherConfig.main_gpu !== undefined) {
+            if (typeof mainGpu === "string") {
+                mainGpu = /^[+-]?\d+$/.test(mainGpu)
+                    ? Number(mainGpu)
+                    : mainGpu.toLowerCase();
+            }
+            if (mainGpu !== "dedicated" &&
+                mainGpu !== "integrated" &&
+                !(typeof mainGpu === "number" &&
+                    Number.isInteger(mainGpu) &&
+                    mainGpu >= -2147483648 &&
+                    mainGpu <= 2147483647)) {
+                throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
+            }
+            if (["gpu_backend", "gpuBackend", "gpu_device", "gpuDevice"].some((key) => otherConfig[key] !== undefined)) {
+                throw new TypeError("main-gpu cannot be combined with legacy GPU selectors");
+            }
+            otherConfig["main-gpu"] = mainGpu;
+            delete otherConfig.main_gpu;
+        }
         // Accept camelCase aliases for the GPU keys so the config object can
         // stay consistent with backendsDir/openclCacheDir. The C++ binding
         // expects snake_case (mirrors nmt_context_params field names), so we

@@ -6,7 +6,7 @@ schemaType: HowTo
 
 ## Overview
 
-[`assessModelFit()`](/reference/api#assessmodelfit) answers one question before anything is downloaded: is this model likely to fit in memory? It reads the model constant metadata together with a fresh memory sample, and returns a verdict for each candidate plus one for the set.
+[`assessModelFit()`](/reference/api#assessmodelfit) answers one question before anything is downloaded: is this model likely to fit in memory? It reads the model constant metadata together with a fresh memory sample, and returns a verdict for each candidate plus one for the set. For a single candidate it also fetches the registry's weightless description of the artifact — tens of KB, the tensor list with no data section — and runs the engine's own fitter against it.
 
 It is **advisory**. It never downloads weights or loads a model, and it does not block [`loadModel()`](/reference/api#loadmodel), reserve memory, pick a model for you, or make any claim about speed.
 
@@ -36,7 +36,7 @@ assessModelFit({
 
 The candidates, at least one. They are assessed together, against a single budget.
 
-- `model` — a catalog model constant. Only its name and checksum are read; the byte totals and transformer facts come from the resource profile that checksum resolves to.
+- `model` — a catalog model constant. Its name, checksum and registry coordinates are read; the byte totals and transformer facts come from the resource profile that checksum resolves to, and the coordinates locate the description the fitter reads.
 - `workload` — what you intend to run on it: `{ kind: "llm", contextTokens }` for completion and embedding models, `{ kind: "audio", windowMs, streaming }` for speech-to-text, with an optional `batch` for concurrent windows per call.
 - `artifacts` — optional. Extra catalog constants the same load also requires, such as a VAD or a pivot model. Their bytes are added to this candidate.
 
@@ -74,14 +74,17 @@ What backs the verdict.
 
 | `evidence` | What it is | Can say |
 | --- | --- | --- |
+| `native-fit` | The engine's own fitter, run against the registry's weightless description of the artifact. | any verdict |
 | `calibration` | A two-sided `estimate` from coefficients measured on this platform. | any verdict |
 | `computed-only` | A floor from catalog facts alone — artifact bytes, plus the KV cache for llama.cpp models — reported as `floorBytes`. | `likely-too-large` or `unknown` |
 
-Read `evidence` alongside the verdict, because the same `unknown` can mean two different things:
+`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable only for a single llama.cpp candidate, without companion `artifacts`, whose registry record publishes a description; a set of candidates, a candidate with companions, a model with no description, and an offline caller keep the calibrated estimate.
+
+Read `evidence` alongside the verdict, because the same `unknown` can mean different things:
 - Under `calibration`, the numbers came out too close to call.
 - Under `computed-only`, this platform has no measurements at all, so the answer says nothing about whether the model fits.
 
-That difference matters once you act on the result. Hiding the `likely-too-large` candidates works the same way under both, since that verdict is trustworthy either way. Telling a user that a model will fit needs `calibration`, because only calibration ever produces `likely-fits`.
+That difference matters once you act on the result. Hiding the `likely-too-large` candidates works the same way under all three, since that verdict is trustworthy either way. Telling a user that a model will fit needs `native-fit` or `calibration`; the computed floor never produces `likely-fits`.
 
 ### `basis`
 
@@ -106,6 +109,8 @@ Every `unknown` names its cause here — on the model when the cause is that mod
 `calibration` evidence — and with it any `likely-fits` — exists only where coefficients have been measured on real hardware and validated against a held-out model. Today that is LLM workloads (`llamacpp-completion`, `llamacpp-embedding`) on desktop, except `win32-arm64`. Where a GPU would run the model, the platform also needs a fixture measured on that placement.
 
 Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers Android, iOS, `win32-arm64`, audio workloads, and every engine with no estimator yet.
+
+`native-fit` is independent of calibration. Wherever the engine's fitter runs — every platform with a llama.cpp addon, mobile included — a single llama.cpp candidate with a published description and no companion `artifacts` gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
 
 The per-platform calibration matrix, which changes with every release, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
 
