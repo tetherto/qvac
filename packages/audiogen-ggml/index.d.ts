@@ -79,7 +79,7 @@ export interface GenerateOptions {
     duration?: number;
     /** MiniMax semantic-frame cap. Cannot be combined with `duration`. */
     maxFrames?: number;
-    /** MiniMax flow steps for this generation; 0 uses the model default. */
+    /** MiniMax flow steps for this generation; 0 uses the engine default (20). */
     inferenceSteps?: number;
     /** MiniMax flow classifier-free guidance scale for this generation. */
     cfgScale?: number;
