@@ -1167,6 +1167,7 @@ data class TranscribeRequest(
 
 @Serializable
 data class TranscribeResponse(
+    val diagnostics: JsonObject? = null,
     val done: Boolean? = null,
     val endOfTurn: JsonElement? = null,
     val error: String? = null,
@@ -1192,6 +1193,7 @@ data class TranscribeStreamRequest(
 
 @Serializable
 data class TranscribeStreamResponse(
+    val diagnostics: JsonObject? = null,
     val done: Boolean? = null,
     val endOfTurn: JsonElement? = null,
     val error: String? = null,
