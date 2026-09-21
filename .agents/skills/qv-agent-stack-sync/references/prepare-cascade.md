@@ -20,8 +20,9 @@ Reuse if it exists. Do not force-push.
 git checkout -b chore/<slug>-<version>-changelog ORG_REMOTE/release-<slug>-<version>
 ```
 
-Head must not start with `release-` (Merge Guard runs on the pushed ref). Full
-naming: `qv-sdk-pr-create` → "Release PR branch naming".
+Head must not start with `release-`: the cli / ai-sdk-provider / plugin publish
+workflows trigger on push to `release-*` and publish to npm. Full naming:
+`qv-sdk-pr-create` → "Release PR branch naming".
 
 1. Bump `package.json` (and `openclaw.plugin.json` when present).
 2. Apply planned dep / peer ranges.

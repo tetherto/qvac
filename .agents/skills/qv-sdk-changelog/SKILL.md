@@ -49,8 +49,8 @@ slice of that same set. A patch on either side is one release of its own.
 
 **Working branch (when cutting from a release line):** use
 `chore/<pkg>-<x.y.z>-changelog` (e.g. `chore/sdk-0.17.0-changelog`). Do **not**
-name the head `release-*` — org pushes to `release-*` run Release Merge Guard
-against the pushed ref (not the PR base). The release cut itself must be
+name the head `release-*`: the cli / ai-sdk-provider / plugin publish
+workflows trigger on push to `release-*` and publish to npm. The release cut itself must be
 three-part `release-<pkg>-x.y.z`. Full rules live in
 `qv-sdk-pr-create` → "Release PR branch naming".
 
@@ -170,13 +170,18 @@ For **every** SDK pod package, after the raw files exist:
 
 ```bash
 DIR=$(node -e "console.log(require('./scripts/sdk/package-paths.cjs').getPackageDir('<slug>'))")
-LAST=$(git tag --list "<slug>-v*" --sort=-v:refname | head -1)
-git diff "$LAST" HEAD -- "$DIR/package.json"
+PKG=$(node -e "console.log(require('./${DIR}/package.json').name)")
+PUBLISHED=$(npm view "$PKG" version)
+LAST=$(npm view "$PKG@$PUBLISHED" gitHead)
+git diff "$LAST" HEAD -- "$DIR"
 ```
 
-Diff this package's public surface the same way: `exports`, serve/HTTP routes,
-exported constants/catalog. Every user-facing add, remove, or rename in that
-diff must appear in `api.md`, `breaking.md`, and/or `models.md`. Hand-add.
+`sdk-v*` tags are not the published commit (`create-github-release.yml` omits
+`target_commitish`, so the tag lands on `main`). `gitHead` is packed with the
+tarball. Fail-stop if `npm view` cannot resolve. Diff `$DIR`, not
+`package.json`: `exports`, serve/HTTP routes, and exported constants live in
+source. Every user-facing add, remove, or rename in that diff must appear in
+`api.md`, `breaking.md`, and/or `models.md`. Hand-add.
 `--update-root-changelog` only — do not re-run a full generate. New public
 exports under an older umbrella PR still get their own `api.md` example.
 
@@ -440,7 +445,7 @@ Examples:
 - `sdk-v0.8.1` (patch — used as base for next patch release)
 - `rag-v2.0.0`
 
-## Repeated footguns
+## Repeated mistakes
 
 These have gone red on more than one SDK-pod changelog PR. Fix them before
 push, and keep this list to things that are cheap to prevent:
@@ -460,9 +465,10 @@ push, and keep this list to things that are cheap to prevent:
   contributor fork. `git push` with no remote follows `origin`.
 - **Do not skip SDK Pod Checks.** Workspace red vs published red is a real
   signal; `[skip-sdk-pod-checks]` is not the changelog fix.
-- **Notes vs last published tag, not only `git log`.** After generate, audit
-  exports / routes / constants against `<slug>-v*` (highest shipped). `git log`
-  `<base>..HEAD` misses work that is already an ancestor of `--base-commit`.
+- **Notes vs last published `gitHead`, not only `git log`.** After generate,
+  audit exports / routes / constants against `npm view @qvac/<pkg> gitHead`.
+  Do not use `sdk-v*` for this. `git log <base>..HEAD` misses work that is
+  already an ancestor of `--base-commit`.
 - **NOTICE JS wipe.** A failed `npm install` must not replace the JS section
   with zero deps. Restore JS from `HEAD`; keep successful model-scan adds.
 
@@ -482,7 +488,7 @@ Before completing:
 - [ ] CHANGELOG_LLM.md authored from `changelog/<version>/` after the published-tag audit (this package's name on the title/NPM line)
 - [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `bun install` against unpublished lockstep deps)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
-- [ ] Published-tag audit done: last `<slug>-v*` vs HEAD public surface under `getPackageDir(<slug>)` matches `api.md` / `breaking.md` / `models.md`
+- [ ] Published-tag audit done: `npm view` `gitHead` of the last published `@qvac/<pkg>` vs HEAD under `getPackageDir(<slug>)` (`$DIR`, not `package.json`) matches `api.md` / `breaking.md` / `models.md`
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
