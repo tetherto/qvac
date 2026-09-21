@@ -61,3 +61,58 @@ protected:
 //
 //     std::cout << "EN->HI: " << input << " -> " << output << "\n";
 // }
+
+TEST(NmtMainGpuConfigTest, ValidatesNativeConfigBeforeLoading) {
+  qvac_lib_inference_addon_nmt::TranslationModel model;
+  EXPECT_NO_THROW(model.setConfig({{"main-gpu", int64_t{0}}}));
+  EXPECT_NO_THROW(model.setConfig({{"main_gpu", std::string{"integrated"}}}));
+  EXPECT_NO_THROW(model.setConfig({{"main-gpu", std::string{"dedicated"}}}));
+  EXPECT_NO_THROW(model.setConfig({{"main-gpu", 2.0}}));
+  EXPECT_NO_THROW(model.setConfig({{"main-gpu", -1.0}}));
+  EXPECT_NO_THROW(model.setConfig({{"main-gpu", std::string{"-1"}}}));
+  EXPECT_NO_THROW(model.setConfig({{"main-gpu", std::string{"+2"}}}));
+  EXPECT_NO_THROW(model.setConfig({{"main-gpu", std::string{"INTEGRATED"}}}));
+  EXPECT_THROW(
+      model.setConfig({{"main-gpu", std::string{"2junk"}}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      model.setConfig({{"main-gpu", std::string{"2147483648"}}}),
+      std::invalid_argument);
+  EXPECT_THROW(model.setConfig({{"main-gpu", 0.5}}), std::invalid_argument);
+  EXPECT_THROW(
+      model.setConfig({{"main-gpu", std::string{"vulkan"}}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      model.setConfig({{"main-gpu", int64_t{0}}, {"main_gpu", int64_t{0}}}),
+      std::invalid_argument);
+  for (const auto* legacy :
+       {"gpu_backend", "gpuBackend", "gpu_device", "gpuDevice"}) {
+    EXPECT_THROW(
+        model.setConfig({{"main-gpu", int64_t{0}}, {legacy, int64_t{0}}}),
+        std::invalid_argument);
+  }
+}
+
+TEST(NmtMainGpuConfigTest, ReplacementConfigWithoutSelectorClearsMainGpu) {
+  qvac_lib_inference_addon_nmt::TranslationModel model;
+
+  model.setConfig(
+      {{"use_gpu", int64_t{1}}, {"main-gpu", std::string{"dedicated"}}});
+  ASSERT_TRUE(std::holds_alternative<std::string>(model.mainGpuForTesting()));
+  EXPECT_FALSE(model.legacyGpuSelectionForTesting());
+
+  model.setConfig({{"use_gpu", int64_t{1}}});
+  EXPECT_TRUE(
+      std::holds_alternative<std::monostate>(model.mainGpuForTesting()));
+  EXPECT_FALSE(model.legacyGpuSelectionForTesting());
+
+  model.setConfig(
+      {{"use_gpu", int64_t{1}}, {"main-gpu", std::string{"dedicated"}}});
+  ASSERT_TRUE(std::holds_alternative<std::string>(model.mainGpuForTesting()));
+
+  model.setConfig({{"use_gpu", int64_t{1}}, {"gpu_device", int64_t{1}}});
+  EXPECT_TRUE(
+      std::holds_alternative<std::monostate>(model.mainGpuForTesting()));
+  EXPECT_TRUE(model.legacyGpuSelectionForTesting());
+  EXPECT_EQ(model.gpuDeviceForTesting(), 1);
+}
