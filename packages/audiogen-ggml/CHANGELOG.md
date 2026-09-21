@@ -9,10 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-18`. MiniMax-Music3 generates faster
+  with the model files you already have: the RVQ depth decoder keeps a K/V cache
+  instead of recomputing its prefix on every codebook step, and the flow default
+  is 20 steps instead of 30 (`inferenceSteps` still overrides it). On an AMD
+  Strix Halo a 10 s track goes from 57.0 s to 39.1 s on Vulkan. Synth files
+  re-converted with the new engine also quantize the depth decoder with the
+  chosen tier, worth a further 2.6 s there.
+- Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
+  one engine stack. Nothing in the window touches the audiogen engine, so
+  published behavior is unchanged.
+
+## [0.4.1] - 2026-09-16
+
+### Changed
+
 - Raise the `speech-cpp` floor to `2026-09-11`. The pinned engine adds an
   optional Apple-only Core ML sidecar for the ACE-Step VAE decoder
   (`AUDIOGEN_COREML`); the prebuilds keep it disabled, so published behavior
   is unchanged until a build opts in.
+
+- The binding loader now verifies that `require.addon()` returned an AudioGen
+  native binding before using it. If the result is the JavaScript package entry,
+  loading falls through to `#host-addon`; the resolved platform package is
+  validated as well, and the original lookup failure is retained as the error
+  cause for clearer diagnostics. Without this the wrong module was returned
+  verbatim and the first symptom was `createInstance is not a function` deep in
+  a model load. Local source-build behaviour is unchanged.
+  
+### Fixed
+
+- Mobile platform packages (`@qvac/audiogen-ggml-android-arm64`,
+`@qvac/audiogen-ggml-ios`) are no longer `os`-filtered `optionalDependencies`
+of the meta package. No build host ever reports a mobile `os`, so installers
+could never select them during a cross-build and mobile bundles failed
+verification with missing prebuilds. They now publish without install filters;
+mobile applications declare the target's platform package as a direct
+dependency pinned to the exact meta package version.
+
 
 ## [0.4.0] - 2026-09-11
 

@@ -680,6 +680,32 @@ export class RAGWorkspaceNotOpenError extends QvacErrorBase {
   }
 }
 
+// ============== Vector index ==============
+
+export class VectorIndexProviderUnavailableError extends QvacErrorBase {
+  constructor(cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.VECTOR_INDEX_PROVIDER_UNAVAILABLE, undefined, cause))
+  }
+}
+
+export class VectorIndexNotFoundError extends QvacErrorBase {
+  constructor(indexId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.VECTOR_INDEX_NOT_FOUND, [indexId], cause))
+  }
+}
+
+export class VectorIndexInvalidVectorsError extends QvacErrorBase {
+  constructor(details: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.VECTOR_INDEX_INVALID_VECTORS, [details], cause))
+  }
+}
+
+export class VectorIndexFailedError extends QvacErrorBase {
+  constructor(details: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.VECTOR_INDEX_FAILED, [details], cause))
+  }
+}
+
 // ============== Download / resource ==============
 
 export class FileNotFoundError extends QvacErrorBase {

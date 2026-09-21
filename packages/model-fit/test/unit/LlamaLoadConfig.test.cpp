@@ -660,6 +660,64 @@ int main() {
   }
 
   {
+    // The flash-attn rejection above is thrown by this addon. This one is
+    // thrown by qvac__fabric@0.bare: nothing here validates KV cache type
+    // names, so an unknown one reaches llama's `--cache-type-k` handler inside
+    // the fabric module, which rejects it. `parseGenericConfig` catches that as
+    // `std::exception` and rethrows it as `std::invalid_argument` naming the
+    // setting -- so this asserts that a C++ exception survives the module
+    // boundary by type, which is the only reason the message is readable.
+    //
+    // On Linux that catch used to be unreachable. Fabric and the addon each
+    // statically linked their own libc++, so each carried its own
+    // `std::exception` typeinfo, and RTTI matches typeinfo by address: the
+    // throw unwound straight past both catch clauses. @qvac/llm-llamacpp has
+    // the same shape around the same parser, which is how a negative
+    // `repeat_penalty` reached JS as INTERNAL_ERROR / "Unknown error" instead
+    // of llama's message -- JSCATCH's `catch (...)` was the first clause that
+    // matched. Fabric now owns the one C++ runtime in the process
+    // (qvac_addon_import_fabric_cxx_runtime); the `catch (...)` arm below is
+    // what a regression to two runtimes looks like.
+    std::string detail;
+    bool threw = false;
+    bool caughtByType = false;
+    try {
+      static_cast<void>(model_fit::normalizeLlamaLoadConfig(
+          "/model.gguf",
+          LlamaConfigMap{{"device", "cpu"}, {"cache-type-k", "q4_0_nonesuch"}},
+          ModelTraits{},
+          {cpu()}));
+    } catch (const std::invalid_argument& error) {
+      threw = true;
+      caughtByType = true;
+      detail = error.what();
+    } catch (...) {
+      threw = true;
+    }
+    // Distinguish the three outcomes: a typed catch (correct), an exception of
+    // an unrecognizable type (the bug this guards), and no exception at all --
+    // which would mean fabric started accepting the value and this case needs a
+    // different one, not that the boundary is sound.
+    expect(
+        threw,
+        "fabric accepted an unknown cache-type-k, so this case no longer "
+        "exercises a fabric-thrown exception and needs a value fabric rejects");
+    expect(
+        !threw || caughtByType,
+        "an exception thrown inside @qvac/fabric must be catchable by type in "
+        "the addon; a std::exception that matches no catch clause means the "
+        "process has more than one C++ runtime");
+    expect(
+        !caughtByType || detail.find("cache-type-k") != std::string::npos,
+        "a cache type fabric rejects must surface as an invalid argument "
+        "naming the setting");
+    expect(
+        !caughtByType || detail.find("q4_0_nonesuch") != std::string::npos,
+        "fabric's own message must reach the caller instead of being replaced "
+        "by a generic one");
+  }
+
+  {
     // `common/fit.h`: the fitter rewrites the context size "if and only if
     // equal to 0", so an unset embedding context has to be pinned or the fit
     // reports a reduced nCtx for a load that runs at the trained context.

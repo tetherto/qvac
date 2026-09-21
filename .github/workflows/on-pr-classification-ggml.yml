@@ -18,6 +18,9 @@ on:
       - ".github/workflows/*classification-ggml*.yml"
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
+      # on-pr carve-out: on-pr-nx.yml will not build this package, so a
+      # template-only change has to start this orchestrator itself.
+      - "cmake/qvac-addon/**"
   workflow_dispatch:
 
   workflow_call:
@@ -195,17 +198,30 @@ jobs:
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   cpp-lint:
-    if: needs.ci-router.outputs.run_verified_checks == 'true' && needs.authorize.outputs.allowed == 'true'
+    # resolve-fabric-prebuilds is skipped on every non-fabric-stack PR, and an
+    # if: without a status-check function carries an implicit success() over all
+    # of needs — which would skip this job there. always() suppresses it; the
+    # gates it also suppresses are restored explicitly below.
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_verified_checks == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     uses: ./.github/workflows/cpp-lint.yaml
     needs:
       - fork-approval
       - authorize
       - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/classification-ggml
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   await-ts-checks:
     name: Await PR-head TypeScript checks
@@ -273,6 +289,7 @@ jobs:
           workflow-file: on-pr-classification-ggml.yml
           native-hash: ${{ needs.detect-native-changes.outputs.native_hash }}
           pr-number: ${{ github.event.pull_request.number }}
+          artifact-name: prebuilds-classification-ggml
 
   prebuild:
     permissions:

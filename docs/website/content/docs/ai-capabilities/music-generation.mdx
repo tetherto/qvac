@@ -8,22 +8,22 @@ schemaType: HowTo
 
 Music generation uses [`@qvac/audiogen-ggml`](https://github.com/tetherto/qvac/tree/main/packages/audiogen-ggml), with your choice of either [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) as the inference engine. Load a model with `modelType: "audiogen"` and select the engine with `modelConfig.engine` — `"minimax"` for MiniMax-Music3; ACE-Step is the default. Then call `audioGen()` with a caption and any engine-specific inputs.
 
-Pick ACE-Step when you need lyrics, per-song musical controls (BPM, key, time signature, vocal language), reference-audio timbre conditioning, or cover generation. Pick MiniMax-Music3 when you want a lighter API surface — just a caption and a handful of sampling knobs — on desktop hardware with a capable GPU.
+Pick ACE-Step when you need lyrics, per-song musical controls (BPM, key, time signature, vocal language), reference-audio timbre conditioning, cover generation, [editing of an existing recording](#edit-an-existing-recording) with `audioEdit()`, or [describing one](#understand-a-recording) with `audioUnderstand()`. Pick MiniMax-Music3 when you want a lighter API surface — just a caption and a handful of sampling knobs — on desktop hardware with a capable GPU.
 
-`audioGen()` returns immediately with:
+`audioGen()` (and `audioEdit()`) returns immediately with:
 
 - `requestId` — a synchronous identifier for targeted cancellation.
 - `progressStream` — stage and step updates while generation runs.
 - `audio` — a promise resolving to interleaved PCM, its sample rate, channel count, and `bitsPerSample`.
 - `stats` — a promise resolving to timing statistics.
 
-Both engines return through this same shape; only the inputs to `loadModel()` and `audioGen()` differ.
+Both engines return through this same shape; only the inputs to `loadModel()` and `audioGen()` differ. `audioUnderstand()` runs the same pipeline backwards and so returns `description` where the other two return `audio`.
 
 <Callout type="info">
   **Platform support:** ACE-Step runs on desktop (Linux, macOS, Windows) and
-  mobile (Android arm64, iOS arm64), with GPU acceleration via Metal (Apple)
-  and Vulkan (Android). MiniMax-Music3 runs on desktop only and needs
-  ~22 GB of device memory for its f16 model pair when `useGPU: true`.
+  mobile (Android arm64, iOS arm64), with GPU acceleration via Metal (Apple) and
+  Vulkan (Android). MiniMax-Music3 runs on desktop only and needs ~22 GB of
+  device memory for its f16 model pair when `useGPU: true`.
 </Callout>
 
 ## Functions
@@ -31,7 +31,7 @@ Both engines return through this same shape; only the inputs to `loadModel()` an
 Use the following sequence:
 
 1. [`loadModel()`](/reference/api#loadmodel)
-2. [`audioGen()`](/reference/api#audiogen)
+2. [`audioGen()`](/reference/api#audiogen) — or [`audioEdit()`](/reference/api#audioedit) to edit an existing recording, or [`audioUnderstand()`](/reference/api#audiounderstand) to describe one (both ACE-Step only)
 3. [`unloadModel()`](/reference/api#unloadmodel)
 
 For complete signatures, see the [SDK API reference](/reference/api/).
@@ -62,18 +62,18 @@ Unlike single-file model families, AudioGen does not use a top-level `modelSrc`.
 
 ACE-Step uses four GGUF files — text encoder, LM, one DiT variant of the three listed, and VAE:
 
-| Stage | SDK model constant | Purpose |
-| --- | --- | --- |
-| Text encoder | `AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0` | Encodes captions and lyrics |
-| Language model | `AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0` | Plans the song and musical structure |
-| DiT | `AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M` | Fast, lower-memory Turbo generation |
-| DiT | `AUDIOGEN_ACESTEP_V15_TURBO_Q8_0` | Higher-precision Turbo generation |
-| DiT | `AUDIOGEN_ACESTEP_V15_SFT_Q8_0` | Supervised fine-tuned generation |
-| VAE | `AUDIOGEN_VAE_BF16` | Decodes the latent into PCM audio |
+| Stage          | SDK model constant                   | Purpose                              |
+| -------------- | ------------------------------------ | ------------------------------------ |
+| Text encoder   | `AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0` | Encodes captions and lyrics          |
+| Language model | `AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0`  | Plans the song and musical structure |
+| DiT            | `AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M`  | Fast, lower-memory Turbo generation  |
+| DiT            | `AUDIOGEN_ACESTEP_V15_TURBO_Q8_0`    | Higher-precision Turbo generation    |
+| DiT            | `AUDIOGEN_ACESTEP_V15_SFT_Q8_0`      | Supervised fine-tuned generation     |
+| VAE            | `AUDIOGEN_VAE_BF16`                  | Decodes the latent into PCM audio    |
 
 <Callout type="warning">
-  The first ACE-Step load downloads ~3.3 GB across these four files. On slow
-  or unstable links, set `registryStreamTimeoutMs: 600000` and
+  The first ACE-Step load downloads ~3.3 GB across these four files. On slow or
+  unstable links, set `registryStreamTimeoutMs: 600000` and
   `registryDownloadMaxRetries: 10` in `qvac.config.json` and point
   `QVAC_CONFIG_PATH` at that file before loading.
 </Callout>
@@ -155,43 +155,76 @@ for await (const progress of run.progressStream) {
   console.log(`${progress.stage}: ${progress.step}/${progress.total}`);
 }
 
-const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all([
-  run.audio,
-  run.stats,
-]);
+const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all(
+  [run.audio, run.stats],
+);
 ```
 
-Omit `lyrics` or use `"[Instrumental]"` for instrumental output. Omitted musical controls are inferred from the caption.
+Omit `lyrics` or use `"[Instrumental]"` for instrumental output. Omitted musical controls are inferred from the caption. Set `augmentCaptionWithMetadata: true` to also reinforce the BPM, key, and time-signature hints in the engine's internal conditioning caption (the result metadata keeps your original caption); it defaults to `false`.
 
 `duration` is approximate. ACE-Step rounds the requested length to its latent frame grid, so the generated clip can be shorter or longer than requested. Use `stats.audioDurationMs` or calculate the duration from the returned PCM frame count and `sampleRate`; those values describe the actual output.
+
+#### LM-assisted captions, lyrics, and scoring (ACE-Step only)
+
+Four controls put the LM to work around the caption you pass. All four require the default `taskType: "text2music"` and are rejected on any other task:
+
+| Field                 | What it does                                                                                                                                                                                                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `simpleMode`          | Treats `caption` as a short natural-language query and lets the LM compose the full request — a detailed caption, lyrics, and any metadata you left unset. Options you did set are kept. Leave `lyrics` unset for LM-written vocals, or pass `"[Instrumental]"` for an instrumental. Cannot be combined with `audioCodes`. |
+| `rewriteQuery`        | Query Rewriting: the LM rewrites `caption` into a detailed musical description while preserving your lyric content. It takes both caption and lyrics as input, so real `lyrics` are required — `"[Instrumental]"` belongs to Simple Mode. Faithful rewriting needs the 1.7B LM.                                            |
+| `generateLrc`         | Aligns the lyrics with the generated audio and returns karaoke-style LRC text in `stats.lrc`, with an alignment confidence in `stats.lyricsScore`. Needs lyrics to align: pass `lyrics` or let Simple Mode write them. Instrumental requests are rejected.                                                                 |
+| `computeQualityScore` | Teacher-forces the generated codes back through the LM and reports a weighted `[0, 1]` match against the request in `stats.qualityScore` (caption/lyrics PMI plus metadata recall). Costs extra LM forwards after code generation; made for ranking a batch of takes.                                                      |
+
+`simpleMode` and `rewriteQuery` are mutually exclusive — one writes the lyrics, the other rewrites around lyrics you supply — and the SDK rejects a request that sets both.
+
+```ts
+// A one-line query, expanded by the LM, scored and timestamped.
+const run = audioGen({
+  modelId,
+  caption: "a hopeful indie track for a road-trip montage",
+  simpleMode: true,
+  generateLrc: true,
+  computeQualityScore: true,
+});
+
+const { lrc, lyricsScore, qualityScore } = (await run.stats) ?? {};
+```
+
+#### Output and guidance controls (ACE-Step only)
+
+| Field               | Purpose                                                                                                                                                                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `normalizeLoudness` | Percentile loudness normalization on the generated audio (default `true`): the 99.999th-percentile sample scales to full scale and the tiny tail above it clips. Set `false` for the raw engine output. Audio edits are never normalized. |
+| `guidanceScale`     | DiT classifier-free guidance scale. `0` (the default) resolves automatically — `1.0` on turbo variants, which disables CFG, and `7.0` on base/SFT. Values above `1` run CFG via APG and double the DiT cost per step.                     |
 
 #### Sampling and DCW controls (ACE-Step only)
 
 Advanced per-run controls map 1:1 to the ACE-Step engine and are only needed for reproducible quality comparisons; omit them to keep the engine defaults:
 
-| Field | Purpose |
-| --- | --- |
-| `lmTemperature` | LM sampling temperature (default 0.85) |
-| `lmTopP` | LM nucleus-sampling probability (default 0.9) |
-| `lmTopK` | LM top-k cutoff; `0` disables top-k filtering |
-| `lmCfgScale` | Classifier-free guidance scale used by the LM |
-| `lmPhase1` | Let the LM infer missing metadata before semantic-code generation |
-| `dcwEnabled` | Apply the official Haar DCW correction during DiT sampling (default: true) |
-| `dcwScaler` | DCW low-frequency correction strength (default 0.05) |
-| `dcwHighScaler` | DCW high-frequency correction strength (default 0.02) |
+| Field           | Purpose                                                                                                                                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lmTemperature` | LM sampling temperature (default 0.85)                                                                                                                                                                          |
+| `lmTopP`        | LM nucleus-sampling probability (default 0.9)                                                                                                                                                                   |
+| `lmTopK`        | LM top-k cutoff; `0` disables top-k filtering                                                                                                                                                                   |
+| `lmCfgScale`    | Classifier-free guidance scale used by the LM                                                                                                                                                                   |
+| `lmPhase1`      | Let the LM infer missing metadata before semantic-code generation                                                                                                                                               |
+| `dcwEnabled`    | Apply the official Haar DCW correction during DiT sampling (default: true)                                                                                                                                      |
+| `dcwScaler`     | DCW low-frequency correction strength (default 0.05)                                                                                                                                                            |
+| `dcwHighScaler` | DCW high-frequency correction strength (default 0.02)                                                                                                                                                           |
+| `audioCodes`    | Frozen semantic codes (an `Int32Array` or `number[]`) to synthesize instead of running the LM — for example the codes of an earlier take. Up to `AUDIOGEN_MAX_AUDIO_CODES` (3000, ten minutes at the LM's 5 Hz) |
 
 ### With MiniMax-Music3
 
-MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`), the ACE-Step-only LM and DCW knobs above, and every reference/cover field. Pass the caption and, when useful, any of these MiniMax-only controls:
+MiniMax-Music3 exposes a smaller input surface. It rejects ACE-Step's musical controls (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `augmentCaptionWithMetadata`), the ACE-Step-only LM and DCW knobs and `audioCodes` above, the LM-assisted and output controls (`simpleMode`, `rewriteQuery`, `generateLrc`, `computeQualityScore`, `normalizeLoudness`, `guidanceScale`), every reference/cover field, and both `audioEdit()` and `audioUnderstand()`. Pass the caption and, when useful, any of these MiniMax-only controls:
 
-| Field | When to set it |
-| --- | --- |
-| `lyrics` | Vocal lyrics; use `"[Instrumental]"` for instrumental output. |
-| `seed` | RNG seed for reproducible generation. |
-| `duration` | Target length in seconds. Internally converted to the model's 25 semantic frames per second. Cannot be combined with `maxFrames`. |
-| `maxFrames` | Explicit semantic-frame cap when you want direct control over length instead of a seconds-based target. Cannot be combined with `duration`. |
-| `inferenceSteps` | Per-run flow sampling steps; leave unset (or `0`) to use the model default. Raise it to trade generation time for higher quality. |
-| `cfgScale` | Per-run flow classifier-free guidance scale; leave unset (or `0`) to use the model default. Raise it to follow the caption more literally, lower it for more freedom. |
+| Field            | When to set it                                                                                                                                                        |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lyrics`         | Vocal lyrics; use `"[Instrumental]"` for instrumental output.                                                                                                         |
+| `seed`           | RNG seed for reproducible generation.                                                                                                                                 |
+| `duration`       | Target length in seconds. Internally converted to the model's 25 semantic frames per second. Cannot be combined with `maxFrames`.                                     |
+| `maxFrames`      | Explicit semantic-frame cap when you want direct control over length instead of a seconds-based target. Cannot be combined with `duration`.                           |
+| `inferenceSteps` | Per-run flow sampling steps; leave unset (or `0`) to use the model default. Raise it to trade generation time for higher quality.                                     |
+| `cfgScale`       | Per-run flow classifier-free guidance scale; leave unset (or `0`) to use the model default. Raise it to follow the caption more literally, lower it for more freedom. |
 
 ```ts
 import { audioGen } from "@qvac/sdk";
@@ -205,15 +238,14 @@ const run = audioGen({
   inferenceSteps: 8,
 });
 
-const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all([
-  run.audio,
-  run.stats,
-]);
+const [{ pcm, sampleRate, channels, bitsPerSample }, stats] = await Promise.all(
+  [run.audio, run.stats],
+);
 ```
 
 ## Reference audio and covers
 
-Reference and cover generation is **ACE-Step only** — MiniMax-Music3 rejects `referenceAudio`, `sourceAudio`, and `taskType`.
+Reference, cover, and per-layer generation are **ACE-Step only** — MiniMax-Music3 rejects `referenceAudio`, `sourceAudio`, `taskType`, and `track`.
 
 `referenceAudio` conditions the generated timbre without changing the text-to-music task. `taskType: "cover-nofsq"` re-renders `sourceAudio` with a new caption while keeping its structure, optionally combined with a timbre reference:
 
@@ -242,12 +274,127 @@ const cover = audioGen({
 ```
 
 - `referenceAudio` — Optional timbre reference. Provide it to nudge the generated timbre toward the reference recording; omit it to let the engine pick freely.
-- `taskType` — `"text2music"` (default) for caption-driven generation, or `"cover-nofsq"` to re-render `sourceAudio` with a new caption while keeping its structure.
-- `sourceAudio` — The source recording for the cover. Required when `taskType` is `"cover-nofsq"`.
+- `taskType` — `"text2music"` (default) for caption-driven generation, `"cover-nofsq"` to re-render `sourceAudio` with a new caption while keeping its structure, or `"lego"` to regenerate a single instrument layer of `sourceAudio`. The vocabulary is exported as `AUDIOGEN_TASK_TYPES`.
+- `sourceAudio` — The source recording the task works from. Required when `taskType` is `"cover-nofsq"` or `"lego"`.
 - `audioCoverStrength` — Fraction of DiT steps (0..1) that keep the source context. `"cover-nofsq"` currently requires `1`; the SDK rejects any other value, so omit it or pass `1`.
 - `coverNoiseStrength` — Blends the initial noise toward the source latent (0..1). Closer to `0` gives more variation; closer to `1` stays nearer the source. Default `0`.
+- `track` — The instrument layer `"lego"` regenerates. Required when `taskType` is `"lego"` and rejected on any other task. One of `AUDIOGEN_TRACKS`: `"vocals"`, `"backing_vocals"`, `"drums"`, `"bass"`, `"guitar"`, `"keyboard"`, `"percussion"`, `"strings"`, `"synth"`, `"fx"`, `"brass"`, `"woodwinds"`.
+
+<Callout type="warning">
+  `"lego"` runs on the **base** DiT only — the engine rejects both the turbo and
+  the sft variants. Every `AUDIOGEN_ACESTEP_*` DiT constant on this page is one
+  of those, so a lego request built from them fails in the engine. The base DiT
+  is not in the registry variant set yet: pass it as an explicit `ditModelSrc`
+  path.
+</Callout>
+
+```ts
+// Lego: keep the song, rebuild one layer of it.
+const newDrums = audioGen({
+  modelId,
+  caption: "the same song with a busier, live-sounding kit",
+  taskType: "lego",
+  track: "drums",
+  sourceAudio: "/path/to/song.wav",
+});
+```
 
 Both `referenceAudio` and `sourceAudio` accept either a file path (the SDK decodes `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, and `.aac` server-side; any other extension is read as raw interleaved stereo 48 kHz Float32 LE PCM) or a `Buffer` / `Uint8Array` in that same raw PCM layout (see `AUDIOGEN_INPUT_SAMPLE_RATE` and `AUDIOGEN_INPUT_CHANNELS`). Clips are capped at 600 s.
+
+## Edit an existing recording
+
+`audioEdit()` is **ACE-Step only**. It runs an ordered pipeline of edit operations over one source recording and returns the same run shape as `audioGen()`. Operations execute in array order and may repeat or mix:
+
+- `flow-edit` — re-conditions the whole clip from a `from` prompt (what the source is) to a `to` prompt (what it should become), over an optional `nMin`..`nMax` diffusion window (0..1, defaults 0 and 1) with `nAvg` forward-noise samples per step (default 1). Supported on the turbo DiT variants only (`AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M`, `AUDIOGEN_ACESTEP_V15_TURBO_Q8_0`); the SFT variant rejects it.
+- `repaint` — regenerates the `start`..`end` range (seconds) against a new `caption`, keeping the audio outside the range. Omit `end` to repaint through the end of the source; the range must stay inside the source and span at least one latent frame (1/25 s). `mode` is `"conservative"`, `"balanced"` (default), or `"aggressive"`, and `strength` (0..1, default 0.5) tunes balanced-mode preservation.
+
+```ts
+import { audioEdit } from "@qvac/sdk";
+
+const run = audioEdit({
+  modelId,
+  sourceAudio: "/path/to/song.wav",
+  operations: [
+    {
+      type: "flow-edit",
+      from: { caption: "original pop song", lyrics: originalLyrics },
+      to: { caption: "guitar pop-rock", lyrics: newLyrics },
+    },
+    {
+      type: "repaint",
+      caption: "analog synth solo",
+      lyrics: "[Instrumental]",
+      start: 10,
+      end: 20,
+    },
+    {
+      type: "flow-edit",
+      from: { caption: "guitar pop-rock" },
+      to: { caption: "dark synthwave" },
+    },
+  ],
+  seed: 22883,
+});
+
+for await (const progress of run.progressStream) {
+  console.log(`${progress.stage}: ${progress.step}/${progress.total}`);
+}
+const { pcm, sampleRate, channels, bitsPerSample } = await run.audio;
+```
+
+`sourceAudio` takes the same forms as the generation inputs above — a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM bytes — and every sample must lie in `[-1, 1]`. Prompt `lyrics` default to `"[Instrumental]"`. `seed` seeds the first operation; each following operation uses `seed + index`. The vocabularies are exported as `AUDIOGEN_EDIT_OPERATIONS` and `AUDIOGEN_REPAINT_MODES`.
+
+## Understand a recording
+
+`audioUnderstand()` is **ACE-Step only**. It runs the generation pipeline backwards: the engine encodes `sourceAudio`, recovers its FSQ semantic codes, and the LM reports a caption and the clip's musical metadata. Because the run produces a description rather than PCM, it returns `description` where `audioGen()` returns `audio`; `requestId`, `progressStream`, `stats`, and `diagnostics` are unchanged.
+
+```ts
+import { audioUnderstand } from "@qvac/sdk";
+
+const run = audioUnderstand({
+  modelId,
+  sourceAudio: "/path/to/song.wav",
+  vocalLanguage: "en",
+  seed: 11,
+});
+
+for await (const progress of run.progressStream) {
+  console.log(`${progress.stage}: ${progress.step}/${progress.total}`);
+}
+
+const {
+  caption,
+  bpm,
+  keyscale,
+  timesignature,
+  vocalLanguage,
+  duration,
+  audioCodes,
+} = await run.description;
+```
+
+`description` resolves to:
+
+| Field                                               | Meaning                                                                |
+| --------------------------------------------------- | ---------------------------------------------------------------------- |
+| `caption`                                           | The LM's description of the clip.                                      |
+| `bpm`, `keyscale`, `timesignature`, `vocalLanguage` | The musical metadata the LM read off the recording.                    |
+| `duration`                                          | The LM's estimate in seconds. The recovered codes fix the true length. |
+| `audioCodes`                                        | The recovered FSQ semantic codes, as a plain integer array.            |
+
+`sourceAudio` takes the same forms as every other audio input — a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM bytes with every sample in `[-1, 1]` — and is capped at 600 s. `seed`, `vocalLanguage`, `lmTemperature`, `lmTopP`, and `lmTopK` are the only other inputs: `vocalLanguage` is forced into the result instead of the LM's guess, and the rest steer the LM decode exactly as they do on a generation.
+
+The recovered codes are a generation input, so a description round-trips straight back into `audioGen()`:
+
+```ts
+const { caption, audioCodes } = await audioUnderstand({ modelId, sourceAudio })
+  .description;
+
+// Re-synthesize the same piece without re-running the LM.
+const remake = audioGen({ modelId, caption, audioCodes });
+```
+
+The same description is repeated on the terminal frame as `stats.understand`, so a caller that only wants stats does not need to read the stream.
 
 ## Cancellation
 
@@ -266,7 +413,7 @@ try {
 }
 ```
 
-AudioGen supports hard cancellation on both engines: the addon interrupts the active generation. The stream terminates with `stopReason: "cancelled"`, and the `audio` and `stats` promises reject with `InferenceCancelledError`. You can also broad-cancel AudioGen work with `cancel({ modelId, kind: "audiogen" })`.
+AudioGen supports hard cancellation on both engines: the addon interrupts the active generation. The stream terminates with `stopReason: "cancelled"`, and the `audio` and `stats` promises reject with `InferenceCancelledError`. `audioEdit()` and `audioUnderstand()` runs cancel the same way, rejecting `audio` and `description` respectively. You can also broad-cancel AudioGen work — generations and edits alike — with `cancel({ modelId, kind: "audiogen" })`.
 
 See [Runtime — Cancellation](/runtime/cancellation) for cancellation behavior shared across the SDK.
 
@@ -277,7 +424,10 @@ See [Runtime — Cancellation](/runtime/cancellation) for cancellation behavior 
 This example loads the registry-hosted ACE-Step models, reports progress, generates an instrumental, and writes the PCM output as WAV.
 
 <Callout type="info">
-The generated Python client exposes the contract-level `audio_gen_stream()` method. Unlike the TypeScript `audioGen()` wrapper, it yields progress, base64 PCM chunks, and the terminal stats frame directly; callers decode and concatenate the chunks themselves — see the Python tab.
+  The generated Python client exposes the contract-level `audio_gen_stream()`
+  method. Unlike the TypeScript `audioGen()` wrapper, it yields progress, base64
+  PCM chunks, and the terminal stats frame directly; callers decode and
+  concatenate the chunks themselves — see the Python tab.
 </Callout>
 
 <Tabs>
@@ -285,6 +435,7 @@ The generated Python client exposes the contract-level `audio_gen_stream()` meth
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-music.ts title="generate-music.ts" lineNumbers
+
 ```
 
 </WrapCode>
@@ -294,7 +445,9 @@ The generated Python client exposes the contract-level `audio_gen_stream()` meth
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/audiogen.py title="audiogen.py" lineNumbers
+
 ```
+
 </WrapCode>
 </Tab>
 </Tabs>
@@ -304,6 +457,27 @@ The cover example takes an existing recording (any FFmpeg-decodable file), an op
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-cover.ts title="generate-cover.ts" lineNumbers
+
+```
+
+</WrapCode>
+
+The edit example takes an existing recording plus a source and a target caption, runs a Flow-Edit followed by a Repaint of seconds 10–20, and writes the result as WAV:
+
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/audiogen/edit-music.ts title="edit-music.ts" lineNumbers
+
+```
+
+</WrapCode>
+
+The understand example takes an existing recording and prints the caption, musical metadata, and recovered code count the LM reports for it:
+
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/audiogen/understand-music.ts title="understand-music.ts" lineNumbers
+
 ```
 
 </WrapCode>
@@ -315,6 +489,7 @@ This example loads a local MiniMax-Music3 pair from the `AUDIOGEN_MINIMAX_LM_MOD
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/audiogen/generate-music-minimax.ts title="generate-music-minimax.ts" lineNumbers
+
 ```
 
 </WrapCode>

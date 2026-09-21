@@ -54,7 +54,7 @@
           "modelCache": [
             {
               "paths": "packages/translation-nmtcpp/model",
-              "hashFilesGlob": ".github/workflows/integration-test-nx.yml",
+              "hashFilesGlob": "packages/translation-nmtcpp/project.json",
               "warm": "false"
             }
           ],
@@ -110,6 +110,7 @@
   },
   "implicitDependencies": [
     "inference-addon-cpp",
-    "lint-cpp"
+    "lint-cpp",
+    "qvac-addon-cmake"
   ]
 }

@@ -213,7 +213,7 @@
   {
     "source": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_0.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "Qwen3 1.7B instruct model",
     "quantization": "q4",
     "params": "1.7B",
     "licenseId": "Apache-2.0",
@@ -8250,6 +8250,28 @@
     "tags": ["audio-generation", "acestep", "vae", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audiogen/2026-09-18/acestep-5Hz-lm-0.6B-BF16.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step 5 Hz 0.6B language model for audio generation (GGUF)",
+    "quantization": "bf16",
+    "params": "0.6B",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "language-model", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/acestep-5Hz-lm-0.6B"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audiogen/2026-09-18/acestep-v15-base-Q4_K_M.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 base audio generation model (GGUF)",
+    "quantization": "q4_k_m",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "v1.5", "base", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/acestep-v15-base"
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf",

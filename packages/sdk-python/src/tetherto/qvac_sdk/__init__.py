@@ -29,6 +29,8 @@ from .methods import *  # noqa: F401,F403
 from .methods import __all__ as _methods_all
 from .errors import *  # noqa: F401,F403
 from .errors import __all__ as _errors_all
+from ._generated.numeric_constants import *  # noqa: F401,F403
+from ._generated.numeric_constants import __all__ as _numeric_constants_all
 from .client import Client, WorkerNotFoundError  # noqa: F401
 from .logging_streams import (  # noqa: F401
     SDK_ALL_LOG_ID,
@@ -130,6 +132,12 @@ _ERGONOMIC = [
 ]
 
 __all__ = sorted(
-    (set(_ERGONOMIC) | set(_errors_all) | set(_methods_all) | set(_schemas_all))
+    (
+        set(_ERGONOMIC)
+        | set(_errors_all)
+        | set(_methods_all)
+        | set(_schemas_all)
+        | set(_numeric_constants_all)
+    )
     - {"completion_orchestrate"}  # advanced-only; see the del above
 )

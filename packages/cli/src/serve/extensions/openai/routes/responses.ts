@@ -6,6 +6,7 @@ import { HttpError } from '@/serve/lib/http-error'
 import { initSSE } from '@/serve/lib/sse'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
+import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-enabled'
 import {
   responsesBody,
   responsesIdParams,
@@ -19,6 +20,7 @@ import {
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   InvalidResponseFormatError,
+  InvalidToolChoiceError,
   type GenerationParams,
   type ResponseFormat
 } from '@/serve/extensions/openai/schemas/common'
@@ -73,6 +75,12 @@ addressable via GET / DELETE / input_items.
 - \`background: true\` → \`400 background_not_supported\` (only synchronous responses)
 - \`tools[].type\` other than \`function\` (e.g. \`web_search\`, \`file_search\`, \`code_interpreter\`) → \`400 invalid_tool_type\`
 - structured output (\`json_object\`/\`json_schema\`) combined with non-empty \`tools\` → \`400 invalid_response_format\`
+- \`tools\` on a model loaded without \`config.tools: true\` → \`400 tools_not_enabled\`
+- \`tool_choice\` demanding a tool with no matching \`tools\` entry → \`400 invalid_tool_choice\`
+
+**\`tool_choice\`**: \`"auto"\` (default), \`"none"\`, \`"required"\`, or
+\`{ type: 'function', name }\` to force one tool. \`required\` and a named tool
+constrain generation with the chat template's tool grammar.
 
 **Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
 (\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
@@ -133,15 +141,15 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         if (err instanceof InvalidResponseFormatError) {
           throw new HttpError(400, 'invalid_response_format', err.message)
         }
+        if (err instanceof InvalidToolChoiceError) {
+          throw new HttpError(400, 'invalid_tool_choice', err.message)
+        }
         throw err
       }
 
-      if (
-        sdk.responseFormat &&
-        sdk.responseFormat.type !== 'text' &&
-        sdk.tools &&
-        sdk.tools.length > 0
-      ) {
+      assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
+
+      if (sdk.responseFormat && sdk.responseFormat.type !== 'text' && toolsRequested(sdk.tools)) {
         throw new HttpError(
           400,
           'invalid_response_format',
@@ -213,8 +221,10 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         previousResponseId: params.previousResponseId
       }
 
+      const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
+
       if (streaming) {
-        const result = completion({
+        const result = completionFn({
           modelId: params.sdkModelId,
           history: params.history,
           stream: true,
@@ -228,7 +238,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
         await writeStreamingResponse(reply.raw, writerParams, result)
       } else {
-        const result = completion({
+        const result = completionFn({
           modelId: params.sdkModelId,
           history: params.history,
           stream: false,

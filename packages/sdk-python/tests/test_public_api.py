@@ -68,6 +68,8 @@ def test_js_client_api_capabilities_have_python_equivalents():
     # method; the capability, not each helper, is what's guarded here.
     js_to_python = {
         "audioGen": "audio_gen_stream",
+        "audioEdit": "audio_edit_stream",
+        "audioUnderstand": "audio_understand",
         "batchCompletion": "batch_completion_stream",
         "completion": "completion",
         "deleteCache": "delete_cache",
@@ -107,6 +109,31 @@ def test_js_client_api_capabilities_have_python_equivalents():
         "vlaPreprocessImage": "vla_preprocess_image",
         "vlaPadState": "vla_pad_state",
         "rag*": "rag",
+        # createVectorIndex/loadVectorIndex return a handle object in JS; Python
+        # reaches the same worker operations through the generated stub.
+        "createVectorIndex": "vector_index",
+        "loadVectorIndex": "vector_index",
     }
     missing = {js: py for js, py in js_to_python.items() if not hasattr(qvac, py)}
     assert not missing, f"JS client/api capabilities missing from qvac: {missing}"
+
+
+def test_asr_backend_ids_decode_backend_id_without_hardcoding():
+    # stats.backend_id is a bare number on the wire; this is the vocabulary that
+    # decodes it, mirroring the TS SDK's ASR_BACKEND_IDS.
+    import json
+    from pathlib import Path
+
+    from tetherto.qvac_sdk import ASR_BACKEND_IDS
+
+    assert "ASR_BACKEND_IDS" in qvac.__all__
+    assert ASR_BACKEND_IDS["CUDA"] == 2
+    assert ASR_BACKEND_IDS["CPU"] == 0
+
+    contract = (
+        Path(__file__).resolve().parents[2]
+        / "sdk"
+        / "contract"
+        / "numeric-constants.json"
+    )
+    assert ASR_BACKEND_IDS == json.loads(contract.read_text())["ASR_BACKEND_IDS"]
