@@ -1273,10 +1273,9 @@ void TextLlmContext::beginCacheRequest() {
   preRequestLedger_ = residentLedger_;
   pendingPromptLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();
-  // Pure-attention memory rolls back with a tail trim to `preRequestNPast_`,
-  // so a full-state dump is only taken when reconciliation is about to
-  // discard resident state that a trim cannot bring back (see
-  // `reconcilePrompt`). Models that cannot trim need it up front.
+  // Pure-attention memory never needs a dump: rollback is a tail trim to the
+  // rollback target, which `reconcilePrompt` moves to the divergence point
+  // when it trims resident state. Models that cannot trim snapshot up front.
   if (needsFullStateSnapshot_) {
     capturePreRequestCacheSnapshot();
   }
@@ -1346,14 +1345,18 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
       checkpoint = "cold";
     }
   } else if (!needsFullStateSnapshot_ && reuseTarget < cachedLength) {
-    // The trimmed range is resident state the request may still need back
-    // on rollback, and a tail trim cannot restore it. Capture the pre-request
-    // dump now; the append-only common case never pays for it.
-    capturePreRequestCacheSnapshot();
+    // Trimming discards resident state a tail trim cannot bring back, so the
+    // rollback target moves to the divergence point instead of the
+    // pre-request state. That is the state the next request wants anyway:
+    // a retry of this prompt shares exactly this prefix with the cache, and
+    // restoring the old tail would only have it trimmed again. No snapshot
+    // is ever written for pure-attention memory.
     const llama_pos reusePos = residentLedger_.positions(reuseTarget);
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
     residentLedger_.truncate(reuseTarget);
     nPast_ = reusePos;
+    preRequestLedger_ = residentLedger_;
+    preRequestNPast_ = nPast_;
   }
 
   // Checkpoints past the divergence no longer describe an authoritative
@@ -1407,8 +1410,9 @@ bool TextLlmContext::restorePreRequestCacheState() {
   if (!preRequestCacheSnapshot_.empty()) {
     ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
   } else if (nPast_ > preRequestNPast_) {
-    // No dump was needed: the request only appended to resident memory, so
-    // dropping the appended tail is the exact pre-request state.
+    // Pure-attention memory: everything this request added sits after the
+    // rollback target (the pre-request cursor, or the divergence point when
+    // reconciliation trimmed), so dropping that tail restores it.
     try {
       clearSequenceMemory(modelCtx_.lctx, preRequestNPast_, -1);
     } catch (const std::exception& e) {

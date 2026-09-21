@@ -50,6 +50,11 @@ std::string makeUniqueSnapshotPath(llama_seq_id seqId) {
   return (base / filename).string();
 }
 
+std::atomic<uint64_t>& snapshotFilesWritten() noexcept {
+  static std::atomic<uint64_t> count{0};
+  return count;
+}
+
 // Best-effort file removal. Used by the snapshot destructor and clear
 // path, so it must not throw — a leaked temp file is recoverable, a
 // thrown exception inside a destructor is not.
@@ -168,7 +173,12 @@ bool snapshotSequenceState(
   }
 
   out.adoptFile(std::move(path), nPastAt);
+  snapshotFilesWritten().fetch_add(1, std::memory_order_relaxed);
   return true;
+}
+
+uint64_t sequenceStateSnapshotFilesWritten() noexcept {
+  return snapshotFilesWritten().load(std::memory_order_relaxed);
 }
 
 bool restoreSequenceState(

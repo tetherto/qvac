@@ -45,6 +45,7 @@ namespace fs = std::filesystem;
 
 using qvac_lib_inference_addon_llama::utils::restoreSequenceState;
 using qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot;
+using qvac_lib_inference_addon_llama::utils::sequenceStateSnapshotFilesWritten;
 using qvac_lib_inference_addon_llama::utils::snapshotSequenceState;
 
 namespace {
@@ -1298,6 +1299,109 @@ TEST(
   followup.cacheKey = cachePath.string();
   ASSERT_NO_THROW(model->processPrompt(followup));
   EXPECT_GT(baseCtx->getNPast(), preRequestNPast);
+
+  fs::remove(cachePath);
+}
+
+// A cached request whose history diverges from the resident cache trims the
+// old tail before prefilling. On a pure-attention model that must not cost a
+// snapshot: a rollback lands on the shared prefix, the state a retry reuses,
+// so nothing is ever written to disk for these models.
+TEST(
+    TextLlmContextCancelDuringGenerationTest,
+    PureAttentionDivergentPrefillCancelRollsBackToSharedPrefixWithoutSnapshot) {
+  const std::string modelPath = qwen3PureAttentionModelPath();
+  if (!fs::exists(modelPath)) {
+    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "4096";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "8";
+  config["batch-size"] = "1";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+
+  std::string mp = modelPath;
+  std::string proj;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(mp), std::move(proj), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("pure-attention-divergent-cancel-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".ggsq");
+  fs::remove(cachePath);
+
+  // Seed a full turn so the cache holds a generated answer the next history
+  // will not reproduce verbatim.
+  LlamaModel::Prompt seed;
+  seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
+  seed.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(seed));
+
+  LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(baseCtx, nullptr);
+  const llama_pos seededNPast = baseCtx->getNPast();
+  ASSERT_GT(seededNPast, 0);
+  const uint64_t filesBefore = sequenceStateSnapshotFilesWritten();
+
+  // Diverges right after the first user message: the seed's generated
+  // answer is replaced by a different assistant message.
+  std::string longBody;
+  for (int i = 0; i < 220; ++i) {
+    longBody += "divergent prefill cancellation marker ";
+  }
+  LlamaModel::Prompt divergent;
+  divergent.input =
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"assistant","content":"A different answer."},)"
+      R"({"role":"user","content":")" +
+      longBody + R"("}])";
+  divergent.prefill = true;
+  divergent.cacheKey = cachePath.string();
+
+  std::atomic<bool> done{false};
+  std::thread worker([&] {
+    try {
+      model->processPrompt(divergent);
+    } catch (...) {
+      // Treat any cancel-surface exception as a completed cancel for this test.
+    }
+    done.store(true);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(25));
+  baseCtx->stop();
+  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
+  worker.join();
+
+  EXPECT_EQ(sequenceStateSnapshotFilesWritten(), filesBefore)
+      << "a pure-attention divergent request must not write a snapshot file";
+  const llama_pos afterCancelNPast = baseCtx->getNPast();
+  EXPECT_GT(afterCancelNPast, 0)
+      << "rollback must keep the prefix shared with the new prompt";
+  EXPECT_LT(afterCancelNPast, seededNPast)
+      << "rollback must land on the divergence point, not restore the seed's "
+         "generated answer";
+
+  // A retry of the same history starts from that shared prefix.
+  LlamaModel::Prompt retry;
+  retry.input = divergent.input;
+  retry.prefill = true;
+  retry.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(retry));
+  EXPECT_GT(baseCtx->getNPast(), afterCancelNPast);
+  EXPECT_EQ(sequenceStateSnapshotFilesWritten(), filesBefore)
+      << "the retry must not write a snapshot file either";
 
   fs::remove(cachePath);
 }
