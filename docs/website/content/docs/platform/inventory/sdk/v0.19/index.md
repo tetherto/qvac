@@ -1,19 +1,27 @@
 ---
-title: "@qvac/sdk v0.17"
-description: "The @qvac/sdk README for the 0.17 release of the SDK."
+title: "@qvac/sdk v0.19"
+description: "The @qvac/sdk README as released in sdk-v0.19.1."
 ---
 
-*The `@qvac/sdk` README as it stands on [`main`](https://github.com/tetherto/qvac/tree/main/packages/sdk), which is what `sdk-v0.17.0` will carry — that tag has not been cut yet. Every documented version is listed on the [`@qvac/sdk` index](/platform/inventory/sdk).*
+*The `@qvac/sdk` README as released in [`sdk-v0.19.1`](https://github.com/tetherto/qvac/releases/tag/sdk-v0.19.1). Every documented version is listed on the [`@qvac/sdk` index](/platform/inventory/sdk).*
 
 **QVAC SDK** is the canonical entry point to develop AI applications with QVAC.
 
-**QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js, [Bare runtime](https://bare.pears.com), and [Expo](https://expo.dev).
+> _Part of **QVAC** ecosystem_
+> <br>
+> <sup>
+> <a href="https://qvac.tether.io/" >Home</a> &nbsp;•&nbsp;
+> <a href="https://docs.qvac.tether.io/" >Docs</a> &nbsp;•&nbsp;
+> <a href="https://discord.com/channels/1425125849346216029/1445400675189264516" >Support</a> &nbsp;•&nbsp;
+> <a href="https://discord.com/invite/tetherdev" >Discord</a>
+
+**QVAC SDK** is the main entry point for developing applications with QVAC. It is type-safe and exposes all QVAC capabilities through a unified interface. It runs on Node.js and [Expo](https://expo.dev).
 
 See [https://docs.qvac.tether.io/sdk/getting-started](https://docs.qvac.tether.io/sdk/getting-started) for the comprehensive QVAC documentation.
 
 For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.qvac.tether.io/llms-full.txt) as the consolidated plaintext documentation export.
 
-> **Running on Bare directly?** `@qvac/sdk` runs on Bare, but you must register the plugins you use explicitly before the first SDK call (Node and Expo do this automatically). For direct Bare usage we recommend [`@qvac/bare-sdk`](https://github.com/tetherto/qvac/blob/main/packages/bare-sdk/README.md) — the same SDK surface with no built-in plugin addons, designed for consumers wiring their own worker entry (Pear apps, bare-expo apps, direct Bare scripts).
+> **In-process Bare:** use [`@qvac/inference`](../inference/README.md). `@qvac/bare-sdk` is deprecated; last release is 0.18.2.
 
 ## Supported environments and installation
 
@@ -92,9 +100,95 @@ if (resources.sample?.cpu.status === 'supported') {
 }
 ```
 
+See the [system resources support matrix](./docs/system-resources-support-matrix.md)
+for metric-level evidence and platform limitations.
+
 Every metric reports `supported`, `unavailable`, `unverified`, or `failed`.
-Supported values include their source and scope. These values are diagnostics;
-they do not reserve memory or guarantee that a model can be loaded.
+Supported values include provenance with a source and optional scope. These
+values are diagnostics; they do not reserve memory or guarantee that a model
+can be loaded.
+
+GPU capabilities expose observed driver names, versions, and graphics APIs.
+These observations do not prove that an inference backend is compatible.
+
+Profiled inference operation events may include `event.backend` with the
+selected backend and device, graphics API, driver, fallback reason, and probe
+result. Addons attach backend metadata with `attachBackendDiagnostics`; the SDK
+validates it before recording the operation event. `gpuId`, when present,
+identifies a GPU from the current worker resource collector and is stable only
+for that collector's lifetime. The SDK does not infer compatibility from driver
+inventory or log text.
+
+### Profiler resource gauges
+
+Resource gauges are disabled by default. Enable them explicitly to attach one
+worker resource sample to each profiled operation:
+
+```ts
+import { profiler } from '@qvac/sdk'
+
+profiler.enable({ mode: 'verbose', includeResourceGauges: true })
+
+// Run SDK operations, then inspect recentEvents[].resources.
+const profile = profiler.exportJSON()
+```
+
+The sample uses the same status, provenance, and scope semantics as
+`getSystemResources({ sample: true })`. Its `sampledAt` uses the same monotonic
+clock as the profiling event's `ts`, so the two timestamps are comparable.
+`resources.origin` records that the sample was taken on the `local` worker.
+Samples are delivered to `profiler.onRecord`; they
+are retained in `exportJSON().recentEvents` only in `verbose` mode. Enabling
+gauges in `summary` mode still incurs the sampling cost without retaining them.
+Disabling profiling or omitting `includeResourceGauges` performs no resource
+sampling. Enabling gauges adds one CPU query and one query per GPU to each
+profiled operation's response path. If the worker resource collector is not
+initialized, the event omits the resource block.
+
+## Pre-download model fit assessment
+
+Use `assessModelFit` to check, before downloading anything, whether models are
+likely to fit in this device's memory. It reads generated catalog metadata plus a
+fresh memory sample — no weights, no load, no native probe:
+
+```ts
+import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
+
+const result = await assessModelFit({
+  models: [{ model: QWEN3_8B_INST_Q4_K_M, workload: { kind: 'llm', contextTokens: 8192 } }],
+  execution: 'sequential',
+  policy: 'interactive-v1'
+})
+
+console.log(result.verdict) // 'likely-fits' | 'likely-too-large' | 'unknown'
+```
+
+The result is advisory: it does not block `loadModel`, reserve memory, or make a
+performance claim. `unknown` is a real answer meaning the evidence does not
+support a call either way — show it as "can't say", not as "no".
+
+See [pre-download model fit assessment](./docs/assess-model-fit.md) for the
+budget arithmetic, why estimates are ranges, the supported engine and workload
+matrix, and the current calibration status.
+
+## Streaming transcription statistics
+
+Whisper and Parakeet duplex transcription sessions expose terminal engine
+statistics after their event iterator completes:
+
+```ts
+const session = await transcribeStream({ modelId })
+
+for await (const text of session) {
+  process.stdout.write(text)
+}
+
+const stats = await session.stats
+console.log(stats?.audioDuration, stats?.realTimeFactor)
+```
+
+`session.stats` resolves to `undefined` when the engine does not report
+statistics.
 
 ## Examples
 
@@ -114,12 +208,23 @@ node dist/examples/path/to/example.js
 bun run examples/path/to/example.ts
 ```
 
+`examples/abot-world.ts` has a companion guide covering the hardware
+requirements, scene-pack lifecycle, cancellation semantics and concurrency rules
+of an interactive world session: see
+[ABot-World interactive world sessions](./docs/abot-world.md).
+
 ## Build
 
 Use the [Bun](https://bun.sh/) package manager:
 
 ```bash
 bun i
+```
+
+`@qvac/inference` resolves to its published release by default. To build and test against the in-repo engine at the same commit, link it first:
+
+```bash
+bun run sdk-source:workspace
 ```
 
 ```bash
@@ -138,15 +243,14 @@ npm i path/to/sdk-0.3.0.tgz
 
 ## Testing
 
-The SDK test suite is organized into three buckets by runtime:
+The SDK test suite is organized into two buckets by runtime:
 
-| Bucket            | Runtime    | Location     | Command                                |
-| ----------------- | ---------- | ------------ | -------------------------------------- |
-| Unit              | Bun / Node | `test/unit/` | `bun run test:unit`                    |
-| Server (Bare)     | Bare       | `test/bare/` | `bun run test:bare`                    |
-| Client (consumer) | Node / RN  | `e2e/`       | See [`e2e/README.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/e2e/README.md) |
+| Bucket            | Runtime    | Location | Command                                |
+| ----------------- | ---------- | -------- | -------------------------------------- |
+| Unit              | Bun / Node | `test/`  | `bun run test:unit`                    |
+| Client (consumer) | Node / RN  | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
 
-See [`TESTING.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/TESTING.md) for the full decision tree on where new tests should land.
+See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 
 ## Contributing
 

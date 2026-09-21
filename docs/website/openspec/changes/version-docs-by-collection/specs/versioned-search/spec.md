@@ -25,13 +25,13 @@ While a reader is inside a documentation line, Search and the AI Assistant SHALL
 
 #### Scenario: Search is filtered to the active line
 
-- **WHEN** the reader searches from an SDK `v0.16` page
-- **THEN** the request carries an attribute filter for the SDK `v0.16` line
+- **WHEN** the reader searches from an SDK `v0.18` page
+- **THEN** the request carries an attribute filter for the SDK `v0.18` line
 - **AND** results from other SDK lines are not returned
 
 #### Scenario: The assistant answers inside the line
 
-- **WHEN** the reader asks the assistant a question from an SDK `v0.16` page
+- **WHEN** the reader asks the assistant a question from an SDK `v0.18` page
 - **THEN** the request carries the same restriction, and the answer cites no other SDK line
 
 #### Scenario: Unversioned content stays reachable
@@ -41,7 +41,7 @@ While a reader is inside a documentation line, Search and the AI Assistant SHALL
 
 #### Scenario: Another versioned collection is reachable at its current line
 
-- **WHEN** a reader on an SDK `v0.16` page searches for something the Provider documents
+- **WHEN** a reader on an SDK `v0.18` page searches for something the Provider documents
 - **THEN** the Provider's current line is returned, and no older Provider line is
 
 #### Scenario: An assistant request path that cannot carry the filter is not shipped
@@ -69,7 +69,7 @@ A query issued through the site's programmatic retrieval surface SHALL be able t
 
 #### Scenario: A programmatic query is scoped
 
-- **WHEN** a query names the SDK collection and the `v0.17` line
+- **WHEN** a query names the SDK collection and the `v0.19` line
 - **THEN** only pages of that line and of unversioned collections are returned
 
 #### Scenario: Results name their line

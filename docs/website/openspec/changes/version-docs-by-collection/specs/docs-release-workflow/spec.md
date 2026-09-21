@@ -7,9 +7,9 @@ Publishing a documentation line SHALL happen immediately after a release deploys
 #### Scenario: A cut preserves the outgoing line and opens the new one
 
 - **WHEN** `@qvac/sdk` `0.16` has been deployed and `0.17` is the version being prepared
-- **THEN** `(v0.16)` becomes `v0.16` and a copy of it becomes `(v0.17)`
-- **AND** the manifest renames the `v0.16` entry's folder and gains a `v0.17` entry naming the group
-- **AND** the collection's version-less paths serve `v0.17` from the deploy that releases it
+- **THEN** `(v0.18)` becomes `v0.18` and a copy of it becomes `(v0.19)`
+- **AND** the manifest renames the `v0.18` entry's folder and gains a `v0.19` entry naming the group
+- **AND** the collection's version-less paths serve `v0.19` from the deploy that releases it
 
 #### Scenario: A half-done cut does not build
 

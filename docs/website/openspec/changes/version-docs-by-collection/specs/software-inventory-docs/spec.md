@@ -62,7 +62,7 @@ Each documented version SHALL be one folder named `v<major>.<minor>` under its p
 #### Scenario: Patch-shaped version folders are rejected
 
 - **WHEN** the content tree is validated
-- **THEN** a folder named `v0.9.0` or `v0.9.x` under a package fails the check
+- **THEN** a folder named `v0.13.0` or `v0.13.x` under a package fails the check
 
 #### Scenario: Packages version independently
 
@@ -81,8 +81,8 @@ A package's pages SHALL offer the same switcher a versioned collection's lines u
 
 #### Scenario: The switcher lists the index and every version
 
-- **WHEN** the switcher is opened on a package documented at `v0.17` and `v0.16`
-- **THEN** it lists `All versions`, `v0.17`, and `v0.16`
+- **WHEN** the switcher is opened on a package documented at `v0.19` and `v0.18`
+- **THEN** it lists `All versions`, `v0.19`, and `v0.18`
 - **AND** no entry carries the ` (latest)` suffix, which the inventory does not use
 
 #### Scenario: No version appears in the sidebar

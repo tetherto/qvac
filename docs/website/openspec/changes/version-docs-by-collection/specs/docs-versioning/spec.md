@@ -42,13 +42,13 @@ The current line's folder SHALL be named as a Fumadocs folder group, `(v<major>.
 
 #### Scenario: The current line is served at version-less paths
 
-- **WHEN** the SDK's current line is `v0.17` and its folder is `(v0.17)`
-- **THEN** `content/docs/sdk/(v0.17)/quickstart.mdx` resolves at `/sdk/quickstart/`
+- **WHEN** the SDK's current line is `v0.19` and its folder is `(v0.19)`
+- **THEN** `content/docs/sdk/(v0.19)/js-ts-sdk.mdx` resolves at `/sdk/js-ts-sdk/`
 
 #### Scenario: An older line carries its version segment
 
-- **WHEN** the SDK also publishes `v0.16`
-- **THEN** `content/docs/sdk/v0.16/quickstart.mdx` resolves at `/sdk/v0.16/quickstart/`
+- **WHEN** the SDK also publishes `v0.18`
+- **THEN** `content/docs/sdk/v0.18/js-ts-sdk.mdx` resolves at `/sdk/v0.18/js-ts-sdk/`
 
 #### Scenario: Exactly one current line per collection
 
@@ -112,8 +112,8 @@ The folder group SHALL be the version the next release will publish, and SHALL b
 #### Scenario: The next line is cut right after a release
 
 - **WHEN** `@qvac/sdk` `0.16` is live on the site
-- **THEN** `main` renames `(v0.16)` to `v0.16` and copies it to `(v0.17)`
-- **AND** the site keeps serving `v0.16` until the next release deploys
+- **THEN** `main` renames `(v0.18)` to `v0.18` and copies it to `(v0.19)`
+- **AND** the site keeps serving `v0.18` until the next release deploys
 
 #### Scenario: The coming release's edits land in the group
 
@@ -137,13 +137,13 @@ A versioned collection SHALL publish the current line and, once a release has cu
 #### Scenario: The SDK publishes both of its lines
 
 - **WHEN** the content tree is enumerated after this change ships with `@qvac/sdk` `0.17`
-- **THEN** the SDK publishes `(v0.17)` and `v0.16`
-- **AND** `v0.16` starts as what the site served before the cut
+- **THEN** the SDK publishes `(v0.19)` and `v0.18`
+- **AND** `v0.18` starts as what the site served before the cut
 
 #### Scenario: The Provider publishes both of its lines
 
 - **WHEN** the content tree is enumerated after the Provider is cut
-- **THEN** the Provider publishes `(v0.9)`, the release that is live, and `v0.8`, the one before it
+- **THEN** the Provider publishes `(v0.13)`, the release that is live, and `v0.12`, the one before it
 - **AND** both collections therefore exercise switching, fallback, and corpus isolation
 
 #### Scenario: A collection can publish one line
@@ -167,14 +167,14 @@ A documentation line SHALL represent every patch release in its major-minor rang
 
 #### Scenario: One line covers a whole patch range
 
-- **WHEN** the SDK line `v0.16` is published
+- **WHEN** the SDK line `v0.18` is published
 - **THEN** it documents `@qvac/sdk` `>=0.16.0 <0.17.0`
 - **AND** no separate line exists for `0.16.0`, `0.16.1`, or any later patch in that range
 
 #### Scenario: Patch-shaped line names are rejected
 
 - **WHEN** the content tree is validated
-- **THEN** a line folder named `v0.16.0`, `v0.16.x`, `(v0.16.0)`, or `(v0.16.x)` fails the check
+- **THEN** a line folder named `v0.18.0`, `v0.18.x`, `(v0.18.0)`, or `(v0.18.x)` fails the check
 
 ### Requirement: Resources declare compatibility per entry
 

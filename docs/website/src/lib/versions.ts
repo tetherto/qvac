@@ -69,8 +69,8 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'collection',
     path: '/provider',
     versions: [
-      { version: 'v0.9', folder: '(v0.9)' },
-      { version: 'v0.8', folder: 'v0.8' },
+      { version: 'v0.13', folder: '(v0.13)' },
+      { version: 'v0.12', folder: 'v0.12' },
     ],
   },
   {
@@ -78,8 +78,8 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'package',
     path: '/platform/inventory/sdk',
     versions: [
-      { version: 'v0.17', folder: 'v0.17' },
-      { version: 'v0.16', folder: 'v0.16' },
+      { version: 'v0.19', folder: 'v0.19' },
+      { version: 'v0.18', folder: 'v0.18' },
     ],
   },
   {
@@ -87,8 +87,8 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'package',
     path: '/platform/inventory/sdk-python',
     versions: [
-      { version: 'v0.17', folder: 'v0.17' },
-      { version: 'v0.16', folder: 'v0.16' },
+      { version: 'v0.19', folder: 'v0.19' },
+      { version: 'v0.18', folder: 'v0.18' },
     ],
   },
   {
@@ -96,8 +96,8 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'package',
     path: '/platform/inventory/cli',
     versions: [
-      { version: 'v0.9', folder: 'v0.9' },
-      { version: 'v0.8', folder: 'v0.8' },
+      { version: 'v0.13', folder: 'v0.13' },
+      { version: 'v0.12', folder: 'v0.12' },
     ],
   },
   {
@@ -105,8 +105,8 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'package',
     path: '/platform/inventory/ai-sdk-provider',
     versions: [
-      { version: 'v0.4', folder: 'v0.4' },
-      { version: 'v0.3', folder: 'v0.3' },
+      { version: 'v0.7', folder: 'v0.7' },
+      { version: 'v0.6', folder: 'v0.6' },
     ],
   },
 ] as const satisfies readonly DocumentedSoftware[];

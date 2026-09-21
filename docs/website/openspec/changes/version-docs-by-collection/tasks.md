@@ -1,10 +1,10 @@
 ## 1. De-risk the routing assumptions
 
-- [x] 1.1 Hand-build one page at `content/docs/sdk/(v0.17)/index.mdx`, export the site, and confirm the folder group is excluded from the slug so the page still resolves at `/sdk/`
-- [x] 1.2 Hand-build one page at `content/docs/sdk/v0.16/index.mdx` and record whether the dot-bearing segment survives the build, the `@vahor/next-broken-links` step, and the CDN rules
+- [x] 1.1 Hand-build one page at `content/docs/sdk/(v0.19)/index.mdx`, export the site, and confirm the folder group is excluded from the slug so the page still resolves at `/sdk/`
+- [x] 1.2 Hand-build one page at `content/docs/sdk/v0.18/index.mdx` and record whether the dot-bearing segment survives the build, the `@vahor/next-broken-links` step, and the CDN rules
 - [x] 1.3 Add the `200` rewrite for the trailing-slash form and, below it, the `301` from the slash-less form, and confirm both resolve against the built output without looping
-- [x] 1.4 Export one line-scoped route handler at `/sdk/v0.16/llms.txt` and confirm it does not collide with the `(docs)/[[...slug]]` catch-all
-- [x] 1.5 Navigate client-side into `/sdk/v0.16/` from a version-less page and confirm the `__next.*.txt` payloads resolve through the CDN rules, so the router does not fall back to a document load
+- [x] 1.4 Export one line-scoped route handler at `/sdk/v0.18/llms.txt` and confirm it does not collide with the `(docs)/[[...slug]]` catch-all
+- [x] 1.5 Navigate client-side into `/sdk/v0.18/` from a version-less page and confirm the `__next.*.txt` payloads resolve through the CDN rules, so the router does not fall back to a document load
 - [x] 1.6 Put a `meta.json` in each spike line and confirm `source.pageTree` carries a node per line folder, addressable by its path, whose children reflect that file's order
 - [x] 1.7 If the folder group, the segment, the route, the client-side navigation, or the per-line subtree collides irrecoverably, record the change in `design.md` before continuing
 - [x] 1.8 Delete the spike content, keeping only the findings
@@ -35,10 +35,10 @@
 
 - [x] 4.1 Move the sixteen `reference/api/v*.mdx` and `reference/release-notes/v*.mdx` files to `content/_unpublished/`, keeping only both `index.mdx`
 - [x] 4.1b Flatten each surviving `index.mdx` up to `reference/api.mdx` and `reference/release-notes.mdx`, so the entry is a page and not a folder holding one, and confirm both URLs are unchanged
-- [x] 4.2 `git mv` every SDK page into `content/docs/sdk/v0.16/`, keeping what the site serves today, and confirm no `.mdx` file is left directly under `content/docs/sdk`
-- [x] 4.3 Copy `v0.16` to `(v0.17)` verbatim, `meta.json` files included, and confirm the two trees are identical before any release edit
+- [x] 4.2 `git mv` every SDK page into `content/docs/sdk/v0.18/`, keeping what the site serves today, and confirm no `.mdx` file is left directly under `content/docs/sdk`
+- [x] 4.3 Copy `v0.18` to `(v0.19)` verbatim, `meta.json` files included, and confirm the two trees are identical before any release edit
 - [x] 4.4 Point the SDK's manifest entries at the folders as cut, then delete one entry and confirm the correspondence check fails before restoring it
-- [x] 4.5 Reorder or omit one entry in `(v0.17)`'s `meta.json` and confirm only that line's sidebar changes, then revert it
+- [x] 4.5 Reorder or omit one entry in `(v0.19)`'s `meta.json` and confirm only that line's sidebar changes, then revert it
 - [x] 4.6 Replay the pre-versioning URL set and confirm every SDK URL still resolves at its version-less path, without a redirect
 - [x] 4.7 Regenerate the `.source/` registry and confirm it lists no path that no longer exists
 - [x] 4.8 Point `generate-api-docs.ts` and `generate-release-notes.ts` at the current line's `reference/api.mdx` and `reference/release-notes.mdx`, resolved from the manifest, since the cut removed the folders they wrote into and a page written there would have claimed the current line's URL
@@ -52,7 +52,7 @@
 - [x] 5.4 Assert that no captured URL needs more than one redirect to reach its page
 - [x] 5.5 List any captured URL no rule covers as knowingly dropped, and confirm nothing outside `public/_redirects` was added to keep a URL alive
 - [x] 5.6 Write the remark plugin that prefixes a same-collection absolute link with the line of the page carrying it, leaving the current line, unversioned targets, and other collections untouched, and register it in `source.config.ts`
-- [x] 5.7 Confirm the plugin's rewrite reaches the per-page Markdown as well as the HTML, by fetching the Markdown of a `v0.16` page and comparing its links to the rendered ones
+- [x] 5.7 Confirm the plugin's rewrite reaches the per-page Markdown as well as the HTML, by fetching the Markdown of a `v0.18` page and comparing its links to the rendered ones
 - [x] 5.8 Teach `tests/link-integrity.test.ts` to resolve a version-less link against the line of the file it appears in, so a link to a page missing from that line fails
 - [x] 5.9 Confirm every internal SDK link resolves inside its own line, in both lines, and that no link source text was rewritten by the cut
 - [x] 5.10 Run `tests/link-integrity.test.ts` and the build's broken-link step, and fix what they report
@@ -61,7 +61,7 @@
 
 - [x] 6.1 Render `SidebarTabsDropdown` from `fumadocs-ui/components/sidebar/tabs` in the docs layout's `sidebar.banner`, given the active collection's lines, and show it only on a versioned collection
 - [x] 6.2 Build each option from the line index — `url` for the destination and `urls` for the line's pathnames, so `isTabActive` resolves the active line — and confirm the browser receives no per-page version data
-- [x] 6.3 Derive each option's title from the manifest entry's folder — `v0.17 (latest)` for the group, plain `v0.16` otherwise — so the suffix follows a cut with no edit beyond the entry itself
+- [x] 6.3 Derive each option's title from the manifest entry's folder — `v0.19 (latest)` for the group, plain `v0.18` otherwise — so the suffix follows a cut with no edit beyond the entry itself
 - [x] 6.4 Point each option at the same path under its line, falling back to that line's index when the page does not exist there
 - [x] 6.5 Delete `VersionSelector`, `getVersionSelectorProps`, and the section machinery in `src/lib/versions.ts` that the retired patch-series archives were the only consumer of
 - [x] 6.6 Confirm the switch does not reload the document and does not remount the navbar, the collection bar, or the sidebar container
@@ -69,7 +69,7 @@
 - [x] 6.8 Confirm the narrow-viewport order in the sidebar header — Fumadocs' collection dropdown from `sidebar.tabs`, then the line switcher, then the tree — and that the dropdown still marks the collection active from a page of a non-current line
 - [x] 6.9 Set each page's canonical URL to its own line, the version-less path for the current line and the versioned path for the others
 - [x] 6.10 Add a switching test asserting that every page of every line lands on its equivalent or on the selected line's index
-- [x] 6.11 Add a page to `v0.16` that `(v0.17)` does not carry, list it in that line's `meta.json` only, and confirm it resolves, appears in that line's sidebar and artifacts, and leaves the current line untouched
+- [x] 6.11 Add a page to `v0.18` that `(v0.19)` does not carry, list it in that line's `meta.json` only, and confirm it resolves, appears in that line's sidebar and artifacts, and leaves the current line untouched
 
 ## 7. Phase 2 — Agent artifacts per line
 
@@ -97,20 +97,20 @@
 
 ## 9. Phase 3 — Provider
 
-- [x] 9.1 Move the Provider pages into `content/docs/provider/(v0.9)/`, anchored on `@qvac/cli` `0.9.0`, point its manifest entry at that folder, and confirm no Provider URL changed
+- [x] 9.1 Move the Provider pages into `content/docs/provider/(v0.13)/`, anchored on `@qvac/cli` `0.13.1`, point its manifest entry at that folder, and confirm no Provider URL changed
 - [x] 9.2 Convert the Provider subtree into `meta.json` files inside its line and splice its root through the Phase 1 helper, with no Provider-specific branch
 - [x] 9.3 Confirm the single-line state behaves correctly before adding the second: the switcher lists one line, resolution and artifacts work, and nothing assumes a second line exists
-- [x] 9.4 Copy `(v0.9)` to `v0.8`, the release before it, declare that entry, and confirm it needs no code change
-- [x] 9.5 Note in `v0.8` that it starts as the `0.9` pages, since documentation for `0.8` was never written separately, and correct anything materially wrong for that release
-- [x] 9.6 Confirm `v0.8` behaves as any older line does in its URLs, switcher entry, artifacts, and retrieval attributes, and that the switcher labels `(v0.9)` as `v0.9 (latest)`
+- [x] 9.4 Copy `(v0.13)` to `v0.12`, the release before it, declare that entry, and confirm it needs no code change
+- [x] 9.5 Note in `v0.12` that it starts as the `0.13` pages, since documentation for `0.12` was never written separately, and correct anything materially wrong for that release
+- [x] 9.6 Confirm `v0.12` behaves as any older line does in its URLs, switcher entry, artifacts, and retrieval attributes, and that the switcher labels `(v0.13)` as `v0.13 (latest)`
 - [x] 9.7 Extend the redirects, agent artifacts, and retrieval metadata to the Provider with no new infrastructure
 - [x] 9.8 Record any change the Provider forced on shared code, since that is the measure of whether the infrastructure was built SDK-shaped
 
 ## 10. Phase 4 — Software Inventory
 
 - [x] 10.1 Create the inventory index under `/platform/inventory/`, stating what the inventory documents, how it differs from the product collections, and listing the four packages by published name
-- [x] 10.2 Read each package's two most recent released READMEs out of git — `@qvac/sdk` and the Python client from `sdk-v0.17.0` and `sdk-v0.16.0`, `@qvac/ai-sdk-provider` from `ai-sdk-provider-v0.4.0` and `ai-sdk-provider-v0.3.0`, `@qvac/cli` from `cli-v0.9.0` and `cli-v0.8.1` — and paste each into its version folder by hand as `.md`, every version folder plain and none of them a group
-- [x] 10.3 Take the SDK's and the Python client's `v0.17` README from `main` if `sdk-v0.17.0` has not been cut when the pages are written, since `main` is what that tag will carry, and record on the page which of the two it came from
+- [x] 10.2 Read each package's two most recent released READMEs out of git — `@qvac/sdk` and the Python client from `sdk-v0.19.1` and `sdk-v0.18.2`, `@qvac/ai-sdk-provider` from `ai-sdk-provider-v0.7.0` and `ai-sdk-provider-v0.6.2`, `@qvac/cli` from `cli-v0.13.1` and `cli-v0.12.0` — and paste each into its version folder by hand as `.md`, every version folder plain and none of them a group
+- [x] 10.3 Take the SDK's and the Python client's `v0.19` README from `main` if `sdk-v0.19.1` has not been cut when the pages are written, since `main` is what that tag will carry, and record on the page which of the two it came from
 - [x] 10.4 Write each package's index at its version-less path: published name, one sentence on what the package is, repository and registry links, and the version list linking each version page and its GitHub release
 - [x] 10.5 Add frontmatter to each version page naming the tag it came from, a link to that GitHub release, and a link back to the package index
 - [x] 10.6 Point each package's manifest entries at the folders as created, and confirm the correspondence check covers the inventory exactly as it covers the collections

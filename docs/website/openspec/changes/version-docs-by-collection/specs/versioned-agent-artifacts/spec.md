@@ -12,7 +12,7 @@ The site SHALL publish `llms.txt` at three levels: a root router listing the col
 #### Scenario: The collection resolver lists its lines
 
 - **WHEN** the SDK collection resolver is fetched
-- **THEN** it lists `v0.17` and `v0.16`, marks the current one, and links each line's index
+- **THEN** it lists `v0.19` and `v0.18`, marks the current one, and links each line's index
 
 #### Scenario: The line index lists that line's pages
 
@@ -30,8 +30,8 @@ Each documentation line SHALL publish its own `llms-full.txt` containing the ful
 
 #### Scenario: Another line's corpus is at its versioned path
 
-- **WHEN** `/sdk/v0.16/llms-full.txt` is fetched
-- **THEN** it contains only `v0.16` pages
+- **WHEN** `/sdk/v0.18/llms-full.txt` is fetched
+- **THEN** it contains only `v0.18` pages
 
 #### Scenario: The root corpus does not mix lines
 

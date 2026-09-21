@@ -289,8 +289,8 @@
 # one, and a literal line makes a cut visible in the diff.
 /sdk/v0.18/        /sdk/v0.18/index.html        200
 /sdk/v0.18         /sdk/v0.18/                  301
-/provider/v0.8/    /provider/v0.8/index.html    200
-/provider/v0.8     /provider/v0.8/              301
+/provider/v0.12/   /provider/v0.12/index.html   200
+/provider/v0.12    /provider/v0.12/             301
 
 # ======================================================================
 # SOFTWARE INVENTORY VERSIONS

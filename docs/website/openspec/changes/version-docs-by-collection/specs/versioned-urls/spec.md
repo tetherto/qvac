@@ -6,8 +6,8 @@ Because the current line's folder is a folder group, its pages SHALL keep the co
 
 #### Scenario: A current-line page keeps its URL
 
-- **WHEN** the SDK quickstart of the current line is requested
-- **THEN** it resolves at `/sdk/quickstart/`, the URL it had before versioning
+- **WHEN** the JS/TS SDK page of the current line is requested
+- **THEN** it resolves at `/sdk/js-ts-sdk/`, the URL it had before versioning
 
 #### Scenario: The collection root serves the current line
 
@@ -20,18 +20,18 @@ A page in a line other than the current one SHALL be published at `/{collection}
 
 #### Scenario: A non-current line page carries its segment
 
-- **WHEN** the SDK quickstart of line `v0.17` is requested
-- **THEN** it resolves at `/sdk/v0.17/quickstart/`
+- **WHEN** the JS/TS SDK page of line `v0.18` is requested
+- **THEN** it resolves at `/sdk/v0.18/js-ts-sdk/`
 
 #### Scenario: A segment without the `v` prefix is not a line
 
-- **WHEN** `/sdk/0.17/quickstart/` is requested
-- **THEN** it does not resolve to a page of the `v0.17` line
+- **WHEN** `/sdk/0.18/js-ts-sdk/` is requested
+- **THEN** it does not resolve to a page of the `v0.18` line
 
 #### Scenario: A segment carrying a patch or a series suffix is not a line
 
-- **WHEN** `/sdk/v0.17.2/quickstart/` or `/sdk/v0.17.x/quickstart/` is requested
-- **THEN** neither resolves to a page of the `v0.17` line
+- **WHEN** `/sdk/v0.18.2/js-ts-sdk/` or `/sdk/v0.18.x/js-ts-sdk/` is requested
+- **THEN** neither resolves to a page of the `v0.18` line
 
 ### Requirement: Version segments are linked in the trailing-slash form the CDN serves
 
@@ -44,13 +44,13 @@ Every page URL is served in its trailing-slash form, because the CDN normalizes 
 
 #### Scenario: The trailing-slash form is served
 
-- **WHEN** `/sdk/v0.17/` is requested
+- **WHEN** `/sdk/v0.18/` is requested
 - **THEN** the line's index is served, without a redirect
 
 #### Scenario: The slash-less form redirects to it
 
-- **WHEN** `/sdk/v0.17` is requested
-- **THEN** the site redirects to `/sdk/v0.17/`
+- **WHEN** `/sdk/v0.18` is requested
+- **THEN** the site redirects to `/sdk/v0.18/`
 - **AND** the request does not end on the slash-less form again
 
 ### Requirement: A page is canonical for its own line
@@ -73,13 +73,13 @@ When a release cuts a new line, the version-less paths SHALL serve it, and the p
 
 #### Scenario: Version-less paths follow the current line
 
-- **WHEN** `v0.17` is cut and `/sdk/quickstart/` is requested
-- **THEN** it serves the `v0.17` quickstart
+- **WHEN** `v0.19` is cut and `/sdk/js-ts-sdk/` is requested
+- **THEN** it serves the `v0.19` JS/TS SDK page
 
 #### Scenario: The previous line becomes addressable
 
-- **WHEN** `v0.17` is cut
-- **THEN** the previous quickstart is reachable at `/sdk/v0.16/quickstart/`
+- **WHEN** `v0.19` is cut
+- **THEN** the previous JS/TS SDK page is reachable at `/sdk/v0.18/js-ts-sdk/`
 
 #### Scenario: A cut retires no URL
 

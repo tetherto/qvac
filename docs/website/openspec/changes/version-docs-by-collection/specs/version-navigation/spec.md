@@ -24,14 +24,14 @@ Every page of a versioned collection SHALL offer a documentation-line switcher i
 
 #### Scenario: The switcher lists the collection's lines
 
-- **WHEN** the switcher is opened on an SDK page and `v0.17` is the current line
-- **THEN** it lists `v0.17 (latest)` and `v0.16`
+- **WHEN** the switcher is opened on an SDK page and `v0.19` is the current line
+- **THEN** it lists `v0.19 (latest)` and `v0.18`
 - **AND** exactly one entry carries the suffix
 
 #### Scenario: The trigger carries the same label
 
 - **WHEN** the reader is on a page of the current line
-- **THEN** the switcher's trigger reads `v0.17 (latest)`
+- **THEN** the switcher's trigger reads `v0.19 (latest)`
 
 #### Scenario: The suffix follows the cut
 
@@ -55,8 +55,8 @@ Selecting a line SHALL move the reader into that line entirely. The page, the si
 
 #### Scenario: Switching moves every surface
 
-- **WHEN** the reader switches from `v0.17` to `v0.16`
-- **THEN** the page, sidebar, canonical URL, Markdown URL, and retrieval scope are all `v0.16`
+- **WHEN** the reader switches from `v0.19` to `v0.18`
+- **THEN** the page, sidebar, canonical URL, Markdown URL, and retrieval scope are all `v0.18`
 
 #### Scenario: Switching does not cross collections
 
@@ -90,8 +90,8 @@ Switching lines SHALL land on the page occupying the same path within the target
 
 #### Scenario: The same path resolves in the target line
 
-- **WHEN** the reader switches from `/sdk/guides/streaming/` to `v0.16`
-- **THEN** the destination is `/sdk/v0.16/guides/streaming/`
+- **WHEN** the reader switches from `/sdk/guides/streaming/` to `v0.18`
+- **THEN** the destination is `/sdk/v0.18/guides/streaming/`
 
 #### Scenario: Switching back returns to the origin
 
@@ -104,8 +104,8 @@ When the path does not exist in the target line, the switcher SHALL land on that
 
 #### Scenario: A missing page lands on the line index
 
-- **WHEN** the reader switches to `v0.16` from a page that line does not contain
-- **THEN** the destination is the index of the SDK `v0.16` line
+- **WHEN** the reader switches to `v0.18` from a page that line does not contain
+- **THEN** the destination is the index of the SDK `v0.18` line
 
 #### Scenario: The index is served unchanged
 

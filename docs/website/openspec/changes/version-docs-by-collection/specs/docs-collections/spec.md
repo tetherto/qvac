@@ -12,7 +12,7 @@ The `sdk` collection SHALL hold the material about installing, configuring, and 
 #### Scenario: SDK receives the remaining existing pages
 
 - **WHEN** a documentation line of the `sdk` collection is enumerated
-- **THEN** it contains the former `quickstart.mdx`, `system-requirements.mdx`, `installation.mdx`, and `troubleshooting.mdx`
+- **THEN** it contains the former `system-requirements.mdx` and `troubleshooting.mdx`, plus `js-ts-sdk.mdx` and `python-sdk.mdx`, the per-client pages that absorbed the former `quickstart.mdx` and `installation.mdx`
 - **AND** it contains the former `configuration/**`, `models/**`, `ai-capabilities/**`, `p2p-capabilities/**`, `runtime/**`, and `tutorials/**` pages
 - **AND** it contains the former `reference/api/index.mdx` and `reference/release-notes/index.mdx`
 - **AND** it contains the former `cli/index.mdx`
@@ -46,6 +46,21 @@ The `provider` collection SHALL hold the material about installing, configuring,
 
 - **WHEN** the `provider` collection is enumerated
 - **THEN** it contains no page for the anticipated Installation, Configuration, API reference, or Troubleshooting sections, because no existing page covers them
+
+### Requirement: Resources collection composition
+
+The `resources` collection SHALL NOT be versioned, and MUST therefore be the home of the material that supports the products without documenting a release of one. Its pages sit directly under the collection rather than inside a documentation line, and MUST NOT be copied into one when a line is cut.
+
+#### Scenario: Resources holds unversioned supporting material
+
+- **WHEN** the `resources` collection is enumerated
+- **THEN** it contains its index page alongside the supporting pages, and no documentation-line folder
+
+#### Scenario: Solutions are published unversioned
+
+- **WHEN** a Solutions page is published
+- **THEN** it resolves under `/resources/solutions/` with no version segment
+- **AND** cutting a line in any collection leaves it untouched
 
 ## REMOVED Requirements
 

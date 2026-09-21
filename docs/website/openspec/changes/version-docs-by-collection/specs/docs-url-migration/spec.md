@@ -64,8 +64,8 @@ Authors SHALL keep writing internal links as version-less absolute paths — `/s
 
 #### Scenario: An older line's link is prefixed at build
 
-- **WHEN** a page in `v0.16` links to `/sdk/configuration/`
-- **THEN** the built page links to `/sdk/v0.16/configuration/`
+- **WHEN** a page in `v0.18` links to `/sdk/configuration/`
+- **THEN** the built page links to `/sdk/v0.18/configuration/`
 
 #### Scenario: The current line's link is untouched
 
@@ -74,7 +74,7 @@ Authors SHALL keep writing internal links as version-less absolute paths — `/s
 
 #### Scenario: The Markdown twin carries the resolved link
 
-- **WHEN** the Markdown of a page in `v0.16` is fetched
+- **WHEN** the Markdown of a page in `v0.18` is fetched
 - **THEN** its links are the same resolved URLs the HTML carries
 
 #### Scenario: A cut rewrites no link

@@ -1,17 +1,19 @@
 ---
-title: "@qvac/ai-sdk-provider v0.3"
-description: "The @qvac/ai-sdk-provider README as released in ai-sdk-provider-v0.3.0."
+title: "@qvac/ai-sdk-provider v0.7"
+description: "The @qvac/ai-sdk-provider README as released in ai-sdk-provider-v0.7.0."
 ---
 
-*The `@qvac/ai-sdk-provider` README as released in [`ai-sdk-provider-v0.3.0`](https://github.com/tetherto/qvac/releases/tag/ai-sdk-provider-v0.3.0). Every documented version is listed on the [`@qvac/ai-sdk-provider` index](/platform/inventory/ai-sdk-provider).*
+*The `@qvac/ai-sdk-provider` README as released in [`ai-sdk-provider-v0.7.0`](https://github.com/tetherto/qvac/releases/tag/ai-sdk-provider-v0.7.0). Every documented version is listed on the [`@qvac/ai-sdk-provider` index](/platform/inventory/ai-sdk-provider).*
 
 [Vercel AI SDK](https://ai-sdk.dev) provider for the [QVAC](https://qvac.tether.io) local AI runtime.
 
-QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package is a thin, branded wrapper around [`@ai-sdk/openai-compatible`](https://www.npmjs.com/package/@ai-sdk/openai-compatible) that points at a running `qvac serve openai` HTTP server and re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
+QVAC is an open-source, cross-platform ecosystem for **local-first, peer-to-peer AI** — LLMs, embeddings, transcription, translation, speech, OCR, and image generation, all running on the user's own hardware. This package implements the native provider contracts for language, embedding, image, file-reference, transcription, and speech operations against a local `qvac serve --openai` runtime. It also re-exports QVAC's model metadata so callers can introspect typed model constants without an HTTP round-trip.
 
-> **Status — `0.2.0`.** Two modes:
+The provider is OpenAI-compatible by construction: the OpenAI-compatible transport is its fallback provider, while the SDK's native custom-provider composition adds QVAC-specific files, transcription, and speech capabilities. Existing OpenAI-shaped chat, completion, embedding, and image requests keep the same wire protocol.
+
+> **Runtime modes:**
 >
-> - **External** (default): the package wraps a `qvac serve openai` HTTP endpoint that you run yourself.
+> - **External** (default): the package wraps a `qvac serve --openai` HTTP endpoint that you run yourself.
 > - **Managed** (`mode: 'managed'`): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
 >
 > See the [QVAC-19194 epic](https://app.asana.com/1/45238840754660/task/1214968611313049).
@@ -25,13 +27,20 @@ bun add @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible
 # or: npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible
 ```
 
-`ai` and `@ai-sdk/openai-compatible` are **peer dependencies** — install them alongside.
+Runtime requirements:
+
+- **Node.js 22 or newer.** Node 20 is not supported.
+- **AI SDK 7** (`ai@^7`) and **OpenAI-compatible provider 3** (`@ai-sdk/openai-compatible@^3`).
+- **Provider-v4 contracts.** Custom middleware and direct model integrations must use the AI SDK v4 provider interfaces exposed by these versions.
+- **ESM-only imports.** Use `import` / dynamic `import()`; CommonJS `require()` is not supported.
+
+`ai` and `@ai-sdk/openai-compatible` are **peer dependencies** — install those compatible major versions alongside the provider.
 
 ---
 
 ## Quickstart
 
-### 1. Run `qvac serve openai`
+### 1. Run `qvac serve --openai`
 
 You need [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) installed and a minimal config that preloads at least one chat model:
 
@@ -48,7 +57,8 @@ cat > qvac.config.json <<'EOF'
 }
 EOF
 
-qvac serve openai
+export QVAC_API_KEY='replace-with-a-random-secret'
+qvac serve --openai --no-default --api-key "$QVAC_API_KEY"
 ```
 
 By default, `qvac serve` listens on `http://127.0.0.1:11434/v1` (the port may change in a future CLI release — see the **Default base URL** note below).
@@ -61,7 +71,7 @@ import { streamText } from 'ai'
 
 const qvac = createQvac({
   baseURL: 'http://127.0.0.1:11434/v1', // match your `qvac serve` port
-  apiKey: 'qvac' // anything non-empty; serve does not validate
+  apiKey: process.env.QVAC_API_KEY // must match the serve's --api-key value
 })
 
 const { textStream } = streamText({
@@ -82,19 +92,80 @@ qvac.chatModel('qwen3-600m') // explicit chat model
 qvac.completionModel('qwen3-600m') // legacy completion
 qvac.textEmbeddingModel('embed-gemma') // text embeddings
 qvac.imageModel('flux-schnell') // image generation
+qvac.transcriptionModel('whisper') // speech to text
+qvac.speechModel('tts') // text to speech
+qvac.files() // local ephemeral file uploads
 ```
+
+### Local file references
+
+`uploadFile` stores bytes in the running QVAC process and returns a `qvac` provider reference. Passing that reference to a QVAC language model resolves the bytes through the same local runtime immediately before inference. The reference never becomes a cloud URL and expires with QVAC's ephemeral file store.
+
+```ts
+import { readFileSync } from 'node:fs'
+import { generateText, uploadFile } from 'ai'
+
+const { providerReference } = await uploadFile({
+  api: qvac,
+  data: readFileSync('./sensor.png'),
+  mediaType: 'image/png',
+  filename: 'sensor.png'
+})
+
+const { text } = await generateText({
+  model: qvac('vision'),
+  messages: [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Read the sensor display.' },
+        { type: 'file', mediaType: 'image/png', data: providerReference }
+      ]
+    }
+  ]
+})
+```
+
+### Native speech and transcription
+
+Speech operations use the provider's native model contracts while remaining entirely inside the local QVAC serve:
+
+```ts
+import { generateSpeech, transcribe } from 'ai'
+
+const speech = await generateSpeech({
+  model: qvac.speechModel('tts'),
+  text: 'The sensor temperature is twenty four degrees.',
+  voice: 'alloy',
+  outputFormat: 'wav'
+})
+
+const transcript = await transcribe({
+  model: qvac.transcriptionModel('stt'),
+  audio: speech.audio.uint8Array,
+  providerOptions: {
+    qvac: { prompt: 'Sensor terminology' }
+  }
+})
+```
+
+Per-request transcription `prompt` is supported. Language is selected when the QVAC model is loaded, and speech speed, instructions, and language are not consumed by the current local engines; the provider returns structured warnings when callers supply those options.
 
 ---
 
 ## Managed mode
 
-External mode (above) assumes you've already authored a `qvac.config.json` and have `qvac serve openai` running in another terminal. **Managed mode removes both steps**: pass `mode: 'managed'` and a list of model constants, and the provider will synthesize an ephemeral config, spawn `qvac serve` on a free port, wait until it's healthy, and reap it automatically once nothing is using it.
+External mode (above) assumes you've already authored a `qvac.config.json` and have `qvac serve --openai` running in another terminal. **Managed mode removes both steps**: pass `mode: 'managed'` and a list of model constants, and the provider will synthesize an ephemeral config, spawn `qvac serve` on a free port, wait until it's healthy, and reap it automatically once nothing is using it.
 
 The serve is **shared and self-cleaning**: a second session (or a separate tool) asking for the same models attaches to the already-warm serve instead of paying another cold start, and the serve is torn down by a detached supervisor a few minutes after the last user goes away. You never have to babysit a process — see [Shared serves & lifecycle](#shared-serves--lifecycle).
 
+Managed mode generates a cryptographically random API key for each new serve fleet, stores it in the private managed registry record, and reuses that record's key when attaching to the same fleet. The provider owns this key: a caller-supplied `authorization` header is replaced with the resolved managed key.
+
+Custom `fetch` wrappers receive requests after managed authorization has been applied. Treat the `Authorization` header as secret material and do not log request headers.
+
 ```bash
 # Managed mode needs the QVAC CLI available (optional peer dependency):
-npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli@^0.13.0
 ```
 
 ```ts
@@ -135,12 +206,11 @@ interface QvacManagedOptions {
   // entry is the default alias unless one sets `default: true`.
   models: (string | QvacManagedModel)[]
   servePort?: number // default: auto-allocate a free port
-  serveHost?: string // default: '127.0.0.1' (loopback only)
+  serveHost?: string // default: '127.0.0.1'
   serveStartTimeout?: number // ms to wait for health; default: 180000
   serveBinPath?: string // override the `qvac` binary; default: resolve @qvac/cli
   reuse?: boolean // share/reuse a matching serve; default: true (false if servePort is pinned)
   serveIdleTimeout?: number // ms to keep a shared serve after its last user exits; default: 300000
-  apiKey?: string // default: 'qvac'
   headers?: Record<string, string>
   fetch?: typeof fetch
 }
@@ -154,6 +224,21 @@ interface QvacManagedModel {
 ```
 
 The resolved provider also exposes `provider.port`, `provider.pid`, and `provider.baseURL` for diagnostics.
+
+Its read-only `provider.apiKey` getter returns the key of the serve currently in use, for trusted in-process adapters that must talk to the managed serve outside the provider's own `fetch`:
+
+```ts
+await using qvac = await createQvac({ mode: 'managed', models: ['QWEN3_8B_INST_Q4_K_M'] })
+
+// Read it fresh per request: crash recovery respawns the serve with a new key.
+const res = await fetch(`${qvac.baseURL}/models`, {
+  headers: { authorization: `Bearer ${qvac.apiKey}` }
+})
+```
+
+Treat it as secret material. The property is non-enumerable, so `{ ...provider }`, `Object.keys(provider)`, and object dumps never carry it; never log it or hand it to an untrusted process.
+
+Neither the detached runner nor the `qvac serve` it starts receives the key through argv: both read it from a one-shot `0600` file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`. Every CLI in the supported `^0.13.0` peer range takes `--api-key-file`, so the argv fallback is reached only behind a `serveBinPath` override, whose version cannot be determined.
 
 ### Per-model configuration
 
@@ -186,13 +271,13 @@ Managed mode runs `qvac serve` as a **shared, self-cleaning daemon** so that ope
 - **`close()` detaches, it doesn't kill.** Calling `provider.close()` (or leaving an `await using` scope) deregisters _your_ session. A serve still in use by another session keeps running; an unused one is reaped after the idle timeout. An abrupt exit (Ctrl-C, crash) is handled too — the runner prunes dead consumers automatically.
 - **Crash recovery.** If the underlying serve is gone when a request goes out (connection refused), the provider's `fetch` transparently re-resolves — reattaching to a healthy serve or spawning a fresh one — and retries that request once. Only connection-refused is retried, so a completion that the serve had already begun processing is never blindly replayed.
 - **Private serves.** Pass `reuse: false` (or pin `servePort`) to force a dedicated serve that is **not** shared and is reaped as soon as your process exits.
-- **Self-healing registry.** Records live under `~/.qvac/managed-serves/`. Every `createQvac` first sweeps the registry, dropping dead records and terminating any serve whose runner has died — so a hard crash can never strand a process or wedge reuse.
+- **Self-healing registry.** Records live under `~/.qvac/managed-serves/`. Every `createQvac` first sweeps the registry, dropping dead records and terminating any serve whose runner has died — so a hard crash can never strand a process or wedge reuse. The sweep also reaps serves left behind by a provider version that predates managed authentication (their records carry no key, so they are probed anonymously and shut down rather than left listening unauthenticated), and removes abandoned one-shot runner handoff files once no runner could still be waiting to read one.
 
 ### Behaviour notes
 
 - **Startup is gated on model preload.** `qvac serve` does not open its port until every preloaded model is ready, and a cold P2P download can take minutes — hence the generous default `serveStartTimeout`. Raise it for large models.
 - **External mode pays nothing.** The managed subsystem (and its `node:child_process` / `@qvac/cli` resolution) is dynamically imported only when `mode: 'managed'` is set.
-- **Node 20+ and Bun.** The managed subsystem uses only portable `node:` APIs — no Bun-specific calls.
+- **Node 22+ and Bun.** The managed subsystem uses only portable `node:` APIs — no Bun-specific calls.
 - **Typed errors.** Managed setup throws structured errors you can `instanceof`-check: `UnknownManagedModelError`, `DuplicateManagedModelError`, `MultipleDefaultManagedModelsError`, `CliNotFoundError`, `ServeStartTimeoutError`, `ServeSpawnFailedError`, `ServeExitedError`, and `PortAllocationFailedError` (all extending `QvacManagedModeError`, with a `.code` from `QvacManagedErrorCode`). They're exported from the package root.
 
 ---
@@ -290,7 +375,7 @@ const qvac = createQvac() // uses DEFAULT_BASE_URL
 
 > ⚠️ **The default `baseURL` is a placeholder pending the CLI port-change ticket.** `qvac serve` today defaults to `11434` (which collides with Ollama). The CLI will move to a non-conflicting port in a future release, and this package's default will move with it. **Set `baseURL` explicitly to your `qvac serve` port** until the default is finalized — otherwise the provider will fail to connect.
 
-The default `apiKey` is the literal string `'qvac'`. `qvac serve` does not validate the key; the value matters only because some OpenAI-shaped HTTP clients refuse to issue a request without an `Authorization` header.
+In external mode, the provider's default `apiKey` is the literal string `'qvac'`. If `qvac serve` was started with `--api-key`, pass that exact key to `createQvac`; otherwise authenticated requests are rejected. Managed mode does not use this default: it generates and owns a random key for the spawned serve.
 
 ---
 
@@ -323,7 +408,7 @@ type EndpointCategory =
   | 'image'
 ```
 
-The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package, covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`onnx-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
+The catalog is **codegen'd from the live QVAC P2P registry** at build time and committed to the package, covering chat (`llamacpp-completion`), embeddings (`llamacpp-embedding`), transcription (`whispercpp-transcription`, `parakeet-transcription`), translation (`nmtcpp-translation`), speech (`onnx-tts`, `tts-ggml`), OCR (`ggml-ocr`), and image generation (`sdcpp-generation`). Regenerate against the live registry with:
 
 ```bash
 npm run update-models     # writes src/models/constants.ts + models/history/<sha>.txt
