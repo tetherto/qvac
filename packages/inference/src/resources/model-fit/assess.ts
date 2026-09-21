@@ -5,7 +5,8 @@ import type {
   ModelFitEvidence,
   ModelFitExecution,
   ModelFitModelResult,
-  ModelFitVerdict
+  ModelFitVerdict,
+  NativeProbeFit
 } from '@/schemas/assess-model-fit'
 import type { GPUResourceCapabilities, SystemResources } from '@/schemas/system-resources'
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
@@ -96,6 +97,15 @@ export interface AssessModelFitOptions {
   ) => PlatformCalibration | undefined
   /** Defaults to the generated catalog table; injected in tests. */
   resolveProfile?: ProfileResolver
+  /**
+   * The engine's own verdict for the single candidate, from the registry's fit
+   * stub. Resolved in the handler, which is where the network is.
+   *
+   * Only ever set for a one-candidate assessment: the fitter answers about one
+   * model against the whole machine, and two such answers cannot be summed into
+   * a combined budget the way two byte estimates can.
+   */
+  nativeFit?: NativeProbeFit | undefined
 }
 
 /**
@@ -290,6 +300,24 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     )
   }
 
+  // The engine's own fitter, where it reached a verdict, replaces the modelled
+  // one: it read this model's tensor list and measured this machine, which is
+  // what the coefficients above approximate. The estimator's reasons and
+  // assumptions describe the path not taken, so none of them are reported.
+  const native = nativeModelResult(options.nativeFit, modelResults)
+  if (native) {
+    return {
+      verdict: native.verdict,
+      basis,
+      execution,
+      evidence: 'native-fit',
+      ...(budget && { budget }),
+      models: [native],
+      reasons: ['the engine fitter read the registry description of this model'],
+      assumptions: []
+    }
+  }
+
   return {
     verdict,
     basis,
@@ -303,6 +331,36 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     models: modelResults,
     reasons,
     assumptions
+  }
+}
+
+/**
+ * The per-model result a native fit produces, or `undefined` when the modelled
+ * one stands.
+ *
+ * The probe answers about one model against the whole machine. Two such answers
+ * carry no byte demand that could be summed under one budget, so a multi-model
+ * assessment keeps the estimator that can aggregate. `unknown` — the probe
+ * disabled, the load shape unsupported, the child unusable — is not a verdict
+ * and falls through the same way.
+ */
+function nativeModelResult(
+  nativeFit: NativeProbeFit | undefined,
+  modelResults: readonly ModelFitModelResult[]
+): ModelFitModelResult | undefined {
+  if (!nativeFit || modelResults.length !== 1) return undefined
+  if (nativeFit.verdict === 'unknown') return undefined
+
+  const modelled = modelResults[0]
+  if (!modelled) return undefined
+
+  return {
+    name: modelled.name,
+    verdict: nativeFit.verdict === 'fit' ? 'likely-fits' : 'likely-too-large',
+    evidence: 'native-fit',
+    estimatorVersion: nativeFit.estimatorVersion,
+    reasons:
+      nativeFit.message === undefined ? [nativeFit.reason] : [nativeFit.reason, nativeFit.message]
   }
 }
 
