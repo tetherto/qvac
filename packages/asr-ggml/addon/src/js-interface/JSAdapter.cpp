@@ -245,7 +245,16 @@ void JSAdapter::loadMap(
   for (auto i = 0; i < namesSize; ++i) {
     auto key = names.get<js::String>(env, i);
     auto value = jsObject.getProperty(env, key);
-    switch (getValueType(env, value)) {
+    const auto valueType = getValueType(env, value);
+    const auto keyName = key.as<std::string>(env);
+    if ((keyName == "main-gpu" || keyName == "main_gpu") &&
+        valueType != js_number && valueType != js_string) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+          "'integrated'");
+    }
+    switch (valueType) {
     // addConfigParam throws if the key already exists
     case js_boolean:
       addConfigParam(

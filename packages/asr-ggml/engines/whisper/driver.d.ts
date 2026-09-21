@@ -28,7 +28,12 @@ export interface WhisperConfig extends Record<string, unknown> {
 export interface WhisperEngineConfig {
     engine: "whisper";
     whisperConfig?: WhisperConfig;
-    contextParams?: Record<string, unknown>;
+    contextParams?: Record<string, unknown> & {
+        /** Raw ggml registry index (number or integer string), or GPU class. */
+        "main-gpu"?: number | string;
+        /** Alias of main-gpu; supply only one spelling. */
+        main_gpu?: number | string;
+    };
     miscConfig?: Record<string, unknown>;
     audio_format?: string;
     vadModelPath?: string;

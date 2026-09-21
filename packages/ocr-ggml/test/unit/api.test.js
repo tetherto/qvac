@@ -3,6 +3,7 @@
 const test = require('brittle')
 const OcrGgml = require('../..').OcrGgml
 const { ERR_CODES, QvacErrorAddonOcrGgml } = require('../..')
+const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('../../lib/main-gpu')
 
 async function captureRejection(fn) {
   try {
@@ -319,4 +320,94 @@ test('OcrGgml.load surfaces the activation error even when cleanup fails', async
   const err = await captureRejection(() => ocr.load())
   t.is(err && err.message, 'activation boom', 'the original activation error wins')
   t.is(ocr.addon, null, 'no addon handle is retained')
+})
+
+test('OcrGgml.load forwards shared selectors and preserves legacy GPU indices', async (t) => {
+  for (const key of ['main-gpu', 'main_gpu', 'gpuDevice']) {
+    const values =
+      key === 'gpuDevice'
+        ? [0, 2]
+        : [
+            0,
+            2,
+            -1,
+            '0',
+            '+2',
+            '-1',
+            'dedicated',
+            'integrated',
+            'DEDICATED',
+            'Integrated',
+            MIN_MAIN_GPU_INDEX,
+            MAX_MAIN_GPU_INDEX,
+            String(MIN_MAIN_GPU_INDEX),
+            String(MAX_MAIN_GPU_INDEX)
+          ]
+    for (const value of values) {
+      let forwarded
+      const ocr = new OcrGgml({
+        params: {
+          pathDetector: 'unused',
+          pathRecognizer: 'unused',
+          langList: ['en'],
+          backendDevice: 'vulkan',
+          [key]: value
+        }
+      })
+      ocr._createAddon = (config) => {
+        forwarded = config
+        return fakeAddon()
+      }
+      await ocr.load()
+      t.is(forwarded[key], value, `${key}: ${value} reaches the native selector`)
+      t.is(forwarded.backendDevice, 'vulkan')
+      await ocr.unload()
+    }
+  }
+})
+
+test('OcrGgml.load rejects invalid or conflicting shared selectors before loading models', async (t) => {
+  const invalid = [
+    null,
+    true,
+    false,
+    0.5,
+    NaN,
+    Infinity,
+    '1junk',
+    ' 1',
+    '1.5',
+    String(MAX_MAIN_GPU_INDEX + 1),
+    String(MIN_MAIN_GPU_INDEX - 1),
+    'gpu',
+    '',
+    {},
+    [],
+    MAX_MAIN_GPU_INDEX + 1,
+    MIN_MAIN_GPU_INDEX - 1
+  ]
+  const cases = [
+    ...['main-gpu', 'main_gpu'].flatMap((key) => invalid.map((value) => ({ [key]: value }))),
+    { 'main-gpu': 0, main_gpu: 0 },
+    { 'main-gpu': 0, gpuDevice: 0 },
+    { main_gpu: 'dedicated', gpuDevice: 1 }
+  ]
+  for (const selectors of cases) {
+    let created = false
+    const ocr = new OcrGgml({
+      params: {
+        pathDetector: 'unused',
+        pathRecognizer: 'unused',
+        langList: ['en'],
+        ...selectors
+      }
+    })
+    ocr._createAddon = () => {
+      created = true
+      return fakeAddon()
+    }
+    const err = await captureRejection(() => ocr.load())
+    t.ok(err instanceof TypeError, 'invalid selector rejected')
+    t.is(created, false, 'native model creation was not attempted')
+  }
 })
