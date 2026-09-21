@@ -947,7 +947,28 @@ bare-make generate -D USE_BERGAMOT=OFF
 
 ### Compute backend selection
 
-At runtime, the addon picks a ggml compute device using the `use_gpu`, `gpu_backend`, and `gpu_device` config keys described in [Backend & GPU Settings](#backend--gpu-settings). When `use_gpu` is true and `gpu_backend` is **not** set, the selector falls back to a default gated pass:
+For IndicTrans2, `config['main-gpu']` (alias `main_gpu`) accepts a raw ggml
+registry index (integer or integer string), `'dedicated'`, or `'integrated'`.
+Class names are case-insensitive; negative indices use the out-of-range fallback. Set `use_gpu: true` (or
+`useGPU: true`) to enable GPU execution; the selector does not enable it.
+Numeric indices refer to the original registry, before backend filtering or
+GPU ordering. An in-range unsupported device falls back to CPU rather than
+selecting a different GPU. An out-of-range index logs a warning and uses
+normal automatic selection, which prefers dedicated GPUs before integrated
+GPUs across eligible backends. Class selectors require a GPU of the requested
+class and otherwise fall back to CPU. All selections retain Translation's
+backend allowlist, RPC exclusion, and automatic OpenCL build guard.
+
+Use only one of `main-gpu` and `main_gpu`. Combining either with
+`gpu_backend`, `gpu_device`, `gpuBackend`, or `gpuDevice` is rejected.
+Legacy selectors retain their backend-filtered ordinal meanings when used
+without `main-gpu`. Bergamot remains CPU-only.
+
+```javascript
+config: { modelType: 'IndicTrans', use_gpu: true, 'main-gpu': 'dedicated' }
+```
+
+At runtime, the addon picks a ggml compute device using the `use_gpu`, `gpu_backend`, and `gpu_device` config keys described in [Backend & GPU Settings](#backend--gpu-settings). When `use_gpu` is true and `gpu_backend` is **not** set, the selector uses the following gated passes within each GPU class (dedicated before integrated). An explicit legacy `gpu_device` retains the historical backend-first ordering:
 
 1. If built with `USE_OPENCL=ON`, prefer an OpenCL device first.
 2. Otherwise (and as a fallback in the `ON` case) pick an eligible Vulkan, Metal, or CUDA device. When `USE_OPENCL=OFF` (the default), OpenCL devices are excluded from the fallback — the OpenCL backend still loads as a shared library but is never selected automatically.
