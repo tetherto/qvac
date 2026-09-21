@@ -24,6 +24,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  checks: read
   contents: read
   pull-requests: read
   packages: read
@@ -112,6 +113,7 @@ jobs:
       needs.ci-router.outputs.run_prebuilds == 'true' &&
       (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success')
     permissions:
+      actions: read
       contents: write
       packages: write
       pull-requests: write
@@ -121,6 +123,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      reuse-workflow-file: on-pr-ggml-rpc-server.yml
 
   publish-prebuild-status:
     needs: [fork-approval, authorize, await-ts-checks, prebuild, ci-router]
@@ -144,7 +147,7 @@ jobs:
           REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PREBUILD_RESULT: ${{ needs.prebuild.result }}
-          REUSE_HIT: "false"
+          REUSE_HIT: ${{ needs.prebuild.outputs.reuse_hit }}
           CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
           RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

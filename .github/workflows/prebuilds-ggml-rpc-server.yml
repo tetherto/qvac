@@ -26,6 +26,15 @@ on:
         required: false
         type: string
         default: packages/ggml-rpc-server
+      reuse-workflow-file:
+        description: Calling PR workflow basename used for cross-run artifact reuse
+        required: false
+        type: string
+        default: ""
+    outputs:
+      reuse_hit:
+        description: Whether a prior matching prebuild artifact was reused
+        value: ${{ jobs.prebuild.outputs.reuse_hit }}
 
 permissions:
   contents: read
@@ -33,6 +42,7 @@ permissions:
 jobs:
   prebuild:
     permissions:
+      actions: read
       contents: write
       packages: read
       pull-requests: write
@@ -49,4 +59,5 @@ jobs:
       desktop-smoke-command: node test/node/prebuild-smoke.cjs && bare test/bare/prebuild-smoke.js
       extra-strip-binary-name: ggml-rpc-server
       post-artifact-build-command: bash ../../.github/scripts/validate-rpc-rdma-build.sh
+      reuse-workflow-file: ${{ inputs.reuse-workflow-file }}
     secrets: inherit

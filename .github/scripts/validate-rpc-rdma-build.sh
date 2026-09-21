@@ -22,7 +22,7 @@ bare-make generate \
 bare-make build
 bare-make install
 
-ABI_INFO=$(find build/_vcpkg -path '*/share/qvac-fabric/vcpkg_abi_info.txt' -print -quit)
+ABI_INFO=$(find build/_vcpkg -path '*/share/qvac-fabric/vcpkg_abi_info.txt' -print -quit || true)
 if [[ -z "$ABI_INFO" ]] || ! grep -Eq '^features .*rpc-rdma' "$ABI_INFO"; then
   echo "qvac-fabric was not built with the rpc-rdma feature" >&2
   exit 1

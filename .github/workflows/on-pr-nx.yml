@@ -159,6 +159,7 @@ jobs:
                 "classification-ggml": "classification-ggml-pr-head-ts-checks / ts-checks",
                 "diffusion-cpp":       "diffusion-pr-head-ts-checks",
                 "embed-llamacpp":      "embed-pr-head-ts-checks / ts-checks",
+                "ggml-rpc-server":     "ggml-rpc-server-pr-head-ts-checks / ts-checks",
                 "llm-llamacpp":        "llm-pr-head-ts-checks / ts-checks",
                 "model-fit":           "model-fit-pr-head-ts-checks / ts-checks",
                 "ocr-ggml":            "ocr-ggml-pr-head-ts-checks / ts-checks",

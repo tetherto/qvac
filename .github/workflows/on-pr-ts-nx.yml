@@ -1,4 +1,4 @@
-# Consolidates the 8 on-pr-<pkg>-ts.yml producers.
+# Consolidates the per-package PR-head TypeScript check producers.
 #
 # These run PR-head code, so they stay on pull_request (unprivileged, no
 # secrets) rather than moving into on-pr-nx, which is pull_request_target.
@@ -83,6 +83,13 @@ jobs:
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/embed-llamacpp
+
+  ggml-rpc-server-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'ggml-rpc-server')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/ggml-rpc-server
 
   llm-pr-head-ts-checks:
     needs: matrix

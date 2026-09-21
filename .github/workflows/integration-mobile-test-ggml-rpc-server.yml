@@ -108,7 +108,7 @@ jobs:
   # A manual run has no sibling PR prebuild job, so produce the exact branch
   # artifacts in this run before packaging the device app.
   prebuild-manual:
-    if: github.event_name == 'workflow_dispatch'
+    if: inputs.platform != ''
     permissions:
       contents: write
       packages: write

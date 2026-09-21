@@ -1489,6 +1489,9 @@ test("fork-ci: fork-approval caller grants statuses: write (reusable cannot elev
 test('ggml-rpc-server keeps Device Farm runs on demand', () => {
   const path = '.github/workflows/on-pr-ggml-rpc-server.yml'
   const source = read(path)
+  const mobilePath =
+    '.github/workflows/integration-mobile-test-ggml-rpc-server.yml'
+  const mobileSource = read(mobilePath)
   const mobile = eachJob(source).find((job) => job.name === 'mobile')
   assert.equal(
     mobile,
@@ -1500,11 +1503,16 @@ test('ggml-rpc-server keeps Device Farm runs on demand', () => {
     /run_mobile/,
     `${path}: must not route the legacy run-mobile-addon-tests label`,
   )
+  assert.match(
+    mobileSource,
+    /prebuild-manual:\n\s+if: inputs\.platform != ''/,
+    `${mobilePath}: only a direct manual dispatch should build prebuilds`,
+  )
 })
 
 test('ggml-rpc-server TypeScript checks run on PR head without privileged cache access', () => {
   const pr = read('.github/workflows/on-pr-ggml-rpc-server.yml')
-  const prHead = read('.github/workflows/on-pr-ggml-rpc-server-ts.yml')
+  const prHead = read('.github/workflows/on-pr-ts-nx.yml')
   const sanity = eachJob(pr).find((job) => job.name === 'sanity-checks')
   const awaitJob = jobBlock(pr, 'await-ts-checks')
   const prebuild = jobBlock(pr, 'prebuild')
@@ -1513,10 +1521,9 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
   assert.match(prHead, /\n\s+pull_request:/)
   assert.match(
     prHead,
-    /ggml-rpc-server-pr-head-ts-checks:[\s\S]*?uses:\s*\.\/\.github\/workflows\/reusable-ts-checks\.yml/,
+    /ggml-rpc-server-pr-head-ts-checks:[\s\S]*?if:\s*contains\(fromJSON\(needs\.matrix\.outputs\.tspackages\), 'ggml-rpc-server'\)[\s\S]*?uses:\s*\.\/\.github\/workflows\/reusable-ts-checks\.yml/,
   )
   assert.match(prHead, /workdir:\s*packages\/ggml-rpc-server/)
-  assert.match(prHead, /vcpkg-overlays\/ports\/qvac-fabric\/\*\*/)
 
   assert.match(
     awaitJob,
@@ -1543,6 +1550,14 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
 
 test('RPC RDMA validation covers client and server without replacing release artifacts', () => {
   const reusable = read('.github/workflows/reusable-prebuilds.yml')
+  const nxPrebuilds = read('.github/workflows/prebuilds-nx.yml')
+  const rpcPrebuilds = read('.github/workflows/prebuilds-ggml-rpc-server.yml')
+  const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml')
+  const stripAction = read('.github/actions/strip-prebuilds/action.yml')
+  const validation = read('.github/scripts/validate-rpc-rdma-build.sh')
+  const llmBuildCi = JSON.parse(
+    read('packages/llm-llamacpp/project.json'),
+  ).targets.build.options.ci
   const uploadIndex = reusable.indexOf(
     'name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}',
   )
@@ -1551,6 +1566,75 @@ test('RPC RDMA validation covers client and server without replacing release art
   assert.ok(
     validationIndex > uploadIndex,
     'the optional validation rebuild must run only after the release artifact is captured',
+  )
+  assert.match(
+    validation,
+    /ABI_INFO=\$\(find build\/_vcpkg[^\n]+\|\| true\)/,
+    'a missing ABI metadata directory must reach the explicit validation error',
+  )
+  assert.match(stripAction, /extra-names:/)
+  assert.match(
+    reusable,
+    /uses:\s*\.\/\.github\/actions\/strip-prebuilds[\s\S]*?extra-names:\s*\$\{\{ inputs\.extra-strip-binary-name \}\}/,
+    'extensionless executables must use the canonical strip-and-verify action',
+  )
+  assert.doesNotMatch(reusable, /name:\s*Strip extensionless executable/)
+  assert.match(
+    reusable,
+    /runs-on:\s*\$\{\{ needs\.runner_names\.outputs\[matrix\.runner_key\] \|\| matrix\.os \}\}/,
+    'caller-defined prebuild matrices must retain the os runner fallback',
+  )
+  assert.match(
+    reusable,
+    /Each entry requires os, runner_key,[\s\S]*?platform, and arch; tags and flags are optional/,
+    'matrix-include must document its required and optional fields',
+  )
+  for (const [input, field] of [
+    ['matrix-include', 'matrixInclude'],
+    ['desktop-smoke-command', 'desktopSmokeCommand'],
+    ['post-artifact-build-command', 'postArtifactBuildCommand'],
+    ['extra-strip-binary-name', 'extraStripBinaryName'],
+  ]) {
+    assert.match(
+      nxPrebuilds,
+      new RegExp(`${input}: \\$\\{\\{ matrix\\.${field}`),
+      `prebuilds-nx must forward ${field}`,
+    )
+  }
+  assert.equal(llmBuildCi.linuxExtraPackages, 'libibverbs-dev')
+  assert.equal(
+    llmBuildCi.postArtifactBuildCommand,
+    'bash ../../.github/scripts/validate-rpc-rdma-build.sh',
+  )
+  assert.match(
+    reusable,
+    /reuse_hit:[\s\S]*?value:\s*\$\{\{ jobs\.detect-reuse\.outputs\.reuse_hit \}\}/,
+  )
+  const rpcDispatchBlock = rpcPrebuilds.slice(
+    rpcPrebuilds.indexOf('  workflow_dispatch:'),
+    rpcPrebuilds.indexOf('  workflow_call:'),
+  )
+  const rpcCallBlock = rpcPrebuilds.slice(
+    rpcPrebuilds.indexOf('  workflow_call:'),
+    rpcPrebuilds.indexOf('\npermissions:'),
+  )
+  assert.doesNotMatch(rpcDispatchBlock, /reuse-workflow-file|outputs:/)
+  assert.match(rpcCallBlock, /reuse-workflow-file:/)
+  assert.match(
+    rpcCallBlock,
+    /reuse_hit:[\s\S]*?value:\s*\$\{\{ jobs\.prebuild\.outputs\.reuse_hit \}\}/,
+  )
+  assert.match(
+    rpcPrebuilds,
+    /reuse-workflow-file:\s*\$\{\{ inputs\.reuse-workflow-file \}\}/,
+  )
+  assert.match(
+    rpcPr,
+    /reuse-workflow-file:\s*on-pr-ggml-rpc-server\.yml/,
+  )
+  assert.match(
+    rpcPr,
+    /REUSE_HIT:\s*\$\{\{ needs\.prebuild\.outputs\.reuse_hit \}\}/,
   )
 
   for (const path of [
@@ -1577,6 +1661,15 @@ test('RPC RDMA validation covers client and server without replacing release art
     2,
     'both RPC release publishers download the package-derived merged artifact',
   )
+  for (const name of ['publish-gpr', 'publish-npm']) {
+    const publishJob = eachJob(release).find((job) => job.name === name)
+    assert.ok(publishJob, `${name} job exists`)
+    assert.match(
+      publishJob.text,
+      /name:\s*Checkout repository[\s\S]*?persist-credentials:\s*false/,
+      `${name} must not persist checkout credentials while publishing`,
+    )
+  }
 })
 
 test('managed RPC lifecycle overlay is a syntactically valid git patch', () => {
