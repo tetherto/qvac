@@ -1,9 +1,8 @@
 {
-  "overlay-ports": ["./vcpkg/ports"],
   "default-registry": {
     "kind": "git",
     "reference": "main",
-    "baseline": "18fd55a0288f492346964fe780fb8c7c8789c351",
+    "baseline": "4d6eca05d0a20b9c5dc003c7d40b5c478c9b95e4",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [

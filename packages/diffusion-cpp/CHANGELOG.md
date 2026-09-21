@@ -9,6 +9,13 @@
   CPU-backed streaming and explicit disk residency work with the walk's KV cache.
 - World `verbosity` exposes native placement and segment-residency logs.
 
+### Changed
+
+- Resolve `stable-diffusion-cpp@2026-08-11#2` from the registry without an overlay.
+- World verbosity accepts numeric strings, validates levels 0..3, and restores
+  the shared log level on unload. Native log-level reads are thread-safe.
+- Invalid World budgets and decoder disk placement report typed input errors.
+
 ## [0.24.0] - 2026-09-15
 
 This release adds explicit model-placement and layer-streaming controls, with

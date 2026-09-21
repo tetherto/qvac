@@ -20,7 +20,7 @@ using namespace qvac_errors;
 
 WorldSessionModel::WorldSessionModel(
     qvac_lib_inference_addon_sd::WorldSessionConfig config)
-    : config_(std::move(config)) {
+    : config_(std::move(config)), verbosity_(config_.verbosity) {
   sd_set_log_callback(qvac_lib_inference_addon_sd::sdLogCallback, nullptr);
 }
 
@@ -39,6 +39,8 @@ void WorldSessionModel::load() {
   if (isLoaded()) {
     return;
   }
+  qvac_lib_inference_addon_sd::validateWorldPlacement(
+      config_.paramsBackend, config_.maxVram);
   if (config_.ditModelPath.empty() || config_.taehvPath.empty() ||
       config_.scenePath.empty()) {
     throw StatusError(

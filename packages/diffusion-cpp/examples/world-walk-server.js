@@ -135,7 +135,7 @@ function makeWorld() {
       paramsBackend: process.env.ABOT_PARAMS_BACKEND || undefined,
       maxVram: process.env.ABOT_MAX_VRAM || undefined,
       streamLayers: process.env.ABOT_STREAM_LAYERS === '1' || undefined,
-      verbosity: process.env.ABOT_VERBOSITY ? Number(process.env.ABOT_VERBOSITY) : undefined,
+      verbosity: process.env.ABOT_VERBOSITY || undefined,
       // 0/unset = lossless PNG frames; 1..100 = JPEG at that quality (much
       // smaller frames, so remote/tunneled browsers stream far less data).
       // Number(): frameJpegQuality is validated with Number.isInteger, so the
