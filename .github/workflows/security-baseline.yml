@@ -122,6 +122,14 @@ jobs:
           node --test
           .github/scripts/test/sdk-e2e-rerun.test.mjs
 
+      # The prepare-inference action is checked out from the PR head in
+      # test-sdk.yml, but not every PR runs e2e. This suite pins the win32
+      # `file:C:/…` tarball spec without needing a Windows runner.
+      - name: Run SDK e2e tarball-spec tests
+        run: >-
+          node --test
+          .github/scripts/test/sdk-e2e-local-tarball-spec.test.mjs
+
       # The trust-policy suite asserts on workflow *text*, so it stays green even
       # when an edit destroys a job graph. on-merge-*/on-publish-* never run on a
       # PR, and pull_request_target workflows load from the base branch, so this

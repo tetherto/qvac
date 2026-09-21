@@ -145,6 +145,20 @@ def test_models_registry_module_has_one_constant_per_catalog_entry() -> None:
         ), f"{name}: catalog key must match its own name field"
 
 
+def test_models_registry_preserves_published_parakeet_aliases() -> None:
+    catalog = generate.load_models_registry()
+
+    for suffix in ("F16", "Q4_0", "Q8_0"):
+        legacy_name = f"PARAKEET_0_6B_{suffix}"
+        canonical_name = f"PARAKEET_NEMOTRON_0_6B_{suffix}"
+        legacy = catalog[legacy_name]
+        canonical = catalog[canonical_name]
+
+        assert legacy["name"] == legacy_name
+        assert legacy["src"] == canonical["src"]
+        assert legacy["sha256Checksum"] == canonical["sha256Checksum"]
+
+
 def test_progress_capable_methods_get_a_with_progress_stub(
     manifest_methods: list[dict],
 ) -> None:

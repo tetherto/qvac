@@ -68,9 +68,6 @@
       "import": "./dist/src/worker/index.js",
       "require": "./dist/src/worker/index.js"
     },
-    "./dist/server/worker.js": {
-      "import": "./dist/src/worker/legacy-worker-entry.js"
-    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/src/worker/plugins/llamacpp-completion.d.ts",
       "import": "./dist/src/worker/plugins/llamacpp-completion.js"
@@ -142,9 +139,6 @@
     "./worker-lifecycle": {
       "import": "./dist/src/worker/lifecycle.js"
     },
-    "./worker-core": {
-      "import": "./dist/src/worker/worker-core.js"
-    },
     "./plugins": {
       "import": "./dist/src/server/plugins/index.js"
     },
@@ -192,9 +186,9 @@
     "test:unit": "bun run scripts/run-unit-tests.ts",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "lint": "lunte && npm run enforce-inference-peer-dependencies",
+    "lint": "lunte && npm run enforce-inference-versions",
     "lint:fix": "lunte --fix",
-    "enforce-inference-peer-dependencies": "bun scripts/enforce-inference-peer-dependencies.ts",
+    "enforce-inference-versions": "bun scripts/enforce-inference-versions.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.types.json",
     "postcompile:aliases": "tsc-alias -p tsconfig.alias.json",
     "build": "rm -rf dist && npm run lint && tsc --project tsconfig.json && npm run postcompile:aliases",
@@ -212,8 +206,8 @@
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {
+    "@qvac/asr-ggml": "^0.5.3",
     "@qvac/audiogen-ggml": "^0.4.0",
-    "@qvac/asr-ggml": "^0.3.1",
     "@qvac/bci-whispercpp": "^0.9.1",
     "@qvac/classification-ggml": "^0.26.1",
     "@qvac/decoder-audio": "^0.6.0",

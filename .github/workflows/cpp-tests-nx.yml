@@ -53,6 +53,26 @@ on:
 permissions:
   contents: read
 
+# Deliberately NO concurrency block, unlike the legacy per-package cpp-tests
+# workflows this leaf replaces. In nx the orchestrators own concurrency
+# (on-pr-nx, benchmark-performance-nx) and the leaves -- prebuilds-nx,
+# integration-test-nx, this one -- do not.
+#
+# The legacy files can each carry one because each covers a single package, so
+# its group only ever holds runs that target the same actions/cache key. This
+# leaf covers every package in one run, so any workflow-level group collapses to
+# one per ref: two standalone dispatches for disjoint package sets would then
+# serialise, and a third would silently cancel the second pending one. Standalone
+# dispatch is how these leaves are validated (docs/ci/nx-ci-consolidation.md), so
+# that is the common case, not an edge one.
+#
+# This trades away the A9 convention that every workflow declares a group. The
+# thing A9 protects here is already covered: the vcpkg cache write is gated to
+# trusted events, its key is package-scoped, and actions/cache/save is a no-op
+# against a key that already exists -- so two concurrent runs cannot corrupt an
+# entry, and there is no state left for a group to serialise. Per-PR
+# cancellation still comes from on-pr-nx's own group.
+
 jobs:
   matrix:
     name: Determine affected packages (nx project.json, transitive)
@@ -93,9 +113,11 @@ jobs:
     env:
       BUILD_TYPE: Debug
       ENABLE_COVERAGE: ON
-      # Matches main per lane: coverage caches at the workspace root, standard
-      # per package. Without it the whole matrix loses its vcpkg binary cache.
-      VCPKG_BINARY_SOURCES: ${{ matrix.mode == 'coverage' && format('clear;files,{0}/vcpkg/cache,readwrite', github.workspace) || format('clear;files,{0}/{1}/vcpkg/cache,readwrite', github.workspace, matrix.workdir) }}
+      # No VCPKG_BINARY_SOURCES here. setup-vcpkg writes that variable to
+      # $GITHUB_ENV, which wins over the job's env: block for every later step,
+      # so a value set here was read by nothing on the standard lanes. The
+      # standard lanes get it from vcpkg-binary-cache-dir below; the coverage
+      # lanes, which do not run setup-vcpkg, set it in their own vcpkg step.
     steps:
       - name: Manual Workspace Cleanup
         if: matrix.mode == 'standard' && runner.environment != 'github-hosted'
@@ -150,7 +172,24 @@ jobs:
 
       - name: Setup vcpkg (system-preinstalled)
         if: matrix.mode == 'coverage'
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+        run: |
+          echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+          # Coverage lanes build at the workspace root and nothing else on this
+          # path writes VCPKG_BINARY_SOURCES. Unchanged from the job env: block
+          # this moved out of; these lanes have no actions/cache entry either
+          # way, so the directory lives and dies with the workspace.
+          echo "VCPKG_BINARY_SOURCES=clear;files,$GITHUB_WORKSPACE/vcpkg/cache,readwrite" >> $GITHUB_ENV
+
+      # Resolves to a host-wide directory on self-hosted runners (shared by every
+      # runner instance on the box, survives the workspace wipe) and to the
+      # workspace on GitHub-hosted ones, where actions/cache below carries it.
+      # Must come after setup-vcpkg, which writes VCPKG_BINARY_SOURCES itself.
+      - name: Point vcpkg at its binary cache
+        if: matrix.mode == 'standard'
+        uses: ./.github/actions/vcpkg-binary-cache-dir
+        with:
+          workdir: ${{ matrix.workdir }}
+          trusted: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) }}
 
       - name: Cleanup vcpkg
         shell: bash
@@ -160,6 +199,44 @@ jobs:
           if [ "${{ matrix.mode }}" = "coverage" ]; then
             rm -rf "$VCPKG_ROOT/downloads/git-tmp"
           fi
+
+      # Exports TOOLCHAIN_FINGERPRINT for the cache key below. Must run before
+      # both cache steps. See the action for why the key cannot omit it.
+      - name: Fingerprint the toolchain
+        if: matrix.mode == 'standard'
+        uses: ./.github/actions/vcpkg-toolchain-fingerprint
+
+      # Restore only. The save sits below the build because a run that restores
+      # from the host layer compiles nothing, and would otherwise save an EMPTY
+      # entry over the shared key, making every other host rebuild.
+      #
+      # Own key namespace: the legacy per-package workflows spell the package
+      # short-name (`embed`) where nx has the project name (`embed-llamacpp`),
+      # and their key inputs differ per package, so the two cannot share entries.
+      # Until a trusted caller exists here, this layer is warmed by a
+      # workflow_dispatch of this workflow; the host layer, which needs no key,
+      # is warm on every run.
+      - name: Get vcpkg cache (restore)
+        if: matrix.mode == 'standard'
+        id: vcpkg-cache
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          # The ports glob below is the PACKAGE-local overlay (one file today, in
+          # embed-llamacpp). The workspace-root 'vcpkg/ports/**' is deliberately
+          # absent: hashing the microsoft/vcpkg port tree on NTFS exceeded the
+          # 120s template-eval cap on qvac-win25-x64, and the pinned clone is a
+          # constant anyway.
+          key: >-
+            cpp-tests-nx-v1-${{ matrix.package }}-${{ matrix.platform }}-${{ matrix.arch }}-${{
+              hashFiles(
+                format('{0}/vcpkg.json', matrix.workdir),
+                format('{0}/vcpkg-configuration.json', matrix.workdir),
+                format('{0}/vcpkg/ports/**', matrix.workdir),
+                'vcpkg-overlays/triplets/**',
+                'vcpkg-overlays/toolchains/**'
+              )
+            }}-${{ env.TOOLCHAIN_FINGERPRINT }}
+          path: ${{ matrix.workdir }}/vcpkg/cache
 
       - name: Setup ccache
         if: matrix.hasCcache
@@ -403,6 +480,69 @@ jobs:
         working-directory: ${{ matrix.workdir }}
         run: ${{ matrix.mode == 'coverage' && 'npm run coverage:cpp:build' || 'npm run test:cpp:build' }}
 
+      # Workspace -> host ONLY. vcpkg already wrote this run's compiled archives
+      # to the host layer (it is `write` there for trusted events); this adds the
+      # ones that came from the keyed entry rather than from a compile, so a
+      # trusted run warms a cold host even when it builds nothing.
+      #
+      # The host -> workspace direction is deliberately absent. The host path has
+      # no package component, so copying it in would put every addon's archives
+      # into this package's entry and every PR leg would download the union.
+      # Nothing is lost by dropping it: a trusted run cannot read the host layer,
+      # so if its keyed entry is gone it compiles and the save recreates the
+      # entry from that build.
+      #
+      # Temp-then-mv because other instances read this dir concurrently; umask
+      # 000 because 1777 on the root is not inherited by vcpkg's bucket dirs.
+      - name: Sync the host and workspace vcpkg caches
+        if: >-
+          matrix.mode == 'standard' && env.VCPKG_CACHE_PERSISTENT == 'true' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository)
+        shell: bash
+        run: |
+          set +e
+          host_dir=$(echo "${VCPKG_BINARY_SOURCES}" | tr ';' '\n' | grep '^files,' | head -n 1 | cut -d, -f2)
+          ws_dir="${VCPKG_CACHE_DIR}"
+          # Windows hands these over with backslashes, which this shell cannot
+          # traverse; cygpath is present in the runner's Git bash.
+          if command -v cygpath > /dev/null 2>&1; then
+            host_dir=$(cygpath -u "${host_dir}" 2>/dev/null || echo "${host_dir}")
+            ws_dir=$(cygpath -u "${ws_dir}" 2>/dev/null || echo "${ws_dir}")
+          fi
+          echo "sync: host=${host_dir} workspace=${ws_dir}"
+          [ -n "${host_dir}" ] && [ -d "${host_dir}" ] || { echo "sync: no host dir"; exit 0; }
+          [ "${host_dir}" = "${ws_dir}" ] && exit 0
+          mkdir -p "${ws_dir}"
+          umask 000
+
+          sync_dir() {
+            find "$1" -type f 2>/dev/null | while read -r f; do
+              out="$2/${f#$1/}"
+              [ -f "$out" ] && continue
+              mkdir -p "$(dirname "$out")" 2>/dev/null
+              tmp="$out.tmp.$$"
+              cp "$f" "$tmp" 2>/dev/null && mv -f "$tmp" "$out" 2>/dev/null
+              rm -f "$tmp" 2>/dev/null
+            done
+          }
+          sync_dir "${ws_dir}" "${host_dir}"
+
+          echo "sync: host=$(find "${host_dir}" -type f 2>/dev/null | wc -l) archives, workspace=$(find "${ws_dir}" -type f 2>/dev/null | wc -l)"
+          exit 0
+
+      # Only trusted events may write the shared cache (see .github/AGENTS.md),
+      # and only when there are archives to write: hashFiles is empty for an
+      # empty directory.
+      - name: Save vcpkg cache (trusted contexts)
+        if: >-
+          matrix.mode == 'standard' &&
+          (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) &&
+          hashFiles(format('{0}/vcpkg/cache/**', matrix.workdir)) != ''
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+          path: ${{ matrix.workdir }}/vcpkg/cache
+
       - name: Deterministic tier (must pass)
         if: matrix.hardGateCommand
         working-directory: ${{ matrix.workdir }}
@@ -492,6 +632,7 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'llm-llamacpp') && inputs.fabric-overlay-artifact || '' }}
 
   cpp-tests-audiogen:
     needs: matrix
