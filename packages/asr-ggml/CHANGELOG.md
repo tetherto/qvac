@@ -14,6 +14,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `ggml-speech` floor to `2026-09-21`: the speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2). Same models, same GPU backends, no API change.
+
 ### Added
 
 - Cache-aware streaming for `parakeet-unified-en-0.6b`. The engine keeps

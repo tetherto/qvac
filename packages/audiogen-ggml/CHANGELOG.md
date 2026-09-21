@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `ggml-speech` floor to `2026-09-21`: the speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2). Same models, same GPU backends, no API change.
 - Raise the `speech-cpp` floor to `2026-09-18`. MiniMax-Music3 generates faster
   with the model files you already have: the RVQ depth decoder keeps a K/V cache
   instead of recomputing its prefix on every codebook step, and the flow default
