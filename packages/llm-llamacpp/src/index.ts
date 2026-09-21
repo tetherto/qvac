@@ -1144,6 +1144,39 @@ namespace LlmLlamacpp {
      * `InvalidArgument` naming both knobs.
      */
     parallel?: NumericLike;
+    /**
+     * Per-sequence cap on the process-local full-state checkpoints kept for
+     * cached requests on hybrid / recurrent models (Qwen3.5, Jamba,
+     * Granite-Hybrid, DeepSeek V4, ...). Such models cannot trim a KV tail,
+     * so an edited or diverging history is served by restoring the newest
+     * checkpoint that is still a prefix of the new prompt. One checkpoint is
+     * added per committed cached request and each is a full sequence dump in
+     * the OS temp directory, so this bounds disk usage: `0` keeps none (every
+     * divergent turn is a cold prefill), the default is 32, the maximum 1024.
+     * Ignored on pure-attention models, which never take checkpoints.
+     * Also accepted as `cache-checkpoints`; supplying both is an error.
+     */
+    cache_checkpoints?: NumericLike;
+    /**
+     * Byte budget for the checkpoints kept per sequence, enforced before
+     * `cache_checkpoints`: the oldest checkpoints are dropped until the total
+     * payload fits. `0` (default) is unlimited. When set, the model load fails
+     * with `InvalidArgument` if the budget cannot hold `cache_checkpoints`
+     * checkpoints of the largest size the context allows, so a misconfigured
+     * budget is reported up front rather than discovered mid-conversation.
+     * Also accepted as `cache-checkpoints-max-bytes`.
+     */
+    cache_checkpoints_max_bytes?: NumericLike;
+    /**
+     * Where checkpoints and the per-request rollback snapshot live:
+     * `'disk'` (default) writes them to the OS temp directory, `'memory'`
+     * keeps them in host RAM so a cached chat never touches the disk. Each
+     * live snapshot costs one full copy of the sequence state, so pair
+     * `'memory'` with a small `cache_checkpoints` or a
+     * `cache_checkpoints_max_bytes` budget. Also accepted as
+     * `cache-checkpoint-storage`.
+     */
+    cache_checkpoint_storage?: "disk" | "memory";
     [key: string]: string | number | boolean | string[] | undefined;
   }
 

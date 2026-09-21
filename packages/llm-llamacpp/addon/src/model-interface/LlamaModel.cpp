@@ -38,7 +38,9 @@
 #include "utils/BackendSelection.hpp"
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/ModelMemoryPolicy.hpp"
 #include "utils/ScopeGuard.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 #include "utils/SharedSnapshot.hpp"
 
 using namespace qvac_lib_inference_addon_llama::errors;
@@ -193,6 +195,17 @@ void LlamaModel::init(bool acquireLock) {
     snap->backendsHandle_ = LlamaBackendsHandle(backendsDir, openclCacheDir);
   }
 
+  // Addon-only knobs: consume them here so they are not forwarded to
+  // llama.cpp's argument parser, which would reject them as unknown.
+  try {
+    snap->cacheCheckpointPolicy_ =
+        qvac_lib_inference_addon_llama::cache::parseCheckpointPolicy(
+            configFilemap);
+  } catch (const std::invalid_argument& e) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, e.what());
+  }
+
   auto normalized = load_fit_normalization::normalizeLoadForFit(
       modelPath,
       std::move(configFilemap),
@@ -244,6 +257,8 @@ void LlamaModel::init(bool acquireLock) {
       std::move(llamaInit));
 
   if (snap->llmContext_) {
+    snap->llmContext_->setCacheCheckpointPolicy(snap->cacheCheckpointPolicy_);
+    validateCheckpointBudget(*snap);
     snap->cacheManager_.emplace(
         snap->llmContext_.get(),
         [this](bool resetStats) { this->resetState(resetStats); });
@@ -251,6 +266,59 @@ void LlamaModel::init(bool acquireLock) {
 
   if (isMultiBatchActivated(*snap)) {
     snap->batchScheduler_ = initBatchScheduler(*snap);
+  }
+}
+
+void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
+  namespace utils = qvac_lib_inference_addon_llama::utils;
+  const auto& policy = state.cacheCheckpointPolicy_;
+  if (policy.maxBytes == 0 || policy.maxCount == 0) {
+    return;
+  }
+  llama_model* mdl = state.llmContext_->getModel();
+  llama_context* ctx = state.llmContext_->getCtx();
+  if (mdl == nullptr || ctx == nullptr) {
+    return;
+  }
+  // Only models that cannot trim a KV tail keep checkpoints; a budget on a
+  // pure-attention model is inert and needs no validation.
+  const std::optional<std::string> architecture =
+      utils::getModelArchitecture(mdl);
+  const bool isDeepSeekV4 = architecture.has_value() &&
+                            utils::isDeepSeekV4Architecture(*architecture);
+  if (!utils::needsFullStateSnapshot(
+          llama_model_is_recurrent(mdl),
+          llama_model_is_hybrid(mdl),
+          isDeepSeekV4)) {
+    return;
+  }
+  const uint32_t perSeqTokens = llama_n_ctx_seq(ctx);
+  const uint64_t worstCase = utils::estimateMaxSequenceStateBytes(
+      ctx, llama_model_get_vocab(mdl), perSeqTokens);
+  if (worstCase == 0) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[LlamaModel] could not measure the sequence state size; "
+        "cache_checkpoints_max_bytes is enforced at runtime only\n");
+    return;
+  }
+  const uint64_t needed = worstCase * static_cast<uint64_t>(policy.maxCount);
+  if (needed > policy.maxBytes) {
+    const uint64_t fit = policy.maxBytes / worstCase;
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        string_format(
+            "[LlamaModel] cache_checkpoints_max_bytes=%llu cannot hold "
+            "cache_checkpoints=%zu checkpoints: one checkpoint of a "
+            "%u-token sequence takes up to %llu bytes, so %zu need %llu. "
+            "Lower cache_checkpoints to %llu or raise the budget.",
+            static_cast<unsigned long long>(policy.maxBytes),
+            policy.maxCount,
+            perSeqTokens,
+            static_cast<unsigned long long>(worstCase),
+            policy.maxCount,
+            static_cast<unsigned long long>(needed),
+            static_cast<unsigned long long>(fit)));
   }
 }
 
@@ -268,19 +336,24 @@ namespace {
 // declaration order); null for text-only contexts selects the text driver.
 // Capability is queried via `visionContext()` rather than an RTTI cast, so a
 // future multimodal context is picked up without inheriting MtmdLlmContext.
-batching::DriverFactory
-buildDriverFactory(LlmModelContext shared, mtmd_context* sharedVision) {
-  return [shared, sharedVision](
+batching::DriverFactory buildDriverFactory(
+    LlmModelContext shared, mtmd_context* sharedVision,
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy checkpointPolicy) {
+  return [shared, sharedVision, checkpointPolicy](
              const common_params& params,
              uint32_t seqId,
              llama_pos perSeqCtxCeiling) -> std::unique_ptr<SequenceDriver> {
     const auto sid = static_cast<llama_seq_id>(seqId);
+    std::unique_ptr<SequenceDriver> driver;
     if (sharedVision != nullptr) {
-      return std::make_unique<MtmdLlmContext>(
+      driver = std::make_unique<MtmdLlmContext>(
           params, shared, sharedVision, sid, perSeqCtxCeiling);
+    } else {
+      driver = std::make_unique<TextLlmContext>(
+          params, shared, sid, perSeqCtxCeiling);
     }
-    return std::make_unique<TextLlmContext>(
-        params, shared, sid, perSeqCtxCeiling);
+    driver->setCacheCheckpointPolicy(checkpointPolicy);
+    return driver;
   };
 }
 
@@ -312,7 +385,10 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
         batchSize,
         batchCapacity,
         cparams,
-        buildDriverFactory(shared, state.llmContext_->visionContext()));
+        buildDriverFactory(
+            shared,
+            state.llmContext_->visionContext(),
+            state.cacheCheckpointPolicy_));
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,

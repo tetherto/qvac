@@ -159,6 +159,12 @@ public:
   void setCacheReconciliationEnabled(bool enabled) override {
     cacheReconciliationEnabled_ = enabled;
   }
+  void setCacheCheckpointPolicy(
+      const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy)
+      override {
+    cacheCheckpointPolicy_ = policy;
+    requestRollback_.setStorage(policy.storage);
+  }
   [[nodiscard]] std::vector<llama_token> cacheStateTokens() const override;
   void restoreCacheStateTokens(const std::vector<llama_token>& tokens) override;
   void clearCacheReconciliationState() override;
@@ -457,6 +463,8 @@ private:
   qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot
       preRequestCacheSnapshot_;
   std::deque<CacheCheckpoint> cacheCheckpoints_;
+  qvac_lib_inference_addon_llama::cache::CheckpointPolicy
+      cacheCheckpointPolicy_;
   size_t pendingReuseEntries_ = 0;
 
   // Generic request-entry snapshot for cancellation on memory that cannot

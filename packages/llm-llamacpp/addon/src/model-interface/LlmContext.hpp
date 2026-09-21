@@ -315,6 +315,13 @@ public:
   /// existing behavior.
   virtual void setCacheReconciliationEnabled(bool enabled) { (void)enabled; }
 
+  /// Process-local checkpoint policy (count, byte budget, storage); see
+  /// `cache::parseCheckpointPolicy`. Set once at model load.
+  virtual void setCacheCheckpointPolicy(
+      const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy) {
+    (void)policy;
+  }
+
   /**
    * Number of renders in the most recent request where the chat template
    * rejected the tool definitions and the prompt was produced without them.

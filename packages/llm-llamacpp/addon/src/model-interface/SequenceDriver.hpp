@@ -11,6 +11,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "CacheLedger.hpp"
 #include "MediaLoadOrder.hpp"
 #include "RenderOverrides.hpp"
 #include "addon/LlmErrors.hpp"
@@ -204,6 +205,12 @@ public:
   }
 
   virtual void setCacheReconciliationEnabled(bool enabled) { (void)enabled; }
+  /// See `LlmContext::setCacheCheckpointPolicy`; the scheduler applies the
+  /// model-wide policy to every driver it creates.
+  virtual void setCacheCheckpointPolicy(
+      const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy) {
+    (void)policy;
+  }
 
   /// Tokenize the prompt and stage it for prefill (without running
   /// generation). Returns the text tokens still pending decode by the

@@ -4,12 +4,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <llama.h>
+
+#include "utils/ParseUnsigned.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 
 namespace qvac_lib_inference_addon_llama::cache {
 
@@ -19,7 +25,36 @@ inline constexpr llama_token LEDGER_MAGIC = 0x514c4447; // "QLDG"
 inline constexpr llama_token LEDGER_VERSION = 1;
 inline constexpr size_t LEDGER_HEADER_WORDS = 8;
 inline constexpr size_t LEDGER_ENTRY_WORDS = 5;
-inline constexpr size_t MAX_PROCESS_CHECKPOINTS = 32;
+// Process-local full-state checkpoints kept per sequence on models that
+// cannot trim a KV tail. One is added per committed cached request, and each
+// is a full copy of the sequence state (on disk or in memory, see
+// `SnapshotStorage`), so the policy below bounds that footprint.
+//   * `cache_checkpoints`: how many to keep; 0 keeps none, which turns every
+//     divergent turn into a cold prefill.
+//   * `cache_checkpoints_max_bytes`: total payload budget per sequence; 0 is
+//     unlimited. It is enforced before the count, and the model load fails
+//     early when it cannot hold `cache_checkpoints` checkpoints of the
+//     largest size the context allows.
+//   * `cache_checkpoint_storage`: `disk` (temp files, default) or `memory`.
+inline constexpr size_t DEFAULT_PROCESS_CHECKPOINTS = 32;
+inline constexpr size_t MAX_CONFIGURABLE_PROCESS_CHECKPOINTS = 1024;
+inline constexpr const char* CACHE_CHECKPOINTS_KEY = "cache_checkpoints";
+inline constexpr const char* CACHE_CHECKPOINTS_KEY_DASHED = "cache-checkpoints";
+inline constexpr const char* CACHE_CHECKPOINTS_MAX_BYTES_KEY =
+    "cache_checkpoints_max_bytes";
+inline constexpr const char* CACHE_CHECKPOINTS_MAX_BYTES_KEY_DASHED =
+    "cache-checkpoints-max-bytes";
+inline constexpr const char* CACHE_CHECKPOINT_STORAGE_KEY =
+    "cache_checkpoint_storage";
+inline constexpr const char* CACHE_CHECKPOINT_STORAGE_KEY_DASHED =
+    "cache-checkpoint-storage";
+
+struct CheckpointPolicy {
+  size_t maxCount = DEFAULT_PROCESS_CHECKPOINTS;
+  uint64_t maxBytes = 0; // 0 = unlimited
+  qvac_lib_inference_addon_llama::utils::SnapshotStorage storage =
+      qvac_lib_inference_addon_llama::utils::SnapshotStorage::Disk;
+};
 
 enum class EntryKind : int32_t { Token = 1, Media = 2 };
 
@@ -94,12 +129,86 @@ inline size_t commonPrefix(const Ledger& a, const Ledger& b) {
   return i;
 }
 
-template <typename T>
-void appendProcessCheckpoint(std::deque<T>& checkpoints, T checkpoint) {
+// Appends `checkpoint` and evicts from the oldest end until both limits of
+// `policy` hold: total payload bytes (measured by `bytesOf`) within
+// `maxBytes` when set, then count within `maxCount`. A single checkpoint
+// larger than the whole budget is evicted immediately.
+template <typename T, typename BytesOf>
+void appendProcessCheckpoint(
+    std::deque<T>& checkpoints, T checkpoint, const CheckpointPolicy& policy,
+    BytesOf bytesOf) {
   checkpoints.push_back(std::move(checkpoint));
-  while (checkpoints.size() > MAX_PROCESS_CHECKPOINTS) {
+  const auto totalBytes = [&]() {
+    uint64_t sum = 0;
+    for (const T& entry : checkpoints) {
+      sum += bytesOf(entry);
+    }
+    return sum;
+  };
+  while (!checkpoints.empty() &&
+         (checkpoints.size() > policy.maxCount ||
+          (policy.maxBytes > 0 && totalBytes() > policy.maxBytes))) {
     checkpoints.pop_front();
   }
+}
+
+// Consumes one addon-only key that may be spelled with underscores or dashes.
+// Returns the value, or nothing when neither spelling is present. Throws
+// std::invalid_argument when both are given.
+inline std::optional<std::pair<std::string, std::string>> takeConfigKey(
+    std::unordered_map<std::string, std::string>& config,
+    const char* underscoreKey, const char* dashedKey) {
+  const auto underscore = config.find(underscoreKey);
+  const auto dashed = config.find(dashedKey);
+  if (underscore != config.end() && dashed != config.end()) {
+    throw std::invalid_argument(
+        std::string(underscoreKey) + " and " + dashedKey +
+        " must not both be set");
+  }
+  const auto it = underscore != config.end() ? underscore : dashed;
+  if (it == config.end()) {
+    return std::nullopt;
+  }
+  std::pair<std::string, std::string> taken{it->first, it->second};
+  config.erase(it);
+  return taken;
+}
+
+// Consumes the checkpoint keys from the load config and returns the policy.
+// Absent keys keep their defaults. Throws std::invalid_argument for a
+// malformed or out-of-range value, an unknown storage name, or both spellings
+// of one key; callers translate it into their error type.
+inline CheckpointPolicy
+parseCheckpointPolicy(std::unordered_map<std::string, std::string>& config) {
+  using qvac_lib_inference_addon_llama::utils::SnapshotStorage;
+  CheckpointPolicy policy;
+  if (const auto count = takeConfigKey(
+          config, CACHE_CHECKPOINTS_KEY, CACHE_CHECKPOINTS_KEY_DASHED)) {
+    policy.maxCount = parseUnsignedInRange(
+        count->second, 0, MAX_CONFIGURABLE_PROCESS_CHECKPOINTS, count->first);
+  }
+  if (const auto bytes = takeConfigKey(
+          config,
+          CACHE_CHECKPOINTS_MAX_BYTES_KEY,
+          CACHE_CHECKPOINTS_MAX_BYTES_KEY_DASHED)) {
+    policy.maxBytes = parseUnsigned64InRange(
+        bytes->second, 0, std::numeric_limits<uint64_t>::max(), bytes->first);
+  }
+  if (const auto storage = takeConfigKey(
+          config,
+          CACHE_CHECKPOINT_STORAGE_KEY,
+          CACHE_CHECKPOINT_STORAGE_KEY_DASHED)) {
+    if (storage->second == "disk") {
+      policy.storage = SnapshotStorage::Disk;
+    } else if (storage->second == "memory") {
+      policy.storage = SnapshotStorage::Memory;
+    } else {
+      throw std::invalid_argument(
+          storage->first + " must be \"disk\" or \"memory\", got: \"" +
+          storage->second + "\"");
+    }
+  }
+  return policy;
 }
 
 inline uint64_t hashBytes(const void* data, size_t size) {
