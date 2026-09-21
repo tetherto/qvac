@@ -2,6 +2,10 @@
 
 Cache control is managed through `runOptions`. For a single prompt, pass `runOptions` as the second argument to `model.run(prompt, runOptions)`.
 
+For the mechanics behind these options, with state diagrams of the request
+transaction, prompt reconciliation, checkpoints and the `cacheKey` file, see
+[cache-lifecycle.md](./cache-lifecycle.md).
+
 Examples that need to add an assistant response back to history use this
 helper:
 
