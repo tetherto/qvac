@@ -1,734 +1,740 @@
-import test from 'node:test'
-import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import test from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
-const MILLISECONDS_PER_MINUTE = 60_000
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const MILLISECONDS_PER_MINUTE = 60_000;
 
 function read(relativePath) {
-  return readFileSync(join(root, relativePath), 'utf8')
+  return readFileSync(join(root, relativePath), "utf8");
 }
 
 function filesUnder(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    return entry.isDirectory() ? filesUnder(path) : [path]
-  })
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? filesUnder(path) : [path];
+  });
 }
 
 function extractRunBlock(relativePath, stepName) {
-  const source = read(relativePath)
-  const stepIndex = source.indexOf(`name: ${stepName}`)
-  assert.notEqual(stepIndex, -1, `step "${stepName}" exists in ${relativePath}`)
+  const source = read(relativePath);
+  const stepIndex = source.indexOf(`name: ${stepName}`);
+  assert.notEqual(
+    stepIndex,
+    -1,
+    `step "${stepName}" exists in ${relativePath}`,
+  );
 
-  const remainder = source.slice(stepIndex)
-  const runMatch = remainder.match(/^(\s*)run:\s*\|\s*$/m)
-  assert.ok(runMatch, `run block exists after "${stepName}" in ${relativePath}`)
+  const remainder = source.slice(stepIndex);
+  const runMatch = remainder.match(/^(\s*)run:\s*\|\s*$/m);
+  assert.ok(
+    runMatch,
+    `run block exists after "${stepName}" in ${relativePath}`,
+  );
 
-  const runStart = stepIndex + runMatch.index + runMatch[0].length + 1
-  const contentIndent = runMatch[1].length + 2
-  const lines = source.slice(runStart).split('\n')
-  const block = []
+  const runStart = stepIndex + runMatch.index + runMatch[0].length + 1;
+  const contentIndent = runMatch[1].length + 2;
+  const lines = source.slice(runStart).split("\n");
+  const block = [];
 
   for (const line of lines) {
-    if (line === '') {
-      block.push('')
-      continue
+    if (line === "") {
+      block.push("");
+      continue;
     }
-    if (line.startsWith(' '.repeat(contentIndent))) {
-      block.push(line.slice(contentIndent))
-      continue
+    if (line.startsWith(" ".repeat(contentIndent))) {
+      block.push(line.slice(contentIndent));
+      continue;
     }
-    break
+    break;
   }
 
-  return block.join('\n')
+  return block.join("\n");
 }
 
 function runScript(script, env = {}) {
-  const directory = mkdtempSync(join(tmpdir(), 'qvac-ci-policy-'))
-  const outputPath = join(directory, 'github-output')
+  const directory = mkdtempSync(join(tmpdir(), "qvac-ci-policy-"));
+  const outputPath = join(directory, "github-output");
   const result = spawnSync(
-    'bash',
-    ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', script],
+    "bash",
+    ["--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
     {
-      encoding: 'utf8',
+      encoding: "utf8",
       env: {
         ...process.env,
         GITHUB_OUTPUT: outputPath,
         ...env,
       },
     },
-  )
+  );
 
-  let output = ''
+  let output = "";
   try {
-    output = readFileSync(outputPath, 'utf8')
+    output = readFileSync(outputPath, "utf8");
   } catch {
     // A denied/failing script can legitimately produce no output.
   }
-  rmSync(directory, { recursive: true, force: true })
+  rmSync(directory, { recursive: true, force: true });
 
   assert.equal(
     result.status,
     0,
     `script failed:\nstdout=${result.stdout}\nstderr=${result.stderr}`,
-  )
+  );
 
   return Object.fromEntries(
     output
       .trim()
-      .split('\n')
+      .split("\n")
       .filter(Boolean)
       .map((line) => {
-        const separator = line.indexOf('=')
-        return [line.slice(0, separator), line.slice(separator + 1)]
+        const separator = line.indexOf("=");
+        return [line.slice(0, separator), line.slice(separator + 1)];
       }),
-  )
+  );
 }
 
 const falseRoute = {
-  run_verified_checks: 'false',
-  run_prebuilds: 'false',
-  run_cpp_tests: 'false',
-  run_desktop: 'false',
-  run_mobile: 'false',
-}
+  run_verified_checks: "false",
+  run_prebuilds: "false",
+  run_cpp_tests: "false",
+  run_desktop: "false",
+  run_mobile: "false",
+};
 
 const baselineRoute = {
   ...falseRoute,
-  run_verified_checks: 'true',
-}
+  run_verified_checks: "true",
+};
 
 function route(overrides = {}) {
   const script = extractRunBlock(
-    '.github/actions/ci-router/action.yml',
-    'Route CI stages',
-  )
+    ".github/actions/ci-router/action.yml",
+    "Route CI stages",
+  );
   return runScript(script, {
-    EVENT_NAME: 'pull_request_target',
-    PR_LABELS_JSON: '[]',
-    HEAD_REPO: 'tetherto/qvac',
-    BASE_REPO: 'tetherto/qvac',
-    IS_DRAFT: 'false',
+    EVENT_NAME: "pull_request_target",
+    PR_LABELS_JSON: "[]",
+    HEAD_REPO: "tetherto/qvac",
+    BASE_REPO: "tetherto/qvac",
+    IS_DRAFT: "false",
     ...overrides,
-  })
+  });
 }
 
-test('ci-router: trusted non-PR events enable every stage', () => {
+test("ci-router: trusted non-PR events enable every stage", () => {
   assert.deepEqual(
-    route({ EVENT_NAME: 'workflow_dispatch', HEAD_REPO: '', IS_DRAFT: '' }),
+    route({ EVENT_NAME: "workflow_dispatch", HEAD_REPO: "", IS_DRAFT: "" }),
     {
-      run_verified_checks: 'true',
-      run_prebuilds: 'true',
-      run_cpp_tests: 'true',
-      run_desktop: 'true',
-      run_mobile: 'true',
+      run_verified_checks: "true",
+      run_prebuilds: "true",
+      run_cpp_tests: "true",
+      run_desktop: "true",
+      run_mobile: "true",
     },
-  )
-})
+  );
+});
 
-test('ci-router: ready internal PR runs baseline without verified', () => {
-  assert.deepEqual(route(), baselineRoute)
-})
+test("ci-router: ready internal PR runs baseline without verified", () => {
+  assert.deepEqual(route(), baselineRoute);
+});
 
-test('ci-router: internal draft runs nothing even with every heavy label', () => {
+test("ci-router: internal draft runs nothing even with every heavy label", () => {
   assert.deepEqual(
     route({
-      IS_DRAFT: 'true',
+      IS_DRAFT: "true",
       PR_LABELS_JSON: JSON.stringify([
-        'prebuilds',
-        'run-cpp-addon-tests',
-        'run-desktop-addon-tests',
-        'run-mobile-addon-tests',
+        "prebuilds",
+        "run-cpp-addon-tests",
+        "run-desktop-addon-tests",
+        "run-mobile-addon-tests",
       ]),
     }),
     falseRoute,
-  )
-})
+  );
+});
 
-test('ci-router: internal granular labels select only requested stages', () => {
-  assert.deepEqual(
-    route({ PR_LABELS_JSON: '["run-cpp-addon-tests"]' }),
-    { ...baselineRoute, run_cpp_tests: 'true' },
-  )
-  assert.deepEqual(
-    route({ PR_LABELS_JSON: '["run-desktop-addon-tests"]' }),
-    {
-      ...baselineRoute,
-      run_prebuilds: 'true',
-      run_desktop: 'true',
-    },
-  )
-  assert.deepEqual(
-    route({ PR_LABELS_JSON: '["run-mobile-addon-tests"]' }),
-    {
-      ...baselineRoute,
-      run_prebuilds: 'true',
-      run_mobile: 'true',
-    },
-  )
-})
+test("ci-router: internal granular labels select only requested stages", () => {
+  assert.deepEqual(route({ PR_LABELS_JSON: '["run-cpp-addon-tests"]' }), {
+    ...baselineRoute,
+    run_cpp_tests: "true",
+  });
+  assert.deepEqual(route({ PR_LABELS_JSON: '["run-desktop-addon-tests"]' }), {
+    ...baselineRoute,
+    run_prebuilds: "true",
+    run_desktop: "true",
+  });
+  assert.deepEqual(route({ PR_LABELS_JSON: '["run-mobile-addon-tests"]' }), {
+    ...baselineRoute,
+    run_prebuilds: "true",
+    run_mobile: "true",
+  });
+});
 
-test('ci-router: external fork ready PR gets baseline routing without verified label', () => {
-  assert.deepEqual(route({ HEAD_REPO: 'outsider/qvac' }), baselineRoute)
+test("ci-router: external fork ready PR gets baseline routing without verified label", () => {
+  assert.deepEqual(route({ HEAD_REPO: "outsider/qvac" }), baselineRoute);
   assert.deepEqual(
     route({
-      HEAD_REPO: 'outsider/qvac',
+      HEAD_REPO: "outsider/qvac",
       PR_LABELS_JSON: '["run-mobile-addon-tests"]',
     }),
     {
       ...baselineRoute,
-      run_prebuilds: 'true',
-      run_mobile: 'true',
+      run_prebuilds: "true",
+      run_mobile: "true",
     },
-  )
-})
+  );
+});
 
-test('ci-router: external fork draft runs nothing even with heavy labels', () => {
+test("ci-router: external fork draft runs nothing even with heavy labels", () => {
   assert.deepEqual(
     route({
-      HEAD_REPO: 'outsider/qvac',
-      IS_DRAFT: 'true',
+      HEAD_REPO: "outsider/qvac",
+      IS_DRAFT: "true",
       PR_LABELS_JSON: '["run-desktop-addon-tests"]',
     }),
     falseRoute,
-  )
-})
+  );
+});
 
-test('ci-router: missing head repo fails closed; fork and same-repo route alike', () => {
-  assert.deepEqual(route({ HEAD_REPO: '' }), falseRoute)
+test("ci-router: missing head repo fails closed; fork and same-repo route alike", () => {
+  assert.deepEqual(route({ HEAD_REPO: "" }), falseRoute);
   // Routing is not a trust decision, so a fork and a same-repo PR get the same
   // stages. Fork trust lives in `needs: fork-approval` (asserted further down).
-  assert.deepEqual(route({ HEAD_REPO: 'TetherTo/QVAC' }), baselineRoute)
-  assert.deepEqual(route({ HEAD_REPO: 'outsider/qvac' }), baselineRoute)
-})
+  assert.deepEqual(route({ HEAD_REPO: "TetherTo/QVAC" }), baselineRoute);
+  assert.deepEqual(route({ HEAD_REPO: "outsider/qvac" }), baselineRoute);
+});
 
 function inferenceAuthorization(relativePath, stepName, overrides = {}) {
-  const script = extractRunBlock(relativePath, stepName)
+  const script = extractRunBlock(relativePath, stepName);
   return runScript(script, {
-    EVENT: 'pull_request',
-    IS_FORK: 'false',
-    IS_DRAFT: 'false',
-    HAS_RUN_LABEL: 'false',
+    EVENT: "pull_request",
+    IS_FORK: "false",
+    IS_DRAFT: "false",
+    HAS_RUN_LABEL: "false",
     // SHA-bound approval (qvac/fork-verified status on the current head),
     // resolved by the job's separate read-only step; injected here for the
     // decision-logic unit.
-    HAS_APPROVED_SHA: 'false',
+    HAS_APPROVED_SHA: "false",
     ...overrides,
-  })
+  });
 }
 
 for (const [relativePath, stepName, label, runLabel] of [
   [
-    '.github/workflows/pr-test-inference-addon-cpp.yml',
-    'Authorize native tests',
-    'native',
-    'run-cpp-addon-tests',
+    ".github/workflows/pr-test-inference-addon-cpp.yml",
+    "Authorize native tests",
+    "native",
+    "run-cpp-addon-tests",
   ],
   [
-    '.github/workflows/pr-test-inference-addon-cpp-js.yml',
-    'Authorize JS tests',
-    'JS',
-    'run-desktop-addon-tests',
+    ".github/workflows/pr-test-inference-addon-cpp-js.yml",
+    "Authorize JS tests",
+    "JS",
+    "run-desktop-addon-tests",
   ],
 ]) {
   test(`${label} authorization: internal ready PR needs only ${runLabel}`, () => {
     assert.equal(
       inferenceAuthorization(relativePath, stepName).allowed,
-      'false',
-    )
+      "false",
+    );
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
-        HAS_RUN_LABEL: 'true',
+        HAS_RUN_LABEL: "true",
       }).allowed,
-      'true',
-    )
-  })
+      "true",
+    );
+  });
 
   test(`${label} authorization: drafts are denied until ready`, () => {
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
-        IS_DRAFT: 'true',
-        HAS_RUN_LABEL: 'true',
+        IS_DRAFT: "true",
+        HAS_RUN_LABEL: "true",
       }).allowed,
-      'false',
-    )
-  })
+      "false",
+    );
+  });
 
   test(`${label} authorization: external fork needs ${runLabel} AND a SHA-bound approval`, () => {
     // Fork, nothing -> denied.
     assert.equal(
-      inferenceAuthorization(relativePath, stepName, { IS_FORK: 'true' })
+      inferenceAuthorization(relativePath, stepName, { IS_FORK: "true" })
         .allowed,
-      'false',
-    )
+      "false",
+    );
     // Approved SHA but no tier label -> denied.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
-        IS_FORK: 'true',
-        HAS_APPROVED_SHA: 'true',
+        IS_FORK: "true",
+        HAS_APPROVED_SHA: "true",
       }).allowed,
-      'false',
-    )
+      "false",
+    );
     // Tier label present but the current head SHA is NOT approved (stale label /
     // draft->ready / close->reopen flip / fresh push) -> denied.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
-        IS_FORK: 'true',
-        HAS_RUN_LABEL: 'true',
+        IS_FORK: "true",
+        HAS_RUN_LABEL: "true",
       }).allowed,
-      'false',
-    )
+      "false",
+    );
     // Tier label + SHA-bound approval on the current head -> allowed.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
-        IS_FORK: 'true',
-        HAS_RUN_LABEL: 'true',
-        HAS_APPROVED_SHA: 'true',
+        IS_FORK: "true",
+        HAS_RUN_LABEL: "true",
+        HAS_APPROVED_SHA: "true",
       }).allowed,
-      'true',
-    )
-  })
+      "true",
+    );
+  });
 
   test(`${label} authorization: a stale tier label on an unapproved (pushed) SHA is denied`, () => {
     // The draft->ready / close->reopen flip and any later fork push land here:
     // the label persists but the new head SHA carries no approval.
     assert.equal(
       inferenceAuthorization(relativePath, stepName, {
-        IS_FORK: 'true',
-        HAS_RUN_LABEL: 'true',
-        HAS_APPROVED_SHA: 'false',
+        IS_FORK: "true",
+        HAS_RUN_LABEL: "true",
+        HAS_APPROVED_SHA: "false",
       }).allowed,
-      'false',
-    )
-  })
+      "false",
+    );
+  });
 }
 
 function authorizePr(overrides = {}) {
   const script = extractRunBlock(
-    '.github/actions/authorize-pr/action.yml',
-    'Check authorization',
-  )
+    ".github/actions/authorize-pr/action.yml",
+    "Check authorization",
+  );
   return runScript(script, {
-    EVENT: 'pull_request_target',
-    ACTION: 'opened',
-    HEAD_REPO: 'outsider/qvac',
-    BASE_REPO: 'tetherto/qvac',
-    IS_DRAFT: 'false',
-    HAS_WRITE: '0',
-    HAS_APPROVED_SHA: 'false',
-    LABEL_NAME: '',
-    LABELS_JSON: '[]',
-    GITHUB_ACTOR: 'outsider',
+    EVENT: "pull_request_target",
+    ACTION: "opened",
+    HEAD_REPO: "outsider/qvac",
+    BASE_REPO: "tetherto/qvac",
+    IS_DRAFT: "false",
+    HAS_WRITE: "0",
+    HAS_APPROVED_SHA: "false",
+    LABEL_NAME: "",
+    LABELS_JSON: "[]",
+    GITHUB_ACTOR: "outsider",
     ...overrides,
-  })
+  });
 }
 
-test('authorize-pr: external fork requires SHA-bound fork-ci approval', () => {
-  assert.equal(authorizePr().allowed, 'false')
-  assert.equal(authorizePr({ HAS_APPROVED_SHA: 'true' }).allowed, 'true')
+test("authorize-pr: external fork requires SHA-bound fork-ci approval", () => {
+  assert.equal(authorizePr().allowed, "false");
+  assert.equal(authorizePr({ HAS_APPROVED_SHA: "true" }).allowed, "true");
   assert.equal(
-    authorizePr({ ACTION: 'synchronize', HAS_APPROVED_SHA: 'true' }).allowed,
-    'true',
-  )
-  assert.equal(authorizePr({ ACTION: 'synchronize' }).allowed, 'false')
-})
+    authorizePr({ ACTION: "synchronize", HAS_APPROVED_SHA: "true" }).allowed,
+    "true",
+  );
+  assert.equal(authorizePr({ ACTION: "synchronize" }).allowed, "false");
+});
 
-test('authorize-pr: same-repo synchronize remains authorised', () => {
+test("authorize-pr: same-repo synchronize remains authorised", () => {
   assert.equal(
     authorizePr({
-      ACTION: 'synchronize',
-      HEAD_REPO: 'tetherto/qvac',
+      ACTION: "synchronize",
+      HEAD_REPO: "tetherto/qvac",
     }).allowed,
-    'true',
-  )
+    "true",
+  );
   assert.equal(
     authorizePr({
-      ACTION: 'synchronize',
-      HEAD_REPO: 'TetherTo/QVAC',
+      ACTION: "synchronize",
+      HEAD_REPO: "TetherTo/QVAC",
     }).allowed,
-    'true',
-  )
-})
+    "true",
+  );
+});
 
-test('authorize-pr: write access on external fork requires SHA-bound approval', () => {
-  assert.equal(authorizePr({ HAS_WRITE: '1', HAS_APPROVED_SHA: 'false' }).allowed, 'false')
+test("authorize-pr: write access on external fork requires SHA-bound approval", () => {
+  assert.equal(
+    authorizePr({ HAS_WRITE: "1", HAS_APPROVED_SHA: "false" }).allowed,
+    "false",
+  );
   assert.equal(
     authorizePr({
-      HAS_WRITE: '1',
-      HAS_APPROVED_SHA: 'true',
-      LABEL_NAME: 'safe-to-test',
-      LABELS_JSON: '[]',
+      HAS_WRITE: "1",
+      HAS_APPROVED_SHA: "true",
+      LABEL_NAME: "safe-to-test",
+      LABELS_JSON: "[]",
     }).allowed,
-    'true',
-  )
-})
+    "true",
+  );
+});
 
-test('authorize-pr: author association alone grants no trust on an external fork', () => {
+test("authorize-pr: author association alone grants no trust on an external fork", () => {
   // authorize-pr deliberately never reads author_association: a MEMBER / OWNER
   // / COLLABORATOR badge on a fork PR says nothing about whether THIS head SHA
   // was reviewed. Injecting one must not move the decision in either direction.
-  for (const assoc of ['MEMBER', 'OWNER', 'COLLABORATOR']) {
+  for (const assoc of ["MEMBER", "OWNER", "COLLABORATOR"]) {
     assert.equal(
       authorizePr({
         AUTHOR_ASSOC: assoc,
-        HAS_WRITE: '0',
-        HAS_APPROVED_SHA: 'false',
+        HAS_WRITE: "0",
+        HAS_APPROVED_SHA: "false",
       }).allowed,
-      'false',
+      "false",
       `${assoc} without write and without an approved SHA is denied`,
-    )
+    );
     assert.equal(
       authorizePr({
         AUTHOR_ASSOC: assoc,
-        HAS_WRITE: '0',
-        HAS_APPROVED_SHA: 'true',
+        HAS_WRITE: "0",
+        HAS_APPROVED_SHA: "true",
       }).allowed,
-      'true',
+      "true",
       `${assoc} is allowed only because the head SHA carries fork-ci approval`,
-    )
+    );
   }
-})
+});
 
-test('authorize-pr: external fork with pod label requires label and SHA', () => {
+test("authorize-pr: external fork with pod label requires label and SHA", () => {
   assert.equal(
     authorizePr({
-      LABEL_NAME: 'safe-to-test',
-      LABELS_JSON: '[]',
+      LABEL_NAME: "safe-to-test",
+      LABELS_JSON: "[]",
     }).allowed,
-    'false',
-  )
+    "false",
+  );
   assert.equal(
     authorizePr({
-      LABEL_NAME: 'safe-to-test',
+      LABEL_NAME: "safe-to-test",
       LABELS_JSON: '["safe-to-test"]',
-      HAS_APPROVED_SHA: 'false',
+      HAS_APPROVED_SHA: "false",
     }).allowed,
-    'false',
-  )
+    "false",
+  );
   assert.equal(
     authorizePr({
-      LABEL_NAME: 'safe-to-test',
+      LABEL_NAME: "safe-to-test",
       LABELS_JSON: '["safe-to-test"]',
-      HAS_APPROVED_SHA: 'true',
+      HAS_APPROVED_SHA: "true",
     }).allowed,
-    'true',
-  )
-})
+    "true",
+  );
+});
 
-test('sdk-python full e2e: no stale-label synchronize run; checkout pinned to head SHA', () => {
-  const src = read('.github/workflows/on-pr-sdk-python-e2e-full.yml')
+test("sdk-python full e2e: no stale-label synchronize run; checkout pinned to head SHA", () => {
+  const src = read(".github/workflows/on-pr-sdk-python-e2e-full.yml");
   // Trigger is exactly `types: [labeled]` — no synchronize (a stale
   // test-e2e-full label must not re-run a new, unreviewed SHA).
   assert.match(
     src,
     /types:\s*\[labeled\]\s*$/m,
-    'pull_request trigger must be [labeled] only (no synchronize)',
-  )
+    "pull_request trigger must be [labeled] only (no synchronize)",
+  );
   assert.doesNotMatch(
     src,
     /action == 'synchronize'/,
-    'run gate must not authorise a synchronize with a stale test-e2e-full label',
-  )
+    "run gate must not authorise a synchronize with a stale test-e2e-full label",
+  );
   assert.match(
     src,
     /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
-    'checkout must pin to the approved head SHA',
-  )
-})
+    "checkout must pin to the approved head SHA",
+  );
+});
 
-test('authorize-pr: drafts are denied before internal or fork trust checks', () => {
+test("authorize-pr: drafts are denied before internal or fork trust checks", () => {
   assert.equal(
     authorizePr({
-      HEAD_REPO: 'tetherto/qvac',
-      IS_DRAFT: 'true',
-      HAS_WRITE: '1',
+      HEAD_REPO: "tetherto/qvac",
+      IS_DRAFT: "true",
+      HAS_WRITE: "1",
     }).allowed,
-    'false',
-  )
+    "false",
+  );
   assert.equal(
     authorizePr({
-      IS_DRAFT: 'true',
-      HAS_WRITE: '1',
+      IS_DRAFT: "true",
+      HAS_WRITE: "1",
     }).allowed,
-    'false',
-  )
-})
+    "false",
+  );
+});
 
 // SDK e2e: internal same-repo PRs run via dedicated labels; external forks rely
 // on fork-approval (fork-ci) + authorize-pr with pod-specific label inputs.
-const sdkE2eWorkflows = [
-  '.github/workflows/on-pr-test-sdk.yml',
-]
+const sdkE2eWorkflows = [".github/workflows/on-pr-test-sdk.yml"];
 
-test('sdk e2e: run gate uses fork-approval + authorize-pr, never hardcoded verified', () => {
+test("sdk e2e: run gate uses fork-approval + authorize-pr, never hardcoded verified", () => {
   for (const path of sdkE2eWorkflows) {
-    const source = read(path)
+    const source = read(path);
     assert.match(
       source,
       /\bfork-approval:/,
       `${path} defines a fork-approval gate job`,
-    )
+    );
     assert.match(
       source,
       /uses:\s*\.\/\.github\/actions\/authorize-pr/,
       `${path} uses the shared authorize-pr composite`,
-    )
+    );
     assert.match(
       source,
       /needs:[\s\S]*?\bfork-approval\b/,
       `${path} gates privileged jobs on fork-approval`,
-    )
+    );
     // qvac/fork-verified commit status is expected; the retired label gate is not.
     const functionalVerified = source
-      .split('\n')
-      .filter((line) => !line.trimStart().startsWith('#'))
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
       .some((line) => {
-        const withoutForkStatus = line.replace(/fork-verified/g, '')
-        return withoutForkStatus.includes('verified')
-      })
+        const withoutForkStatus = line.replace(/fork-verified/g, "");
+        return withoutForkStatus.includes("verified");
+      });
     assert.equal(
       functionalVerified,
       false,
       `${path} must not hardcode a 'verified' gate outside comments`,
-    )
+    );
   }
-})
+});
 
-test('sdk e2e: internal PR authorised without verified; external fork stays gated', () => {
+test("sdk e2e: internal PR authorised without verified; external fork stays gated", () => {
   // Both e2e workflows invoke authorize-pr with the e2e-specific label input.
   const internal = authorizePr({
-    HEAD_REPO: 'tetherto/qvac',
-    LABEL_NAME: 'safe-to-test',
-    LABELS_JSON: '[]',
-    HAS_WRITE: '0',
-  })
-  assert.equal(internal.allowed, 'true')
+    HEAD_REPO: "tetherto/qvac",
+    LABEL_NAME: "safe-to-test",
+    LABELS_JSON: "[]",
+    HAS_WRITE: "0",
+  });
+  assert.equal(internal.allowed, "true");
 
   // Case-insensitive same-repo match is honoured for internal detection.
   const internalMixedCase = authorizePr({
-    HEAD_REPO: 'TetherTo/QVAC',
-    LABEL_NAME: 'safe-to-test',
-    LABELS_JSON: '[]',
-    HAS_WRITE: '0',
-  })
-  assert.equal(internalMixedCase.allowed, 'true')
+    HEAD_REPO: "TetherTo/QVAC",
+    LABEL_NAME: "safe-to-test",
+    LABELS_JSON: "[]",
+    HAS_WRITE: "0",
+  });
+  assert.equal(internalMixedCase.allowed, "true");
 
   const fork = authorizePr({
-    HEAD_REPO: 'outsider/qvac',
-    LABEL_NAME: 'safe-to-test',
+    HEAD_REPO: "outsider/qvac",
+    LABEL_NAME: "safe-to-test",
     LABELS_JSON: '["safe-to-test"]',
-    HAS_APPROVED_SHA: 'false',
-    HAS_WRITE: '0',
-  })
-  assert.equal(fork.allowed, 'false')
+    HAS_APPROVED_SHA: "false",
+    HAS_WRITE: "0",
+  });
+  assert.equal(fork.allowed, "false");
 
   const forkApproved = authorizePr({
-    HEAD_REPO: 'outsider/qvac',
-    LABEL_NAME: 'safe-to-test',
+    HEAD_REPO: "outsider/qvac",
+    LABEL_NAME: "safe-to-test",
     LABELS_JSON: '["safe-to-test"]',
-    HAS_APPROVED_SHA: 'true',
-    HAS_WRITE: '0',
-  })
-  assert.equal(forkApproved.allowed, 'true')
-})
+    HAS_APPROVED_SHA: "true",
+    HAS_WRITE: "0",
+  });
+  assert.equal(forkApproved.allowed, "true");
+});
 
 function jobBlock(source, job) {
-  const header = `\n  ${job}:\n`
-  const start = source.indexOf(header)
-  assert.notEqual(start, -1, `job '${job}' exists in workflow`)
-  const after = start + header.length
-  const nextJob = source.slice(after).search(/\n {2}[A-Za-z0-9_-]+:\n/)
-  return nextJob === -1 ? source.slice(start) : source.slice(start, after + nextJob)
+  const header = `\n  ${job}:\n`;
+  const start = source.indexOf(header);
+  assert.notEqual(start, -1, `job '${job}' exists in workflow`);
+  const after = start + header.length;
+  const nextJob = source.slice(after).search(/\n {2}[A-Za-z0-9_-]+:\n/);
+  return nextJob === -1
+    ? source.slice(start)
+    : source.slice(start, after + nextJob);
 }
 
-test('registry-server PR jobs depend on fork-approval for fork trust', () => {
+test("registry-server PR jobs depend on fork-approval for fork trust", () => {
   const source = read(
-    '.github/workflows/pr-models-validation-registry-server.yml',
-  )
-  for (const job of ['detect-changes', 'validate-json', 'test']) {
-    const block = jobBlock(source, job)
+    ".github/workflows/pr-models-validation-registry-server.yml",
+  );
+  for (const job of ["detect-changes", "validate-json", "test"]) {
+    const block = jobBlock(source, job);
     assert.match(
       block,
       /needs:[\s\S]*?\bfork-approval\b/,
       `'${job}' must depend on fork-approval`,
-    )
+    );
   }
-})
+});
 
 function publicPrLabelPolicy(overrides = {}) {
   const script = extractRunBlock(
-    '.github/workflows/public-pr.yml',
-    'Check tests status',
-  )
+    ".github/workflows/public-pr.yml",
+    "Check tests status",
+  );
   const policyBlock = script.split(
     'if [[ "${{ inputs.sanity-checks-status }}"',
-  )[0]
+  )[0];
 
   return runScript(
     `${policyBlock}\necho "failed=$failed" >> "$GITHUB_OUTPUT"\n`,
     {
-      EVENT_NAME: 'pull_request_target',
-      HEAD_REPO: 'tetherto/qvac',
-      BASE_REPO: 'tetherto/qvac',
-      PR_LABELS: '',
-      PR_LABELS_JSON: '[]',
+      EVENT_NAME: "pull_request_target",
+      HEAD_REPO: "tetherto/qvac",
+      BASE_REPO: "tetherto/qvac",
+      PR_LABELS: "",
+      PR_LABELS_JSON: "[]",
       ...overrides,
     },
-  ).failed
+  ).failed;
 }
 
-test('public-pr: internal same-repo PR does not need verified', () => {
-  assert.equal(publicPrLabelPolicy(), '0')
-  assert.equal(publicPrLabelPolicy({ HEAD_REPO: 'TetherTo/QVAC' }), '0')
-})
+test("public-pr: internal same-repo PR does not need verified", () => {
+  assert.equal(publicPrLabelPolicy(), "0");
+  assert.equal(publicPrLabelPolicy({ HEAD_REPO: "TetherTo/QVAC" }), "0");
+});
 
-test('public-pr: external fork does not require verified label', () => {
-  assert.equal(publicPrLabelPolicy({ HEAD_REPO: 'outsider/qvac' }), '0')
-  assert.equal(publicPrLabelPolicy({ HEAD_REPO: '' }), '0')
-})
+test("public-pr: external fork does not require verified label", () => {
+  assert.equal(publicPrLabelPolicy({ HEAD_REPO: "outsider/qvac" }), "0");
+  assert.equal(publicPrLabelPolicy({ HEAD_REPO: "" }), "0");
+});
 
-test('public-pr: trusted non-PR calls do not require verified', () => {
+test("public-pr: trusted non-PR calls do not require verified", () => {
   assert.equal(
     publicPrLabelPolicy({
-      EVENT_NAME: 'workflow_dispatch',
-      HEAD_REPO: '',
+      EVENT_NAME: "workflow_dispatch",
+      HEAD_REPO: "",
     }),
-    '0',
-  )
-})
+    "0",
+  );
+});
 
-test('all ci-router callers re-run when a draft becomes ready', () => {
-  const workflowDirectory = join(root, '.github/workflows')
+test("all ci-router callers re-run when a draft becomes ready", () => {
+  const workflowDirectory = join(root, ".github/workflows");
   const workflowNames = [
-    'on-pr-asr-ggml.yml',
-    'on-pr-bci-whispercpp.yml',
-    'on-pr-classification-ggml.yml',
-    'on-pr-decoder-audio.yml',
-    'on-pr-diffusion-cpp.yml',
-    'on-pr-embed-llamacpp.yml',
-    'on-pr-fabric.yml',
-    'on-pr-llm-llamacpp.yml',
-    'on-pr-model-fit.yml',
-    'on-pr-ocr-ggml.yml',
-    'on-pr-translation-nmtcpp.yml',
-    'on-pr-tts-ggml.yml',
-    'on-pr-vla.yml',
-  ]
+    "on-pr-asr-ggml.yml",
+    "on-pr-bci-whispercpp.yml",
+    "on-pr-classification-ggml.yml",
+    "on-pr-decoder-audio.yml",
+    "on-pr-diffusion-cpp.yml",
+    "on-pr-embed-llamacpp.yml",
+    "on-pr-fabric.yml",
+    "on-pr-llm-llamacpp.yml",
+    "on-pr-model-fit.yml",
+    "on-pr-ocr-ggml.yml",
+    "on-pr-translation-nmtcpp.yml",
+    "on-pr-tts-ggml.yml",
+    "on-pr-vla.yml",
+  ];
 
   for (const workflowName of workflowNames) {
-    const source = readFileSync(join(workflowDirectory, workflowName), 'utf8')
-    assert.match(source, /uses:\s+\.\/\.github\/actions\/ci-router/)
-    assert.match(source, /ready_for_review/)
+    const source = readFileSync(join(workflowDirectory, workflowName), "utf8");
+    assert.match(source, /uses:\s+\.\/\.github\/actions\/ci-router/);
+    assert.match(source, /ready_for_review/);
   }
-  assert.match(read('.github/workflows/pr-gate-merge.yml'), /ready_for_review/)
-})
+  assert.match(read(".github/workflows/pr-gate-merge.yml"), /ready_for_review/);
+});
 
-test('special workflows subscribe to ready and label events', () => {
+test("special workflows subscribe to ready and label events", () => {
   for (const relativePath of [
-    '.github/workflows/pr-test-inference-addon-cpp.yml',
-    '.github/workflows/pr-test-inference-addon-cpp-js.yml',
-    '.github/workflows/check-approvals.yml',
+    ".github/workflows/pr-test-inference-addon-cpp.yml",
+    ".github/workflows/pr-test-inference-addon-cpp-js.yml",
+    ".github/workflows/check-approvals.yml",
   ]) {
-    const source = read(relativePath)
-    assert.match(source, /ready_for_review/)
-    assert.match(source, /labeled/)
+    const source = read(relativePath);
+    assert.match(source, /ready_for_review/);
+    assert.match(source, /labeled/);
   }
-})
+});
 
-test('check-approvals no longer depends on verified and skips drafts', () => {
-  const source = read('.github/workflows/check-approvals.yml')
-  assert.doesNotMatch(source, /verified/)
-  assert.match(source, /!github\.event\.pull_request\.draft/)
-})
+test("check-approvals no longer depends on verified and skips drafts", () => {
+  const source = read(".github/workflows/check-approvals.yml");
+  assert.doesNotMatch(source, /verified/);
+  assert.match(source, /!github\.event\.pull_request\.draft/);
+});
 
-const AWS_OIDC_SECRET = 'AWS_OIDC_ROLE_ARN'
+const AWS_OIDC_SECRET = "AWS_OIDC_ROLE_ARN";
 
 const MOBILE_SDK_WORKFLOWS = [
-  './.github/workflows/test-android-sdk.yml',
-  './.github/workflows/test-ios-sdk.yml',
-]
+  "./.github/workflows/test-android-sdk.yml",
+  "./.github/workflows/test-ios-sdk.yml",
+];
 
-const JOB_SECRETS_KEY_RE = /^ {4}secrets:/
-const SECRETS_ENTRY_RE = /^ {5,}/
-const SECRETS_INHERIT_RE = /^ {4}secrets:[ \t]*inherit[ \t]*$/m
+const JOB_SECRETS_KEY_RE = /^ {4}secrets:/;
+const SECRETS_ENTRY_RE = /^ {5,}/;
+const SECRETS_INHERIT_RE = /^ {4}secrets:[ \t]*inherit[ \t]*$/m;
 
 function workflowPaths() {
-  return readdirSync(join(root, '.github/workflows'))
+  return readdirSync(join(root, ".github/workflows"))
     .filter((name) => /\.ya?ml$/.test(name))
-    .map((name) => `.github/workflows/${name}`)
+    .map((name) => `.github/workflows/${name}`);
 }
 
 function jobsCalling(source, reusable) {
-  return eachJob(source).filter((job) => job.text.includes(`uses: ${reusable}`))
+  return eachJob(source).filter((job) =>
+    job.text.includes(`uses: ${reusable}`),
+  );
 }
 
 function callersOf(reusable) {
   return workflowPaths().flatMap((path) =>
     jobsCalling(read(path), reusable).map((job) => ({ path, job })),
-  )
+  );
 }
 
 function withoutComments(block) {
   return block
-    .split('\n')
-    .map((line) => line.replace(/(^|\s)#.*$/, ''))
-    .join('\n')
+    .split("\n")
+    .map((line) => line.replace(/(^|\s)#.*$/, ""))
+    .join("\n");
 }
 
 function linesUntilDedent(lines) {
   const end = lines.findIndex(
-    (line) => line.trim() !== '' && !SECRETS_ENTRY_RE.test(line),
-  )
-  return end === -1 ? lines : lines.slice(0, end)
+    (line) => line.trim() !== "" && !SECRETS_ENTRY_RE.test(line),
+  );
+  return end === -1 ? lines : lines.slice(0, end);
 }
 
 function secretsMapping(jobText) {
-  const lines = jobText.split('\n')
-  const start = lines.findIndex((line) => JOB_SECRETS_KEY_RE.test(line))
-  if (start === -1) return ''
+  const lines = jobText.split("\n");
+  const start = lines.findIndex((line) => JOB_SECRETS_KEY_RE.test(line));
+  if (start === -1) return "";
   return withoutComments(
-    [lines[start], ...linesUntilDedent(lines.slice(start + 1))].join('\n'),
-  )
+    [lines[start], ...linesUntilDedent(lines.slice(start + 1))].join("\n"),
+  );
 }
 
 function forwardsSecret(jobText, secret) {
-  const mapping = secretsMapping(jobText)
+  const mapping = secretsMapping(jobText);
   return (
     SECRETS_INHERIT_RE.test(mapping) ||
-    new RegExp(`^ {6,}${secret}:`, 'm').test(mapping)
-  )
+    new RegExp(`^ {6,}${secret}:`, "m").test(mapping)
+  );
 }
 
 function workflowCallHeader(source) {
-  const jobsIdx = source.search(/^jobs:\s*$/m)
-  return withoutComments(jobsIdx === -1 ? source : source.slice(0, jobsIdx))
+  const jobsIdx = source.search(/^jobs:\s*$/m);
+  return withoutComments(jobsIdx === -1 ? source : source.slice(0, jobsIdx));
 }
 
 function callLineCount(source, reusable) {
   return withoutComments(source)
-    .split('\n')
-    .filter((line) => line.trim() === `uses: ${reusable}`).length
+    .split("\n")
+    .filter((line) => line.trim() === `uses: ${reusable}`).length;
 }
 
 function rawCallCount(reusable) {
   return workflowPaths().reduce(
     (total, path) => total + callLineCount(read(path), reusable),
     0,
-  )
+  );
 }
 
 function assertDeclaresAwsRole(reusable) {
   assert.match(
-    workflowCallHeader(read(reusable.replace('./', ''))),
-    new RegExp(`^ {6}${AWS_OIDC_SECRET}:`, 'm'),
+    workflowCallHeader(read(reusable.replace("./", ""))),
+    new RegExp(`^ {6}${AWS_OIDC_SECRET}:`, "m"),
     `${reusable} declares ${AWS_OIDC_SECRET} in on.workflow_call.secrets`,
-  )
+  );
 }
 
 function assertEveryCallWasParsed(reusable, callers) {
@@ -736,24 +742,24 @@ function assertEveryCallWasParsed(reusable, callers) {
     callers.length,
     rawCallCount(reusable),
     `every \`uses: ${reusable}\` line resolves to a parsed caller job`,
-  )
+  );
 }
 
 function assertForwardsAwsRole(reusable, { path, job }) {
   assert.ok(
     forwardsSecret(job.text, AWS_OIDC_SECRET),
     `${path} job '${job.name}' forwards ${AWS_OIDC_SECRET} to ${reusable}`,
-  )
+  );
 }
 
 function assertCallersForwardAwsRole(reusable) {
-  const callers = callersOf(reusable)
-  assertDeclaresAwsRole(reusable)
-  assertEveryCallWasParsed(reusable, callers)
-  callers.forEach((caller) => assertForwardsAwsRole(reusable, caller))
+  const callers = callersOf(reusable);
+  assertDeclaresAwsRole(reusable);
+  assertEveryCallWasParsed(reusable, callers);
+  callers.forEach((caller) => assertForwardsAwsRole(reusable, caller));
 }
 
-test('mobile SDK callers forward the AWS OIDC role to Device Farm jobs', () => {
+test("mobile SDK callers forward the AWS OIDC role to Device Farm jobs", () => {
   // test-android-sdk.yml and test-ios-sdk.yml authenticate to Device Farm with
   // `role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}`. That is a repository
   // secret, so the `environment: release` jobs cannot resolve it on their own:
@@ -765,36 +771,36 @@ test('mobile SDK callers forward the AWS OIDC role to Device Farm jobs', () => {
   // shape. Caller jobs come from eachJob, which only sees a bare `job-name:`
   // line, so compare against the raw `uses:` count: a caller the parser cannot
   // see must fail here rather than silently go unchecked.
-  MOBILE_SDK_WORKFLOWS.forEach(assertCallersForwardAwsRole)
-})
+  MOBILE_SDK_WORKFLOWS.forEach(assertCallersForwardAwsRole);
+});
 
 // Any indent, so reindenting a workflow header cannot quietly move a caller
 // into the exempt branch below.
-const DECLARES_REPOSITORY_INPUT_RE = /^\s{2,}repository:/m
+const DECLARES_REPOSITORY_INPUT_RE = /^\s{2,}repository:/m;
 
 // The key alone is not enough: `repository: ''` and `repository: ${{
 // github.repository }}` both parse yet leave the callee falling back to this
 // repo, which is the bug. The value has to carry the caller's own repository,
 // either directly (`inputs.repository`) or via a context job that derives it.
 const FORWARDS_REPOSITORY_RE =
-  /^\s*repository:\s*\$\{\{[^}]*(?:inputs\.repository|outputs\.repository)[^}]*\}\}/m
+  /^\s*repository:\s*\$\{\{[^}]*(?:inputs\.repository|outputs\.repository)[^}]*\}\}/m;
 
 function declaresRepositoryInput(path) {
-  return DECLARES_REPOSITORY_INPUT_RE.test(workflowCallHeader(read(path)))
+  return DECLARES_REPOSITORY_INPUT_RE.test(workflowCallHeader(read(path)));
 }
 
 function assertPinsRepositoryWithRef(reusable, { path, job }) {
-  const block = withoutComments(job.text)
-  if (!/^\s*test-version:/m.test(block)) return
-  if (!declaresRepositoryInput(path)) return
+  const block = withoutComments(job.text);
+  if (!/^\s*test-version:/m.test(block)) return;
+  if (!declaresRepositoryInput(path)) return;
   assert.match(
     block,
     FORWARDS_REPOSITORY_RE,
     `${path} job "${job.name}" passes test-version to ${reusable} without forwarding its own repository, so a fork ref would resolve against this repo`,
-  )
+  );
 }
 
-test('mobile SDK callers that can target a fork forward the repository too', () => {
+test("mobile SDK callers that can target a fork forward the repository too", () => {
   // These workflows check out `test-version` from `inputs.repository ||
   // github.repository`. A caller that can be pointed at a fork but forwards
   // only the ref makes them resolve that ref against THIS repo: a fork-only
@@ -803,63 +809,63 @@ test('mobile SDK callers that can target a fork forward the repository too', () 
   // Callers with no `repository` input of their own are same-repo by
   // construction and stay exempt.
   MOBILE_SDK_WORKFLOWS.forEach((reusable) => {
-    const callers = callersOf(reusable)
-    assertEveryCallWasParsed(reusable, callers)
-    callers.forEach((caller) => assertPinsRepositoryWithRef(reusable, caller))
-  })
-})
+    const callers = callersOf(reusable);
+    assertEveryCallWasParsed(reusable, callers);
+    callers.forEach((caller) => assertPinsRepositoryWithRef(reusable, caller));
+  });
+});
 
-test('npm integration uses a dedicated run label, not verified', () => {
-  const source = read('.github/workflows/public-reusable-npm.yml')
+test("npm integration uses a dedicated run label, not verified", () => {
+  const source = read(".github/workflows/public-reusable-npm.yml");
   const integrationStep = source.slice(
-    source.indexOf('name: Run integration tests if labeled'),
-  )
-  assert.match(integrationStep, /run-desktop-addon-tests/)
-  assert.doesNotMatch(integrationStep.split('name: Check for')[0], /verified/)
-})
+    source.indexOf("name: Run integration tests if labeled"),
+  );
+  assert.match(integrationStep, /run-desktop-addon-tests/);
+  assert.doesNotMatch(integrationStep.split("name: Check for")[0], /verified/);
+});
 
-test('npm reusable pins PR checkout and keeps user input out of run scripts', () => {
-  const source = read('.github/workflows/public-reusable-npm.yml')
+test("npm reusable pins PR checkout and keeps user input out of run scripts", () => {
+  const source = read(".github/workflows/public-reusable-npm.yml");
   assert.match(
     source,
     /ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/,
-  )
-  assert.match(source, /persist-credentials: false/)
+  );
+  assert.match(source, /persist-credentials: false/);
 
   const echoScript = extractRunBlock(
-    '.github/workflows/public-reusable-npm.yml',
-    'Echo Step',
-  )
-  assert.doesNotMatch(echoScript, /\$\{\{\s*(github\.event|inputs\.)/)
-})
+    ".github/workflows/public-reusable-npm.yml",
+    "Echo Step",
+  );
+  assert.doesNotMatch(echoScript, /\$\{\{\s*(github\.event|inputs\.)/);
+});
 
 const FORK_CI_ENV_RE =
-  /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/
+  /environment:\s*\$\{\{[\s\S]*?event_name\s*==\s*'pull_request_target'[\s\S]*?head\.repo\.full_name\s*!=\s*github\.repository[\s\S]*?'fork-ci'[\s\S]*?\|\|\s*''\s*\}\}/;
 
-test('reusable-fork-approval: fork-ci gate and status recording', () => {
-  const source = read('.github/workflows/reusable-fork-approval.yml')
+test("reusable-fork-approval: fork-ci gate and status recording", () => {
+  const source = read(".github/workflows/reusable-fork-approval.yml");
   assert.match(
     source,
     FORK_CI_ENV_RE,
-    'reusable-fork-approval must gate on the fork-ci environment (fork-only conditional)',
-  )
-  assert.match(source, /context=qvac\/fork-verified/)
-  assert.match(source, /GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/)
-  assert.match(source, /statuses:\s*write/)
+    "reusable-fork-approval must gate on the fork-ci environment (fork-only conditional)",
+  );
+  assert.match(source, /context=qvac\/fork-verified/);
+  assert.match(source, /GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/);
+  assert.match(source, /statuses:\s*write/);
   assert.match(
     source,
     /HEAD_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
-  )
-  assert.match(source, /REPO:\s*\$\{\{\s*github\.repository\s*\}\}/)
+  );
+  assert.match(source, /REPO:\s*\$\{\{\s*github\.repository\s*\}\}/);
   assert.doesNotMatch(
     source,
     /run:[\s\S]*?\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
-    'fork-approval must not interpolate head.sha directly in run:',
-  )
-})
+    "fork-approval must not interpolate head.sha directly in run:",
+  );
+});
 
-test('audit-called-out privileged checkouts are pinned to event head SHA', () => {
-  const mergeGuard = read('.github/workflows/pr-gate-merge.yml')
+test("audit-called-out privileged checkouts are pinned to event head SHA", () => {
+  const mergeGuard = read(".github/workflows/pr-gate-merge.yml");
   // Merge Guard verifies prebuilds, it does not trigger them: it must not call a
   // prebuild workflow, and must not privileged-checkout the PR head repo for
   // prebuild verification. Its verify-prebuilds job only READS commit statuses on
@@ -867,350 +873,378 @@ test('audit-called-out privileged checkouts are pinned to event head SHA', () =>
   assert.doesNotMatch(
     mergeGuard,
     /uses:\s+\.\/\.github\/workflows\/prebuilds-/,
-    'Merge Guard must not call a prebuild workflow (verify, do not trigger)',
-  )
+    "Merge Guard must not call a prebuild workflow (verify, do not trigger)",
+  );
   assert.doesNotMatch(
     mergeGuard,
     /head\.repo\.full_name/,
-    'Merge Guard must not privileged-checkout the PR head repo',
-  )
+    "Merge Guard must not privileged-checkout the PR head repo",
+  );
   assert.match(
     mergeGuard,
     /HEAD_SHA:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
-    'verify-prebuilds reads statuses from the immutable event head SHA',
-  )
+    "verify-prebuilds reads statuses from the immutable event head SHA",
+  );
 
-  const sanityChecks = read('.github/actions/sanity-checks/action.yaml')
+  const sanityChecks = read(".github/actions/sanity-checks/action.yaml");
   assert.match(
     sanityChecks,
     /repository:\s+\$\{\{ github\.event\.pull_request\.head\.repo\.full_name \}\}\r?\n\s+ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
-  )
-  assert.doesNotMatch(
-    sanityChecks,
-    /PR_HEAD_REF|PR_FORK_URL|refs\/pr\/head/,
-  )
-})
+  );
+  assert.doesNotMatch(sanityChecks, /PR_HEAD_REF|PR_FORK_URL|refs\/pr\/head/);
+});
 
-test('audiogen mobile actions come from an isolated default-branch checkout', () => {
-  const workflow = read('.github/workflows/integration-mobile-test-audiogen-ggml.yml')
-  const trustedActionUses = workflow.match(
-    /uses:\s+\.\/trusted-actions\/\.github\/actions\/run-mobile-integration-tests\//g,
-  ) || []
+test("audiogen mobile actions come from an isolated default-branch checkout", () => {
+  const workflow = read(
+    ".github/workflows/integration-mobile-test-audiogen-ggml.yml",
+  );
+  const trustedActionUses =
+    workflow.match(
+      /uses:\s+\.\/trusted-actions\/\.github\/actions\/run-mobile-integration-tests\//g,
+    ) || [];
 
   assert.match(
     workflow,
     /name:\s+Checkout composite action source[\s\S]*?repository:\s+\$\{\{ github\.repository \}\}[\s\S]*?ref:\s+\$\{\{ github\.event\.repository\.default_branch \}\}[\s\S]*?path:\s+trusted-actions[\s\S]*?persist-credentials:\s+false/,
-  )
+  );
   // 10, not 9: the on-demand validate-devices job also runs in the release
   // environment (OIDC), so it too sources its action from the default-branch
   // trusted-actions checkout rather than a caller-selected ref.
-  assert.equal(trustedActionUses.length, 10)
+  assert.equal(trustedActionUses.length, 10);
   assert.doesNotMatch(
     workflow,
     /uses:\s+\.\/\.github\/actions\/run-mobile-integration-tests\//,
-  )
-})
+  );
+});
 
-test('no GitHub Actions checkout/ref input resolves mutable PR head.ref', () => {
-  const actionFiles = filesUnder(join(root, '.github')).filter((path) =>
+test("no GitHub Actions checkout/ref input resolves mutable PR head.ref", () => {
+  const actionFiles = filesUnder(join(root, ".github")).filter((path) =>
     /\.(?:ya?ml)$/.test(path),
-  )
-  const mutableRef = /ref:\s*\$\{\{[^}\n]*head\.ref/
+  );
+  const mutableRef = /ref:\s*\$\{\{[^}\n]*head\.ref/;
   const offenders = actionFiles
-    .filter((path) => mutableRef.test(readFileSync(path, 'utf8')))
-    .map((path) => path.slice(root.length + 1))
-  assert.deepEqual(offenders, [])
-})
+    .filter((path) => mutableRef.test(readFileSync(path, "utf8")))
+    .map((path) => path.slice(root.length + 1));
+  assert.deepEqual(offenders, []);
+});
 
-test('cpp-lint resolves checkout from event head SHA, never branch ref', () => {
-  const source = read('.github/workflows/cpp-lint.yaml')
+test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
+  const source = read(".github/workflows/cpp-lint.yaml");
   assert.match(
     source,
     /PR_HEAD_SHA:\s+\$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
-  )
-  assert.match(source, /ref:\s+\$\{\{ env\.HEAD_SHA \}\}/)
-  assert.doesNotMatch(source, /PR_HEAD_REF|env\.HEAD_REF/)
-})
+  );
+  assert.match(source, /ref:\s+\$\{\{ env\.HEAD_SHA \}\}/);
+  assert.doesNotMatch(source, /PR_HEAD_REF|env\.HEAD_REF/);
+});
 
-test('on-pr context outputs resolve PR ref from head SHA, never head.ref', () => {
-  const workflowDirectory = join(root, '.github/workflows')
+test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
+  const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)
     .filter((name) => /^on-pr-.*\.yml$/.test(name))
     .filter((name) => {
-      const source = readFileSync(join(workflowDirectory, name), 'utf8')
+      const source = readFileSync(join(workflowDirectory, name), "utf8");
       return (
         /HEAD_REF:\s+\$\{\{ github\.event\.pull_request\.head\.ref \}\}/.test(
           source,
         ) || /ref="\$HEAD_REF"/.test(source)
-      )
-    })
-  assert.deepEqual(offenders, [])
-})
+      );
+    });
+  assert.deepEqual(offenders, []);
+});
 
-test('infer-base changes reach the required merge-guard status check', () => {
-  const source = read('.github/workflows/pr-gate-merge.yml')
+test("infer-base changes reach the required merge-guard status check", () => {
+  const source = read(".github/workflows/pr-gate-merge.yml");
   assert.match(
     source,
     /\n\s+infer-base:\n\s+- "packages\/infer-base\/\*\*"/,
-    'merge guard filters on packages/infer-base',
-  )
+    "merge guard filters on packages/infer-base",
+  );
 
-  const guard = jobBlock(source, 'qvac-merge-guard')
-  assert.match(guard, /needs:[\s\S]*?\bsanity-checks\b/)
+  const guard = jobBlock(source, "qvac-merge-guard");
+  assert.match(guard, /needs:[\s\S]*?\bsanity-checks\b/);
   assert.match(
     guard,
     /sanity-checks-status:[\s\S]*?needs\.sanity-checks\.result/,
-    'merge guard reports the sanity-checks result',
-  )
-})
+    "merge guard reports the sanity-checks result",
+  );
+});
 
-test('merge guard fails closed when the PR was not authorized', () => {
-  const source = read('.github/workflows/pr-gate-merge.yml')
-  const guard = jobBlock(source, 'qvac-merge-guard')
+test("merge guard fails closed when the PR was not authorized", () => {
+  const source = read(".github/workflows/pr-gate-merge.yml");
+  const guard = jobBlock(source, "qvac-merge-guard");
 
   // The aggregate must wait on the full authorization chain so an unapproved
   // fork cannot pass via skipped=success on the gated jobs.
   assert.match(
     guard,
     /needs:[\s\S]*?\bfork-approval\b/,
-    'merge guard must depend on fork-approval',
-  )
+    "merge guard must depend on fork-approval",
+  );
   assert.match(
     guard,
     /needs:[\s\S]*?\bauthorize\b/,
-    'merge guard must depend on authorize',
-  )
+    "merge guard must depend on authorize",
+  );
 
   // Each gated status input must require fork-approval success, authorize
   // success, AND allowed == 'true' before a skip is treated as a pass.
   for (const input of [
-    'sanity-checks-status',
-    'build-status',
-    'general-checks-status',
+    "sanity-checks-status",
+    "build-status",
+    "general-checks-status",
   ]) {
     const line = guard
-      .split('\n')
-      .find((l) => l.trim().startsWith(`${input}:`))
-    assert.ok(line, `merge guard defines ${input}`)
+      .split("\n")
+      .find((l) => l.trim().startsWith(`${input}:`));
+    assert.ok(line, `merge guard defines ${input}`);
     assert.match(
       line,
       /needs\.fork-approval\.result == 'success'/,
       `${input} must require fork-approval success (fail closed)`,
-    )
+    );
     assert.match(
       line,
       /needs\.authorize\.result == 'success'/,
       `${input} must require authorize success (fail closed)`,
-    )
+    );
     assert.match(
       line,
       /needs\.authorize\.outputs\.allowed == 'true'/,
       `${input} must require authorize to allow the PR (fail closed)`,
-    )
+    );
   }
-})
+});
 
-test('merge guard cancels superseded in-flight runs', () => {
-  const source = read('.github/workflows/pr-gate-merge.yml')
+test("merge guard cancels superseded in-flight runs", () => {
+  const source = read(".github/workflows/pr-gate-merge.yml");
   // verify-prebuilds uses a static per-run freshness threshold, so an older
   // run started before a prebuild label must be cancelled rather than allowed
   // to trust a pre-label skipped=success. That relies on concurrency
   // cancel-in-progress; assert it stays enabled.
   const concurrency = source
-    .split('\n')
-    .slice(
-      source.split('\n').findIndex((l) => l.startsWith('concurrency:')),
-    )
+    .split("\n")
+    .slice(source.split("\n").findIndex((l) => l.startsWith("concurrency:")))
     .slice(0, 12)
-    .join('\n')
+    .join("\n");
   assert.match(
     concurrency,
     /cancel-in-progress:\s*true/,
-    'Merge Guard must cancel superseded in-flight runs (verify-only gate)',
-  )
-})
+    "Merge Guard must cancel superseded in-flight runs (verify-only gate)",
+  );
+});
 
-test('verify-prebuilds binds a prebuild status to its producing on-pr run', () => {
-  const source = read('.github/workflows/pr-gate-merge.yml')
-  const verify = jobBlock(source, 'verify-prebuilds')
+test("verify-prebuilds binds a prebuild status to its producing on-pr run", () => {
+  const source = read(".github/workflows/pr-gate-merge.yml");
+  const verify = jobBlock(source, "verify-prebuilds");
 
   // The gate reads workflow runs (to bind a status to its producing run) and
   // delegates the decision to a single, unit-tested module checked out from the
   // trusted default branch (never PR head code).
-  assert.match(verify, /actions:\s*read/, 'verify-prebuilds can read workflow runs')
+  assert.match(
+    verify,
+    /actions:\s*read/,
+    "verify-prebuilds can read workflow runs",
+  );
   assert.match(
     verify,
     /sparse-checkout:\s*\.github\/scripts\/prebuild-status/,
-    'verify-prebuilds checks out only the prebuild-status scripts',
-  )
+    "verify-prebuilds checks out only the prebuild-status scripts",
+  );
   assert.match(
     verify,
     /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
-    'verify-prebuilds checks out the trusted default branch, never PR head',
-  )
+    "verify-prebuilds checks out the trusted default branch, never PR head",
+  );
   assert.match(
     verify,
     /run:\s*node \.github\/scripts\/prebuild-status\/verify\.mjs/,
-    'verify-prebuilds runs the shared verify script',
-  )
+    "verify-prebuilds runs the shared verify script",
+  );
   assert.match(
     verify,
     /PR_UPDATED_AT:\s*\$\{\{ github\.event\.pull_request\.updated_at \}\}/,
-    'verify-prebuilds passes the PR event timestamp as the freshness threshold',
-  )
+    "verify-prebuilds passes the PR event timestamp as the freshness threshold",
+  );
 
   // Timestamp alone is insufficient: a superseded pre-label run can post a
   // fresh-looking skipped success, so the module binds the status to the run
   // that produced it (target_url -> run -> on-pr-<pkg> workflow -> created_at).
-  const lib = read('.github/scripts/prebuild-status/lib.mjs')
-  assert.match(lib, /target_url/, 'lib reads the producing run from the status target_url')
-  assert.match(lib, /actions\S*runs/, 'lib parses the producing run id from the run URL')
+  const lib = read(".github/scripts/prebuild-status/lib.mjs");
+  assert.match(
+    lib,
+    /target_url/,
+    "lib reads the producing run from the status target_url",
+  );
+  assert.match(
+    lib,
+    /actions\S*runs/,
+    "lib parses the producing run id from the run URL",
+  );
   assert.match(
     lib,
     /on-pr-\$\{pkg\}\.yml/,
-    'lib checks the producing run is the on-pr-<pkg> workflow',
-  )
+    "lib checks the producing run is the on-pr-<pkg> workflow",
+  );
   assert.match(
     lib,
     /createdMs \/ 1000\) >= prUpdatedEpoch/,
-    'lib rejects a producing run created before this PR event',
-  )
-})
+    "lib rejects a producing run created before this PR event",
+  );
+});
 
 // on-pr-nx runs on pull_request_target, so every job that executes PR code or
 // holds a write scope must gate on fork-approval. Enumerated from the file so a
 // newly added job cannot land ungated: anything not explicitly exempted below
 // has to carry the gate.
-test('on-pr-nx: every non-exempt job gates on fork-approval', () => {
-  const source = read('.github/workflows/on-pr-nx.yml')
+test("on-pr-nx: every non-exempt job gates on fork-approval", () => {
+  const source = read(".github/workflows/on-pr-nx.yml");
 
   // Exempt, and why. Each either runs no PR code or establishes the gate itself.
   const exempt = new Map([
-    ['fork-approval', 'is the gate'],
-    ['ci-router', 'reads PR labels from a trusted checkout; runs no PR code'],
-    ['authorize', 'needs fork-approval already, and is the second half of the gate'],
-    ['matrix', 'checks out the default branch only and reads options.ci off it'],
-    ['publish-prebuild-status', 'trusted sparse checkout; publishes a commit status after gated jobs'],
-  ])
+    ["fork-approval", "is the gate"],
+    ["ci-router", "reads PR labels from a trusted checkout; runs no PR code"],
+    [
+      "authorize",
+      "needs fork-approval already, and is the second half of the gate",
+    ],
+    [
+      "matrix",
+      "checks out the default branch only and reads options.ci off it",
+    ],
+    [
+      "publish-prebuild-status",
+      "trusted sparse checkout; publishes a commit status after gated jobs",
+    ],
+  ]);
 
   const jobNames = [...source.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm)].map(
     (m) => m[1],
-  )
-  assert.ok(jobNames.length > 10, 'parsed the on-pr-nx job list')
+  );
+  assert.ok(jobNames.length > 10, "parsed the on-pr-nx job list");
 
   for (const job of jobNames) {
-    if (exempt.has(job)) continue
-    const block = jobBlock(source, job)
-    const needs = block.match(/needs:[\s\S]*?(?=\n {4}[a-z#]|\n {2}[a-z])/)
-    assert.ok(needs, `'${job}' declares needs`)
+    if (exempt.has(job)) continue;
+    const block = jobBlock(source, job);
+    const needs = block.match(/needs:[\s\S]*?(?=\n {4}[a-z#]|\n {2}[a-z])/);
+    assert.ok(needs, `'${job}' declares needs`);
     assert.match(
       needs[0],
       /\bfork-approval\b/,
       `'${job}' must gate on fork-approval (or be added to the exempt map with a reason)`,
-    )
+    );
   }
 
   // The exempt map must not drift into naming jobs that no longer exist.
   for (const job of exempt.keys()) {
-    assert.ok(jobNames.includes(job), `exempt job '${job}' still exists`)
+    assert.ok(jobNames.includes(job), `exempt job '${job}' still exists`);
   }
-})
+});
 
-test('on-pr-nx matrix job loads nx-project-matrix from the trusted default branch and reads config off it, never PR head', () => {
-  const source = read('.github/workflows/on-pr-nx.yml')
-  const matrix = jobBlock(source, 'matrix')
+test("on-pr-nx matrix job loads nx-project-matrix from the trusted default branch and reads config off it, never PR head", () => {
+  const source = read(".github/workflows/on-pr-nx.yml");
+  const matrix = jobBlock(source, "matrix");
 
   // (i) The matrix composite runs from a FULL (non-sparse) checkout of the trusted
   // default branch, pinned before `uses:` — never PR head (fork RCE under pull_request_target).
   const checkoutRefLine = matrix
-    .split('\n')
-    .find((line) => line.trim().startsWith('ref:'))
-  assert.ok(checkoutRefLine, 'matrix job checkout pins a ref')
+    .split("\n")
+    .find((line) => line.trim().startsWith("ref:"));
+  assert.ok(checkoutRefLine, "matrix job checkout pins a ref");
   assert.doesNotMatch(
     checkoutRefLine,
     /github\.event\.pull_request\.head\./,
-    'matrix checkout ref must never resolve to a PR-head expression',
-  )
+    "matrix checkout ref must never resolve to a PR-head expression",
+  );
   assert.match(
     checkoutRefLine,
     /github\.event\.repository\.default_branch/,
-    'matrix checkout ref is the trusted default branch',
-  )
+    "matrix checkout ref is the trusted default branch",
+  );
   assert.doesNotMatch(
     matrix,
     /sparse-checkout:\s*\.github\/actions\/nx-project-matrix/,
-    'matrix job must NOT sparse-checkout (sparse config leaks into the action checkout and breaks the pnpm pin)',
-  )
+    "matrix job must NOT sparse-checkout (sparse config leaks into the action checkout and breaks the pnpm pin)",
+  );
   assert.match(
     matrix,
     /persist-credentials:\s*false/,
-    'matrix job checkout must not persist credentials',
-  )
+    "matrix job checkout must not persist credentials",
+  );
 
   const trustedCheckoutIndex = matrix.search(
     /uses: actions\/checkout@[0-9a-f]{40}/,
-  )
-  const usesIndex = matrix.indexOf('uses: ./.github/actions/nx-project-matrix')
-  assert.notEqual(usesIndex, -1, 'matrix job runs the nx-project-matrix composite')
+  );
+  const usesIndex = matrix.indexOf("uses: ./.github/actions/nx-project-matrix");
+  assert.notEqual(
+    usesIndex,
+    -1,
+    "matrix job runs the nx-project-matrix composite",
+  );
   assert.ok(
     trustedCheckoutIndex !== -1 && trustedCheckoutIndex < usesIndex,
-    'the trusted default-branch checkout must precede `uses: ./.github/actions/nx-project-matrix`',
-  )
+    "the trusted default-branch checkout must precede `uses: ./.github/actions/nx-project-matrix`",
+  );
 
   // (ii) config-ref (the options.ci source) must resolve to the trusted default
   // branch, never a PR-head expression (else a fork points the git-show at its tree).
   const configRefLine = matrix
-    .split('\n')
-    .find((line) => line.trim().startsWith('config-ref:'))
-  assert.ok(configRefLine, 'matrix job passes config-ref to nx-project-matrix')
+    .split("\n")
+    .find((line) => line.trim().startsWith("config-ref:"));
+  assert.ok(configRefLine, "matrix job passes config-ref to nx-project-matrix");
   assert.doesNotMatch(
     configRefLine,
     /github\.event\.pull_request\.head\./,
-    'config-ref must not resolve to a PR-head expression',
-  )
+    "config-ref must not resolve to a PR-head expression",
+  );
   assert.match(
     configRefLine,
     /github\.event\.repository\.default_branch/,
-    'config-ref resolves to the trusted default branch',
-  )
-})
+    "config-ref resolves to the trusted default branch",
+  );
+});
 
-test('publish-prebuild-status stamps its run URL into target_url', () => {
-  const workflowDirectory = join(root, '.github/workflows')
+test("publish-prebuild-status stamps its run URL into target_url", () => {
+  const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)
     .filter((name) => /^on-pr-.*\.yml$/.test(name))
     .filter((name) => {
-      const text = readFileSync(join(workflowDirectory, name), 'utf8')
-      if (!text.includes('publish-prebuild-status')) return false
+      const text = readFileSync(join(workflowDirectory, name), "utf8");
+      if (!text.includes("publish-prebuild-status")) return false;
       // A publish job must define RUN_URL from github.run_id, pass its context,
       // and delegate to the shared publish script (which stamps target_url), so
       // Merge Guard can bind the status to this run.
       const hasRunUrl =
         /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/.test(
           text,
-        )
-      const hasContext = /CONTEXT:\s*qvac\/prebuild-/.test(text)
-      const runsScript = /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(text)
+        );
+      const hasContext = /CONTEXT:\s*qvac\/prebuild-/.test(text);
+      const runsScript =
+        /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(
+          text,
+        );
       // A skipped prebuild must be distinguishable from a failure-induced skip,
       // so the publish job forwards ci-router's result + run_prebuilds decision.
       const hasSkipGuard =
         /CI_ROUTER_RESULT:\s*\$\{\{ needs\.ci-router\.result \}\}/.test(text) &&
-        /RUN_PREBUILDS:\s*\$\{\{ needs\.ci-router\.outputs\.run_prebuilds \}\}/.test(text)
-      return !(hasRunUrl && hasContext && runsScript && hasSkipGuard)
-    })
+        /RUN_PREBUILDS:\s*\$\{\{ needs\.ci-router\.outputs\.run_prebuilds \}\}/.test(
+          text,
+        );
+      return !(hasRunUrl && hasContext && runsScript && hasSkipGuard);
+    });
   assert.deepEqual(
     offenders,
     [],
-    'every on-pr publish-prebuild-status must run the shared publish script with RUN_URL, CONTEXT, and the ci-router skip guard',
-  )
+    "every on-pr publish-prebuild-status must run the shared publish script with RUN_URL, CONTEXT, and the ci-router skip guard",
+  );
 
   // The shared script is what actually stamps the run URL into target_url.
-  const publish = read('.github/scripts/prebuild-status/publish.mjs')
+  const publish = read(".github/scripts/prebuild-status/publish.mjs");
   assert.match(
     publish,
     /target_url=\$\{runUrl\}/,
-    'publish.mjs stamps the run URL into the status target_url',
-  )
+    "publish.mjs stamps the run URL into the status target_url",
+  );
 
   // Fail-closed on failure-induced skips: publish.mjs forwards ci-router's
   // result + run_prebuilds, and the shared decision only trusts a skip that was
@@ -1220,94 +1254,94 @@ test('publish-prebuild-status stamps its run URL into target_url', () => {
   assert.match(
     publish,
     /resolvePublishState\(\s*process\.env\.PREBUILD_RESULT,\s*process\.env\.REUSE_HIT,\s*process\.env\.CI_ROUTER_RESULT,\s*process\.env\.RUN_PREBUILDS,?\s*\)/,
-    'publish.mjs passes ci-router result + run_prebuilds into the state decision',
-  )
-  const lib = read('.github/scripts/prebuild-status/lib.mjs')
+    "publish.mjs passes ci-router result + run_prebuilds into the state decision",
+  );
+  const lib = read(".github/scripts/prebuild-status/lib.mjs");
   assert.match(
     lib,
     /ciRouterResult === 'success' && runPrebuilds === 'false'/,
-    'resolvePublishState only treats a skip as success for a legit no-label skip',
-  )
-})
+    "resolvePublishState only treats a skip as success for a legit no-label skip",
+  );
+});
 
-test('infer-base publish jobs are gated on generated-artifact validation', () => {
-  const source = read('.github/workflows/trigger-reusable-infer-base.yml')
+test("infer-base publish jobs are gated on generated-artifact validation", () => {
+  const source = read(".github/workflows/trigger-reusable-infer-base.yml");
 
-  const validate = jobBlock(source, 'validate-artifacts')
-  assert.match(validate, /working-directory: packages\/infer-base/)
-  assert.match(validate, /npm run test:types/)
+  const validate = jobBlock(source, "validate-artifacts");
+  assert.match(validate, /working-directory: packages\/infer-base/);
+  assert.match(validate, /npm run test:types/);
 
   for (const job of [
-    'publish-main-gpr-dev',
-    'publish-release-npm',
-    'publish-feature-gpr',
-    'publish-tmp-gpr',
+    "publish-main-gpr-dev",
+    "publish-release-npm",
+    "publish-feature-gpr",
+    "publish-tmp-gpr",
   ]) {
-    const block = jobBlock(source, job)
+    const block = jobBlock(source, job);
     assert.match(
       block,
       /needs:[\s\S]*?- validate-artifacts/,
       `'${job}' declares validate-artifacts as a dependency`,
-    )
+    );
     // Asserted explicitly rather than relying on implicit needs-failure
     // skipping, which an always() in the same condition would defeat.
     assert.match(
       block,
       /needs\.validate-artifacts\.result == 'success'/,
       `'${job}' if-gates on validate-artifacts success`,
-    )
+    );
   }
-})
+});
 
-test('merge guards accept intentionally skipped optional prebuilds', () => {
-  const workflowDirectory = join(root, '.github/workflows')
+test("merge guards accept intentionally skipped optional prebuilds", () => {
+  const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)
     .filter((name) => /^on-pr-.*\.yml$/.test(name))
     .filter((name) => {
       const buildStatusLines = readFileSync(
         join(workflowDirectory, name),
-        'utf8',
+        "utf8",
       )
-        .split('\n')
+        .split("\n")
         .filter(
           (line) =>
-            line.includes('build-status:') &&
-            line.includes('needs.prebuild.result'),
-        )
+            line.includes("build-status:") &&
+            line.includes("needs.prebuild.result"),
+        );
       return buildStatusLines.some(
         (line) => !line.includes("needs.prebuild.result == 'skipped'"),
-      )
-    })
-  assert.deepEqual(offenders, [])
-})
+      );
+    });
+  assert.deepEqual(offenders, []);
+});
 
 // --- fork-ci environment gating (QVAC-22799) --------------------------------
 // Every pull_request_target workflow that gates any job on authorize.outputs.allowed
 // must call reusable-fork-approval.yml, and every trust-gated job must depend on it.
 
-const FORK_CI_GATE_JOBS = new Set(['authorize', 'ci-router', 'fork-approval'])
+const FORK_CI_GATE_JOBS = new Set(["authorize", "ci-router", "fork-approval"]);
 
 function eachJob(source) {
-  const jobsIdx = source.search(/^jobs:\s*$/m)
-  if (jobsIdx === -1) return []
-  const lines = source.slice(jobsIdx).split('\n')
-  const jobs = []
-  let cur = null
+  const jobsIdx = source.search(/^jobs:\s*$/m);
+  if (jobsIdx === -1) return [];
+  const lines = source.slice(jobsIdx).split("\n");
+  const jobs = [];
+  let cur = null;
   for (const line of lines) {
-    const m = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/)
+    const m = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
     if (m) {
-      if (cur) jobs.push(cur)
-      cur = { name: m[1], text: '' }
-      continue
+      if (cur) jobs.push(cur);
+      cur = { name: m[1], text: "" };
+      continue;
     }
     if (/^\S/.test(line) && cur) {
-      jobs.push(cur)
-      cur = null
+      jobs.push(cur);
+      cur = null;
     }
-    if (cur) cur.text += line + '\n'
+    if (cur) cur.text += line + "\n";
   }
-  if (cur) jobs.push(cur)
-  return jobs
+  if (cur) jobs.push(cur);
+  return jobs;
 }
 
 /**
@@ -1316,27 +1350,27 @@ function eachJob(source) {
  * mention `pull_request_target` only to say they deliberately avoid it.
  */
 function onBlock(source) {
-  const match = source.match(/^on:[ \t]*$/m)
+  const match = source.match(/^on:[ \t]*$/m);
   if (!match) {
-    const inline = source.match(/^on:.*$/m)
-    return inline ? inline[0] : ''
+    const inline = source.match(/^on:.*$/m);
+    return inline ? inline[0] : "";
   }
-  const start = source.indexOf(match[0]) + match[0].length
-  const lines = source.slice(start).split('\n')
-  const block = []
+  const start = source.indexOf(match[0]) + match[0].length;
+  const lines = source.slice(start).split("\n");
+  const block = [];
   for (const line of lines) {
-    if (/^\S/.test(line)) break
-    block.push(line)
+    if (/^\S/.test(line)) break;
+    block.push(line);
   }
-  return block.join('\n')
+  return block.join("\n");
 }
 
 function pullRequestTargetWorkflows() {
-  const dir = join(root, '.github/workflows')
+  const dir = join(root, ".github/workflows");
   return readdirSync(dir)
     .filter((n) => /\.ya?ml$/.test(n))
     .map((n) => `.github/workflows/${n}`)
-    .filter((p) => /^\s{2}pull_request_target:/m.test(onBlock(read(p))))
+    .filter((p) => /^\s{2}pull_request_target:/m.test(onBlock(read(p))));
 }
 
 /**
@@ -1351,101 +1385,110 @@ function pullRequestTargetWorkflows() {
  */
 const FORK_CI_EXEMPT = new Map([
   [
-    '.github/workflows/check-approvals.yml',
-    'No checkout: runs the published @qvac/ci against PR metadata over the API. ' +
-      'Also a required status check on main/release — gating it on fork-ci would ' +
-      'deadlock fork PRs, since approval cannot complete until the check reports.',
+    ".github/workflows/check-approvals.yml",
+    "No checkout: runs the published @qvac/ci against PR metadata over the API. " +
+      "Also a required status check on main/release — gating it on fork-ci would " +
+      "deadlock fork PRs, since approval cannot complete until the check reports.",
   ],
   [
-    '.github/workflows/on-pr-community-label.yml',
-    'No checkout: actions/github-script applies a label via the API only.',
+    ".github/workflows/on-pr-community-label.yml",
+    "No checkout: actions/github-script applies a label via the API only.",
   ],
   [
-    '.github/workflows/pr-validation-sdk-pod.yml',
-    'Checks out the base branch (no ref: on a pull_request_target checkout) and ' +
-      'runs a base-branch validator over PR title/body passed via env. No secrets.',
+    ".github/workflows/pr-validation-sdk-pod.yml",
+    "Checks out the base branch (no ref: on a pull_request_target checkout) and " +
+      "runs a base-branch validator over PR title/body passed via env. No secrets.",
   ],
-])
+]);
 
 function forkCiTargets() {
-  return pullRequestTargetWorkflows().filter((p) => !FORK_CI_EXEMPT.has(p))
+  return pullRequestTargetWorkflows().filter((p) => !FORK_CI_EXEMPT.has(p));
 }
 
-test('fork-ci: every pull_request_target workflow is either gated or explicitly exempt', () => {
+test("fork-ci: every pull_request_target workflow is either gated or explicitly exempt", () => {
   const unclassified = pullRequestTargetWorkflows().filter((p) => {
-    if (FORK_CI_EXEMPT.has(p)) return false
-    return !read(p).includes('reusable-fork-approval.yml')
-  })
+    if (FORK_CI_EXEMPT.has(p)) return false;
+    return !read(p).includes("reusable-fork-approval.yml");
+  });
   assert.deepEqual(
     unclassified,
     [],
-    'new pull_request_target workflow with no fork-ci gate: add `needs: fork-approval` ' +
-      'or, if it genuinely cannot run fork code, add it to FORK_CI_EXEMPT with a reason',
-  )
-})
+    "new pull_request_target workflow with no fork-ci gate: add `needs: fork-approval` " +
+      "or, if it genuinely cannot run fork code, add it to FORK_CI_EXEMPT with a reason",
+  );
+});
 
-test('fork-ci: exempt workflows never check out fork-controlled code', () => {
-  const offenders = []
+test("fork-ci: exempt workflows never check out fork-controlled code", () => {
+  const offenders = [];
   for (const path of FORK_CI_EXEMPT.keys()) {
-    const source = read(path)
+    const source = read(path);
     // The exemptions rest on these workflows never materialising the fork's
     // tree. An explicit head ref would break that and re-open pwn-request.
-    if (/ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(sha|ref)\s*\}\}/.test(source)) {
-      offenders.push(`${path}: checks out PR head while exempt from fork-ci`)
+    if (
+      /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(sha|ref)\s*\}\}/.test(
+        source,
+      )
+    ) {
+      offenders.push(`${path}: checks out PR head while exempt from fork-ci`);
     }
   }
-  assert.deepEqual(offenders, [])
-})
+  assert.deepEqual(offenders, []);
+});
 
-test('fork-ci: every exempt workflow still exists and carries a reason', () => {
-  const known = new Set(pullRequestTargetWorkflows())
-  const stale = []
+test("fork-ci: every exempt workflow still exists and carries a reason", () => {
+  const known = new Set(pullRequestTargetWorkflows());
+  const stale = [];
   for (const [path, reason] of FORK_CI_EXEMPT) {
     if (!known.has(path)) {
-      stale.push(`${path}: exempt but no longer a pull_request_target workflow — drop the entry`)
+      stale.push(
+        `${path}: exempt but no longer a pull_request_target workflow — drop the entry`,
+      );
     }
     if (!reason || reason.length < 20) {
-      stale.push(`${path}: exemption needs a substantive reason`)
+      stale.push(`${path}: exemption needs a substantive reason`);
     }
   }
-  assert.deepEqual(stale, [])
-})
+  assert.deepEqual(stale, []);
+});
 
-test('fork-ci: every pull_request_target verified-surface workflow has the fork-ci gate job', () => {
-  const targets = forkCiTargets()
+test("fork-ci: every pull_request_target verified-surface workflow has the fork-ci gate job", () => {
+  const targets = forkCiTargets();
   // Floor, not an exact count: it only guards against the discovery globbing
   // silently matching nothing (which would make every assertion below vacuous).
   // Lower it deliberately when workflow families are retired or consolidated —
   // dropped from 20 when transcription-* merged into asr-ggml, then to 18 when
   // ocr-onnx CI was retired on main.
-  assert.ok(targets.length >= 18, `found ${targets.length} fork-ci target workflows`)
+  assert.ok(
+    targets.length >= 18,
+    `found ${targets.length} fork-ci target workflows`,
+  );
   for (const path of targets) {
-    const gate = eachJob(read(path)).find((j) => j.name === 'fork-approval')
-    assert.ok(gate, `${path}: must define a fork-approval gate job`)
+    const gate = eachJob(read(path)).find((j) => j.name === "fork-approval");
+    assert.ok(gate, `${path}: must define a fork-approval gate job`);
     assert.match(
       gate.text,
       /uses:\s*\.\/\.github\/workflows\/reusable-fork-approval\.yml/,
       `${path}: fork-approval must call reusable-fork-approval.yml`,
-    )
+    );
   }
-})
+});
 
-test('fork-ci: fork-approval caller grants statuses: write (reusable cannot elevate token)', () => {
-  const targets = forkCiTargets()
+test("fork-ci: fork-approval caller grants statuses: write (reusable cannot elevate token)", () => {
+  const targets = forkCiTargets();
   for (const path of targets) {
-    const gate = eachJob(read(path)).find((j) => j.name === 'fork-approval')
-    assert.ok(gate, `${path}: must define fork-approval`)
+    const gate = eachJob(read(path)).find((j) => j.name === "fork-approval");
+    assert.ok(gate, `${path}: must define fork-approval`);
     assert.match(
       gate.text,
       /permissions:[\s\S]*?statuses:\s*write/,
       `${path}: fork-approval caller must declare statuses: write — reusable workflows cannot elevate GITHUB_TOKEN scope`,
-    )
+    );
   }
-})
+});
 
 function jobDependsOnAuthorize(job) {
-  if (job.text.includes('authorize.outputs.allowed')) return true
-  return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text)
+  if (job.text.includes("authorize.outputs.allowed")) return true;
+  return /\bneeds:[\s\S]*?\bauthorize\b/.test(job.text);
 }
 
 /**
@@ -1458,19 +1501,21 @@ function jobDependsOnAuthorize(job) {
  * matching job text would accept that as a gate when the `if:` has none.
  */
 function jobCondition(jobText) {
-  const block = jobText.match(/^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|[ \t]*\n)*)/m)
+  const block = jobText.match(
+    /^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|[ \t]*\n)*)/m,
+  );
   if (block) {
     return block[1]
-      .split('\n')
+      .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
-      .join(' ')
+      .join(" ");
   }
-  const inline = jobText.match(/^ {4}if:[ \t]*(.+)$/m)
-  return inline ? inline[1].trim() : ''
+  const inline = jobText.match(/^ {4}if:[ \t]*(.+)$/m);
+  return inline ? inline[1].trim() : "";
 }
 
-const reusablePrivilege = new Map()
+const reusablePrivilege = new Map();
 
 /**
  * A local reusable workflow is a privileged fork surface when it can reach a
@@ -1480,65 +1525,70 @@ const reusablePrivilege = new Map()
  */
 function localReusableIsPrivileged(relativePath) {
   if (reusablePrivilege.has(relativePath)) {
-    return reusablePrivilege.get(relativePath)
+    return reusablePrivilege.get(relativePath);
   }
   // Seed conservatively so a cyclic `uses:` chain resolves to "privileged"
   // rather than recursing forever.
-  reusablePrivilege.set(relativePath, true)
+  reusablePrivilege.set(relativePath, true);
 
-  let source
+  let source;
   try {
-    source = read(relativePath)
+    source = read(relativePath);
   } catch {
-    return true
+    return true;
   }
 
   const privileged =
     /secrets\.(?!GITHUB_TOKEN\b)/.test(source) ||
     /^\s*secrets:/m.test(source) ||
     /runs-on:.*\bqvac-/.test(source) ||
-    /uses:\s*actions\/checkout@/.test(source)
+    /uses:\s*actions\/checkout@/.test(source);
 
-  reusablePrivilege.set(relativePath, privileged)
-  return privileged
+  reusablePrivilege.set(relativePath, privileged);
+  return privileged;
 }
 
 function jobRunsPrivilegedForkSurface(job) {
-  if (/secrets\.(?!GITHUB_TOKEN\b)/.test(job.text)) return true
-  if (/uses:\s*[^@\n]+\n[\s\S]*?secrets:\s*inherit/.test(job.text)) return true
+  if (/secrets\.(?!GITHUB_TOKEN\b)/.test(job.text)) return true;
+  if (/uses:\s*[^@\n]+\n[\s\S]*?secrets:\s*inherit/.test(job.text)) return true;
   // A job that delegates to a local reusable workflow carries no checkout of
   // its own, so the `actions/checkout` probe below waves it through even when
   // the reusable it calls checks out PR code on a self-hosted runner. Resolve
   // the target instead of guessing from the caller's own text.
-  const delegated = job.text.match(/uses:\s*\.\/(\.github\/workflows\/\S+)/)
-  if (delegated) return localReusableIsPrivileged(delegated[1])
-  if (!/uses:\s*actions\/checkout@/.test(job.text)) return false
-  if (/ref:\s*\$\{\{\s*github\.event\.repository\.default_branch\s*\}\}/.test(job.text)) {
-    return false
+  const delegated = job.text.match(/uses:\s*\.\/(\.github\/workflows\/\S+)/);
+  if (delegated) return localReusableIsPrivileged(delegated[1]);
+  if (!/uses:\s*actions\/checkout@/.test(job.text)) return false;
+  if (
+    /ref:\s*\$\{\{\s*github\.event\.repository\.default_branch\s*\}\}/.test(
+      job.text,
+    )
+  ) {
+    return false;
   }
   if (/sparse-checkout/.test(job.text) && /default_branch/.test(job.text)) {
-    return false
+    return false;
   }
-  return true
+  return true;
 }
 
 // always(), !cancelled(), success() and failure() each suppress the implicit
 // "all needs succeeded" check over the WHOLE of needs. A job carrying one of
 // them is no longer skipped by a failed or skipped fork-approval, so its
 // `needs:` entry stops being a gate and becomes mere ordering.
-const STATUS_CHECK_FUNCTION = /\b(?:always|cancelled|success|failure)\s*\(\s*\)/
+const STATUS_CHECK_FUNCTION =
+  /\b(?:always|cancelled|success|failure)\s*\(\s*\)/;
 
-test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated fork run)', () => {
+test("fork-ci: every authorised-gated job depends on fork-approval (no un-gated fork run)", () => {
   for (const path of forkCiTargets()) {
     for (const job of eachJob(read(path))) {
-      if (FORK_CI_GATE_JOBS.has(job.name)) continue
-      if (!jobDependsOnAuthorize(job)) continue
-      if (!jobRunsPrivilegedForkSurface(job)) continue
+      if (FORK_CI_GATE_JOBS.has(job.name)) continue;
+      if (!jobDependsOnAuthorize(job)) continue;
+      if (!jobRunsPrivilegedForkSurface(job)) continue;
       assert.match(
         job.text,
         /needs:[\s\S]*?\bfork-approval\b/,
         `${path}: job '${job.name}' gates on authorize but does not depend on fork-approval (fail-open)`,
-      )
+      );
 
       // QVAC-24913. Same hazard as validate-artifacts above: once a status-check
       // function is in the condition, `needs: [fork-approval, authorize]` no
@@ -1547,209 +1597,231 @@ test('fork-ci: every authorised-gated job depends on fork-approval (no un-gated 
       // written out in the `if:`. jobDependsOnAuthorize() is satisfied by the
       // needs: entry alone, so without this assertion deleting that clause left
       // the entire suite green.
-      const condition = jobCondition(job.text)
-      if (!STATUS_CHECK_FUNCTION.test(condition)) continue
+      const condition = jobCondition(job.text);
+      if (!STATUS_CHECK_FUNCTION.test(condition)) continue;
       assert.match(
         condition,
         /needs\.authorize\.outputs\.allowed == 'true'/,
         `${path}: job '${job.name}' suppresses implicit needs-skipping with a status-check function, so it must if-gate on needs.authorize.outputs.allowed == 'true' explicitly (fail-open)`,
-      )
+      );
     }
   }
-})
+});
 
-test('authorize jobs: run after fork-approval and checkout authorize-pr from default branch only', () => {
-  const dir = join(root, '.github/workflows')
-  const offenders = []
+test("authorize jobs: run after fork-approval and checkout authorize-pr from default branch only", () => {
+  const dir = join(root, ".github/workflows");
+  const offenders = [];
   for (const name of readdirSync(dir)) {
-    if (!/\.ya?ml$/.test(name)) continue
-    const path = join(dir, name)
-    const src = readFileSync(path, 'utf8')
+    if (!/\.ya?ml$/.test(name)) continue;
+    const path = join(dir, name);
+    const src = readFileSync(path, "utf8");
     for (const job of eachJob(src)) {
-      if (!/\.\/\.github\/actions\/authorize-pr/.test(job.text)) continue
-      if (job.name !== 'authorize' && job.name !== 'resolve-config') continue
+      if (!/\.\/\.github\/actions\/authorize-pr/.test(job.text)) continue;
+      if (job.name !== "authorize" && job.name !== "resolve-config") continue;
       if (!/\bneeds:[\s\S]*?\bfork-approval\b/.test(job.text)) {
-        offenders.push(`${name}: job ${job.name} missing needs fork-approval`)
+        offenders.push(`${name}: job ${job.name} missing needs fork-approval`);
       }
       if (!/default_branch/.test(job.text)) {
         offenders.push(
           `${name}: job ${job.name} must checkout from github.event.repository.default_branch`,
-        )
+        );
       }
-      if (!/sparse-checkout:\s*\.github\/actions\/authorize-pr/.test(job.text)) {
+      if (
+        !/sparse-checkout:\s*\.github\/actions\/authorize-pr/.test(job.text)
+      ) {
         offenders.push(
           `${name}: job ${job.name} must sparse-checkout .github/actions/authorize-pr only`,
-        )
+        );
       }
       if (!/persist-credentials:\s*false/.test(job.text)) {
-        offenders.push(`${name}: job ${job.name} must set persist-credentials: false`)
+        offenders.push(
+          `${name}: job ${job.name} must set persist-credentials: false`,
+        );
       }
       if (!/statuses:\s*read/.test(job.text)) {
         offenders.push(
           `${name}: job ${job.name} must grant statuses: read for qvac/fork-verified lookup`,
-        )
+        );
       }
     }
   }
-  assert.deepEqual(offenders, [])
-})
+  assert.deepEqual(offenders, []);
+});
 
 // Shared-CI-infra validation runs on plain `pull_request` (no secrets, no
 // privileged context), so it deliberately carries no authorize gate and needs
 // no fork-ci coverage. This test pins that posture so a future edit can't
 // quietly reintroduce a secret-bearing untrusted-checkout surface.
-test('shared-ci-infra: runs on pull_request (fork-safe), never pull_request_target', () => {
-  const entry = read('.github/workflows/on-pr-shared-ci-infra.yml')
-  assert.match(entry, /^on:\n\s*pull_request:/m)
-  assert.doesNotMatch(entry, /pull_request_target/)
-  assert.doesNotMatch(entry, /secrets:\s*inherit/)
-  assert.doesNotMatch(entry, /HF_TOKEN/)
-})
+test("shared-ci-infra: runs on pull_request (fork-safe), never pull_request_target", () => {
+  const entry = read(".github/workflows/on-pr-shared-ci-infra.yml");
+  assert.match(entry, /^on:\n\s*pull_request:/m);
+  assert.doesNotMatch(entry, /pull_request_target/);
+  assert.doesNotMatch(entry, /secrets:\s*inherit/);
+  assert.doesNotMatch(entry, /HF_TOKEN/);
+});
 
-test('tts-ggml Android per-test wait remains below its Mocha ceiling', () => {
-  const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
+test("tts-ggml Android per-test wait remains below its Mocha ceiling", () => {
+  const workflow = read(
+    ".github/workflows/integration-mobile-test-tts-ggml.yml",
+  );
 
   function integerValue(key) {
-    const match = workflow.match(new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, 'm'))
-    assert.ok(match, `${key} must be a literal integer`)
-    return Number(match[1])
+    const match = workflow.match(
+      new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, "m"),
+    );
+    assert.ok(match, `${key} must be a literal integer`);
+    return Number(match[1]);
   }
 
   const androidWaitMs =
-    integerValue('android-per-test-timeout-minutes') * MILLISECONDS_PER_MINUTE
-  const mochaTimeoutMs = integerValue('mocha-timeout-ms')
+    integerValue("android-per-test-timeout-minutes") * MILLISECONDS_PER_MINUTE;
+  const mochaTimeoutMs = integerValue("mocha-timeout-ms");
 
   assert.ok(
     androidWaitMs < mochaTimeoutMs,
     `android per-test wait (${androidWaitMs} ms) must remain below ` +
       `Mocha timeout (${mochaTimeoutMs} ms)`,
-  )
-})
+  );
+});
 
-test('asr-ggml per-test wait remains below its Mocha ceiling', () => {
-  const workflow = read('.github/workflows/integration-mobile-test-asr-ggml.yml')
+test("asr-ggml per-test wait remains below its Mocha ceiling", () => {
+  const workflow = read(
+    ".github/workflows/integration-mobile-test-asr-ggml.yml",
+  );
 
   function integerValue(key) {
-    const match = workflow.match(new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, 'm'))
-    assert.ok(match, `${key} must be a literal integer`)
-    return Number(match[1])
+    const match = workflow.match(
+      new RegExp(`^\\s*${key}:\\s*['"]?(\\d+)['"]?\\s*$`, "m"),
+    );
+    assert.ok(match, `${key} must be a literal integer`);
+    return Number(match[1]);
   }
 
   const perTestWaitMs =
-    integerValue('per-test-timeout-minutes') * MILLISECONDS_PER_MINUTE
-  const mochaTimeoutMs = integerValue('mocha-timeout-ms')
+    integerValue("per-test-timeout-minutes") * MILLISECONDS_PER_MINUTE;
+  const mochaTimeoutMs = integerValue("mocha-timeout-ms");
 
   assert.ok(
     perTestWaitMs < mochaTimeoutMs,
     `ASR per-test wait (${perTestWaitMs} ms) must remain below ` +
       `Mocha timeout (${mochaTimeoutMs} ms)`,
-  )
-})
+  );
+});
 
-test('mobile scheduler preserves automatic sharding and supports explicit multi-spec dual flagship', () => {
+test("mobile scheduler preserves automatic sharding and supports explicit multi-spec dual flagship", () => {
   const action = read(
-    '.github/actions/run-mobile-integration-tests/schedule-test-run/action.yml',
-  )
-  const llmWorkflow = read('.github/workflows/integration-mobile-test-llm-llamacpp.yml')
-  const validationIndex = action.indexOf('test-specs must be a non-empty array')
-  const schedulingStartedIndex = action.indexOf('SCHEDULING_STARTED=1')
+    ".github/actions/run-mobile-integration-tests/schedule-test-run/action.yml",
+  );
+  const llmWorkflow = read(
+    ".github/workflows/integration-mobile-test-llm-llamacpp.yml",
+  );
+  const validationIndex = action.indexOf(
+    "test-specs must be a non-empty array",
+  );
+  const schedulingStartedIndex = action.indexOf("SCHEDULING_STARTED=1");
 
-  assert.match(action, /multi-spec-dual-flagship:[\s\S]*?default:\s*"false"/)
-  assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
-  assert.match(action, /length > 0/)
+  assert.match(action, /multi-spec-dual-flagship:[\s\S]*?default:\s*"false"/);
+  assert.match(action, /run:\s*\|\n\s+set -euo pipefail/);
+  assert.match(action, /length > 0/);
   assert.ok(
     validationIndex >= 0 && validationIndex < schedulingStartedIndex,
-    'invalid or empty specs fail before rollback ownership starts',
-  )
-  assert.match(action, /APP_UPLOAD_ID="\$\{APP_ARN##\*\/\}"/)
+    "invalid or empty specs fail before rollback ownership starts",
+  );
+  assert.match(action, /APP_UPLOAD_ID="\$\{APP_ARN##\*\/\}"/);
   assert.match(
     action,
     /RUN_NAME_BASE="\$\{RUN_NAME_BASE\}-\$\{\{ github\.run_id \}\}\.\$\{\{ github\.run_attempt \}\}-\$\{APP_UPLOAD_ID\}"/,
-  )
+  );
   // Automatic sharding is preserved, but the manual on-demand path
   // (manual-devices) is deliberately excluded from the sharded branch so a
   // manual multi-spec run pins to the chosen device(s) instead of the pool.
   assert.match(
     action,
     /if \[ "\$SCHEDULING_MODE" != "manual-devices" \] && \[ "\$SPEC_COUNT" -gt 1 \] && \{ \[ "\$SCHEDULING_MODE" != "dual-flagship" \] \|\| \[ "\$MULTI_SPEC_DUAL_FLAGSHIP" != "true" \]; \}; then/,
-  )
-  assert.match(action, /for IDX in \$\(seq 0 \$\(\(SPEC_COUNT - 1\)\)\); do/)
-  assert.match(action, /RUN_NAME_PREFIX="\$\{RUN_NAME_BASE\}-\$\{GROUP_NAME\}"/)
+  );
+  assert.match(action, /for IDX in \$\(seq 0 \$\(\(SPEC_COUNT - 1\)\)\); do/);
+  assert.match(
+    action,
+    /RUN_NAME_PREFIX="\$\{RUN_NAME_BASE\}-\$\{GROUP_NAME\}"/,
+  );
   assert.match(
     action,
     /RUN_ARNS_JSON=\$\(echo "\$RUN_ARNS_JSON" \| jq --arg a "\$RUN_ARN_1" --arg b "\$RUN_ARN_2" '\. \+ \[\$a,\$b\]'\)/,
-  )
-  assert.match(action, /S25 Ultra/)
-  assert.match(action, /Pixel 9/)
-  assert.match(action, /schedule_run_with_pool "\$IOS_POOL_ARN"/)
-  assert.match(action, /iPhone 17/)
-  assert.doesNotMatch(llmWorkflow, /multi-spec-dual-flagship:/)
+  );
+  assert.match(action, /S25 Ultra/);
+  assert.match(action, /Pixel 9/);
+  assert.match(action, /schedule_run_with_pool "\$IOS_POOL_ARN"/);
+  assert.match(action, /iPhone 17/);
+  assert.doesNotMatch(llmWorkflow, /multi-spec-dual-flagship:/);
 
   // Manual on-demand (workflow_dispatch) path: fan out one run per
   // (spec x device), pinned to a single device, never the pool.
-  assert.match(action, /elif \[ "\$SCHEDULING_MODE" = "manual-devices" \]; then/)
-  assert.match(action, /Manual on-demand fan-out/)
+  assert.match(
+    action,
+    /elif \[ "\$SCHEDULING_MODE" = "manual-devices" \]; then/,
+  );
+  assert.match(action, /Manual on-demand fan-out/);
   // The device list is de-duplicated so `Pixel 9,Pixel 9` cannot bill twice ...
-  assert.match(action, /map\(select\(length > 0\)\) \| unique/)
+  assert.match(action, /map\(select\(length > 0\)\) \| unique/);
   // ... and bounded so a fat-fingered list cannot spray the whole fleet.
-  assert.match(action, /MAX_DEVICES=10/)
+  assert.match(action, /MAX_DEVICES=10/);
   // Backstop cap: validate-devices enforces the same ceiling earlier (before
   // build/upload) from the addon's test-groups.json; 40 covers the documented
   // broad-coverage flow (e.g. 3 devices x the heaviest shard set).
-  assert.match(action, /MAX_RUNS=40/)
-  assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
-  assert.match(action, /for MIDX in \$\(seq 0 \$\(\(MODEL_COUNT - 1\)\)\); do/)
-})
+  assert.match(action, /MAX_RUNS=40/);
+  assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/);
+  assert.match(action, /for MIDX in \$\(seq 0 \$\(\(MODEL_COUNT - 1\)\)\); do/);
+});
 
-test('mobile validate-devices fails fast on an unknown tests filter and an oversized fan-out', () => {
+test("mobile validate-devices fails fast on an unknown tests filter and an oversized fan-out", () => {
   const action = read(
-    '.github/actions/run-mobile-integration-tests/validate-devices/action.yml',
-  )
+    ".github/actions/run-mobile-integration-tests/validate-devices/action.yml",
+  );
   // Device existence check (unchanged).
-  assert.match(action, /aws devicefarm list-devices/)
+  assert.match(action, /aws devicefarm list-devices/);
   // The device list is de-duplicated + capped, matching the scheduler.
-  assert.match(action, /map\(select\(length > 0\)\) \| unique/)
-  assert.match(action, /MAX_DEVICES=10/)
+  assert.match(action, /map\(select\(length > 0\)\) \| unique/);
+  assert.match(action, /MAX_DEVICES=10/);
   // Overlapping CONTAINS selectors that resolve to the same fleet model are
   // rejected before scheduling, so a model can't be billed twice.
-  assert.match(action, /select\(\.model \| contains\(\$m\)\)/)
-  assert.match(action, /group_by\(\.\) \| map\(select\(length > 1\)/)
-  assert.match(action, /selectors overlap on model/)
+  assert.match(action, /select\(\.model \| contains\(\$m\)\)/);
+  assert.match(action, /group_by\(\.\) \| map\(select\(length > 1\)/);
+  assert.match(action, /selectors overlap on model/);
   // A `tests` filter that matches zero known runners is rejected here (before
   // any build) so a typo can't run zero tests and pass green. Multi-spec addons
   // source runner names + shard count from their test-groups.json.
-  assert.match(action, /RUNNERS_JSON=\$\(jq -c/)
-  assert.match(action, /grep -Ec -- "\$TESTS"/)
-  assert.match(action, /matches none of the/)
+  assert.match(action, /RUNNERS_JSON=\$\(jq -c/);
+  assert.match(action, /grep -Ec -- "\$TESTS"/);
+  assert.match(action, /matches none of the/);
   // The mocha-safe charset allowlist the workflows enforce at the sink is ALSO
   // enforced here (before the build) so an anchored/invalid pattern fails fast
   // instead of wasting build minutes only to be rejected afterwards.
-  assert.match(action, /grep -Eq '\^\[A-Za-z0-9_ \|\(\)\.\*\+-\]\+\$'/)
+  assert.match(action, /grep -Eq '\^\[A-Za-z0-9_ \|\(\)\.\*\+-\]\+\$'/);
   // Single-spec addons validate the SAME filter against their committed
   // integration.auto.cjs runner declarations.
-  assert.match(action, /runner-source-path/)
-  assert.match(action, /RUNNER_SOURCE_PATH/)
-  assert.match(action, /async function run\[A-Za-z0-9_\]\+/)
+  assert.match(action, /runner-source-path/);
+  assert.match(action, /RUNNER_SOURCE_PATH/);
+  assert.match(action, /async function run\[A-Za-z0-9_\]\+/);
   // Spec-count-aware run-count cap, enforced before build/upload spend (specs =
   // 1 when a tests filter is given, else the platform's group count).
-  assert.match(action, /SPEC_COUNT=\$GROUP_COUNT/)
-  assert.match(action, /MAX_RUNS=40/)
-  assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/)
-})
+  assert.match(action, /SPEC_COUNT=\$GROUP_COUNT/);
+  assert.match(action, /MAX_RUNS=40/);
+  assert.match(action, /TOTAL_RUNS=\$\(\(SPEC_COUNT \* MODEL_COUNT\)\)/);
+});
 
 const MOBILE_TEST_WORKFLOWS = workflowPaths().filter((path) =>
   /integration-mobile-test-.*\.ya?ml$/.test(path),
-)
+);
 
-test('mobile validate-devices reads its filter/shard data from the tested ref, not the workflow ref', () => {
+test("mobile validate-devices reads its filter/shard data from the tested ref, not the workflow ref", () => {
   // The build checks out addon code from the tested ref, so the validator must
   // read test-groups.json / integration.auto.cjs from the SAME ref — otherwise
   // a branch that renames/adds runners passes stale validation and can run zero
   // tests. The executable composite action stays on the trusted workflow ref,
   // so the data file must NEVER be sparse-checked-out alongside it.
-  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
+  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14);
   for (const path of MOBILE_TEST_WORKFLOWS) {
-    const src = read(path)
+    const src = read(path);
     // Validation data comes from the SAME immutable commit the build compiles,
     // into a dedicated dir. Most addons pin to `inputs.ref || github.sha`
     // (github.sha is the constant triggering commit, so a mid-run push can't
@@ -1762,35 +1834,35 @@ test('mobile validate-devices reads its filter/shard data from the tested ref, n
       src,
       /ref: \$\{\{ (inputs\.ref \|\| github\.sha|github\.event\.pull_request\.head\.sha \|\| inputs\.ref \|\| github\.sha) \}\}/,
       `${path} must check out validation data from the same immutable ref the build uses`,
-    )
+    );
     assert.doesNotMatch(
       src,
       /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/,
       `${path} must not resolve a checkout to the mutable github.ref`,
-    )
+    );
     assert.match(
       src,
       /path: validation-data/,
       `${path} must isolate validation data in validation-data/`,
-    )
+    );
     // The path handed to the validator points at that dir, never a raw
     // workflow-ref checkout path.
     assert.match(
       src,
       /(test-groups-path|runner-source-path): validation-data\//,
       `${path} must validate against the tested-ref data copy`,
-    )
+    );
     // The data file is never co-located on the trusted composite-action
     // checkout (that would pin validation to the workflow ref again).
     assert.doesNotMatch(
       src,
       /run-mobile-integration-tests\n\s+packages\/[^\n]*\/test\/mobile\//,
       `${path} must not sparse-checkout mobile test data on the action checkout`,
-    )
+    );
   }
-})
+});
 
-test('mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs', () => {
+test("mobile dispatch inputs are injection-safe and default to branch-native + exact-model runs", () => {
   // (1) `${{ github.event.inputs.package }}` must never be interpolated into a
   // run: script — it goes through an `env:` block per .github/AGENTS.md, else a
   // crafted spec (`"; curl … | bash; echo "`) breaks out of the scope check that
@@ -1799,66 +1871,77 @@ test('mobile dispatch inputs are injection-safe and default to branch-native + e
   // near-match (e.g. Pixel 9 -> Pixel 9 Pro); (3) the dispatch package spec
   // defaults to EMPTY so a `--ref <branch>` run tests the branch's native
   // prebuild artifact, not the published @latest.
-  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14)
+  assert.ok(MOBILE_TEST_WORKFLOWS.length >= 14);
   for (const path of MOBILE_TEST_WORKFLOWS) {
-    const src = read(path)
+    const src = read(path);
     assert.doesNotMatch(
       src,
       /"\$\{\{ github\.event\.inputs\.package \}\}" =~/,
       `${path} must validate the package spec via an env: block, not an inline run: template`,
-    )
+    );
     assert.doesNotMatch(
       src,
       /default: CONTAINS/,
       `${path} must default device_model_operator to EQUALS`,
-    )
+    );
     assert.doesNotMatch(
       src,
       /default:\s*['"]@[a-z]+\/[^'"]*@latest['"]/,
       `${path} must default the dispatch package spec to empty (artifact-first), not @latest`,
-    )
+    );
   }
-})
+});
 
-test('audiogen keeps the composite action on the default branch but reads data from the tested ref', () => {
+test("audiogen keeps the composite action on the default branch but reads data from the tested ref", () => {
   // audiogen runs validate-devices in the `release` environment, so the
   // executable action stays pinned to the default branch (supply-chain guard);
   // only the JSON data follows the tested ref.
-  const src = read('.github/workflows/integration-mobile-test-audiogen-ggml.yml')
-  assert.match(src, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/)
-  assert.match(src, /ref: \$\{\{ inputs\.ref \|\| github\.sha \}\}/)
-  assert.match(src, /test-groups-path: validation-data\//)
-})
+  const src = read(
+    ".github/workflows/integration-mobile-test-audiogen-ggml.yml",
+  );
+  assert.match(
+    src,
+    /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/,
+  );
+  assert.match(src, /ref: \$\{\{ inputs\.ref \|\| github\.sha \}\}/);
+  assert.match(src, /test-groups-path: validation-data\//);
+});
 
-test('translation validation data and build check out the SAME repository', () => {
+test("translation validation data and build check out the SAME repository", () => {
   // Translation's build hardcodes the tetherto/qvac fallback, so its
   // validation-data checkout must use the identical fallback — otherwise a
   // blank-`repository` fork dispatch validates the fork but builds tetherto.
-  const src = read('.github/workflows/integration-mobile-test-translation-nmtcpp.yml')
-  const repoLines = src.match(/repository: \$\{\{ inputs\.repository \|\| [^\n]+/g) || []
-  assert.ok(repoLines.length >= 2, 'expected both data + build repository lines')
+  const src = read(
+    ".github/workflows/integration-mobile-test-translation-nmtcpp.yml",
+  );
+  const repoLines =
+    src.match(/repository: \$\{\{ inputs\.repository \|\| [^\n]+/g) || [];
+  assert.ok(
+    repoLines.length >= 2,
+    "expected both data + build repository lines",
+  );
   for (const line of repoLines) {
     assert.match(
       line,
       /inputs\.repository \|\| 'tetherto\/qvac'/,
       `translation must not fall back to github.repository (found: ${line})`,
-    )
+    );
   }
-})
+});
 
-test('inference generates its runner map in an unprivileged job and fails closed', () => {
+test("inference generates its runner map in an unprivileged job and fails closed", () => {
   const src = read(
-    '.github/workflows/integration-mobile-test-inference-addon-cpp.yml',
-  )
+    ".github/workflows/integration-mobile-test-inference-addon-cpp.yml",
+  );
   // The generator runs repo-branch code, so it must hold no secrets.
   const mapJob = src.slice(
-    src.indexOf('  resolve-runner-map:'),
-    src.indexOf('  validate-devices:'),
-  )
-  assert.ok(mapJob.length > 0, 'resolve-runner-map job must exist')
-  assert.match(mapJob, /permissions:\n\s+contents: read/)
-  assert.doesNotMatch(mapJob, /id-token: write/)
-  assert.doesNotMatch(mapJob, /environment:/)
+    src.indexOf("  resolve-runner-map:"),
+    src.indexOf("  validate-devices:"),
+  );
+  assert.ok(mapJob.length > 0, "resolve-runner-map job must exist");
+  assert.match(mapJob, /permissions:\n\s+contents: read/);
+  assert.doesNotMatch(mapJob, /id-token: write/);
+  assert.doesNotMatch(mapJob, /environment:/);
   // It regenerates from the SAME immutable commit the build compiles: the
   // build jobs share this exact expression, and the trailing github.sha pins a
   // blank workflow_dispatch to the triggering commit (github.ref is deliberately
@@ -1867,321 +1950,360 @@ test('inference generates its runner map in an unprivileged job and fails closed
   assert.match(
     mapJob,
     /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| inputs\.ref \|\| github\.sha \}\}/,
-  )
-  assert.doesNotMatch(mapJob, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/)
-  assert.match(mapJob, /set -euo pipefail/)
-  assert.doesNotMatch(src, /falling back to device-only/)
+  );
+  assert.doesNotMatch(mapJob, /ref: \$\{\{ inputs\.ref \|\| github\.ref \}\}/);
+  assert.match(mapJob, /set -euo pipefail/);
+  assert.doesNotMatch(src, /falling back to device-only/);
   // validate-devices consumes the artifact as data and hard-fails if the map
   // could not be produced, before any build or Device Farm spend.
-  assert.match(src, /needs\.resolve-runner-map\.result != 'success'/)
-  assert.match(src, /Failing closed/)
-  assert.match(src, /test-groups-path: validation-data\/inference-mobile-test-groups\.json/)
-})
+  assert.match(src, /needs\.resolve-runner-map\.result != 'success'/);
+  assert.match(src, /Failing closed/);
+  assert.match(
+    src,
+    /test-groups-path: validation-data\/inference-mobile-test-groups\.json/,
+  );
+});
 
-test('mobile monitor maps each run back to its spec for any per-spec fan-out', () => {
+test("mobile monitor maps each run back to its spec for any per-spec fan-out", () => {
   const action = read(
-    '.github/actions/run-mobile-integration-tests/monitor-test-run/action.yml',
-  )
-  assert.match(action, /run:\s*\|\n\s+set -euo pipefail/)
-  assert.match(action, /spec_index_for_run\(\)/)
+    ".github/actions/run-mobile-integration-tests/monitor-test-run/action.yml",
+  );
+  assert.match(action, /run:\s*\|\n\s+set -euo pipefail/);
+  assert.match(action, /spec_index_for_run\(\)/);
   // The legend generalises runs_per_spec = RUN_COUNT / SPEC_COUNT so it labels
   // dual-flagship (2), single-pool (1) AND manual fan-outs with >2 devices
   // correctly, instead of only special-casing the *2 shape.
-  assert.match(action, /RUN_COUNT % SPEC_COUNT/)
-  assert.match(action, /per_spec=\$\(\(RUN_COUNT \/ SPEC_COUNT\)\)/)
-  assert.match(action, /echo \$\(\(run_index \/ per_spec\)\)/)
-  assert.match(action, /for \(\(i=0; i<RUN_COUNT; i\+\+\)\); do/)
-})
+  assert.match(action, /RUN_COUNT % SPEC_COUNT/);
+  assert.match(action, /per_spec=\$\(\(RUN_COUNT \/ SPEC_COUNT\)\)/);
+  assert.match(action, /echo \$\(\(run_index \/ per_spec\)\)/);
+  assert.match(action, /for \(\(i=0; i<RUN_COUNT; i\+\+\)\); do/);
+});
 
-test('mobile shards pass grep explicitly and retain host-phase failure logs', () => {
+test("mobile shards pass grep explicitly and retain host-phase failure logs", () => {
   const uploadAction = read(
-    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/action.yml',
-  )
+    ".github/actions/run-mobile-integration-tests/upload-to-devicefarm/action.yml",
+  );
   const generateTestspec = read(
-    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
-  )
+    ".github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh",
+  );
   const collectLogs = read(
-    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
-  )
+    ".github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml",
+  );
 
-  assert.match(uploadAction, /export GROUP_GREP_B64=/)
-  assert.match(
-    generateTestspec,
-    /base64 -d > \/tmp\/qvacShardGrep\.txt/,
-  )
-  assert.match(
-    generateTestspec,
-    /DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH:-/,
-  )
-  assert.match(collectLogs, /\*Test\*spec\*output\*/)
-  assert.match(collectLogs, /\*Standard\*Output\*/)
-  assert.match(collectLogs, /Host phase log:/)
-})
+  assert.match(uploadAction, /export GROUP_GREP_B64=/);
+  assert.match(generateTestspec, /base64 -d > \/tmp\/qvacShardGrep\.txt/);
+  assert.match(generateTestspec, /DEVICEFARM_APPIUM_WDA_DERIVED_DATA_PATH:-/);
+  assert.match(collectLogs, /\*Test\*spec\*output\*/);
+  assert.match(collectLogs, /\*Standard\*Output\*/);
+  assert.match(collectLogs, /Host phase log:/);
+});
 
 // A native abort() kills the app before Bare flushes its console buffer, so the
 // .ips crash report is the only place the faulting stack survives.
-test('iOS mobile runs collect on-device crash reports', () => {
+test("iOS mobile runs collect on-device crash reports", () => {
   const generateTestspec = read(
-    '.github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh',
-  )
+    ".github/actions/run-mobile-integration-tests/upload-to-devicefarm/generate-testspec.sh",
+  );
   const collectLogs = read(
-    '.github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml',
-  )
+    ".github/actions/run-mobile-integration-tests/collect-and-upload-logs/action.yml",
+  );
 
   // Must run in the test phase: Device Farm skips post_test when the test phase
   // exits non-zero, i.e. exactly when a crash report is what we need.
-  const wdioCall = generateTestspec.indexOf('node node_modules/@wdio/cli/bin/wdio.js')
-  const crashPull = generateTestspec.lastIndexOf('pymobiledevice3 crash pull')
-  const androidLogcat = generateTestspec.indexOf('adb logcat -d -b all')
+  const wdioCall = generateTestspec.indexOf(
+    "node node_modules/@wdio/cli/bin/wdio.js",
+  );
+  const crashPull = generateTestspec.lastIndexOf("pymobiledevice3 crash pull");
+  const androidLogcat = generateTestspec.indexOf("adb logcat -d -b all");
   // Anchor on the emitted YAML key, not the word — prose above mentions it too.
-  const postTestPhase = generateTestspec.indexOf('  post_test:\n    commands:')
-  assert.ok(crashPull > 0, 'iOS crash-report pull must exist')
-  assert.ok(androidLogcat > 0, 'Android logcat collection must stay in post_test')
+  const postTestPhase = generateTestspec.indexOf("  post_test:\n    commands:");
+  assert.ok(crashPull > 0, "iOS crash-report pull must exist");
+  assert.ok(
+    androidLogcat > 0,
+    "Android logcat collection must stay in post_test",
+  );
   assert.ok(
     crashPull < postTestPhase,
-    'crash pull must be emitted in the test phase — post_test never runs on a failed test',
-  )
+    "crash pull must be emitted in the test phase — post_test never runs on a failed test",
+  );
 
   // Re-exits with wdio's own code, so wrapping cannot change a run's verdict.
-  const exitLine = generateTestspec.indexOf('exit $WDIO_RC')
-  const rcCapture = generateTestspec.indexOf('WDIO_RC=$?')
-  assert.ok(rcCapture > wdioCall, 'wdio exit code must be captured right after the run')
-  assert.ok(exitLine > crashPull, 'the wrapper must re-exit after collecting logs')
+  const exitLine = generateTestspec.indexOf("exit $WDIO_RC");
+  const rcCapture = generateTestspec.indexOf("WDIO_RC=$?");
+  assert.ok(
+    rcCapture > wdioCall,
+    "wdio exit code must be captured right after the run",
+  );
+  assert.ok(
+    exitLine > crashPull,
+    "the wrapper must re-exit after collecting logs",
+  );
   assert.match(
     generateTestspec.slice(0, wdioCall),
     /if \[ "\$PLATFORM" = "iOS" \]/,
-    'wrapper must be iOS-only',
-  )
+    "wrapper must be iOS-only",
+  );
   assert.doesNotMatch(
     generateTestspec.slice(wdioCall, exitLine),
     /^\s+set -e$/m,
-    'set -e must not be re-enabled around log collection',
-  )
+    "set -e must not be re-enabled around log collection",
+  );
 
-  assert.match(generateTestspec, /\[CRASH_REPORT_START\]/)
-  assert.match(generateTestspec, /\[CRASH_REPORT_END\]/)
+  assert.match(generateTestspec, /\[CRASH_REPORT_START\]/);
+  assert.match(generateTestspec, /\[CRASH_REPORT_END\]/);
 
   // Device Farm reuses phones and every shard is the same bundle id, so the
   // reports already present before wdio ran are snapshotted by NAME and
   // subtracted afterwards. An mtime window cannot distinguish them.
   assert.ok(
-    generateTestspec.indexOf('BEFORE_LIST') < wdioCall,
-    'the pre-run crash snapshot must be taken before wdio starts',
-  )
-  assert.match(generateTestspec.slice(crashPull), /grep -Fxq "\$\(basename "\$f"\)" "\$BEFORE_LIST"/)
-  assert.doesNotMatch(generateTestspec, /-mmin/, 'no rolling time window — names are exact')
+    generateTestspec.indexOf("BEFORE_LIST") < wdioCall,
+    "the pre-run crash snapshot must be taken before wdio starts",
+  );
+  assert.match(
+    generateTestspec.slice(crashPull),
+    /grep -Fxq "\$\(basename "\$f"\)" "\$BEFORE_LIST"/,
+  );
+  assert.doesNotMatch(
+    generateTestspec,
+    /-mmin/,
+    "no rolling time window — names are exact",
+  );
 
   // A snapshot that never ran is not an empty phone. Both pulls are guarded,
   // the snapshot's status is kept, and a report can only be presented as this
   // run's when that status is good — otherwise it is labelled UNVERIFIED.
-  assert.match(generateTestspec, /SNAP_RC=\$\?/, "the snapshot's exit status must be captured")
+  assert.match(
+    generateTestspec,
+    /SNAP_RC=\$\?/,
+    "the snapshot's exit status must be captured",
+  );
   assert.strictEqual(
-    (generateTestspec.match(/command -v pymobiledevice3 >\/dev\/null 2>&1/g) || []).length,
+    (
+      generateTestspec.match(/command -v pymobiledevice3 >\/dev\/null 2>&1/g) ||
+      []
+    ).length,
     3,
-    'install check plus both pulls are guarded',
-  )
+    "install check plus both pulls are guarded",
+  );
   assert.match(
     generateTestspec,
     /if \[ -n "\$NEWEST" \] && \[ "\$SNAP_RC" -eq 0 \]/,
-    'a verified report requires a successful snapshot',
-  )
-  assert.match(generateTestspec, /CRASH_REPORT_START_UNVERIFIED/)
+    "a verified report requires a successful snapshot",
+  );
+  assert.match(generateTestspec, /CRASH_REPORT_START_UNVERIFIED/);
 
   // ...and they have to reach the uploaded artifact.
-  assert.match(collectLogs, /-type d -name "crash-reports"/)
-  assert.match(collectLogs, /Extracted iOS crash report/)
-})
+  assert.match(collectLogs, /-type d -name "crash-reports"/);
+  assert.match(collectLogs, /Extracted iOS crash report/);
+});
 
-test('tts-ggml functional mobile workflow opts into dual flagship per shard', () => {
-  const workflow = read('.github/workflows/integration-mobile-test-tts-ggml.yml')
+test("tts-ggml functional mobile workflow opts into dual flagship per shard", () => {
+  const workflow = read(
+    ".github/workflows/integration-mobile-test-tts-ggml.yml",
+  );
   // The workflow_call branch (benchmark || functional) is unchanged; it is now
   // preceded inside fromJSON() by the manual-dispatch single-platform branch,
   // so anchor on the matrix JSON rather than on `fromJSON(` directly.
   const matrices = workflow.match(
     /inputs\.run_rtf_benchmarks && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'/,
-  )
+  );
   // Scope to the build job's name: validate-devices is now the first job in the
   // file, so a bare "first name:" capture would pick the wrong job.
-  const jobName = workflow.match(/^\s{4}name:\s*(Build .+)$/m)
+  const jobName = workflow.match(/^\s{4}name:\s*(Build .+)$/m);
 
-  assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
-  assert.ok(jobName, 'build-and-test job must have a name')
-  const benchmarkMatrix = JSON.parse(matrices[1])
-  const functionalMatrix = JSON.parse(matrices[2])
+  assert.ok(
+    matrices,
+    "benchmark and functional matrices must be literal JSON objects",
+  );
+  assert.ok(jobName, "build-and-test job must have a name");
+  const benchmarkMatrix = JSON.parse(matrices[1]);
+  const functionalMatrix = JSON.parse(matrices[2]);
   assert.deepEqual(
     functionalMatrix.include.map((entry) => entry.platform),
-    ['Android', 'iOS'],
-  )
+    ["Android", "iOS"],
+  );
   // Manual dispatch (inputs.platform set) selects ONE row on the chosen
   // platform; devices come from the manual inputs, not the matrix.
   const dispatchMatrices = workflow.match(
     /inputs\.platform != '' && \(inputs\.platform == 'iOS' && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'\)/,
-  )
-  assert.ok(dispatchMatrices, 'manual dispatch must select a single-platform matrix')
-  const dispatchIos = JSON.parse(dispatchMatrices[1])
-  const dispatchAndroid = JSON.parse(dispatchMatrices[2])
-  assert.equal(dispatchIos.include.length, 1)
-  assert.equal(dispatchIos.include[0].platform, 'iOS')
-  assert.equal(dispatchAndroid.include.length, 1)
-  assert.equal(dispatchAndroid.include[0].platform, 'Android')
-  assert.equal(benchmarkMatrix.include.length, 25)
+  );
+  assert.ok(
+    dispatchMatrices,
+    "manual dispatch must select a single-platform matrix",
+  );
+  const dispatchIos = JSON.parse(dispatchMatrices[1]);
+  const dispatchAndroid = JSON.parse(dispatchMatrices[2]);
+  assert.equal(dispatchIos.include.length, 1);
+  assert.equal(dispatchIos.include[0].platform, "iOS");
+  assert.equal(dispatchAndroid.include.length, 1);
+  assert.equal(dispatchAndroid.include[0].platform, "Android");
+  assert.equal(benchmarkMatrix.include.length, 25);
   assert.equal(
-    benchmarkMatrix.include.filter((entry) => entry.platform === 'Android').length,
+    benchmarkMatrix.include.filter((entry) => entry.platform === "Android")
+      .length,
     13,
-  )
+  );
   assert.equal(
-    benchmarkMatrix.include.filter((entry) => entry.platform === 'iOS').length,
+    benchmarkMatrix.include.filter((entry) => entry.platform === "iOS").length,
     12,
-  )
-  assert.match(workflow, /release environment authorizes GitHub OIDC/)
+  );
+  assert.match(workflow, /release environment authorizes GitHub OIDC/);
   // A manual `tests` filter (steps.manual_tests) overrides the automatic
   // perf/functional groups; otherwise the auto-sharded groups are used.
   assert.match(
     workflow,
     /test-groups:\s*\$\{\{ steps\.manual_tests\.outputs\.groups != '' && steps\.manual_tests\.outputs\.groups \|\| steps\.perf_groups\.outputs\.groups \}\}/,
-  )
-  assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/)
-  assert.match(jobName[1], /^Build \$\{\{ matrix\.platform \}\}/)
-  assert.match(jobName[1], /matrix\.engine/)
-  assert.match(jobName[1], /matrix\.variant/)
-  assert.match(jobName[1], /matrix\.use_gpu/)
-  assert.doesNotMatch(jobName[1], /inputs\.run_rtf_benchmarks/)
+  );
+  assert.doesNotMatch(workflow, /Resolve functional test-groups by engine/);
+  assert.match(jobName[1], /^Build \$\{\{ matrix\.platform \}\}/);
+  assert.match(jobName[1], /matrix\.engine/);
+  assert.match(jobName[1], /matrix\.variant/);
+  assert.match(jobName[1], /matrix\.use_gpu/);
+  assert.doesNotMatch(jobName[1], /inputs\.run_rtf_benchmarks/);
   // Manual dispatch pins the chosen device(s) (manual-devices); the automatic
   // workflow_call path keeps its dual-flagship sharding, unchanged.
   assert.match(
     workflow,
     /scheduling-mode:\s*\$\{\{ inputs\.platform != '' && 'manual-devices' \|\| 'dual-flagship' \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /TTS_GGML_MOBILE_FUNCTIONAL_MULTI_SPEC:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 180 \|\| 150 \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
-  )
-})
+  );
+});
 
-test('asr-ggml functional mobile workflow opts into dual flagship per engine shard', () => {
-  const workflow = read('.github/workflows/integration-mobile-test-asr-ggml.yml')
+test("asr-ggml functional mobile workflow opts into dual flagship per engine shard", () => {
+  const workflow = read(
+    ".github/workflows/integration-mobile-test-asr-ggml.yml",
+  );
   // The workflow_call branch (benchmark || functional) is unchanged; it is now
   // preceded inside fromJSON() by the manual-dispatch single-platform branch,
   // so anchor on the matrix JSON rather than on `fromJSON(` directly.
   const matrices = workflow.match(
     /inputs\.run_rtf_benchmarks && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'/,
-  )
+  );
 
-  assert.ok(matrices, 'benchmark and functional matrices must be literal JSON objects')
-  const benchmarkMatrix = JSON.parse(matrices[1])
-  const functionalMatrix = JSON.parse(matrices[2])
-  assert.equal(benchmarkMatrix.include.length, 20)
+  assert.ok(
+    matrices,
+    "benchmark and functional matrices must be literal JSON objects",
+  );
+  const benchmarkMatrix = JSON.parse(matrices[1]);
+  const functionalMatrix = JSON.parse(matrices[2]);
+  assert.equal(benchmarkMatrix.include.length, 20);
   assert.deepEqual(
     functionalMatrix.include.map((entry) => entry.platform),
-    ['Android', 'iOS'],
-  )
+    ["Android", "iOS"],
+  );
   // Manual dispatch (inputs.platform set) selects ONE row on the chosen
   // platform; devices come from the manual inputs, not the matrix.
   const dispatchMatrices = workflow.match(
     /inputs\.platform != '' && \(inputs\.platform == 'iOS' && '(\{"include"[^']+)' \|\| '(\{"include"[^']+)'\)/,
-  )
-  assert.ok(dispatchMatrices, 'manual dispatch must select a single-platform matrix')
-  const dispatchIos = JSON.parse(dispatchMatrices[1])
-  const dispatchAndroid = JSON.parse(dispatchMatrices[2])
-  assert.equal(dispatchIos.include.length, 1)
-  assert.equal(dispatchIos.include[0].platform, 'iOS')
-  assert.equal(dispatchAndroid.include.length, 1)
-  assert.equal(dispatchAndroid.include[0].platform, 'Android')
+  );
+  assert.ok(
+    dispatchMatrices,
+    "manual dispatch must select a single-platform matrix",
+  );
+  const dispatchIos = JSON.parse(dispatchMatrices[1]);
+  const dispatchAndroid = JSON.parse(dispatchMatrices[2]);
+  assert.equal(dispatchIos.include.length, 1);
+  assert.equal(dispatchIos.include[0].platform, "iOS");
+  assert.equal(dispatchAndroid.include.length, 1);
+  assert.equal(dispatchAndroid.include[0].platform, "Android");
   // Manual dispatch is serialized per (workflow, branch) and supersedes an
   // in-flight manual run; workflow_call keys on the unique run_id and never
   // cancels, so parallel automated callers cannot collide or cancel each other.
   assert.match(
     workflow,
     /concurrency:\s*\n[\s\S]*?group:\s*\$\{\{ inputs\.platform != '' && format\('mobile-dispatch-\{0\}-\{1\}', github\.workflow, github\.ref\) \|\| format\('mobile-call-\{0\}', github\.run_id\) \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /cancel-in-progress:\s*\$\{\{ inputs\.platform != '' \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /name: Manual Workspace Cleanup[\s\S]*?if: runner\.environment != 'github-hosted'[\s\S]*?working-directory: \./,
-  )
-  assert.match(workflow, /release environment authorizes GitHub OIDC/)
+  );
+  assert.match(workflow, /release environment authorizes GitHub OIDC/);
   assert.match(
     workflow,
     /PACKAGE_SPEC:\s*\$\{\{ github\.event\.inputs\.package_spec \}\}[\s\S]*?if \[\[ ! "\$PACKAGE_SPEC"/,
-  )
+  );
   assert.doesNotMatch(
     workflow,
     /if \[\[ ! "\$\{\{ github\.event\.inputs\.package_spec \}\}"/,
-  )
+  );
   // A manual `tests` filter (steps.manual_tests) overrides the automatic
   // perf/functional groups; otherwise the auto-sharded groups are used.
   assert.match(
     workflow,
     /test-groups:\s*\$\{\{ steps\.manual_tests\.outputs\.groups != '' && steps\.manual_tests\.outputs\.groups \|\| steps\.perf_groups\.outputs\.groups \}\}/,
-  )
+  );
   // Manual dispatch pins the chosen device(s) (manual-devices); the automatic
   // workflow_call path keeps its dual-flagship sharding, unchanged.
   assert.match(
     workflow,
     /scheduling-mode:\s*\$\{\{ inputs\.platform != '' && 'manual-devices' \|\| 'dual-flagship' \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /multi-spec-dual-flagship:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 'true' \|\| 'false' \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /package-version:\s*\$\{\{ inputs\.prebuild_package \|\| inputs\.package_spec \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /force-npm-prebuild:\s*\$\{\{ \(inputs\.prebuild_package != '' \|\| inputs\.package_spec != ''\) && 'true' \|\| 'false' \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /timeout-minutes:\s*\$\{\{ !inputs\.run_rtf_benchmarks && 210 \|\| 180 \}\}/,
-  )
+  );
   assert.match(
     workflow,
     /max-wait-time-seconds:\s*\$\{\{ !inputs\.run_rtf_benchmarks && '9000' \|\| '7200' \}\}/,
-  )
-})
+  );
+});
 
 // --- SDK-only GitHub Releases policy ----------------------------------------
 // Only the SDK cuts GitHub Releases; every other package cuts a plain version
 // tag via create-release-tag.yml, keeping the Releases page SDK-focused. Adding
 // a caller here is a deliberate policy decision, not a drive-by edit.
-const GITHUB_RELEASE_REUSABLE = './.github/workflows/create-github-release.yml'
-const ALLOWED_RELEASE_CALLERS = ['.github/workflows/publish-sdk.yml']
+const GITHUB_RELEASE_REUSABLE = "./.github/workflows/create-github-release.yml";
+const ALLOWED_RELEASE_CALLERS = [".github/workflows/publish-sdk.yml"];
 
-test('release policy: only the SDK workflow calls create-github-release.yml', () => {
+test("release policy: only the SDK workflow calls create-github-release.yml", () => {
   const callers = [
     ...new Set(callersOf(GITHUB_RELEASE_REUSABLE).map(({ path }) => path)),
-  ]
+  ];
   assert.deepEqual(
     callers.sort(),
     [...ALLOWED_RELEASE_CALLERS].sort(),
-    'non-SDK packages must use create-release-tag.yml (tag only, no GitHub Release)',
-  )
-})
+    "non-SDK packages must use create-release-tag.yml (tag only, no GitHub Release)",
+  );
+});
 
 // Workflows allowed to touch GitHub Releases directly, each SDK-owned so the
 // Releases page stays SDK-only. Adding an entry is a deliberate policy decision.
@@ -2191,22 +2313,278 @@ test('release policy: only the SDK workflow calls create-github-release.yml', ()
 //    assets to the SDK's own sdk-v<version> release, and (manual backfill only)
 //    drafts that sdk-v* tag if missing. Invoked by publish-sdk.yml.
 const RELEASE_WRITE_EXEMPT = new Set([
-  '.github/workflows/create-github-release.yml',
-  '.github/workflows/build-sdk-python-fat-wheels.yml',
-])
+  ".github/workflows/create-github-release.yml",
+  ".github/workflows/build-sdk-python-fat-wheels.yml",
+]);
 
-test('release policy: no workflow cuts a GitHub Release outside the SDK surface', () => {
-  const offenders = []
+test("release policy: no workflow cuts a GitHub Release outside the SDK surface", () => {
+  const offenders = [];
   for (const path of workflowPaths()) {
-    if (RELEASE_WRITE_EXEMPT.has(path)) continue
+    if (RELEASE_WRITE_EXEMPT.has(path)) continue;
     // Strip comments so prose like "no GitHub Release" cannot false-positive.
-    const code = withoutComments(read(path))
+    const code = withoutComments(read(path));
     if (/softprops\/action-gh-release@/.test(code)) {
-      offenders.push(`${path}: uses softprops/action-gh-release directly`)
+      offenders.push(`${path}: uses softprops/action-gh-release directly`);
     }
     if (/gh release create\b/.test(code)) {
-      offenders.push(`${path}: calls 'gh release create'`)
+      offenders.push(`${path}: calls 'gh release create'`);
     }
   }
-  assert.deepEqual(offenders, [])
-})
+  assert.deepEqual(offenders, []);
+});
+
+// A cpp-tests workflow runs PR-head code and is reachable from a fork PR once
+// fork-ci is approved, so a cache WRITE (actions/cache/save) must be gated on
+// trusted events only. Easy to undo by accident, so pin it here.
+// See .github/AGENTS.md.
+const TRUSTED_CACHE_EVENTS = [
+  "push",
+  "workflow_dispatch",
+  "merge_group",
+  "schedule",
+];
+
+// Known-ungated, tracked on QVAC-24711. Both write a ccache/models cache with no
+// event gate at all; neither has a vcpkg cache step yet, so they were out of
+// scope for QVAC-24711's first pass. Remove each entry as it is fixed -- this
+// list should only ever shrink.
+const TRUSTED_CACHE_EXEMPT = new Set([
+  ".github/workflows/cpp-test-coverage-asr-ggml.yml",
+  ".github/workflows/cpp-test-coverage-tts-ggml.yml",
+  // Exempt only for its three pre-existing ungated actions/cache@ writes (ccache,
+  // parakeet GGUF, tts venv), reachable from on-pr-nx.yml (pull_request_target).
+  // Needs its own ticket. Its vcpkg cache write IS gated, and is checked below.
+  ".github/workflows/cpp-tests-nx.yml",
+]);
+
+// Events that must never appear in a cache WRITE gate. `pull_request_target` is
+// the whole point -- a gate that merely lists the four trusted events still
+// passes a presence check while carrying `|| github.event_name ==
+// 'pull_request_target'` alongside them, which is exactly the hole this test
+// exists to close. So assert the untrusted ones are absent too.
+// A trusted event is not a trusted run. `Checkout code` takes both a
+// `repository` and a `ref` redirect, and neither is safer for arriving as a
+// workflow_call input: on-pr-nx.yml fills both from its own workflow_dispatch
+// inputs and forwards them through cpp-tests-nx.yml to every leaf. Inside a
+// called workflow github.event_name and github.ref are the caller's, so a
+// dispatch on the default branch satisfies the branch clause while the checkout
+// builds a foreign tree (QVAC-25269).
+const TRUST_GUARDS = [
+  [
+    "the default branch",
+    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+  ],
+  ["its own ref", "(inputs.ref == '' || inputs.ref == github.ref_name)"],
+  [
+    "its own repository",
+    "(inputs.repository == '' || inputs.repository == github.repository)",
+  ],
+];
+
+function missingTrustGuards(step) {
+  return TRUST_GUARDS.filter(([, guard]) => !step.includes(guard)).map(
+    ([label]) => label,
+  );
+}
+
+const UNTRUSTED_CACHE_EVENTS = [
+  "pull_request",
+  "pull_request_target",
+  "issue_comment",
+];
+
+// Every `uses: actions/cache@` (write) step in the cpp-tests family, as
+// {path, code, steps, index}. Steps are split on the six-space step indent
+// these workflows use; `index` is the step's position, for ordering checks.
+//
+// `match` is one regex or an array of them, ALL of which must match the step.
+// An array is how a caller spells "this step mentions both X and Y" without
+// tying itself to the order the YAML keys happen to be written in: a single
+// /X[\s\S]*Y/ silently stops matching when someone moves `with:` above `uses:`,
+// which is legal YAML with identical runtime behaviour and would let a cache
+// write slip past the gate below.
+function eachCppTestsCacheStep(opts = {}) {
+  const found = [];
+  const patterns = [opts.match].flat();
+  for (const path of workflowPaths()) {
+    if (!/\/cpp-tests?-/.test(path)) continue;
+    if (!opts.includeExempt && TRUSTED_CACHE_EXEMPT.has(path)) continue;
+    const code = withoutComments(read(path));
+    const steps = code.split(/\n      - /);
+    steps.forEach((step, index) => {
+      if (!patterns.every((p) => p.test(step))) return;
+      found.push({ path, code, steps, step, index });
+    });
+  }
+  return found;
+}
+
+test("cache policy: cpp-tests cache writes are gated on trusted events", () => {
+  const offenders = [];
+  const check = (path, step) => {
+    const missing = TRUSTED_CACHE_EVENTS.filter(
+      (e) => !step.includes(`github.event_name == '${e}'`),
+    );
+    if (missing.length) {
+      offenders.push(
+        `${path}: a cache write step does not gate on ${missing.join(", ")}`,
+      );
+    }
+    const forbidden = UNTRUSTED_CACHE_EVENTS.filter((e) =>
+      step.includes(`github.event_name == '${e}'`),
+    );
+    if (forbidden.length) {
+      offenders.push(
+        `${path}: a cache write step admits untrusted ${forbidden.join(", ")}`,
+      );
+    }
+    const unpinned = missingTrustGuards(step);
+    if (unpinned.length) {
+      offenders.push(
+        `${path}: a cache write step is not pinned to ${unpinned.join(", ")}`,
+      );
+    }
+  };
+  const seen = new Set();
+  for (const { path, step, index } of eachCppTestsCacheStep({
+    match: /uses: actions\/cache(@|\/save@)/,
+  })) {
+    seen.add(`${path}#${index}`);
+    check(path, step);
+  }
+  // An exempt file is exempt only for the ungated model/ccache caches it already
+  // had; a vcpkg cache write carries the full gate wherever it appears.
+  for (const { path, step, index } of eachCppTestsCacheStep({
+    match: [/uses: actions\/cache\/save@/, /vcpkg\/cache/],
+    includeExempt: true,
+  })) {
+    if (seen.has(`${path}#${index}`)) continue;
+    check(path, step);
+  }
+  // The third gate site: the action decides read vs write mode from `trusted`.
+  for (const { path, step } of eachCppTestsCacheStep({
+    match: /uses: \.\/\.github\/actions\/vcpkg-binary-cache-dir/,
+    includeExempt: true,
+  })) {
+    check(path, step);
+  }
+  assert.deepEqual(offenders, []);
+});
+
+// vcpkg names every cached package by an ABI hash that includes the toolchain,
+// so a vcpkg cache key that does not move with the compiler restores an entry
+// whose archives all miss -- and an exact primary-key hit suppresses the save,
+// so the dead entry is never replaced. Observed on both Windows pools and on a
+// single macOS runner four days apart. Both cache steps in a workflow must
+// carry the fingerprint, and the step that produces it must come first.
+// The host cache directory outlives the job and is shared with every later job
+// on the box, so the step that copies archives into it must carry the same trust
+// gate as the cache write. It was gated only on VCPKG_CACHE_PERSISTENT at first,
+// which is true on any self-hosted runner including a pull_request_target run.
+test("cache policy: the host-cache sync step is gated on trusted events", () => {
+  const offenders = [];
+  for (const { path, step } of eachCppTestsCacheStep({
+    match: /name: Sync the host and workspace vcpkg caches/,
+    includeExempt: true,
+  })) {
+    const missing = TRUSTED_CACHE_EVENTS.filter(
+      (e) => !step.includes(`github.event_name == '${e}'`),
+    );
+    if (missing.length) {
+      offenders.push(
+        `${path}: the host-cache sync step does not gate on ${missing.join(", ")}`,
+      );
+    }
+    const unpinned = missingTrustGuards(step);
+    if (unpinned.length) {
+      offenders.push(
+        `${path}: the host-cache sync step is not pinned to ${unpinned.join(", ")}`,
+      );
+    }
+  }
+  // Every cpp-tests workflow with a persistent host layer must have the step.
+  assert.ok(
+    eachCppTestsCacheStep({
+      match: /name: Sync the host and workspace vcpkg caches/,
+      includeExempt: true,
+    }).length >= 5,
+  );
+  assert.deepEqual(offenders, []);
+});
+
+test("cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint", () => {
+  const offenders = [];
+  // Only the vcpkg cache; the model caches are keyed on manifests and are
+  // toolchain-independent by construction.
+  // Only the restore step spells the key out; the save reuses it via
+  // steps.vcpkg-cache.outputs.cache-primary-key, so it cannot drift.
+  const vcpkgCacheSteps = eachCppTestsCacheStep({
+    match: [/uses: actions\/cache\/restore@/, /vcpkg\/cache/],
+    includeExempt: true,
+  });
+
+  for (const { path, steps, step, index } of vcpkgCacheSteps) {
+    if (!step.includes("env.TOOLCHAIN_FINGERPRINT")) {
+      offenders.push(
+        `${path}: a vcpkg cache step's key omits env.TOOLCHAIN_FINGERPRINT`,
+      );
+      continue;
+    }
+    // Compare step positions, not string offsets: two textually identical steps
+    // resolve to the same offset, and the restore/save pair very nearly is one.
+    const producer = steps.findIndex((s) =>
+      s.includes("actions/vcpkg-toolchain-fingerprint"),
+    );
+    if (producer === -1) {
+      offenders.push(
+        `${path}: uses env.TOOLCHAIN_FINGERPRINT but never runs the action that sets it`,
+      );
+      continue;
+    }
+    if (index < producer) {
+      offenders.push(
+        `${path}: a vcpkg cache step runs before the fingerprint action that sets its key`,
+      );
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test("cache policy: the toolchain fingerprint identifies vcpkg by version, not by binary bytes", () => {
+  const source = read(".github/actions/vcpkg-toolchain-fingerprint/action.yml");
+  const offenders = [];
+
+  // Hashing vcpkg's bytes splits the key per host. linux and windows take vcpkg
+  // pre-installed from the runner image, and hosts imaged at different times
+  // carry byte-different copies of one release -- measured on windows, where
+  // vctools and sdk matched across two runs at the same commit but the binary
+  // hash did not, so the entry never hit. The reported version is stable across
+  // those hosts and still moves when vcpkg itself moves.
+  for (const [shell, pattern] of [
+    ["bash", /sha256sum\s+"?\$\{?vcpkg_bin/],
+    ["bash", /shasum\s+-a\s+256\s+"?\$\{?vcpkg_bin/],
+    ["powershell", /Get-FileHash[^\n]*vcpkgBin/i],
+  ]) {
+    if (pattern.test(source)) {
+      offenders.push(
+        `${shell}: the fingerprint hashes the vcpkg binary's bytes (${pattern})`,
+      );
+    }
+  }
+
+  // And the version really is what feeds the probe, on both branches.
+  if (!/vcpkg_version_raw="\$\("\$\{vcpkg_bin\}" version\)/.test(source)) {
+    offenders.push("bash: the fingerprint never runs `vcpkg version`");
+  }
+  if (!/\$vcpkgVersion\s*=\s*\(&\s*\$vcpkgBin\s+version/.test(source)) {
+    offenders.push("powershell: the fingerprint never runs `vcpkg version`");
+  }
+
+  // An empty version would hash to one constant on every host, which is the
+  // same bug wearing the opposite disguise, so both branches must refuse it.
+  if (!/printed nothing; cache key would be unstable/.test(source)) {
+    offenders.push("the fingerprint accepts an empty `vcpkg version`");
+  }
+
+  assert.deepEqual(offenders, []);
+});

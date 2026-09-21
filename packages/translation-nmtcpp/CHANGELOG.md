@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added the `main-gpu` / `main_gpu` config selector for choosing a raw ggml
+  registry index or a `dedicated` / `integrated` GPU class. The selector rejects
+  conflicts with legacy `gpu_backend` / `gpu_device` keys; ineligible raw-index
+  targets fall back to CPU, out-of-range indices return to automatic selection,
+  and class selectors fall back to CPU when no matching eligible GPU exists.
+  
+## [0.16.4] - 2026-09-18
+
+### Fixed
+
+- Reject malformed model files during loading instead of crashing on a corrupt or untrusted model. Loading a legitimate model is unaffected.
+
+## [0.16.3] - 2026-09-18
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.0` -> `^0.16.1`. Another hard floor: Android consumers built against `0.16.0` fail to load. That release named the ELF version node `QVAC_FABRIC_ABI_1` on every ELF target, so an Android addon records a `DT_VERNEED` that bionic cannot satisfy — `dlopen` fails and `bare` reports `ADDON_NOT_FOUND: Cannot find addon '.'` from `binding.js` before any model work. `0.16.1` names the node only where fabric owns the C++ runtime (Linux embedding libc++); Android keeps the anonymous node it had through `0.15.0`. An Android binary linked against `0.16.0` keeps the versioned imports and still fails, so this package has to be rebuilt. A caret on a `0.x` version locks the minor, so `^0.16.0` could still resolve `0.16.0`. Released as a patch rather than a minor so consumers already tracking the `0.16.x` line pick this up without a range change of their own. Linux binaries built against `0.16.0` are unaffected. Desktop was unaffected. No API change. Rationale: fabric `0.16.1` ([#4566](https://github.com/tetherto/qvac/pull/4566)).
+
 ## [0.16.2] - 2026-09-17
 
 ### Changed

@@ -2,6 +2,8 @@
 
 const { OcrGgml } = require('../..')
 const test = require('brittle')
+const path = require('bare-path')
+const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('../../lib/main-gpu')
 const {
   isMobile,
   platform,
@@ -32,6 +34,101 @@ const vulkanBackendLib = findVulkanBackendLib(PREBUILDS_DIR)
 // Skip on mobile (prebuilds layout / device provisioning differ) and on any
 // host that did not ship a Vulkan backend lib.
 const shouldSkip = isMobile || !vulkanBackendLib
+
+function nativeBackendsDir() {
+  if (isMobile) return PREBUILDS_DIR
+  return path.join(path.dirname(require.resolve('@qvac/fabric/package')), 'prebuilds')
+}
+
+for (const key of ['main-gpu', 'main_gpu']) {
+  for (const value of [0, '+0', 'DEDICATED', 'Integrated']) {
+    test(
+      `native createInstance: ${key}=${value} resolves the requested device`,
+      { timeout: TEST_TIMEOUT },
+      async function (t) {
+        const binding = require('../../binding')
+        const pathDetector = await ensureModelPath('detector_craft')
+        const pathRecognizer = await ensureModelPath('recognizer_latin')
+        const backendDevice = platform === 'darwin' || platform === 'ios' ? 'metal' : 'vulkan'
+        const handle = binding.createInstance(
+          {},
+          {
+            pathDetector,
+            pathRecognizer,
+            langList: ['en'],
+            backendDevice,
+            backendsDir: nativeBackendsDir(),
+            [key]: value
+          },
+          () => {}
+        )
+        try {
+          const info = binding.getBackendInfo(handle)
+          t.is(info.requested, backendDevice, 'native backend request is preserved')
+          const numeric = value === 0 || value === '+0'
+          if (info.backendDevice === 'CPU') {
+            t.is(info.deviceIndex, -1, 'fallback selects CPU')
+            const selectorReason = numeric
+              ? 'main-gpu registry index 0 is not an eligible'
+              : 'main-gpu requested GPU class is unavailable'
+            t.ok(
+              info.fallbackReason.includes(selectorReason) ||
+                info.fallbackReason.includes('does not implement the OCR vision ops'),
+              'fallback identifies the parsed selector or the OCR safety check'
+            )
+          } else {
+            t.is(info.fallbackReason, '', 'selected GPU needs no fallback')
+            t.ok(info.deviceIndex >= 0, 'selected GPU has a registry index')
+            t.ok(
+              backendDevice === 'metal'
+                ? /metal|mtl/i.test(info.backendName)
+                : /vulkan/i.test(info.backendName),
+              'resolved device belongs to the requested backend'
+            )
+            if (numeric) {
+              t.is(info.deviceIndex, 0, 'numeric selector preserves raw registry identity')
+            } else {
+              t.is(
+                info.backendDevice,
+                value.toLowerCase() === 'integrated' ? 'IGPU' : 'GPU',
+                'class selector is parsed case-insensitively and applied strictly'
+              )
+            }
+          }
+        } finally {
+          binding.destroyInstance(handle)
+        }
+      }
+    )
+  }
+
+  test(`native createInstance: ${key} rejects invalid indices before model loading`, (t) => {
+    const binding = require('../../binding')
+    for (const value of [
+      0.5,
+      NaN,
+      Infinity,
+      MAX_MAIN_GPU_INDEX + 1,
+      MIN_MAIN_GPU_INDEX - 1,
+      String(MAX_MAIN_GPU_INDEX + 1),
+      String(MIN_MAIN_GPU_INDEX - 1),
+      '+-1',
+      '1junk',
+      ' 1'
+    ]) {
+      t.exception(
+        () =>
+          binding.createInstance(
+            {},
+            { pathDetector: 'unused', pathRecognizer: 'unused', langList: ['en'], [key]: value },
+            () => {}
+          ),
+        /main-gpu must be a 32-bit integer registry index/,
+        `${key}=${value} is rejected by native validation`
+      )
+    }
+  })
+}
 
 test(
   'backendDevice vulkan: selects Vulkan or reports an explicit CPU fallback',

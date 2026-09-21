@@ -1033,13 +1033,18 @@ TEST_F(
 
 // split-mode 'none' resolves through chooseBackend, so a GPU result on an
 // Adreno-<800 one-bit BitNet load proves the split filter did not run.
+//
+// The backend must be named "none": this branch forwards `--device <name>` to
+// qvac-fabric's parser, which rejects any name absent from the live ggml
+// registry. The Adreno-740 split participant below would be dropped to CPU if
+// the filter ran.
 TEST_F(
     LoadFitNormalizationTest, SplitModeNoneLeavesAdrenoPolicyToChooseBackend) {
   test_common::MockModelMetaData bitnet{true, "bitnet"};
   auto config = baseConfig();
   config["split-mode"] = "none";
   auto dependencies = backend(
-      {.type = backend_selection::GPU, .name = "vulkan0", .adrenoVersion = 740},
+      {.type = backend_selection::GPU, .name = "none", .adrenoVersion = 740},
       {});
   auto selection = splitSelection({"vulkan0"});
   selection.devices[0].adrenoVersion = 740;
@@ -1050,7 +1055,7 @@ TEST_F(
 
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.runtimeBackendDevice, 1);
-  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.params.mmproj_backend, "none");
   EXPECT_EQ(result.adrenoVersion, 740);
 }
 
