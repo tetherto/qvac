@@ -284,7 +284,7 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 | **Translation** | Neural machine translation, via Fabric LLM and [Bergamot](https://browser.mt). |
 | **BCI** | Brain–computer interface transcription via [a Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
 | **VLA** | Vision-language-action for robot control via [a GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |
-| **OCR** | Extract text from images via ONNX Runtime or GGML backends. |
+| **OCR** | Extract text from images via ONNX Runtime or GGML backends. See [OCR GPU selection (`main-gpu`)](packages/ocr-ggml/README.md#shared-gpu-selection-main-gpu) to select a GGML GPU by registry index or device class. |
 | **Image classification** | Classify images into labels with confidence scores via [a GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml). |
 
 ## Peer-to-peer

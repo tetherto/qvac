@@ -49,10 +49,23 @@ export const modelFitWorkloadSchema = z.discriminatedUnion('kind', [
  * are read; everything else — engine, byte totals, transformer facts — comes
  * from the resolved resource profile, not from the caller.
  */
-export const modelFitModelRefSchema = modelRegistryEntrySchema.pick({
-  name: true,
-  sha256Checksum: true
-})
+export const modelFitModelRefSchema = modelRegistryEntrySchema
+  .pick({
+    name: true,
+    sha256Checksum: true
+  })
+  .extend({
+    registryPath: z
+      .string()
+      .optional()
+      .describe(
+        'Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.'
+      ),
+    registrySource: z
+      .string()
+      .optional()
+      .describe('Registry source identifier, e.g. `huggingface`.')
+  })
 
 /**
  * One model the caller is considering, with the workload it would run.
@@ -130,8 +143,11 @@ export const modelFitBasisSchema = z.enum([
  *   plus the KV cache for llama.cpp models. It omits every engine cost that
  *   only a real load can tell, so it can refuse a model but never confirm one.
  *   This is what an uncalibrated platform, including Android and iOS, reports.
+ * - `native-fit`: the engine's own fitter, run against the registry's weightless
+ *   description of the artifact. It is the answer the loader would give on this
+ *   machine, not a model of it, so it outranks `calibration` where both exist.
  */
-export const modelFitEvidenceSchema = z.enum(['calibration', 'computed-only'])
+export const modelFitEvidenceSchema = z.enum(['calibration', 'computed-only', 'native-fit'])
 
 export const modelFitBudgetSchema = z.object({
   totalBytes: z
