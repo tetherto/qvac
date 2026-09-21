@@ -9,6 +9,7 @@ namespace qvac::asrggml::parakeet {
 struct ParakeetConfig {
   static constexpr int DEFAULT_STREAMING_CHUNK_MS = 2000;
   static constexpr int DEFAULT_NEMOTRON_STREAMING_CHUNK_MS = 320;
+  static constexpr int DEFAULT_UNIFIED_STREAMING_CHUNK_MS = 560;
   static constexpr int DEFAULT_STREAMING_HISTORY_MS = 30000;
   static constexpr int DEFAULT_STREAMING_SPK_CACHE_LEN = 188;
   static constexpr int DEFAULT_STREAMING_FIFO_LEN = 188;
