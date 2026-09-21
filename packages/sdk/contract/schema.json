@@ -305,6 +305,14 @@
                   "sha256Checksum": {
                     "type": "string",
                     "description": "Expected SHA-256 checksum of the model file."
+                  },
+                  "registryPath": {
+                    "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+                    "type": "string"
+                  },
+                  "registrySource": {
+                    "description": "Registry source identifier, e.g. `huggingface`.",
+                    "type": "string"
                   }
                 },
                 "required": ["name", "sha256Checksum"],
@@ -324,6 +332,14 @@
                     "sha256Checksum": {
                       "type": "string",
                       "description": "Expected SHA-256 checksum of the model file."
+                    },
+                    "registryPath": {
+                      "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+                      "type": "string"
+                    },
+                    "registrySource": {
+                      "description": "Registry source identifier, e.g. `huggingface`.",
+                      "type": "string"
                     }
                   },
                   "required": ["name", "sha256Checksum"],
@@ -431,7 +447,7 @@
         "evidence": {
           "description": "The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.",
           "type": "string",
-          "enum": ["calibration", "computed-only"],
+          "enum": ["calibration", "computed-only", "native-fit"],
           "title": "AssessModelFitResponseEvidence"
         },
         "budget": {
@@ -505,7 +521,7 @@
               "evidence": {
                 "description": "What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
                 "type": "string",
-                "enum": ["calibration", "computed-only"],
+                "enum": ["calibration", "computed-only", "native-fit"],
                 "title": "AssessModelFitResponseModelsItemEvidence"
               },
               "estimate": {
