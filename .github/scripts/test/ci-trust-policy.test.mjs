@@ -1508,7 +1508,7 @@ test('ggml-rpc-server keeps Device Farm runs on demand', () => {
     /prebuild-manual:\n\s+if: inputs\.platform != ''/,
     `${mobilePath}: only a direct manual dispatch should build prebuilds`,
   )
-})
+});
 
 test('ggml-rpc-server TypeScript checks run on PR head without privileged cache access', () => {
   const pr = read('.github/workflows/on-pr-ggml-rpc-server.yml')
@@ -1546,7 +1546,7 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
     guard,
     /sanity-checks-status:[\s\S]*?needs\.await-ts-checks\.result == 'success'/,
   )
-})
+});
 
 test('RPC RDMA validation covers client and server without replacing release artifacts', () => {
   const reusable = read('.github/workflows/reusable-prebuilds.yml')
@@ -1670,7 +1670,7 @@ test('RPC RDMA validation covers client and server without replacing release art
       `${name} must not persist checkout credentials while publishing`,
     )
   }
-})
+});
 
 test('managed RPC lifecycle overlay is a syntactically valid git patch', () => {
   const patch = join(
@@ -1683,7 +1683,7 @@ test('managed RPC lifecycle overlay is a syntactically valid git patch', () => {
   })
   assert.equal(result.status, 0, result.stderr)
   assert.match(result.stdout, /ggml\/src\/ggml-rpc\/ggml-rpc\.cpp/)
-})
+});
 
 function jobDependsOnAuthorize(job) {
   if (job.text.includes("authorize.outputs.allowed")) return true;
