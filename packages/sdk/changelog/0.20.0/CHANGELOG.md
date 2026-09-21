@@ -51,3 +51,4 @@ Release Date: 2026-09-17
 
 - Rerun only previously failed SDK e2e tests via label. (see PR [#4217](https://github.com/tetherto/qvac/pull/4217))
 - Cover the tests a PR touched in test-e2e-smoke runs. (see PR [#4244](https://github.com/tetherto/qvac/pull/4244))
+- Prefix the Windows e2e inference tarball pin with `file:`. (see PR [#4556](https://github.com/tetherto/qvac/pull/4556))
