@@ -3,6 +3,7 @@ import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import { parakeetTests } from '../../parakeet-tests.js'
+import { validateParakeetSegments } from '../../shared/transcription-segments.js'
 
 export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTests> {
   pattern = /^parakeet-/
@@ -46,8 +47,8 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTe
       const audioUri = await this.resolveAsset(assetModule)
 
       if (p.metadata === true) {
-        await transcribe({ modelId, audioChunk: audioUri, metadata: true })
-        return { passed: false, output: 'Expected error but transcription succeeded' }
+        const segments = await transcribe({ modelId, audioChunk: audioUri, metadata: true })
+        return validateParakeetSegments(segments)
       }
 
       const text = await transcribe({ modelId, audioChunk: audioUri })
