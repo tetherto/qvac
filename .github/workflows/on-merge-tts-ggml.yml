@@ -112,7 +112,7 @@ jobs:
       - name: Download prebuild artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: prebuilds
+          name: prebuilds-tts-ggml
           path: packages/tts-ggml/prebuilds
 
       - name: Set up Node.js
@@ -194,7 +194,7 @@ jobs:
       - name: Download prebuild artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          name: prebuilds
+          name: prebuilds-tts-ggml
           path: packages/tts-ggml/prebuilds
 
       - name: Set up Node.js
@@ -210,8 +210,10 @@ jobs:
           tag: ${{ inputs.npm_tag || 'latest' }}
 
       # Move each prebuilds/<host> dir into a per-platform package and inject
-      # the version-locked optionalDependencies into the meta package.json, so
-      # the meta tarball published below ships JS only.
+      # the version-locked optionalDependencies for host-filtered (desktop)
+      # slices into the meta package.json, so the meta tarball published below
+      # ships JS only. Cross-built mobile slices are not injected: consumers
+      # declare them as direct dependencies.
       - name: Slice platform packages
         run: node scripts/ci/slice-platform-packages.mjs --workdir packages/tts-ggml --out-dir "${{ runner.temp }}/platform-packages"
 

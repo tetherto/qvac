@@ -234,6 +234,8 @@ Before marking scaffolding complete:
 - [ ] Executors registered or explicitly skipped in every relevant consumer entry, including Electron
       when compatible (which also covers Snap).
 - [ ] User has confirmed the new tests pass through each compatible local consumer command.
+- [ ] User reminded to run `/qv-docs-update` when the tested surface is user-facing. Never auto-run
+      it — the skill is manual-only.
 
 ## References
 

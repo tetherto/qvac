@@ -2,7 +2,7 @@
   "include": ["**/*"],
   "exclude": ["node_modules", "dist", "e2e", "test"],
   "compilerOptions": {
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "lib": ["DOM", "DOM.Iterable", "ES2022", "ESNext.Disposable"],
     "target": "ES2022",
     "module": "ES2022",
     "types": ["node"],

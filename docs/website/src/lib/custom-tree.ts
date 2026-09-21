@@ -107,6 +107,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Merge'),
   },
   {
+    name: 'Assess model fit',
+    url: '/models/assess-model-fit',
+    type: 'page',
+    icon: resolveIcon('MemoryStick'),
+  },
+  {
     type: 'separator',
     name: 'AI capabilities',
   },

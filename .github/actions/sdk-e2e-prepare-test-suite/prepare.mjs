@@ -92,9 +92,10 @@ export function resolveManifestSource(dependencySpec) {
   };
 }
 
-function toLocalTarballSpec(tarballPath, platform = process.platform) {
+// Mirrors sdk-e2e-prepare-inference/prepare.mjs — keep the win32 form in lockstep.
+export function toLocalTarballSpec(tarballPath, platform = process.platform) {
   if (platform === "win32") {
-    return path.win32.resolve(tarballPath).replaceAll("\\", "/");
+    return `file:${path.win32.resolve(tarballPath).replaceAll("\\", "/")}`;
   }
   return pathToFileURL(path.resolve(tarballPath)).href;
 }

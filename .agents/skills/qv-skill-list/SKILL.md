@@ -77,6 +77,14 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 ---
 
+## Documentation website
+
+| Skill | Purpose | Use when |
+|-------|---------|----------|
+| [`qv-docs-solution-create`](../qv-docs-solution-create/SKILL.md) | Solutions pages: generalize a supported use case into a docs page and register it in the site navigation. | A real developer, company, or partner scenario should become reusable documentation. **Manual:** `/qv-docs-solution-create` |
+
+---
+
 ## Developer diary and standup
 
 | Skill | Purpose | Use when |
@@ -94,6 +102,14 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 |-------|---------|----------|
 | [`qv-holepunch-dev`](../qv-holepunch-dev/SKILL.md) | Holepunch/P2P/Bare/Pear API discovery via docs.pears.com and `gh`. | Hypercore, Hyperswarm, Autobase, Bare, Pear development. **Auto** |
 | [`qv-notice-generate`](../qv-notice-generate/SKILL.md) | NOTICE files and third-party attributions for monorepo packages. | License compliance, release NOTICE updates. **Auto** |
+
+---
+
+## Documentation site
+
+| Skill | Purpose | Use when |
+|-------|---------|----------|
+| [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates the docs website after a change to the SDK or CLI. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
 
 ---
 
@@ -129,8 +145,10 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Sync CLI/provider/OpenCode/OpenClaw to SDK | `qv-agent-stack-sync` |
 | New SDK e2e tests | `qv-sdk-e2e-create` |
 | Registry Autobase/HyperDB help | `qv-registry-autobase-patterns` |
+| Publish a Solutions page from a use case | `qv-docs-solution-create` |
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
+| Update the docs website after an SDK/CLI change | `qv-docs-update` |
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |
