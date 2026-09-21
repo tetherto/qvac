@@ -98,13 +98,14 @@ class AndroidBareKitTransport private constructor(
             assetName: String = DEFAULT_WORKER_ASSET,
             homeDirectory: String = context.filesDir.absolutePath,
             config: JsonObject = JsonObject(emptyMap()),
+            runtimeContext: JsonObject? = null,
             memoryLimitBytes: Int = DEFAULT_MEMORY_LIMIT_BYTES,
             rpcLimits: io.tether.qvac.sdk.rpc.BareRpcLimits = io.tether.qvac.sdk.rpc.BareRpcLimits(),
         ): AndroidBareKitTransport {
             var started: AndroidBareKitTransport? = null
             try {
                 return withContext(Dispatchers.Main.immediate) {
-                    connectOnMain(context, assetName, homeDirectory, config, memoryLimitBytes, rpcLimits)
+                    connectOnMain(context, assetName, homeDirectory, config, runtimeContext, memoryLimitBytes, rpcLimits)
                         .also { started = it }
                 }
             } catch (error: Throwable) {
@@ -116,11 +117,22 @@ class AndroidBareKitTransport private constructor(
             }
         }
 
+        // Android hosts report device identity so @qvac/inference can apply its
+        // device-specific defaults (e.g. Pixel → llama device=cpu) without the
+        // caller configuring anything. Caller-supplied keys override the defaults.
+        private fun androidRuntimeContext(override: JsonObject?): JsonObject = buildJsonObject {
+            put("platform", "android")
+            put("deviceBrand", android.os.Build.MANUFACTURER)
+            put("deviceModel", android.os.Build.MODEL)
+            override?.forEach { (key, value) -> put(key, value) }
+        }
+
         private suspend fun connectOnMain(
             context: Context,
             assetName: String,
             homeDirectory: String,
             config: JsonObject,
+            runtimeContext: JsonObject?,
             memoryLimitBytes: Int,
             rpcLimits: io.tether.qvac.sdk.rpc.BareRpcLimits,
         ): AndroidBareKitTransport {
@@ -155,11 +167,13 @@ class AndroidBareKitTransport private constructor(
                     AndroidRuntimeProfile.load(context),
                     rpcLimits,
                 )
-                if (config.isNotEmpty()) {
+                val effectiveRuntimeContext = androidRuntimeContext(runtimeContext)
+                if (config.isNotEmpty() || effectiveRuntimeContext.isNotEmpty()) {
                     val response = transport.call(
                         buildJsonObject {
                             put("type", "__init_config")
-                            put("config", config)
+                            if (config.isNotEmpty()) put("config", config)
+                            put("runtimeContext", effectiveRuntimeContext)
                         },
                     )
                     requireSuccessfulWorkerControlResponse("configuration", response)
