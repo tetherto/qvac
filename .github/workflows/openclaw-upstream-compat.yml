@@ -24,9 +24,13 @@ on:
         required: false
         default: "1"
       tool_profile:
-        description: "OpenClaw tools.profile for the run (minimal | coding | messaging | full)"
+        description: "OpenClaw tools.profile for the run (minimal | coding | messaging | full). Has no effect unless tool_deny is widened too."
         required: false
         default: "minimal"
+      tool_deny:
+        description: "OpenClaw tools.deny, as JSON. Denies everything by default and wins over tool_profile; set to [] to restore the profile's tools."
+        required: false
+        default: '["*"]'
       agent_prompt:
         description: "Override the agent prompt. For calibrating compliance without a code change; blank uses the default."
         required: false
@@ -78,6 +82,7 @@ jobs:
           OPENCLAW_AGENT_TIMEOUT_SECONDS: ${{ env.OPENCLAW_AGENT_TIMEOUT_SECONDS }}
           OPENCLAW_AGENT_MAX_ATTEMPTS: ${{ inputs.attempts || '1' }}
           OPENCLAW_TOOL_PROFILE: ${{ inputs.tool_profile || 'minimal' }}
+          OPENCLAW_TOOL_DENY: ${{ inputs.tool_deny || '["*"]' }}
           # Blank falls through to the script's default, so scheduled runs are
           # unaffected. The script must therefore treat empty as unset.
           AGENT_PROMPT: ${{ inputs.agent_prompt }}
@@ -117,10 +122,10 @@ jobs:
               ``,
               `- Run: ${runUrl}`,
               `- Artifact: \`openclaw-upstream-compat\``,
-              `- Triage: read \`prompt-surface.md\` **first** — it reports the advertised tool count and prompt size. A count above the ceiling means upstream widened \`tools.profile\`, which is the failure this tripwire exists to catch.`,
+              `- Triage: read \`prompt-surface.md\` **first** — it reports the advertised tool count and prompt size. The smoke denies every tool, so any count at all means the deny stopped applying; the ceiling is what turns that into a red run.`,
               `- Then diff \`versions.md\` against the last passing run's artifact. If no package version moved, this is not upstream drift — look at \`openclaw-agent.stderr\` (turn count, \`failover decision\` lines), \`sessions/\`, and \`qvac-serve.stdout\`/\`qvac-serve.stderr\`.`,
-              `- Possible causes, in the order worth checking: a widened tool surface (see above); a version bump visible in \`versions.md\`; a wedged \`qvac serve\` that stops answering mid-run; or the agent turn itself — read \`openclaw-agent.attempt-1.stdout\`, and \`toolSummary\` in particular: a tool call means the deny stopped taking effect.`,
-              `- To reproduce, dispatch this workflow; \`agent_prompt\` and \`tool_profile\` vary the turn without a code change, and \`tool_profile: coding\` restores the pre-#4112 tool surface.`,
+              `- Possible causes, in the order worth checking: the deny no longer applying (see above, and check \`openclaw-config.json\` for what landed); a version bump visible in \`versions.md\`; a wedged \`qvac serve\` that stops answering mid-run; or the agent turn itself — read \`openclaw-agent.attempt-1.stdout\`, \`toolSummary\` in particular.`,
+              `- To reproduce, dispatch this workflow; \`agent_prompt\`, \`tool_profile\` and \`tool_deny\` vary the turn without a code change. \`tool_deny: []\` with \`tool_profile: coding\` restores the pre-#4112 tool surface — deny wins, so both are needed.`,
             ].join('\n');
 
             const issues = await github.paginate(github.rest.issues.listForRepo, {

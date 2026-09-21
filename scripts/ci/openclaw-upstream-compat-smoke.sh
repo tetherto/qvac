@@ -28,8 +28,14 @@ OPENCLAW_AGENT_BACKSTOP_SECONDS="$((OPENCLAW_AGENT_TIMEOUT_SECONDS + 60))"
 # switching tool support off.
 OPENCLAW_TOOL_PROFILE="${OPENCLAW_TOOL_PROFILE:-minimal}"
 
-# A widened surface is compatibility drift, so it has to fail rather than pass
-# more slowly.
+# Deny is its own policy layer, ANDed with the profile and evaluated first, so
+# `["*"]` empties the tool array whatever the profile admits. That makes it the
+# knob that decides the surface -- set it to `[]` alongside a wider profile to
+# get the tools back.
+OPENCLAW_TOOL_DENY="${OPENCLAW_TOOL_DENY:-[\"*\"]}"
+
+# Guards the deny: with every tool denied, a nonzero advertised count means the
+# deny stopped applying, not that a profile widened.
 OPENCLAW_MAX_ADVERTISED_TOOLS="${OPENCLAW_MAX_ADVERTISED_TOOLS:-8}"
 OPENCLAW_PACKAGE_SPEC="${OPENCLAW_PACKAGE_SPEC:-openclaw@latest}"
 QVAC_OPENCLAW_PLUGIN_SPEC="${QVAC_OPENCLAW_PLUGIN_SPEC:-@qvac/openclaw-plugin@latest}"
@@ -275,11 +281,11 @@ npx openclaw config set tools.toolSearch false --strict-json \
 
 # Every failed attempt measured on this smoke was the model calling a tool and
 # looping until the deadline, never a wrong answer -- so denying the tools is
-# what removes the nondeterminism, rather than retrying through it. `deny` wins
-# over every other layer and takes wildcards. The plugin's `tools: true` stays
-# on, so the Jinja chat template still renders (use_jinja is set at load time,
-# independent of the request's tool array); only the array is empty.
-npx openclaw config set tools.deny '["*"]' --strict-json \
+# what removes the nondeterminism, rather than retrying through it. The plugin's
+# `tools: true` stays on, so the Jinja chat template still renders (use_jinja is
+# set at load time, independent of the request's tool array); only the array is
+# empty.
+npx openclaw config set tools.deny "$OPENCLAW_TOOL_DENY" --strict-json \
   > "$ARTIFACT_DIR/openclaw-config-tool-deny.stdout" \
   2> "$ARTIFACT_DIR/openclaw-config-tool-deny.stderr"
 
@@ -392,12 +398,12 @@ for (( attempt = 1; attempt <= OPENCLAW_AGENT_MAX_ATTEMPTS; attempt++ )); do
   if (( agent_status != 0 )); then
     case "$agent_status" in
       # 124/137 are the shell backstop killing a process that blew past its own
-      # deadline, and arrive with empty stdout. Any other status is OpenClaw
-      # exiting on its own terms, so its stdout holds a readable envelope; 2 is
-      # the status upstream documents for a deadline.
+      # deadline, and arrive with empty stdout. `openclaw agent` otherwise exits
+      # only 0 or 1 -- the 2-means-timeout status belongs to `agent exec`, which
+      # this does not call -- so a `--timeout` expiry lands in the general case
+      # with an envelope naming it, rather than as a distinct status.
       124 | 137) agent_failure="attempt ${attempt}: agent ignored its ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s deadline and was killed by the ${OPENCLAW_AGENT_BACKSTOP_SECONDS}s backstop" ;;
-      2) agent_failure="attempt ${attempt}: agent exited 2, upstream's documented deadline status (limit ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s); see openclaw-agent.attempt-${attempt}.stdout" ;;
-      *) agent_failure="attempt ${attempt}: agent exited ${agent_status}; see openclaw-agent.attempt-${attempt}.stdout" ;;
+      *) agent_failure="attempt ${attempt}: agent exited ${agent_status} (deadline was ${OPENCLAW_AGENT_TIMEOUT_SECONDS}s); read openclaw-agent.attempt-${attempt}.stdout for the envelope" ;;
     esac
     echo "$agent_failure" >&2
     continue
@@ -460,7 +466,7 @@ if (( surface_status != 0 )); then
     echo
     echo "The agent turn answered correctly, but the advertised tool surface is above the \`${OPENCLAW_MAX_ADVERTISED_TOOLS}\` ceiling -- see \`prompt-surface.md\`."
     echo
-    echo "Upstream widened what \`tools.profile=${OPENCLAW_TOOL_PROFILE}\` admits. Re-pin the surface, or raise \`OPENCLAW_MAX_ADVERTISED_TOOLS\` if the wider set is intended; leaving it unbounded is what made this tripwire unable to pass in #4112."
+    echo "\`tools.deny=${OPENCLAW_TOOL_DENY}\` should leave nothing advertised, so any tool reaching the model means the deny stopped applying: a renamed config key, a precedence change, or \`config set\` accepting a path it no longer honours. Check \`openclaw-config.json\` in the artifact for what actually landed."
   } | tee "$ARTIFACT_DIR/smoke-result.md" > /dev/null
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     cat "$ARTIFACT_DIR/smoke-result.md" >> "$GITHUB_STEP_SUMMARY"
