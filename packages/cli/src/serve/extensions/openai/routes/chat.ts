@@ -352,7 +352,12 @@ async function runStreaming(
       const extended =
         round >= MAX_TOOL_SEARCH_ROUNDS
           ? null
-          : foldToolSearch(p.tools, turnHistory, drained.toolCalls, drained.rawFullText ?? drained.text)
+          : foldToolSearch(
+              p.tools,
+              turnHistory,
+              drained.toolCalls,
+              drained.rawFullText ?? drained.text
+            )
       if (!extended) {
         for (const delta of buffered) sendSSE(raw, chunk(delta, null))
         break

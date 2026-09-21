@@ -195,7 +195,12 @@ export async function writeStreamingResponse(
     const extended =
       round >= MAX_TOOL_SEARCH_ROUNDS
         ? null
-        : foldToolSearch(p.tools, turnHistory, drained.toolCalls, drained.rawFullText ?? drained.text)
+        : foldToolSearch(
+            p.tools,
+            turnHistory,
+            drained.toolCalls,
+            drained.rawFullText ?? drained.text
+          )
     if (!extended) {
       for (const token of buffered) sendDelta(token)
       break
@@ -205,7 +210,8 @@ export async function writeStreamingResponse(
     turnHistory = extended
   }
 
-  const { toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(drained)
+  const { toolCalls, toolErrors, stats, stopReason, completionTokens } =
+    stripToolSearchCalls(drained)
   const hasToolCalls = toolCalls.length > 0
 
   sendSSE(res, {

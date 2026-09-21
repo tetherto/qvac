@@ -6,11 +6,7 @@ import {
   openaiToolsToSdk,
   InvalidToolChoiceError
 } from '@/serve/extensions/openai/schemas/common'
-import {
-  foldToolSearch,
-  hasDeferredTools,
-  stripToolSearchCalls
-} from '@/serve/lib/tool-search'
+import { foldToolSearch, hasDeferredTools, stripToolSearchCalls } from '@/serve/lib/tool-search'
 
 const DEFERRED_WIRE = {
   type: 'function',

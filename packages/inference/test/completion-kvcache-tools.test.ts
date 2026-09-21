@@ -1317,11 +1317,7 @@ test('completion: loading a deferred tool leaves the prefix block untouched', as
     'the warm turn skips the block, exactly as it does for a non-deferred tool set'
   )
   t.alike(toolNames(before), ['tool_search'], 'the cold turn declared only the search tool')
-  t.is(
-    new Set(cachePaths).size,
-    1,
-    'loading a definition does not open a second cache file'
-  )
+  t.is(new Set(cachePaths).size, 1, 'loading a definition does not open a second cache file')
 
   unregisterModel(modelId)
   clearRegistry()
