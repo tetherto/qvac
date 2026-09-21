@@ -223,26 +223,17 @@ endif()
 # to keep the host's libstdc++ from answering for that C++ ABI, so the links
 # without the block keep the anonymous node symbols.map ships.
 if(UNIX AND NOT APPLE)
-  # Whether consumers should expect to import their C++ runtime from this
-  # module. True only for the link that embeds libc++; Android links
-  # libc++_shared.so and the ASan build links libc++.so.1, so there the runtime
-  # is shared by other means and a consumer that pinned it here would find
-  # nothing to pin. Published through the package config so the addon template
-  # can tell "fabric does not own the runtime" apart from "fabric is too old".
-  if(QVAC_FABRIC_LIBCXX_ARCHIVE)
-    set(QVAC_FABRIC_OWNS_CXX_RUNTIME ON)
-  else()
-    set(QVAC_FABRIC_OWNS_CXX_RUNTIME OFF)
-  endif()
   # symbols.map ships anonymous, which is what the links above need. The link
   # that owns the C++ runtime gets the ABI block spliced in and the node named,
   # the two halves of the same guarantee: the name is what makes consumers
   # record a DT_VERNEED, and the DT_VERNEED is what keeps the host's libstdc++
   # from answering for the block. symbols.map carries the full rationale.
   set(_fabric_version_script "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map")
-  if(QVAC_FABRIC_OWNS_CXX_RUNTIME)
-    # Declared here so the name reaches consumers through the package config.
-    # This is its only definition: the script below is stamped from it.
+  if(QVAC_FABRIC_LIBCXX_ARCHIVE)
+    # Named here so the script below can be asserted against it and the two
+    # cannot drift. Build-internal: consumers read the node they have to pin to
+    # off this module's exports, not off anything published here, because the
+    # package config is shared by every platform's prebuild leg.
     set(QVAC_FABRIC_ABI_VERSION "QVAC_FABRIC_ABI_1")
     set(_fabric_cxx_runtime_map
       "${CMAKE_CURRENT_SOURCE_DIR}/symbols-linux-cxx-runtime.map")
@@ -276,11 +267,6 @@ if(UNIX AND NOT APPLE)
     file(WRITE "${_fabric_version_script}" "${_fabric_symbols}")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
       "${CMAKE_CURRENT_SOURCE_DIR}/symbols.map" "${_fabric_cxx_runtime_map}")
-  else()
-    # Nothing to publish: this link's node stays anonymous, so a consumer has no
-    # version to record a DT_VERNEED on. Empty rather than unset so the package
-    # config says "this build shares its runtime" instead of going missing.
-    set(QVAC_FABRIC_ABI_VERSION "")
   endif()
   target_link_options(${qvac-fabric}_module PRIVATE
     -Wl,--version-script=${_fabric_version_script})

@@ -128,11 +128,11 @@ jobs:
       - name: Install bare tooling
         run: npm install -g --force bare bare-make
 
-      # Prebuilds live in the merged `prebuilds-embed-llamacpp` bundle. Extract to runner.temp,
+      # Prebuilds live in the merged package bundle. Extract to runner.temp,
       # not the package tree: unscoped merge-multiple into $GITHUB_WORKSPACE is
       # CodeQL actions/artifact-poisoning/critical when this reusable workflow
-      # is reachable from workflow_dispatch callers (on-pr / on-merge). Scoping
-      # to the addon artifact also keeps fabric-prebuilds out of this addon's
+      # is reachable from workflow_dispatch callers (on-pr / on-merge). The
+      # package-scoped name also keeps fabric-prebuilds out of this addon's
       # prebuilds/, so resolveBackendsDir() cannot pass via the mobile fallback.
       - name: Download prebuilds bundle
         if: ${{ !inputs.prebuild_package }}

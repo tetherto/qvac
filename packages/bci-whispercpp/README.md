@@ -205,6 +205,24 @@ const bci = new BCIWhispercpp({
 > })
 > ```
 
+### GPU selection
+
+For Whisper GPU selection, set `contextParams['main-gpu']` (or the alias
+`contextParams.main_gpu`) to a raw ggml registry index, an integer string,
+`'dedicated'`, or `'integrated'` (class names are case-insensitive). With GPU
+enabled and no explicit selector, dedicated GPUs are preferred. A class
+selector is strict: if that class is unavailable, execution falls back to CPU.
+An in-range numeric selector preserves its registry identity before backend
+filtering; a CPU, excluded backend, or refused Adreno Vulkan slot falls back to
+CPU without selecting another GPU. An out-of-range index logs a warning and
+uses normal selection. The supported local families are Metal, CUDA, Vulkan,
+and OpenCL; the existing Adreno OpenCL guard still applies.
+
+`main-gpu` does not enable GPU execution by itself. `use_gpu: false` always
+selects CPU. The legacy `contextParams.gpu_device` retains its existing
+Whisper GPU/IGPU-ordinal meaning and Adreno guard. Combining it with either
+new selector spelling, or supplying both new spellings, is rejected.
+
 ### 2. Load the model
 
 ```js
@@ -362,7 +380,8 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 | `model` | string | Optional override; usually set via `args.files.model`. |
 | `use_gpu` | boolean | Enable GPU acceleration. Enabled by default (whisper.cpp default); set `false` to force CPU. The GPU backend is chosen per platform at build time: Metal on macOS/iOS, Vulkan on Linux/Windows (plus CUDA on `build:cuda` builds, preferred when an NVIDIA device and the CUDA runtime are present), OpenCL/Vulkan on Android. |
 | `flash_attn` | boolean | Enable flash attention. |
-| `gpu_device` | number | Select a non-default GPU device. |
+| `gpu_device` | number | Legacy index in Whisper’s GPU/IGPU-only list; cannot be combined with `main-gpu` or `main_gpu`. |
+| `main-gpu` / `main_gpu` | number or string | Raw registry index (integer number/string), or strict `dedicated` / `integrated` class. See [GPU selection](#gpu-selection). |
 
 ### config.miscConfig
 
