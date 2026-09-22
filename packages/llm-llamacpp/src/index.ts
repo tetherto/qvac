@@ -1616,7 +1616,6 @@ namespace LlmLlamacpp {
   export type FitResult = LlamaFitResult;
   export type FitStatus = LlamaFitStatus;
   export type FitDevice = LlamaFitDevice;
-
 }
 
 export = LlmLlamacpp;
