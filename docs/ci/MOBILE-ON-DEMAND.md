@@ -321,6 +321,7 @@ that run only built the addons it considered affected, and yours was not one. Th
 dispatch failure message lists which addons a run did build, so a wrong guess
 tells you where to look.
 
+```bash
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=Android \
   -f devices_custom="Google Pixel 9" \

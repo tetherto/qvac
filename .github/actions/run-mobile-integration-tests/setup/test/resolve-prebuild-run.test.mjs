@@ -11,6 +11,7 @@ import { join } from 'node:path'
 
 import {
   candidateArtifactNames,
+  isSafeWorkdir,
   describeAvailableBundles,
   conclusionWarning,
   conflictingSource,
@@ -135,7 +136,10 @@ test('platform maps to the prebuild dir the mobile build actually consumes', () 
   assert.deepEqual(platformPrebuildDirs(''), [])
 })
 
-test('a live artifact wins over an expired one, in candidate order', () => {
+test('an expired own bundle is NOT replaced by a live bare one', () => {
+  // The bare name carries no addon identity, so preferring it over this addon's
+  // own EXPIRED bundle would install another addon's binaries and go green —
+  // the failure class this route exists to close.
   const selected = selectArtifact(
     [
       { name: 'prebuilds-llm-llamacpp', expired: true, id: 1 },
@@ -143,9 +147,7 @@ test('a live artifact wins over an expired one, in candidate order', () => {
     ],
     candidateArtifactNames('packages/llm-llamacpp'),
   )
-  // The preferred name is expired, so the legacy name is used rather than
-  // failing on retention while a usable bundle sits right there.
-  assert.deepEqual(selected, { name: 'prebuilds', id: 2, expired: false })
+  assert.deepEqual(selected, { name: 'prebuilds-llm-llamacpp', id: null, expired: true })
 
   assert.deepEqual(
     selectArtifact(
@@ -154,6 +156,34 @@ test('a live artifact wins over an expired one, in candidate order', () => {
     ),
     { name: 'prebuilds-llm-llamacpp', id: 7, expired: false },
   )
+})
+
+test('the legacy bare name is still used when this addon has no bundle at all', () => {
+  const selected = selectArtifact(
+    [{ name: 'prebuilds', expired: false, id: 9 }],
+    candidateArtifactNames('packages/llm-llamacpp'),
+  )
+  assert.deepEqual(selected, { name: 'prebuilds', id: 9, expired: false })
+})
+
+test('isSafeWorkdir refuses anything that could escape the addon checkout', () => {
+  // It selects the directory the run clears with rm -rf, and 8 mobile workflows
+  // expose it as a dispatch input.
+  for (const ok of ['packages/ocr-ggml', 'packages/inference-addon-cpp/mobile', './packages/vla-ggml']) {
+    assert.equal(isSafeWorkdir(ok), true, ok)
+  }
+  for (const bad of ['../../../otherrepo', '/etc', 'packages/../../x', '', 'C:\\x', 'a\\b']) {
+    assert.equal(isSafeWorkdir(bad), false, JSON.stringify(bad))
+  }
+})
+
+test('a traversing workdir is refused before anything is deleted', async () => {
+  const api = fakeApi({})
+  await assert.rejects(
+    () => resolvePrebuildRun({ env: baseEnv({ ADDON_WORKDIR: '../../../otherrepo' }), request: api.request }),
+    /is not a plain relative path/,
+  )
+  assert.deepEqual(api.calls, [], 'nothing is requested for a rejected workdir')
 })
 
 test('all-expired is distinguishable from never-existed', () => {

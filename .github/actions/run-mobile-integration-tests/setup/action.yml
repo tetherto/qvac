@@ -233,6 +233,7 @@ runs:
         SOURCE_HEAD_SHA: ${{ steps.prebuild_run.outputs.head_sha }}
         SOURCE_ARTIFACT: ${{ steps.prebuild_run.outputs.artifact_name }}
         PLATFORM: ${{ inputs.platform }}
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
       run: |
         MISSING=""
         for dir in $EXPECTED_DIRS; do
@@ -249,6 +250,30 @@ runs:
           ls -A prebuilds 2>/dev/null || echo "  (none)"
           exit 1
         fi
+        # Identity, the equivalent of the npm route's PACKED_ADDON assertion: a
+        # bundle can only be trusted if it is a build of THIS addon. Matters most
+        # for the legacy bare `prebuilds` name, which carries no addon in it.
+        # Flag a foreign stem rather than a missing expected one, so an addon
+        # whose binary is named differently is not failed for that alone.
+        EXPECTED="qvac__$(basename "$ADDON_WORKDIR")"
+        for dir in $EXPECTED_DIRS; do
+          FOREIGN=""
+          for f in "prebuilds/$dir"/qvac__*; do
+            [ -e "$f" ] || continue
+            stem="$(basename "$f")"; stem="${stem%%.*}"
+            [ "$stem" = "$EXPECTED" ] && { FOREIGN=""; break; }
+            FOREIGN="$stem"
+          done
+          if [ -n "$FOREIGN" ]; then
+            echo "::error::Run $SOURCE_RUN_ID's '$SOURCE_ARTIFACT' contains $FOREIGN, not $EXPECTED — it is not a build of this addon."
+            echo "A bundle named plainly 'prebuilds' carries no addon identity, so a run that"
+            echo "built a different addon can resolve here. Use a run that built this addon;"
+            echo "the failure message on a missing bundle lists which addons a run did build."
+            ls -A "prebuilds/$dir"
+            exit 1
+          fi
+        done
+
         echo "Using prebuilds from run $SOURCE_RUN_ID (head $SOURCE_HEAD_SHA), artifact '$SOURCE_ARTIFACT':"
         ls -la prebuilds/
 

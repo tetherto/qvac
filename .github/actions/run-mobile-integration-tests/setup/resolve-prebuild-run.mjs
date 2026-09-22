@@ -26,12 +26,24 @@ export function parseRunId(raw) {
 
 // Matches how reusable-prebuilds.yml names the merged bundle.
 export function mergedArtifactName(addonWorkdir) {
-  const segments = String(addonWorkdir ?? '')
+  if (!isSafeWorkdir(addonWorkdir)) return null
+  const segments = String(addonWorkdir)
     .split('/')
     .filter((segment) => segment !== '' && segment !== '.')
   const name = segments[segments.length - 1]
-  if (!name || name === '..') return null
+  if (!name) return null
   return `prebuilds-${name}`
+}
+
+// addon-workdir reaches a `rm -rf "addon/$ADDON_WORKDIR/prebuilds"` and the
+// download path, and 8 of the mobile workflows expose it as a dispatch input.
+// A traversing value would delete a sibling checkout on a persistent
+// self-hosted runner, so reject anything that is not a plain relative path.
+export function isSafeWorkdir(addonWorkdir) {
+  const value = String(addonWorkdir ?? '')
+  if (value === '' || value.startsWith('/') || /^[A-Za-z]:/.test(value)) return false
+  if (value.includes('\\') || value.includes('\0')) return false
+  return value.split('/').every((segment) => segment !== '..')
 }
 
 // Bare `prebuilds` is the legacy name, kept so an older run id still resolves.
@@ -49,6 +61,16 @@ export function platformPrebuildDirs(platform) {
 export function selectArtifact(artifacts, candidates) {
   const rows = Array.isArray(artifacts) ? artifacts : []
 
+  // The bare `prebuilds` name carries no addon identity — it is whatever that
+  // run happened to build. Only fall back to it when the addon's OWN bundle is
+  // absent from the run entirely. Preferring a live bare row over an EXPIRED
+  // `prebuilds-<pkg>` would install another addon's binaries under this addon's
+  // name and go green, which is the failure class this route exists to close;
+  // the npm route guards the same thing with its PACKED_ADDON assertion.
+  const [own] = candidates
+  const ownPresent = rows.some((row) => row?.name === own)
+  const usable = ownPresent ? [own] : candidates
+
   // A re-run leaves the earlier attempt's artifacts under the same run id, so a
   // run can hold two live rows with the same name. Take the NEWEST: first-match
   // would freeze whichever the API happened to list first (id-ascending in
@@ -62,13 +84,13 @@ export function selectArtifact(artifacts, candidates) {
     return (Number(a?.id) || 0) >= (Number(b?.id) || 0) ? a : b
   }
 
-  for (const name of candidates) {
+  for (const name of usable) {
     const live = rows
       .filter((row) => row?.name === name && row?.expired !== true)
       .reduce((best, row) => (best ? newest(best, row) : row), null)
     if (live) return { name, id: live.id ?? null, expired: false }
   }
-  for (const name of candidates) {
+  for (const name of usable) {
     if (rows.some((row) => row?.name === name)) {
       return { name, id: null, expired: true }
     }
@@ -258,6 +280,16 @@ export async function resolvePrebuildRun({ env, request }) {
 
   const repo = String(env.REPO ?? '').trim()
   if (!repo) throw new ResolveError('REPO must name the repository holding the run.')
+
+  if (!isSafeWorkdir(env.ADDON_WORKDIR)) {
+    throw new ResolveError(
+      `addon-workdir '${env.ADDON_WORKDIR ?? ''}' is not a plain relative path.`,
+      [
+        'It selects the directory that gets cleared and written to, so an absolute',
+        'path or one containing ".." is refused before anything is deleted.',
+      ],
+    )
+  }
 
   const platform = String(env.PLATFORM ?? '').trim()
   const expectedDirs = platformPrebuildDirs(platform)
