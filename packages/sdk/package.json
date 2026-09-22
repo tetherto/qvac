@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.19.1",
+  "version": "0.20.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -214,7 +214,7 @@
     "@qvac/diffusion-cpp": "^0.24.0",
     "@qvac/embed-llamacpp": "^0.41.1",
     "@qvac/error": "^0.1.1",
-    "@qvac/inference": "^0.19.1",
+    "@qvac/inference": "^0.20.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.53.0",
     "@qvac/logging": "^0.1.0",
