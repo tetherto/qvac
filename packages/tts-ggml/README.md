@@ -1093,6 +1093,49 @@ const {
 | 13010 | `FAILED_TO_STOP` |
 | 13011 | `JOB_ALREADY_RUNNING` |
 
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads GGUF metadata and never weight data, so the registry's weightless copy of each file answers the same as the file itself and the projection can run before anything is downloaded. It is a module export, not an instance method — nothing is loaded to call it.
+
+```js
+const TTSGgml = require('@qvac/tts-ggml')
+
+const fit = TTSGgml.assessFit({
+  engineType: 'supertonic',
+  modelPath: '/models/supertonic.gguf',
+  textTokens: 256,
+  audioSeconds: 30
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
+fit.modelVariant // which pipeline was projected, e.g. 'chatterbox-t3-turbo'
+fit.deviceName
+fit.deviceBytes
+fit.weightsBytes
+fit.stateBytes
+fit.lmComputeBytes // 0 for a pipeline with no language-model stage, such as supertonic
+fit.codecComputeBytes // 0 for a pipeline with no separate codec stage
+fit.hostBytes
+fit.report
+```
+
+`engineType` picks the fitter, the same key a load uses, and is required: a fit request carries none of the file keys a load is inferred from. Each engine takes its own file keys and workload:
+
+| `engineType` | Files | Workload |
+| --- | --- | --- |
+| `supertonic` | `modelPath` | `textTokens`, `audioSeconds`, `steps`, `precision`, `f16Weights`, `vulkanDevice` |
+| `parler` | `modelPath` | `descriptionTokens`, `promptTokens`, `maxFrames` |
+| `chatterbox` | `t3Path`, `s3genPath` | `contextSize`, `kvCacheType`, `textTokens`, `predictTokens` |
+| `audio8` | `lmPath`, `codecDecoderPath`, `codecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
+| `cosyvoice3` | `llmPath`, `flowPath`, `hiftPath`, `voicePath` | `textTokens`, `speechTokens`, `vulkanDevice` |
+
+Supplying `codecEncoderPath` for `audio8` projects voice cloning, which the decoder alone cannot do. A `steps` or `speechTokens` of 0 takes the GGUF's own default. `gpuLayers` greater than 0 requests the GPU stack, `marginBytes` sets the free memory that must remain for the projection to count as fitting, and `backendsDir` is where the dynamically-loaded ggml backends live.
+
+`deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
+
+A model the engine cannot read is `status: "error"`; a broken request, or a host with no native binding, throws.
+
 ## Examples
 
 Runnable demos under `examples/`:

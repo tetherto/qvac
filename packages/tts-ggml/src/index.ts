@@ -20,6 +20,18 @@ import {
 } from "./tts";
 import * as errorModule from "./lib/error";
 import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
+import {
+  assessFit as assessFitImpl,
+  type Audio8FitRequest,
+  type ChatterboxFitRequest,
+  type CosyvoiceFitRequest,
+  type ParlerFitRequest,
+  type SupertonicFitRequest,
+  type TtsFitEngine,
+  type TtsFitRequest,
+  type TtsFitResult,
+  type TtsFitStatus,
+} from "./lib/fit";
 import { splitTtsText } from "./lib/textChunker";
 import {
   accumulateTextStream,
@@ -3984,6 +3996,15 @@ type NamespaceRunInput = TTSRunInput;
 type NamespaceInferenceState = InferenceState;
 type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 type NamespaceVoiceControlsCatalog = VoiceControlsCatalog;
+type NamespaceFitEngine = TtsFitEngine;
+type NamespaceFitRequest = TtsFitRequest;
+type NamespaceFitResult = TtsFitResult;
+type NamespaceFitStatus = TtsFitStatus;
+type NamespaceSupertonicFit = SupertonicFitRequest;
+type NamespaceParlerFit = ParlerFitRequest;
+type NamespaceChatterboxFit = ChatterboxFitRequest;
+type NamespaceAudio8Fit = Audio8FitRequest;
+type NamespaceCosyvoiceFit = CosyvoiceFitRequest;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace -- declaration merging preserves the established class namespace API.
 namespace TTSGgml {
@@ -4007,7 +4028,18 @@ namespace TTSGgml {
   export type CosyvoiceInstruct = NamespaceCosyvoiceInstruct;
   export type VoiceControlsCatalog = NamespaceVoiceControlsCatalog;
 
+  export type TtsFitEngine = NamespaceFitEngine;
+  export type TtsFitRequest = NamespaceFitRequest;
+  export type TtsFitResult = NamespaceFitResult;
+  export type TtsFitStatus = NamespaceFitStatus;
+  export type SupertonicFitRequest = NamespaceSupertonicFit;
+  export type ParlerFitRequest = NamespaceParlerFit;
+  export type ChatterboxFitRequest = NamespaceChatterboxFit;
+  export type Audio8FitRequest = NamespaceAudio8Fit;
+  export type CosyvoiceFitRequest = NamespaceCosyvoiceFit;
+
   export const resolveBackendsDir = resolveBackendsDirImpl;
+  export const assessFit = assessFitImpl;
 }
 
 export = TTSGgml;
