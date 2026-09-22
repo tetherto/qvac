@@ -12,6 +12,7 @@ import { buildConsumerElectron } from './commands/build-consumer-electron.js'
 import { buildConsumerSnap } from './commands/build-consumer-snap.js'
 import { reportCompare } from './commands/report-compare.js'
 import { reportFormat } from './commands/report-format.js'
+import { catalogValidate } from './commands/catalog-validate.js'
 import {
   runLocalDesktop,
   runLocalAndroid,
@@ -201,6 +202,13 @@ program
   .requiredOption('--format <format>', 'Output format (markdown)')
   .option('--output <file>', 'Output file (optional, prints to stdout if not specified)')
   .action(reportFormat)
+
+program
+  .command('catalog:validate')
+  .description('Validate every test definition before a run (cheap; meant for CI)')
+  .option('--config <path>', 'Path to config directory', process.cwd())
+  .option('--check-schema-parity', 'Also print the operations the JSON Schema declares')
+  .action(catalogValidate)
 
 // ---------------------------------------------------------------------------
 // run:local:* — one-liner local development commands
