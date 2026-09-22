@@ -283,6 +283,60 @@ export async function runLocalDesktop(opts: LocalOptions) {
 }
 
 // ---------------------------------------------------------------------------
+// run:local:external
+// ---------------------------------------------------------------------------
+
+interface ExternalOptions extends LocalOptions {
+  name: string
+}
+
+/**
+ * Producer plus one external (non-JS) client, both on this machine.
+ *
+ * Deliberately local: the point of the first slice is to learn from a real run
+ * before the step vocabulary, the resource table format and the bridge
+ * protocol are committed to. CI wiring comes later.
+ */
+export async function runLocalExternal(opts: ExternalOptions) {
+  try {
+    console.log(`🔌 run:local:external (${opts.name})\n`)
+
+    const { runId, configDir, reportDir, brokerHandle } = await setupLocal(opts)
+    const cliPath = resolveCliPath()
+    const tracked: TrackedProcess[] = []
+
+    const producer = spawnTracked(
+      'node',
+      buildProducerArgs(cliPath, runId, configDir, reportDir, opts),
+      { reportDir, name: 'producer', cwd: configDir }
+    )
+    tracked.push(producer)
+
+    const consumer = spawnTracked(
+      'node',
+      [
+        cliPath,
+        'run:consumer:external',
+        `--runId=${runId}`,
+        `--config=${configDir}`,
+        `--name=${opts.name}`
+      ],
+      { reportDir, name: `consumer-${opts.name}`, cwd: configDir }
+    )
+    tracked.push(consumer)
+
+    const pidEntries = tracked.map((t) => ({ name: t.name, pid: t.pid, logPath: t.logPath }))
+    printPidTable(pidEntries)
+    printLogPaths(reportDir)
+    setupCleanup(tracked, reportDir, brokerHandle)
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error(`❌ run:local:external failed: ${msg}`)
+    process.exit(1)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // run:local:electron
 // ---------------------------------------------------------------------------
 

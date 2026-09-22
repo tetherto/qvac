@@ -5,6 +5,7 @@ import { runProducer } from './commands/run-producer.js'
 import { runConsumerDesktop } from './commands/run-consumer-desktop.js'
 import { runConsumerElectron } from './commands/run-consumer-electron.js'
 import { runConsumerSnap } from './commands/run-consumer-snap.js'
+import { runConsumerExternal } from './commands/run-consumer-external.js'
 import { runBootstrap } from './commands/run-bootstrap.js'
 import { buildConsumerMobile } from './commands/build-consumer-mobile.js'
 import { buildConsumerElectron } from './commands/build-consumer-electron.js'
@@ -16,7 +17,8 @@ import {
   runLocalAndroid,
   runLocalIos,
   runLocalElectron,
-  runLocalSnap
+  runLocalSnap,
+  runLocalExternal
 } from './commands/run-local.js'
 
 const packageJson = JSON.parse(
@@ -106,6 +108,15 @@ program
   .option('--skip-install', 'Skip app dependency install before packaging')
   .option('--skip-snap-install', 'Skip installation of the built Snap')
   .action(runConsumerSnap)
+
+program
+  .command('run:consumer:external')
+  .description('Run a non-JS consumer over the stdin/stdout bridge (e.g., the Python runner)')
+  .requiredOption('--runId <id>', 'Unique run identifier (must match producer)')
+  .requiredOption('--name <name>', 'Name of the external consumer in consumers.external')
+  .option('--mqtt-broker <url>', 'MQTT broker URL (overrides config)')
+  .option('--config <path>', 'Path to config directory', process.cwd())
+  .action(runConsumerExternal)
 
 program
   .command('run:bootstrap:desktop')
@@ -211,6 +222,16 @@ const addLocalOpts = (cmd: Command) =>
 addLocalOpts(program.command('run:local:desktop'))
   .description('Run producer + desktop consumer locally (one command)')
   .action(runLocalDesktop)
+
+addLocalOpts(program.command('run:local:external'))
+  .description('Run producer + a configured external (non-JS) consumer locally')
+  .requiredOption('--name <name>', 'Name of the external consumer in consumers.external')
+  .action(runLocalExternal)
+
+addLocalOpts(program.command('run:local:python'))
+  .description('Run producer + the Python consumer locally (alias of run:local:external)')
+  .option('--name <name>', 'External consumer name', 'python')
+  .action(runLocalExternal)
 
 addLocalOpts(program.command('run:local:electron'))
   .description('Package Electron consumer app + run producer locally')
