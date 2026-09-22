@@ -342,15 +342,18 @@ TEST_F(NmtGpuSelectionTest, MainGpuDoesNotInheritLegacySelection) {
       deviceGet(1));
 }
 
+// QLOG (inference-addon-cpp/Logger.hpp) writes to std::cout, so the warning
+// has to be captured from stdout; a stderr capture stays empty and the
+// assertions below fail while the message shows up in the runner log.
 TEST_F(NmtGpuSelectionTest, CpuFallbackWarnsWithEveryRefusedGpuIdentity) {
   inventory = {
       {"rocm0", "ROCm", GGML_BACKEND_DEVICE_TYPE_GPU},
       {"CPU", "CPU", GGML_BACKEND_DEVICE_TYPE_CPU},
       {"sycl0", "SYCL", GGML_BACKEND_DEVICE_TYPE_GPU}};
-  testing::internal::CaptureStderr();
+  testing::internal::CaptureStdout();
   const auto selected = nmtSelectGpuDevice(
       backend, true, {}, 0, "refused-test", false, {}, false);
-  const std::string warning = testing::internal::GetCapturedStderr();
+  const std::string warning = testing::internal::GetCapturedStdout();
   EXPECT_EQ(selected, nullptr);
   EXPECT_NE(warning.find("no eligible device is available"), std::string::npos);
   EXPECT_NE(warning.find("rocm0 (ROCm)"), std::string::npos);
@@ -359,10 +362,10 @@ TEST_F(NmtGpuSelectionTest, CpuFallbackWarnsWithEveryRefusedGpuIdentity) {
 
 TEST_F(NmtGpuSelectionTest, MainGpuIneligibleTargetNamesRefusedDevice) {
   inventory = {{"rocm0", "ROCm", GGML_BACKEND_DEVICE_TYPE_GPU}};
-  testing::internal::CaptureStderr();
+  testing::internal::CaptureStdout();
   const auto selected = nmtSelectGpuDevice(
       backend, true, {}, 0, "main-gpu-test", false, int64_t{0}, false);
-  const std::string warning = testing::internal::GetCapturedStderr();
+  const std::string warning = testing::internal::GetCapturedStdout();
   EXPECT_EQ(selected, nullptr);
   EXPECT_NE(warning.find("rocm0 (ROCm)"), std::string::npos);
 }

@@ -11,7 +11,8 @@
           "hasCppLint": true,
           "hasTsChecks": true,
           "tsChecksMode": "dts",
-          "hasFabricLockstep": true
+          "hasFabricLockstep": true,
+          "cppTestsBaseline": true
         }
       }
     },
