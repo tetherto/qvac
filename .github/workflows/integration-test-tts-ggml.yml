@@ -4,7 +4,7 @@ on:
     inputs:
       platform:
         type: choice
-        options: [linux, windows, software, vulkan-ops]
+        options: [linux, windows, software, vulkan-ops, clone-metal, clone-cuda]
         default: linux
 permissions:
   contents: read
@@ -192,3 +192,43 @@ jobs:
           cp "$RUNNER_TEMP/fixed-vulkan.cpp" src/ggml-vulkan/ggml-vulkan.cpp
           cmake --build build --target test-backend-ops -j 8
           build/bin/test-backend-ops test -b Vulkan0 -o MUL_MAT -p 'b_absmax'
+
+  clone-backend:
+    if: inputs.platform == 'clone-metal' || inputs.platform == 'clone-cuda'
+    needs: runner_names
+    runs-on: ${{ inputs.platform == 'clone-metal' && needs.runner_names.outputs.macos_arm64_gpu || needs.runner_names.outputs.linux_ubuntu2204_x64_gpu }}
+    timeout-minutes: 45
+    environment: release
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NO_GPU: 'false'
+      TTS_CPP_GPU_BACKEND: ${{ inputs.platform == 'clone-metal' && 'metal' || 'cuda' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: codex/cosyvoice-clone-ci-backend
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: lts/*
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ${{ inputs.platform == 'clone-metal' && 'prebuild-tts-ggml-darwin-arm64' || 'prebuild-tts-ggml-linux-x64' }}
+          path: packages/tts-ggml/prebuilds
+          run-id: 35602323525
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ./.github/actions/cache-models
+        with:
+          package: tts-ggml
+          paths: packages/tts-ggml/models
+          hash-files-glob: packages/tts-ggml/scripts/download-tts-ggml-models.js
+          enable-cross-os: 'true'
+      - name: Run cloning on the requested GPU backend
+        working-directory: packages/tts-ggml
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install
+          npm install -g --force bare
+          npm run build:ts
+          export LD_LIBRARY_PATH="$PWD/prebuilds/linux-x64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}"
+          npx brittle-bare test/integration/cosyvoice3-clone.test.js
