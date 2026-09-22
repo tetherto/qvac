@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LlamaInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
+exports.resolveBackendsDir = resolveBackendsDir;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
@@ -192,4 +193,5 @@ exports.LlamaInterface = LlamaInterface;
 module.exports = {
     LlamaInterface,
     mapAddonEvent,
+    resolveBackendsDir,
 };

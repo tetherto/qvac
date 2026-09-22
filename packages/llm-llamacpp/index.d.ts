@@ -1,5 +1,6 @@
 import QvacLogger = require("@qvac/logging");
 import { QvacResponse } from "@qvac/infer-base";
+import { assessFit as assessFitImpl, type LlamaFitDevice, type LlamaFitRequest, type LlamaFitResult, type LlamaFitStatus } from "./fit";
 import type * as AddonModule from "./addon";
 type BareEventMap = Record<string | symbol, unknown[]>;
 /** Aliases: inside the namespace, `QvacResponse` resolves to its own member. */
@@ -63,6 +64,7 @@ interface LlmLlamacppConstructor {
     readonly prototype: LlmLlamacpp;
     /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
     readonly pickPrimaryGgufPath: typeof pickPrimaryGgufPath;
+    readonly assessFit: typeof assessFitImpl;
 }
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 declare const LlmLlamacpp: LlmLlamacppConstructor;
@@ -646,5 +648,9 @@ declare namespace LlmLlamacpp {
         stats?: FinetuneStats;
     }
     type QvacResponse<Output = any> = InferQvacResponseOf<Output>;
+    type FitRequest = LlamaFitRequest;
+    type FitResult = LlamaFitResult;
+    type FitStatus = LlamaFitStatus;
+    type FitDevice = LlamaFitDevice;
 }
 export = LlmLlamacpp;
