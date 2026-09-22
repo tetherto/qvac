@@ -305,7 +305,8 @@ TEST(Audio8Validate, LoadIsDeferredAndStubFailsToParse) {
 TEST(Audio8Stats, CoremlBackendIsRecognisedByNamedPrefix) {
   EXPECT_TRUE(Audio8Model::codecBackendIsCoreml("coreml-all"));
   EXPECT_TRUE(Audio8Model::codecBackendIsCoreml("coreml-gpu"));
-  EXPECT_TRUE(Audio8Model::codecBackendIsCoreml(Audio8Model::kCoremlBackendPrefix));
+  EXPECT_TRUE(
+      Audio8Model::codecBackendIsCoreml(Audio8Model::kCoremlBackendPrefix));
   EXPECT_FALSE(Audio8Model::codecBackendIsCoreml("ggml"));
   EXPECT_FALSE(Audio8Model::codecBackendIsCoreml("MTL0"));
   EXPECT_FALSE(Audio8Model::codecBackendIsCoreml("xcoreml"));
