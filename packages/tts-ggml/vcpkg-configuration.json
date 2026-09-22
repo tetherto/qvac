@@ -1,7 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "b9ca3b07a85cd88fdd30730c662b4c138ede1ca3",
+    "baseline": "e8dd005898f21b3e50b98b985e8d2b0ea5f482b2",
+    "reference": "QVAC-25372/moss-delay-engine",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
