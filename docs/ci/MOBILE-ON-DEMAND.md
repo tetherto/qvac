@@ -616,6 +616,21 @@ gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
 This is the cheap, fast loop for reproducing/fixing a single failure without paying
 for the whole pool again.
 
+**Attach the run to the PR.** A re-run is only evidence if a reviewer can open it,
+so put its link in the PR — in the description when it is part of the case that
+the change works, or as a comment when it answers a specific review question.
+
+```
+Re-ran runChatterboxSpeedTest on Samsung Galaxy S26 Ultra after 4e1f2a9:
+https://github.com/tetherto/qvac/actions/runs/<id> — total=1 passed=1
+```
+
+Say which **test** and which **device**, so the link is readable without opening
+it. Read the verdict from the run's `test-results.json` rather than the workflow
+conclusion — a green workflow is not the same as a passed test, and Device Farm's
+own `Totals:` line counts its own suite, not your runners. When a run is red, see
+[Where the logs are when a run fails](#where-the-logs-are-when-a-run-fails).
+
 ### Run-count cap (fail-fast)
 
 To stop a single dispatch from spraying the whole fleet, two safety rails are

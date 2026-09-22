@@ -192,6 +192,27 @@ Warnings worth acting on:
 The run-id path **fails closed** — a wrong, private, unfinished or expired run id
 fails the run with the reason rather than falling back to `@latest`.
 
+Read the verdict from the run's `test-results.json`, not the workflow conclusion:
+a green workflow is not the same as a passed test, and Device Farm's `Totals:`
+line counts its own suite rather than your runners.
+
+## Step 6 — attach the run to the PR
+
+A run is only evidence if a reviewer can open it. After a re-run, put the link on
+the PR — in the **description** when it is part of the case that the change works,
+or as a **comment** when it answers a specific review question.
+
+Name the test and the device, so the line reads without opening anything:
+
+```
+Re-ran runChatterboxSpeedTest on Samsung Galaxy S26 Ultra after 4e1f2a9:
+https://github.com/tetherto/qvac/actions/runs/<id> — total=1 passed=1
+```
+
+Quote the counts from `test-results.json`. Never report a pass you have not read
+out of that file — say what actually ran, including when the answer is that a
+failure is still reproducing.
+
 ## Per-addon notes
 
 | addon | note |
