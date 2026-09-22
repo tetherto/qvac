@@ -379,7 +379,7 @@ std::any Audio8Model::process(const std::any& input) {
 }
 
 bool Audio8Model::codecBackendIsCoreml(const std::string& backend) {
-  return backend.rfind(kCoremlBackendPrefix, 0) == 0;
+  return backend.rfind(COREML_BACKEND_PREFIX, 0) == 0;
 }
 
 void Audio8Model::recordSynthesisResult(

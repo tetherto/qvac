@@ -51,7 +51,7 @@ public:
   std::any process(const std::any& input) override;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
 
-  static constexpr const char* kCoremlBackendPrefix = "coreml";
+  static constexpr const char* COREML_BACKEND_PREFIX = "coreml";
   static bool codecBackendIsCoreml(const std::string& backend);
 
   void recordSynthesisResult(
