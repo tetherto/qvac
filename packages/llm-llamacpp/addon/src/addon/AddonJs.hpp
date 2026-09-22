@@ -8,8 +8,11 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
+#include <common/arg.h>
+#include <common/common.h>
 #include <common/fit.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
@@ -500,11 +503,90 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
-/// Requests occupying or waiting for a continuous-batching slot. Complements
-/// JsInterface::activeJobs (a job count): one batch job of N prompts consumes
-/// up to N slots, so only this number tracks the resource that runs out. 0
-/// when no batch scheduler is active (`parallel: 1`), hence the JS admission
-/// check takes the max of the two rather than replacing one with the other.
+/// Applies a load's settings, in llama's own CLI spelling, by dispatching each
+/// through llama's argument table, so tensor splits, MoE placement and tensor
+/// buffer overrides are parsed exactly as the loader reads them.
+///
+/// Returns a reason when the load cannot be represented, empty on success.
+inline std::optional<std::string> applyLlamaLoadParams(
+    js_env_t* env,
+    qvac_lib_inference_addon_cpp::js::Object request,
+    common_params& params) {
+  namespace js = qvac_lib_inference_addon_cpp::js;
+
+  auto supplied = request.getOptionalProperty<js::Object>(env, "params");
+  if (!supplied.has_value()) {
+    return std::nullopt;
+  }
+
+  auto parser = common_params_parser_init(
+      params, LLAMA_EXAMPLE_COMMON, [](int, char**) {});
+
+  std::unordered_map<std::string, common_arg*> options;
+  std::unordered_map<std::string, bool> polarity;
+  for (common_arg& option : parser.options) {
+    for (const char* arg : option.args) {
+      options[arg] = &option;
+      polarity[arg] = true;
+    }
+    for (const char* arg : option.args_neg) {
+      options[arg] = &option;
+      polarity[arg] = false;
+    }
+  }
+
+  js_value_t* names = nullptr;
+  JS(js_get_property_names(env, *supplied, &names));
+  auto keys = js::Array::fromValue(names);
+  const size_t count = keys.size(env);
+
+  for (size_t index = 0; index < count; ++index) {
+    const std::string key =
+        keys.get<js::String>(env, index).as<std::string>(env);
+    const std::string value =
+        supplied->getProperty<js::String>(env, key.c_str()).as<std::string>(env);
+    const std::string arg = "--" + key;
+
+    const auto found = options.find(arg);
+    if (found == options.end()) {
+      return "unsupported-config";
+    }
+
+    common_arg& option = *found->second;
+    try {
+      if (option.handler_bool != nullptr) {
+        const bool requested = value.empty() || common_arg_utils::is_truthy(value);
+        option.handler_bool(params, polarity.at(arg) ? requested : !requested);
+      } else if (option.handler_void != nullptr) {
+        // A valueless flag can only assert itself, so a load asking for its
+        // opposite describes a placement this path cannot express.
+        if (!value.empty() && !common_arg_utils::is_truthy(value)) {
+          return "unsupported-config";
+        }
+        option.handler_void(params);
+      } else if (option.handler_int != nullptr) {
+        option.handler_int(params, std::stoi(value));
+      } else if (option.handler_string != nullptr) {
+        option.handler_string(params, value);
+      } else {
+        return "unsupported-config";
+      }
+    } catch (const std::exception&) {
+      return "unsupported-config";
+    }
+  }
+
+  // llama reads both lists to their terminator rather than by size.
+  if (!params.tensor_buft_overrides.empty()) {
+    params.tensor_buft_overrides.push_back({nullptr, nullptr});
+  }
+  if (!params.kv_overrides.empty()) {
+    params.kv_overrides.emplace_back();
+    params.kv_overrides.back().key[0] = '\0';
+  }
+  return std::nullopt;
+}
+
 // ── assessFit ────────────────────────────────────────────────────────────
 //
 // Projects one model against the memory free right now. Args: [request].
@@ -537,8 +619,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 
   // `common_fit_params` reads ggml's global device registry and loads nothing
   // itself, so whatever is registered here is its whole view of the machine.
+  // The handle holds the reference count for the call: a model unloading on
+  // another thread would otherwise free the backend underneath it.
   auto backendsDir = request.getOptionalProperty<js::String>(env, "backendsDir");
-  LlamaLazyInitializeBackend::initialize(
+  LlamaBackendsHandle backendsHandle(
       backendsDir.has_value() ? backendsDir->as<std::string>(env)
                               : std::string());
 
@@ -570,43 +654,15 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     return errorResult("model-unreadable");
   }
 
-  llama_model_params mparams = llama_model_default_params();
-  llama_context_params cparams = llama_context_default_params();
-
-  if (auto layers = number("gpuLayers")) {
-    mparams.n_gpu_layers = static_cast<int>(*layers);
-  }
-  if (auto mainGpu = number("mainGpu")) {
-    mparams.main_gpu = static_cast<int>(*mainGpu);
-  }
-  if (auto ctxSize = number("ctxSize")) {
-    cparams.n_ctx = static_cast<uint32_t>(*ctxSize);
-  }
-  if (auto batchSize = number("batchSize")) {
-    cparams.n_batch = static_cast<uint32_t>(*batchSize);
-  }
-  if (auto ubatchSize = number("ubatchSize")) {
-    cparams.n_ubatch = static_cast<uint32_t>(*ubatchSize);
+  common_params loadParams;
+  loadParams.embedding = false;
+  if (auto applied = applyLlamaLoadParams(env, request, loadParams);
+      applied.has_value()) {
+    return errorResult(applied->c_str());
   }
 
-  // The fitter rewrites only fields still holding a llama default, so one left
-  // unset here is chosen by it rather than matched to the intended load.
-  if (auto splitMode = number("splitMode")) {
-    mparams.split_mode = static_cast<llama_split_mode>(static_cast<int>(*splitMode));
-  }
-  if (auto typeK = number("typeK")) {
-    cparams.type_k = static_cast<ggml_type>(static_cast<int>(*typeK));
-  }
-  if (auto typeV = number("typeV")) {
-    cparams.type_v = static_cast<ggml_type>(static_cast<int>(*typeV));
-  }
-  if (auto flashAttn = number("flashAttnType")) {
-    cparams.flash_attn_type =
-        static_cast<llama_flash_attn_type>(static_cast<int>(*flashAttn));
-  }
-  if (auto swaFull = request.getOptionalProperty<js::Boolean>(env, "swaFull")) {
-    cparams.swa_full = swaFull->as<bool>(env);
-  }
+  llama_model_params mparams = common_model_params_to_llama(loadParams);
+  llama_context_params cparams = common_context_params_to_llama(loadParams);
 
   const uint32_t minCtx = number("minCtxSize").has_value()
                               ? static_cast<uint32_t>(*number("minCtxSize"))
@@ -616,15 +672,26 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
           ? static_cast<size_t>(*number("marginBytes"))
           : 0;
 
-  // Writable scratch the fit API requires; the sizes are the library's, not
-  // the caller's.
-  std::vector<float> tensorSplit(llama_max_devices(), 0.0F);
+  // In/out: the fitter rewrites only the entries still holding a llama
+  // default, so a placement the load pinned survives into the projection.
+  std::vector<float> tensorSplit(
+      std::begin(loadParams.tensor_split),
+      std::begin(loadParams.tensor_split) + llama_max_devices());
   std::vector<llama_model_tensor_buft_override> buftOverrides(
       llama_max_tensor_buft_overrides());
+  // llama walks this array to its `{nullptr, nullptr}` terminator, so a list
+  // that does not fit with the terminator would be read past its end.
+  if (loadParams.tensor_buft_overrides.size() > buftOverrides.size()) {
+    return errorResult("unsupported-config");
+  }
+  std::copy_n(
+      loadParams.tensor_buft_overrides.begin(),
+      loadParams.tensor_buft_overrides.size(),
+      buftOverrides.begin());
   std::vector<size_t> margins(llama_max_devices(), marginBytes);
 
   common_params_fit_status status{};
-  {
+  try {
     const std::lock_guard<std::mutex> lock(fitMutex);
     status = common_fit_params(
         modelPath.c_str(),
@@ -636,6 +703,10 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         minCtx,
         false,
         GGML_LOG_LEVEL_INFO);
+  } catch (const std::exception&) {
+    // A load llama cannot build a context for is a configuration this
+    // projection cannot answer, not a failure of the caller's request.
+    return errorResult("unsupported-config");
   }
 
   const char* statusName = "error";
@@ -668,15 +739,25 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   uint32_t resolvedLayers = 0;
   uint32_t trainCtx = 0;
   uint32_t expertCount = 0;
-  const common_device_memory_data_vec breakdown = common_get_device_memory_data(
-      modelPath.c_str(),
-      &mparams,
-      &cparams,
-      devices,
-      resolvedLayers,
-      trainCtx,
-      expertCount,
-      GGML_LOG_LEVEL_INFO);
+  common_device_memory_data_vec breakdown;
+  bool measured = true;
+  try {
+    breakdown = common_get_device_memory_data(
+        modelPath.c_str(),
+        &mparams,
+        &cparams,
+        devices,
+        resolvedLayers,
+        trainCtx,
+        expertCount,
+        GGML_LOG_LEVEL_INFO);
+  } catch (const std::exception&) {
+    // The fit already reached a verdict; this probe only breaks it down, so a
+    // failure here leaves the verdict standing without per-device figures.
+    measured = false;
+    devices.clear();
+    breakdown.clear();
+  }
 
   // The probe returns one row per device the model was assigned to, then a
   // trailing host row: the CPU device is counted among the devices but its
@@ -721,9 +802,11 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     perDevice.set(env, i, entry);
   }
 
-  // A fitted 0 names the trained context rather than a usable load.
+  // A fitted 0 names the trained context rather than a usable load. Only the
+  // breakdown probe reads the trained context, so without it a fitted 0 stays
+  // 0 instead of being read as an unreadable model.
   uint32_t fittedCtx = cparams.n_ctx;
-  if (fittedCtx == 0) {
+  if (fittedCtx == 0 && measured) {
     if (trainCtx == 0) {
       return errorResult("model-unreadable");
     }
@@ -744,6 +827,11 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
 }
 JSCATCH
 
+/// Requests occupying or waiting for a continuous-batching slot. Complements
+/// JsInterface::activeJobs (a job count): one batch job of N prompts consumes
+/// up to N slots, so only this number tracks the resource that runs out. 0
+/// when no batch scheduler is active (`parallel: 1`), hence the JS admission
+/// check takes the max of the two rather than replacing one with the other.
 inline js_value_t* activeSlots(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
 
