@@ -207,6 +207,18 @@ Third-Party Model Licenses
     https://huggingface.co/HuggingFaceVLA/smolvla_libero
   SmolVLM2-500M-Video-Instruct-GGUF
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
+  TranslatePsy-AfriSLM-0.8B-Q4-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF
+  TranslatePsy-AfriSLM-0.8B-Q8-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q8-GGUF
+  TranslatePsy-AfriSLM-2B-Q4-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-2B-Q4-GGUF
+  TranslatePsy-AfriSLM-2B-Q8-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-2B-Q8-GGUF
+  TranslatePsy-AfriSLM-4B-Q4-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-4B-Q4-GGUF
+  TranslatePsy-AfriSLM-4B-Q8-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-4B-Q8-GGUF
   umt5-xxl-enc-q8_0
     https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
   unlimited-ocr-gguf
@@ -608,6 +620,12 @@ Third-Party Model Licenses
     https://huggingface.co/nvidia/GR00T-N1.7-LIBERO
   groot-q8_vf16
     https://huggingface.co/nvidia/GR00T-N1.7-3B
+  nemotron-3.5-asr-streaming-0.6b.f16
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  nemotron-3.5-asr-streaming-0.6b.q4_0
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  nemotron-3.5-asr-streaming-0.6b.q8_0
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
   parakeet-unified-en-0.6b.f16
     https://huggingface.co/nvidia/parakeet-unified-en-0.6b
   parakeet-unified-en-0.6b.q4_0

@@ -149,6 +149,7 @@ bare examples/backend-device.js --backend metal
 | `params.nThreads` | `number` | | `0` (auto) | CPU thread count for GGML; `<0` leaves the GGML default |
 | `params.backendsDir` | `string` | | `<package>/prebuilds` | directory holding `libggml-*.so` backend shared libs |
 | `params.backendDevice` | `'cpu'` \| `'vulkan'` \| `'metal'` \| `'opencl'` | | `'cpu'` | ggml backend device. `'vulkan'` (Linux/Windows/Android), `'metal'` (Apple) and `'opencl'` (Android/Adreno) opt in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan--metal--opencl) |
+| `params.main-gpu` / `params.main_gpu` | `number` \| `string` | | _prefer dedicated_ | Raw ggml registry index or strict GPU class; requires GPU `backendDevice`. See below. |
 | `params.gpuDevice` | `number` | | _prefer discrete_ | 0-based index into the matching GPU/iGPU devices for `'vulkan'`/`'metal'`/`'opencl'`; out-of-range → CPU fallback — see [Selecting a specific GPU](#selecting-a-specific-gpu-gpudevice) |
 | `opts.stats` | `boolean` | | `false` | emit timing stats on `finish` |
 | `logger` | `Object` | | `null` | optional `{ info, warn, error, debug }` — receives C++ log lines |
@@ -277,6 +278,26 @@ Behaviour and expectations:
   the `clinical_chemistry` page drops from ~11.9 s to ~2.7 s warm GPU end-to-end
   with identical output. Other GPUs (Adreno OpenCL, Apple Metal, NVIDIA/Intel
   Vulkan) keep full-GPU detection.
+
+### Shared GPU selection (`main-gpu`)
+
+With a GPU `backendDevice`, set `'main-gpu': N` (or `main_gpu: N`) to select
+that **raw ggml registry index before backend filtering**. For example, with
+`[ROCm0, Vulkan0]`, `'main-gpu': 0` and `backendDevice: 'vulkan'` falls back to
+CPU; it never renumbers Vulkan0 to index 0. An in-range CPU, unsupported,
+or safety-excluded target also falls back to CPU. An out-of-range integer
+(including negative values) emits a warning and uses normal selection.
+
+`'dedicated'` selects only a dedicated GPU; `'integrated'` selects only an
+integrated GPU. If that class is unavailable, selection falls back to CPU.
+Without a selector, GPU selection prefers dedicated devices. Adreno Vulkan
+and required OCR-op safety checks apply to all `main-gpu` requests.
+`backendDevice: 'cpu'` (the default) remains CPU, regardless of this selector.
+
+Use only one of `main-gpu`, `main_gpu`, or legacy `gpuDevice`. The new selector
+accepts signed 32-bit integer numbers or integer strings, and case-insensitive
+class strings. Null, booleans, fractions, overflow, and other strings are rejected.
+`gpuDevice` retains its existing index into the filtered backend list.
 
 ### Selecting a specific GPU (`gpuDevice`)
 

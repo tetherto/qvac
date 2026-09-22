@@ -24,9 +24,37 @@ const TRANSIENT_ERROR_CODES = new Set([
 // A tiny (~1MB) llama-architecture GGUF. Public, no auth — ideal for a fast
 // all-platform fit projection. Override with FIT_MODEL_PATH to point the test
 // at a real model locally.
-const DEFAULT_MODEL = {
-  modelName: 'stories260K.gguf',
-  downloadUrl: 'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories260K.gguf'
+//
+// Read from models.manifest.json rather than repeated here. That file is what
+// CI's cache-models action warms from and keys its cache on, and it pins the
+// HuggingFace revision; a second copy of the URL in this file is how the two
+// end up fetching different bytes under one filename.
+//
+// Loaded with a literal require(), not fs.readFileSync. Mobile builds pack this
+// file into a single bundle via bare-pack, which follows static require()
+// calls; a dynamic read is invisible to that traversal and drops the manifest
+// from the bundle, so the lookup fails on-device even though the file was there
+// at build time. Same reason embed-llamacpp/test/integration/utils.js does it
+// this way.
+const MANIFEST_NAME = 'test/integration/models.manifest.json'
+const DEFAULT_MODEL_NAME = 'stories260K.gguf'
+let _defaultModel
+
+// Resolved by name, and only when something actually asks for the default.
+// Both test files require this module at their top, so doing the lookup at
+// module load would let a manifest problem fail the whole suite at import --
+// including the runs that set FIT_MODEL_PATH and never download anything. By
+// name rather than "the only entry", so adding a second model to the manifest
+// stays a no-op here.
+function loadDefaultModel() {
+  if (_defaultModel !== undefined) return _defaultModel
+  const manifest = require('./models.manifest.json')
+  const entry = ((manifest && manifest.models) || {})[DEFAULT_MODEL_NAME]
+  if (!entry) {
+    throw new Error(`"${DEFAULT_MODEL_NAME}" is missing from ${MANIFEST_NAME}`)
+  }
+  _defaultModel = { modelName: DEFAULT_MODEL_NAME, downloadUrl: entry.urls, bytes: entry.bytes }
+  return _defaultModel
 }
 
 function isTransientError(err) {
@@ -190,25 +218,49 @@ async function downloadFileWithRetries(urls, dest, opts = {}) {
  * its absolute path. Honours FIT_MODEL_PATH as an override for local runs.
  * @returns {Promise<string>} absolute path to a GGUF file
  */
-async function ensureModelPath({ modelName, downloadUrl } = DEFAULT_MODEL) {
+async function ensureModelPath(model) {
+  const { modelName, downloadUrl, bytes } = model || loadDefaultModel()
   const modelDir = path.resolve(__dirname, '../model')
   const modelPath = path.join(modelDir, modelName)
 
-  if (fs.existsSync(modelPath) && fs.statSync(modelPath).size > 0) {
-    return modelPath
+  // Size, not mere existence. A file left behind by an earlier, unpinned
+  // download carries the same name, and accepting it would silently undo the
+  // revision pin the manifest exists to enforce.
+  if (fs.existsSync(modelPath)) {
+    const size = fs.statSync(modelPath).size
+    if (bytes ? size === bytes : size > 0) return modelPath
+    console.log(
+      bytes
+        ? `[download] Discarding ${modelName}: ${size} bytes on disk, manifest declares ${bytes}`
+        : `[download] Discarding empty ${modelName}`
+    )
+    fs.unlinkSync(modelPath)
   }
-  if (fs.existsSync(modelPath)) fs.unlinkSync(modelPath)
 
   fs.mkdirSync(modelDir, { recursive: true })
   console.log(`[download] Downloading test model: ${modelName}...`)
-  await downloadFileWithRetries(downloadUrl, modelPath)
+  await downloadFileWithRetries(downloadUrl, modelPath, bytes ? { minBytes: bytes } : {})
+
+  // minBytes only rejects a SHORT read, and it retries, because that is what a
+  // truncated transfer deserves. An over-long body is a different animal -- a
+  // moved revision, an interstitial page -- and retrying cannot fix it. Without
+  // this it would be renamed into place, returned, then rejected by the size
+  // gate above on the next call, so the suite would quietly re-download it once
+  // per test instead of failing once.
   const stat = fs.statSync(modelPath)
+  if (bytes && stat.size !== bytes) {
+    fs.unlinkSync(modelPath)
+    throw new Error(
+      `${modelName} downloaded as ${stat.size} bytes, but ${MANIFEST_NAME} declares ${bytes}.`
+    )
+  }
   console.log(`[download] Model ready: ${(stat.size / 1024 / 1024).toFixed(2)}MB`)
   return modelPath
 }
 
 module.exports = {
-  DEFAULT_MODEL,
+  DEFAULT_MODEL_NAME,
+  loadDefaultModel,
   downloadFile: downloadFileWithRetries,
   ensureModelPath
 }

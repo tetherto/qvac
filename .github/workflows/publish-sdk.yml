@@ -1,10 +1,21 @@
 name: Build and Publish QVAC SDK (sdk)
 
+# Releases @qvac/sdk (npm) and tetherto-qvac-sdk (PyPI).
+#
+# @qvac/inference releases from publish-inference.yml. When both packages move to
+# a new major.minor, the engine is published there first: this workflow installs
+# the committed @qvac/inference range from npm, and the SDK's lint requires that
+# range to match the SDK's own major and minor.
+#
+# A push to main / feature-* / tmp-* publishes @tetherto/sdk-mono and
+# @tetherto/inference-mono to GitHub Packages from this workflow in a single run,
+# so the SDK build pins the engine built beside it by the shared run id.
+
 on:
   push:
     branches:
       - main
-      - release-*
+      - release-sdk-*
       - feature-*
       - tmp-*
     paths:
@@ -24,7 +35,7 @@ on:
         default: ""
         type: string
       publish_pypi_only:
-        description: "Republish tetherto-qvac-sdk to PyPI only (lockstep version; skip npm)"
+        description: "Republish tetherto-qvac-sdk to PyPI only (same version as @qvac/sdk; skip npm)"
         required: false
         default: false
         type: boolean
@@ -67,7 +78,7 @@ jobs:
   release-merge-guard:
     name: Release Merge Guard
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-')
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && startsWith(github.ref_name, 'release-sdk-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -108,29 +119,26 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Verify inference / sdk / python version lockstep
+      - name: Verify @qvac/sdk and python versions match
         shell: bash
         run: |
-          # @qvac/inference is the sole version anchor: sdk and
-          # sdk-python must all match it. Run /qv-sdk-lockstep-sync to align.
+          # tetherto-qvac-sdk is generated from @qvac/sdk and publishes at the
+          # same version. Regenerate it (`scripts/generate.py`) to align.
+          # @qvac/inference has its own version; the SDK's dependency range on it
+          # is checked by the SDK's enforce-inference-versions lint step.
           set -euo pipefail
           REF="${GITHUB_SHA}"
-          INF_VER=$(git show "${REF}":packages/inference/package.json | jq -r .version)
           SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
           PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
           if [ -z "$PY_VER" ]; then
             echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
             exit 1
           fi
-          if [ "$SDK_VER" != "$INF_VER" ]; then
-            echo "::error title=Version mismatch::@qvac/sdk@$SDK_VER vs anchor @qvac/inference@$INF_VER at ${REF}. sdk must match the inference anchor. Run /qv-sdk-lockstep-sync before release."
+          if [ "$PY_VER" != "$SDK_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${REF}. Run packages/sdk-python/scripts/generate.py before release."
             exit 1
           fi
-          if [ "$PY_VER" != "$INF_VER" ]; then
-            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs anchor @qvac/inference@$INF_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
-            exit 1
-          fi
-          echo "OK: @qvac/inference, @qvac/sdk, and tetherto-qvac-sdk all at $INF_VER (verified at ${REF})"
+          echo "OK: @qvac/sdk and tetherto-qvac-sdk both at $SDK_VER (verified at ${REF})"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
@@ -170,15 +178,16 @@ jobs:
           "@tetherto" = { token = "${{ env.READ_NPM_TOKEN }}", url = "https://npm.pkg.github.com" }
           EOF
 
-      # Compile the SDK against the in-repo @qvac/inference at this commit, not
-      # the previously-published npm release (which lags behind engine API the
-      # SDK already consumes). Link before bun install: lockstep cuts publish
-      # inference in this same workflow, so the committed range is not on npm
-      # yet. This only affects the dist built here; the published dependency
-      # is set per channel below — GPR is pinned to the co-published
-      # @tetherto/inference-mono (see publish-gpr), npm keeps its committed
-      # range (resolved to the inference released in the same run).
+      # Dev builds compile against the in-repo @qvac/inference at this commit,
+      # because the engine they publish is the one built beside them in this run
+      # (publish-gpr pins the SDK mono build to that @tetherto/inference-mono).
+      #
+      # A release build compiles against the committed range instead, installed
+      # from npm below. The engine for a release is published by
+      # publish-inference.yml beforehand, so the range resolves; the in-repo copy
+      # can sit ahead of it, since a release branch is cut from main.
       - name: Build against workspace @qvac/inference
+        if: ${{ !startsWith(github.ref_name, 'release-sdk-') }}
         run: bun run sdk-source:workspace
         working-directory: ${{ env.WORKDIR }}
 
@@ -284,9 +293,13 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       branch: ${{ steps.version.outputs.branch }}
 
+  # Dev builds only: the engine artifact feeds publish-gpr-inference, which the
+  # SDK mono build pins. Release builds of the engine come from
+  # publish-inference.yml.
   build-inference:
     name: Build @qvac/inference
-    needs: [build]
+    needs: [build, publish-logic]
+    if: ${{ needs.publish-logic.outputs.publish_main == 'true' || needs.publish-logic.outputs.publish_feature == 'true' || needs.publish-logic.outputs.publish_tmp == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -386,24 +399,26 @@ jobs:
       - name: Build
         run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
 
-      - name: Verify version lockstep with @qvac/inference
+      - name: Verify python version matches @qvac/sdk
         working-directory: ${{ github.workspace }}
         run: |
-          # @qvac/inference is the sole version anchor. This job can run
-          # standalone (publish_pypi_only), so check python against the anchor.
+          # tetherto-qvac-sdk is generated from @qvac/sdk and publishes at the
+          # same version. This job can run standalone (publish_pypi_only), so it
+          # checks python against the SDK itself rather than relying on the
+          # build job's check.
           set -euo pipefail
           REF="${GITHUB_SHA}"
-          INF_VER=$(git show "${REF}":packages/inference/package.json | jq -r .version)
+          SDK_VER=$(git show "${REF}":packages/sdk/package.json | jq -r .version)
           PY_VER=$(git show "${REF}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
           if [ -z "$PY_VER" ]; then
             echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${REF}"
             exit 1
           fi
-          if [ "$PY_VER" != "$INF_VER" ]; then
-            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs anchor @qvac/inference@$INF_VER at ${REF}. Run /qv-sdk-lockstep-sync before release."
+          if [ "$PY_VER" != "$SDK_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${REF}. Run packages/sdk-python/scripts/generate.py before release."
             exit 1
           fi
-          echo "OK: tetherto-qvac-sdk and @qvac/inference both at $INF_VER (verified at ${REF})"
+          echo "OK: tetherto-qvac-sdk and @qvac/sdk both at $SDK_VER (verified at ${REF})"
 
       - name: Check metadata
         run: .venv/bin/twine check dist/*
@@ -440,7 +455,7 @@ jobs:
           if [ "$event_name" = "push" ] || [ "$event_name" = "workflow_dispatch" ]; then
             if [ "$ref_name" = "main" ]; then
               publish_main="true"
-            elif [[ "$ref_name" == release-* ]]; then
+            elif [[ "$ref_name" == release-sdk-* ]]; then
               publish_release="true"
             elif [[ "$ref_name" == feature-* ]]; then
               publish_feature="true"
@@ -690,65 +705,6 @@ jobs:
           tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: ${{ env.WORKDIR }}
 
-  publish-npm-inference:
-    name: Publish @qvac/inference to NPM
-    needs:
-      - fork-approval
-      - build-inference
-      - publish-logic
-      - release-merge-guard
-    if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
-    runs-on: ubuntu-latest
-    environment: npm
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-    env:
-      WORKDIR_INFERENCE: packages/inference
-      # prepare runs tsc; publish the prebuilt dist only.
-      NPM_CONFIG_IGNORE_SCRIPTS: "true"
-    steps:
-      - name: Validate npm_tag input
-        if: inputs.npm_tag != ''
-        shell: bash
-        run: |
-          tag="${{ inputs.npm_tag }}"
-          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
-            exit 1
-          fi
-
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Download inference dist artifact
-        uses: ./.github/actions/download-release-artifact
-        with:
-          name: dist-inference
-          path: ${{ env.WORKDIR_INFERENCE }}/dist/
-
-      - name: Determine dist-tag
-        id: dist-tag-inference
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
-        with:
-          workdir: ${{ env.WORKDIR_INFERENCE }}
-          tag: ${{ inputs.npm_tag }}
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
-        with:
-          tag: ${{ steps.dist-tag-inference.outputs.tag }}
-          workdir: ${{ env.WORKDIR_INFERENCE }}
-
   publish-pypi:
     name: Publish tetherto-qvac-sdk to PyPI
     needs:
@@ -758,8 +714,7 @@ jobs:
       - publish-logic
       - release-merge-guard
       - publish-npm
-      - publish-npm-inference
-    # Lockstep release after npm publishes. Escape hatch:
+    # Publishes after @qvac/sdk reaches npm, at the same version. Escape hatch:
     # workflow_dispatch with publish_pypi_only=true (npm already shipped).
     if: >-
       always() &&
@@ -770,8 +725,7 @@ jobs:
         (
           needs.publish-logic.outputs.publish_release == 'true' &&
           (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-          needs.publish-npm.result == 'success' &&
-          needs.publish-npm-inference.result == 'success'
+          needs.publish-npm.result == 'success'
         )
         ||
         (
@@ -797,13 +751,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
   # Create GitHub release only for actual releases (after NPM publish).
-  # Require all lockstep npm publishes before tagging sdk-v*.
   # PyPI is separate; recover with workflow_dispatch publish_pypi_only.
   publish-release:
-    needs: [publish-npm, publish-npm-inference]
+    needs: [publish-npm]
     if: >-
       needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
-      && needs.publish-npm-inference.result == 'success' && needs.publish-npm-inference.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
@@ -813,16 +765,6 @@ jobs:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: "packages/sdk"
-
-  create-tag-inference:
-    needs: [publish-npm-inference]
-    if: needs.publish-npm-inference.result == 'success' && needs.publish-npm-inference.outputs.published_version != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-release-tag.yml
-    with:
-      repo_name: "inference"
-      published_version: ${{ needs.publish-npm-inference.outputs.published_version }}
 
   # Build the self-contained per-platform tetherto-qvac-sdk wheels and attach
   # them to the sdk-v<version> release the job above just created, for a turnkey
