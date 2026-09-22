@@ -1,12 +1,10 @@
-# Changelog
+# QVAC SDK v0.20.0 Release Notes
 
-## [0.20.0]
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.20.0
 
-📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.20.0
+QVAC SDK 0.20.0 adds TranslatePsy-AfriSLM translation, an in-process TurboVec vector index, MiniMax-H3 video, Parakeet Nemotron transcription, and the rest of the AudioGen and TTS surfaces. ABot-World sessions (`worldCreateScene` / `worldStep`) are on this surface. `loadModel` runs an advisory llama.cpp fit check. Diffusion VAE constant names, CPU flags, `'row'` split, Parakeet `language` codes, and how system prompts combine with KV cache all change.
 
-QVAC Inference 0.20.0 is the engine cut that SDK 0.20.0 will depend on. It adds TranslatePsy-AfriSLM translation, an in-process TurboVec vector index, MiniMax-H3 video, Parakeet Nemotron transcription, and the rest of the AudioGen and TTS surfaces. ABot-World sessions (`worldCreateScene` / `worldStep`) are on this surface. `loadModel` runs an advisory llama.cpp fit check. Diffusion VAE constant names, CPU flags, `'row'` split, Parakeet `language` codes, and how system prompts combine with KV cache all change.
-
-Publish this package before `@qvac/sdk@0.20.0`. The SDK release points its `@qvac/inference` range at this version.
+`@qvac/sdk`, `@qvac/inference`, and `tetherto-qvac-sdk` all ship at 0.20.0. Install `@qvac/sdk` and `@qvac/inference` together at this version.
 
 ## Breaking Changes
 
@@ -155,10 +153,10 @@ modelConfig: {
 
 ### TurboVec vector index
 
-`createVectorIndex` builds an in-process vector index on the embedding plugin's TurboVec engine. Pair it with `embed()`: add each document's embedding under an id you choose, search with a query embedding, and map the returned ids back to your store. Default storage is `VectorIndexStorage.TURBOVEC_Q4`. Dimension must be a multiple of 8 and at most 1024 for TurboVec modes.
+`createVectorIndex` builds an in-worker vector index on the embedding plugin's TurboVec engine. Pair it with `embed()`: add each document's embedding under an id you choose, search with a query embedding, and map the returned ids back to your store. Default storage is `VectorIndexStorage.TURBOVEC_Q4`. Dimension must be a multiple of 8 and at most 1024 for TurboVec modes.
 
 ```typescript
-import { createVectorIndex, loadVectorIndex, VectorIndexStorage } from '@qvac/inference'
+import { createVectorIndex, loadVectorIndex, VectorIndexStorage } from '@qvac/sdk'
 
 const index = await createVectorIndex({
   dim: 1024,
@@ -229,10 +227,10 @@ Pass `returnPack: true` on create to keep the scene bytes for a later reload.
 
 ### Parakeet Nemotron
 
-Three Parakeet Nemotron 0.6B weights are on the catalog for `parakeet-transcription`.
+Three Parakeet Nemotron 0.6B weights are on the SDK catalog for `parakeet-transcription`.
 
 ```typescript
-import { loadModel, PARAKEET_NEMOTRON_0_6B_Q4_0 } from '@qvac/inference'
+import { loadModel, PARAKEET_NEMOTRON_0_6B_Q4_0 } from '@qvac/sdk'
 
 const modelId = await loadModel({
   modelSrc: PARAKEET_NEMOTRON_0_6B_Q4_0,
@@ -301,11 +299,15 @@ Before each llama.cpp completion or embedding load, `loadModel` runs `@qvac/mode
 
 On Android and iOS, llama `assessModelFit` runs `@qvac/model-fit` in-process on a worker thread. There is no disposable child process on those hosts. A leftover `.running` marker from a previous abort is treated as crashed so the same path and config skip native instead of retrying the abort. The JavaScript loop stays free while the fit runs.
 
+`@qvac/tts-ggml` 0.9.x installs host binaries in per-platform packages (`@qvac/tts-ggml-darwin-arm64` and siblings) next to the meta package. `qvac verify bundle` looks there instead of under the meta package's `prebuilds/`.
+
 ## Bug Fixes
 
 Automatic KV-cache files keep the last committed saved-message boundary across a worker restart, so a warm turn does not replay already-cached messages. A cancelled or failed warm turn no longer deletes that committed file.
 
 An addon's logger is attached when its model loads, not when the plugin registers, so unused addons do not open log sinks.
+
+Mobile `withQvacSDK` prebuild verifies only the hosts the bundle actually links, and only the current Android or iOS target's hosts. A missing addon pin now names the exact platform package instead of a generic missing-prebuild error.
 
 ## Model Changes
 
@@ -338,9 +340,3 @@ ABOT_WORLD_0_5B_LF_VAE_F16
 LTX_2_3_VAE
 LTX_2_3_VAE_1
 ```
-
-## [0.17.0]
-
-📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.17.0
-
-First public release of `@qvac/inference`, the Bare-only in-process engine aligned with `@qvac/sdk` 0.17.0. Same inference API surface as the SDK, without the RPC/worker layer — register the plugins you need and run directly on Bare.

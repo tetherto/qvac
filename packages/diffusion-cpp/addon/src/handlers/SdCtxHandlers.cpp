@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -189,6 +191,52 @@ bool maxVramSpecHasNonZeroBudget(const std::string& spec) {
     }
   }
   return false;
+}
+
+void validateWorldPlacement(
+    const std::string& paramsBackend, const std::string& maxVram) {
+  std::string_view defaultBackend;
+  std::optional<std::string_view> vaeBackend;
+  forEachSpecAssignment(
+      paramsBackend, [&](std::string_view key, std::string_view value) {
+        if (isWholeSpecDefaultKey(key)) {
+          defaultBackend = value;
+        } else if (paramsBackendModuleIndex(key) == 3) {
+          vaeBackend = value;
+        }
+      });
+  if (equalsIgnoreCase(vaeBackend.value_or(defaultBackend), "disk")) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "paramsBackend: vae=disk is unsupported for the ABot decoder; use "
+        "diffusion=disk");
+  }
+
+  std::istringstream assignments(maxVram);
+  std::string part;
+  while (std::getline(assignments, part, ',')) {
+    const auto assignment = trim(part);
+    if (assignment.empty())
+      continue;
+    const auto equals = assignment.find('=');
+    const auto value = equals == std::string_view::npos
+                           ? assignment
+                           : trim(assignment.substr(equals + 1));
+    bool valid = equals == std::string_view::npos ||
+                 !trim(assignment.substr(0, equals)).empty();
+    try {
+      std::size_t consumed = 0;
+      const float budget = std::stof(std::string(value), &consumed);
+      valid = valid && consumed == value.size() && std::isfinite(budget);
+    } catch (...) {
+      valid = false;
+    }
+    if (!valid) {
+      throw StatusError(
+          general_error::InvalidArgument,
+          "maxVram contains an invalid budget assignment: '" + part + "'");
+    }
+  }
 }
 
 std::string
