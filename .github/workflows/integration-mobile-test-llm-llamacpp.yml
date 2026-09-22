@@ -187,6 +187,16 @@ on:
         type: boolean
         required: false
         default: false
+      addon_prebuild_run_id:
+        description: "Run id whose `prebuilds-<addon>` artifact holds this branch's addon prebuilds. Set it and the npm fallback never runs, so the device gets your build instead of the published release."
+        type: string
+        required: false
+        default: ""
+      fabric_prebuild_run_id:
+        description: "Run id whose `fabric-prebuilds` artifact holds the @qvac/fabric build to overlay — e.g. the on-pr-fabric run of a rollout PR. Empty means the device runs the PUBLISHED fabric no matter what the addon prebuilds were built against."
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   # workflow_dispatch: at most one manual mobile run per (workflow, branch) at a
@@ -226,6 +236,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/actions/overlay-local-fabric
           sparse-checkout-cone-mode: false
       # Validate the tests filter + shard fan-out against test-groups.json from
       # the SAME ref the build executes (inputs.ref || github.sha), not the
@@ -276,6 +287,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/actions/overlay-local-fabric
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
@@ -333,6 +345,8 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
+      # Cross-run artifact downloads (addon_prebuild_run_id / fabric_prebuild_run_id).
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -357,6 +371,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/actions/overlay-local-fabric
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository
@@ -384,6 +399,29 @@ jobs:
       - name: Validate mobile tests are up-to-date
         working-directory: addon/packages/llm-llamacpp
         run: npm run test:mobile:validate
+
+      # Pre-populate prebuilds/ from another run BEFORE setup looks at it. setup's
+      # own download only sees THIS run's artifacts, and a standalone dispatch has
+      # none — so without this the npm fallback quietly installs the published
+      # release. With the dir already populated, setup reports "Prebuilds already
+      # present from artifacts" and skips the fallback entirely.
+      - name: Download addon prebuilds from another run
+        if: inputs.addon_prebuild_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds-llm-llamacpp
+          path: addon/packages/llm-llamacpp/prebuilds
+          run-id: ${{ inputs.addon_prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download fabric prebuilds to overlay
+        if: inputs.fabric_prebuild_run_id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: fabric-prebuilds
+          path: ${{ runner.temp }}/fabric-prebuilds
+          run-id: ${{ inputs.fabric_prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup mobile test environment
         uses: ./.github/actions/run-mobile-integration-tests/setup
@@ -485,6 +523,7 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/llm-llamacpp'
           addon-npm-name: '@qvac/llm-llamacpp'
+          fabric-prebuilds-root: ${{ inputs.fabric_prebuild_run_id != '' && format('{0}/fabric-prebuilds', runner.temp) || '' }}
           ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
           ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
           ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}

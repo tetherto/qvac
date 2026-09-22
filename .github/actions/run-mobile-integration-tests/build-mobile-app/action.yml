@@ -28,6 +28,20 @@ inputs:
     description: "Mobile app bundle id"
     required: false
     default: "io.tether.test.qvac"
+  fabric-prebuilds-root:
+    description: |
+      Path to a merged @qvac/fabric prebuilds tree (include/, share/,
+      <platform>-<arch>/). When set, it is overlaid into every installed
+      node_modules/@qvac/fabric after npm install and before the app is built.
+
+      Needed because the addon links fabric's prebuilt .bare module
+      (qvac-addon.cmake:126, include_bare_module("@qvac/fabric" ... PREBUILD)),
+      so the fabric that reaches the device is whatever `npm install` resolved
+      from the addon's package.json — the PUBLISHED version. The desktop legs
+      already do this via integration-test-nx.yml; without it no fabric rollout
+      is ever validated on a device. Empty = keep the npm-resolved fabric.
+    required: false
+    default: ""
 
   # iOS signing inputs (ignored on Android)
   ios-build-cert-base64:
@@ -156,6 +170,45 @@ runs:
       run: |
         echo "Setting up mobile test framework..."
         npm install
+
+    # Must sit after BOTH npm installs above (the addon's and the framework's,
+    # each of which resolves @qvac/fabric from the registry) and before the app
+    # build that bundles the resolved .bare into the APK/IPA. Only the target
+    # <platform>-arm64 dir is replaced — Device Farm runs real arm64 hardware —
+    # so any sibling arch dir still holds the published fabric.
+    - name: Overlay fabric prebuilds into @qvac/fabric
+      if: inputs.fabric-prebuilds-root != ''
+      uses: ./.github/actions/overlay-local-fabric
+      with:
+        workdir: addon/${{ inputs.addon-workdir }}
+        prebuilds-root: ${{ inputs.fabric-prebuilds-root }}
+        platform: ${{ inputs.platform == 'iOS' && 'ios' || 'android' }}
+        arch: arm64
+        search-dirs: test-framework
+
+    - name: Report fabric provenance
+      if: inputs.fabric-prebuilds-root != ''
+      shell: bash
+      env:
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+        PLAT: ${{ inputs.platform == 'iOS' && 'ios' || 'android' }}
+      run: |
+        set -euo pipefail
+        echo "Fabric trees carrying the overlaid ${PLAT}-arm64 build:"
+        found=0
+        for root in "addon/${ADDON_WORKDIR}" test-framework; do
+          for pkg in $(find "$root" -type d -path "*/node_modules/@qvac/fabric" 2>/dev/null); do
+            if [ -d "$pkg/prebuilds/${PLAT}-arm64" ]; then
+              echo "  $pkg/prebuilds/${PLAT}-arm64"
+              found=$((found + 1))
+            fi
+          done
+        done
+        if [ "$found" -eq 0 ]; then
+          echo "::error::fabric-prebuilds-root was set but no node_modules/@qvac/fabric tree carries ${PLAT}-arm64."
+          echo "The device would run the PUBLISHED fabric, silently. Failing instead."
+          exit 1
+        fi
 
     - name: Build test app with addon
       shell: bash
