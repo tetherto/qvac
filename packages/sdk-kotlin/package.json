@@ -10,6 +10,9 @@
   },
   "dependencies": {
     "@qvac/sdk": "0.20.0",
+    "@qvac/asr-ggml-android-arm64": "0.5.3",
+    "@qvac/audiogen-ggml-android-arm64": "0.4.1",
+    "@qvac/tts-ggml-android-arm64": "0.9.2",
     "bare-link": "3.0.1",
     "react-native-bare-kit": "0.14.0"
   }
