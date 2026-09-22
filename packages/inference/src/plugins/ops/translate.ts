@@ -309,7 +309,7 @@ export async function* translate(
   }
   const modelExecutionMs = nowMs() - modelStart
 
-  const stats = buildNmtTranslationStats(nmtResponse.stats)
+  const stats = buildNmtTranslationStats(nmtResponse.stats, model)
 
   return buildStreamResult(modelExecutionMs, stats)
 }

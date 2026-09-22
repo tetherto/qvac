@@ -601,6 +601,12 @@ Populated on `response.stats` when the model was constructed with
 > Pivot translations may emit keys prefixed with the model name
 > (e.g. `"BERGAMOT : ->TPS"`); the table above models the non-pivot shape.
 
+`totalTokens`, `totalTime`, `decodeTime` and `encodeTime` accumulate over the
+life of the loaded model rather than describing the run that returned them,
+and `TPS` divides those totals. They restart at zero on `unload()`/`load()`.
+For per-run figures, difference consecutive readings — jobs are serialized,
+so nothing lands between them.
+
 ### Errors
 
 Native-facing failures reject with a structured `QvacErrorAddonMarian`
