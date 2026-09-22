@@ -1548,6 +1548,33 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
   )
 });
 
+test('ggml-rpc-server overlay triggers wait for the server package layer', () => {
+  const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml');
+  const rpcMerge = read('.github/workflows/on-merge-ggml-rpc-server.yml');
+  const mergeGate = read('.github/workflows/pr-gate-merge.yml');
+  const fabricOverlay = /vcpkg-overlays\/ports\/qvac-fabric/;
+  const rpcGate = mergeGate.match(
+    /^ {12}ggml-rpc-server:\n(?:^ {14}- .+\n?)+/m,
+  )?.[0];
+
+  assert.doesNotMatch(
+    rpcPr,
+    fabricOverlay,
+    'the RPC workflow must not await package checks before the server package exists',
+  )
+  assert.doesNotMatch(
+    rpcMerge,
+    fabricOverlay,
+    'the RPC release workflow must not build before the server package exists',
+  )
+  assert.ok(rpcGate, 'the merge gate must retain its ggml-rpc-server mapping');
+  assert.doesNotMatch(
+    rpcGate,
+    fabricOverlay,
+    'the merge gate must not require an RPC prebuild before the server package exists',
+  )
+});
+
 test('RPC RDMA validation covers the server without replacing release artifacts', () => {
   const reusable = read('.github/workflows/reusable-prebuilds.yml')
   const nxPrebuilds = read('.github/workflows/prebuilds-nx.yml')

@@ -102,7 +102,6 @@ jobs:
               - "packages/infer-base/**"
             ggml-rpc-server:
               - "packages/ggml-rpc-server/**"
-              - "vcpkg-overlays/ports/qvac-fabric/**"
               - ".github/workflows/prebuilds-ggml-rpc-server.yml"
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
