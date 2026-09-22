@@ -3,7 +3,12 @@ import { resolve, sep, join } from 'bare-path'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import { sanitizePathComponent } from '@/utils/path-sanitize'
-import { checkPathWithinBase, validateAndJoinPath, isPathWithinBase } from '@/utils/path-security'
+import {
+  checkPathWithinBase,
+  validateAndJoinPath,
+  isPathWithinBase,
+  joinWithinBase
+} from '@/utils/path-security'
 import { extractTarStream } from '@/utils/archive'
 
 // ============== sanitizePathComponent ==============
@@ -94,6 +99,32 @@ test('isPathWithinBase: rejects escaped paths', function (t) {
 test('isPathWithinBase: accepts contained paths', function (t) {
   t.ok(isPathWithinBase('/safe/dir', '/safe/dir/file.txt'))
   t.ok(isPathWithinBase('/safe/dir', '/safe/dir'))
+})
+
+// ============== joinWithinBase ==============
+
+test('joinWithinBase: leaves clean names byte-identical', function (t) {
+  const base = '/base/dir'
+  const name = 'a1b2c3_acestep-5Hz-lm-0.6B-Q8_0.gguf'
+  t.is(joinWithinBase(base, name), join(base, name))
+})
+
+test('joinWithinBase: allows nested names that stay inside the base', function (t) {
+  const base = '/base/dir'
+  t.is(joinWithinBase(base, 'a1b2c3_models/model.gguf'), join(base, 'a1b2c3_models/model.gguf'))
+})
+
+test('joinWithinBase: throws on traversal', function (t) {
+  t.exception(() => joinWithinBase('/base/dir', 'a1b2c3_../../../etc/passwd'))
+  t.exception(() => joinWithinBase('/base/dir', 'a1b2c3_models/../../../../tmp/pwned.gguf'))
+})
+
+test('joinWithinBase: nests absolute-looking names under the base', function (t) {
+  t.is(joinWithinBase('/base/dir', '/etc/passwd'), join('/base/dir', 'etc/passwd'))
+})
+
+test('joinWithinBase: throws on null byte', function (t) {
+  t.exception(() => joinWithinBase('/base/dir', 'a1b2c3_model\0.gguf'))
 })
 
 // ============== archive extraction (zip-slip) ==============

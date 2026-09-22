@@ -47,3 +47,21 @@ export function validateAndJoinPath(basePath: string, ...components: string[]): 
 
   return resolved
 }
+
+/**
+ * Unlike validateAndJoinPath, this never rewrites the name, so cache filenames
+ * stay byte-stable and previously downloaded files keep hitting.
+ */
+export function joinWithinBase(basePath: string, name: string): string {
+  if (name.includes('\0')) {
+    throw new PathTraversalError(name, basePath)
+  }
+
+  const joined = path.join(basePath, name)
+
+  if (!isPathWithinBase(basePath, joined)) {
+    throw new PathTraversalError(name, basePath)
+  }
+
+  return joined
+}
