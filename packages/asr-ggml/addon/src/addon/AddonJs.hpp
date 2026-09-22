@@ -11,6 +11,7 @@
 #include <cmath>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -24,6 +25,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <js.h>
+#include <parakeet/fit.h>
 #include <whisper.h>
 
 #include "addon/AsrErrors.hpp"
@@ -342,6 +344,219 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
       });
 }
 JSCATCH
+
+// ── assessFit ────────────────────────────────────────────────────────────
+//
+// `engine` picks the fitter, the same value createInstance takes. A model the
+// fitter cannot read is an "error" status carrying the engine's own reason,
+// never a throw.
+//
+// Takes no instance and runs on the calling thread: both fitters read model
+// metadata only, never weight data, and return in milliseconds.
+
+inline js_value_t*
+whisperFit(js_env_t* env, js::Object request, const std::string& modelPath);
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+
+  const std::string modelPath =
+      request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+  auto engine = request.getOptionalProperty<js::String>(env, "engine");
+  if (engine.has_value()) {
+    const std::string name = engine->as<std::string>(env);
+    if (name == "whisper") {
+      return whisperFit(env, request, modelPath);
+    }
+    // An unrecognised name would otherwise run the parakeet fitter against a
+    // model it cannot read, which reports a broken model rather than a broken
+    // request.
+    if (name != "parakeet") {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Unknown fit engine: " + name);
+    }
+  }
+
+  ::parakeet::FitOptions options;
+  options.model_gguf_path = modelPath;
+
+  auto number = [&](const char* name) -> std::optional<double> {
+    auto value = request.getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<double>(env);
+  };
+
+  if (auto seconds = number("audioSeconds")) {
+    options.audio_seconds = static_cast<float>(*seconds);
+  }
+  if (auto layers = number("gpuLayers")) {
+    options.n_gpu_layers = static_cast<int>(*layers);
+  }
+  if (auto threads = number("threads")) {
+    options.n_threads = static_cast<int>(*threads);
+  }
+  if (auto frames = number("longFormWindowFrames")) {
+    options.long_form_window_frames = static_cast<int>(*frames);
+  }
+  if (auto frames = number("longFormContextFrames")) {
+    options.long_form_context_frames = static_cast<int>(*frames);
+  }
+  if (auto chunkMs = number("nemotronChunkMs")) {
+    options.nemotron_chunk_ms = static_cast<int>(*chunkMs);
+  }
+  if (auto margin = number("marginBytes")) {
+    options.margin_bytes = static_cast<uint64_t>(*margin);
+  }
+  if (auto dir = request.getOptionalProperty<js::String>(env, "backendsDir")) {
+    options.backends_dir = dir->as<std::string>(env);
+  }
+
+  const ::parakeet::FitResult fit = ::parakeet::fit_params(options);
+
+  const char* status = "error";
+  if (fit.status == ::parakeet::FitStatus::Success) {
+    status = "fits";
+  } else if (fit.status == ::parakeet::FitStatus::Failure) {
+    status = "does-not-fit";
+  }
+
+  auto result = js::Object::create(env);
+  auto text = [&](const char* name, const std::string& value) {
+    result.setProperty(env, name, js::String::create(env, value));
+  };
+  auto bytes = [&](const char* name, uint64_t value) {
+    result.setProperty(env, name, js::Number::create(env, static_cast<double>(value)));
+  };
+
+  text("status", status);
+  text("reason", fit.reason);
+  text("modelType", fit.model_type);
+  text("modelVariant", fit.model_variant);
+  text("deviceName", fit.device_name);
+  text("report", fit.report);
+  result.setProperty(env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
+  result.setProperty(
+      env,
+      "deviceSharesHostMemory",
+      js::Boolean::create(env, fit.device_shares_host_memory));
+  bytes("deviceFreeBytes", fit.device_free_bytes);
+  bytes("deviceTotalBytes", fit.device_total_bytes);
+  bytes("deviceBytes", fit.device.total_bytes);
+  bytes("weightsBytes", fit.device.weights_bytes);
+  bytes("encoderComputeBytes", fit.device.encoder_compute_bytes);
+  bytes("decoderStateBytes", fit.device.decoder_state_bytes);
+  bytes("decoderComputeBytes", fit.device.decoder_compute_bytes);
+  bytes("hostBytes", fit.host_bytes);
+
+  return result;
+}
+JSCATCH
+
+inline js_value_t*
+whisperFit(js_env_t* env, js::Object request, const std::string& modelPath) {
+  // whisper_fit_params reads ggml's global device registry and loads nothing
+  // itself, so whatever is registered here is its whole view of the machine.
+#if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
+  auto backendsDir = request.getOptionalProperty<js::String>(env, "backendsDir");
+  whisper::ensureBackendsLoaded(
+      backendsDir.has_value() ? backendsDir->as<std::string>(env)
+                              : std::string());
+#endif
+
+  whisper_fit_options options = whisper_fit_default_options();
+  options.model_path = modelPath.c_str();
+
+  std::string vadPath;
+  if (auto vad = request.getOptionalProperty<js::String>(env, "vadModelPath")) {
+    vadPath = vad->as<std::string>(env);
+    options.vad_model_path = vadPath.empty() ? nullptr : vadPath.c_str();
+  }
+
+  auto number = [&](const char* name) -> std::optional<double> {
+    auto value = request.getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<double>(env);
+  };
+  auto boolean = [&](const char* name) -> std::optional<bool> {
+    auto value = request.getOptionalProperty<js::Boolean>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<bool>(env);
+  };
+
+  // Whisper takes a GPU switch where parakeet takes a layer count, so the
+  // shared `gpuLayers` maps onto it rather than adding a second spelling.
+  if (auto layers = number("gpuLayers")) {
+    options.use_gpu = *layers > 0;
+  }
+  if (auto flashAttn = boolean("flashAttn")) {
+    options.flash_attn = *flashAttn;
+  }
+  if (auto device = number("gpuDevice")) {
+    options.gpu_device = static_cast<int>(*device);
+  }
+  if (auto decoders = number("decoders")) {
+    options.n_decoders = static_cast<int>(*decoders);
+  }
+  if (auto seconds = number("audioSeconds")) {
+    options.audio_seconds = static_cast<float>(*seconds);
+  }
+  if (auto margin = number("marginBytes")) {
+    options.margin_bytes = static_cast<uint64_t>(*margin);
+  }
+
+  whisper_fit_result fit{};
+  whisper_fit_params(&options, &fit);
+
+  const char* status = "error";
+  if (fit.status == WHISPER_FIT_SUCCESS) {
+    status = "fits";
+  } else if (fit.status == WHISPER_FIT_FAILURE) {
+    status = "does-not-fit";
+  }
+
+  auto result = js::Object::create(env);
+  auto text = [&](const char* name, const char* value) {
+    result.setProperty(env, name, js::String::create(env, std::string(value)));
+  };
+  auto bytes = [&](const char* name, uint64_t value) {
+    result.setProperty(
+        env, name, js::Number::create(env, static_cast<double>(value)));
+  };
+
+  text("status", status);
+  text("reason", fit.reason);
+  text("modelType", fit.model_type);
+  text("modelVariant", "");
+  text("deviceName", fit.device_name);
+  text("report", fit.report);
+  result.setProperty(
+      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
+  result.setProperty(
+      env,
+      "deviceSharesHostMemory",
+      js::Boolean::create(env, fit.device_shares_host_memory));
+  bytes("deviceFreeBytes", fit.device_free_bytes);
+  bytes("deviceTotalBytes", fit.device_total_bytes);
+  bytes("deviceBytes", fit.device.total_bytes);
+  bytes("weightsBytes", fit.device.weights_bytes);
+  bytes("kvBytes", fit.device.kv_bytes);
+  bytes("computeBytes", fit.device.compute_bytes);
+  bytes("vadBytes", fit.device.vad_bytes);
+  bytes("hostOverflowBytes", fit.device.host_overflow_bytes);
+  bytes("hostBytes", fit.host_bytes);
+
+  return result;
+}
 
 // ── getBackendInfo ───────────────────────────────────────────────────────
 //
