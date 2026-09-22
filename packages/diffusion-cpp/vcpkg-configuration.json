@@ -14,7 +14,9 @@
         "gtest",
         "picojson",
         "spirv-headers",
-        "stb"
+        "stb",
+        "antlr4",
+        "libuuid"
       ]
     }
   ]

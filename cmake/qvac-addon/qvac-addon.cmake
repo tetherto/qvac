@@ -15,6 +15,17 @@
 #   qvac_addon_link_fabric(${<name>} ${qvac_fabric_target})
 #   qvac_addon_finalize(${<name>} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
 #
+# Unmigrated addons that cannot call qvac_addon_preproject() (it also sets
+# overlay triplets and Android STL) still reuse the fuzz helpers:
+#
+#   include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+#   qvac_addon_fuzz_manifest()              # BEFORE project()
+#   project(<name> LANGUAGES C CXX)
+#   ...find_path(inference-addon-cpp)...
+#   qvac_addon_fuzz_only_return()           # skips engines + .bare when fuzz-only
+#   ...
+#   qvac_addon_add_fuzz_subdirectory()      # combined tests+fuzz configure
+#
 # qvac_addon_preproject / _project_setup / _use_fabric are macros on purpose:
 # they set directory-scope state (VCPKG_MANIFEST_FEATURES, the vcpkg toolchain,
 # ANDROID_STL, CMAKE_CXX_STANDARD, the fabric target var, ...) that must land in
@@ -23,6 +34,40 @@
 include_guard(GLOBAL)
 
 set(QVAC_ADDON_CMAKE_VERSION "0.3.0")
+
+# ---------------------------------------------------------------------------
+# qvac_addon_fuzz_manifest()
+#
+# Enable the vcpkg "fuzz" feature. Safe to call from unmigrated addons that
+# cannot use qvac_addon_preproject() (that macro also sets overlay triplets
+# and Android STL). Must run BEFORE project().
+# ---------------------------------------------------------------------------
+macro(qvac_addon_fuzz_manifest)
+  option(BUILD_FUZZING "Build fuzz targets (Google FuzzTest, from vcpkg)" OFF)
+  # The "fuzz" feature installs FuzzTest's dependency stack from the shared
+  # binary cache. See qvac_addon_enable_fuzztest() and
+  # docs/architecture/ADDON-FUZZING.md.
+  if(BUILD_FUZZING)
+    list(APPEND VCPKG_MANIFEST_FEATURES "fuzz")
+  endif()
+endmacro()
+
+macro(qvac_addon_add_fuzz_subdirectory)
+  if(BUILD_FUZZING)
+    enable_testing()
+    add_subdirectory(test/fuzz)
+  endif()
+endmacro()
+
+# Fuzz-only configure: BUILD_FUZZING without BUILD_TESTING. Builds just the
+# fuzz targets and skips the .bare module + engine find_package()s so pure
+# parse/transform drivers keep full ASan + LSan.
+macro(qvac_addon_fuzz_only_return)
+  if(BUILD_FUZZING AND NOT BUILD_TESTING)
+    qvac_addon_add_fuzz_subdirectory()
+    return()
+  endif()
+endmacro()
 
 # ---------------------------------------------------------------------------
 # qvac_addon_preproject()
@@ -34,16 +79,9 @@ set(QVAC_ADDON_CMAKE_VERSION "0.3.0")
 macro(qvac_addon_preproject)
   option(BUILD_TESTING "Build tests" OFF)
   option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
-  option(BUILD_FUZZING "Build fuzz targets (Google FuzzTest, from vcpkg)" OFF)
+  qvac_addon_fuzz_manifest()
   if(BUILD_TESTING)
     list(APPEND VCPKG_MANIFEST_FEATURES "tests")
-  endif()
-  # The "fuzz" feature installs the parts of FuzzTest's dependency stack that
-  # vcpkg can supply (GoogleTest, the ANTLR4 C++ runtime) so they come from the
-  # shared binary cache instead of a per-build-tree source compile. See
-  # qvac_addon_enable_fuzztest() and docs/architecture/ADDON-FUZZING.md.
-  if(BUILD_FUZZING)
-    list(APPEND VCPKG_MANIFEST_FEATURES "fuzz")
   endif()
 
   find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
@@ -515,8 +553,8 @@ endfunction()
 # would wrongly suppress the resolve a sibling directory needs; a CACHE entry would
 # survive into the next configure and leave link_fuzztest() undefined.
 #
-# Requires the "fuzz" vcpkg manifest feature, which qvac_addon_preproject()
-# enables whenever BUILD_FUZZING is on.
+# Requires the "fuzz" vcpkg manifest feature, which qvac_addon_fuzz_manifest()
+# (and therefore qvac_addon_preproject()) enables whenever BUILD_FUZZING is on.
 #
 # Pass -DFUZZTEST_FUZZING_MODE=ON at configure time for coverage-guided fuzzing
 # mode; the default (OFF) is FuzzTest's unit-test mode, which runs each

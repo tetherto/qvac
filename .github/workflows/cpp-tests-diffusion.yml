@@ -211,7 +211,7 @@ jobs:
           CC: clang
           CXX: clang++
         run: |
-          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON
+          bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON -D BUILD_FUZZING=OFF
           bare-make build --target addon-test
 
       - name: Build C++ tests
@@ -354,4 +354,21 @@ jobs:
             cat build/test/unit/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
+
+      # Fuzz-only after coverage artifacts are collected. libFuzzer + ASan is
+      # Linux-only; Darwin/Windows keep the unit-test path above.
+      - name: Build fuzz targets
+        if: ${{ matrix.os == 'ubuntu-24.04' }}
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          CC: clang
+          CXX: clang++
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        if: ${{ matrix.os == 'ubuntu-24.04' }}
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run test:scripts
+          npm run fuzz:run
 

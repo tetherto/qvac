@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Bounded FuzzTest coverage for GGUF video-capability inspection
+  (`inspectVideoModelCapabilities`), including a cap on untrusted GGUF string
+  lengths. Linux C++ CI runs the suite after unit tests. The inspector
+  compiles without stable-diffusion.cpp, so ASan and LeakSanitizer stay at
+  full strength. No public addon API changes.
+
 ## [0.24.0] - 2026-09-15
 
 This release adds explicit model-placement and layer-streaming controls, with

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <iosfwd>
 #include <string>
 
 namespace qvac_lib_inference_addon_sd {
@@ -26,5 +29,10 @@ struct VideoModelCapabilities {
  */
 VideoModelCapabilities
 inspectVideoModelCapabilities(const std::string& modelPath);
+
+VideoModelCapabilities inspectVideoModelCapabilities(std::istream& input);
+
+VideoModelCapabilities inspectVideoModelCapabilities(
+    const std::uint8_t* data, std::size_t size);
 
 } // namespace qvac_lib_inference_addon_sd
