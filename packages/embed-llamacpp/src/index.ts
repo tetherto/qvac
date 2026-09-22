@@ -2,6 +2,7 @@
 import fs = require("bare-fs");
 import path = require("bare-path");
 import QvacLogger = require("@qvac/logging");
+import { assessFit as assessFitImpl } from "./fit";
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   createJobHandler,
@@ -35,6 +36,13 @@ export type {
   IdMapIndexStorage,
 } from "./idMapIndex";
 export { BertInterface } from "./addon";
+export { assessFit } from "./fit";
+export type {
+  EmbedFitDevice,
+  EmbedFitRequest,
+  EmbedFitResult,
+  EmbedFitStatus
+} from "./fit";
 export type { QvacResponse };
 
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
@@ -279,6 +287,7 @@ const cjsExports = GGMLBert as typeof GGMLBert & {
   pickPrimaryGgufPath?: typeof pickPrimaryGgufPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
+  assessFit?: typeof assessFitImpl;
   readonly IdMapIndex?: typeof IdMapIndex;
   readonly IdMapIndexFilter?: typeof IdMapIndexFilter;
 };
@@ -286,6 +295,7 @@ cjsExports.default = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
+cjsExports.assessFit = assessFitImpl;
 Object.defineProperties(cjsExports, {
   IdMapIndex: {
     enumerable: true,

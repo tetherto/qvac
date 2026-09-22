@@ -6,6 +6,8 @@ import type { IdMapIndexFilter as ActualIdMapIndexFilter } from "./idMapIndex";
 export type { GGMLConfig, NumericLike, AddonConfigurationParams, RuntimeStats, Addon, } from "./addon";
 export type { IdMapIndexBitWidth, IdMapIndexOptions, IdMapIndexSearchResult, IdMapIndexStorage, } from "./idMapIndex";
 export { BertInterface } from "./addon";
+export { assessFit } from "./fit";
+export type { EmbedFitDevice, EmbedFitRequest, EmbedFitResult, EmbedFitStatus } from "./fit";
 export type { QvacResponse };
 export declare const IdMapIndex: typeof ActualIdMapIndex;
 export declare const IdMapIndexFilter: typeof ActualIdMapIndexFilter;

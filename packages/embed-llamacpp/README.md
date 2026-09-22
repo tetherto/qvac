@@ -16,6 +16,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running text e
   - [6. Generate embeddings for input sequence](#6-generate-embeddings-for-input-sequence)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
+- [Assessing fit](#assessing-fit)
 - [IdMapIndex vector database](#idmapindex-vector-database)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
@@ -226,6 +227,33 @@ The following table describes the expected behavior of `run` and `cancel` depend
 A second `run()` while a job is active is serialized by `exclusiveRunQueue` — it waits in the queue until the previous `_runInternal` returns, then enters the busy guard. Because the busy flag (`_hasActiveResponse`) is only cleared when the previous `response.await()` settles, the second call rejects with `"Cannot set new job: a job is already set or being processed"`. The queue eliminates race conditions but does not retry or buffer results; callers must wait for the previous `response.await()` to settle (or call `model.cancel()`) before issuing the next request.
 
 **Cancellation API:** Prefer cancelling from the model: `await model.cancel()`. This cancels the current job and the Promise resolves when the job has actually stopped (future-based in C++). You can also call `await response.cancel()` on the value returned by `run()`; it is equivalent and targets the same job. Both are no-op when idle.
+
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads GGUF metadata and never weight data, so the registry's weightless copy of a model answers the same as the model itself and the projection can run before anything is downloaded.
+
+```js
+const EmbedLlamacpp = require('@qvac/embed-llamacpp')
+
+const fit = EmbedLlamacpp.assessFit({
+  modelPath: '/models/embed.gguf',
+  params: { 'gpu-layers': '99', 'batch-size': '1024' }
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
+fit.gpuLayers // what fits, which is not always what the request asked for
+fit.ctxSize
+fit.devices // one row per device the model was assigned to, then a `host` row
+fit.deviceBytes // model, context and compute summed across the devices, host excluded
+fit.hostBytes // the same, for the trailing host row
+```
+
+`params` takes the load in llama's own CLI spelling without the leading `--`, exactly as the loader takes it: `gpu-layers`, `tensor-split`, `batch-size` and the rest. Each is dispatched through llama's argument table, so a placement pinned there reaches the projection. A setting llama does not recognise, or a flag asked to be off that can only assert itself, is `status: "error"` with `unsupported-config`.
+
+`minCtxSize` sets a floor the fitter may not reduce the context below, `marginBytes` the memory to leave free on every device, and `backendsDir` where the dynamically-loaded ggml backends live.
+
+A model the fitter cannot read is `status: "error"`; only a broken request throws.
 
 ## IdMapIndex vector database
 
