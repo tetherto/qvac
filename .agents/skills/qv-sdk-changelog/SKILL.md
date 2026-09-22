@@ -99,7 +99,7 @@ git log --first-parent --format='%s' <prev-lockstep-.0-backmerge>..<patch-backme
   numbers already in `changelog/<patch>/` if they re-list. If no tags exist,
   ask for `--base-commit` and `--base-version`.
 
-`--base-commit` is only the generate range. The published-tag audit after
+`--base-commit` is only the generate range. The published-version audit after
 generate is the consumer delta, for every package.
 
 ### Step 3: Generate Raw Changelog
@@ -132,7 +132,7 @@ giant row). It also writes `models.md`.
 
 `CHANGELOG.md` inline lines may stay at `MAX_INLINE_MODELS` (5) plus
 `(and N more)`. **`models.md` is the full added/removed set** — never truncated.
-PR bodies are often incomplete; if the published-tag audit disagrees, replace
+PR bodies are often incomplete; if the published-version audit disagrees, replace
 `models.md` from the export/constant diff, not from the PR body.
 
 If this package's public API *is* those exported constants, removed names are
@@ -162,7 +162,7 @@ After both filters, each section is trimmed to `MAX_INLINE_MODELS` (currently
 If after filtering a section is empty, it's omitted. If all sections are empty
 the bullet emits with no continuation lines.
 
-### After generate: published-tag audit (mandatory)
+### After generate: published-version audit (mandatory)
 
 `git log <base>..HEAD` is the generate range. It is not the consumer delta.
 
@@ -171,10 +171,13 @@ For **every** SDK pod package, after the raw files exist:
 ```bash
 DIR=$(node -e "console.log(require('./scripts/sdk/package-paths.cjs').getPackageDir('<slug>'))")
 PKG=$(node -e "console.log(require('./${DIR}/package.json').name)")
-PUBLISHED=$(npm view "$PKG" version)
-LAST=$(npm view "$PKG@$PUBLISHED" gitHead)
+LAST=$(npm view "$PKG@<base-version>" gitHead)
 git diff "$LAST" HEAD -- "$DIR"
 ```
+
+`<base-version>` is Step 2's `--base-version` (the version this cut supersedes).
+Do not `npm view "$PKG" version`: that is dist-tag `latest`, which is a
+different line when you cut a patch behind current.
 
 `sdk-v*` tags are not the published commit (`create-github-release.yml` omits
 `target_commitish`, so the tag lands on `main`). `gitHead` is packed with the
@@ -191,7 +194,7 @@ Fail-stop until the notes match the tree. Then write `CHANGELOG_LLM.md`.
 
 Always run this step. Do not ask the user — it's part of the skill.
 
-Author `CHANGELOG_LLM.md` from `changelog/<version>/` **after** the published-tag
+Author `CHANGELOG_LLM.md` from `changelog/<version>/` **after** the published-version
 audit, not from `git log`. Title and NPM line are this package (`@qvac/<pkg>`),
 not always sdk.
 
@@ -209,7 +212,7 @@ prefers it over `CHANGELOG.md`):
 node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<name> --update-root-changelog
 ```
 
-Do **not** re-run a full generate after the published-tag hand edits — that
+Do **not** re-run a full generate after the published-version hand edits — that
 overwrites `api.md` / `breaking.md` / `models.md`.
 
 **Format the generated markdown (mandatory).** `CHANGELOG_LLM.md` is authored by
@@ -414,7 +417,7 @@ Generates changelog files in `packages/<package>/changelog/<version>/`:
 
 - `CHANGELOG.md` - Main changelog
 - `breaking.md` - Breaking changes (`[bc]` PRs and catalog-as-API removals)
-- `api.md` - API changes (`[api]` PRs and published-tag export/route diffs)
+- `api.md` - API changes (`[api]` PRs and published-version export/route diffs)
 - `models.md` - Model changes (full set; `[mod]` PRs and constant diffs)
 - `CHANGELOG_LLM.md` - Human-readable version (always generated, see Step 4)
 - `announcement-post.txt` - Slack copy-paste post (always generated, see Step 5,
@@ -465,10 +468,11 @@ push, and keep this list to things that are cheap to prevent:
   contributor fork. `git push` with no remote follows `origin`.
 - **Do not skip SDK Pod Checks.** Workspace red vs published red is a real
   signal; `[skip-sdk-pod-checks]` is not the changelog fix.
-- **Notes vs last published `gitHead`, not only `git log`.** After generate,
-  audit exports / routes / constants against `npm view @qvac/<pkg> gitHead`.
-  Do not use `sdk-v*` for this. `git log <base>..HEAD` misses work that is
-  already an ancestor of `--base-commit`.
+- **Notes vs `--base-version` `gitHead`, not only `git log`.** After generate,
+  audit exports / routes / constants against
+  `npm view "$PKG@<base-version>" gitHead`. Do not use `sdk-v*` or npm `latest`.
+  `git log <base>..HEAD` misses work that is already an ancestor of
+  `--base-commit`.
 - **NOTICE JS wipe.** A failed `npm install` must not replace the JS section
   with zero deps. Restore JS from `HEAD`; keep successful model-scan adds.
 
@@ -485,10 +489,10 @@ Before completing:
 - [ ] `GIT_DIR` / `GIT_WORK_TREE` unset (or pointed at this worktree) so generate/git did not run in a parent repo
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
-- [ ] CHANGELOG_LLM.md authored from `changelog/<version>/` after the published-tag audit (this package's name on the title/NPM line)
+- [ ] CHANGELOG_LLM.md authored from `changelog/<version>/` after the published-version audit (this package's name on the title/NPM line)
 - [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `bun install` against unpublished lockstep deps)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
-- [ ] Published-tag audit done: `npm view` `gitHead` of the last published `@qvac/<pkg>` vs HEAD under `getPackageDir(<slug>)` (`$DIR`, not `package.json`) matches `api.md` / `breaking.md` / `models.md`
+- [ ] Published-version audit done: `npm view "$PKG@<base-version>" gitHead` vs HEAD under `getPackageDir(<slug>)` (`$DIR`, not `package.json`) matches `api.md` / `breaking.md` / `models.md`
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing

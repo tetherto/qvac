@@ -189,7 +189,7 @@ Always end with:
 - [ ] `@qvac/inference` released ahead of an SDK release that moves major.minor
 - [ ] Draft release **and** draft backmerge opened together per package
 - [ ] Release head is `chore/<slug>-<version>-changelog`, not `release-*`
-- [ ] `qv-sdk-changelog` completed for each hop (published-tag audit included)
+- [ ] `qv-sdk-changelog` completed for each hop (published-version audit included)
 - [ ] Blocked plugins (e.g. AI SDK mismatch) not force-released
 - [ ] No publish / workflow_dispatch for npm
 - [ ] Org-branch heads preferred (`tetherto/qvac`)

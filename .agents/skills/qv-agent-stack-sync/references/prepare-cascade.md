@@ -27,7 +27,7 @@ workflows trigger on push to `release-*` and publish to npm. Full naming:
 1. Bump `package.json` (and `openclaw.plugin.json` when present).
 2. Apply planned dep / peer ranges.
 3. Follow `qv-sdk-changelog` for this `--package` (lockstep `--base-commit`,
-   published-tag audit, LLM, prettier, NOTICE). Do not call the generator as a
+   published-version audit, LLM, prettier, NOTICE). Do not call the generator as a
    shortcut.
 4. `--package=sdk` only: `qv-sdk-inference-version` + docs Step 8 from
    `qv-sdk-changelog`. It writes the range from a published engine version, so
