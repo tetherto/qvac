@@ -331,7 +331,8 @@ SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
 SdModel::~SdModel() = default;
 
 // ---------------------------------------------------------------------------
-// load() -- maps SdCtxConfig -> sd_ctx_params_t, then calls new_sd_ctx()
+// fillCtxParams() -- maps SdCtxConfig -> sd_ctx_params_t, shared by load()
+// and assessFit()
 // ---------------------------------------------------------------------------
 
 void SdModel::fillCtxParams(CtxParams& out) const {
@@ -533,6 +534,97 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.vae_conv_direct = config_.vaeConvDirect;
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
 }
+
+SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
+  CtxParams ctx;
+  fillCtxParams(ctx);
+
+  FitOutcome outcome;
+
+  // `sd_fit_params` answers any pinned placement with SD_FIT_FAILURE, and a
+  // `device` of cpu reaches it as `preferred_gpu_backend`, which its planner
+  // does not read: it would judge a CPU load against the first GPU's budget.
+  const bool pinnedBackend =
+      ctx.params.backend != nullptr && ctx.params.backend[0] != '\0';
+  const bool pinnedParams =
+      !ctx.paramsBackend.empty() && ctx.paramsBackend != "*=cpu";
+  const bool cpuPreferred =
+      ctx.params.preferred_gpu_backend == SD_BACKEND_PREF_CPU;
+  // An OpenCL load is planned against the first enumerated GPU like any
+  // other, so it describes that load only where OpenCL is that device.
+  const bool openClElsewhere =
+      ctx.params.preferred_gpu_backend == SD_BACKEND_PREF_OPENCL &&
+      !sd_backend_selection::openClPreferenceMatchesEnumeratedGpu();
+  if (pinnedBackend || pinnedParams || cpuPreferred || openClElsewhere) {
+    outcome.status = SD_FIT_ERROR;
+    outcome.reason = "unsupported-config";
+    return outcome;
+  }
+
+  const bool offloadParamsToCpu = ctx.paramsBackend == "*=cpu";
+  ctx.params.backend = nullptr;
+  ctx.params.params_backend =
+      offloadParamsToCpu ? ctx.paramsBackend.c_str() : nullptr;
+
+  sd_fit_workload_t request{};
+  sd_fit_workload_init(&request);
+  request.prompt = workload.prompt.empty() ? nullptr : workload.prompt.c_str();
+  request.width = workload.width;
+  request.height = workload.height;
+  request.video_frames = workload.videoFrames;
+  request.vae_tiling_params.enabled = workload.vaeTiling;
+  request.vae_tiling_params.tile_size_x = workload.vaeTileSizeX;
+  request.vae_tiling_params.tile_size_y = workload.vaeTileSizeY;
+  request.vae_tiling_params.target_overlap = workload.vaeTileOverlap;
+
+  sd_fit_result_t result{};
+  try {
+    outcome.status = sd_fit_params(&ctx.params, &request, &result);
+  } catch (const std::exception& error) {
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::ERROR,
+        std::string("fit assessment threw: ") + error.what());
+    sd_fit_result_free(&result);
+    return outcome;
+  }
+  outcome.changed = result.changed;
+  outcome.vaeTiling = result.vae_tiling;
+  outcome.streamLayers = result.stream_layers;
+  if (result.backend != nullptr)
+    outcome.backend = result.backend;
+  if (result.params_backend != nullptr)
+    outcome.paramsBackend = result.params_backend;
+  if (result.report != nullptr)
+    outcome.report = result.report;
+  sd_fit_result_free(&result);
+
+  // With params offloaded the engine plans a placement for every module and
+  // always reports it as a change, so the plan is compared against the one an
+  // "*=cpu" load makes for itself.
+  if (outcome.status == SD_FIT_SUCCESS && outcome.changed &&
+      offloadParamsToCpu &&
+      sd_backend_selection::matchesCpuOffloadPlacement(
+          outcome.backend,
+          outcome.paramsBackend,
+          outcome.vaeTiling,
+          outcome.streamLayers,
+          workload.vaeTiling,
+          config_.streamLayers)) {
+    outcome.changed = false;
+  }
+
+  if (outcome.status == SD_FIT_SUCCESS) {
+    outcome.reason = outcome.changed ? "does-not-fit" : "fits";
+  } else if (outcome.status == SD_FIT_FAILURE) {
+    outcome.reason = "does-not-fit";
+  }
+
+  return outcome;
+}
+
+// ---------------------------------------------------------------------------
+// load() -- builds the context params, then calls new_sd_ctx()
+// ---------------------------------------------------------------------------
 
 void SdModel::load() {
   if (isLoaded())

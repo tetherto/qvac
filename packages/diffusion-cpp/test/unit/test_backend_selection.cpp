@@ -200,3 +200,21 @@ TEST_F(SdBackendSelectionTest, SelectMainGpuNoMatchingClassIsNullopt) {
   EXPECT_FALSE(selectMainGpuName(devices, kIntegrated).has_value());
   EXPECT_FALSE(selectMainGpuName(devices, indexSpec(1)).has_value());
 }
+
+TEST_F(
+    SdBackendSelectionTest, OpenClPreferenceMatchesWhenOpenClEnumeratesFirst) {
+  EXPECT_TRUE(openClPreferenceMatchesFirstGpu({"GPUOpenCL", "Vulkan0"}));
+}
+
+TEST_F(
+    SdBackendSelectionTest, OpenClPreferenceMissesWhenVulkanEnumeratesFirst) {
+  EXPECT_FALSE(openClPreferenceMatchesFirstGpu({"Vulkan0", "GPUOpenCL"}));
+}
+
+TEST_F(SdBackendSelectionTest, OpenClPreferenceIgnoresCase) {
+  EXPECT_TRUE(openClPreferenceMatchesFirstGpu({"gpuOpenCL"}));
+}
+
+TEST_F(SdBackendSelectionTest, OpenClPreferenceMissesWithNoGpu) {
+  EXPECT_FALSE(openClPreferenceMatchesFirstGpu({}));
+}
