@@ -1,32 +1,22 @@
 export interface EmbedFitRequest {
     /** Absolute path to the GGUF, or to the registry's weightless copy. */
     modelPath: string;
-    /** Layers to offload; a negative value means all of them. */
-    gpuLayers?: number;
-    mainGpu?: number;
-    /** 0 lets the fitter choose, which is the only case it may reduce. */
-    ctxSize?: number;
-    batchSize?: number;
-    ubatchSize?: number;
+    /**
+     * The load, in llama's own CLI spelling without the leading `--`, exactly as
+     * the loader takes it: `gpu-layers`, `tensor-split`, `batch-size` and the
+     * rest. Each is dispatched through llama's argument table, so a placement
+     * pinned here reaches the projection.
+     *
+     * A setting llama does not recognise, or a flag asked to be off that can only
+     * assert itself, is `status: "error"` with `unsupported-config`.
+     */
+    params?: Record<string, string>;
     /** Floor the fitter may not reduce the context below. */
     minCtxSize?: number;
     /** Memory to leave free on every device. */
     marginBytes?: number;
     /** Where the dynamically-loaded ggml backends live. */
     backendsDir?: string;
-    /**
-     * The fitter rewrites only fields still holding a llama default, so one left
-     * unset is chosen by it rather than matched to the load you intend.
-     */
-    splitMode?: number;
-    /** `ggml_type` of the K cache; a quantised cache needs less memory. */
-    typeK?: number;
-    /** `ggml_type` of the V cache. */
-    typeV?: number;
-    /** `llama_flash_attn_type`; changes both cache and working memory. */
-    flashAttnType?: number;
-    /** Whether the load uses the full-size sliding-window cache. */
-    swaFull?: boolean;
 }
 export type EmbedFitStatus = 'fits' | 'does-not-fit' | 'error';
 export interface EmbedFitDevice {
@@ -39,7 +29,7 @@ export interface EmbedFitDevice {
 }
 export interface EmbedFitResult {
     status: EmbedFitStatus;
-    /** `fits`, `does-not-fit`, `model-unreadable` or `no-backend-device`. */
+    /** `fits`, `does-not-fit`, `model-unreadable`, `no-backend-device` or `unsupported-config`. */
     reason: string;
     /** What fits, which is not always what the request asked for. */
     gpuLayers: number;
