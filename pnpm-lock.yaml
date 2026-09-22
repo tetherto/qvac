@@ -381,8 +381,8 @@ importers:
         specifier: 8.5.2
         version: 8.5.2(@types/node@25.9.5)
       '@qvac/sdk':
-        specifier: ^0.19.0
-        version: 0.19.1(33e4f26373a3b0f577071c644d5fc8f3)
+        specifier: ^0.20.0
+        version: link:../sdk
       close-with-grace:
         specifier: ^2.1.0
         version: 2.5.0
