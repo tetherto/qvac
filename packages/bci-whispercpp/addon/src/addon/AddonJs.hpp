@@ -1,8 +1,10 @@
 #pragma once
 
 #include <any>
+#include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -86,6 +88,117 @@ struct JsTranscriptArrayOutputHandler
               return jsOutput;
             }) {}
 };
+
+// ── assessFit ────────────────────────────────────────────────────────────
+//
+// Projects one BCI model against the memory free right now. Args: [request],
+// carrying the model path and the workload.
+//
+// Takes no instance and loads nothing: the fitter reads model metadata only. A
+// model it cannot read is an "error" status carrying whisper's own reason.
+//
+// Covers the whisper half of a BCI load. The embedder has no fitter, so its
+// file size is reported separately and is not part of the projection.
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+
+  const std::string modelPath =
+      request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+
+  // whisper_fit_params reads ggml's global device registry and loads nothing
+  // itself, so whatever is registered here is its whole view of the machine.
+#if defined(__ANDROID__) || defined(__linux__)
+  auto backendsDir = request.getOptionalProperty<js::String>(env, "backendsDir");
+  ensureBackendsLoaded(
+      backendsDir.has_value() ? backendsDir->as<std::string>(env)
+                              : std::string());
+#endif
+
+  whisper_fit_options options = whisper_fit_default_options();
+  options.model_path = modelPath.c_str();
+
+  auto number = [&](const char* name) -> std::optional<double> {
+    auto value = request.getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<double>(env);
+  };
+
+  if (auto layers = number("gpuLayers")) {
+    options.use_gpu = *layers > 0;
+  }
+  if (auto device = number("gpuDevice")) {
+    options.gpu_device = static_cast<int>(*device);
+  }
+  if (auto decoders = number("decoders")) {
+    options.n_decoders = static_cast<int>(*decoders);
+  }
+  if (auto seconds = number("audioSeconds")) {
+    options.audio_seconds = static_cast<float>(*seconds);
+  }
+  if (auto margin = number("marginBytes")) {
+    options.margin_bytes = static_cast<uint64_t>(*margin);
+  }
+
+  whisper_fit_result fit{};
+  whisper_fit_params(&options, &fit);
+
+  const char* status = "error";
+  if (fit.status == WHISPER_FIT_SUCCESS) {
+    status = "fits";
+  } else if (fit.status == WHISPER_FIT_FAILURE) {
+    status = "does-not-fit";
+  }
+
+  uint64_t embedderFileBytes = 0;
+  if (auto embedder =
+          request.getOptionalProperty<js::String>(env, "embedderPath")) {
+    std::error_code error;
+    const auto size =
+        std::filesystem::file_size(embedder->as<std::string>(env), error);
+    if (!error) {
+      embedderFileBytes = size;
+    }
+  }
+
+  auto result = js::Object::create(env);
+  auto text = [&](const char* name, const char* value) {
+    result.setProperty(env, name, js::String::create(env, std::string(value)));
+  };
+  auto bytes = [&](const char* name, uint64_t value) {
+    result.setProperty(
+        env, name, js::Number::create(env, static_cast<double>(value)));
+  };
+
+  text("status", status);
+  text("reason", fit.reason);
+  text("modelType", fit.model_type);
+  text("deviceName", fit.device_name);
+  text("report", fit.report);
+  result.setProperty(
+      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
+  result.setProperty(
+      env,
+      "deviceSharesHostMemory",
+      js::Boolean::create(env, fit.device_shares_host_memory));
+  bytes("deviceFreeBytes", fit.device_free_bytes);
+  bytes("deviceTotalBytes", fit.device_total_bytes);
+  bytes("deviceBytes", fit.device.total_bytes);
+  bytes("weightsBytes", fit.device.weights_bytes);
+  bytes("kvBytes", fit.device.kv_bytes);
+  bytes("computeBytes", fit.device.compute_bytes);
+  bytes("hostOverflowBytes", fit.device.host_overflow_bytes);
+  bytes("hostBytes", fit.host_bytes);
+  bytes("embedderFileBytes", embedderFileBytes);
+
+  return result;
+}
+JSCATCH
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
