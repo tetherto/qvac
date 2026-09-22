@@ -16,6 +16,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [6. Run Inference](#6-run-inference)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
+- [Assessing fit](#assessing-fit)
 - [Fine-tuning](#fine-tuning)
 - [Quickstart Example](#quickstart-example)
 - [Other Examples](#other-examples)
@@ -359,6 +360,33 @@ So a cancelled batch that contained queued prompts rejects with `Cancelled`; cal
 
 Cancelling a queued job resolves immediately, whether or not the slots it was waiting for are held by an unrelated run — you never wait out someone else's generation to cancel your own queued work.
 
+
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads GGUF metadata and never weight data, so the registry's weightless copy of a model answers the same as the model itself and the projection can run before anything is downloaded.
+
+```js
+const LlmLlamacpp = require('@qvac/llm-llamacpp')
+
+const fit = LlmLlamacpp.assessFit({
+  modelPath: '/models/model.gguf',
+  params: { 'ctx-size': '4096', 'gpu-layers': '99' }
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
+fit.gpuLayers // what fits, which is not always what the request asked for
+fit.ctxSize
+fit.devices // one row per device the model was assigned to, then a `host` row
+fit.deviceBytes // model, context and compute summed across the devices, host excluded
+fit.hostBytes // the same, for the trailing host row
+```
+
+`params` takes the load in llama's own CLI spelling without the leading `--`, exactly as the loader takes it: `ctx-size`, `tensor-split`, `override-tensor`, `cpu-moe`, `no-kv-offload` and the rest. Each is dispatched through llama's argument table, so a placement pinned there reaches the projection. A setting llama does not recognise, or a flag asked to be off that can only assert itself, is `status: "error"` with `unsupported-config`.
+
+`minCtxSize` sets a floor the fitter may not reduce the context below, `marginBytes` the memory to leave free on every device, and `backendsDir` where the dynamically-loaded ggml backends live.
+
+A model the fitter cannot read is `status: "error"`; only a broken request throws.
 
 ## Fine-tuning
 
