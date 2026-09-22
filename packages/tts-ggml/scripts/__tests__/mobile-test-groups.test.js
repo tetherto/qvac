@@ -23,7 +23,7 @@ const EXPECTED_GROUPS = [
 const EXPECTED_ASSIGNMENTS = {
   chatterbox: ['runAddonTest', 'runChatterboxKvCacheGpuTest', 'runChatterboxSpeedTest'],
   'chatterbox-mtl': ['runChatterboxMtlTest'],
-  supertonic: ['runSupertonicTest'],
+  supertonic: ['runSupertonicTest', 'runFitTest'],
   'supertonic-mtl': ['runSupertonicMtlTest'],
   supertonic3: ['runSupertonic3QuantTest'],
   parler: ['runParlerTest'],
