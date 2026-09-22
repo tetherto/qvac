@@ -334,13 +334,8 @@ SdModel::~SdModel() = default;
 // load() -- maps SdCtxConfig -> sd_ctx_params_t, then calls new_sd_ctx()
 // ---------------------------------------------------------------------------
 
-void SdModel::load() {
-  if (isLoaded())
-    return;
-
-  const auto tLoadStart = std::chrono::steady_clock::now();
-
-  sd_ctx_params_t params{};
+void SdModel::fillCtxParams(CtxParams& out) const {
+  sd_ctx_params_t& params = out.params;
   sd_ctx_params_init(&params);
 
   // -- Model paths ------------------------------------------------------------
@@ -431,9 +426,9 @@ void SdModel::load() {
         "Effective stable-diffusion max_vram '" + config_.maxVramSpec + "'");
   }
 
-  std::string paramsBackend =
-      qvac_lib_inference_addon_sd::effectiveParamsBackendSpec(
-          config_.paramsBackendSpec, config_.offloadToCpu);
+  std::string& paramsBackend = out.paramsBackend;
+  paramsBackend = qvac_lib_inference_addon_sd::effectiveParamsBackendSpec(
+      config_.paramsBackendSpec, config_.offloadToCpu);
   if (config_.offloadToCpu &&
       qvac_lib_inference_addon_sd::paramsBackendSpecOverridesCpuDefault(
           config_.paramsBackendSpec)) {
@@ -469,7 +464,7 @@ void SdModel::load() {
   params.preferred_gpu_backend =
       sd_backend_selection::preferredGpuBackendForConfigDevice(config_.device);
 
-  std::string mainGpuBackend;
+  std::string& mainGpuBackend = out.mainGpuBackend;
   if (!config_.backendSpec.empty()) {
     params.backend = config_.backendSpec.c_str();
     if (!config_.mainGpu.empty()) {
@@ -537,6 +532,17 @@ void SdModel::load() {
   params.diffusion_conv_direct = config_.diffusionConvDirect;
   params.vae_conv_direct = config_.vaeConvDirect;
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
+}
+
+void SdModel::load() {
+  if (isLoaded())
+    return;
+
+  const auto tLoadStart = std::chrono::steady_clock::now();
+
+  CtxParams ctx;
+  fillCtxParams(ctx);
+  sd_ctx_params_t& params = ctx.params;
 
   sd_ctx_t* raw = new_sd_ctx(&params);
   if (!raw) {
