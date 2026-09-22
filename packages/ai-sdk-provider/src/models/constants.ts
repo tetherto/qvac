@@ -1376,7 +1376,7 @@ export const allModels = [
     endpointCategory: 'chat'
   } as const,
   {
-    name: 'BITNET_B1_58_3B_INST_TQ2_0',
+    name: 'BITNET_B1_58_3B_BASE_TQ2_0',
     src: `registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf',
     registrySource: 's3',
@@ -1394,7 +1394,7 @@ export const allModels = [
     endpointCategory: 'chat'
   } as const,
   {
-    name: 'BITNET_0_7B_INST_TQ2_0',
+    name: 'BITNET_0_7B_BASE_TQ2_0',
     src: `registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf',
     registrySource: 's3',
@@ -1412,7 +1412,7 @@ export const allModels = [
     endpointCategory: 'chat'
   } as const,
   {
-    name: 'BITNET_1B_INST_TQ2_0',
+    name: 'BITNET_1B_BASE_TQ2_0',
     src: `registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf`,
     registryPath: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf',
     registrySource: 's3',
@@ -19725,9 +19725,9 @@ export const MMPROJ_QWEN3_5_2B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModel
 export const MMPROJ_QWEN3_5_4B_MULTIMODAL_Q8_0: ModelConstant<'chat'> = allModels[67]
 export const OCR_0_6B_MULTIMODAL_Q4_K_M: ModelConstant<'chat'> = allModels[68]
 export const MMPROJ_OCR_0_6B_MULTIMODAL_F16: ModelConstant<'chat'> = allModels[69]
-export const BITNET_B1_58_3B_INST_TQ2_0: ModelConstant<'chat'> = allModels[70]
-export const BITNET_0_7B_INST_TQ2_0: ModelConstant<'chat'> = allModels[71]
-export const BITNET_1B_INST_TQ2_0: ModelConstant<'chat'> = allModels[72]
+export const BITNET_B1_58_3B_BASE_TQ2_0: ModelConstant<'chat'> = allModels[70]
+export const BITNET_0_7B_BASE_TQ2_0: ModelConstant<'chat'> = allModels[71]
+export const BITNET_1B_BASE_TQ2_0: ModelConstant<'chat'> = allModels[72]
 export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD: ModelConstant<'chat'> = allModels[73]
 export const DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS: ModelConstant<'chat'> = allModels[74]
 export const GPT_OSS_120B_INST_Q4_K_M_SHARD: ModelConstant<'chat'> = allModels[75]

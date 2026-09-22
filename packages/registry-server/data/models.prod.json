@@ -3166,34 +3166,34 @@
     "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
-    "description": "Bitnet 3B model",
-    "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
+    "description": "BitNet b1.58 3B base model",
+    "notes": "TQ2_0 quantization of the pretrained https://huggingface.co/1bitLLM/bitnet_b1_58-3B checkpoint (not instruction-tuned)",
     "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "3B",
-    "tags": ["generation", "instruct", "bitnet"]
+    "tags": ["generation", "base", "bitnet"]
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-large",
-    "description": "Bitnet 0.7B model",
-    "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-large",
+    "description": "BitNet b1.58 0.7B base model",
+    "notes": "TQ2_0 quantization of the pretrained https://huggingface.co/1bitLLM/bitnet_b1_58-large checkpoint (not instruction-tuned)",
     "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "0.7B",
-    "tags": ["generation", "instruct", "bitnet"]
+    "tags": ["generation", "base", "bitnet"]
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
-    "description": "Bitnet 1B model",
-    "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
+    "description": "BitNet b1.58 1B base model",
+    "notes": "TQ2_0 quantization of the pretrained https://huggingface.co/1bitLLM/bitnet_b1_58-xl checkpoint (not instruction-tuned)",
     "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "1B",
-    "tags": ["generation", "instruct", "bitnet"]
+    "tags": ["generation", "base", "bitnet"]
   },
   {
     "source": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/8342a6a97b2d18acae5d62124735c39ba23060e2/flux-2-klein-4b-Q4_0.gguf",

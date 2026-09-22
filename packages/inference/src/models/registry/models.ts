@@ -1458,7 +1458,7 @@ export const models = [
     params: '0.6B'
   },
   {
-    name: 'BITNET_B1_58_3B_INST_TQ2_0',
+    name: 'BITNET_B1_58_3B_BASE_TQ2_0',
     registryPath: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf',
     registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
@@ -1474,7 +1474,7 @@ export const models = [
     params: '3B'
   },
   {
-    name: 'BITNET_0_7B_INST_TQ2_0',
+    name: 'BITNET_0_7B_BASE_TQ2_0',
     registryPath: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf',
     registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
@@ -1490,7 +1490,7 @@ export const models = [
     params: '0.7B'
   },
   {
-    name: 'BITNET_1B_INST_TQ2_0',
+    name: 'BITNET_1B_BASE_TQ2_0',
     registryPath: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf',
     registrySource: 's3',
     blobCoreKey: '6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963',
@@ -20080,8 +20080,8 @@ export const MMPROJ_OCR_0_6B_MULTIMODAL_F16 = {
   params: models[77].params
 } as const
 
-export const BITNET_B1_58_3B_INST_TQ2_0 = {
-  name: 'BITNET_B1_58_3B_INST_TQ2_0',
+export const BITNET_B1_58_3B_BASE_TQ2_0 = {
+  name: 'BITNET_B1_58_3B_BASE_TQ2_0',
   src: `registry://${models[78].registrySource}/${models[78].registryPath}`,
   registryPath: models[78].registryPath,
   registrySource: models[78].registrySource,
@@ -20098,8 +20098,8 @@ export const BITNET_B1_58_3B_INST_TQ2_0 = {
   params: models[78].params
 } as const
 
-export const BITNET_0_7B_INST_TQ2_0 = {
-  name: 'BITNET_0_7B_INST_TQ2_0',
+export const BITNET_0_7B_BASE_TQ2_0 = {
+  name: 'BITNET_0_7B_BASE_TQ2_0',
   src: `registry://${models[79].registrySource}/${models[79].registryPath}`,
   registryPath: models[79].registryPath,
   registrySource: models[79].registrySource,
@@ -20116,8 +20116,8 @@ export const BITNET_0_7B_INST_TQ2_0 = {
   params: models[79].params
 } as const
 
-export const BITNET_1B_INST_TQ2_0 = {
-  name: 'BITNET_1B_INST_TQ2_0',
+export const BITNET_1B_BASE_TQ2_0 = {
+  name: 'BITNET_1B_BASE_TQ2_0',
   src: `registry://${models[80].registrySource}/${models[80].registryPath}`,
   registryPath: models[80].registryPath,
   registrySource: models[80].registrySource,

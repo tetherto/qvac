@@ -2081,8 +2081,8 @@ BERGAMOT_ZH_EN = ModelConstant(
     params="",
 )
 
-BITNET_0_7B_INST_TQ2_0 = ModelConstant(
-    name="BITNET_0_7B_INST_TQ2_0",
+BITNET_0_7B_BASE_TQ2_0 = ModelConstant(
+    name="BITNET_0_7B_BASE_TQ2_0",
     src="registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     registry_path="qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     registry_source="s3",
@@ -2099,8 +2099,8 @@ BITNET_0_7B_INST_TQ2_0 = ModelConstant(
     params="0.7B",
 )
 
-BITNET_1B_INST_TQ2_0 = ModelConstant(
-    name="BITNET_1B_INST_TQ2_0",
+BITNET_1B_BASE_TQ2_0 = ModelConstant(
+    name="BITNET_1B_BASE_TQ2_0",
     src="registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     registry_path="qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     registry_source="s3",
@@ -2117,8 +2117,8 @@ BITNET_1B_INST_TQ2_0 = ModelConstant(
     params="1B",
 )
 
-BITNET_B1_58_3B_INST_TQ2_0 = ModelConstant(
-    name="BITNET_B1_58_3B_INST_TQ2_0",
+BITNET_B1_58_3B_BASE_TQ2_0 = ModelConstant(
+    name="BITNET_B1_58_3B_BASE_TQ2_0",
     src="registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     registry_path="qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     registry_source="s3",
@@ -7759,9 +7759,9 @@ __all__ = [
     "BERGAMOT_UK_EN",
     "BERGAMOT_VI_EN",
     "BERGAMOT_ZH_EN",
-    "BITNET_0_7B_INST_TQ2_0",
-    "BITNET_1B_INST_TQ2_0",
-    "BITNET_B1_58_3B_INST_TQ2_0",
+    "BITNET_0_7B_BASE_TQ2_0",
+    "BITNET_1B_BASE_TQ2_0",
+    "BITNET_B1_58_3B_BASE_TQ2_0",
     "CLIP_VISION_H",
     "DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
