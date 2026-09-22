@@ -161,7 +161,8 @@ export async function runParakeetStreamEou(
  * must carry timings and the parakeet-only `isEndOfTurn` / `startsWord` flags.
  *
  * Streaming segment ids and timings are per-window, so unlike the batch
- * check this does not assert audio-time ordering.
+ * check this asserts each segment's own interval but not audio-time ordering
+ * across segments.
  */
 export async function runParakeetStreamMetadata(
   modelId: string,
@@ -208,11 +209,16 @@ export async function runParakeetStreamMetadata(
       if (event.type === 'text') textEvents++
     }
 
-    if (segments.length === 0) {
+    // Metadata mode replaces text events with segment events outright, so any
+    // text event is a failure however many segments came alongside it.
+    if (textEvents > 0) {
       return {
         passed: false,
-        output: `metadata: true produced no segment events (${textEvents} plain text event(s) instead)`
+        output: `metadata: true still yielded ${textEvents} plain text event(s) alongside ${segments.length} segment(s)`
       }
+    }
+    if (segments.length === 0) {
+      return { passed: false, output: 'metadata: true produced no segment events' }
     }
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i]!
@@ -224,6 +230,14 @@ export async function runParakeetStreamMetadata(
       }
       if (typeof seg.endMs !== 'number' || !Number.isFinite(seg.endMs)) {
         return { passed: false, output: `Segment ${i}: missing/invalid endMs` }
+      }
+      // Timings may restart between windows, so only each segment's own
+      // interval is checked, not the order across segments.
+      if (seg.endMs < seg.startMs) {
+        return {
+          passed: false,
+          output: `Segment ${i}: endMs (${seg.endMs}) < startMs (${seg.startMs})`
+        }
       }
       const flags = checkParakeetFlags(seg, i)
       if (flags) return flags
