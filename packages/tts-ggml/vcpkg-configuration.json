@@ -1,7 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "b9ca3b07a85cd88fdd30730c662b4c138ede1ca3",
+    "baseline": "85edf10229b78b4a3a04a28353c62114327b14f4",
+    "reference": "QVAC-25373/moss-directable-speech",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
