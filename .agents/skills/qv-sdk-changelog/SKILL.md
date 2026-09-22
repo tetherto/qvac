@@ -94,7 +94,8 @@ git log --first-parent --format='%s' <prev-lockstep-.0-backmerge>..<patch-backme
 ```
 
 - **Standalone** (cli, plugins, anything not lockstep): omit the flags. The
-  generator auto-detects (minor → previous `.0`, patch → previous tag). A
+  generator auto-detects (minor → previous `.0`, patch → highest tag).
+  Cutting a patch behind current needs `--base-version` passed explicitly. A
   previous `.0` still includes main-only work in the patch window; drop PR
   numbers already in `changelog/<patch>/` if they re-list. If no tags exist,
   ask for `--base-commit` and `--base-version`.
