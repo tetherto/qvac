@@ -69,11 +69,28 @@ export const testResultSchema = z.object({
   consumerId: z.string(),
   testId: z.string().describe('Test identifier'),
   uniqueTestId: z.string().describe('Unique test instance ID'),
-  outcome: z.enum(['success', 'failure', 'skipped']),
+  outcome: z
+    .enum(['success', 'failure', 'skipped', 'incomplete'])
+    .describe(
+      'skipped: platform policy says the test does not apply here — a statement about the ' +
+        'platform. incomplete: the test applies but this client has not implemented what it ' +
+        'needs — a statement about the client, and a debt with an owner. Neither is a pass'
+    ),
   duration: z.number().describe('Test duration in milliseconds including retry if any'),
   timestamp: z.string(),
   error: z.string().optional().describe('Error message if failed'),
   output: z.string().optional().describe('Test output'),
+  incompleteReason: z
+    .string()
+    .optional()
+    .describe('Why this client could not run the test; required when outcome is incomplete'),
+  assertedValue: z
+    .unknown()
+    .optional()
+    .describe(
+      'The value the assertion ran against, summarised. Captured so two clients can be ' +
+        'compared on what they built from the same stream, not just on their verdicts'
+    ),
   retried: z.boolean().optional(),
   retryPassed: z.boolean().optional(),
   retryOutput: z.string().optional(),

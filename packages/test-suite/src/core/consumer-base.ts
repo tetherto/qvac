@@ -1,5 +1,6 @@
 import type { MqttClient } from 'mqtt'
 import type { TestDefinition } from '../types/test-definition.js'
+import { StepInterpreter, type StepBindings } from './step-interpreter.js'
 import {
   registerAckSchema,
   type ProfilerExport,
@@ -11,7 +12,23 @@ import { buildMqttSessionEndOptions } from '../utils/mqtt-session.js'
 export interface TestResult {
   passed: boolean
   output: string
+  /** Platform policy says this test does not apply here. About the platform. */
   skipped?: boolean
+  /**
+   * The test applies, but this client has not implemented what it needs: no
+   * step body, no named assertion, no imperative version yet. About the
+   * client, and a debt with an owner — which is why it is kept distinct from
+   * both `skipped` and a plain failure.
+   */
+  incomplete?: boolean
+  /** Why the client could not run it. Required when `incomplete` is set. */
+  incompleteReason?: string
+  /**
+   * The value the assertion ran against, already summarised by the client.
+   * Carried into the report so two clients can be compared on what they built
+   * from the same stream rather than only on their verdicts.
+   */
+  assertedValue?: unknown
 }
 
 export interface TestExecutor {
@@ -30,6 +47,17 @@ export interface TestExecutor {
   reload?(testId: string, context: unknown): Promise<void>
   getProfilingData?(): ProfilerExport | undefined
   initProfiling?(): void
+  /**
+   * When present, a definition carrying `steps` is run by the shared step
+   * interpreter instead of this executor's hand-written body. The bindings are
+   * how the framework reaches the SDK under test without knowing anything
+   * about it.
+   *
+   * This is what makes JS the reference implementation rather than merely the
+   * first one: the same interpreter, over the same catalog, as every other
+   * client.
+   */
+  stepBindings?: StepBindings
 }
 
 export interface ConsumerCallbacks {
@@ -92,12 +120,14 @@ export class ConsumerBase {
   protected testsPassed = 0
   protected testsFailed = 0
   protected testsSkipped = 0
+  protected testsIncomplete = 0
   protected testsRetried = 0
   protected testsRetriedPassed = 0
   protected isProcessingTest = false
   protected shutdownRequested = false
   protected callbacks: ConsumerCallbacks
   private messageQueue: Promise<void> = Promise.resolve()
+  private stepInterpreter?: StepInterpreter
   private heartbeatTimer?: ReturnType<typeof setInterval>
   private profilingCheckpointTimer?: ReturnType<typeof setInterval>
   private profilingCheckpointIntervalMs = readProfilingCheckpointIntervalMs()
@@ -467,11 +497,39 @@ export class ConsumerBase {
     this.shutdown()
   }
 
-  protected getTestSkipReason(definition: TestDefinition): string | null {
-    if (definition.skip?.platforms?.includes(this.platform)) {
-      return definition.skip.reason
+  private stepsRunner(): StepInterpreter {
+    if (!this.stepInterpreter) {
+      this.stepInterpreter = new StepInterpreter(this.executor.stepBindings!)
     }
-    return null
+    return this.stepInterpreter
+  }
+
+  /**
+   * Whether platform policy skips this test here, and why.
+   *
+   * The vocabulary distinguishes OS as well as consumer type — `desktop-macos`,
+   * `electron-linux`, `mobile-ios` — because such skips already exist in
+   * practice. Matching is by segment prefix so the two can coexist during the
+   * move: a catalog entry of `desktop` still matches a leg registering as
+   * `desktop-macos`, and an entry of `desktop-macos` matches only that OS.
+   *
+   * Prefix, not substring: `desktop` must not match `desktop-python`'s sibling
+   * `desktop-pythonista`, and a bare `mobile` must not match `mobile-ios`
+   * accidentally where the author meant only Android.
+   */
+  protected getTestSkipReason(definition: TestDefinition): string | null {
+    const declared = definition.skip?.platforms
+    if (!declared?.length) return null
+
+    const segments = this.platform.split('-')
+    const matches = declared.some((entry) => {
+      if (entry === this.platform) return true
+      const entrySegments = entry.split('-')
+      if (entrySegments.length >= segments.length) return false
+      return entrySegments.every((segment, index) => segment === segments[index])
+    })
+
+    return matches ? (definition.skip?.reason ?? null) : null
   }
 
   protected async executeTest(uniqueTestId: string, definition: TestDefinition) {
@@ -576,8 +634,14 @@ export class ConsumerBase {
       // hits the reload+retry path. Other throws keep the original fail-fast.
       let result: TestResult
       try {
+        // A definition without `steps` routes to its executor exactly as
+        // before, so migration is per-test and reversible.
+        const runTest =
+          definition.steps?.length && this.executor.stepBindings
+            ? this.stepsRunner().run(definition)
+            : this.executor.executeTest(testId, context, params, expectation)
         result = await this.runWithTimeout(
-          this.executor.executeTest(testId, context, params, expectation),
+          runTest,
           timeoutMs,
           `Test timeout after ${timeoutMs / 1000}s`
         )
@@ -666,9 +730,17 @@ export class ConsumerBase {
       }
 
       const duration = Date.now() - startTime
-      const outcome = result.skipped ? 'skipped' : result.passed ? 'success' : 'failure'
+      const outcome = result.incomplete
+        ? 'incomplete'
+        : result.skipped
+          ? 'skipped'
+          : result.passed
+            ? 'success'
+            : 'failure'
 
-      if (result.skipped) {
+      if (result.incomplete) {
+        this.log(`🚧 ${testId}: ${result.incompleteReason ?? result.output}`)
+      } else if (result.skipped) {
         this.log(`⏭️  ${testId}: ${result.output}`)
       } else if (retried) {
         const verdict = retryPassed ? '✅ passed' : '❌ failed'
@@ -687,7 +759,9 @@ export class ConsumerBase {
 
       // Update stats
       this.testsCompleted++
-      if (result.skipped) {
+      if (result.incomplete) {
+        this.testsIncomplete++
+      } else if (result.skipped) {
         this.testsSkipped++
       } else if (outcome === 'success') {
         this.testsPassed++
@@ -711,9 +785,18 @@ export class ConsumerBase {
           testId,
           uniqueTestId,
           outcome,
-          duration: result.skipped ? 0 : duration,
+          duration: result.skipped || result.incomplete ? 0 : duration,
           timestamp: new Date().toISOString(),
-          error: result.skipped ? result.output : result.passed ? undefined : result.output,
+          error:
+            result.skipped || result.incomplete
+              ? result.output
+              : result.passed
+                ? undefined
+                : result.output,
+          ...(result.incomplete && {
+            incompleteReason: result.incompleteReason ?? result.output
+          }),
+          ...(result.assertedValue !== undefined && { assertedValue: result.assertedValue }),
           ...(retried && { retried: true, retryPassed, retryOutput, attempt1DurationMs })
         }),
         { qos: 1 }

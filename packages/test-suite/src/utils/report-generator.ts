@@ -10,10 +10,18 @@ export interface ReportTestResult {
   /** Unique test-instance ID (matches per-test memory window). */
   uniqueTestId?: string
   consumerId: string
-  outcome: 'success' | 'failure' | 'skipped'
+  outcome: 'success' | 'failure' | 'skipped' | 'incomplete'
   duration: number
   error?: string
   output?: string
+  /** Why this client could not run the test. Set when outcome is incomplete. */
+  incompleteReason?: string
+  /**
+   * The value the assertion ran against, summarised by the client. Kept in the
+   * report so two clients can later be compared on what they built from the
+   * same stream, not only on their verdicts.
+   */
+  assertedValue?: unknown
   expected?: string
   actual?: string
   suites?: string[]
@@ -179,10 +187,13 @@ export function generateHtmlReport(data: ReportData): string {
   const successCount = data.completedTests.filter((t) => t.outcome === 'success').length
   const failureCount = data.completedTests.filter((t) => t.outcome === 'failure').length
   const skippedCount = data.completedTests.filter((t) => t.outcome === 'skipped').length
+  const incompleteCount = data.completedTests.filter((t) => t.outcome === 'incomplete').length
   const retriedCount = data.completedTests.filter((t) => t.retried).length
   const retriedPassedCount = data.completedTests.filter((t) => t.retried && t.retryPassed).length
   const retriedFailedCount = retriedCount - retriedPassedCount
-  const nonSkipped = data.completedTests.length - skippedCount
+  // A test that never ran to a verdict — skipped by platform policy, or
+  // incomplete because this client cannot run it — is outside the rate.
+  const nonSkipped = data.completedTests.length - skippedCount - incompleteCount
   const successRate = nonSkipped > 0 ? ((successCount / nonSkipped) * 100).toFixed(1) : '0.0'
 
   // Group tests by consumer
@@ -1062,23 +1073,26 @@ export function generateJsonReport(data: ReportData): string {
   const successCount = data.completedTests.filter((t) => t.outcome === 'success').length
   const failureCount = data.completedTests.filter((t) => t.outcome === 'failure').length
   const skippedCount = data.completedTests.filter((t) => t.outcome === 'skipped').length
+  const incompleteCount = data.completedTests.filter((t) => t.outcome === 'incomplete').length
 
   // Group by category — same metadata.category-first rule as the HTML side.
   const byCategory: Record<
     string,
-    { passed: number; failed: number; skipped: number; total: number }
+    { passed: number; failed: number; skipped: number; incomplete: number; total: number }
   > = {}
   for (const test of data.completedTests) {
     const category =
       test.category ?? (test.testId.includes('-') ? test.testId.split('-')[0] : test.testId)
     if (!byCategory[category]) {
-      byCategory[category] = { passed: 0, failed: 0, skipped: 0, total: 0 }
+      byCategory[category] = { passed: 0, failed: 0, skipped: 0, incomplete: 0, total: 0 }
     }
     byCategory[category].total++
     if (test.outcome === 'success') {
       byCategory[category].passed++
     } else if (test.outcome === 'skipped') {
       byCategory[category].skipped++
+    } else if (test.outcome === 'incomplete') {
+      byCategory[category].incomplete++
     } else {
       byCategory[category].failed++
     }
@@ -1087,22 +1101,23 @@ export function generateJsonReport(data: ReportData): string {
   // Group by suite for JSON
   const bySuite: Record<
     string,
-    { passed: number; failed: number; skipped: number; total: number }
+    { passed: number; failed: number; skipped: number; incomplete: number; total: number }
   > = {}
   for (const test of data.completedTests) {
     if (!test.suites) continue
     for (const suite of test.suites) {
       if (!bySuite[suite]) {
-        bySuite[suite] = { passed: 0, failed: 0, skipped: 0, total: 0 }
+        bySuite[suite] = { passed: 0, failed: 0, skipped: 0, incomplete: 0, total: 0 }
       }
       bySuite[suite].total++
       if (test.outcome === 'success') bySuite[suite].passed++
       else if (test.outcome === 'skipped') bySuite[suite].skipped++
+      else if (test.outcome === 'incomplete') bySuite[suite].incomplete++
       else bySuite[suite].failed++
     }
   }
 
-  const nonSkipped = data.completedTests.length - skippedCount
+  const nonSkipped = data.completedTests.length - skippedCount - incompleteCount
   const jsonReport = {
     runId: data.runId,
     timestamp: new Date().toISOString(),
@@ -1111,6 +1126,7 @@ export function generateJsonReport(data: ReportData): string {
       passed: successCount,
       failed: failureCount,
       skipped: skippedCount,
+      incomplete: incompleteCount,
       successRate: nonSkipped > 0 ? ((successCount / nonSkipped) * 100).toFixed(1) : '0.0',
       duration: elapsed
     },
@@ -1124,6 +1140,8 @@ export function generateJsonReport(data: ReportData): string {
       error: test.error,
       output: test.output,
       suites: test.suites,
+      ...(test.incompleteReason && { incompleteReason: test.incompleteReason }),
+      ...(test.assertedValue !== undefined && { assertedValue: test.assertedValue }),
       ...(test.retried && {
         retried: true,
         retryPassed: test.retryPassed,
@@ -1337,12 +1355,17 @@ function renderMemorySeries(
           : t.attemptLabel === '2'
             ? (retryOutcomeByUid.get(t.uniqueTestId) ?? baseOutcome)
             : baseOutcome
-      const outcome: 'success' | 'failure' | 'skipped' | 'crashed' = t.incomplete
+      // `crashed` here is about the *memory window* (an orphan start, see
+      // above), which is a different thing from the test outcome `incomplete`
+      // a client reports. Both land in the same column, so keep them distinct
+      // in the union and count a client-reported incomplete with the skips:
+      // in neither case did the test actually run to a verdict.
+      const outcome: 'success' | 'failure' | 'skipped' | 'incomplete' | 'crashed' = t.incomplete
         ? 'crashed'
         : rowOutcome
       // Don't double-count attempt-1 rows in the summary counts.
       if (t.attemptLabel !== '1') {
-        if (outcome === 'skipped') perTestSkippedCount++
+        if (outcome === 'skipped' || outcome === 'incomplete') perTestSkippedCount++
         else if (outcome === 'failure') perTestFailedCount++
         else if (outcome === 'crashed') perTestIncompleteCount++
         else perTestPassedCount++
