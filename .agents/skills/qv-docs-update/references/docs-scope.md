@@ -29,14 +29,17 @@ docs/website/content/docs/python-sdk.mdx
 docs/website/content/docs/system-requirements.mdx
 ```
 
-## Restricted allowlist — append-only, `NEW_CAPABILITY_PAGE` only
+## Restricted allowlist — append-only, page-creation subprocedures only
 
-These two files are read-only in every state except `NEW_CAPABILITY_PAGE`. Even there, the only accepted diff is an append inside the AI-capabilities block.
+These two files are read-only in every state except `NEW_CAPABILITY_PAGE` and `NEW_MODELS_PAGE`. Even there, the only accepted diff is an append inside the one block the subprocedure names.
 
-| Path | Permitted operation |
-| --- | --- |
-| `docs/website/content/docs/index.mdx` | append 1 `<Card>` at the end of the `## AI capabilities` grid, and add 1 identifier to the `lucide-react` import |
-| `docs/website/src/lib/custom-tree.ts` | append 1 entry at the end of the `AI capabilities` block, between the `AI capabilities` and `P2P capabilities` separators |
+| Path | State | Permitted operation |
+| --- | --- | --- |
+| `docs/website/content/docs/index.mdx` | `NEW_CAPABILITY_PAGE` | append 1 `<Card>` at the end of the `## AI capabilities` grid, and add 1 identifier to the `lucide-react` import |
+| `docs/website/src/lib/custom-tree.ts` | `NEW_CAPABILITY_PAGE` | append 1 entry at the end of the `AI capabilities` block, between the `AI capabilities` and `P2P capabilities` separators |
+| `docs/website/src/lib/custom-tree.ts` | `NEW_MODELS_PAGE` | append 1 entry at the end of the `Models` block, between the `Models` and `AI capabilities` separators |
+
+`index.mdx` takes no edit under `NEW_MODELS_PAGE`. Its only grid is `## AI capabilities`, and a model-lifecycle topic is not one, so there is no card to append.
 
 `custom-tree.ts` is on the list despite living outside `content/docs/` because the sidebar is a hand-maintained tree, not derived from the filesystem. A page with no entry there is reachable by URL and invisible in navigation.
 

@@ -22,7 +22,8 @@ export function isEndOfTurnEvent(event: ASRGgml.ASRStreamOutput): event is ASRGg
 export function toVadStateEvent(event: ASRGgml.VadEvent) {
   return {
     speaking: event.speaking,
-    probability: event.score
+    probability: event.score,
+    source: event.source
   } satisfies VadStateEvent
 }
 

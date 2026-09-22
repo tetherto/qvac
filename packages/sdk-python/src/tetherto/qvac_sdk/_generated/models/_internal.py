@@ -30,6 +30,20 @@ class AssessModelFitRequestModelsItemModel(GeneratedBaseModel):
             description="Expected SHA-256 checksum of the model file.",
         ),
     ]
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
 
 
 class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
@@ -41,6 +55,20 @@ class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
             description="Expected SHA-256 checksum of the model file.",
         ),
     ]
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
 
 
 class AssessModelFitRequestModelsItemWorkloadLlm(GeneratedBaseModel):
@@ -144,6 +172,7 @@ class AssessModelFitResponseExecution(Enum):
 class AssessModelFitResponseEvidence(Enum):
     calibration = "calibration"
     computed_only = "computed-only"
+    native_fit = "native-fit"
 
 
 class AssessModelFitResponseBudget(GeneratedBaseModel):
@@ -201,6 +230,7 @@ class AssessModelFitResponseModelsItemVerdict(Enum):
 class AssessModelFitResponseModelsItemEvidence(Enum):
     calibration = "calibration"
     computed_only = "computed-only"
+    native_fit = "native-fit"
 
 
 class AssessModelFitResponseModelsItemEstimate(GeneratedBaseModel):
@@ -2192,6 +2222,75 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
     gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
     gpu_mem_total_mb: Annotated[float | None, Field(alias="gpuMemTotalMb")] = None
     gpu_mem_free_mb: Annotated[float | None, Field(alias="gpuMemFreeMb")] = None
+    total_time: Annotated[
+        float | None,
+        Field(
+            alias="totalTime",
+            description="Total native inference time for the run, in ms.",
+        ),
+    ] = None
+    total_wall_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalWallMs",
+            description="Wall-clock time spent inside the native engine for the run, in ms.",
+        ),
+    ] = None
+    total_samples: Annotated[
+        float | None,
+        Field(
+            alias="totalSamples", description="Audio samples processed across the run."
+        ),
+    ] = None
+    process_calls: Annotated[
+        float | None,
+        Field(
+            alias="processCalls",
+            description="Native `process()` invocations made across the run.",
+        ),
+    ] = None
+    whisper_sample_ms: Annotated[
+        float | None,
+        Field(alias="whisperSampleMs", description="Whisper: sampling time, in ms."),
+    ] = None
+    whisper_batchd_ms: Annotated[
+        float | None,
+        Field(
+            alias="whisperBatchdMs", description="Whisper: batched-decode time, in ms."
+        ),
+    ] = None
+    whisper_prompt_ms: Annotated[
+        float | None,
+        Field(
+            alias="whisperPromptMs",
+            description="Whisper: prompt-processing time, in ms.",
+        ),
+    ] = None
+    total_transcriptions: Annotated[
+        float | None,
+        Field(
+            alias="totalTranscriptions",
+            description="Parakeet: transcriptions produced across the session.",
+        ),
+    ] = None
+    model_load_ms: Annotated[
+        float | None,
+        Field(alias="modelLoadMs", description="Parakeet: model load time, in ms."),
+    ] = None
+    total_encoded_frames: Annotated[
+        float | None,
+        Field(
+            alias="totalEncodedFrames",
+            description="Parakeet: encoder frames produced across the run.",
+        ),
+    ] = None
+    encoder_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="encoderOnCoreml",
+            description="Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+        ),
+    ] = None
 
 
 class BciTranscribeResponseSegment(GeneratedBaseModel):
@@ -2203,6 +2302,20 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    is_end_of_turn: Annotated[
+        bool | None,
+        Field(
+            alias="isEndOfTurn",
+            description="Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+        ),
+    ] = None
+    starts_word: Annotated[
+        bool | None,
+        Field(
+            alias="startsWord",
+            description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+        ),
+    ] = None
 
 
 class BciTranscribeResponse(GeneratedBaseModel):
@@ -2306,6 +2419,75 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
     gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
     gpu_mem_total_mb: Annotated[float | None, Field(alias="gpuMemTotalMb")] = None
     gpu_mem_free_mb: Annotated[float | None, Field(alias="gpuMemFreeMb")] = None
+    total_time: Annotated[
+        float | None,
+        Field(
+            alias="totalTime",
+            description="Total native inference time for the run, in ms.",
+        ),
+    ] = None
+    total_wall_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalWallMs",
+            description="Wall-clock time spent inside the native engine for the run, in ms.",
+        ),
+    ] = None
+    total_samples: Annotated[
+        float | None,
+        Field(
+            alias="totalSamples", description="Audio samples processed across the run."
+        ),
+    ] = None
+    process_calls: Annotated[
+        float | None,
+        Field(
+            alias="processCalls",
+            description="Native `process()` invocations made across the run.",
+        ),
+    ] = None
+    whisper_sample_ms: Annotated[
+        float | None,
+        Field(alias="whisperSampleMs", description="Whisper: sampling time, in ms."),
+    ] = None
+    whisper_batchd_ms: Annotated[
+        float | None,
+        Field(
+            alias="whisperBatchdMs", description="Whisper: batched-decode time, in ms."
+        ),
+    ] = None
+    whisper_prompt_ms: Annotated[
+        float | None,
+        Field(
+            alias="whisperPromptMs",
+            description="Whisper: prompt-processing time, in ms.",
+        ),
+    ] = None
+    total_transcriptions: Annotated[
+        float | None,
+        Field(
+            alias="totalTranscriptions",
+            description="Parakeet: transcriptions produced across the session.",
+        ),
+    ] = None
+    model_load_ms: Annotated[
+        float | None,
+        Field(alias="modelLoadMs", description="Parakeet: model load time, in ms."),
+    ] = None
+    total_encoded_frames: Annotated[
+        float | None,
+        Field(
+            alias="totalEncodedFrames",
+            description="Parakeet: encoder frames produced across the run.",
+        ),
+    ] = None
+    encoder_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="encoderOnCoreml",
+            description="Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+        ),
+    ] = None
 
 
 class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
@@ -2317,6 +2499,20 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    is_end_of_turn: Annotated[
+        bool | None,
+        Field(
+            alias="isEndOfTurn",
+            description="Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+        ),
+    ] = None
+    starts_word: Annotated[
+        bool | None,
+        Field(
+            alias="startsWord",
+            description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+        ),
+    ] = None
 
 
 class BciTranscribeStreamResponse(GeneratedBaseModel):
@@ -8153,6 +8349,44 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigFlashAttn(Enum):
     auto = "auto"
 
 
+class MoeCacheMib(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="Persistent accelerator cache for Mixture-of-Experts weights, in MiB. Default `'auto'`, which sizes it during `fit`.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy(Enum):
+    on = "on"
+    auto = "auto"
+    off = "off"
+
+
+class FitTarget(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="Free margin `fit` aims to leave per device, in MiB. A single value is broadcast across devices; a comma-separated list such as `'1024,512'` sets them individually. Default 1024.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class FitTarget1(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="Free margin `fit` aims to leave per device, in MiB. A single value is broadcast across devices; a comma-separated list such as `'1024,512'` sets them individually. Default 1024.",
+            pattern="^\\d+(,\\d+)*$",
+        ),
+    ]
+
+
 class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -8429,6 +8663,156 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             description="Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
         ),
     ] = None
+    batch_size: Annotated[
+        int | None,
+        Field(
+            alias="batch-size",
+            description="Logical maximum batch size, the tokens submitted per decode call. Default 2048.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    ubatch_size: Annotated[
+        int | None,
+        Field(
+            alias="ubatch-size",
+            description="Physical maximum batch size, the tokens computed in one pass. Default 512.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    cpu_moe: Annotated[
+        bool | None,
+        Field(
+            alias="cpu-moe",
+            description="Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.",
+        ),
+    ] = None
+    n_cpu_moe: Annotated[
+        int | None,
+        Field(
+            alias="n-cpu-moe",
+            description="Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    kv_offload: Annotated[
+        bool | None,
+        Field(
+            alias="kv-offload",
+            description="Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.",
+        ),
+    ] = None
+    image_max_tokens: Annotated[
+        int | None,
+        Field(
+            alias="image-max-tokens",
+            description="Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    image_min_tokens: Annotated[
+        int | None,
+        Field(
+            alias="image-min-tokens",
+            description="Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU threads to use during generation. Unset uses one thread per physical core; a value of 0 or below uses every logical CPU, which is a different and usually larger count.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    threads_batch: Annotated[
+        int | None,
+        Field(
+            alias="threads-batch",
+            description="CPU threads to use during batch and prompt processing. Setting it governs generation too and discards `threads` and `cpu-mask`; leave it unset for `threads` to apply to both.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    cpu_mask: Annotated[
+        str | None,
+        Field(
+            alias="cpu-mask",
+            description="CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Unset applies no affinity. Ignored when `threads-batch` is set.",
+        ),
+    ] = None
+    cpu_mask_batch: Annotated[
+        str | None,
+        Field(
+            alias="cpu-mask-batch",
+            description="CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Honoured only alongside `threads-batch`; without it `cpu-mask` takes over.",
+        ),
+    ] = None
+    override_tensor: Annotated[
+        str | None,
+        Field(
+            alias="override-tensor",
+            description="Buffer type overrides for tensors matching a pattern, as comma-separated `<tensor name pattern>=<buffer type>` entries, e.g. `'blk\\.(1[0-9])\\.ffn_(up|down|gate)_exps=CPU'` to keep those experts in system memory.",
+        ),
+    ] = None
+    n_cpu_ffn: Annotated[
+        int | None,
+        Field(
+            alias="n-cpu-ffn",
+            description="Keep the dense FFN weights of the first N layers on the CPU.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    moe_cache_mib: Annotated[
+        MoeCacheMib | Literal["auto"] | None,
+        Field(
+            alias="moe-cache-mib",
+            description="Persistent accelerator cache for Mixture-of-Experts weights, in MiB. Default `'auto'`, which sizes it during `fit`.",
+        ),
+    ] = None
+    prefetch_weights: Annotated[
+        bool | Literal["auto"] | None,
+        Field(
+            alias="prefetch-weights",
+            description="Overlap host-to-accelerator weight copies with compute. Default `'auto'`, which enables it for fitted dense models.",
+        ),
+    ] = None
+    tensor_read_lazy: Annotated[
+        LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy | None,
+        Field(
+            alias="tensor-read-lazy",
+            description="On-demand reading of large tensors such as per-layer embeddings, which requires mmap: `'on'` reads their rows from disk instead of keeping them resident, `'off'` always keeps them resident, `'auto'` (default) applies `'on'` above 4 GiB.",
+            title="LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy",
+        ),
+    ] = None
+    fit: Annotated[
+        bool | None,
+        Field(
+            description="Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting this field releases the `gpu_layers` default so fit can choose it, which offloads every layer rather than 99 if fit then gives up; setting `gpu_layers` alongside it pins the value and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it."
+        ),
+    ] = None
+    fit_target: Annotated[
+        FitTarget | FitTarget1 | None,
+        Field(
+            alias="fit-target",
+            description="Free margin `fit` aims to leave per device, in MiB. A single value is broadcast across devices; a comma-separated list such as `'1024,512'` sets them individually. Default 1024.",
+        ),
+    ] = None
+    fit_ctx: Annotated[
+        int | None,
+        Field(
+            alias="fit-ctx",
+            description="Smallest context size `fit` may settle on. Default 4096.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
     opencl_cache_dir: Annotated[
         str | None,
         Field(
@@ -8598,6 +8982,14 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(
 ):
     caption_enabled: Annotated[
         bool | None, Field(description="Format output segments as captions.")
+    ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed applied to the whisper context; `-1` picks a random seed.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ] = None
 
 
@@ -8858,7 +9250,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+            description="Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own."
         ),
     ] = None
     suppress_blank: Annotated[
@@ -8907,6 +9299,33 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
             description="Beam size for beam-search decoding; `-1` = default.",
             ge=-9007199254740991,
             le=9007199254740991,
+        ),
+    ] = None
+    max_initial_ts: Annotated[
+        float | None,
+        Field(
+            description="Maximum initial timestamp the decoder may emit, as a fraction of the window."
+        ),
+    ] = None
+    no_speech_thold: Annotated[
+        float | None,
+        Field(
+            description="No-speech probability above which a segment is treated as silence."
+        ),
+    ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="Decoding RNG seed; `-1` picks a random seed.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
         ),
     ] = None
     vad_params: Annotated[
@@ -17197,6 +17616,14 @@ class ReloadConfigRequestModelConfigMiscConfig(GeneratedBaseModel):
     caption_enabled: Annotated[
         bool | None, Field(description="Format output segments as captions.")
     ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="RNG seed applied to the whisper context; `-1` picks a random seed.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
 
 
 class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
@@ -17452,7 +17879,7 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+            description="Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own."
         ),
     ] = None
     suppress_blank: Annotated[
@@ -17501,6 +17928,33 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
             description="Beam size for beam-search decoding; `-1` = default.",
             ge=-9007199254740991,
             le=9007199254740991,
+        ),
+    ] = None
+    max_initial_ts: Annotated[
+        float | None,
+        Field(
+            description="Maximum initial timestamp the decoder may emit, as a fraction of the window."
+        ),
+    ] = None
+    no_speech_thold: Annotated[
+        float | None,
+        Field(
+            description="No-speech probability above which a segment is treated as silence."
+        ),
+    ] = None
+    seed: Annotated[
+        int | None,
+        Field(
+            description="Decoding RNG seed; `-1` picks a random seed.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
         ),
     ] = None
     vad_params: Annotated[
@@ -18952,6 +19406,75 @@ class TranscribeResponseStats(GeneratedBaseModel):
     gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
     gpu_mem_total_mb: Annotated[float | None, Field(alias="gpuMemTotalMb")] = None
     gpu_mem_free_mb: Annotated[float | None, Field(alias="gpuMemFreeMb")] = None
+    total_time: Annotated[
+        float | None,
+        Field(
+            alias="totalTime",
+            description="Total native inference time for the run, in ms.",
+        ),
+    ] = None
+    total_wall_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalWallMs",
+            description="Wall-clock time spent inside the native engine for the run, in ms.",
+        ),
+    ] = None
+    total_samples: Annotated[
+        float | None,
+        Field(
+            alias="totalSamples", description="Audio samples processed across the run."
+        ),
+    ] = None
+    process_calls: Annotated[
+        float | None,
+        Field(
+            alias="processCalls",
+            description="Native `process()` invocations made across the run.",
+        ),
+    ] = None
+    whisper_sample_ms: Annotated[
+        float | None,
+        Field(alias="whisperSampleMs", description="Whisper: sampling time, in ms."),
+    ] = None
+    whisper_batchd_ms: Annotated[
+        float | None,
+        Field(
+            alias="whisperBatchdMs", description="Whisper: batched-decode time, in ms."
+        ),
+    ] = None
+    whisper_prompt_ms: Annotated[
+        float | None,
+        Field(
+            alias="whisperPromptMs",
+            description="Whisper: prompt-processing time, in ms.",
+        ),
+    ] = None
+    total_transcriptions: Annotated[
+        float | None,
+        Field(
+            alias="totalTranscriptions",
+            description="Parakeet: transcriptions produced across the session.",
+        ),
+    ] = None
+    model_load_ms: Annotated[
+        float | None,
+        Field(alias="modelLoadMs", description="Parakeet: model load time, in ms."),
+    ] = None
+    total_encoded_frames: Annotated[
+        float | None,
+        Field(
+            alias="totalEncodedFrames",
+            description="Parakeet: encoder frames produced across the run.",
+        ),
+    ] = None
+    encoder_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="encoderOnCoreml",
+            description="Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+        ),
+    ] = None
 
 
 class TranscribeResponseSegment(GeneratedBaseModel):
@@ -18963,6 +19486,25 @@ class TranscribeResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    is_end_of_turn: Annotated[
+        bool | None,
+        Field(
+            alias="isEndOfTurn",
+            description="Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+        ),
+    ] = None
+    starts_word: Annotated[
+        bool | None,
+        Field(
+            alias="startsWord",
+            description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+        ),
+    ] = None
+
+
+class TranscribeResponseVadSource(Enum):
+    silero = "silero"
+    energy = "energy"
 
 
 class TranscribeResponseVad(GeneratedBaseModel):
@@ -18971,6 +19513,13 @@ class TranscribeResponseVad(GeneratedBaseModel):
     )
     speaking: bool
     probability: float
+    source: Annotated[
+        TranscribeResponseVadSource | None,
+        Field(
+            description="Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+            title="TranscribeResponseVadSource",
+        ),
+    ] = None
 
 
 class TranscribeResponseEndOfTurnWhisper(GeneratedBaseModel):
@@ -18986,6 +19535,109 @@ class TranscribeResponseEndOfTurnParakeet(GeneratedBaseModel):
         extra="forbid",
     )
     source: Literal["parakeet"] = "parakeet"
+
+
+class TranscribeResponseDiagnosticsSelectedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class TranscribeResponseDiagnosticsGraphicsApi(Enum):
+    vulkan = "vulkan"
+    opencl = "opencl"
+    opengl = "opengl"
+    webgpu = "webgpu"
+    metal = "metal"
+    direct3d11 = "direct3d11"
+    direct3d12 = "direct3d12"
+    cuda = "cuda"
+    level_zero = "levelZero"
+    rocm = "rocm"
+
+
+class TranscribeResponseDiagnosticsDriver(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(min_length=1)]
+    version: Annotated[str | None, Field(min_length=1)] = None
+
+
+class TranscribeResponseDiagnosticsFallbackRequestedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class TranscribeResponseDiagnosticsFallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    requested_backend: Annotated[
+        str | None, Field(alias="requestedBackend", min_length=1)
+    ] = None
+    requested_device: Annotated[
+        TranscribeResponseDiagnosticsFallbackRequestedDevice | None,
+        Field(
+            alias="requestedDevice",
+            title="TranscribeResponseDiagnosticsFallbackRequestedDevice",
+        ),
+    ] = None
+    reason: Annotated[str, Field(min_length=1)]
+
+
+class TranscribeResponseDiagnosticsProbeStatus(Enum):
+    compatible = "compatible"
+    incompatible = "incompatible"
+    unknown = "unknown"
+
+
+class TranscribeResponseDiagnosticsProbe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        TranscribeResponseDiagnosticsProbeStatus,
+        Field(title="TranscribeResponseDiagnosticsProbeStatus"),
+    ]
+    backend: Annotated[str, Field(min_length=1)]
+    reason: str | None = None
+
+
+class TranscribeResponseDiagnostics(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
+    selected_device: Annotated[
+        TranscribeResponseDiagnosticsSelectedDevice,
+        Field(
+            alias="selectedDevice", title="TranscribeResponseDiagnosticsSelectedDevice"
+        ),
+    ]
+    graphics_api: Annotated[
+        TranscribeResponseDiagnosticsGraphicsApi | None,
+        Field(alias="graphicsApi", title="TranscribeResponseDiagnosticsGraphicsApi"),
+    ] = None
+    driver: Annotated[
+        TranscribeResponseDiagnosticsDriver | None,
+        Field(title="TranscribeResponseDiagnosticsDriver"),
+    ] = None
+    gpu_id: Annotated[
+        str | None,
+        Field(
+            alias="gpuId",
+            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+            min_length=1,
+        ),
+    ] = None
+    fallback: Annotated[
+        TranscribeResponseDiagnosticsFallback | None,
+        Field(title="TranscribeResponseDiagnosticsFallback"),
+    ] = None
+    probe: Annotated[
+        TranscribeResponseDiagnosticsProbe | None,
+        Field(title="TranscribeResponseDiagnosticsProbe"),
+    ] = None
 
 
 class TranscribeResponse(GeneratedBaseModel):
@@ -19007,6 +19659,13 @@ class TranscribeResponse(GeneratedBaseModel):
     end_of_turn: Annotated[
         TranscribeResponseEndOfTurnWhisper | TranscribeResponseEndOfTurnParakeet | None,
         Field(alias="endOfTurn"),
+    ] = None
+    diagnostics: Annotated[
+        TranscribeResponseDiagnostics | None,
+        Field(
+            description="Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+            title="TranscribeResponseDiagnostics",
+        ),
     ] = None
     type: Literal["transcribe"] = "transcribe"
 
@@ -19102,6 +19761,75 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
     gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
     gpu_mem_total_mb: Annotated[float | None, Field(alias="gpuMemTotalMb")] = None
     gpu_mem_free_mb: Annotated[float | None, Field(alias="gpuMemFreeMb")] = None
+    total_time: Annotated[
+        float | None,
+        Field(
+            alias="totalTime",
+            description="Total native inference time for the run, in ms.",
+        ),
+    ] = None
+    total_wall_ms: Annotated[
+        float | None,
+        Field(
+            alias="totalWallMs",
+            description="Wall-clock time spent inside the native engine for the run, in ms.",
+        ),
+    ] = None
+    total_samples: Annotated[
+        float | None,
+        Field(
+            alias="totalSamples", description="Audio samples processed across the run."
+        ),
+    ] = None
+    process_calls: Annotated[
+        float | None,
+        Field(
+            alias="processCalls",
+            description="Native `process()` invocations made across the run.",
+        ),
+    ] = None
+    whisper_sample_ms: Annotated[
+        float | None,
+        Field(alias="whisperSampleMs", description="Whisper: sampling time, in ms."),
+    ] = None
+    whisper_batchd_ms: Annotated[
+        float | None,
+        Field(
+            alias="whisperBatchdMs", description="Whisper: batched-decode time, in ms."
+        ),
+    ] = None
+    whisper_prompt_ms: Annotated[
+        float | None,
+        Field(
+            alias="whisperPromptMs",
+            description="Whisper: prompt-processing time, in ms.",
+        ),
+    ] = None
+    total_transcriptions: Annotated[
+        float | None,
+        Field(
+            alias="totalTranscriptions",
+            description="Parakeet: transcriptions produced across the session.",
+        ),
+    ] = None
+    model_load_ms: Annotated[
+        float | None,
+        Field(alias="modelLoadMs", description="Parakeet: model load time, in ms."),
+    ] = None
+    total_encoded_frames: Annotated[
+        float | None,
+        Field(
+            alias="totalEncodedFrames",
+            description="Parakeet: encoder frames produced across the run.",
+        ),
+    ] = None
+    encoder_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="encoderOnCoreml",
+            description="Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+        ),
+    ] = None
 
 
 class TranscribeStreamResponseSegment(GeneratedBaseModel):
@@ -19113,6 +19841,25 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
     end_ms: Annotated[float, Field(alias="endMs")]
     append: bool
     id: float
+    is_end_of_turn: Annotated[
+        bool | None,
+        Field(
+            alias="isEndOfTurn",
+            description="Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+        ),
+    ] = None
+    starts_word: Annotated[
+        bool | None,
+        Field(
+            alias="startsWord",
+            description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+        ),
+    ] = None
+
+
+class TranscribeStreamResponseVadSource(Enum):
+    silero = "silero"
+    energy = "energy"
 
 
 class TranscribeStreamResponseVad(GeneratedBaseModel):
@@ -19121,6 +19868,13 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
     )
     speaking: bool
     probability: float
+    source: Annotated[
+        TranscribeStreamResponseVadSource | None,
+        Field(
+            description="Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+            title="TranscribeStreamResponseVadSource",
+        ),
+    ] = None
 
 
 class TranscribeStreamResponseEndOfTurnWhisper(GeneratedBaseModel):
@@ -19136,6 +19890,112 @@ class TranscribeStreamResponseEndOfTurnParakeet(GeneratedBaseModel):
         extra="forbid",
     )
     source: Literal["parakeet"] = "parakeet"
+
+
+class TranscribeStreamResponseDiagnosticsSelectedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class TranscribeStreamResponseDiagnosticsGraphicsApi(Enum):
+    vulkan = "vulkan"
+    opencl = "opencl"
+    opengl = "opengl"
+    webgpu = "webgpu"
+    metal = "metal"
+    direct3d11 = "direct3d11"
+    direct3d12 = "direct3d12"
+    cuda = "cuda"
+    level_zero = "levelZero"
+    rocm = "rocm"
+
+
+class TranscribeStreamResponseDiagnosticsDriver(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(min_length=1)]
+    version: Annotated[str | None, Field(min_length=1)] = None
+
+
+class TranscribeStreamResponseDiagnosticsFallbackRequestedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class TranscribeStreamResponseDiagnosticsFallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    requested_backend: Annotated[
+        str | None, Field(alias="requestedBackend", min_length=1)
+    ] = None
+    requested_device: Annotated[
+        TranscribeStreamResponseDiagnosticsFallbackRequestedDevice | None,
+        Field(
+            alias="requestedDevice",
+            title="TranscribeStreamResponseDiagnosticsFallbackRequestedDevice",
+        ),
+    ] = None
+    reason: Annotated[str, Field(min_length=1)]
+
+
+class TranscribeStreamResponseDiagnosticsProbeStatus(Enum):
+    compatible = "compatible"
+    incompatible = "incompatible"
+    unknown = "unknown"
+
+
+class TranscribeStreamResponseDiagnosticsProbe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        TranscribeStreamResponseDiagnosticsProbeStatus,
+        Field(title="TranscribeStreamResponseDiagnosticsProbeStatus"),
+    ]
+    backend: Annotated[str, Field(min_length=1)]
+    reason: str | None = None
+
+
+class TranscribeStreamResponseDiagnostics(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
+    selected_device: Annotated[
+        TranscribeStreamResponseDiagnosticsSelectedDevice,
+        Field(
+            alias="selectedDevice",
+            title="TranscribeStreamResponseDiagnosticsSelectedDevice",
+        ),
+    ]
+    graphics_api: Annotated[
+        TranscribeStreamResponseDiagnosticsGraphicsApi | None,
+        Field(
+            alias="graphicsApi", title="TranscribeStreamResponseDiagnosticsGraphicsApi"
+        ),
+    ] = None
+    driver: Annotated[
+        TranscribeStreamResponseDiagnosticsDriver | None,
+        Field(title="TranscribeStreamResponseDiagnosticsDriver"),
+    ] = None
+    gpu_id: Annotated[
+        str | None,
+        Field(
+            alias="gpuId",
+            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+            min_length=1,
+        ),
+    ] = None
+    fallback: Annotated[
+        TranscribeStreamResponseDiagnosticsFallback | None,
+        Field(title="TranscribeStreamResponseDiagnosticsFallback"),
+    ] = None
+    probe: Annotated[
+        TranscribeStreamResponseDiagnosticsProbe | None,
+        Field(title="TranscribeStreamResponseDiagnosticsProbe"),
+    ] = None
 
 
 class TranscribeStreamResponse(GeneratedBaseModel):
@@ -19161,6 +20021,13 @@ class TranscribeStreamResponse(GeneratedBaseModel):
         | TranscribeStreamResponseEndOfTurnParakeet
         | None,
         Field(alias="endOfTurn"),
+    ] = None
+    diagnostics: Annotated[
+        TranscribeStreamResponseDiagnostics | None,
+        Field(
+            description="Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+            title="TranscribeStreamResponseDiagnostics",
+        ),
     ] = None
     type: Literal["transcribeStream"] = "transcribeStream"
 

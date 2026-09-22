@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.19.1",
+  "version": "0.20.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -67,9 +67,6 @@
     "./dist/src/worker/index.js": {
       "import": "./dist/src/worker/index.js",
       "require": "./dist/src/worker/index.js"
-    },
-    "./dist/server/worker.js": {
-      "import": "./dist/src/worker/legacy-worker-entry.js"
     },
     "./llamacpp-completion/plugin": {
       "types": "./dist/src/worker/plugins/llamacpp-completion.d.ts",
@@ -141,9 +138,6 @@
     "./worker.mobile.bundle": "./dist/worker.mobile.bundle.js",
     "./worker-lifecycle": {
       "import": "./dist/src/worker/lifecycle.js"
-    },
-    "./worker-core": {
-      "import": "./dist/src/worker/worker-core.js"
     },
     "./plugins": {
       "import": "./dist/src/server/plugins/index.js"
@@ -220,7 +214,7 @@
     "@qvac/diffusion-cpp": "^0.24.0",
     "@qvac/embed-llamacpp": "^0.41.1",
     "@qvac/error": "^0.1.1",
-    "@qvac/inference": "^0.19.1",
+    "@qvac/inference": "^0.20.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "^0.53.0",
     "@qvac/logging": "^0.1.0",
