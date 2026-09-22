@@ -34,15 +34,54 @@ function run(sequence, { timeoutTicks = 1000 } = {}) {
   })
 }
 
-test('classifyConclusion: success passes, real failures fail, the rest wait', () => {
+test('classifyConclusion: success and an intentional skip pass, real failures fail, the rest wait', () => {
   assert.equal(classifyConclusion('success'), 'pass')
+  // The producer skips a package's ts-checks when nx finds its TypeScript is not
+  // affected, so there is nothing to gate on. Treating that as a failure made any
+  // PR touching a package's workflow but not its code unmergeable.
+  assert.equal(classifyConclusion('skipped'), 'pass')
   assert.equal(classifyConclusion('failure'), 'fail')
   assert.equal(classifyConclusion('timed_out'), 'fail')
   assert.equal(classifyConclusion('action_required'), 'fail')
   assert.equal(classifyConclusion('cancelled'), 'wait')
-  assert.equal(classifyConclusion('skipped'), 'wait')
   assert.equal(classifyConclusion('neutral'), 'wait')
   assert.equal(classifyConclusion('stale'), 'wait')
+})
+
+test('a skipped check returns success and says why', async () => {
+  const logs = []
+  const code = await pollForCheck({
+    checkName: 'ocr-pr-head-ts-checks',
+    fetchChecks: async () => [
+      { name: 'ocr-pr-head-ts-checks', status: 'completed', conclusion: 'skipped' },
+    ],
+    now: () => 0,
+    sleep: async () => {},
+    pollIntervalMs: 1,
+    timeoutMs: 1000,
+    log: (m) => logs.push(m),
+  })
+  assert.equal(code, 0)
+  assert.match(logs.join('\n'), /was skipped — nx found no affected TypeScript/)
+  // It must not be reported as a success it never had.
+  assert.doesNotMatch(logs.join('\n'), /succeeded\./)
+})
+
+test('a real failure is still a failure', async () => {
+  const logs = []
+  const code = await pollForCheck({
+    checkName: 'ocr-pr-head-ts-checks',
+    fetchChecks: async () => [
+      { name: 'ocr-pr-head-ts-checks', status: 'completed', conclusion: 'failure' },
+    ],
+    now: () => 0,
+    sleep: async () => {},
+    pollIntervalMs: 1,
+    timeoutMs: 1000,
+    log: (m) => logs.push(m),
+  })
+  assert.equal(code, 1)
+  assert.match(logs.join('\n'), /completed with conclusion: failure/)
 })
 
 test('success on first poll -> 0', async () => {

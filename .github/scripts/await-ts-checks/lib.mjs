@@ -4,12 +4,23 @@
 // workflow script block.
 
 // A completed check-run conclusion maps to one of:
-//   'pass' - the PR-head check succeeded.
+//   'pass' - the PR-head check succeeded, or was intentionally not run.
 //   'fail' - a real, terminal failure.
 //   'wait' - not terminal for us: a superseding producer run is expected (the
 //            producer uses cancel-in-progress), so keep polling for the fresh one.
+//
+// 'skipped' is a PASS. The producer gates each <pkg>-pr-head-ts-checks job on
+// `contains(matrix.outputs.tspackages, '<pkg>')`, so a skip means nx decided the
+// package's TypeScript is not affected by this PR — there is nothing to gate on.
+// Treating it as a failure made every PR that touches a package's WORKFLOW but
+// not its code unmergeable: the consumer triggers on `.github/workflows/*<pkg>*`
+// while the producer only triggers on `packages/**`.
+//
+// This is not fail-open. A skip caused by the producer erroring (a failed
+// `matrix` job leaves tspackages unset, so the `if` is false) still shows up as
+// that job's own red check on the PR, independently of this gate.
 export function classifyConclusion(conclusion) {
-  if (conclusion === 'success') return 'pass'
+  if (conclusion === 'success' || conclusion === 'skipped') return 'pass'
   if (conclusion === 'failure' || conclusion === 'timed_out' || conclusion === 'action_required') {
     return 'fail'
   }
@@ -42,14 +53,18 @@ export async function pollForCheck({ checkName, fetchChecks, now, sleep, pollInt
     if (check && check.status === 'completed') {
       const verdict = classifyConclusion(check.conclusion)
       if (verdict === 'pass') {
-        log(`${checkName} succeeded.`)
+        log(
+          check.conclusion === 'skipped'
+            ? `${checkName} was skipped — nx found no affected TypeScript for this package; nothing to gate on.`
+            : `${checkName} succeeded.`
+        )
         return 0
       }
       if (verdict === 'fail') {
         log(`::error title=Await PR-head TypeScript checks failed::${checkName} completed with conclusion: ${check.conclusion}`)
         return 1
       }
-      // 'wait': cancelled / skipped / neutral / stale - a superseding run is expected.
+      // 'wait': cancelled / neutral / stale - a superseding run is expected.
     }
 
     if (now() >= deadline) {
