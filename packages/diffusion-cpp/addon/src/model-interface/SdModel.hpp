@@ -153,6 +153,16 @@ private:
   std::any
   processVideo(const GenerationJob& job, const picojson::value& parsed);
 
+  /** sd_ctx_params_t borrows every string it is given, so they live here. */
+  struct CtxParams {
+    sd_ctx_params_t params{};
+    std::string paramsBackend;
+    std::string mainGpuBackend;
+  };
+
+  /** The one mapping from the stored config to the engine's parameters. */
+  void fillCtxParams(CtxParams& out) const;
+
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;
 
   // LTX-2 is inferred from its LTX-only embeddings-connectors input. Its
