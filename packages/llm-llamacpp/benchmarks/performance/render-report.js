@@ -81,17 +81,39 @@ function loadDir (dir, desktopDevice) {
   // The desktop device name (incl. the detected GPU) is stamped into
   // desktop-meta.json at run time, so re-renders show the real GPU even though
   // the desktop job didn't run. Falls back to the passed/default name.
+  //
+  // A multi-platform desktop matrix uploads one desktop-meta.json per leg, so
+  // a single global name would label Linux, Windows and macOS results all as
+  // whichever leg's file happened to be read first — and then aggregate()
+  // would merge same-config rows from different platforms under that one
+  // device key. Each stamp is therefore scoped to the directory it sits in,
+  // and a sweep result takes the name from its nearest stamp.
+  const stampByDir = new Map()
   let resolvedDesktop = desktopDevice
   for (const f of files) {
     try {
       const d = JSON.parse(fs.readFileSync(f, 'utf8'))
-      if (d && typeof d.desktopDevice === 'string' && d.desktopDevice) { resolvedDesktop = d.desktopDevice; break }
+      if (d && typeof d.desktopDevice === 'string' && d.desktopDevice) {
+        stampByDir.set(path.dirname(f), d.desktopDevice)
+        if (resolvedDesktop === desktopDevice) resolvedDesktop = d.desktopDevice
+      }
     } catch {}
+  }
+  // Nearest stamp walking upwards, so a per-leg subdirectory wins over a
+  // sibling leg's stamp and a single-platform layout behaves exactly as before.
+  const deviceFor = (file) => {
+    let dir = path.dirname(file)
+    for (;;) {
+      if (stampByDir.has(dir)) return stampByDir.get(dir)
+      const parent = path.dirname(dir)
+      if (parent === dir) return resolvedDesktop
+      dir = parent
+    }
   }
   const meta = { addonVersion: null, repeats: null, promptTokens: null, expectedShards: null }
   let rows = []
   for (const f of files) {
-    const r = rowsFromFile(f, resolvedDesktop, meta)
+    const r = rowsFromFile(f, deviceFor(f), meta)
     rows.push(...r)
   }
   rows = aggregate(rows)
@@ -143,6 +165,15 @@ function rowsFromFile (file, desktopDevice, meta) {
         const crashed = c.status && c.status !== 'ok' && c.status !== 'partial-failure'
         rows.push({
           device: desktopDevice,
+          // Explicit, not inferred. Desktop-vs-mobile used to be decided by
+          // comparing a row's device name against one global desktopDevice.
+          // With a desktop matrix there are several desktop names, so every
+          // leg but the first classified as mobile — gaining a bogus mobile
+          // shard-coverage row and leaking into the mobile charts. A
+          // load-mode-only dispatch made it worse: the stamp reads
+          // "Desktop linux-x64 (<gpu>)" while the load report says
+          // "Desktop linux-x64", so even the first leg failed the comparison.
+          isDesktop: true,
           config,
           ttft: num(m.ttftMsMean),
           ttftStd: num(m.ttftMsStd),
@@ -170,8 +201,15 @@ function rowsFromFile (file, desktopDevice, meta) {
       if (int(m.prompt_tokens) !== null && meta.promptTokens === null) {
         meta.promptTokens = int(m.prompt_tokens)
       }
+      // "No throughput" meant "crashed" while every row measured generation.
+      // A load-mode row measures the load only and carries no TTFT/TPS by
+      // design, so that heuristic reports a successful measurement as a
+      // failure. A row counts as crashed when it says so, or when it produced
+      // neither throughput nor load figures — i.e. nothing at all.
+      const noThroughput = num(m.ttft_ms) === null && num(m.tps) === null && num(m.pp_tps) === null
+      const noLoad = num(m.load_ms) === null && num(m.rss_bytes) === null
       const crashed = (r.status && String(r.status).toLowerCase() === 'crashed') ||
-        (num(m.ttft_ms) === null && num(m.tps) === null && num(m.pp_tps) === null)
+        (noThroughput && noLoad)
       rows.push({
         device,
         config: r.test || '(unknown)',
@@ -179,7 +217,19 @@ function rowsFromFile (file, desktopDevice, meta) {
         tps: num(m.tps),
         ppTps: num(m.pp_tps),
         tokens: int(m.generated_tokens),
-        crashed: !!crashed
+        crashed: !!crashed,
+        // The desktop load-mode runner writes this schema too (it is the one
+        // the renderer already parsed), and flags itself so its rows are not
+        // taken for a phone's.
+        isDesktop: doc.desktop === true,
+        // Per-load figures, present from the run that introduced them. Null on
+        // older artifacts and on platforms without /proc (iOS), which the
+        // load-mode table renders as '—' rather than as a zero.
+        loadMs: num(m.load_ms),
+        rssBytes: num(m.rss_bytes),
+        rssAnonBytes: num(m.rss_anon_bytes),
+        rssFileBytes: num(m.rss_file_bytes),
+        lockedBytes: num(m.locked_bytes)
       })
     }
     return rows
@@ -188,12 +238,13 @@ function rowsFromFile (file, desktopDevice, meta) {
   return rows
 }
 
-function configLabel ({ model, backend, rb, ck, cv, bs, ctx }) {
+function configLabel ({ model, backend, rb, ck, cv, bs, lm, ctx }) {
   const parts = [`[${model}]`]
   if (backend) parts.push(`[${backend}]`)
   if (rb !== undefined && rb !== null && rb !== '') parts.push(`[rb=${rb}]`)
   if (ck || cv) parts.push(ck === cv ? `[kv=${ck}]` : `[kv=${ck || '?'}/${cv || '?'}]`)
   if (bs !== undefined && bs !== null && bs !== '') parts.push(`[bs=${bs}]`)
+  if (lm !== undefined && lm !== null && lm !== '') parts.push(`[lm=${lm}]`)
   if (ctx !== undefined && ctx !== null && ctx !== '') parts.push(`[ctx=${ctx}]`)
   return parts.join(' ')
 }
@@ -250,18 +301,26 @@ function aggregate (rows) {
     const pre = group.find(r => r.preAggregated && !r.crashed)
     if (pre) { out.push(pre); continue }
     if (group.some(r => r.preAggregated)) {
-      out.push({ device, config, crashed: true, tokens: null }); continue
+      out.push({ device, config, isDesktop: group.some(r => r.isDesktop), crashed: true, tokens: null }); continue
     }
     const real = group.filter(r => !r.crashed)
     if (!real.length) {
-      out.push({ device, config, crashed: true, tokens: null }); continue
+      out.push({ device, config, isDesktop: group.some(r => r.isDesktop), crashed: true, tokens: null }); continue
     }
     const ttftVals = real.map(r => r.ttft).filter(v => v !== null)
     const tpsVals = real.map(r => r.tps).filter(v => v !== null)
     const ppVals = real.map(r => r.ppTps).filter(v => v !== null)
+    // Load and resident-memory figures are per LOAD, not per generation: every
+    // repetition of a cell shares one load and reports the same numbers, so
+    // they are carried through rather than averaged across repetitions (which
+    // would average a value with itself). Taking the first non-null keeps them
+    // available to the load-mode section; without this they are silently
+    // dropped here and every load-mode column renders empty.
+    const firstNonNull = (key) => real.find(r => r[key] !== null && r[key] !== undefined)?.[key] ?? null
     out.push({
       device,
       config,
+      isDesktop: group.some(r => r.isDesktop),
       crashed: false,
       ttft: mean(ttftVals),
       ttftStd: stddev(ttftVals),
@@ -270,6 +329,11 @@ function aggregate (rows) {
       ppTps: mean(ppVals),
       ppTpsStd: stddev(ppVals),
       tokens: real.find(r => r.tokens !== null)?.tokens ?? null,
+      loadMs: firstNonNull('loadMs'),
+      rssBytes: firstNonNull('rssBytes'),
+      rssAnonBytes: firstNonNull('rssAnonBytes'),
+      rssFileBytes: firstNonNull('rssFileBytes'),
+      lockedBytes: firstNonNull('lockedBytes'),
       sampleCount: real.length
     })
   }
@@ -286,7 +350,7 @@ function buildBaselineMap (baseRows) {
 // repetition count, read from the data rather than hard-coded).
 function mobileRepeats (rows, desktopDevice) {
   const counts = rows
-    .filter(r => r.device !== desktopDevice && !r.crashed && r.sampleCount)
+    .filter(r => !r.isDesktop && !r.crashed && r.sampleCount)
     .map(r => r.sampleCount)
   return counts.length ? Math.max(...counts) : null
 }
@@ -306,20 +370,33 @@ function metaLine (meta, addonVersion, hasDesktopRows, mobileReps) {
 }
 
 // Shard key for a mobile row, parsed from its "[<modelId>] [<dev>] [rb=..]
-// [kv=<cache>] [bs=<N>]" label, to match _benchmark-matrix.js mobileShardKey.
-// [bs=N] is present only on batch-sweep rows, so cross-product rows keep their
-// two-part "<model>|<kv>" key.
+// [kv=<cache>] [bs=<N>] [lm=<mode>]" label, to match _benchmark-matrix.js
+// mobileShardKey. [bs=N] appears only on batch-sweep rows and [lm=mode] only on
+// load-mode rows, so cross-product rows keep their two-part "<model>|<kv>" key.
 function shardKeyOf (config) {
   const model = /^\[([^\]]+)\]/.exec(config)
   const kv = /\[kv=([^\]]+)\]/.exec(config)
   if (!model || !kv) return null
   const bs = /\[bs=([^\]]+)\]/.exec(config)
-  return bs ? `${model[1]}|${kv[1]}|bs${bs[1]}` : `${model[1]}|${kv[1]}`
+  if (bs) return `${model[1]}|${kv[1]}|bs${bs[1]}`
+  const lm = /\[lm=([^\]]+)\]/.exec(config)
+  if (lm) {
+    // Load-mode shards are one per (mode, backend) — each backend needs its own
+    // process, so each is its own shard — and mobileShardKey encodes the
+    // backend as a fourth segment. It has to be reproduced here or every
+    // load-mode shard reconciles as missing and the coverage summary reports
+    // twelve phantom gaps on a run where all twelve succeeded.
+    const backend = /\[(gpu|cpu)\]/.exec(config)
+    return `${model[1]}|${kv[1]}|lm${lm[1]}|${backend ? backend[1] : 'unknown'}`
+  }
+  return `${model[1]}|${kv[1]}`
 }
 
 function shardLabel (key) {
-  const [model, kv, bs] = key.split('|')
-  return `${model} [kv=${kv}]${bs ? ` [bs=${bs.slice(2)}]` : ''}`
+  const [model, kv, extra, backend] = key.split('|')
+  if (!extra) return `${model} [kv=${kv}]`
+  if (extra.startsWith('bs')) return `${model} [kv=${kv}] [bs=${extra.slice(2)}]`
+  return `${model} [kv=${kv}] [lm=${extra.slice(2)}]${backend ? ` [${backend}]` : ''}`
 }
 
 // Per-device coverage of the mobile shard matrix. Every shard that runs emits
@@ -333,7 +410,12 @@ function coverageLines (rows, desktopDevice, devices, expectedShards) {
   // grown (e.g. an old 30-shard run reading 30/70 against today's 70).
   const expected = expectedShards || matrix().map(mobileShardKey)
   const expectedSet = new Set(expected)
-  const mobileDevices = devices.filter(d => d !== desktopDevice)
+  // Every device name that carried a desktop row. A desktop matrix produces
+  // several, so excluding only the one global desktopDevice would hand the
+  // other legs a mobile shard-coverage row and a missing-shard count for a
+  // matrix they never ran.
+  const desktopNames = new Set(rows.filter(r => r.isDesktop).map(r => r.device))
+  const mobileDevices = devices.filter(d => !desktopNames.has(d))
   if (!mobileDevices.length) {
     return [
       '## Coverage',
@@ -347,7 +429,7 @@ function coverageLines (rows, desktopDevice, devices, expectedShards) {
   const seenByDevice = new Map(mobileDevices.map(d => [d, new Set()]))
   const seenAll = new Set()
   for (const r of rows) {
-    if (r.device === desktopDevice) continue
+    if (r.isDesktop) continue
     const k = shardKeyOf(r.config)
     if (!k || !expectedSet.has(k) || !seenByDevice.has(r.device)) continue
     seenByDevice.get(r.device).add(k)
@@ -407,18 +489,194 @@ function mermaidBar (title, ylabel, labels, values) {
 // is one real measured number. xychart-beta is single-series and cannot draw
 // error bars, so the per-backend breakdowns by KV-cache type / quantization,
 // with 3-rep stddev whiskers, live in the HTML chart artifact.
-// The charts hold every axis but one at a single value; the additive batch
-// sweep varies batch-size (a dimension the charts do not hold), so its rows
-// would land in a held-config bucket they were not measured for and silently win
-// the "first row" pick. Batch rows are the only ones tagged [bs=…], so excluding
-// them keeps every chart bucket to one cross-product measurement.
-function isBatchSweepRow (config) {
-  return /\[bs=/.test(config)
+// The charts hold every axis but one at a single value; an additive sweep
+// varies a dimension the charts do not hold, so its rows would land in a
+// held-config bucket they were not measured for and silently win the "first
+// row" pick. Batch rows are tagged [bs=…] and load-mode rows [lm=…], and no
+// cross-product row carries either, so excluding both keeps every chart bucket
+// to one cross-product measurement.
+function isAdditiveSweepRow (config) {
+  return /\[bs=/.test(config) || /\[lm=/.test(config)
+}
+
+function mib (bytes) {
+  return bytes === null || bytes === undefined ? null : Math.round((bytes / (1024 * 1024)) * 10) / 10
+}
+
+// Load-mode section: what each `load_mode` costs to load and to keep resident,
+// per device. Separate from the throughput tables because it answers a
+// different question with different metrics — load time and resident memory,
+// not TTFT/TPS — and because `load_mode` never touches the compute graph, so a
+// throughput column would only restate the cross-product's answer.
+//
+// Reads the [lm=…] rows the additive load-mode sweep produces. Each cell is
+// reported once per device; the reasoning-budget and run repeats a cell carries
+// all share one load, so the first non-crashed row per (device, mode) stands.
+//
+// `auto` is the addon's default, so margins are quoted against it. `dio` is
+// accepted by the addon but currently discarded by qvac-fabric before the file
+// is opened, so it behaves as `none`; it is labelled rather than ranked.
+function loadModeSection (rows, desktopDevice, expectedShards) {
+  // Which modes this dispatch asked for, read from the shards run-meta
+  // stamped. Null (an older artifact with no stamp) means "assume all six",
+  // so a re-render of a pre-selector run still reports gaps as before.
+  const selectedModes = Array.isArray(expectedShards)
+    ? new Set(
+        expectedShards
+          .map((k) => /\|lm([^|]+)/.exec(k))
+          .filter(Boolean)
+          .map((m) => m[1])
+      )
+    : null
+  const lmRows = rows.filter(r => /\[lm=/.test(r.config))
+  if (lmRows.length === 0) return []
+
+  const out = ['## Load modes', '']
+  out.push(
+    'What each `load_mode` costs to bring the weights into memory. `auto` is the ' +
+    'addon default: it maps the weights unless a selected device reports no mmap ' +
+    'support (integrated GPUs, Adreno/OpenCL, Hexagon), in which case it loads ' +
+    'them anonymously. Margins are against `auto`.'
+  )
+  out.push('')
+  out.push(
+    'Memory is the resident delta across the load. `anon` and `file` come from ' +
+    '`/proc` and are blank on platforms without it (iOS); they matter because ' +
+    'total `rss` can rank the modes backwards — a mapped load holds the weights ' +
+    'in evictable file-backed pages, so it reads higher while costing less of ' +
+    'the anonymous memory the system must actually find.'
+  )
+  out.push('')
+
+  // Keyed by device AND backend. A phone runs every mode on both gpu and cpu,
+  // and mmap support differs between them (Adreno's OpenCL backend reports
+  // none, the CPU backend supports it), so collapsing them would hide the very
+  // difference this sweep exists to measure — and would silently drop whichever
+  // backend sorted second.
+  const backendOf = (config) => (/\[cpu\]/.test(config) ? 'cpu' : /\[gpu\]/.test(config) ? 'gpu' : null)
+  const groups = new Map()
+  for (const r of lmRows) {
+    const mode = /\[lm=([^\]]+)\]/.exec(r.config)
+    if (!mode) continue
+    const backend = backendOf(r.config)
+    const key = `${r.device}@@${backend || 'unknown'}`
+    if (!groups.has(key)) groups.set(key, { device: r.device, backend, modes: new Map() })
+    const modes = groups.get(key).modes
+    if (!modes.has(mode[1]) || (modes.get(mode[1]).crashed && !r.crashed)) modes.set(mode[1], r)
+  }
+
+  // Desktop legs first, then phones; within each, by name. Ordered on the
+  // explicit flag rather than a name match, so every desktop platform sorts
+  // ahead of the phones instead of only whichever one the stamp named.
+  const desktopKeys = new Set(lmRows.filter(r => r.isDesktop).map(r => r.device))
+  const keys = [...groups.keys()].sort((a, b) => {
+    const da = groups.get(a).device
+    const db = groups.get(b).device
+    const dda = desktopKeys.has(da)
+    const ddb = desktopKeys.has(db)
+    if (dda !== ddb) return dda ? -1 : 1
+    if (da !== db) return da.localeCompare(db)
+    return a.localeCompare(b)
+  })
+
+  for (const key of keys) {
+    const { device, backend, modes: seen } = groups.get(key)
+    if (seen.size === 0) continue
+
+    const auto = seen.get('auto')
+    const mmapRow = seen.get('mmap')
+    // Margin against `auto` (the real default) and against `mmap` (named
+    // explicitly by the acceptance criteria). Both, because correcting the
+    // stale premise about which is the default does not remove the
+    // requirement to report the mmap margin.
+    const pctVs = (ref, r) => {
+      if (!ref || ref.crashed || ref.loadMs === null || r.crashed || r.loadMs === null) return '-'
+      if (r === ref) return '—'
+      const d = ((r.loadMs / ref.loadMs) - 1) * 100
+      return `${d >= 0 ? '+' : ''}${Math.round(d * 10) / 10}%`
+    }
+
+    out.push(`### ${device}${backend ? ` — ${backend}` : ''}`, '')
+    out.push('| Mode | Load (ms) | Δ vs auto | Δ vs mmap | rss (MiB) | anon (MiB) | file (MiB) | locked (MiB) | Status |')
+    out.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |')
+    // Fixed order, not measured order: a reader comparing two devices should
+    // find the same mode on the same line.
+    for (const mode of ['auto', 'none', 'mmap', 'mlock', 'mmap+mlock', 'dio']) {
+      const r = seen.get(mode)
+      if (!r) {
+        // A mode the dispatch deliberately left out is not a coverage gap —
+        // saying so would make every narrowed run look broken. Only a mode
+        // that WAS selected and produced nothing is a gap, which is the state
+        // the acceptance criteria care about.
+        out.push(
+          selectedModes && !selectedModes.has(mode)
+            ? `| \`${mode}\` | - | - | - | - | - | - | - | Not selected for this run |`
+            : `| \`${mode}\` | - | - | - | - | - | - | - | **Not measured (coverage gap)** |`
+        )
+        continue
+      }
+      if (r.crashed) {
+        out.push(`| \`${mode}\` | - | - | - | - | - | - | - | Failed |`)
+        continue
+      }
+      // A lock that silently did not happen is not a measured mlock. Where the
+      // locked counter is unavailable (no /proc), say the lock was unverified
+      // rather than implying it took effect.
+      let status = 'Measured'
+      if (mode === 'dio') status = 'Inert (fabric discards the flag)'
+      else if (mode === 'mlock' || mode === 'mmap+mlock') {
+        if (r.lockedBytes === null || r.lockedBytes === undefined) status = 'Measured (lock unverified)'
+        else if (r.lockedBytes === 0) status = 'Measured (lock had no effect)'
+      }
+      out.push(
+        `| \`${mode}\` | ${r.loadMs ?? '-'} | ${pctVs(auto, r)} | ${pctVs(mmapRow, r)} | ` +
+        `${mib(r.rssBytes) ?? '-'} | ${mib(r.rssAnonBytes) ?? '-'} | ${mib(r.rssFileBytes) ?? '-'} | ` +
+        `${mib(r.lockedBytes) ?? '-'} | ${status} |`
+      )
+    }
+    out.push('')
+
+    // Two metrics can name two different modes, so both are stated and no
+    // single overall winner is manufactured. 'dio' is excluded: crowning an
+    // alias of `none` would read as advice to set an inert flag.
+    const ranked = [...seen.entries()].filter(([m, r]) => m !== 'dio' && !r.crashed)
+    const timed = ranked.filter(([, r]) => r.loadMs !== null)
+    // Ranked on anonymous RSS where the platform exposes it, because total rss
+    // ranks mapped modes backwards — the mapped weights are file-backed and
+    // evictable, so a mapped load reads higher on rss while costing less of the
+    // memory the system must actually find. Falling back to total rss without
+    // saying so would contradict the note above this table.
+    const anonRanked = ranked.filter(([, r]) => r.rssAnonBytes !== null && r.rssAnonBytes !== undefined)
+    const rssRanked = ranked.filter(([, r]) => r.rssBytes !== null)
+    if (timed.length > 0) {
+      const fastest = timed.reduce((a, b) => (b[1].loadMs < a[1].loadMs ? b : a))
+      out.push(`- fastest load: \`${fastest[0]}\` (${fastest[1].loadMs} ms)`)
+    }
+    if (anonRanked.length > 0) {
+      const leanest = anonRanked.reduce((a, b) => (b[1].rssAnonBytes < a[1].rssAnonBytes ? b : a))
+      out.push(`- lowest anonymous resident: \`${leanest[0]}\` (${mib(leanest[1].rssAnonBytes)} MiB anon)`)
+    } else if (rssRanked.length > 0) {
+      const leanest = rssRanked.reduce((a, b) => (b[1].rssBytes < a[1].rssBytes ? b : a))
+      out.push(
+        `- lowest total resident: \`${leanest[0]}\` (${mib(leanest[1].rssBytes)} MiB rss) — ` +
+        'anonymous RSS unavailable on this platform, so this ranks total rss and may favour an ' +
+        'unmapped mode for memory it does not truly cost'
+      )
+    }
+    const missing = ['auto', 'none', 'mmap', 'mlock', 'mmap+mlock', 'dio']
+      .filter(m => !seen.has(m) && (!selectedModes || selectedModes.has(m)))
+    if (missing.length > 0) {
+      out.push(`- ⚠ coverage gap: ${missing.map(m => '`' + m + '`').join(', ')} produced no row here.`)
+    }
+    out.push('')
+  }
+
+  return out
 }
 
 function mermaidSection (rows, desktopDevice, chartsUrl) {
   const held = { backend: 'gpu', rb: CHART_RB, size: CHART_SIZE, quant: CHART_QUANT_HELD, kv: CHART_KV_DEFAULT }
-  const pts = atConfig(rows, held).filter(r => r.device !== desktopDevice && !r.crashed && r.tps !== null && !isBatchSweepRow(r.config))
+  const pts = atConfig(rows, held).filter(r => !r.isDesktop && !r.crashed && r.tps !== null && !isAdditiveSweepRow(r.config))
   if (pts.length < 2) return []
   const byDevice = new Map()
   for (const r of pts) if (!byDevice.has(r.device)) byDevice.set(r.device, r.tps)
@@ -445,6 +703,11 @@ function mermaidSection (rows, desktopDevice, chartsUrl) {
 function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseline, chartsUrl) {
   const byDevice = new Map()
   for (const r of rows) {
+    // Load-mode rows measure load time and residency, not throughput, and
+    // carry no TTFT/TPS at all. Left in the per-device throughput tables they
+    // would render as a wall of "Crashed" — the absence of a throughput
+    // number read as a failure. They have their own section.
+    if (/\[lm=/.test(r.config)) continue
     if (!byDevice.has(r.device)) byDevice.set(r.device, [])
     byDevice.get(r.device).push(r)
   }
@@ -463,7 +726,7 @@ function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseli
   lines.push('')
 
   // Current-run metadata block
-  const hasDesktopRows = rows.some(r => r.device === desktopDevice)
+  const hasDesktopRows = rows.some(r => r.isDesktop)
   const curLine = metaLine(meta, addonVersion, hasDesktopRows, mobileRepeats(rows, desktopDevice))
   if (curLine) {
     lines.push(curLine)
@@ -499,17 +762,21 @@ function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseli
   )
   lines.push('')
   lines.push(
-    'Config labels read `[model] [gpu|cpu] [rb=N] [kv=type] [bs=N] [ctx=N]`, where ' +
+    'Config labels read `[model] [gpu|cpu] [rb=N] [kv=type] [bs=N] [lm=mode] [ctx=N]`, where ' +
     '`rb` is the reasoning budget (-1 leaves the model\'s reasoning channel on, 0 ' +
-    'disables it), `kv` is the KV-cache type, `bs` is the batch/ubatch size, and ' +
-    '`ctx` is the context size. The batch sweep varies `bs` at a fixed baseline ' +
-    'against a long context-filling prompt, so its rows carry `ctx=8192`.'
+    'disables it), `kv` is the KV-cache type, `bs` is the batch/ubatch size, ' +
+    '`lm` is the model load mode, and `ctx` is the context size. The batch sweep ' +
+    'varies `bs` at a fixed baseline against a long context-filling prompt, so its ' +
+    'rows carry `ctx=8192`; the load-mode sweep varies `lm` at a fixed baseline and ' +
+    'is reported in its own section, since it measures load rather than throughput.'
   )
   lines.push('')
 
   for (const l of coverageLines(rows, desktopDevice, devices, meta.expectedShards)) lines.push(l)
 
   for (const l of mermaidSection(rows, desktopDevice, chartsUrl)) lines.push(l)
+
+  for (const l of loadModeSection(rows, desktopDevice, meta.expectedShards)) lines.push(l)
 
   const hasTokens = rows.some(r => r.tokens !== null)
 
@@ -646,7 +913,7 @@ function atConfig (rows, { backend, rb, size, quant, kv }) {
 // mean and the whisker its own measured 3-rep stddev (stdKey) — never a spread
 // recomputed across blended configs.
 function chartSeries (rows, desktopDevice, byKey, order, metric, stdKey) {
-  const pts = rows.filter(r => r.device !== desktopDevice && !r.crashed && r[metric] !== null && byKey(r.config) !== null)
+  const pts = rows.filter(r => !r.isDesktop && !r.crashed && r[metric] !== null && byKey(r.config) !== null)
   const present = new Set(pts.map(r => byKey(r.config)))
   const cats = order.filter(c => present.has(c))
   const devices = [...new Set(pts.map(r => r.device))].sort()
@@ -698,7 +965,7 @@ function svgBarChart (title, unit, cats, series, maxOverride) {
 
 function renderHtml (rows, desktopDevice, meta, addonVersionArg) {
   const addonVersion = meta.addonVersion || addonVersionArg || ''
-  const mobile = rows.filter(r => r.device !== desktopDevice && !isBatchSweepRow(r.config))
+  const mobile = rows.filter(r => !r.isDesktop && !isAdditiveSweepRow(r.config))
   const devices = [...new Set(mobile.filter(r => !r.crashed).map(r => r.device))].sort()
   const legend = devices.map((d, i) => `<span style="display:inline-flex;align-items:center;margin:0 14px 6px 0"><span style="width:12px;height:12px;background:${CHART_COLORS[i % CHART_COLORS.length]};display:inline-block;margin-right:5px;border-radius:2px"></span>${d}</span>`).join('')
   const KVO = ['f16', 'q8_0', 'q4_0', 'tbq3_0/pq3_0', 'tbq4_0/pq4_0', 'pq3_0', 'pq4_0']

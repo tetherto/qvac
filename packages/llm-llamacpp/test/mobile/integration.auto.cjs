@@ -26,6 +26,66 @@ async function runBenchmarkPerf08bQ40F16Bs512Test (options = {}) { // eslint-dis
   return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-bs512.test.js', options)
 }
 
+async function runBenchmarkPerf08bQ40F16LmautoCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmautoCpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmauto-cpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmautoGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmautoGpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmauto-gpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmdioCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmdioCpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmdio-cpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmdioGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmdioGpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmdio-gpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmmlockCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmmlockCpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmmlock-cpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmmlockGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmmlockGpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmmlock-gpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmmmapCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmmmapCpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmmmap-cpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmmmapGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmmmapGpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmmmap-gpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmmmapmlockCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmmmapmlockCpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmmmapmlock-cpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmmmapmlockGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmmmapmlockGpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmmmapmlock-gpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmnoneCpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmnoneCpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmnone-cpu.test.js', options)
+}
+
+async function runBenchmarkPerf08bQ40F16LmnoneGpuTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16LmnoneGpuTest')) return __FILTERED
+  return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16-lmnone-gpu.test.js', options)
+}
+
 async function runBenchmarkPerf08bQ40F16Test (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runBenchmarkPerf08bQ40F16Test')) return __FILTERED
   return runIntegrationModule('../integration/benchmark-perf-08b-q4-0-f16.test.js', options)
@@ -479,6 +539,11 @@ async function runImageMmprojGpuTest (options = {}) { // eslint-disable-line no-
 async function runKvCacheTypeDefaultsTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKvCacheTypeDefaultsTest')) return __FILTERED
   return runIntegrationModule('../integration/kv-cache-type-defaults.test.js', options)
+}
+
+async function runLoadModeTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLoadModeTest')) return __FILTERED
+  return runIntegrationModule('../integration/load-mode.test.js', options)
 }
 
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars

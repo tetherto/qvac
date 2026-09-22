@@ -146,7 +146,100 @@ for desktop and mobile:
 > at 512. The rate metrics (TPS, ppTPS) stay comparable; the `Tokens` column
 > and absolute TTFT reflect those different caps.
 
+## Choosing what to sweep (`--sweep-params`)
+
+**Optional. Omit it and everything is swept, exactly as before** — the default
+CI dispatch is unchanged.
+
+When you only care about some parameters, name them and the rest pin to a
+single value, so the run costs only the axes it is about:
+
+```bash
+# Sweep quantization across its full configured range; pin everything else.
+npm run run:param-sweep -- --sweep-params="quantization"
+
+# Two params, both full range.
+npm run run:param-sweep -- --sweep-params="quantization,cache-type-k"
+
+# Pick the values too: params separate with "," and values with "|".
+npm run run:param-sweep -- --sweep-params="quantization=Q4_0|Q8_0"
+
+# Mix: pinned values for one, full range for the other.
+npm run run:param-sweep -- --sweep-params="quantization=Q4_0|Q8_0,cache-type-k"
+
+# Load modes only — skips the ~6h grid entirely.
+node ./load-mode-sweep.js --sweep-params="load-mode=auto|mmap"
+```
+
+### Naming a grid axis alongside `load-mode` applies to both
+
+```bash
+# 2 modes x 2 quantizations = 4 load-mode cells, AND the quantization grid.
+--sweep-params="load-mode=auto|mmap,quantization=Q4_0|Q8_0"
+
+# A bare name means every quantization the model has.
+--sweep-params="load-mode=auto|mmap,quantization"
+```
+
+`quantization`, `device` and `ctx-size` narrow the load-mode sweep the same way
+they narrow the grid. This matters because the reason `load_mode` stays out of
+the main grid covers the *ratio* between modes, not the absolute cost: load
+time and residency both scale with artifact bytes, so whether the
+mapped-vs-anonymous gap holds at a larger quantization is a real question the
+sweep should answer without a code edit.
+
+**Desktop and mobile have different catalogues, and the selector says so.**
+The desktop runner builds its cells at run time from whatever model files are
+present, so `quantization` there means any quantization you have. Mobile runs
+pre-generated Device Farm shards, and the matrix defines load-mode shards at
+`Q4_0`/`f16` only — so `--sweep-params="load-mode,quantization=Q8_0"` fails
+with *"No mobile benchmark cases match this selection"* rather than silently
+falling back to `Q4_0` or inventing a shard family. Add the shards to
+`test/integration/_benchmark-matrix.js` if you need them.
+
+An axis a shard runs *internally* cannot narrow it and is rejected rather than
+ignored. A mobile grid shard sweeps both backends and both reasoning budgets
+in one session, so `device=gpu` or `threads=8` would have returned all 70
+shards while looking filtered; both now fail with the reason.
+
+What stays additive is the relationship to the **70-cell main grid**:
+`load-mode` and `batch-sweep` each run as their own sweep rather than being
+crossed into it, so cost is bounded by what you asked for instead of
+multiplying the whole matrix. That is the PR #3300 precedent, and it is why
+`--sweep-params="load-mode,quantization"` gives you the grid plus a
+quantization-swept load-mode sweep — not 70 cells × 6 modes.
+
+Two separators, deliberately: `,` between params and `|` between values. With
+commas on both sides `a=1,2,b` is ambiguous — there is no way to tell a second
+value from a second param. `|` is safe for every value the sweep accepts,
+including `mmap+mlock`.
+
+| Param | Sweeps |
+|-------|--------|
+| `quantization` | GGUF quantization levels |
+| `device` | `gpu` / `cpu` |
+| `ctx-size` | context sizes |
+| `threads` | thread counts |
+| `batch-size`, `ubatch-size` | batch / micro-batch sizes |
+| `flash-attn` | flash attention on/off |
+| `cache-type-k`, `cache-type-v` | KV-cache types |
+| `reasoning-budget` | reasoning budget |
+| `load-mode` | the additive load-mode sweep (`load-mode-sweep.js`) — load time and resident memory per `load_mode`, not throughput |
+
+A param that is named but unknown fails the run rather than being ignored, so
+a typo cannot silently sweep nothing. Naming only `load-mode` skips the
+parameter grid; naming only grid params skips the load-mode sweep.
+
+In CI this is the single `sweep_params` input on
+**Benchmark Performance — LLM Parameter Sweep**; the same string, same syntax.
+Note that a narrowed load-mode run cannot satisfy QVAC-25043's acceptance
+criteria — the report marks the modes you left out as coverage gaps rather than
+pretending they passed.
+
 ## Sweep Flags
+
+Individual dimensions can also be overridden directly. Prefer `--sweep-params`
+above for choosing what to vary; these remain for pinning a specific value.
 
 All sweep dimensions accept comma-separated values for full-factorial grid.
 

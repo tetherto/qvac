@@ -153,7 +153,7 @@ const config = {
   gpu_layers: '99', // number of model layers offloaded to GPU.
   ctx_size: '1024', // context length
   device: 'cpu', // must be specified: 'gpu' or 'cpu' else it will throw an error
-  load_mode: 'none' // read fully into memory: no mmap, mlock or direct I/O
+  load_mode: 'none' // read fully into memory; unset uses 'auto' (see Load modes)
 }
 ```
 
@@ -168,7 +168,7 @@ const config = {
 | top_k             | 0 – 128                                     | 40                           | Top-k sampling                                        |
 | predict         | integer (-1 = infinity)                     | -1                           | Maximum tokens to predict                             |
 | seed              | integer                                     | -1 (random)                  | Random seed for sampling                              |
-| load_mode         | `"none"`, `"mmap"`, `"mlock"`, `"mmap+mlock"`, or `"dio"` | `"mmap"`                     | Select the model loading mode                          |
+| load_mode         | `"auto"`, `"none"`, `"mmap"`, `"mlock"`, `"mmap+mlock"`, or `"dio"` | `"auto"`   | Select the model loading mode ([details](#load-modes)) |
 | reverse_prompt    | string (comma-separated)                    | —                            | Stop generation when these strings are encountered    |
 | repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
@@ -184,6 +184,40 @@ const config = {
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
 | mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
 
+
+#### Load modes
+
+How the model's weights are brought into memory. Measured per platform and
+device in [docs/perf/load-mode.md](./docs/perf/load-mode.md).
+
+| Mode | Maps the weights | Locks them | Direct I/O |
+|------|------------------|------------|-----------|
+| `auto` (default) | yes, **unless** a selected device reports no mmap support — then loads anonymously | no | no |
+| `mmap` | yes | no | no |
+| `mlock` | no — reads anonymously, then locks | yes | no |
+| `mmap+mlock` | yes | yes | no |
+| `none` | no | no | no |
+| `dio` | no | no | requested, but see below |
+
+`mlock` is **not** "`mmap` plus locking" — it is the anonymous path plus
+locking.
+
+`auto` loads anonymously when a selected device sets `mmap_support = false`:
+OpenCL (Adreno), Hexagon, Vulkan integrated GPUs and CUDA integrated GPUs.
+Everywhere else it maps. Measured on linux-x64, that saves ~196 MiB resident on
+an integrated GPU where mapping buys nothing, and avoids a 2.3× load-time
+penalty on a discrete one — so the choice is per-device rather than
+per-platform.
+
+Two caveats worth knowing before selecting a mode explicitly:
+
+- **`dio` currently does nothing.** qvac-fabric accepts the mode but never
+  opens the file with `O_DIRECT`, so it behaves exactly like `none`. Its
+  underlying implementation is Linux-only in any case.
+- **A failed lock is not an error.** `mlock` warns and continues when the lock
+  exceeds `RLIMIT_MEMLOCK` (8 MB on a stock Linux, and typically unavailable on
+  Android), so a load that "succeeded" may not have locked anything. On a GPU
+  load `mlock` locks nothing at all, because the weights are in device memory.
 
 #### KV-cache type & auto-default
 

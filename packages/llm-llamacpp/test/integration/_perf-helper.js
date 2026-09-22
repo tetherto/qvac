@@ -294,6 +294,12 @@ function _num(v) {
  *                                  'Qwen3-1.7B-Q4_0'). Surfaces as the
  *                                  Model column in the perf renderer.
  * @param {string} [extra._output]  Generated text (will be capped for mobile).
+ * @param {Object} [extra.loadMetrics] Per-load figures for this cell:
+ *                                  `load_ms` plus `rss_bytes` /
+ *                                  `rss_anon_bytes` / `rss_file_bytes` deltas.
+ *                                  Null fields mean the counter was
+ *                                  unavailable on this platform (no /proc on
+ *                                  iOS), not that it read zero.
  */
 function recordPerformance(label, totalTime, extra) {
   const stats = (extra && extra.stats) || null
@@ -338,7 +344,15 @@ function recordPerformance(label, totalTime, extra) {
       generated_tokens: generatedTokens,
       prompt_tokens: promptTokens,
       tps: tps !== null ? Number(tps.toFixed(2)) : null,
-      pp_tps: ppTps !== null ? Number(ppTps.toFixed(2)) : null
+      pp_tps: ppTps !== null ? Number(ppTps.toFixed(2)) : null,
+      // Load-time and resident-memory figures for the load this row was
+      // generated under. Absent (null) for callers that do not measure them,
+      // so existing renderers that never read these keys are unaffected.
+      load_ms: (extra && extra.loadMetrics && extra.loadMetrics.load_ms) ?? null,
+      rss_bytes: (extra && extra.loadMetrics && extra.loadMetrics.rss_bytes) ?? null,
+      rss_anon_bytes: (extra && extra.loadMetrics && extra.loadMetrics.rss_anon_bytes) ?? null,
+      rss_file_bytes: (extra && extra.loadMetrics && extra.loadMetrics.rss_file_bytes) ?? null,
+      locked_bytes: (extra && extra.loadMetrics && extra.loadMetrics.locked_bytes) ?? null
     },
     {
       scenario: (extra && extra.scenario) || 'default',

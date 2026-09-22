@@ -22,9 +22,16 @@ function platformFamily(key) {
 
 // Benchmark shards run only through benchmark-perf-llm-llamacpp.yml's
 // test_groups override. The MoE finetune test is desktop opt-in only (see
-// test/integration/finetuning-moe.test.js), so neither belongs in this file.
+// test/integration/finetuning-moe.test.js). The load-mode behavioural test
+// reads /proc and spawns one subprocess per measurement, neither of which is
+// available on a Device Farm session, so it is desktop-only as well (see
+// test/integration/load-mode.test.js). None of them belongs in this file.
 function isOverrideOnly(name) {
-  return name.startsWith('runBenchmarkPerf') || name === 'runFinetuningMoeTest'
+  return (
+    name.startsWith('runBenchmarkPerf') ||
+    name === 'runFinetuningMoeTest' ||
+    name === 'runLoadModeTest'
+  )
 }
 
 function isGroupMap(value) {

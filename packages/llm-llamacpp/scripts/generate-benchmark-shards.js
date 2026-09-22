@@ -22,7 +22,8 @@ const {
   shardFileName,
   runFunctionName,
   shardContents,
-  workflowBatches
+  workflowBatches,
+  MAX_SHARDS_PER_BATCH
 } = require('../test/integration/_benchmark-matrix.js')
 
 const integrationDir = path.resolve(__dirname, '..', 'test', 'integration')
@@ -47,36 +48,64 @@ const mode = process.argv.includes('--check')
 
 const SHARD_PREFIX = 'benchmark-perf-'
 
-// Verify the committed workflow test_groups match the matrix-derived batches.
+// Verify the mobile PLAN, which is what the workflow now consumes.
+//
+// The workflow used to hold each batch as literal JSON and this compared the
+// two texts. It no longer does: the mobile matrix is planned at run time from
+// the canonical matrix so `sweep_params` can reduce it, and there is no YAML
+// literal left to drift. What has to hold instead is that the planner only
+// ever emits real, runnable, in-budget batches.
 function checkGroups() {
-  if (!fs.existsSync(workflowFile)) {
-    console.error(`MISMATCH: benchmark workflow not found at ${workflowFile}`)
-    return 1
-  }
-  const yaml = fs.readFileSync(workflowFile, 'utf8')
-  // Parse each committed groups value and compare canonically, so reformatting
-  // the inline JSON (extra whitespace etc.) doesn't trip a false mismatch.
-  const committed = [...yaml.matchAll(/groups:\s*'(.+)'/g)].map((m) => {
-    try {
-      return JSON.stringify(JSON.parse(m[1]))
-    } catch {
-      return m[1]
-    }
-  })
-  const expected = workflowBatches().map((b) => JSON.stringify(b.groups))
+  const plan = workflowBatches()
   let bad = 0
-  if (committed.length !== expected.length) {
+
+  // No batch may exceed the proven in-budget Device Farm load. Above it
+  // Android serializes past its time budget and the macOS runner fills its
+  // disk collecting iOS logs, so an oversized batch fails here rather than
+  // being discovered on Device Farm an hour in. The load-mode axis is 12
+  // cells and had to be split into two batches for exactly this reason.
+  for (const batch of plan) {
+    if (batch.groups.length > MAX_SHARDS_PER_BATCH) {
+      console.error(
+        `MISMATCH: batch "${batch.cache}" has ${batch.groups.length} shards, ` +
+          `over the proven safe limit of ${MAX_SHARDS_PER_BATCH}`
+      )
+      bad++
+    }
+    if (batch.groups.length === 0) {
+      console.error(`MISMATCH: batch "${batch.cache}" is empty`)
+      bad++
+    }
+  }
+
+  // Every planned shard must be a case the matrix defines, so the planner can
+  // only ever select from the canonical catalogue and never invent a runner
+  // name that no generated test answers to.
+  const canonical = new Set(matrix().map((cell) => runFunctionName(cell)))
+  const planned = new Set()
+  for (const batch of plan) {
+    for (const group of batch.groups) {
+      if (!canonical.has(group.grep)) {
+        console.error(`MISMATCH: planned shard ${group.grep} is not in the matrix`)
+        bad++
+      }
+      if (planned.has(group.grep)) {
+        console.error(`MISMATCH: shard ${group.grep} planned into more than one batch`)
+        bad++
+      }
+      planned.add(group.grep)
+    }
+  }
+
+  // An unselected plan must cover the whole catalogue, so the default
+  // dispatch still runs everything it used to.
+  if (planned.size !== canonical.size) {
     console.error(
-      `MISMATCH: workflow has ${committed.length} group batches, matrix yields ${expected.length}`
+      `MISMATCH: unselected plan covers ${planned.size} shards, matrix defines ${canonical.size}`
     )
     bad++
   }
-  for (let i = 0; i < expected.length; i++) {
-    if (committed[i] !== expected[i]) {
-      bad++
-      console.error(`MISMATCH: workflow group batch ${i} differs from matrix`)
-    }
-  }
+
   return bad
 }
 

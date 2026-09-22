@@ -4,6 +4,7 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const { round, average, stddev, cartesianProduct } = require('./math')
 const { stripSurroundingQuotes, normalizeArgValue } = require('./utils')
+const { parseSweepParams, applySweepParams, sweepSelection } = require('./load-mode-sweep.config')
 
 // The focused sweep uses a single ~512-token prompt. Add 'ctx-filling' /
 // 'span-fill' back to also sweep context-fill and batch-spanning prompts.
@@ -39,7 +40,7 @@ function splitCsvArg (value, key) {
 }
 
 function buildSweepFromArgs (baseSweep, args) {
-  const nextSweep = {}
+  let nextSweep = {}
   for (const [key, values] of Object.entries(baseSweep)) {
     nextSweep[key] = Array.isArray(values) ? values.slice() : values
   }
@@ -50,7 +51,17 @@ function buildSweepFromArgs (baseSweep, args) {
     nextSweep[key] = rawValues.map((v) => String(v))
   }
 
+  // Applied after the per-key overrides so an explicit --quantization=Q4_0,Q8_0
+  // still wins for a dimension the caller also chose to sweep.
+  nextSweep = applySweepParams(nextSweep, parseSweepParams(normalizeArgValue(args['sweep-params'])))
+
   return nextSweep
+}
+
+// The selection this run's --sweep-params implies, for callers that need to
+// know which sweeps to build rather than which values to use.
+function sweepSelectionFromArgs (args) {
+  return sweepSelection(parseSweepParams(normalizeArgValue(args['sweep-params'])))
 }
 
 function ensureDir (dirPath) {
@@ -111,7 +122,10 @@ function buildBatchSweepCases (modelDef, batchSweep) {
   return cases
 }
 
-function buildCases (modelDef, sweep, batchSweep) {
+// `selection` gates the additive sweeps and the grid. Omitted (the default)
+// means run everything, so existing callers are unaffected.
+function buildCases (modelDef, sweep, batchSweep, selection) {
+  const runs = selection || { grid: true, batchSweep: true }
   const baseQuant = Array.isArray(modelDef.quantizations) ? modelDef.quantizations[0] : null
   const defaults = modelDef.defaults || {}
   if (baseQuant == null) {
@@ -135,6 +149,9 @@ function buildCases (modelDef, sweep, batchSweep) {
   const reasoningBudgetValues = sweep['reasoning-budget'] || []
 
   const cases = []
+  // The baseline and the cross-product both belong to the grid; a selector
+  // that names only an additive sweep must not produce them.
+  if (runs.grid) {
   for (const promptCase of PROMPT_CASES) {
     cases.push({
       caseId: `${modelDef.id}__q=${baseQuant}__baseline-defaults__pc=${promptCase}`,
@@ -203,7 +220,9 @@ function buildCases (modelDef, sweep, batchSweep) {
     }
   }
 
-  cases.push(...buildBatchSweepCases(modelDef, batchSweep))
+  }
+
+  if (runs.batchSweep) cases.push(...buildBatchSweepCases(modelDef, batchSweep))
 
   cases.sort((a, b) => Number(b.isBaseline) - Number(a.isBaseline))
   return cases
@@ -359,6 +378,7 @@ module.exports = {
   SWEEP_OVERRIDE_KEYS,
   splitCsvArg,
   buildSweepFromArgs,
+  sweepSelectionFromArgs,
   ensureDir,
   resolveModelName,
   checkModelExists,

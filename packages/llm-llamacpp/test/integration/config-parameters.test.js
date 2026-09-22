@@ -95,10 +95,58 @@ const scenarios = [
     },
     expectSuccess: true
   },
+  // One scenario per value the addon accepts (LoadFitNormalization.cpp
+  // kLoadModes). They assert acceptance and a working load, not which memory
+  // path the engine took — that is behaviour, and load-mode.test.js measures it.
+  //
+  // None of these may be tightened into a failure expectation on a platform
+  // where the mode degrades: llama.cpp warns and continues when mlock exceeds
+  // RLIMIT_MEMLOCK and when direct I/O is unavailable, so a degraded load is
+  // still a successful load and the addon is behaving correctly by returning it.
+  {
+    name: 'load_mode auto is accepted (the addon default)',
+    overrides: {
+      load_mode: 'auto',
+      n_predict: '16'
+    },
+    expectSuccess: true
+  },
   {
     name: 'load_mode none disables memory-mapped model loading',
     overrides: {
       load_mode: 'none',
+      n_predict: '16'
+    },
+    expectSuccess: true
+  },
+  {
+    name: 'load_mode mmap maps the weights',
+    overrides: {
+      load_mode: 'mmap',
+      n_predict: '16'
+    },
+    expectSuccess: true
+  },
+  {
+    name: 'load_mode mlock is accepted, locked or not',
+    overrides: {
+      load_mode: 'mlock',
+      n_predict: '16'
+    },
+    expectSuccess: true
+  },
+  {
+    name: 'load_mode mmap+mlock is accepted, locked or not',
+    overrides: {
+      load_mode: 'mmap+mlock',
+      n_predict: '16'
+    },
+    expectSuccess: true
+  },
+  {
+    name: 'load_mode dio is accepted whether or not direct I/O is available',
+    overrides: {
+      load_mode: 'dio',
       n_predict: '16'
     },
     expectSuccess: true
