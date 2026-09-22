@@ -51,9 +51,9 @@ test('classifyConclusion: success and an intentional skip pass, real failures fa
 test('a skipped check returns success and says why', async () => {
   const logs = []
   const code = await pollForCheck({
-    checkName: 'ocr-pr-head-ts-checks',
+    checkName: 'ocr-ggml-pr-head-ts-checks',
     fetchChecks: async () => [
-      { name: 'ocr-pr-head-ts-checks', status: 'completed', conclusion: 'skipped' },
+      { name: 'ocr-ggml-pr-head-ts-checks', status: 'completed', conclusion: 'skipped' },
     ],
     now: () => 0,
     sleep: async () => {},
@@ -70,9 +70,9 @@ test('a skipped check returns success and says why', async () => {
 test('a real failure is still a failure', async () => {
   const logs = []
   const code = await pollForCheck({
-    checkName: 'ocr-pr-head-ts-checks',
+    checkName: 'ocr-ggml-pr-head-ts-checks',
     fetchChecks: async () => [
-      { name: 'ocr-pr-head-ts-checks', status: 'completed', conclusion: 'failure' },
+      { name: 'ocr-ggml-pr-head-ts-checks', status: 'completed', conclusion: 'failure' },
     ],
     now: () => 0,
     sleep: async () => {},
