@@ -82,6 +82,45 @@ public:
    */
   [[nodiscard]] bool isLoaded() const noexcept { return sdCtx_ != nullptr; }
 
+  // -- Memory fit -------------------------------------------------------------
+
+  struct FitWorkload {
+    std::string prompt;
+    int width = 512;
+    int height = 512;
+    /** <= 1 projects image generation. */
+    int videoFrames = 1;
+    /** Tiled decoding trades speed for a much smaller VAE arena. */
+    bool vaeTiling = false;
+    int vaeTileSizeX = 0;
+    int vaeTileSizeY = 0;
+    float vaeTileOverlap = 0.0F;
+  };
+
+  struct FitOutcome {
+    sd_fit_status_t status = SD_FIT_ERROR;
+    /**
+     * The engine reached a fitting placement only by altering the backend
+     * assignment, so the configuration as given does not fit.
+     */
+    bool changed = false;
+    bool vaeTiling = false;
+    bool streamLayers = false;
+    std::string backend;
+    std::string paramsBackend;
+    std::string report;
+  };
+
+  /**
+   * Projects this configuration against the memory free right now, reading
+   * model metadata and never weight data. Runs without load().
+   *
+   * Choosing the placement is the point, so the load's own placement is not
+   * carried in: the backend spec, the `mainGpu` pin and any module-specific
+   * `paramsBackend` other than "*=cpu" are dropped before the engine is asked.
+   */
+  [[nodiscard]] FitOutcome assessFit(const FitWorkload& workload) const;
+
   // -- IModel -----------------------------------------------------------------
 
   /**
@@ -160,7 +199,7 @@ private:
     std::string mainGpuBackend;
   };
 
-  /** The one mapping from the stored config to the engine's parameters. */
+  /** The one mapping from the stored config; load() and assessFit() share it. */
   void fillCtxParams(CtxParams& out) const;
 
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;

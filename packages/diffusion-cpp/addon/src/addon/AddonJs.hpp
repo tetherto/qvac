@@ -546,6 +546,102 @@ activateUpscaler(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /**
+ * Project a load against the memory free right now. Args: [request], shaped
+ * like the createInstance model map plus a `workload` sub-object.
+ *
+ * Takes no instance and loads nothing: the engine reads model metadata only. A
+ * model it cannot read is an "error" status rather than a throw.
+ *
+ * A placement the engine reached only by changing the backend assignment is
+ * reported as "does-not-fit", because nothing here applies such a plan.
+ */
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+
+  SdCtxConfig config{};
+  config.modelPath = args.getMapEntry(0, "path");
+  config.diffusionModelPath = args.getMapEntry(0, "diffusionModelPath");
+  config.highNoiseDiffusionModelPath =
+      args.getMapEntry(0, "highNoiseDiffusionModelPath");
+  config.uncondDiffusionModelPath =
+      args.getMapEntry(0, "uncondDiffusionModelPath");
+  config.clipLPath = args.getMapEntry(0, "clipLPath");
+  config.clipGPath = args.getMapEntry(0, "clipGPath");
+  config.t5XxlPath = args.getMapEntry(0, "t5XxlPath");
+  config.llmPath = args.getMapEntry(0, "llmPath");
+  config.vaePath = args.getMapEntry(0, "vaePath");
+  config.clipVisionPath = args.getMapEntry(0, "clipVisionPath");
+  config.esrganPath = args.getMapEntry(0, "esrganPath");
+  config.audioVaePath = args.getMapEntry(0, "audioVaePath");
+  config.embeddingsConnectorsPath =
+      args.getMapEntry(0, "embeddingsConnectorsPath");
+
+  auto configMap = args.getSubmap(0, "config");
+  applySdCtxHandlers(config, configMap);
+
+  auto request = args.getJsObject(0, "request");
+  SdModel::FitWorkload workload;
+  if (auto prompt = request.getOptionalProperty<js::String>(env, "prompt")) {
+    workload.prompt = prompt->as<std::string>(env);
+  }
+  auto number = [&](const char* name) -> std::optional<double> {
+    auto value = request.getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<double>(env);
+  };
+  if (auto width = number("width")) {
+    workload.width = static_cast<int>(*width);
+  }
+  if (auto height = number("height")) {
+    workload.height = static_cast<int>(*height);
+  }
+  if (auto frames = number("videoFrames")) {
+    workload.videoFrames = static_cast<int>(*frames);
+  }
+  if (auto tiling = request.getOptionalProperty<js::Boolean>(env, "vaeTiling")) {
+    workload.vaeTiling = tiling->as<bool>(env);
+  }
+  if (auto tileX = number("vaeTileSizeX")) {
+    workload.vaeTileSizeX = static_cast<int>(*tileX);
+  }
+  if (auto tileY = number("vaeTileSizeY")) {
+    workload.vaeTileSizeY = static_cast<int>(*tileY);
+  }
+  if (auto overlap = number("vaeTileOverlap")) {
+    workload.vaeTileOverlap = static_cast<float>(*overlap);
+  }
+
+  const SdModel model{std::move(config)};
+  const SdModel::FitOutcome outcome = model.assessFit(workload);
+
+  const char* status = "error";
+  if (outcome.status == SD_FIT_SUCCESS) {
+    status = outcome.changed ? "does-not-fit" : "fits";
+  } else if (outcome.status == SD_FIT_FAILURE) {
+    status = "does-not-fit";
+  }
+
+  auto result = js::Object::create(env);
+  result.setProperty(env, "status", js::String::create(env, std::string(status)));
+  result.setProperty(env, "changed", js::Boolean::create(env, outcome.changed));
+  result.setProperty(
+      env, "vaeTiling", js::Boolean::create(env, outcome.vaeTiling));
+  result.setProperty(
+      env, "streamLayers", js::Boolean::create(env, outcome.streamLayers));
+  result.setProperty(env, "backend", js::String::create(env, outcome.backend));
+  result.setProperty(
+      env, "paramsBackend", js::String::create(env, outcome.paramsBackend));
+  result.setProperty(env, "report", js::String::create(env, outcome.report));
+  return result;
+}
+JSCATCH
+
+/**
  * Query expected ESRGAN RuntimeStats.backendDevice for a config.device value,
  * using the same backend policy as native load. Args: [device] or
  * [device, backendsDir].

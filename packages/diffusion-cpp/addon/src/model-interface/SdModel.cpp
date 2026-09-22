@@ -331,7 +331,8 @@ SdModel::SdModel(qvac_lib_inference_addon_sd::SdCtxConfig config)
 SdModel::~SdModel() = default;
 
 // ---------------------------------------------------------------------------
-// load() -- maps SdCtxConfig -> sd_ctx_params_t, then calls new_sd_ctx()
+// fillCtxParams() -- maps SdCtxConfig -> sd_ctx_params_t, shared by load()
+// and assessFit()
 // ---------------------------------------------------------------------------
 
 void SdModel::fillCtxParams(CtxParams& out) const {
@@ -533,6 +534,56 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.vae_conv_direct = config_.vaeConvDirect;
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
 }
+
+SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
+  CtxParams ctx;
+  fillCtxParams(ctx);
+
+  // Choosing the placement is what the fitter is for, so the load's own
+  // placement is cleared: `sd_fit_params` requires `backend` unset, and
+  // `params_backend` unset or "*=cpu". A `mainGpu` pin or a module spec would
+  // otherwise come back as SD_FIT_ERROR with nothing to explain it.
+  ctx.params.backend = nullptr;
+  const bool cpuParams =
+      ctx.paramsBackend.empty() || ctx.paramsBackend == "*=cpu";
+  ctx.params.params_backend = cpuParams && !ctx.paramsBackend.empty()
+                                  ? ctx.paramsBackend.c_str()
+                                  : nullptr;
+
+  sd_fit_workload_t request{};
+  sd_fit_workload_init(&request);
+  request.prompt = workload.prompt.empty() ? nullptr : workload.prompt.c_str();
+  request.width = workload.width;
+  request.height = workload.height;
+  request.video_frames = workload.videoFrames;
+  request.vae_tiling_params.enabled = workload.vaeTiling;
+  if (workload.vaeTileSizeX > 0)
+    request.vae_tiling_params.tile_size_x = workload.vaeTileSizeX;
+  if (workload.vaeTileSizeY > 0)
+    request.vae_tiling_params.tile_size_y = workload.vaeTileSizeY;
+  if (workload.vaeTileOverlap > 0.0F)
+    request.vae_tiling_params.target_overlap = workload.vaeTileOverlap;
+
+  sd_fit_result_t result{};
+  FitOutcome outcome;
+  outcome.status = sd_fit_params(&ctx.params, &request, &result);
+  outcome.changed = result.changed;
+  outcome.vaeTiling = result.vae_tiling;
+  outcome.streamLayers = result.stream_layers;
+  if (result.backend != nullptr)
+    outcome.backend = result.backend;
+  if (result.params_backend != nullptr)
+    outcome.paramsBackend = result.params_backend;
+  if (result.report != nullptr)
+    outcome.report = result.report;
+  sd_fit_result_free(&result);
+
+  return outcome;
+}
+
+// ---------------------------------------------------------------------------
+// load() -- builds the context params, then calls new_sd_ctx()
+// ---------------------------------------------------------------------------
 
 void SdModel::load() {
   if (isLoaded())
