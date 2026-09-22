@@ -8,6 +8,9 @@ const {
   generatedRunnerNames,
   validateTestGroups
 } = require('./lib/validate-test-groups')
+// Same exclusion the generator applies, from one shared definition: two
+// copies of this list would drift and the mismatch only shows up on device.
+const { DESKTOP_ONLY } = require('./lib/desktop-only-tests')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -22,6 +25,7 @@ function getIntegrationTestFiles() {
   return fs
     .readdirSync(integrationDir)
     .filter((f) => f.endsWith('.test.js'))
+    .filter((f) => !DESKTOP_ONLY.has(f))
     .sort()
 }
 

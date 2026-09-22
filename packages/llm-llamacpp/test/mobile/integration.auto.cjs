@@ -541,11 +541,6 @@ async function runKvCacheTypeDefaultsTest (options = {}) { // eslint-disable-lin
   return runIntegrationModule('../integration/kv-cache-type-defaults.test.js', options)
 }
 
-async function runLoadModeTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLoadModeTest')) return __FILTERED
-  return runIntegrationModule('../integration/load-mode.test.js', options)
-}
-
 async function runModelLoadingTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runModelLoadingTest')) return __FILTERED
   return runIntegrationModule('../integration/model-loading.test.js', options)

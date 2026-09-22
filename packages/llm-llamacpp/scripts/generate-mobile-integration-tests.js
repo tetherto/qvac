@@ -3,6 +3,7 @@
 const fs = require('bare-fs')
 const path = require('bare-path')
 const { matrix, shardFileName } = require('../test/integration/_benchmark-matrix.js')
+const { DESKTOP_ONLY } = require('./lib/desktop-only-tests')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -37,6 +38,7 @@ function getIntegrationFiles() {
   return fs
     .readdirSync(integrationDir)
     .filter((entry) => entry.endsWith('.test.js'))
+    .filter((entry) => !DESKTOP_ONLY.has(entry))
     .sort()
 }
 
