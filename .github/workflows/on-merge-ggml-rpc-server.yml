@@ -9,6 +9,7 @@ on:
       - tmp-*
     paths:
       - packages/ggml-rpc-server/**
+      - vcpkg-overlays/ports/qvac-fabric/**
       - .github/workflows/*ggml-rpc-server*.yml
 
   workflow_dispatch:

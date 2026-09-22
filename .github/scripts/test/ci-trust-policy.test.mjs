@@ -1565,31 +1565,46 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
   )
 });
 
-test('ggml-rpc-server overlay triggers wait for the server package layer', () => {
+test('ggml-rpc-server overlay triggers activate with the server package layer', () => {
   const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml');
   const rpcMerge = read('.github/workflows/on-merge-ggml-rpc-server.yml');
+  const tsProducer = read('.github/workflows/on-pr-ts-nx.yml');
   const mergeGate = read('.github/workflows/pr-gate-merge.yml');
+  const rpcProject = JSON.parse(
+    read('packages/ggml-rpc-server/project.json'),
+  );
   const fabricOverlay = /vcpkg-overlays\/ports\/qvac-fabric/;
   const rpcGate = mergeGate.match(
     /^ {12}ggml-rpc-server:\n(?:^ {14}- .+\n?)+/m,
   )?.[0];
 
-  assert.doesNotMatch(
+  assert.match(
     rpcPr,
     fabricOverlay,
-    'the RPC workflow must not await package checks before the server package exists',
+    'fabric changes must run RPC server PR checks once the package exists',
   )
-  assert.doesNotMatch(
+  assert.match(
     rpcMerge,
     fabricOverlay,
-    'the RPC release workflow must not build before the server package exists',
+    'fabric changes must rebuild the RPC server once the package exists',
+  )
+  assert.match(
+    tsProducer,
+    fabricOverlay,
+    'the unprivileged TS-check producer must run whenever the RPC consumer runs',
   )
   assert.ok(rpcGate, 'the merge gate must retain its ggml-rpc-server mapping');
-  assert.doesNotMatch(
+  assert.match(
     rpcGate,
     fabricOverlay,
-    'the merge gate must not require an RPC prebuild before the server package exists',
+    'fabric changes must require the RPC server prebuild once the package exists',
   )
+  assert.ok(
+    rpcProject.targets['on-pr'].inputs.includes(
+      '{workspaceRoot}/vcpkg-overlays/ports/qvac-fabric/**',
+    ),
+    'Nx must mark ggml-rpc-server affected for fabric-overlay-only changes',
+  );
 });
 
 test('RPC RDMA validation covers the server without replacing release artifacts', () => {

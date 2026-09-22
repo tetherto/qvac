@@ -30,6 +30,7 @@ on:
     paths:
       - "packages/**"
       - "cmake/qvac-addon/**"
+      - "vcpkg-overlays/ports/qvac-fabric/**"
       - ".github/workflows/**"
 
 permissions:
