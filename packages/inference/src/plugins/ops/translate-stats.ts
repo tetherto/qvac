@@ -3,23 +3,25 @@ import type { NmtStats } from '@/utils/addon-responses'
 
 export const NMT_SECONDS_TO_MS = 1000
 
-// The nmtcpp addon's counters accumulate over the life of a loaded model, so a
-// response carries the model's totals rather than the request's. Differencing
-// against what the previous job left behind is exact rather than approximate:
-// the addon serializes jobs per model, so no second request can land inside the
-// window. A `runBatch` between two `run` calls is the one gap — it advances the
-// counters and reports no stats, so its work lands in the next delta.
 const NMT_CUMULATIVE_KEYS = ['totalTime', 'totalTokens', 'decodeTime', 'encodeTime'] as const
 
 type NmtCumulativeKey = (typeof NMT_CUMULATIVE_KEYS)[number]
 type NmtCounters = Partial<Record<NmtCumulativeKey, number>>
 
-// Keyed on the loaded model instance, so an unload/reload starts from zero the
-// way the addon's own counters do.
-const lastCounters = new WeakMap<object, NmtCounters>()
+// The addon's counters accumulate over a loaded model's life and its jobs are
+// serialized per model, so the previous job's reading is this request's
+// baseline. Keyed on the model instance: a reload gets fresh counters and a
+// fresh baseline. `null` marks a baseline a batch has advanced past.
+const lastCounters = new WeakMap<object, NmtCounters | null>()
 
-function takeDeltas(stats: Partial<NmtStats>, model: object): NmtCounters {
-  const previous = lastCounters.get(model) ?? {}
+// `runBatch` advances the counters without reporting stats, so the next single
+// request cannot separate its own work from the batch's and reports none.
+export function markNmtCountersStale(model: object): void {
+  lastCounters.set(model, null)
+}
+
+function takeDeltas(stats: Partial<NmtStats>, model: object): NmtCounters | undefined {
+  const previous = lastCounters.get(model)
   const current: NmtCounters = { ...previous }
   const deltas: NmtCounters = {}
 
@@ -27,14 +29,14 @@ function takeDeltas(stats: Partial<NmtStats>, model: object): NmtCounters {
     const value = stats[key]
     if (typeof value !== 'number') continue
     current[key] = value
-    const delta = value - (previous[key] ?? 0)
+    const delta = value - (previous?.[key] ?? 0)
     // A counter that went backwards was reset under us; the reading is then the
     // request's own figure.
     deltas[key] = delta < 0 ? value : delta
   }
 
   lastCounters.set(model, current)
-  return deltas
+  return previous === null ? undefined : deltas
 }
 
 export function buildNmtTranslationStats(
@@ -43,7 +45,7 @@ export function buildNmtTranslationStats(
 ): TranslationStats {
   if (!stats) return {}
 
-  const { totalTime, totalTokens, decodeTime, encodeTime } = takeDeltas(stats, model)
+  const { totalTime, totalTokens, decodeTime, encodeTime } = takeDeltas(stats, model) ?? {}
   // The addon's own TPS divides the lifetime totals, which reads lowest right
   // after load and climbs as the load cost amortises. Derive it from this
   // request's figures instead, and omit it when they cannot carry it.

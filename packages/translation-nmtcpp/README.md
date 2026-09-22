@@ -389,9 +389,11 @@ try {
     })
     .await() // Wait for translation to complete
 
-  // Access performance statistics (if enabled with opts.stats)
+  // Access performance statistics (if enabled with opts.stats). The counters
+  // accumulate over the life of the loaded model; difference consecutive
+  // readings for per-run figures.
   if (response.stats) {
-    console.log('Translation completed in:', response.stats.totalTime, 's')
+    console.log('Total translation time so far:', response.stats.totalTime, 's')
   }
 } catch (error) {
   console.error('Translation failed:', error)

@@ -80,7 +80,9 @@ configures the engine and the language direction.
 | `stream` | `boolean`            | No       | Stream Server-Sent Events                                   |
 
 `translations` comes back in the order the inputs were given, one entry per input. `stats` is
-returned for a single input and describes that request alone; a batch does not report stats.
+returned for a single input and describes that request alone. A batch does not report stats,
+and neither does the first single input after a batch on the same model, whose work the engine
+cannot separate from the batch's.
 
 ```json
 {

@@ -1,5 +1,9 @@
 import test from 'brittle'
-import { buildNmtTranslationStats, NMT_SECONDS_TO_MS } from '@/plugins/ops/translate-stats'
+import {
+  buildNmtTranslationStats,
+  markNmtCountersStale,
+  NMT_SECONDS_TO_MS
+} from '@/plugins/ops/translate-stats'
 
 // The op keys its per-model baseline on the loaded model instance; any object
 // stands in for one here.
@@ -100,4 +104,38 @@ test('NMT stats: counters reset in place are read as the request figure', (t) =>
 
   t.is(afterReset.totalTokens, 10, 'a backwards counter is not reported as a negative delta')
   t.is(afterReset.totalTime, 0.036 * NMT_SECONDS_TO_MS)
+})
+
+test('NMT stats: the single request after a batch omits the cumulative fields', (t) => {
+  const nmt = model()
+
+  buildNmtTranslationStats({ totalTime: 1, totalTokens: 10, TPS: 10 }, nmt)
+  // A batch advances the counters and reports nothing.
+  markNmtCountersStale(nmt)
+  const afterBatch = buildNmtTranslationStats(
+    { totalTime: 3.5, totalTokens: 60, decodeTime: 3, TPS: 17, TTFT: 12 },
+    nmt
+  )
+  const next = buildNmtTranslationStats({ totalTime: 3.6, totalTokens: 70, TPS: 19 }, nmt)
+
+  t.absent(afterBatch.totalTime, 'time cannot be separated from the batch')
+  t.absent(afterBatch.totalTokens, 'tokens cannot be separated from the batch')
+  t.absent(afterBatch.decodeTime, 'decodeTime cannot be separated from the batch')
+  t.absent(afterBatch.tokensPerSecond, 'no rate without a per-request figure')
+  t.is(afterBatch.timeToFirstToken, 12, 'per-job fields still pass through')
+  t.is(next.totalTokens, 10, 'the post-batch reading becomes the next baseline')
+  t.ok(Math.abs(next.totalTime! - 100) < 1e-9, 'the following request is differenced again')
+})
+
+test('NMT stats: a counter first reported on a later request is read as its own figure', (t) => {
+  const nmt = model()
+
+  buildNmtTranslationStats({ totalTime: 1, totalTokens: 10, TPS: 10 }, nmt)
+  const second = buildNmtTranslationStats(
+    { totalTime: 2, totalTokens: 20, encodeTime: 0.4, TPS: 10 },
+    nmt
+  )
+
+  t.ok(Math.abs(second.encodeTime! - 400) < 1e-9, 'no baseline means the reading stands')
+  t.is(second.totalTokens, 10, 'other counters are still differenced')
 })
