@@ -3,6 +3,7 @@
 #include <any>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -28,6 +29,12 @@
 #include "model-interface/moss/MossModel.hpp"
 #include "model-interface/parler/ParlerModel.hpp"
 #include "model-interface/supertonic/SupertonicModel.hpp"
+
+#include <tts-cpp/audio8/fit.h>
+#include <tts-cpp/chatterbox/fit.h>
+#include <tts-cpp/cosyvoice/fit.h>
+#include <tts-cpp/parler/fit.h>
+#include <tts-cpp/supertonic/fit.h>
 
 namespace qvac::ttsggml::addon_js {
 
@@ -323,6 +330,185 @@ getVoiceControls(js_env_t* env, js_callback_info_t* /*info*/) try {
   }
   result.setProperty(env, "engines", engines);
   return result;
+}
+JSCATCH
+
+// ── assessFit ────────────────────────────────────────────────────────────
+//
+// Projects one voice against the memory free right now. Args: [request], whose
+// `engineType` picks the fitter and whose remaining keys carry that engine's
+// files and workload.
+//
+// Takes no instance and loads nothing: every fitter reads GGUF metadata only.
+// A model one cannot read is an "error" status carrying its own reason, never
+// a throw.
+
+inline js_value_t*
+fitResultToJs(js_env_t* env, const tts_cpp::FitResult& fit) {
+  const char* status = "error";
+  if (fit.status == tts_cpp::FitStatus::Success) {
+    status = "fits";
+  } else if (fit.status == tts_cpp::FitStatus::Failure) {
+    status = "does-not-fit";
+  }
+
+  auto result = js::Object::create(env);
+  auto text = [&](const char* name, const std::string& value) {
+    result.setProperty(env, name, js::String::create(env, value));
+  };
+  auto bytes = [&](const char* name, uint64_t value) {
+    result.setProperty(
+        env, name, js::Number::create(env, static_cast<double>(value)));
+  };
+
+  text("status", status);
+  text("reason", fit.reason);
+  text("modelVariant", fit.model_variant);
+  text("deviceName", fit.device_name);
+  text("report", fit.report);
+  result.setProperty(
+      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
+  result.setProperty(
+      env,
+      "deviceSharesHostMemory",
+      js::Boolean::create(env, fit.device_shares_host_memory));
+  bytes("deviceFreeBytes", fit.device_free_bytes);
+  bytes("deviceTotalBytes", fit.device_total_bytes);
+  bytes("deviceBytes", fit.device.total_bytes);
+  bytes("weightsBytes", fit.device.weights_bytes);
+  bytes("stateBytes", fit.device.state_bytes);
+  bytes("lmComputeBytes", fit.device.lm_compute_bytes);
+  bytes("codecComputeBytes", fit.device.codec_compute_bytes);
+  bytes("hostBytes", fit.host_bytes);
+  return result;
+}
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+  // A load infers the engine from the file keys it carries when `engineType`
+  // is absent. A fit request carries none of those keys, so the inference
+  // would name an engine the caller never asked for.
+  auto engineType = request.getOptionalProperty<js::String>(env, "engineType");
+  if (!engineType.has_value() || engineType->as<std::string>(env).empty()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "assessFit: engineType is required");
+  }
+  JSAdapter adapter;
+  const EngineType engine = adapter.readEngineType(request, env);
+
+  auto text = [&](const char* name) -> std::string {
+    auto value = request.getOptionalProperty<js::String>(env, name);
+    return value.has_value() ? value->as<std::string>(env) : std::string();
+  };
+  auto number = [&](const char* name) -> std::optional<double> {
+    auto value = request.getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<double>(env);
+  };
+  auto integer = [&](const char* name, int& out) {
+    if (auto value = number(name)) {
+      out = static_cast<int>(*value);
+    }
+  };
+
+  const std::string backendsDir = text("backendsDir");
+  const int gpuLayers = static_cast<int>(number("gpuLayers").value_or(0));
+  auto margin = [&](uint64_t& out) {
+    if (auto bytes = number("marginBytes")) {
+      out = static_cast<uint64_t>(*bytes);
+    }
+  };
+  auto vulkanDevice = [&](int& out) {
+    if (auto index = number("vulkanDevice")) {
+      out = static_cast<int>(*index);
+    }
+  };
+
+  switch (engine) {
+  case EngineType::Supertonic: {
+    tts_cpp::supertonic::FitOptions options;
+    options.model_gguf_path = text("modelPath");
+    options.backends_dir = backendsDir;
+    options.n_gpu_layers = gpuLayers;
+    integer("textTokens", options.text_tokens);
+    integer("steps", options.steps);
+    margin(options.margin_bytes);
+    vulkanDevice(options.vulkan_device);
+    if (auto precision = request.getOptionalProperty<js::String>(env, "precision")) {
+      options.precision = precision->as<std::string>(env);
+    }
+    integer("f16Weights", options.f16_weights);
+    if (auto seconds = number("audioSeconds")) {
+      options.audio_seconds = static_cast<float>(*seconds);
+    }
+    return fitResultToJs(env, tts_cpp::supertonic::fit_params(options));
+  }
+  case EngineType::Parler: {
+    tts_cpp::parler::FitOptions options;
+    options.model_gguf_path = text("modelPath");
+    options.backends_dir = backendsDir;
+    options.n_gpu_layers = gpuLayers;
+    integer("descriptionTokens", options.description_tokens);
+    integer("promptTokens", options.prompt_tokens);
+    integer("maxFrames", options.max_frames);
+    margin(options.margin_bytes);
+    return fitResultToJs(env, tts_cpp::parler::fit_params(options));
+  }
+  case EngineType::Chatterbox: {
+    tts_cpp::chatterbox::FitOptions options;
+    options.t3_gguf_path = text("t3Path");
+    options.s3gen_gguf_path = text("s3genPath");
+    options.kv_cache_type = text("kvCacheType");
+    options.backends_dir = backendsDir;
+    options.n_gpu_layers = gpuLayers;
+    integer("contextSize", options.n_ctx);
+    integer("textTokens", options.text_tokens);
+    integer("predictTokens", options.n_predict);
+    margin(options.margin_bytes);
+    return fitResultToJs(env, tts_cpp::chatterbox::fit_params(options));
+  }
+  case EngineType::Audio8: {
+    tts_cpp::audio8::FitOptions options;
+    options.lm_gguf_path = text("lmPath");
+    options.codec_decoder_gguf_path = text("codecDecoderPath");
+    options.codec_encoder_gguf_path = text("codecEncoderPath");
+    options.backends_dir = backendsDir;
+    options.n_gpu_layers = gpuLayers;
+    integer("promptTokens", options.prompt_tokens);
+    integer("maxFrames", options.max_frames);
+    if (auto seconds = number("referenceSeconds")) {
+      options.reference_seconds = static_cast<float>(*seconds);
+    }
+    margin(options.margin_bytes);
+    return fitResultToJs(env, tts_cpp::audio8::fit_params(options));
+  }
+  case EngineType::Cosyvoice: {
+    tts_cpp::cosyvoice::FitOptions options;
+    options.llm_gguf_path = text("llmPath");
+    options.flow_gguf_path = text("flowPath");
+    options.hift_gguf_path = text("hiftPath");
+    options.voice_gguf_path = text("voicePath");
+    options.backends_dir = backendsDir;
+    options.n_gpu_layers = gpuLayers;
+    integer("textTokens", options.text_tokens);
+    integer("speechTokens", options.speech_tokens);
+    margin(options.margin_bytes);
+    vulkanDevice(options.vulkan_device);
+    return fitResultToJs(env, tts_cpp::cosyvoice::fit_params(options));
+  }
+  // speech-cpp exposes no fitter for MOSS, so it falls to the throw below.
+  case EngineType::Moss:
+    break;
+  }
+
+  throw StatusError(
+      general_error::InvalidArgument, "assessFit: unsupported engineType");
 }
 JSCATCH
 
