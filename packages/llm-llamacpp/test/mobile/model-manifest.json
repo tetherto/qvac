@@ -1,4 +1,10 @@
 {
+  "runFitTest": [
+    {
+      "name": "Qwen3-0.6B-Q8_0.gguf",
+      "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q8_0.gguf"
+    }
+  ],
   "runApiBehaviorTest": [
     {
       "name": "Qwen3-0.6B-Q8_0.gguf",

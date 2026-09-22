@@ -426,6 +426,11 @@ async function runFinetuningPauseResumeTest (options = {}) { // eslint-disable-l
   return runIntegrationModule('../integration/finetuning-pause-resume.test.js', options)
 }
 
+async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runFitTest')) return __FILTERED
+  return runIntegrationModule('../integration/fit.test.js', options)
+}
+
 async function runGemma4ImageElephantPerfTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runGemma4ImageElephantPerfTest')) return __FILTERED
   return runIntegrationModule('../integration/gemma4-image-elephant-perf.test.js', options)
