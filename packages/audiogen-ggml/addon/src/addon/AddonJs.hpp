@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include <audiogen-cpp/acestep/fit.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -577,6 +578,112 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     modelInput.editOperations = parseEditOperations(env, *operations);
   }
   return instance.runJob(std::any(std::move(modelInput)));
+}
+JSCATCH
+
+// ── assessFit ────────────────────────────────────────────────────────────
+//
+// Projects one ACE-Step model set against the memory free right now. Args:
+// [request], carrying the four stage paths and the generation to accommodate.
+//
+// Takes no instance and loads nothing: the fitter reads GGUF metadata only. A
+// model it cannot read is an "error" status carrying the engine's own reason.
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  JsArgsParser args(env, info);
+  auto request = args.getJsObject(0, "request");
+
+  auto text = [&](const char* name) -> std::string {
+    auto value = request.getOptionalProperty<js::String>(env, name);
+    return value.has_value() ? value->as<std::string>(env) : std::string();
+  };
+  auto number = [&](const char* name) -> std::optional<double> {
+    auto value = request.getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<double>(env);
+  };
+  auto integer = [&](const char* name, int& out) {
+    if (auto value = number(name)) {
+      out = static_cast<int>(*value);
+    }
+  };
+
+  tts_cpp::acestep::FitOptions options;
+  options.models_dir = text("modelsDir");
+  options.text_enc_model_path = text("textEncoderPath");
+  options.lm_model_path = text("lmPath");
+  options.dit_model_path = text("ditPath");
+  options.vae_model_path = text("vaePath");
+  options.backends_dir = text("backendsDir");
+  integer("gpuLayers", options.n_gpu_layers);
+  integer("threads", options.n_threads);
+  integer("textTokens", options.text_tokens);
+  integer("lyricTokens", options.lyric_tokens);
+  integer("lmPromptTokens", options.lm_prompt_tokens);
+  integer("lmMaxNewTokens", options.lm_max_new_tokens);
+  integer("keepStages", options.keep_stages);
+  if (auto bytes = number("marginBytes")) {
+    options.margin_bytes = static_cast<uint64_t>(*bytes);
+  }
+  if (auto seconds = number("durationSeconds")) {
+    options.duration_seconds = static_cast<float>(*seconds);
+  }
+  if (auto scale = number("lmCfgScale")) {
+    options.lm_cfg_scale = static_cast<float>(*scale);
+  }
+  if (auto scale = number("guidanceScale")) {
+    options.guidance_scale = static_cast<float>(*scale);
+  }
+  if (auto source = request.getOptionalProperty<js::Boolean>(
+          env, "withSourceAudio")) {
+    options.with_source_audio = source->as<bool>(env);
+  }
+
+  const tts_cpp::acestep::FitResult fit = tts_cpp::acestep::fit_params(options);
+
+  const char* status = "error";
+  if (fit.status == tts_cpp::acestep::FitStatus::Success) {
+    status = "fits";
+  } else if (fit.status == tts_cpp::acestep::FitStatus::Failure) {
+    status = "does-not-fit";
+  }
+
+  auto result = js::Object::create(env);
+  auto setText = [&](const char* name, const std::string& value) {
+    result.setProperty(env, name, js::String::create(env, value));
+  };
+  auto bytes = [&](const char* name, uint64_t value) {
+    result.setProperty(
+        env, name, js::Number::create(env, static_cast<double>(value)));
+  };
+
+  setText("status", status);
+  setText("reason", fit.reason);
+  setText("modelName", fit.model_name);
+  setText("deviceName", fit.device_name);
+  setText("report", fit.report);
+  result.setProperty(env, "isTurbo", js::Boolean::create(env, fit.is_turbo));
+  result.setProperty(
+      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
+  result.setProperty(
+      env,
+      "deviceSharesHostMemory",
+      js::Boolean::create(env, fit.device_shares_host_memory));
+  result.setProperty(
+      env, "stagesResident", js::Boolean::create(env, fit.stages_resident));
+  bytes("deviceFreeBytes", fit.device_free_bytes);
+  bytes("deviceTotalBytes", fit.device_total_bytes);
+  bytes("deviceBytes", fit.peak_device_bytes);
+  bytes("hostBytes", fit.peak_host_bytes);
+  // Where the device does not share the host pool, host memory is a budget of
+  // its own, so a caller cannot weigh `hostBytes` without these.
+  bytes("hostFreeBytes", fit.host_free_bytes);
+  bytes("hostTotalBytes", fit.host_total_bytes);
+  return result;
 }
 JSCATCH
 
