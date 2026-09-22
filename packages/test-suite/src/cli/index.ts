@@ -13,6 +13,7 @@ import { buildConsumerSnap } from './commands/build-consumer-snap.js'
 import { reportCompare } from './commands/report-compare.js'
 import { reportFormat } from './commands/report-format.js'
 import { catalogValidate } from './commands/catalog-validate.js'
+import { reportMatrix } from './commands/report-matrix.js'
 import {
   runLocalDesktop,
   runLocalAndroid,
@@ -202,6 +203,25 @@ program
   .requiredOption('--format <format>', 'Output format (markdown)')
   .option('--output <file>', 'Output file (optional, prints to stdout if not specified)')
   .action(reportFormat)
+
+program
+  .command('report:matrix')
+  .description('Fold per-client run reports into a testId x client release-claim matrix')
+  .requiredOption(
+    '--report <label=path...>',
+    'Per-client report, e.g. --report desktop=reports/a/results-x.json --report python=...',
+    (value: string, previous: string[] = []) => previous.concat(value),
+    [] as string[]
+  )
+  .option('--output <file>', 'Write the matrix as JSON')
+  .option(
+    '--fail-on-drift',
+    'Exit non-zero if clients pass with different asserted values. Only meaningful over ' +
+      'tests that sample deterministically: a completion left to sample freely produces ' +
+      'different text on every run, which this reports as drift because it cannot tell ' +
+      'that apart from a client divergence'
+  )
+  .action(reportMatrix)
 
 program
   .command('catalog:validate')
