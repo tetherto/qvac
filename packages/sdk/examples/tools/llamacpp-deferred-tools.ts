@@ -9,7 +9,6 @@ import {
   executeToolSearch,
   loadModel,
   unloadModel,
-  type Tool,
   type ToolInput,
   QWEN3_1_7B_INST_Q4
 } from '@qvac/sdk'
@@ -70,7 +69,7 @@ try {
     history.push({ role: 'assistant', content: await first.text })
     history.push({
       role: 'tool',
-      content: executeToolSearch(tools as unknown as Tool[], search.arguments, history)
+      content: executeToolSearch(tools, search.arguments, history)
     })
 
     console.log('▸ Definitions appended. Turn 2 — the model can now call them directly.\n')

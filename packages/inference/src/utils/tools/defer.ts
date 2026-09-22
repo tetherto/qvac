@@ -1,4 +1,5 @@
 import type { Tool } from '@/schemas/tools'
+import { validateTools, type ToolInput } from '@/utils/tool-helpers'
 
 /**
  * Reserved name of the built-in search tool. A caller cannot register a tool
@@ -31,9 +32,15 @@ type ToolSearchResult = {
     query: string
     loaded: string[]
     already_loaded: string[]
+    hint?: string
   }
   tools: Tool[]
 }
+
+// Fixed text, so a repeated no-match search stays byte-identical and cannot
+// move the KV divergence point.
+const NO_MATCH_HINT =
+  'No tool matched. Search again with a different capability word, or answer without a tool.'
 
 export function isDeferred(tool: Tool): boolean {
   return tool.deferLoading === true
@@ -198,11 +205,15 @@ export function buildToolSearchResult(
   matches: readonly Tool[],
   alreadyLoaded: readonly string[]
 ): string {
+  const loaded = matches.map((tool) => tool.name)
   const result: ToolSearchResult = {
     tool_search: {
       query,
-      loaded: matches.map((tool) => tool.name),
-      already_loaded: [...alreadyLoaded]
+      loaded,
+      already_loaded: [...alreadyLoaded],
+      // Without this the model reads an empty result as "try again" and burns
+      // rounds rephrasing the same query.
+      ...(loaded.length === 0 && alreadyLoaded.length === 0 ? { hint: NO_MATCH_HINT } : {})
     },
     tools: matches.map(toWireTool)
   }
@@ -290,13 +301,19 @@ export function resolveDeferredTools(
 /**
  * Run a `tool_search` call and produce the `tool` message that carries its
  * result. Pure over the history it is given; the caller appends the message.
+ *
+ * Takes either wire `Tool`s or the Zod-schema `ToolInput` form, because what a
+ * caller holds is whatever they passed to `completion()`. A `ToolInput` whose
+ * `parameters` is still a Zod object would otherwise be serialised as Zod
+ * internals and reach the model as a definition it cannot call.
  */
 export function executeToolSearch(
-  tools: readonly Tool[],
+  tools: readonly Tool[] | readonly ToolInput[],
   args: Record<string, unknown>,
   history: readonly HistoryMessage[]
 ): string {
-  const { deferred } = partitionTools(tools)
+  const { tools: wire } = validateTools([...tools] as Tool[] | ToolInput[])
+  const { deferred } = partitionTools(wire)
   const query = typeof args['query'] === 'string' ? args['query'] : ''
   const limit = typeof args['limit'] === 'number' ? args['limit'] : undefined
 

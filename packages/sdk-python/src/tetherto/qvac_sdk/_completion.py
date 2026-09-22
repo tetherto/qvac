@@ -104,9 +104,15 @@ def _normalize_tools(
             }
             # Opt-in fields the simplified form may also carry. Dropping them
             # here would quietly turn a deferred tool into an always-loaded one.
-            for key in ("deferLoading", "group"):
+            # `defer_loading` is accepted too: that is the alias the generated
+            # model exposes, so it is what a Python caller reaches for first.
+            for key, wire in (
+                ("deferLoading", "deferLoading"),
+                ("defer_loading", "deferLoading"),
+                ("group", "group"),
+            ):
                 if key in entry:
-                    wrapped[key] = entry[key]
+                    wrapped[wire] = entry[key]
             entry = wrapped
         wire_tools.append(entry)
     return wire_tools, handlers

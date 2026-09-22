@@ -154,11 +154,16 @@ definitions and asks the model again, so the response only ever carries tool
 calls you can execute. Up to four searches run per request before the turn is
 answered as it stands.
 
-Two consequences worth knowing:
+Consequences worth knowing:
 
 - The search happens inside one request. The `tool` message holding the loaded
   definitions is not part of the response, so a later request re-searches if the
   model needs the same tool again.
+- On `stream: true`, a search round stays on the same SSE stream, so a model
+  that says something before searching streams that text too.
+- A turn that asks for a search _and_ calls a tool you can run is returned as it
+  stands with the search dropped — the call is yours to answer, and the model
+  searches again on your next request.
 - `tool_choice` naming a deferred tool is rejected with `400`
   `invalid_tool_choice` — its schema is not in the prompt, so the call cannot be
   forced. Name `tool_search` instead.

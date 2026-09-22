@@ -30,10 +30,6 @@ export function stripToolSearchCalls<T extends DrainedTurn>(drained: T): T {
   }
 }
 
-export function hasDeferredTools(tools: Tool[] | undefined): boolean {
-  return tools?.some((tool) => tool.deferLoading === true) === true
-}
-
 /**
  * Fold a turn's `tool_search` calls into the conversation.
  *
@@ -42,7 +38,11 @@ export function hasDeferredTools(tools: Tool[] | undefined): boolean {
  * client can actually execute ever reach the response.
  *
  * Returns `null` when the turn asked for no search, which is every turn of a
- * request that declares no deferred tools.
+ * request that declares no deferred tools, and also when the turn mixed a
+ * search with a call the client must run: continuing would drop that call, and
+ * only the client can answer it. Such a turn is returned as it stands, with the
+ * search dropped by `stripToolSearchCalls`; the model searches again on the
+ * next request, which is what a fresh request does anyway.
  */
 export function foldToolSearch(
   tools: Tool[] | undefined,
@@ -52,6 +52,7 @@ export function foldToolSearch(
 ): HistoryMessage[] | null {
   const searches = toolCalls.filter((call) => call.name === TOOL_SEARCH_NAME)
   if (searches.length === 0) return null
+  if (searches.length !== toolCalls.length) return null
 
   // The assistant turn goes back verbatim so the model sees its own call
   // syntax on the replay.

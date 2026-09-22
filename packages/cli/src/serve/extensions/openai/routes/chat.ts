@@ -15,7 +15,6 @@ import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-ena
 import {
   MAX_TOOL_SEARCH_ROUNDS,
   foldToolSearch,
-  hasDeferredTools,
   stripToolSearchCalls
 } from '@/serve/lib/tool-search'
 import {
@@ -316,19 +315,14 @@ async function runStreaming(
 
     sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
 
-    // Whether a turn was a `tool_search` turn is only known once it ends, and
-    // its tool-call markup must not reach the client. So when the request
-    // defers tools the turn is buffered and flushed once it turns out to be
-    // the answer; a request with no deferred tools streams live as before.
-    const defersTools = hasDeferredTools(p.tools)
+    // Every turn streams live. Tool-call syntax is framed into `toolCall`
+    // events by the normalizer, so a search turn emits no content deltas to
+    // withhold; what it can emit is a preamble ("let me look that up"), which
+    // is fine to show. Only the SSE stream is held open across a search round.
     let turnHistory = history
     let drained
     for (let round = 0; ; round++) {
-      const buffered: ChatCompletionDelta[] = []
-      const emit = (delta: ChatCompletionDelta) => {
-        if (defersTools) buffered.push(delta)
-        else sendSSE(raw, chunk(delta, null))
-      }
+      const emit = (delta: ChatCompletionDelta) => sendSSE(raw, chunk(delta, null))
 
       const result = completionFn({
         modelId: p.sdkModelId,
@@ -358,12 +352,8 @@ async function runStreaming(
               drained.toolCalls,
               drained.rawFullText ?? drained.text
             )
-      if (!extended) {
-        for (const delta of buffered) sendSSE(raw, chunk(delta, null))
-        break
-      }
-      // A search turn produced no answer: drop what it emitted and ask again
-      // with the definitions it loaded.
+      if (!extended) break
+      // The search turn loaded definitions; ask again with them in the history.
       turnHistory = extended
     }
 

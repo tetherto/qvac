@@ -375,3 +375,25 @@ async def test_orchestrate_requires_handlers_for_every_tool():
             history=[{"role": "user", "content": "x"}],
             tools=[WEATHER_TOOL],
         )
+
+
+async def test_deferred_tool_fields_accept_the_snake_case_alias():
+    transport = FakeTransport(
+        stream_items=[_chunk([_done(0, stopReason="eos")], done=True)]
+    )
+    run = completion(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "open an issue"}],
+        tools=[
+            {
+                "name": "create_issue",
+                "description": "Open a new issue on a repository",
+                "parameters": {"type": "object", "properties": {}},
+                "defer_loading": True,
+            }
+        ],
+    )
+    await run.final
+
+    assert transport.sent["tools"][0]["deferLoading"] is True

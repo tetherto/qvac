@@ -9,7 +9,6 @@ import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-ca
 import {
   MAX_TOOL_SEARCH_ROUNDS,
   foldToolSearch,
-  hasDeferredTools,
   stripToolSearchCalls
 } from '@/serve/lib/tool-search'
 import type { GenerationParams, ResponseFormat } from '@/serve/extensions/openai/schemas/common'
@@ -166,11 +165,10 @@ export async function writeStreamingResponse(
     response_id: p.rid
   })
 
-  // Whether a turn was a `tool_search` turn is only known once it ends, and
-  // its tool-call markup must not reach the client. So when the request defers
-  // tools the deltas are buffered and flushed once the turn turns out to be
-  // the answer; a request with no deferred tools streams live as before.
-  const defersTools = hasDeferredTools(p.tools)
+  // Every turn streams live. Tool-call syntax is framed into `toolCall` events
+  // by the normalizer, so a search turn emits no text deltas to withhold; what
+  // it can emit is a preamble, which is fine to show. Only the SSE stream is
+  // held open across a search round.
   const sendDelta = (token: string) =>
     sendSSE(res, {
       type: 'response.output_text.delta',
@@ -184,12 +182,12 @@ export async function writeStreamingResponse(
   let turnHistory = p.history
   let drained
   for (let round = 0; ; round++) {
-    const buffered: string[] = []
+    // Only the answering turn's text belongs in the final response object; a
+    // search turn's preamble was streamed but is not part of the answer.
     fullText = ''
     drained = await drainCompletion(runTurn(turnHistory), (token) => {
       fullText += token
-      if (defersTools) buffered.push(token)
-      else sendDelta(token)
+      sendDelta(token)
     })
 
     const extended =
@@ -201,12 +199,8 @@ export async function writeStreamingResponse(
             drained.toolCalls,
             drained.rawFullText ?? drained.text
           )
-    if (!extended) {
-      for (const token of buffered) sendDelta(token)
-      break
-    }
-    // A search turn produced no answer: drop what it emitted and ask again
-    // with the definitions it loaded.
+    if (!extended) break
+    // The search turn loaded definitions; ask again with them in the history.
     turnHistory = extended
   }
 

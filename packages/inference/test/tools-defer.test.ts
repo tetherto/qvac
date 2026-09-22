@@ -1,4 +1,5 @@
 import test from 'brittle'
+import { z } from 'zod'
 import type { Tool } from '@/schemas/tools'
 import {
   TOOL_SEARCH_NAME,
@@ -120,6 +121,56 @@ test('search honours the limit and clamps it', (t) => {
   t.is(searchDeferredTools(deferred, 'repository', 1).length, 1)
   t.is(searchDeferredTools(deferred, 'repository', 0).length, 1, 'clamped up to one')
   t.is(searchDeferredTools(deferred, 'repository', 99).length, 2, 'capped by the matches')
+})
+
+test('a no-match search tells the model what to do instead of going quiet', (t) => {
+  const parsed = JSON.parse(executeToolSearch(INVENTORY, { query: 'nothing here at all' }, [])) as {
+    tool_search: { loaded: string[]; hint?: string }
+    tools: Tool[]
+  }
+  t.alike(parsed.tool_search.loaded, [])
+  t.ok(parsed.tool_search.hint, 'a no-match result carries a hint')
+  t.is(
+    executeToolSearch(INVENTORY, { query: 'nothing here at all' }, []),
+    executeToolSearch(INVENTORY, { query: 'nothing here at all' }, []),
+    'and stays byte-identical'
+  )
+})
+
+test('a hit carries no hint', (t) => {
+  const parsed = JSON.parse(executeToolSearch(INVENTORY, { query: 'create_issue' }, [])) as {
+    tool_search: { hint?: string }
+  }
+  t.absent(parsed.tool_search.hint)
+})
+
+test('Zod-schema tools are converted before they reach the model', (t) => {
+  // The ToolInput form a caller passes to `completion()`: `parameters` is a Zod
+  // object, not a JSON schema. Serialising it raw would hand the model Zod
+  // internals instead of a callable definition.
+  const zodTool = {
+    name: 'create_issue',
+    description: 'Open a new issue on a repository',
+    parameters: z.object({ title: z.string().describe('Issue title') }),
+    deferLoading: true
+  }
+
+  const parsed = JSON.parse(executeToolSearch([zodTool], { query: 'create_issue' }, [])) as {
+    tool_search: { loaded: string[] }
+    tools: Tool[]
+  }
+
+  t.alike(parsed.tool_search.loaded, ['create_issue'])
+  t.alike(
+    parsed.tools[0]?.parameters,
+    {
+      type: 'object',
+      properties: { title: { type: 'string', description: 'Issue title' } },
+      required: ['title']
+    },
+    'the model receives a JSON schema, not the Zod object'
+  )
+  t.absent(JSON.stringify(parsed).includes('_zod'), 'no Zod internals reach the model')
 })
 
 test('a search result names what it loaded and carries the full schemas', (t) => {

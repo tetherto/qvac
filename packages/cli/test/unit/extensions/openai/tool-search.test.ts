@@ -6,7 +6,7 @@ import {
   openaiToolsToSdk,
   InvalidToolChoiceError
 } from '@/serve/extensions/openai/schemas/common'
-import { foldToolSearch, hasDeferredTools, stripToolSearchCalls } from '@/serve/lib/tool-search'
+import { foldToolSearch, stripToolSearchCalls } from '@/serve/lib/tool-search'
 
 const DEFERRED_WIRE = {
   type: 'function',
@@ -101,6 +101,24 @@ describe('foldToolSearch', () => {
     assert.equal(foldToolSearch(tools, history, [], 'text'), null)
   })
 
+  it('does not fold a turn that also called a tool the client must run', () => {
+    // Folding would continue the loop and throw this round's `get_weather`
+    // away; only the client can answer it, so the turn is returned as it
+    // stands and the model searches again next request.
+    const mixed = [call('tool_search'), { id: 'call-2', name: 'get_weather', arguments: {} }]
+    assert.equal(foldToolSearch(tools, history, mixed, '<calls>'), null)
+
+    const stripped = stripToolSearchCalls({
+      toolCalls: mixed,
+      finishReason: 'tool_calls' as const
+    })
+    assert.deepEqual(
+      stripped.toolCalls.map((c) => c.name),
+      ['get_weather'],
+      'the client still gets the call it can run'
+    )
+  })
+
   it('appends the assistant turn verbatim and the search result', () => {
     const extended = foldToolSearch(tools, history, [call('tool_search')], '<call tool_search>')!
     assert.equal(extended.length, 3)
@@ -108,12 +126,6 @@ describe('foldToolSearch', () => {
     assert.equal(extended[2]!.role, 'tool')
     assert.ok(extended[2]!.content.includes('"create_issue"'))
     assert.ok(extended[2]!.content.includes('"title"'), 'the full schema is loaded')
-  })
-
-  it('reports whether a request defers anything', () => {
-    assert.equal(hasDeferredTools(tools), true)
-    assert.equal(hasDeferredTools(openaiToolsToSdk([PLAIN_WIRE])), false)
-    assert.equal(hasDeferredTools(undefined), false)
   })
 })
 
