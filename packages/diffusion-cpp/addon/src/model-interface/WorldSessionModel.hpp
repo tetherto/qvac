@@ -11,6 +11,8 @@
 #include <inference-addon-cpp/RuntimeStats.hpp>
 #include <stable-diffusion.h>
 
+#include "utils/LoggingMacros.hpp"
+
 namespace qvac_lib_inference_addon_sd {
 
 // Configuration for an ABot-World interactive walk session. The session is
@@ -30,6 +32,10 @@ struct WorldSessionConfig {
   int numFramePerBlock = 0; // 0 = model default (3)
   int localAttnSize = 0;    // 0 = engine default (8); latent-frame window
   bool offloadParamsToCpu = false;
+  std::string paramsBackend;
+  std::string maxVram;
+  bool streamLayers = false;
+  std::optional<int> verbosity;
   // Frame encoding: 0 = lossless PNG; 1..100 = JPEG at that quality on the
   // standard JPEG scale (higher = better quality / larger frames, 100 =
   // least compression; 85 is a good remote-streaming value). A continuous
@@ -116,6 +122,7 @@ private:
   std::any processSceneCreate(const SceneCreateJob& job);
 
   qvac_lib_inference_addon_sd::WorldSessionConfig config_;
+  qvac_lib_inference_addon_sd::logging::ScopedVerbosity verbosity_;
   sd_abot_session_t* session_{nullptr};
   mutable std::atomic<bool> cancelRequested_{false};
   mutable qvac_lib_inference_addon_cpp::RuntimeStats lastStats_;
