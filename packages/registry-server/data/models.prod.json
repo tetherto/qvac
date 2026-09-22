@@ -8418,6 +8418,83 @@
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-bf16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 flow matching model (GGUF, multilingual)",
+    "quantization": "bf16",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 flow matching model (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 flow matching model (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 flow matching model (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-hift-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 HiFT vocoder (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "hift", "vocoder", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 language model (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "llm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 fused language model (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "llm", "fused", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-f16.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Audio8 DualAR language model (GGUF, multilingual)",
