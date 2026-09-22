@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { classifyConclusion, pollForCheck } from '../await-ts-checks/lib.mjs'
+import { classifyConclusion, findCheck, pollForCheck } from '../await-ts-checks/lib.mjs'
 
 const NAME = 'llm-pr-head-ts-checks / ts-checks'
 
@@ -131,4 +131,53 @@ test('wrong-name check present -> timeout 1 (never false-passes)', async () => {
 
 test('persistent API error to deadline -> 1', async () => {
   assert.equal(await run([new Error('secondary rate limit')], { timeoutTicks: 3 }), 1)
+})
+
+// A skipped CALLER job produces one check run under the bare caller-job name;
+// the nested "<caller> / <job>" run the callers poll for never exists.
+const CALLER = 'llm-pr-head-ts-checks'
+const bare = (status, conclusion) => [{ name: CALLER, status, conclusion }]
+
+test('findCheck: the exact job-level name wins whenever it is present', () => {
+  const rows = [
+    { name: CALLER, status: 'completed', conclusion: 'skipped' },
+    { name: NAME, status: 'completed', conclusion: 'failure' },
+  ]
+  assert.equal(findCheck(rows, NAME).conclusion, 'failure')
+})
+
+test('findCheck: falls back to the bare caller-job name only when it is a completed skip', () => {
+  assert.equal(findCheck(bare('completed', 'skipped'), NAME).name, CALLER)
+  assert.equal(findCheck(bare('completed', 'success'), NAME), undefined)
+  assert.equal(findCheck(bare('completed', 'failure'), NAME), undefined)
+  assert.equal(findCheck(bare('in_progress', null), NAME), undefined)
+})
+
+test('findCheck: a name with no " / " separator has no fallback', () => {
+  const rows = [{ name: 'diffusion', status: 'completed', conclusion: 'skipped' }]
+  assert.equal(findCheck(rows, 'diffusion-pr-head-ts-checks'), undefined)
+})
+
+test('findCheck: tolerates a missing or empty check-run list', () => {
+  assert.equal(findCheck(undefined, NAME), undefined)
+  assert.equal(findCheck([], NAME), undefined)
+})
+
+test('a skipped caller job (bare name only) passes instead of timing out', async () => {
+  const logs = []
+  const code = await pollForCheck({
+    checkName: NAME,
+    fetchChecks: async () => bare('completed', 'skipped'),
+    now: () => 0,
+    sleep: async () => {},
+    pollIntervalMs: 0,
+    timeoutMs: 1,
+    log: (msg) => logs.push(msg),
+  })
+  assert.equal(code, 0)
+  assert.match(logs.join('\n'), /llm-pr-head-ts-checks was skipped/)
+})
+
+test('a bare caller-job success alone does not pass; the nested run is required', async () => {
+  assert.equal(await run([bare('completed', 'success')], { timeoutTicks: 3 }), 1)
 })
