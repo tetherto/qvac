@@ -395,6 +395,48 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
 
   private async _load(): Promise<void> {
     const otherConfig: Record<string, unknown> = { ...this._config };
+    let mainGpu = otherConfig["main-gpu"] ?? otherConfig.main_gpu;
+    if (
+      otherConfig["main-gpu"] !== undefined &&
+      otherConfig.main_gpu !== undefined
+    ) {
+      throw new TypeError("Use only one of main-gpu and main_gpu");
+    }
+    if (
+      otherConfig["main-gpu"] !== undefined ||
+      otherConfig.main_gpu !== undefined
+    ) {
+      if (typeof mainGpu === "string") {
+        mainGpu = /^[+-]?\d+$/.test(mainGpu)
+          ? Number(mainGpu)
+          : mainGpu.toLowerCase();
+      }
+      if (
+        mainGpu !== "dedicated" &&
+        mainGpu !== "integrated" &&
+        !(
+          typeof mainGpu === "number" &&
+          Number.isInteger(mainGpu) &&
+          mainGpu >= -2147483648 &&
+          mainGpu <= 2147483647
+        )
+      ) {
+        throw new TypeError(
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'",
+        );
+      }
+      if (
+        ["gpu_backend", "gpuBackend", "gpu_device", "gpuDevice"].some(
+          (key) => otherConfig[key] !== undefined,
+        )
+      ) {
+        throw new TypeError(
+          "main-gpu cannot be combined with legacy GPU selectors",
+        );
+      }
+      otherConfig["main-gpu"] = mainGpu;
+      delete otherConfig.main_gpu;
+    }
 
     // Accept camelCase aliases for the GPU keys so the config object can
     // stay consistent with backendsDir/openclCacheDir. The C++ binding
@@ -710,6 +752,14 @@ namespace TranslationNmtcpp {
      */
     gpu_backend?: string;
     gpuBackend?: string;
+
+    /** Raw ggml registry index or GPU class. Requires use_gpu/useGPU.
+     * Unsupported devices fall back to CPU; out-of-range indices warn and auto-select.
+     * Cannot be combined with gpu_backend/gpu_device or their camelCase aliases.
+     */
+    "main-gpu"?: number | string;
+    /** Alias for main-gpu; specifying both keys is rejected. */
+    main_gpu?: number | string;
 
     /**
      * Ordinal within the matching compute devices. Defaults to 0.
