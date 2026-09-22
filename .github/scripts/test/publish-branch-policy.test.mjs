@@ -17,6 +17,14 @@ const PUBLISH_MARKER = /uses:.*(npm-publish-logic|publish-library-to-(gpr|npm))/
 
 const ALLOWED = ['release-*']
 
+// A pattern is allowed when every branch it can match is a release branch. That
+// is `release-*` itself and any narrower glob under it, e.g. publish-inference's
+// `release-inference-*` — per docs/gitflow.md you PR INTO a release branch from
+// a fork, so a push to one is a merge, which is the publish trigger this policy
+// exists to permit. Comparing the glob literally rejected the narrower spelling
+// and would reject every future `release-<pkg>-*` pipeline the same way.
+const isAllowed = (branch) => ALLOWED.includes(branch) || branch.startsWith('release-')
+
 // Same markers, different family: single-job npm publishes with no prebuild
 // matrix. Listed so they are explicitly exempt rather than silently failing.
 const LIBRARY_PUBLISHERS = new Set([
@@ -138,7 +146,7 @@ test('automatic pushes stay off PR-head branches', () => {
         `off every branch. List the branches explicitly: ${ALLOWED.join(', ')}.`,
     )
 
-    const disallowed = result.branches.filter((b) => !ALLOWED.includes(b))
+    const disallowed = result.branches.filter((b) => !isAllowed(b))
     assert.deepEqual(
       disallowed,
       [],
