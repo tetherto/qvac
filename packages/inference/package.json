@@ -165,7 +165,7 @@
     "@qvac/logging": "^0.1.1",
     "@qvac/model-fit": "^0.12.0",
     "@qvac/rag": "^0.8.1",
-    "@qvac/registry-client": "^0.6.1",
+    "@qvac/registry-client": "^0.7.0",
     "bare-abort-controller": "^1.1.2",
     "bare-buffer": "^3.6.2",
     "bare-cpu-info": "0.1.1",

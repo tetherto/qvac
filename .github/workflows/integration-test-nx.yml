@@ -157,6 +157,7 @@ jobs:
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
+      fabric-overlay-artifact: ${{ contains(fromJSON(inputs.fabric-consumers), 'llm-llamacpp') && inputs.fabric-overlay-artifact || '' }}
 
   pin-model-manifest:
     name: Pin model manifest (${{ matrix.package }})
