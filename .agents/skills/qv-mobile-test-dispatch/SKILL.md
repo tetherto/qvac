@@ -27,11 +27,17 @@ operating procedure, that doc is the source of truth.
 
 ## Safety rules
 
-- **Device Farm costs money.** Never dispatch the full suite to explore. Always
-  pass a `tests` filter and the smallest device set that answers the question.
-- **`llm-llamacpp` is sharded** (7 Android groups, 13 iOS groups). An empty
-  `tests` filter fans out the whole set as separate Device Farm runs. Always
-  filter for LLM.
+- **Device Farm costs money.** Never dispatch the full suite to explore. Once a
+  first run has been done, pass a `tests` filter and the smallest device set that
+  answers the question.
+- **The exception is a first run on an addon**, which is deliberately the full
+  matrix: every supported device, every test. See
+  [Step 3b](#step-3b--which-devices-to-run-on). Narrow only after it is green.
+- **`llm-llamacpp` is sharded** (7 Android groups, 13 iOS groups) and an empty
+  `tests` filter fans each group out as its own Device Farm run — multiplied by
+  the device list. A full first run on a sharded addon is legitimate but
+  expensive, so say what it will cost before dispatching it; outside a first run,
+  always filter for LLM.
 - **One platform per dispatch.** Android and iOS are separate runs.
 - **A second dispatch of the same workflow on the same branch cancels the
   first.** To cover both platforms, either wait, or use different addons in
@@ -109,12 +115,49 @@ a name from the commands above. (That FATAL used to fire for *valid* runners too
 because the prestage generator kept its own list; `readKnownRunners()` now reads
 `test-groups.json` directly.)
 
+## Step 3b — which devices to run on
+
+**A first run on an addon covers every supported device and every test.** That is
+what says whether the change is good. Narrow only afterwards, when re-running a
+known failure or iterating on one test.
+
+| Platform | Supported devices |
+|----------|-------------------|
+| Android  | `Google Pixel 9 Pro`, `Samsung Galaxy S25 Ultra`, `Samsung Galaxy S26 Ultra` |
+| iOS      | `Apple iPhone 16 Pro`, `Apple iPhone 17 Pro` |
+
+Not supported — these will schedule and bill, but a failure on one is not acted
+on: **Pixel 8 and older** (below the targeted floor) and **Pixel 10** (not
+adopted). Any other fleet device can be added deliberately, e.g. to reproduce a
+report on specific hardware; say why when you do.
+
+`Google Pixel 9` and `Google Pixel 9 Pro` are different fleet models under the
+default `EQUALS` operator. The supported one is the Pro.
+
 ## Step 4 — dispatch
+
+First run — full matrix, one dispatch per platform, `tests` left empty:
 
 ```bash
 gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9" \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
+  -f device_model_operator=EQUALS \
+  -f prebuild_run_id=<run id>
+
+gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
+  -f platform=iOS \
+  -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
+  -f device_model_operator=EQUALS \
+  -f prebuild_run_id=<run id>
+```
+
+Follow-up — one device, one test, after something fails:
+
+```bash
+gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
+  -f platform=Android \
+  -f devices_custom="Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS \
   -f tests=<runnerName> \
   -f prebuild_run_id=<run id>
