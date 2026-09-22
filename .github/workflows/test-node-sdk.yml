@@ -195,6 +195,10 @@ jobs:
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
       QVAC_TEST_SNAP_BUILD_MODE: ${{ startsWith(matrix.os, 'ubuntu-') && 'destructive' || 'lxd' }}
+      # The Windows GPU runner is the maintained two-GPU host. The macOS and
+      # Ubuntu GPU runners currently provide one eligible GPU, so multi-GPU
+      # tests must skip there instead of submitting a two-way tensor split.
+      QVAC_HAS_MULTI_GPU: ${{ startsWith(matrix.os, 'qvac-win25-x64-gpu') && '1' || '0' }}
     steps:
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
@@ -416,7 +420,7 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
       - name: Bootstrap (download models)
@@ -431,7 +435,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
       - name: Build Electron package
@@ -560,7 +564,7 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ~/snap/qvac-sdk-e2e/common/.qvac/models
-          key: qvac-snap-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
 
       - name: Bootstrap models inside Snap
         if: inputs.consumer == 'snap' && steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true'
@@ -576,7 +580,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ~/snap/qvac-sdk-e2e/common/.qvac/models
-          key: qvac-snap-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
 
       - name: Generate runId
         if: always()

@@ -169,4 +169,17 @@ function readScenePackPromptRows(buf) {
   }
 }
 
-module.exports = { pngLuminanceStddev, pngMeanAbsoluteError, readScenePackPromptRows }
+async function waitForLogEvidence(evidence, markers, timeout = 5000) {
+  const deadline = Date.now() + timeout
+  while (!markers.every((marker) => evidence.some((line) => line.includes(marker)))) {
+    if (Date.now() >= deadline) return
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+module.exports = {
+  pngLuminanceStddev,
+  pngMeanAbsoluteError,
+  readScenePackPromptRows,
+  waitForLogEvidence
+}

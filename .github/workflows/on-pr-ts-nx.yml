@@ -1,0 +1,159 @@
+# Consolidates the 8 on-pr-<pkg>-ts.yml producers.
+#
+# These run PR-head code, so they stay on pull_request (unprivileged, no
+# secrets) rather than moving into on-pr-nx, which is pull_request_target.
+#
+# The bug this fixes: on-pr-nx awaits a ts-check for every nx-affected package,
+# but the old producers triggered on their own package's paths. nx selects a
+# package for reasons its paths never see — a dependency edge, the lockfile,
+# nx.json — so the check was never produced and the await burned its 25 minute
+# timeout. Here the trigger is deliberately broad and nx does the narrowing, so
+# both resolve against the same graph and the same on-pr target.
+#
+# Same graph and target, not identical inputs: this workflow computes the
+# changed files from nx-set-shas' git range, while on-pr-nx feeds the API file
+# list to nx --stdin. Base-sha resolution and rename handling can therefore
+# diverge at the edges. That asymmetry is inherent to the privileged split and
+# is not a guarantee of equality.
+name: PR-head TypeScript Checks (nx)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, release-*, feature-*, tmp-*]
+    # Must be a superset of on-pr-nx's own trigger: if on-pr-nx can run, and it
+    # can select any package, then this workflow has to run too. Narrowing this
+    # to a package subset is what caused the original bug. Keep the list
+    # contiguous: ts-check-names.test.mjs stops at the first non-entry line.
+    paths:
+      - "packages/**"
+      - "cmake/qvac-addon/**"
+      - ".github/workflows/on-pr-ts-nx.yml"
+      - ".github/workflows/reusable-ts-checks.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      # JSON array of affected package short-names that declare hasTsChecks.
+      tspackages: ${{ steps.filter.outputs.tspackages }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: compute
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: on-pr
+      - id: filter
+        shell: bash
+        env:
+          # allrows, not matrix: carved-out packages still need their TS check
+          # produced here, because on-pr-<pkg>.yml awaits it.
+          M: ${{ steps.compute.outputs.allrows }}
+        run: |
+          set -euo pipefail
+          tspackages=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true) | .package] | unique')
+          echo "tspackages=$tspackages" >> "$GITHUB_OUTPUT"
+          echo "TS-check packages: $tspackages"
+
+  # One static job per package. `uses:` cannot take an expression, so these
+  # cannot be a matrix. Job ids are load-bearing: the check run is named
+  # "<job id> / ts-checks", and on-pr-nx polls for those exact strings.
+  classification-ggml-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'classification-ggml')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/classification-ggml
+
+  embed-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'embed-llamacpp')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/embed-llamacpp
+
+  llm-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'llm-llamacpp')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/llm-llamacpp
+
+  model-fit-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'model-fit')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/model-fit
+
+  ocr-ggml-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'ocr-ggml')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/ocr-ggml
+
+  translation-nmtcpp-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'translation-nmtcpp')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/translation-nmtcpp
+
+  vla-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'vla-ggml')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/vla-ggml
+
+  # diffusion predates reusable-ts-checks and runs its steps inline, so its
+  # check run is "diffusion-pr-head-ts-checks" with no "/ ts-checks" suffix.
+  # on-pr-nx's name map carries that exception; keep the shape until diffusion
+  # is migrated onto the reusable, which is a rename of a status check.
+  ts-checks:
+    name: diffusion-pr-head-ts-checks
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'diffusion-cpp')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/diffusion-cpp
+        run: npm install --ignore-scripts --package-lock=false --registry=https://registry.npmjs.org/
+
+      - name: Type declaration check
+        working-directory: packages/diffusion-cpp
+        run: npm run test:dts
+
+      - name: Run lint
+        working-directory: packages/diffusion-cpp
+        run: npm run lint
+
+      - name: Install Bare
+        run: npm install --global --force bare --registry=https://registry.npmjs.org/
+
+      - name: Run unit tests
+        working-directory: packages/diffusion-cpp
+        run: npm run test:unit

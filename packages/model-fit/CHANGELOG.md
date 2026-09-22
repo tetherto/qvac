@@ -1,5 +1,60 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- A fit stub is documented and covered as an accepted `modelPath`, single-file
+  and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
+  tokenizer tables and no data section, which the registry serves in place of
+  the artefact. It projects the same plan as the full file, and needs no padding
+  out to the artefact length. Two fabric behaviours make that work and both are
+  covered — 10549.0.0 skips the file-bounds check under no_alloc, and the vocab
+  load it does *not* skip is satisfied by `tokenizer.ggml.model = none` plus a
+  surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
+  that reports failure as an absent projection rather than an error, is asserted
+  on the same files. No API change.
+
+## [0.12.2] - 2026-09-18
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.0` -> `^0.16.1`. Another hard floor: Android consumers built against `0.16.0` fail to load. That release named the ELF version node `QVAC_FABRIC_ABI_1` on every ELF target, so an Android addon records a `DT_VERNEED` that bionic cannot satisfy — `dlopen` fails and `bare` reports `ADDON_NOT_FOUND: Cannot find addon '.'` from `binding.js` before any model work. `0.16.1` names the node only where fabric owns the C++ runtime (Linux embedding libc++); Android keeps the anonymous node it had through `0.15.0`. An Android binary linked against `0.16.0` keeps the versioned imports and still fails, so this package has to be rebuilt. A caret on a `0.x` version locks the minor, so `^0.16.0` could still resolve `0.16.0`. Released as a patch rather than a minor so consumers already tracking the `0.12.x` line pick this up without a range change of their own. Linux binaries built against `0.16.0` are unaffected. Desktop was unaffected. No API change. Rationale: fabric `0.16.1` ([#4566](https://github.com/tetherto/qvac/pull/4566)).
+
+## [0.12.1] - 2026-09-17
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.15.0` -> `^0.16.0`. Another hard floor, for the reason the last one turned out not to be enough on its own: `0.15.0` exported the C++ runtime, but nothing bound this addon to it. `bare`'s executable links GNU `libstdc++.so.6`, which puts a second complete C++ runtime in the process' **global** lookup scope — searched ahead of a `dlopen`'d module's own `DT_NEEDED` chain — so `__cxa_throw`, `__gxx_personality_v0` and the `std::` typeinfo objects resolved from libstdc++ while fabric's exports went unused. `0.16.0` names its version node `QVAC_FABRIC_ABI_1`, which makes this module record a `DT_VERNEED` that libstdc++ cannot satisfy, and that is what completes the pin. A caret on a `0.x` version locks the minor, so `^0.15.0` could not have resolved `0.16.0` on its own. Released as a patch rather than a minor so consumers already tracking the `0.12.x` line pick this up without a range change of their own.
+- The build now proves the pin instead of assuming it: `qvac_addon_finalize` reads the linked module with `readelf` and fails if any C++ runtime symbol is imported without the `QVAC_FABRIC_ABI_1` requirement. That check exists because the built ELF is the only place the invariant is observable — paired with a fabric that does not stamp the node, this module links and loads exactly as before and merely stops matching typed catches.
+- The module now exports the two `bare_*` entry points the runtime resolves by name and nothing else, down from about 1985 symbols: its own and nlohmann's typeinfo, and the whole of `inference-addon-cpp`, are no longer exported. `bare` loads modules `RTLD_LOCAL`, so nothing could reach those anyway; the addon and fabric are now a closed unit exposing plain C by construction rather than by the loader flags of whichever host loads them.
+
+### Fixed
+
+- The Linux fix `0.11.1` recorded takes effect only now. A llama load setting that only fabric can reject — an unknown `cache-type-k`, say — did keep escaping the fitter's handler, because with the runtime unpinned the addon still resolved its typeinfo from the host's libstdc++ rather than from fabric. The `LlamaLoadConfig` unit case added in `0.11.1` passes either way: `qvac_addon_stage_fabric_for_test` produces test executables that link no libstdc++, so fabric's is the only C++ runtime in those processes and the interposition cannot happen there. Coverage for the seam has to run in a host that owns a GNU C++ runtime, which is `bare`. Linux only; macOS, Windows, Android and iOS already share one runtime with the addon. No API change. Rationale: `arch/qips/linux-fabric-libcxx-ownership.md` ([#4519](https://github.com/tetherto/qvac/pull/4519)).
+
+## [0.12.0] - 2026-09-16
+
+This release adds a non-blocking way to run the memory-fit preflight. Callers that run the fit in the same process as their inference — the mobile advisory check today — no longer stall their JS loop for the duration of the probe.
+
+### New APIs
+
+#### `fitParamsAsync(config)`
+
+Takes the same config as `fitParams` and resolves to the same result, but runs `common_fit_params` on a worker thread. Validation failures reject instead of throwing. Backend registration still happens on the calling thread before the fit is queued, so the ggml registry sees the same ordering as the synchronous path, and fits remain serialised process-wide.
+
+```js
+const { fitParamsAsync } = require('@qvac/model-fit')
+
+const plan = await fitParamsAsync({ modelPath: '/abs/path/model.gguf' })
+```
+
+`llamaConfigFitAsync` on the private binding gives the load-config fitter used by the process runner and `@qvac/inference` the same worker-thread shape.
+
+### Pull Requests
+
+- [#4495](https://github.com/tetherto/qvac/pull/4495) - QVAC-25156 feat[api]: add fitParamsAsync to @qvac/model-fit
+
 ## [0.11.1] - 2026-09-16
 
 ### Changed

@@ -125,6 +125,9 @@
           "$ref": "#/$defs/upscaleStream.request"
         },
         {
+          "$ref": "#/$defs/vectorIndex.request"
+        },
+        {
           "$ref": "#/$defs/videoStream.request"
         },
         {
@@ -269,6 +272,9 @@
           "$ref": "#/$defs/upscaleStream.response"
         },
         {
+          "$ref": "#/$defs/vectorIndex.response"
+        },
+        {
           "$ref": "#/$defs/videoStream.response"
         },
         {
@@ -299,6 +305,14 @@
                   "sha256Checksum": {
                     "type": "string",
                     "description": "Expected SHA-256 checksum of the model file."
+                  },
+                  "registryPath": {
+                    "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+                    "type": "string"
+                  },
+                  "registrySource": {
+                    "description": "Registry source identifier, e.g. `huggingface`.",
+                    "type": "string"
                   }
                 },
                 "required": ["name", "sha256Checksum"],
@@ -318,6 +332,14 @@
                     "sha256Checksum": {
                       "type": "string",
                       "description": "Expected SHA-256 checksum of the model file."
+                    },
+                    "registryPath": {
+                      "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+                      "type": "string"
+                    },
+                    "registrySource": {
+                      "description": "Registry source identifier, e.g. `huggingface`.",
+                      "type": "string"
                     }
                   },
                   "required": ["name", "sha256Checksum"],
@@ -425,7 +447,7 @@
         "evidence": {
           "description": "The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or an uncalibrated floor, never a missing model.",
           "type": "string",
-          "enum": ["calibration", "computed-only"],
+          "enum": ["calibration", "computed-only", "native-fit"],
           "title": "AssessModelFitResponseEvidence"
         },
         "budget": {
@@ -499,7 +521,7 @@
               "evidence": {
                 "description": "What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
                 "type": "string",
-                "enum": ["calibration", "computed-only"],
+                "enum": ["calibration", "computed-only", "native-fit"],
                 "title": "AssessModelFitResponseModelsItemEvidence"
               },
               "estimate": {
@@ -2579,6 +2601,50 @@
             },
             "gpuMemFreeMb": {
               "type": "number"
+            },
+            "totalTime": {
+              "description": "Total native inference time for the run, in ms.",
+              "type": "number"
+            },
+            "totalWallMs": {
+              "description": "Wall-clock time spent inside the native engine for the run, in ms.",
+              "type": "number"
+            },
+            "totalSamples": {
+              "description": "Audio samples processed across the run.",
+              "type": "number"
+            },
+            "processCalls": {
+              "description": "Native `process()` invocations made across the run.",
+              "type": "number"
+            },
+            "whisperSampleMs": {
+              "description": "Whisper: sampling time, in ms.",
+              "type": "number"
+            },
+            "whisperBatchdMs": {
+              "description": "Whisper: batched-decode time, in ms.",
+              "type": "number"
+            },
+            "whisperPromptMs": {
+              "description": "Whisper: prompt-processing time, in ms.",
+              "type": "number"
+            },
+            "totalTranscriptions": {
+              "description": "Parakeet: transcriptions produced across the session.",
+              "type": "number"
+            },
+            "modelLoadMs": {
+              "description": "Parakeet: model load time, in ms.",
+              "type": "number"
+            },
+            "totalEncodedFrames": {
+              "description": "Parakeet: encoder frames produced across the run.",
+              "type": "number"
+            },
+            "encoderOnCoreml": {
+              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -2604,6 +2670,14 @@
             },
             "id": {
               "type": "number"
+            },
+            "isEndOfTurn": {
+              "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+              "type": "boolean"
+            },
+            "startsWord": {
+              "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+              "type": "boolean"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -2723,6 +2797,50 @@
             },
             "gpuMemFreeMb": {
               "type": "number"
+            },
+            "totalTime": {
+              "description": "Total native inference time for the run, in ms.",
+              "type": "number"
+            },
+            "totalWallMs": {
+              "description": "Wall-clock time spent inside the native engine for the run, in ms.",
+              "type": "number"
+            },
+            "totalSamples": {
+              "description": "Audio samples processed across the run.",
+              "type": "number"
+            },
+            "processCalls": {
+              "description": "Native `process()` invocations made across the run.",
+              "type": "number"
+            },
+            "whisperSampleMs": {
+              "description": "Whisper: sampling time, in ms.",
+              "type": "number"
+            },
+            "whisperBatchdMs": {
+              "description": "Whisper: batched-decode time, in ms.",
+              "type": "number"
+            },
+            "whisperPromptMs": {
+              "description": "Whisper: prompt-processing time, in ms.",
+              "type": "number"
+            },
+            "totalTranscriptions": {
+              "description": "Parakeet: transcriptions produced across the session.",
+              "type": "number"
+            },
+            "modelLoadMs": {
+              "description": "Parakeet: model load time, in ms.",
+              "type": "number"
+            },
+            "totalEncodedFrames": {
+              "description": "Parakeet: encoder frames produced across the run.",
+              "type": "number"
+            },
+            "encoderOnCoreml": {
+              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -2748,6 +2866,14 @@
             },
             "id": {
               "type": "number"
+            },
+            "isEndOfTurn": {
+              "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+              "type": "boolean"
+            },
+            "startsWord": {
+              "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+              "type": "boolean"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -4483,6 +4609,12 @@
         "UK",
         "VI"
       ]
+    },
+    "constants.VectorIndexStorage": {
+      "title": "VectorIndexStorage",
+      "type": "string",
+      "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+      "x-enum-varnames": ["F32", "Q8", "Q4", "TURBOVEC_Q4", "TURBOVEC_Q2"]
     },
     "constants.Verbosity": {
       "title": "Verbosity",
@@ -9830,9 +9962,9 @@
                       ]
                     },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), `'row'` (legacy; degrades to `'layer'`), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
                       "type": "string",
-                      "enum": ["none", "layer", "row", "tensor"],
+                      "enum": ["none", "layer", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
                     },
                     "flash-attn": {
@@ -9844,6 +9976,130 @@
                     "tensor-split": {
                       "description": "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25).",
                       "type": "string"
+                    },
+                    "batch-size": {
+                      "description": "Logical maximum batch size, the tokens submitted per decode call. Default 2048.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "ubatch-size": {
+                      "description": "Physical maximum batch size, the tokens computed in one pass. Default 512.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "cpu-moe": {
+                      "description": "Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.",
+                      "type": "boolean"
+                    },
+                    "n-cpu-moe": {
+                      "description": "Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "kv-offload": {
+                      "description": "Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.",
+                      "type": "boolean"
+                    },
+                    "image-max-tokens": {
+                      "description": "Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "image-min-tokens": {
+                      "description": "Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "threads": {
+                      "description": "CPU threads to use during generation. Unset uses one thread per physical core; a value of 0 or below uses every logical CPU, which is a different and usually larger count.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "threads-batch": {
+                      "description": "CPU threads to use during batch and prompt processing. Setting it governs generation too and discards `threads` and `cpu-mask`; leave it unset for `threads` to apply to both.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "cpu-mask": {
+                      "description": "CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Unset applies no affinity. Ignored when `threads-batch` is set.",
+                      "type": "string"
+                    },
+                    "cpu-mask-batch": {
+                      "description": "CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Honoured only alongside `threads-batch`; without it `cpu-mask` takes over.",
+                      "type": "string"
+                    },
+                    "override-tensor": {
+                      "description": "Buffer type overrides for tensors matching a pattern, as comma-separated `<tensor name pattern>=<buffer type>` entries, e.g. `'blk\\.(1[0-9])\\.ffn_(up|down|gate)_exps=CPU'` to keep those experts in system memory.",
+                      "type": "string"
+                    },
+                    "n-cpu-ffn": {
+                      "description": "Keep the dense FFN weights of the first N layers on the CPU.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "moe-cache-mib": {
+                      "description": "Persistent accelerator cache for Mixture-of-Experts weights, in MiB. Default `'auto'`, which sizes it during `fit`.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "string",
+                          "const": "auto"
+                        }
+                      ]
+                    },
+                    "prefetch-weights": {
+                      "description": "Overlap host-to-accelerator weight copies with compute. Default `'auto'`, which enables it for fitted dense models.",
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string",
+                          "const": "auto"
+                        }
+                      ]
+                    },
+                    "tensor-read-lazy": {
+                      "description": "On-demand reading of large tensors such as per-layer embeddings, which requires mmap: `'on'` reads their rows from disk instead of keeping them resident, `'off'` always keeps them resident, `'auto'` (default) applies `'on'` above 4 GiB.",
+                      "type": "string",
+                      "enum": ["on", "auto", "off"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigTensorReadLazy"
+                    },
+                    "fit": {
+                      "description": "Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting this field releases the `gpu_layers` default so fit can choose it, which offloads every layer rather than 99 if fit then gives up; setting `gpu_layers` alongside it pins the value and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.",
+                      "type": "boolean"
+                    },
+                    "fit-target": {
+                      "description": "Free margin `fit` aims to leave per device, in MiB. A single value is broadcast across devices; a comma-separated list such as `'1024,512'` sets them individually. Default 1024.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\d+(,\\d+)*$"
+                        }
+                      ]
+                    },
+                    "fit-ctx": {
+                      "description": "Smallest context size `fit` may settle on. Default 4096.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
                     },
                     "openclCacheDir": {
                       "description": "Writable directory for the OpenCL kernel binary cache; required on Android for fast GPU startup.",
@@ -10135,7 +10391,7 @@
                       "type": "string"
                     },
                     "detect_language": {
-                      "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
+                      "description": "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own.",
                       "type": "boolean"
                     },
                     "suppress_blank": {
@@ -10177,6 +10433,24 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "max_initial_ts": {
+                      "description": "Maximum initial timestamp the decoder may emit, as a fraction of the window.",
+                      "type": "number"
+                    },
+                    "no_speech_thold": {
+                      "description": "No-speech probability above which a segment is treated as silence.",
+                      "type": "number"
+                    },
+                    "seed": {
+                      "description": "Decoding RNG seed; `-1` picks a random seed.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "backendsDir": {
+                      "description": "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+                      "type": "string"
                     },
                     "vad_params": {
                       "type": "object",
@@ -10242,6 +10516,12 @@
                         "caption_enabled": {
                           "description": "Format output segments as captions.",
                           "type": "boolean"
+                        },
+                        "seed": {
+                          "description": "RNG seed applied to the whisper context; `-1` picks a random seed.",
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig"
@@ -10707,7 +10987,7 @@
                       "type": "boolean"
                     },
                     "streamingChunkMs": {
-                      "description": "Streaming chunk cadence in ms. Default 2000.",
+                      "description": "Streaming chunk cadence in ms. Defaults to 320 for Nemotron and 2000 for existing models. Nemotron supports 80, 160, 320, 560, or 1120.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
@@ -10723,7 +11003,7 @@
                       "type": "boolean"
                     },
                     "streamingEnergyVad": {
-                      "description": "CTC/TDT-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
+                      "description": "CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
                       "type": "boolean"
                     },
                     "streamingLeftContextMs": {
@@ -10739,8 +11019,9 @@
                       "maximum": 9007199254740991
                     },
                     "language": {
-                      "description": "Multilingual CTC language id (e.g. `hi`, `ta`); required for Indic Conformer GGUFs, ignored on monolingual CTC.",
-                      "type": "string"
+                      "description": "Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.",
+                      "type": "string",
+                      "pattern": "^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
                     },
                     "streamingSpkCacheEnable": {
                       "description": "AOSC (Sortformer v2.1): enable speaker-cache streaming. Default true.",
@@ -10904,9 +11185,9 @@
                       ]
                     },
                     "splitMode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'row'` (tensor parallelism).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU) or `'layer'` (pipeline parallelism).",
                       "type": "string",
-                      "enum": ["none", "layer", "row"],
+                      "enum": ["none", "layer"],
                       "title": "LoadModelSrcRequestLlamacppEmbeddingModelConfigSplitMode"
                     },
                     "tensorSplit": {
@@ -17056,7 +17337,7 @@
                   "type": "string"
                 },
                 "detect_language": {
-                  "description": "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language.",
+                  "description": "Convenience flag: `true` is translated to `language: 'auto'` before the request reaches the addon, which has no `detect_language` key of its own.",
                   "type": "boolean"
                 },
                 "suppress_blank": {
@@ -17098,6 +17379,24 @@
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
+                },
+                "max_initial_ts": {
+                  "description": "Maximum initial timestamp the decoder may emit, as a fraction of the window.",
+                  "type": "number"
+                },
+                "no_speech_thold": {
+                  "description": "No-speech probability above which a segment is treated as silence.",
+                  "type": "number"
+                },
+                "seed": {
+                  "description": "Decoding RNG seed; `-1` picks a random seed.",
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "backendsDir": {
+                  "description": "Root directory for dynamically-loaded ggml backend libraries. Defaults to the addon's own `prebuilds/`.",
+                  "type": "string"
                 },
                 "vad_params": {
                   "type": "object",
@@ -17163,6 +17462,12 @@
                     "caption_enabled": {
                       "description": "Format output segments as captions.",
                       "type": "boolean"
+                    },
+                    "seed": {
+                      "description": "RNG seed applied to the whisper context; `-1` picks a random seed.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigMiscConfig"
@@ -19377,6 +19682,50 @@
             },
             "gpuMemFreeMb": {
               "type": "number"
+            },
+            "totalTime": {
+              "description": "Total native inference time for the run, in ms.",
+              "type": "number"
+            },
+            "totalWallMs": {
+              "description": "Wall-clock time spent inside the native engine for the run, in ms.",
+              "type": "number"
+            },
+            "totalSamples": {
+              "description": "Audio samples processed across the run.",
+              "type": "number"
+            },
+            "processCalls": {
+              "description": "Native `process()` invocations made across the run.",
+              "type": "number"
+            },
+            "whisperSampleMs": {
+              "description": "Whisper: sampling time, in ms.",
+              "type": "number"
+            },
+            "whisperBatchdMs": {
+              "description": "Whisper: batched-decode time, in ms.",
+              "type": "number"
+            },
+            "whisperPromptMs": {
+              "description": "Whisper: prompt-processing time, in ms.",
+              "type": "number"
+            },
+            "totalTranscriptions": {
+              "description": "Parakeet: transcriptions produced across the session.",
+              "type": "number"
+            },
+            "modelLoadMs": {
+              "description": "Parakeet: model load time, in ms.",
+              "type": "number"
+            },
+            "totalEncodedFrames": {
+              "description": "Parakeet: encoder frames produced across the run.",
+              "type": "number"
+            },
+            "encoderOnCoreml": {
+              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -19402,6 +19751,14 @@
             },
             "id": {
               "type": "number"
+            },
+            "isEndOfTurn": {
+              "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+              "type": "boolean"
+            },
+            "startsWord": {
+              "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+              "type": "boolean"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -19416,6 +19773,12 @@
             },
             "probability": {
               "type": "number"
+            },
+            "source": {
+              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "type": "string",
+              "enum": ["silero", "energy"],
+              "title": "TranscribeResponseVadSource"
             }
           },
           "required": ["speaking", "probability"],
@@ -19452,6 +19815,102 @@
               "title": "TranscribeResponseEndOfTurnParakeet"
             }
           ]
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "TranscribeResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "TranscribeResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "TranscribeResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "TranscribeResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "TranscribeResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "TranscribeResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "TranscribeResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "TranscribeResponseDiagnostics"
         },
         "type": {
           "type": "string",
@@ -19617,6 +20076,50 @@
             },
             "gpuMemFreeMb": {
               "type": "number"
+            },
+            "totalTime": {
+              "description": "Total native inference time for the run, in ms.",
+              "type": "number"
+            },
+            "totalWallMs": {
+              "description": "Wall-clock time spent inside the native engine for the run, in ms.",
+              "type": "number"
+            },
+            "totalSamples": {
+              "description": "Audio samples processed across the run.",
+              "type": "number"
+            },
+            "processCalls": {
+              "description": "Native `process()` invocations made across the run.",
+              "type": "number"
+            },
+            "whisperSampleMs": {
+              "description": "Whisper: sampling time, in ms.",
+              "type": "number"
+            },
+            "whisperBatchdMs": {
+              "description": "Whisper: batched-decode time, in ms.",
+              "type": "number"
+            },
+            "whisperPromptMs": {
+              "description": "Whisper: prompt-processing time, in ms.",
+              "type": "number"
+            },
+            "totalTranscriptions": {
+              "description": "Parakeet: transcriptions produced across the session.",
+              "type": "number"
+            },
+            "modelLoadMs": {
+              "description": "Parakeet: model load time, in ms.",
+              "type": "number"
+            },
+            "totalEncodedFrames": {
+              "description": "Parakeet: encoder frames produced across the run.",
+              "type": "number"
+            },
+            "encoderOnCoreml": {
+              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "type": "number"
             }
           },
           "additionalProperties": false,
@@ -19642,6 +20145,14 @@
             },
             "id": {
               "type": "number"
+            },
+            "isEndOfTurn": {
+              "description": "Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.",
+              "type": "boolean"
+            },
+            "startsWord": {
+              "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+              "type": "boolean"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -19656,6 +20167,12 @@
             },
             "probability": {
               "type": "number"
+            },
+            "source": {
+              "description": "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events.",
+              "type": "string",
+              "enum": ["silero", "energy"],
+              "title": "TranscribeStreamResponseVadSource"
             }
           },
           "required": ["speaking", "probability"],
@@ -19692,6 +20209,102 @@
               "title": "TranscribeStreamResponseEndOfTurnParakeet"
             }
           ]
+        },
+        "diagnostics": {
+          "description": "Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+          "type": "object",
+          "properties": {
+            "selectedBackend": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selectedDevice": {
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "TranscribeStreamResponseDiagnosticsSelectedDevice"
+            },
+            "graphicsApi": {
+              "type": "string",
+              "enum": [
+                "vulkan",
+                "opencl",
+                "opengl",
+                "webgpu",
+                "metal",
+                "direct3d11",
+                "direct3d12",
+                "cuda",
+                "levelZero",
+                "rocm"
+              ],
+              "title": "TranscribeStreamResponseDiagnosticsGraphicsApi"
+            },
+            "driver": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["name"],
+              "additionalProperties": false,
+              "title": "TranscribeStreamResponseDiagnosticsDriver"
+            },
+            "gpuId": {
+              "description": "GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+              "type": "string",
+              "minLength": 1
+            },
+            "fallback": {
+              "type": "object",
+              "properties": {
+                "requestedBackend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requestedDevice": {
+                  "type": "string",
+                  "enum": ["cpu", "gpu"],
+                  "title": "TranscribeStreamResponseDiagnosticsFallbackRequestedDevice"
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": ["reason"],
+              "additionalProperties": false,
+              "title": "TranscribeStreamResponseDiagnosticsFallback"
+            },
+            "probe": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["compatible", "incompatible", "unknown"],
+                  "title": "TranscribeStreamResponseDiagnosticsProbeStatus"
+                },
+                "backend": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": ["status", "backend"],
+              "additionalProperties": false,
+              "title": "TranscribeStreamResponseDiagnosticsProbe"
+            }
+          },
+          "required": ["selectedBackend", "selectedDevice"],
+          "additionalProperties": false,
+          "title": "TranscribeStreamResponseDiagnostics"
         },
         "type": {
           "type": "string",
@@ -19995,6 +20608,474 @@
       },
       "required": ["type"],
       "additionalProperties": false
+    },
+    "vectorIndex.request": {
+      "title": "VectorIndexRequest",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "default": "turbovec-q4",
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexRequestCreateStorage"
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "create"
+            }
+          },
+          "required": ["dim", "type", "operation"],
+          "title": "VectorIndexRequestCreate"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "load"
+            }
+          },
+          "required": ["path", "type", "operation"],
+          "title": "VectorIndexRequestLoad"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "vectors": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "add"
+            }
+          },
+          "required": ["ids", "vectors", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestAdd"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "queries": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "k": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "search"
+            }
+          },
+          "required": ["queries", "k", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestSearch"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "remove"
+            }
+          },
+          "required": ["ids", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestRemove"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ids": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^(0|[1-9][0-9]{0,19})$"
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ],
+                "title": "VectorId"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "contains"
+            }
+          },
+          "required": ["ids", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestContains"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "write"
+            }
+          },
+          "required": ["path", "type", "indexId", "operation"],
+          "title": "VectorIndexRequestWrite"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "operation": {
+              "type": "string",
+              "const": "dispose"
+            }
+          },
+          "required": ["type", "indexId", "operation"],
+          "title": "VectorIndexRequestDispose"
+        }
+      ]
+    },
+    "vectorIndex.response": {
+      "title": "VectorIndexResponse",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "create"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexResponseCreateStorage"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "indexId", "dim", "storage", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseCreate"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "load"
+            },
+            "indexId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "dim": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "storage": {
+              "type": "string",
+              "enum": ["f32", "q8", "q4", "turbovec-q4", "turbovec-q2"],
+              "title": "VectorIndexResponseLoadStorage"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "indexId", "dim", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseLoad"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "add"
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseAdd"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "search"
+            },
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "score": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["id", "score"],
+                  "additionalProperties": false,
+                  "title": "VectorIndexResponseSearchResultsItemItem"
+                }
+              }
+            }
+          },
+          "required": ["type", "operation", "results"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseSearch"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "remove"
+            },
+            "removed": {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              }
+            },
+            "length": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["type", "operation", "removed", "length"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseRemove"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "contains"
+            },
+            "present": {
+              "type": "array",
+              "items": {
+                "type": "boolean"
+              }
+            }
+          },
+          "required": ["type", "operation", "present"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseContains"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "write"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": ["type", "operation", "path"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseWrite"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "vectorIndex"
+            },
+            "operation": {
+              "type": "string",
+              "const": "dispose"
+            },
+            "disposed": {
+              "type": "boolean"
+            }
+          },
+          "required": ["type", "operation", "disposed"],
+          "additionalProperties": false,
+          "title": "VectorIndexResponseDispose"
+        }
+      ]
     },
     "videoStream.request": {
       "title": "VideoStreamRequest",

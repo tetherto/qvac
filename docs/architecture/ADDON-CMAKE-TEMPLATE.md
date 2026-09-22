@@ -7,10 +7,11 @@ boilerplate is extracted.
 Use it when refactoring an addon's build, migrating an addon to the shared
 `@qvac/fabric` runtime, or adding a new addon.
 
-> Status: **partially implemented**. The shared module
-> (`cmake/qvac-addon/qvac-addon.cmake`) exists and `classification-ggml` is
-> migrated to it. The CI drift guard described in "Keeping addons in sync" is
-> not built yet, and no other addon is migrated.
+> Status: **Phase 1 complete**. The shared module
+> (`cmake/qvac-addon/qvac-addon.cmake`) exists and every Phase 1 addon is
+> migrated to it — `classification-ggml`, `vla-ggml`, `ocr-ggml`,
+> `translation-nmtcpp`, `model-fit`, `embed-llamacpp` and `llm-llamacpp`. The CI
+> drift guard described in "Keeping addons in sync" is not built yet.
 
 ## Background
 
@@ -80,7 +81,10 @@ Present, in the same order, in essentially every addon:
 - C++20 block (`CMAKE_CXX_STANDARD 20`, `EXTENSIONS OFF`, `PIC ON`).
 - `WIN32` → `-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI`.
 - `find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS …)`.
-- Linux `-Wl,--exclude-libs,ALL` symbol hygiene.
+- ELF symbol hygiene: Linux `-Wl,--exclude-libs,ALL`, plus a version script
+  narrowing the module's exports to the bare entry points
+  (`cmake/qvac-addon/addon-symbols.map`, generalizing what `asr-ggml` applies by
+  hand).
 - `JS_LOGGER` + `BACKENDS_SUBDIR` compile definitions.
 
 New shared blocks introduced by the fabric form (also extract):
@@ -107,11 +111,16 @@ New shared blocks introduced by the fabric form (also extract):
 
 - Module name and `project()` languages.
 - Source file list (`target_sources`).
-- Extra upstream libs layered on top of fabric (e.g. `llama::llama` /
-  `llama::mtmd`, `bergamot-translator`, `sentencepiece`/`protobuf`) and extra
-  third-party deps (OpenCV, STB, picojson, nlohmann, concurrentqueue).
-- Addon-specific options and vcpkg features (`VK_PROFILING`, `USE_BERGAMOT`,
-  `USE_OPENCL`, `ENABLE_VULKAN`, …).
+- Extra upstream libs layered on top of fabric (e.g. `bergamot-translator`,
+  `sentencepiece`/`protobuf`) and extra third-party deps (OpenCV, STB, picojson,
+  nlohmann, concurrentqueue). The llama / libcommon / mtmd layer is not one of
+  these — it lives inside fabric, so `qvac_addon_use_fabric()` plus
+  `qvac_addon_link_fabric()` is the whole of it and no `llama::*` target is
+  named by an addon.
+- Addon-specific options and vcpkg features (`USE_BERGAMOT`, `USE_OPENCL`,
+  `ENABLE_VULKAN`, …). Options that only selected a `qvac-fabric` port feature
+  do not belong here any more: `VK_PROFILING` moved to `packages/fabric`, since
+  the choice now applies to the one shared runtime rather than per consumer.
 - Mobile static-link fallback where applicable.
 - Genuinely exotic per-package logic (nmt's sentencepiece fallback chain,
   parakeet's Android strip + `symbols.map`, etc.) — handled by adding CMake
@@ -125,6 +134,8 @@ New shared blocks introduced by the fabric form (also extract):
 | Android 16 KB page-size link flags | addon fails to load on Pixel 9-class devices | Applied unconditionally in `qvac_addon_finalize` |
 | Apple `compiler-rt` `force_load` (Xcode 16 `__isPlatformVersionAtLeast`) | module aborts at first `@available` call | Applied unconditionally in `qvac_addon_finalize` |
 | lint-cpp `.valgrind.supp` / pre-commit hook | inconsistent local dev hooks | Opt-in flags on `qvac_addon_project_setup` |
+| Fabric's C++ runtime actually reaching the module | `-nostdlib++` links fine, the module loads, and typed `catch` silently stops matching anything that crossed the fabric boundary — a package-level `"Unknown error"` with no build or load diagnostic | `qvac_addon_finalize` runs `assert-fabric-cxx-runtime.cmake` on the built ELF, which reads the node to require out of the fabric module on the link line and fails the build if that fabric exports no version node, or if the module imports its runtime unpinned or not at all |
+| Module exports beyond the bare entry points | co-loaded addons can interpose each other's typeinfo and `inference-addon-cpp` statics under an `RTLD_GLOBAL` host | `addon-symbols.map` applied to every ELF module by `qvac_addon_finalize` |
 
 > **The Android page-size and Apple `compiler-rt` fixes are folded into
 > `qvac_addon_finalize` unconditionally** to normalize the drift: every migrated
@@ -173,7 +184,7 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
 - `qvac_addon_link_fabric(<addon_target> <fabric_target>)` — the two-target link
   split (`qvac-fabric::headers` on the lib, `${fabric_target}_module` on the
   module), plus `qvac_addon_import_fabric_cxx_runtime` on the module.
-- `qvac_addon_import_fabric_cxx_runtime(<target>)` — Linux only: link `<target>`
+- `qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)` — Linux only: link `<target>`
   with `-nostdlib++` so libc++ / libc++abi come from fabric rather than a second
   static copy. Two copies means two `std::exception` typeinfos, and RTTI matches
   by address, so an addon could not `catch` what fabric threw. Fabric exports the
@@ -267,35 +278,42 @@ today (the direct consumers migrating to the `@qvac/fabric` npm prebuild). Other
 ggml variants (whisper.cpp / parakeet / tts-cpp / stable-diffusion — separate
 vcpkg ports) and the ONNX addons (being phased out) are **out of scope**.
 
-Phase 1 packages (vcpkg.json depends on `qvac-fabric`):
+Phase 1 packages (all migrated; none declares `qvac-fabric` in its `vcpkg.json`
+any more, and each is listed under `npm_runtime` in
+`.github/fabric-consumers.json`):
 
 - `packages/classification-ggml` — reference, [PR #3301][pr3301].
 - `packages/vla-ggml`
 - `packages/ocr-ggml`
 - `packages/translation-nmtcpp`
-- `packages/llm-llamacpp`
+- `packages/model-fit`
 - `packages/embed-llamacpp`
+- `packages/llm-llamacpp`
 
-> The llama addons (`llm-llamacpp`, `embed-llamacpp`) consume `llama::*` targets
-> that also come from the `qvac-fabric` port. Their migration additionally
-> depends on `@qvac/fabric` exposing the llama layer with ggml linked
-> dynamically — a fabric-packaging question that may gate their order relative
-> to the direct-ggml addons.
+> The llama addons (`embed-llamacpp`, `llm-llamacpp`) previously consumed
+> `llama::*` targets from the `qvac-fabric` port, so their migration also
+> required `@qvac/fabric` to export the llama / libcommon / mtmd surface with
+> ggml linked dynamically. It does: `qvac-fabric::headers` supplies the
+> `include/` and `include/llama/` roots, and `symbols.map` exports the
+> `llama_* / mtmd_* / ggml_* / gguf_*` C API plus the C++-linkage
+> `common_* / string_* / json_schema_to_grammar` helpers. That is why they
+> migrated last.
 
 Sequencing principle: **template adoption == fabric migration**. Do not
 templatize the dying static-ggml backend loop and then delete it; build the
 shared module around the post-migration form and let each addon's fabric-
 migration PR also be its template-adoption PR.
 
-1. Land `classification-ggml` fabric migration ([PR #3301][pr3301]) as the
-   reference shape.
-2. Add `cmake/qvac-addon/qvac-addon.cmake` and migrate `classification-ggml`.
-   `finalize` folds in the Android page-size + Apple `compiler-rt` fixes
-   unconditionally — a deliberate behavior change that normalizes the drift, so
-   addons that lacked them now get them.
-3. Migrate + adopt per addon, starting with the direct-ggml consumers
-   (`vla-ggml`, `ocr-ggml`, `translation-nmtcpp`), then the llama addons once
-   fabric's llama packaging is ready.
+The order followed was: `classification-ggml` first (as the reference shape,
+landing both the fabric migration and `cmake/qvac-addon/qvac-addon.cmake`), then
+the remaining direct-ggml consumers, then the llama addons once fabric's llama
+packaging was ready. `finalize` folds in the Android page-size + Apple
+`compiler-rt` fixes unconditionally — a deliberate behavior change that
+normalizes the drift, so addons that lacked them now get them.
+
+`packages/fabric` itself is the one remaining `qvac-fabric` vcpkg consumer: it
+builds the port into the shared runtime the others load. That is also what keeps
+`verify-qvac-fabric-lockstep` meaningful now that no addon declares the port.
 
 ## Open questions
 
@@ -306,5 +324,6 @@ migration PR also be its template-adoption PR.
   page-size + Apple `compiler-rt` blocks and rely on `finalize` (avoid
   double-application). Their extra Apple `-Wl,-exported_symbol` flags and
   `symbols.map` version-script stay addon-specific for now.
-- Building the CI drift guard (`scripts/check-addon-cmake.mjs`) before the second
-  addon migrates, so re-inlined boilerplate can't creep back.
+- Building the CI drift guard (`scripts/check-addon-cmake.mjs`). Phase 1 is
+  complete without it, so it is now the only thing stopping re-inlined
+  boilerplate from creeping back into a migrated addon.

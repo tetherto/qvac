@@ -364,6 +364,24 @@ protected:
   }
 };
 
+TEST_F(
+    LoadFitNormalizationTest, PadsTensorBufferOverridesForFabricAutomaticFit) {
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      baseConfig(),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  ASSERT_EQ(
+      result.params.tensor_buft_overrides.size(),
+      llama_max_tensor_buft_overrides());
+  for (const auto& override : result.params.tensor_buft_overrides) {
+    EXPECT_EQ(override.pattern, nullptr);
+    EXPECT_EQ(override.buft, nullptr);
+  }
+}
+
 TEST_F(LoadFitNormalizationTest, ExplicitContextAndMinimumClampAreCanonical) {
   auto config = baseConfig();
   config["ctx-size"] = "4";
@@ -1015,13 +1033,18 @@ TEST_F(
 
 // split-mode 'none' resolves through chooseBackend, so a GPU result on an
 // Adreno-<800 one-bit BitNet load proves the split filter did not run.
+//
+// The backend must be named "none": this branch forwards `--device <name>` to
+// qvac-fabric's parser, which rejects any name absent from the live ggml
+// registry. The Adreno-740 split participant below would be dropped to CPU if
+// the filter ran.
 TEST_F(
     LoadFitNormalizationTest, SplitModeNoneLeavesAdrenoPolicyToChooseBackend) {
   test_common::MockModelMetaData bitnet{true, "bitnet"};
   auto config = baseConfig();
   config["split-mode"] = "none";
   auto dependencies = backend(
-      {.type = backend_selection::GPU, .name = "vulkan0", .adrenoVersion = 740},
+      {.type = backend_selection::GPU, .name = "none", .adrenoVersion = 740},
       {});
   auto selection = splitSelection({"vulkan0"});
   selection.devices[0].adrenoVersion = 740;
@@ -1032,15 +1055,11 @@ TEST_F(
 
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.runtimeBackendDevice, 1);
-  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.params.mmproj_backend, "none");
   EXPECT_EQ(result.adrenoVersion, 740);
 }
 
 // QVAC-24253: split-mode 'tensor' (LLAMA_SPLIT_MODE_TENSOR).
-//
-// The fixture's metadata_ is MockModelMetaData{false, "llama"}, and "llama" is
-// a tensor-split-supported architecture, so it is usable as-is for the cases
-// that are not about the architecture check.
 
 TEST_F(LoadFitNormalizationTest, TensorSplitParsesAndDisablesFit) {
   auto config = baseConfig();
@@ -1447,23 +1466,19 @@ TEST_F(LoadFitNormalizationTest, AutoWithExplicitCacheTypeIsHonoured) {
   EXPECT_EQ(normalized.params.cache_type_v, GGML_TYPE_Q8_0);
 }
 
-TEST_F(LoadFitNormalizationTest, TensorSplitRejectsUnsupportedArchitecture) {
+TEST_F(
+    LoadFitNormalizationTest,
+    TensorSplitDefersUnsupportedArchitectureToFabric) {
   test_common::MockModelMetaData mamba{false, "mamba2"};
   auto config = baseConfig();
   config["split-mode"] = "tensor";
-  try {
-    static_cast<void>(lfn::normalizeLoadForFit(
-        "/tmp/model.gguf",
-        std::move(config),
-        mamba,
-        {},
-        backend({.type = backend_selection::GPU, .name = "vulkan0"})));
-    FAIL() << "tensor split on an unsupported architecture must throw";
-  } catch (const qvac_errors::StatusError& error) {
-    EXPECT_THAT(error.what(), ::testing::HasSubstr("commonParamsParse"));
-    EXPECT_THAT(error.what(), ::testing::HasSubstr("mamba2"));
-    EXPECT_THAT(error.what(), ::testing::HasSubstr("'layer'"));
-  }
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      mamba,
+      {},
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}));
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR);
 }
 
 TEST_F(LoadFitNormalizationTest, TensorSplitAcceptsSupportedArchitecture) {
@@ -1497,18 +1512,13 @@ TEST_F(LoadFitNormalizationTest, TensorSplitCpuFallbackClearsToNone) {
   EXPECT_TRUE(result.params.fit_params);
 }
 
-// Covers every architecture the addon mirrors from llm_arch_supports_sm_tensor
-// (qvac-fabric src/llama-arch.cpp), which the addon cannot call: it lives in
-// the internal src/llama-arch.h, outside the installed include tree.
-//
-// This test reads NOTHING from qvac-fabric — it checks the addon against a
-// second copy of the same literals, so it CANNOT detect fabric drift. It is
-// named for what it does: it pins that each listed architecture is rejected,
-// with the architecture named in the error. Re-deriving the list from
-// LLM_ARCH_NAMES on a fabric bump remains a manual step.
-// Verified by hand against qvac-fabric v10297.1.1 (27 entries).
-TEST_F(LoadFitNormalizationTest, TensorSplitArchDenylistCoversFabric) {
-  static constexpr const char* kUnsupported[] = {
+// Architecture support is owned by qvac-fabric. Keep every architecture from
+// the addon's former denylist here to ensure normalization never reintroduces
+// a local mirror that can drift from fabric.
+TEST_F(
+    LoadFitNormalizationTest,
+    TensorSplitDoesNotMirrorFabricArchitectureSupport) {
+  static constexpr const char* kArchitectures[] = {
       "grok",          "mpt",
       "plamo2",        "minicpm3",
       "gemma3n",       "mamba",
@@ -1522,47 +1532,13 @@ TEST_F(LoadFitNormalizationTest, TensorSplitArchDenylistCoversFabric) {
       "lfm2moe",       "minimax-m2",
       "minimax-m3",    "mistral4",
       "kimi-linear",   "qwen3tts",
-      "qwen3next"};
-  EXPECT_EQ(std::size(kUnsupported), 27U);
+      "qwen3next",     "deepseek2-ocr",
+      "t5encoder",     "llama",
+      "qwen3",         "qwen3moe",
+      "gemma3",        "deepseek4",
+      "qwen35",        "qwen35moe"};
 
-  for (const char* arch : kUnsupported) {
-    test_common::MockModelMetaData metadata{false, arch};
-    auto config = baseConfig();
-    config["split-mode"] = "tensor";
-    try {
-      static_cast<void>(lfn::normalizeLoadForFit(
-          "/tmp/model.gguf",
-          std::move(config),
-          metadata,
-          {},
-          backend({.type = backend_selection::GPU, .name = "vulkan0"})));
-      FAIL() << "expected rejection for architecture: " << arch;
-    } catch (const qvac_errors::StatusError& error) {
-      // Assert on the architecture name, not merely that something threw:
-      // "bitnet" would otherwise satisfy this via the flash-attn branch.
-      EXPECT_THAT(error.what(), ::testing::HasSubstr(arch))
-          << "rejected for the wrong reason: " << arch;
-      EXPECT_THAT(error.what(), ::testing::HasSubstr("not supported"));
-    }
-  }
-
-  // Near-misses that fabric DOES support: none is in its case list, and each is
-  // easy to add to the denylist by mistake because a sibling is.
-  //
-  // deepseek4, qwen35 and qwen35moe were unsupported at v10297.0.0 and gained
-  // support at v10297.1.0. They are asserted here rather than merely deleted
-  // from the denylist so that re-adding them — the natural mistake, since their
-  // siblings deepseek2/deepseek32 and qwen3next remain unsupported — fails.
-  for (const char* arch :
-       {"deepseek2-ocr",
-        "t5encoder",
-        "llama",
-        "qwen3",
-        "qwen3moe",
-        "gemma3",
-        "deepseek4",
-        "qwen35",
-        "qwen35moe"}) {
+  for (const char* arch : kArchitectures) {
     test_common::MockModelMetaData metadata{false, arch};
     auto config = baseConfig();
     config["split-mode"] = "tensor";
@@ -1573,7 +1549,7 @@ TEST_F(LoadFitNormalizationTest, TensorSplitArchDenylistCoversFabric) {
         {},
         backend({.type = backend_selection::GPU, .name = "vulkan0"}));
     EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_TENSOR)
-        << "expected acceptance for architecture: " << arch;
+        << "architecture validation must be deferred to fabric: " << arch;
   }
 }
 

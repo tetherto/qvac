@@ -5,8 +5,6 @@
 
 #include <inference-addon-cpp/Errors.hpp>
 
-#include "utils/LoggingMacros.hpp"
-
 namespace qvac_lib_inference_addon_sd {
 
 using namespace qvac_errors;
@@ -112,9 +110,8 @@ const WorldSessionHandlersMap WORLD_SESSION_HANDLERS = {
        c.streamLayers = parseBool(v, "streamLayers");
      }},
     {"verbosity",
-     [](WorldSessionConfig& /*c*/, const std::string& v) {
-       std::unordered_map<std::string, std::string> m{{"verbosity", v}};
-       logging::setVerbosityLevel(m);
+     [](WorldSessionConfig& c, const std::string& v) {
+       c.verbosity = parseIntInRange(v, "verbosity", 0, 3);
      }},
 
     {"threads",

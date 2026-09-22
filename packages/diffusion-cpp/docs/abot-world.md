@@ -170,16 +170,19 @@ const world = new WorldStableDiffusion({
 - `streamLayers` retains leading DiT segments within the budget and
   transfers/evicts the rest. It needs CPU-backed DiT weights, GPU execution,
   and a nonzero graph budget. Defaults remain unchanged when omitted.
-- `paramsBackend: 'diffusion=disk,vae=disk'` uses lazy disk reads and releases
+- `paramsBackend: 'diffusion=disk'` uses lazy disk reads and releases DiT
   weights after use. This is separate from CPU-backed `streamLayers` and can
-  be combined with graph cutting through `maxVram`.
+  be combined with graph cutting through `maxVram`. `vae=disk` is rejected
+  because the taehv decoder retains its prepared weights across walk steps.
 
 Both recomputed history and `kvCache: true` work with these controls. The
 separate `createScene()` encoder phase keeps its existing configuration;
 the walk's graph budget does not cut taehv or the scene encoders.
 
 `verbosity: 3` exposes the native graph budget and `residency=STREAMED`
-evidence through `addonLogging` (the log level is shared by diffusion instances).
+evidence through `addonLogging`. The level is shared by diffusion instances
+while the session is alive and restored on unload. The most recent explicit
+setting wins; closing an older session does not overwrite a newer setting.
 The demo accepts `ABOT_PARAMS_BACKEND`, `ABOT_MAX_VRAM`,
 `ABOT_STREAM_LAYERS=1`, and `ABOT_VERBOSITY=3`.
 

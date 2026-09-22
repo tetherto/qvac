@@ -11,10 +11,27 @@
 const test = require('brittle')
 const zlib = require('bare-zlib')
 const {
+  waitForLogEvidence,
   pngLuminanceStddev,
   pngMeanAbsoluteError,
   readScenePackPromptRows
 } = require('../integration/abot-guards.js')
+
+test('streaming evidence waits for every asynchronous marker', async (t) => {
+  const evidence = ['params=disk']
+  const timer = setTimeout(() => evidence.push('releasing params backend buffer'), 75)
+  try {
+    await waitForLogEvidence(evidence, ['params=disk', 'releasing params backend buffer'])
+    t.is(evidence.length, 2, 'waits for the later disk-release message')
+    await waitForLogEvidence(evidence, ['missing marker'], 50)
+    t.absent(
+      evidence.includes('missing marker'),
+      'timeout leaves missing evidence available for failure assertions'
+    )
+  } finally {
+    clearTimeout(timer)
+  }
+})
 
 function crc32(buf) {
   let c = ~0

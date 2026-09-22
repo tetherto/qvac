@@ -7,10 +7,6 @@ const ABSOLUTE_PATH_PATTERN = /^(\/|[A-Za-z]:[\\/]|\\\\)/
 
 const base64StringSchema = z.string().min(1).regex(BASE64_PATTERN)
 
-const parameterResidencySchema = z.string().max(4096).optional()
-// A string constraint inside this union makes Python codegen wrap strings in a RootModel.
-const graphBudgetSchema = z.union([z.number().finite(), z.string()]).optional()
-
 const samplingMethodSchema = z.enum([
   'euler',
   'euler_a',
@@ -197,19 +193,30 @@ export const sdcppConfigSchema = z.object({
       'Runtime backend for diffusion and video graphs, globally or per module, ' +
         "for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'."
     ),
-  params_backend: parameterResidencySchema.describe(
-    'Parameter residency for diffusion and video, independent of graph execution. ' +
-      "'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights " +
-      'from the local model file on demand and releases them after use. Disk is ' +
-      'never selected automatically. With offload_to_cpu enabled, explicit ' +
-      'assignments override CPU residency only for the specified modules.'
-  ),
-  max_vram: graphBudgetSchema.describe(
-    'VRAM budget in GiB for diffusion and video graph-cut execution. Positive ' +
-      'values set a budget; negative values use free VRAM minus the absolute ' +
-      'value as headroom; 0 disables graph cutting. Accepts per-device assignments ' +
-      "such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
-  ),
+  params_backend: z
+    .string()
+    .max(4096)
+    .optional()
+    .describe(
+      'Parameter residency for diffusion and video, independent of graph execution. ' +
+        "'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights " +
+        'from the local model file on demand and releases them after use. Disk is ' +
+        'never selected automatically. With offload_to_cpu enabled, explicit ' +
+        'assignments override CPU residency only for the specified modules.'
+    ),
+  max_vram: z
+    // No .max() on the string arm: a constraint here makes datamodel-codegen
+    // wrap it in a `MaxVram(RootModel[str])`, so Python callers read back a
+    // wrapper instead of a str. backend/params_backend keep their cap because
+    // they are not union members. The addon parses the spec either way.
+    .union([z.number().finite(), z.string()])
+    .optional()
+    .describe(
+      'VRAM budget in GiB for diffusion and video graph-cut execution. Positive ' +
+        'values set a budget; negative values use free VRAM minus the absolute ' +
+        'value as headroom; 0 disables graph cutting. Accepts per-device assignments ' +
+        "such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
+    ),
   stream_layers: z
     .boolean()
     .optional()
@@ -320,12 +327,20 @@ export const sdcppConfigSchema = z.object({
   world: z
     .object({
       seed: z.number().int().optional().describe('Walk RNG seed.'),
-      paramsBackend: parameterResidencySchema.describe(
-        'Walk weight residency: diffusion=cpu or diffusion=disk,vae=cpu. Explicit assignments override offloadParamsToCpu.'
-      ),
-      maxVram: graphBudgetSchema.describe(
-        'DiT graph budget in GiB or per-device assignments. Negative values reserve free-memory headroom; 0 disables cuts. Excludes attention history and the decoder.'
-      ),
+      paramsBackend: z
+        .string()
+        .max(4096)
+        .optional()
+        .describe(
+          'Walk weight residency: diffusion=cpu or diffusion=disk,vae=cpu. Explicit assignments override offloadParamsToCpu.'
+        ),
+      maxVram: z
+        // Keep the string arm unconstrained so Python codegen exposes a plain string.
+        .union([z.number().finite(), z.string()])
+        .optional()
+        .describe(
+          'DiT graph budget in GiB or per-device assignments. Negative values reserve free-memory headroom; 0 disables cuts. Excludes attention history and the decoder.'
+        ),
       streamLayers: z
         .boolean()
         .optional()

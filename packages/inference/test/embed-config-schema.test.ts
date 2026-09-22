@@ -8,14 +8,14 @@ const EMBED_BASE = {
   modelSrc: 'model.gguf'
 }
 
-test('embedConfigBaseSchema: accepts valid splitMode values', (t) => {
+test('embedConfigBaseSchema: accepts supported splitMode values', (t) => {
   t.is(embedConfigBaseSchema.safeParse({ splitMode: 'none' }).success, true)
   t.is(embedConfigBaseSchema.safeParse({ splitMode: 'layer' }).success, true)
-  t.is(embedConfigBaseSchema.safeParse({ splitMode: 'row' }).success, true)
 })
 
 test('embedConfigBaseSchema: rejects invalid splitMode values', (t) => {
   t.is(embedConfigBaseSchema.safeParse({ splitMode: 'column' }).success, false)
+  t.is(embedConfigBaseSchema.safeParse({ splitMode: 'row' }).success, false)
 })
 
 test('embedConfigBaseSchema: splitMode is optional', (t) => {
@@ -84,7 +84,7 @@ test('loadModelSrcRequestSchema: accepts splitMode for embed', (t) => {
     type: 'loadModel',
     modelType: ModelType.llamacppEmbedding,
     modelSrc: 'model.gguf',
-    modelConfig: { splitMode: 'row', tensorSplit: '3,1', mainGpu: 0 }
+    modelConfig: { splitMode: 'layer', tensorSplit: '3,1', mainGpu: 0 }
   })
   t.is(result.success, true)
 })

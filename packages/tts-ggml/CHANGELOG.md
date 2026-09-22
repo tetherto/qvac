@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raise the `speech-cpp` floor to `2026-09-18`. Audio8 synthesis is faster on
+  CUDA builds (the decode loop issues far fewer kernel launches per frame), and
+  CosyVoice3 gains a `bf16` flow tier for AVX512-BF16 CPUs. Existing GGUFs keep
+  working; the `bf16` tier needs re-converted flow files.
+- Raise the `speech-cpp` floor to `2026-09-16`. CosyVoice3 synthesis is faster
+  with no model change: on an AMD Strix Halo the reference-exact path gains
+  1.3-1.4x on Vulkan and 1.6-1.8x on CPU, from flash-attention in the flow
+  DiT and an LM KV cache that no longer re-copies itself each token. Existing
+  CosyVoice3 GGUFs keep working; the engine's new quantized flow / f16 HiFT
+  tiers require re-converted model files.
+
 ## [0.9.2] - 2026-09-16
 
 ### Fixed

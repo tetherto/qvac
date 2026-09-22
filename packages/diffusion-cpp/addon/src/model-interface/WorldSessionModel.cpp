@@ -20,7 +20,7 @@ using namespace qvac_errors;
 
 WorldSessionModel::WorldSessionModel(
     qvac_lib_inference_addon_sd::WorldSessionConfig config)
-    : config_(std::move(config)) {
+    : config_(std::move(config)), verbosity_(config_.verbosity) {
   sd_set_log_callback(qvac_lib_inference_addon_sd::sdLogCallback, nullptr);
 }
 
@@ -39,6 +39,8 @@ void WorldSessionModel::load() {
   if (isLoaded()) {
     return;
   }
+  qvac_lib_inference_addon_sd::validateWorldPlacement(
+      config_.paramsBackend, config_.maxVram);
   if (config_.ditModelPath.empty() || config_.taehvPath.empty() ||
       config_.scenePath.empty()) {
     throw StatusError(
@@ -49,8 +51,8 @@ void WorldSessionModel::load() {
   const auto tLoadStart = std::chrono::steady_clock::now();
   qvac_lib_inference_addon_sd::loadBackendModulesOnce(config_.backendsDir);
 
-  sd_abot_session_params_t params;
-  sd_abot_session_params_init(&params);
+  sd_abot_session_params_v2_t params;
+  sd_abot_session_params_v2_init(&params);
   params.dit_model_path = config_.ditModelPath.c_str();
   params.taehv_path = config_.taehvPath.c_str();
   params.scene_path = config_.scenePath.c_str();
@@ -84,7 +86,7 @@ void WorldSessionModel::load() {
         "modules");
   }
 
-  session_ = sd_abot_session_new(&params);
+  session_ = sd_abot_session_new_v2(&params);
   if (session_ == nullptr) {
     throw StatusError(
         general_error::InternalError,

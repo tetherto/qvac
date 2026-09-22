@@ -1,5 +1,122 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+
+- The CMake package config no longer publishes `QVAC_FABRIC_ABI_VERSION` or
+  `QVAC_FABRIC_OWNS_CXX_RUNTIME`. Both described the platform they were
+  configured for, and the config is not per-platform: it installs to
+  `share/qvac-fabric/cmake`, which every prebuild leg writes, and the artifact
+  merge keeps one copy in the published package. So the pair described whichever
+  leg finished last — `ON` from either Linux leg, `OFF` from Android, empty from
+  darwin, iOS or win32 — and a consumer had no way to tell a value meant for it
+  from one that was not. `0.16.0` shipped `ON` by that ordering rather than by
+  construction, and `0.16.1` still published them.
+
+  Consumers asserting the pin read the node, and whether this build exports a
+  runtime to pin to at all, out of the `.bare` for their own triplet instead;
+  `__cxa_throw` is either defined there under a version node or it is not. The
+  in-tree addon template moved to that before this removal, so nothing in the
+  repository reads either variable. `QVAC_FABRIC_ABI_VERSION` remains as a build
+  variable, stamped onto the version node so the name and the script cannot
+  drift.
+
+## [0.16.1] - 2026-09-17
+
+### Fixed
+
+- The Android build exports an anonymous ELF version node again, as it did
+  through 0.15.0. 0.16.0 named the node for every ELF target, which left every
+  consumer unable to load on Android: the addon fails its `dlopen` and `bare`
+  reports `ADDON_NOT_FOUND: Cannot find addon '.'` from the addon's
+  `binding.js`, before any model work. Desktop was unaffected.
+
+  The name exists so a consumer records a `DT_VERNEED` that the host's
+  `libstdc++` cannot satisfy, which is what keeps it from answering for the C++
+  ABI this module exports. Only the Linux link that embeds libc++ exports that
+  ABI — Android links `libc++_shared.so` and the ASan build links
+  `libc++.so.1` — so on Android the `DT_VERNEED` guarded an export set that
+  does not exist and only cost the load. The name now follows the same
+  condition as the ABI block it protects, and `symbols.map` ships the node
+  anonymous. The export surface and its `local: *;` narrowing are unchanged on
+  every platform.
+
+  Not a gap in bionic's symbol versioning, which has been there since API 23.
+  It resolves a version need through the `DT_SONAME` of the dependency that
+  declares it, and on device an addon's fabric dependency is not a file at all:
+  the APK stages it under another name, and the dependency resolves only
+  because `bare` has already loaded it. Either bionic finds no dependency
+  matching the `verneed` and fails the `dlopen`, or it finds no such version
+  there and demotes the requirement to unversioned definitions, which every
+  export carries a version for under a named node. Both end in a failed
+  `dlopen`, and `bare` discards the `dlerror` that would distinguish them, so
+  what is established is narrower: the node's name is the only ELF difference
+  between a consumer that loads and one that does not.
+
+  Consumers must be rebuilt to pick this up: an Android binary built against
+  0.16.0 carries versioned imports of `QVAC_FABRIC_ABI_1` and keeps failing to
+  load. Linux binaries built against 0.16.0 are unaffected and keep working,
+  since the node and its name are unchanged there.
+
+## [0.16.0] - 2026-09-16
+
+### Changed
+
+- On Linux every export now carries the named ELF version node
+  `QVAC_FABRIC_ABI_1` instead of an anonymous one. That is what actually makes a
+  consumer import the C++ runtime from this module.
+
+  0.15.0 exported the runtime, but nothing reached it. The `bare` executable
+  links GNU `libstdc++.so.6`, so a second complete C++ runtime sits in the
+  process' **global** lookup scope, which the dynamic linker searches before a
+  `dlopen`'d module's own `DT_NEEDED` chain. A consumer linked with
+  `-nostdlib++` therefore took `__cxa_throw`, `__gxx_personality_v0` and the
+  `std::` typeinfo objects from libstdc++, and only the libc++-only names from
+  here. `std::exception_ptr` split down that seam — `std::current_exception`
+  binding to libstdc++ and `std::rethrow_exception` to this module's libc++,
+  which re-raises the exception stamped `CLNGC++`, where GNU's personality
+  routine may only match `catch (...)`. Every native error out of a consumer's
+  load path still reached JS as `INTERNAL_ERROR` / `"Unknown error"` on Linux,
+  which is the symptom 0.15.0 set out to fix.
+
+  A named node makes the linker record a `DT_VERNEED` in every consumer that
+  libstdc++ cannot satisfy, since it does not define that version. The node
+  covers the whole export surface rather than only the C++ ABI: an anonymous
+  version node cannot coexist with a named one, and the spliced ABI block has to
+  stay inside the same `global:` list to keep its precedence over `local: *;`.
+  It pins this module's own internal references too, which were being interposed
+  the same way.
+
+  The CMake package config now publishes `QVAC_FABRIC_ABI_VERSION` and
+  `QVAC_FABRIC_OWNS_CXX_RUNTIME`, so a consumer's build can assert it pinned the
+  runtime instead of trusting its link line, and can tell a deliberately shared
+  libc++ (Android, the ASan build) from a fabric too old to pin at all.
+
+  **Consumers must be rebuilt against this release.** This is a **minor** for
+  that reason rather than for surface growth: a mixed pairing is *worse* than
+  the old one and fails silently. Pinning this module's internal references
+  removes the accident that both sides previously resolved the runtime from
+  libstdc++ and so agreed on one, while a consumer that is not rebuilt keeps
+  using libstdc++ — measured, a direct throw from here that used to be catchable
+  by type stops matching. It still loads, because an unversioned reference binds
+  to a default-versioned definition. On `0.x` a caret range locks the minor, so
+  `^0.15.0` is what keeps already-published consumers away from it; a patch
+  would reach them and degrade them. The in-tree consumers hold `^0.15.0` until
+  this release is on npm and then move together, the same ordering the 0.15.0
+  floor followed: their CI installs each package standalone, so a range naming
+  an unpublished version fails to resolve. Until they move,
+  `linkWorkspacePackages` no longer links the workspace copy into them, since
+  `0.16.0` does not satisfy `^0.15.0`.
+
+  The node name is part of the Linux ABI: renaming it is a rebuild of every
+  consumer. Android is the other ELF target sharing `symbols.map` and exports
+  the same set, now version-stamped, but its consumers share `libc++_shared.so`
+  instead of importing the runtime from here, so they are unaffected; Darwin,
+  iOS and Windows use no version script and are untouched. Rationale,
+  alternatives and measurements:
+  `arch/qips/linux-fabric-libcxx-ownership.md`.
+
 ## [0.15.0] - 2026-09-15
 
 ### Changed
