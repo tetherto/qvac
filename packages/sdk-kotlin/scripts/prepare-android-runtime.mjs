@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { bundleSdk, formatVerifyBundleResult, hasErrors, verifyBundle } from '@qvac/sdk/commands'
 import link from 'bare-link'
@@ -60,6 +61,14 @@ const bundle = await bundleSdk({
   defer: ['react-native-bare-kit', '@qvac/sdk/worker.mobile.bundle'],
   quiet: true
 })
+
+// Addon prebuilds ship in per-platform packages that are NOT dependencies of
+// the meta: a build host never reports a mobile os/cpu, so they cannot be
+// os/cpu-filtered optionalDependencies. Derive each bundled addon's
+// android-arm64 platform package from its own `#host-addon` map, at the meta's
+// installed version, and install them so the bundle verifies and links. Keeps
+// versions in lockstep with the metas automatically — no hand-maintained pins.
+await ensureHostPrebuilds(bundle.manifestPath, 'android-arm64')
 
 const verification = await verifyBundle({
   projectRoot,
@@ -161,3 +170,58 @@ await fs.writeFile(
 )
 
 console.log(`Prepared QVAC Android runtime with ${addons.length} addon(s)`)
+
+async function pathExists(target) {
+  try {
+    await fs.access(target)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** The platform prebuild package an addon's `#host-addon` map names for a host. */
+function platformPackageForHost(meta, host) {
+  const dash = host.indexOf('-')
+  const platform = host.slice(0, dash)
+  const arch = host.slice(dash + 1)
+  const hostMap = meta.imports?.['#host-addon']?.[platform]
+  if (hostMap === undefined) return null
+  const entry = Array.isArray(hostMap) ? hostMap : hostMap[arch]
+  const candidate = Array.isArray(entry) ? entry[0] : entry
+  return typeof candidate === 'string' && candidate.startsWith('@') ? candidate : null
+}
+
+/**
+ * Install the per-platform prebuild packages the bundled addons need for `host`,
+ * derived from each addon's own `#host-addon` map at the meta's installed
+ * version. `--no-save` keeps package.json free of hand-maintained pins.
+ */
+async function ensureHostPrebuilds(manifestPath, host) {
+  const manifestJson = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
+  const manifestAddons = Array.isArray(manifestJson.addons) ? manifestJson.addons : []
+  const specs = []
+  for (const addon of manifestAddons) {
+    const addonRoot = path.join(projectRoot, 'node_modules', addon)
+    // A locally present fat `prebuilds/<host>` wins (source builds / the old
+    // layout), so only addons that migrated to per-platform packages need one.
+    if (await pathExists(path.join(addonRoot, 'prebuilds', host))) continue
+    let meta
+    try {
+      meta = JSON.parse(await fs.readFile(path.join(addonRoot, 'package.json'), 'utf8'))
+    } catch {
+      continue
+    }
+    const platformPackage = platformPackageForHost(meta, host)
+    if (platformPackage !== null && typeof meta.version === 'string') {
+      specs.push(`${platformPackage}@${meta.version}`)
+    }
+  }
+  if (specs.length === 0) return
+  console.log(`Installing ${host} prebuild packages: ${specs.join(', ')}`)
+  execFileSync(
+    'npm',
+    ['install', '--no-save', '--no-package-lock', '--ignore-scripts', '--legacy-peer-deps', ...specs],
+    { cwd: projectRoot, stdio: 'inherit' }
+  )
+}
