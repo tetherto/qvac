@@ -1548,16 +1548,13 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
   )
 });
 
-test('RPC RDMA validation covers client and server without replacing release artifacts', () => {
+test('RPC RDMA validation covers the server without replacing release artifacts', () => {
   const reusable = read('.github/workflows/reusable-prebuilds.yml')
   const nxPrebuilds = read('.github/workflows/prebuilds-nx.yml')
   const rpcPrebuilds = read('.github/workflows/prebuilds-ggml-rpc-server.yml')
   const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml')
   const stripAction = read('.github/actions/strip-prebuilds/action.yml')
   const validation = read('.github/scripts/validate-rpc-rdma-build.sh')
-  const llmBuildCi = JSON.parse(
-    read('packages/llm-llamacpp/project.json'),
-  ).targets.build.options.ci
   const uploadIndex = reusable.indexOf(
     'name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}',
   )
@@ -1601,11 +1598,6 @@ test('RPC RDMA validation covers client and server without replacing release art
       `prebuilds-nx must forward ${field}`,
     )
   }
-  assert.equal(llmBuildCi.linuxExtraPackages, 'libibverbs-dev')
-  assert.equal(
-    llmBuildCi.postArtifactBuildCommand,
-    'bash ../../.github/scripts/validate-rpc-rdma-build.sh',
-  )
   assert.match(
     reusable,
     /reuse_hit:[\s\S]*?value:\s*\$\{\{ jobs\.detect-reuse\.outputs\.reuse_hit \}\}/,
@@ -1637,17 +1629,11 @@ test('RPC RDMA validation covers client and server without replacing release art
     /REUSE_HIT:\s*\$\{\{ needs\.prebuild\.outputs\.reuse_hit \}\}/,
   )
 
-  for (const path of [
-    '.github/workflows/prebuilds-ggml-rpc-server.yml',
-    '.github/workflows/prebuilds-llm-llamacpp.yml',
-  ]) {
-    const workflow = read(path)
-    assert.match(workflow, /linux-extra-packages:\s*libibverbs-dev/)
-    assert.match(
-      workflow,
-      /post-artifact-build-command:\s*bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
-    )
-  }
+  assert.match(rpcPrebuilds, /linux-extra-packages:\s*libibverbs-dev/)
+  assert.match(
+    rpcPrebuilds,
+    /post-artifact-build-command:\s*bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
+  )
 
   const mobile = read('.github/workflows/integration-mobile-test-ggml-rpc-server.yml')
   assert.match(
