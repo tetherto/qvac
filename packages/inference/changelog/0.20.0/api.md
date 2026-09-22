@@ -29,6 +29,35 @@ const result = video({
 
 ---
 
+## Add ABot-World interactive world sessions to the SDK
+
+PR: [#3812](https://github.com/tetherto/qvac/pull/3812)
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: ABOT_WORLD_0_5B_Q8_0,
+  modelType: 'sdcpp-generation',
+  modelConfig: {
+    mode: 'world',
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_TAEHV_VAE,
+    t5XxlModelSrc: UMT5_XXL_ENC_Q8_0,
+    vaeModelSrc: ABOT_WORLD_0_5B_LF_WAN_VAE,
+    world: { kvCache: true, frameJpegQuality: 85 }
+  }
+})
+
+const { stats } = worldCreateScene({ modelId, prompt, image })
+await stats
+
+const { scene } = worldCreateScene({ modelId, prompt, image, returnPack: true })
+fs.writeFileSync('world.safetensors', await scene)
+
+const { frameStream } = worldStep({ modelId, keys: ['W', 'L'] })
+for await (const frame of frameStream) render(frame)
+```
+
+---
+
 ## Add Nemotron SDK support
 
 PR: [#4357](https://github.com/tetherto/qvac/pull/4357)
