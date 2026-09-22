@@ -10,8 +10,8 @@ addons used by the Expo integration. The sample hosts it in an
 `android:process=":qvac_worker"` bound service so addon crashes are isolated
 from the UI process.
 
-The client, generated contract, and embedded worker are version-locked to
-`@qvac/sdk` 0.19.1.
+The client, generated contract, and embedded worker are version-locked to the
+`@qvac/sdk` version pinned in `package.json`.
 
 ## Package naming
 
@@ -115,7 +115,7 @@ dependencyResolutionManagement {
 ```kotlin
 // app/build.gradle.kts
 dependencies {
-    implementation("io.tether:qvac-sdk-android:0.19.1")
+    implementation("io.tether:qvac-sdk-android:0.20.0")
 }
 ```
 
@@ -171,7 +171,7 @@ Then add the Android host:
 ```kotlin
 // app/build.gradle.kts
 dependencies {
-    implementation("io.tether:qvac-sdk-android:0.19.1")
+    implementation("io.tether:qvac-sdk-android:0.20.0")
 }
 ```
 
@@ -220,7 +220,7 @@ finish or drop an existing deployment in the Portal before retrying.
 
 Central publication fails closed without signing and a matching authenticated
 published JS worker, even though the plugin stages artifacts on disk first.
-The tokenless published npm `0.19.1` is not eligible for external Kotlin release.
+The tokenless published npm worker is not eligible for external Kotlin release.
 
 Start and close the isolated worker with the application lifecycle:
 
@@ -511,7 +511,7 @@ The supported runtime matrix is intentionally explicit:
 
 - Android `arm64-v8a`, API 29+: embedded in-process or isolated-service host.
 - Desktop JVM: experimental, authenticated workspace worker through
-  `connectResolved`. Managed npm 0.19.1 is unsupported; the next coordinated
+  `connectResolved`. The managed npm worker is unsupported; the next coordinated
   authenticated SDK release is required before external Kotlin publication.
 - Kotlin/Native: not published in this phase. Each target will be added only
   with a real worker host and target-specific release evidence.

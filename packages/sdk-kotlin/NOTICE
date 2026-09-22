@@ -29,38 +29,40 @@ JavaScript Dependencies
 
   @hyperswarm/secret-stream@6.9.2
     https://github.com/holepunchto/hyperswarm-secret-stream
-  @qvac/asr-ggml@0.3.3
+  @qvac/asr-ggml@0.5.3
     https://github.com/tetherto/qvac
-  @qvac/audiogen-ggml@0.3.3
+  @qvac/asr-ggml-darwin-arm64@0.5.3
     https://github.com/tetherto/qvac
-  @qvac/bci-whispercpp@0.8.2
+  @qvac/audiogen-ggml@0.4.1
     https://github.com/tetherto/qvac
-  @qvac/classification-ggml@0.23.1
+  @qvac/audiogen-ggml-darwin-arm64@0.4.1
     https://github.com/tetherto/qvac
-  @qvac/decoder-audio@0.5.0
+  @qvac/bci-whispercpp@0.9.1
     https://github.com/tetherto/qvac
-  @qvac/diagnostics@0.1.2
+  @qvac/classification-ggml@0.26.3
     https://github.com/tetherto/qvac
-  @qvac/diffusion-cpp@0.21.0
+  @qvac/decoder-audio@0.6.0
     https://github.com/tetherto/qvac
-  @qvac/embed-llamacpp@0.37.1
+  @qvac/diffusion-cpp@0.24.0
+    https://github.com/tetherto/qvac
+  @qvac/embed-llamacpp@0.41.3
     https://github.com/tetherto/qvac
   @qvac/error@0.1.1
-  @qvac/fabric@0.10.1
-    https://github.com/tetherto/qvac
-  @qvac/infer-base@0.4.2
+  @qvac/fabric@0.16.1
     https://github.com/tetherto/qvac
   @qvac/infer-base@0.6.2
     https://github.com/tetherto/qvac
-  @qvac/inference@0.19.1
+  @qvac/inference@0.20.0
     https://github.com/tetherto/qvac
   @qvac/langdetect-text@0.1.2
     https://github.com/tetherto/qvac
-  @qvac/llm-llamacpp@0.49.2
+  @qvac/llm-llamacpp@0.53.2
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
     https://github.com/tetherto/qvac
-  @qvac/ocr-ggml@0.21.1
+  @qvac/model-fit@0.12.2
+    https://github.com/tetherto/qvac
+  @qvac/ocr-ggml@0.24.3
     https://github.com/tetherto/qvac
   @qvac/rag@0.8.1
     https://github.com/tetherto/qvac
@@ -68,13 +70,15 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/registry-schema@0.3.0
     https://github.com/tetherto/qvac
-  @qvac/sdk@0.19.1
+  @qvac/sdk@0.20.0
     https://github.com/tetherto/qvac
-  @qvac/translation-nmtcpp@0.13.1
+  @qvac/translation-nmtcpp@0.16.4
     https://github.com/tetherto/qvac
-  @qvac/tts-ggml@0.8.1
+  @qvac/tts-ggml@0.9.2
     https://github.com/tetherto/qvac
-  @qvac/vla-ggml@0.24.1
+  @qvac/tts-ggml-darwin-arm64@0.9.2
+    https://github.com/tetherto/qvac
+  @qvac/vla-ggml@0.27.3
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
@@ -114,7 +118,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-events
   bare-fetch@3.4.0
     https://github.com/holepunchto/bare-fetch
-  bare-ffmpeg@1.5.0
+  bare-ffmpeg@1.6.0
     https://github.com/holepunchto/bare-ffmpeg
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
@@ -260,7 +264,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdht-stats
   hyperdispatch@1.6.0
     https://github.com/holepunchto/hyperdispatch
-  hyperdrive@13.3.3
+  hyperdrive@13.3.4
     https://github.com/holepunchto/hyperdrive
   hyperschema@1.26.2
     https://github.com/holepunchto/hyperschema

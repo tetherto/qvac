@@ -4,9 +4,9 @@ description: Build local AI apps with Kotlin coroutines and self-contained Andro
 schemaType: TechArticle
 ---
 
-The Kotlin SDK drives the same QVAC 0.19.1 worker contract as the JS/TS and
-Python clients. It provides Kotlin data classes, `Flow` streams, structured
-completion runs, and an isolated Android service host.
+The Kotlin SDK drives the same QVAC worker contract as the JS/TS and Python
+clients. It provides Kotlin data classes, `Flow` streams, structured completion
+runs, and an isolated Android service host.
 
 ## Install
 
@@ -14,20 +14,21 @@ Use the Multiplatform client when the application supplies or resolves a
 worker transport:
 
 ```kotlin
-implementation("io.tether:qvac-sdk-kotlin:0.19.1")
+implementation("io.tether:qvac-sdk-kotlin:0.20.0")
 ```
 
-Android applications normally choose one embedded runtime:
+Android applications normally choose one embedded runtime (same version as the
+install snippet above):
 
 | Artifact | Capabilities |
 | --- | --- |
-| `io.tether:qvac-sdk-android:0.19.1` | all current SDK addons/capabilities |
-| `io.tether:qvac-sdk-android-assistant:0.19.1` | chat and transcription |
-| `io.tether:qvac-sdk-android-llm:0.19.1` | completion and embeddings |
-| `io.tether:qvac-sdk-android-speech:0.19.1` | Whisper, Parakeet and BCI transcription, translation, and TTS |
-| `io.tether:qvac-sdk-android-vision:0.19.1` | multimodal completion, OCR, and classification |
-| `io.tether:qvac-sdk-android-media:0.19.1` | audio, image, video, world generation, and upscaling |
-| `io.tether:qvac-sdk-android-robotics:0.19.1` | VLA inference |
+| `io.tether:qvac-sdk-android` | all current SDK addons/capabilities |
+| `io.tether:qvac-sdk-android-assistant` | chat and transcription |
+| `io.tether:qvac-sdk-android-llm` | completion and embeddings |
+| `io.tether:qvac-sdk-android-speech` | Whisper, Parakeet and BCI transcription, translation, and TTS |
+| `io.tether:qvac-sdk-android-vision` | multimodal completion, OCR, and classification |
+| `io.tether:qvac-sdk-android-media` | audio, image, video, world generation, and upscaling |
+| `io.tether:qvac-sdk-android-robotics` | VLA inference |
 
 All artifacts use the `io.tether.qvac.sdk` namespace. A profile's capability
 manifest is checked before each request; a missing addon produces

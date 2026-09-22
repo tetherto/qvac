@@ -35,7 +35,7 @@ class GeneratedContractTest {
 
     @Test
     fun generatesModelCatalogAndVersion() {
-        assertEquals("0.19.1", SDK_VERSION)
+        assertEquals("0.20.0", SDK_VERSION)
         assertTrue(Models.all.isNotEmpty())
         assertNotNull(Models.QWEN3_600M_INST_Q4)
     }

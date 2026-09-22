@@ -15,7 +15,7 @@ class QvacRuntimeProfileTest {
         val transport = ProfileTransport(
             QvacRuntimeProfile(
                 name = "assistant",
-                sdkVersion = "0.19.1",
+                sdkVersion = "0.20.0",
                 capabilities = setOf(QvacCapability.LLM, QvacCapability.TRANSCRIPTION),
             ),
         )
@@ -32,7 +32,7 @@ class QvacRuntimeProfileTest {
         val transport = ProfileTransport(
             QvacRuntimeProfile(
                 name = "llm",
-                sdkVersion = "0.19.1",
+                sdkVersion = "0.20.0",
                 capabilities = setOf(QvacCapability.LLM),
             ),
         )
