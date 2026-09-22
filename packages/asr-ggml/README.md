@@ -26,6 +26,7 @@ breaking changes the merge introduced.
   - [Parakeet — duplex streaming `runStreaming()`](#parakeet--duplex-streaming-runstreaming)
 - [Engine Selection](#engine-selection)
 - [API Surface](#api-surface)
+- [Assessing fit](#assessing-fit)
 - [Configuration Reference](#configuration-reference)
 - [Audio Input](#audio-input)
 - [Backends and GPU Acceleration](#backends-and-gpu-acceleration)
@@ -405,6 +406,48 @@ Constructor options:
   is no `{ type: 'segment' }` wrapper;
 - `{ type: 'vad', speaking, score, source }` for voice-activity events;
 - `{ type: 'endOfTurn', source, silenceDurationMs? }` for turn boundaries.
+
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data, so the registry's weightless copy of a model answers the same as the model itself and the projection can run before anything is downloaded. It is a module export, not an instance method — nothing is loaded to call it.
+
+```js
+const ASRGgml = require('@qvac/asr-ggml')
+
+const fit = ASRGgml.assessFit({
+  engine: 'whisper',
+  modelPath: '/models/whisper.bin',
+  vadModelPath: '/models/silero-vad.bin',
+  audioSeconds: 300,
+  decoders: 5
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
+fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer'
+fit.deviceName
+fit.deviceBytes
+fit.weightsBytes
+fit.hostBytes
+fit.report
+```
+
+`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet reports `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
+
+| Option | Description |
+| --- | --- |
+| `modelPath` | **Required.** Absolute path to the model, or to the registry's weightless copy. |
+| `audioSeconds` | Longest single transcribe the projection must cover. Defaults to 300. |
+| `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. |
+| `marginBytes` | Free memory that must remain for the projection to count as fitting. |
+| `backendsDir` | Where the dynamically-loaded ggml backends live. |
+| `vadModelPath` | Whisper: projected alongside the model. Omitted means no VAD. |
+| `decoders` | Whisper: worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
+| `flashAttn`, `gpuDevice` | Whisper: as the load takes them. |
+| `threads`, `longFormWindowFrames`, `longFormContextFrames` | Parakeet: as the load takes them. |
+| `nemotronChunkMs` | Nemotron: the streaming operating point the projection must also cover. 0 projects the largest allowed one. |
+
+A model the fitter cannot read is `status: "error"` with the engine's reason; only a broken request throws.
 
 ## Configuration Reference
 
