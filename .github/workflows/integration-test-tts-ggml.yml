@@ -4,7 +4,7 @@ on:
     inputs:
       platform:
         type: choice
-        options: [linux, windows, software]
+        options: [linux, windows, software, vulkan-ops]
         default: linux
 permissions:
   contents: read
@@ -14,7 +14,7 @@ jobs:
   runner_names:
     uses: ./.github/workflows/reusable-runner-names.yml
   diagnose:
-    if: inputs.platform != 'windows'
+    if: inputs.platform == 'linux' || inputs.platform == 'software'
     needs: runner_names
     runs-on: ${{ inputs.platform == 'software' && 'ubuntu-24.04' || needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
     timeout-minutes: 35
@@ -143,3 +143,52 @@ jobs:
             Write-Output "Native result: $variant exit=$LASTEXITCODE"
           }
           exit 0
+
+  vulkan-ops:
+    if: inputs.platform == 'vulkan-ops'
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64_gpu }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: tetherto/qvac-ext-ggml
+          ref: codex/vulkan-f32-strided-matmul
+          fetch-depth: 2
+      - name: Configure Vulkan tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "$HOME/vulkan/x86_64/include/vulkan/vulkan.hpp" ]; then
+            sdk_path="$HOME/vulkan/x86_64"
+          else
+            sdk_path="$RUNNER_TEMP/vulkan-sdk/x86_64"
+            mkdir -p "$RUNNER_TEMP/vulkan-sdk"
+            curl -fL --retry 3 https://sdk.lunarg.com/sdk/download/latest/linux/vulkan_sdk.tar.xz -o "$RUNNER_TEMP/vulkan-sdk.tar.xz"
+            tar xf "$RUNNER_TEMP/vulkan-sdk.tar.xz" -C "$RUNNER_TEMP/vulkan-sdk" --strip-components=1
+          fi
+          echo "VULKAN_SDK=$sdk_path" >> "$GITHUB_ENV"
+          echo "$sdk_path/bin" >> "$GITHUB_PATH"
+          cmake --version
+      - name: Reproduce with original backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp src/ggml-vulkan/ggml-vulkan.cpp "$RUNNER_TEMP/fixed-vulkan.cpp"
+          git show HEAD^:src/ggml-vulkan/ggml-vulkan.cpp > src/ggml-vulkan/ggml-vulkan.cpp
+          cmake -S . -B build -DGGML_VULKAN=ON -DGGML_METAL=OFF -DGGML_BLAS=OFF -DGGML_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target test-backend-ops -j 8
+          set +e
+          build/bin/test-backend-ops test -b Vulkan0 -o MUL_MAT -p 'type_a=f32.*b_absmax' > "$RUNNER_TEMP/vulkan-before.log" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/vulkan-before.log"
+          echo "Original backend exit=$result"
+          test "$result" -ne 0
+      - name: Verify corrected backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/fixed-vulkan.cpp" src/ggml-vulkan/ggml-vulkan.cpp
+          cmake --build build --target test-backend-ops -j 8
+          build/bin/test-backend-ops test -b Vulkan0 -o MUL_MAT -p 'b_absmax'
