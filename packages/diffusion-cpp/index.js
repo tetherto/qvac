@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.VideoStableDiffusion = exports.EsrganUpscaler = exports.ImgStableDiffusion = void 0;
+exports.VideoStableDiffusion = exports.assessFit = exports.EsrganUpscaler = exports.ImgStableDiffusion = void 0;
 exports.applyFluxImg2ImgDimDefaults = applyFluxImg2ImgDimDefaults;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const path = require("bare-path");
@@ -8,16 +8,7 @@ const QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const addon_1 = require("./addon");
-const COMPANION_FILE_KEYS = [
-    'clipL',
-    'clipG',
-    't5Xxl',
-    'llm',
-    'vae',
-    'esrgan',
-    'highNoiseDiffusionModel',
-    'uncondModel'
-];
+const file_paths_1 = require("./file-paths");
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed';
 const NATIVE_UPSCALE_REPEATS_MAX = 2_147_483_647;
 function assertAbsolute(key, value) {
@@ -81,12 +72,7 @@ class ImgStableDiffusion {
         if (!files || typeof files !== 'object') {
             throw new TypeError('files must be an object containing at least { model }');
         }
-        assertAbsolute('model', files.model);
-        for (const key of COMPANION_FILE_KEYS) {
-            if (files[key] !== undefined) {
-                assertAbsolute(key, files[key]);
-            }
-        }
+        (0, file_paths_1.assertFilePaths)(files);
         this._files = files;
         this._config = config || {};
         this.logger = new QvacLogger(logger);
@@ -107,22 +93,9 @@ class ImgStableDiffusion {
     }
     async _load() {
         this.logger.info('Starting stable-diffusion model load');
-        const isSplitLayout = !!this._files.llm || !!this._files.t5Xxl || !!this._files.clipL || !!this._files.clipG;
         const filesWithClipVision = this._files;
         const configurationParams = {
-            path: isSplitLayout ? '' : this._files.model,
-            diffusionModelPath: isSplitLayout ? this._files.model : '',
-            highNoiseDiffusionModelPath: this._files.highNoiseDiffusionModel || '',
-            uncondDiffusionModelPath: this._files.uncondModel || '',
-            clipLPath: this._files.clipL || '',
-            clipGPath: this._files.clipG || '',
-            t5XxlPath: this._files.t5Xxl || '',
-            llmPath: this._files.llm || '',
-            vaePath: this._files.vae || '',
-            clipVisionPath: filesWithClipVision.clipVision || '',
-            esrganPath: this._files.esrgan || '',
-            audioVaePath: '',
-            embeddingsConnectorsPath: '',
+            ...(0, file_paths_1.toFilePaths)(filesWithClipVision),
             config: this._config
         };
         this.logger.info('Creating stable-diffusion addon with configuration:', configurationParams);
@@ -517,6 +490,9 @@ function applyFluxImg2ImgDimDefaults(params, prediction, hasInitImages) {
         height: params.height !== undefined ? params.height : 1024
     };
 }
+const fit_1 = require("./fit");
+var fit_2 = require("./fit");
+Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_2.assessFit; } });
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- preserve the CommonJS video subpath export.
 exports.VideoStableDiffusion = require('./video');
 exports.default = ImgStableDiffusion;
@@ -525,4 +501,5 @@ cjsExports.ImgStableDiffusion = ImgStableDiffusion;
 cjsExports.VideoStableDiffusion = exports.VideoStableDiffusion;
 cjsExports.EsrganUpscaler = EsrganUpscaler;
 cjsExports.applyFluxImg2ImgDimDefaults = applyFluxImg2ImgDimDefaults;
+cjsExports.assessFit = fit_1.assessFit;
 module.exports = cjsExports;

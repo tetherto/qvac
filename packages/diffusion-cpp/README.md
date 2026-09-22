@@ -34,6 +34,7 @@ The package exposes four JS entry points:
 - [ESRGAN Upscaler](#esrgan-upscaler)
 - [Response Streams and Stats](#response-streams-and-stats)
 - [Cancellation and Unload](#cancellation-and-unload)
+- [Assessing fit](#assessing-fit)
 - [Operational Notes](#operational-notes)
 - [Credits](#credits)
   - [Test Images](#test-images)
@@ -711,6 +712,42 @@ await model.unload()
 ```
 
 During ESRGAN upscale, cancellation is honored between repeat passes.
+
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data, so the registry's weightless copy of each file answers the same as the file itself and the projection can run before anything is downloaded. It is a module export, not an instance method — nothing is loaded to call it.
+
+```js
+const { assessFit } = require('@qvac/diffusion-cpp')
+
+const fit = assessFit({
+  files: { model: '/models/model.safetensors' },
+  config: { backendsDir: '/opt/backends' },
+  workload: { prompt: 'a lighthouse at dusk', width: 1024, height: 1024 }
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.changed // the engine placed the load only by altering the backend assignment
+fit.backend
+fit.paramsBackend
+fit.vaeTiling
+fit.streamLayers
+fit.report // per-device, per-module memory table, suitable for logging
+```
+
+`files` and `config` are what `createInstance` takes, plus `files.clipVision`. Paths must be absolute. `workload` describes the generation the projection is sized for:
+
+| Field | Description |
+| --- | --- |
+| `prompt` | Token count drives the text-encoder memory; a default stands in when absent. |
+| `width`, `height` | Output dimensions. |
+| `videoFrames` | 1 or less projects image generation. |
+| `vaeTiling` | Tiled decoding trades speed for a much smaller VAE arena. |
+| `vaeTileSizeX`, `vaeTileSizeY`, `vaeTileOverlap` | The tiling geometry. |
+
+There is no `reason` on the result, unlike the other engines: the diffusion engine answers with a status alone, `error` is a model it could not read, and `report` carries everything else it has to say. A `changed` of `true` comes with `status: "does-not-fit"` — the configuration as given does not fit, and the engine reached a placement only by moving modules between backends.
+
+A model the engine cannot read is `status: "error"`; only a broken request throws.
 
 ## Operational Notes
 
