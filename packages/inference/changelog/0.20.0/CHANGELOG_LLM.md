@@ -1,6 +1,4 @@
-# Changelog
-
-## [0.20.0]
+# QVAC Inference v0.20.0 Release Notes
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.20.0
 
@@ -338,9 +336,3 @@ ABOT_WORLD_0_5B_LF_VAE_F16
 LTX_2_3_VAE
 LTX_2_3_VAE_1
 ```
-
-## [0.17.0]
-
-📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.17.0
-
-First public release of `@qvac/inference`, the Bare-only in-process engine aligned with `@qvac/sdk` 0.17.0. Same inference API surface as the SDK, without the RPC/worker layer — register the plugins you need and run directly on Bare.

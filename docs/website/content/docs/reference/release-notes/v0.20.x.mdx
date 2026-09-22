@@ -1,16 +1,21 @@
-# Changelog
+---
+title: SDK Release Notes — v0.20.x
+description: Release notes for QVAC SDK v0.20.0.
+---
 
-## [0.20.0]
+## v0.20.0
 
-📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.20.0
+### @qvac/sdk
 
-QVAC Inference 0.20.0 is the engine cut that SDK 0.20.0 will depend on. It adds TranslatePsy-AfriSLM translation, an in-process TurboVec vector index, MiniMax-H3 video, Parakeet Nemotron transcription, and the rest of the AudioGen and TTS surfaces. ABot-World sessions (`worldCreateScene` / `worldStep`) are on this surface. `loadModel` runs an advisory llama.cpp fit check. Diffusion VAE constant names, CPU flags, `'row'` split, Parakeet `language` codes, and how system prompts combine with KV cache all change.
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.20.0
 
-Publish this package before `@qvac/sdk@0.20.0`. The SDK release points its `@qvac/inference` range at this version.
+QVAC SDK 0.20.0 adds TranslatePsy-AfriSLM translation, an in-process TurboVec vector index, MiniMax-H3 video, Parakeet Nemotron transcription, and the rest of the AudioGen and TTS surfaces. ABot-World sessions (`worldCreateScene` / `worldStep`) are on this surface. `loadModel` runs an advisory llama.cpp fit check. Diffusion VAE constant names, CPU flags, `'row'` split, Parakeet `language` codes, and how system prompts combine with KV cache all change.
 
-## Breaking Changes
+`@qvac/sdk`, `@qvac/inference`, and `tetherto-qvac-sdk` all ship at 0.20.0. Install `@qvac/sdk` and `@qvac/inference` together at this version.
 
-### Diffusion CPU flags
+#### Breaking Changes
+
+##### Diffusion CPU flags
 
 `clip_on_cpu`, `vae_on_cpu`, and `control_net_cpu` are gone. Put the text encoder, VAE, or ControlNet on CPU through `params_backend` and `backend`. Layer streaming still needs CPU diffusion parameter residency and `max_vram`.
 
@@ -43,7 +48,7 @@ const modelConfig = {
 }
 ```
 
-### Diffusion VAE constant names
+##### Diffusion VAE constant names
 
 Generated VAE exports now include the registry type tag, so LTX audio/video and ABot TAeHV/Wan no longer collapse to `_1` suffixes.
 
@@ -65,7 +70,7 @@ LTX_2_3_AUDIO_VAE
 LTX_2_3_VIDEO_VAE
 ```
 
-### System prompts apply on every completion path
+##### System prompts apply on every completion path
 
 A system message in `history` is no longer dropped when `kvCache` is on. `modelConfig.system_prompt` is applied when the history has no system message, including turns that do not use KV cache.
 
@@ -101,7 +106,7 @@ completion({
 
 Callers that previously sent user-only history and relied on no system message must pass `system_prompt: ''` at load (or an explicit empty system turn) if they need that behaviour.
 
-### `'row'` split is rejected
+##### `'row'` split is rejected
 
 Fabric 10549.1.0 dropped llama.cpp's unused row split.
 
@@ -131,7 +136,7 @@ modelConfig: { 'split-mode': 'layer' } // or 'tensor'
 modelConfig: { splitMode: 'layer' }
 ```
 
-### Parakeet `language` is a locale code
+##### Parakeet `language` is a locale code
 
 Parakeet `modelConfig.language` must be `auto`, a short code (`en`, `hi`), or `code-region` (`en-US`, `hi-IN`). `zh-Hans-CN` and names like `english` now fail at `loadModel`. Whisper `language` is unchanged.
 
@@ -151,14 +156,14 @@ modelConfig: {
 }
 ```
 
-## New APIs
+#### New APIs
 
-### TurboVec vector index
+##### TurboVec vector index
 
-`createVectorIndex` builds an in-process vector index on the embedding plugin's TurboVec engine. Pair it with `embed()`: add each document's embedding under an id you choose, search with a query embedding, and map the returned ids back to your store. Default storage is `VectorIndexStorage.TURBOVEC_Q4`. Dimension must be a multiple of 8 and at most 1024 for TurboVec modes.
+`createVectorIndex` builds an in-worker vector index on the embedding plugin's TurboVec engine. Pair it with `embed()`: add each document's embedding under an id you choose, search with a query embedding, and map the returned ids back to your store. Default storage is `VectorIndexStorage.TURBOVEC_Q4`. Dimension must be a multiple of 8 and at most 1024 for TurboVec modes.
 
 ```typescript
-import { createVectorIndex, loadVectorIndex, VectorIndexStorage } from '@qvac/inference'
+import { createVectorIndex, loadVectorIndex, VectorIndexStorage } from '@qvac/sdk'
 
 const index = await createVectorIndex({
   dim: 1024,
@@ -172,7 +177,7 @@ await index.dispose()
 const reopened = await loadVectorIndex({ path: 'indexes/articles.qvi' })
 ```
 
-### MiniMax-H3 video
+##### MiniMax-H3 video
 
 `video()` can run MiniMax-H3 in `txt2vid` mode. Load `sdcpp-generation` with `mode: 'video'` and the H3 text-encoder, video VAE, and audio VAE sources.
 
@@ -199,7 +204,7 @@ const result = video({
 })
 ```
 
-### ABot-World Sessions
+##### ABot-World Sessions
 
 Load a world-mode diffusion model, create a scene once, then step it. Frames stream as they decode.
 
@@ -227,12 +232,12 @@ for await (const frame of frameStream) {
 
 Pass `returnPack: true` on create to keep the scene bytes for a later reload.
 
-### Parakeet Nemotron
+##### Parakeet Nemotron
 
-Three Parakeet Nemotron 0.6B weights are on the catalog for `parakeet-transcription`.
+Three Parakeet Nemotron 0.6B weights are on the SDK catalog for `parakeet-transcription`.
 
 ```typescript
-import { loadModel, PARAKEET_NEMOTRON_0_6B_Q4_0 } from '@qvac/inference'
+import { loadModel, PARAKEET_NEMOTRON_0_6B_Q4_0 } from '@qvac/sdk'
 
 const modelId = await loadModel({
   modelSrc: PARAKEET_NEMOTRON_0_6B_Q4_0,
@@ -244,7 +249,7 @@ const modelId = await loadModel({
 })
 ```
 
-### AudioGen understand, remake, and edit
+##### AudioGen understand, remake, and edit
 
 `audioUnderstand` returns caption, bpm, keyscale, and audio codes. Pass those codes back into `audioGen` to re-synthesize the clip, optionally with LRC lyrics. `audioEdit` runs an ordered `flow-edit` / `repaint` pipeline on a source recording and returns the same run shape as `audioGen`.
 
@@ -265,7 +270,7 @@ const edited = audioEdit({
 })
 ```
 
-### TTS load options, sample rate, and cancel
+##### TTS load options, sample rate, and cancel
 
 Load-time CosyVoice3, Chatterbox, Supertonic, and Parler fields that were previously unreachable now pass through. `textToSpeech` exposes `sampleRate` on the first frame, real stats (`realTimeFactor`, `backendId`, `generatedFrames`), and `cancel({ requestId })` stops the engine, not only delivery.
 
@@ -277,7 +282,7 @@ await cancel({ requestId: result.requestId })
 const stopReason = await result.stopReason // 'cancelled' when the engine stopped
 ```
 
-### Tool grammar
+##### Tool grammar
 
 Completions with tools consume llama.cpp 0.53.0 grammar. `generationParams.tool_choice: 'required'` forces a tool call. When the model emits a tool region that does not parse, `final.toolErrors` lists the failures; the field is omitted when there are none.
 
@@ -293,7 +298,7 @@ const final = await run.final
 if (final.toolCalls.length === 0) console.log(final.toolErrors)
 ```
 
-## Features
+#### Features
 
 `translate()` detects TranslatePsy-AfriSLM by registry name or GGUF filename and applies that family's prompts and deterministic decoding. Custom context is ignored for these models.
 
@@ -301,15 +306,19 @@ Before each llama.cpp completion or embedding load, `loadModel` runs `@qvac/mode
 
 On Android and iOS, llama `assessModelFit` runs `@qvac/model-fit` in-process on a worker thread. There is no disposable child process on those hosts. A leftover `.running` marker from a previous abort is treated as crashed so the same path and config skip native instead of retrying the abort. The JavaScript loop stays free while the fit runs.
 
-## Bug Fixes
+`@qvac/tts-ggml` 0.9.x installs host binaries in per-platform packages (`@qvac/tts-ggml-darwin-arm64` and siblings) next to the meta package. `qvac verify bundle` looks there instead of under the meta package's `prebuilds/`.
+
+#### Bug Fixes
 
 Automatic KV-cache files keep the last committed saved-message boundary across a worker restart, so a warm turn does not replay already-cached messages. A cancelled or failed warm turn no longer deletes that committed file.
 
 An addon's logger is attached when its model loads, not when the plugin registers, so unused addons do not open log sinks.
 
-## Model Changes
+Mobile `withQvacSDK` prebuild verifies only the hosts the bundle actually links, and only the current Android or iOS target's hosts. A missing addon pin now names the exact platform package instead of a generic missing-prebuild error.
 
-### Added
+#### Model Changes
+
+##### Added
 
 ```
 ABOT_WORLD_0_5B_LF_TAEHV_VAE
@@ -330,7 +339,7 @@ TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q4_K_M
 TRANSLATEPSY_AFRISLM_4B_TRANSLATION_Q8_0
 ```
 
-### Removed
+##### Removed
 
 ```
 ABOT_WORLD_0_5B_LF_VAE
@@ -338,9 +347,3 @@ ABOT_WORLD_0_5B_LF_VAE_F16
 LTX_2_3_VAE
 LTX_2_3_VAE_1
 ```
-
-## [0.17.0]
-
-📦 **NPM:** https://www.npmjs.com/package/@qvac/inference/v/0.17.0
-
-First public release of `@qvac/inference`, the Bare-only in-process engine aligned with `@qvac/sdk` 0.17.0. Same inference API surface as the SDK, without the RPC/worker layer — register the plugins you need and run directly on Bare.
