@@ -15,7 +15,6 @@ import {
   type WorldBinding,
   type WorldConfigurationParams
 } from './addon'
-import type { NumericLike } from './index'
 
 export { ActionFlag }
 
@@ -55,14 +54,6 @@ export interface WorldConfig {
   /** History attention window in latent frames. 0 = engine default (8). */
   localAttnSize?: number
   offloadParamsToCpu?: boolean
-  /** Weight residency: e.g. 'diffusion=cpu' or 'diffusion=disk,vae=cpu'. Explicit assignments override offloadParamsToCpu. */
-  paramsBackend?: string
-  /** DiT graph budget in GiB, or per-device assignments. Negative values reserve free-memory headroom; 0 disables cuts. */
-  maxVram?: number | string
-  /** Retain leading DiT segments within maxVram and transfer the remainder from CPU parameters. */
-  streamLayers?: boolean
-  /** Shared native log level while this session is alive: 0=error, 1=warn, 2=info, 3=debug. Restored on unload. */
-  verbosity?: NumericLike
   backendsDir?: string
   /**
    * Frame encoding: 0 = lossless PNG; 1..100 = JPEG at that quality on the

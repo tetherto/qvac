@@ -1,7 +1,5 @@
 #pragma once
 
-#include <atomic>
-#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -11,22 +9,11 @@ namespace qvac_lib_inference_addon_sd {
 namespace logging {
 
 // Global verbosity level shared across all SD model instances
-extern std::atomic<qvac_lib_inference_addon_cpp::logger::Priority>
-    g_verbosityLevel;
-
-class ScopedVerbosity {
-public:
-  explicit ScopedVerbosity(std::optional<int> level);
-  ~ScopedVerbosity();
-  ScopedVerbosity(const ScopedVerbosity&) = delete;
-  ScopedVerbosity& operator=(const ScopedVerbosity&) = delete;
-  ScopedVerbosity(ScopedVerbosity&&) = delete;
-  ScopedVerbosity& operator=(ScopedVerbosity&&) = delete;
-};
+extern qvac_lib_inference_addon_cpp::logger::Priority g_verbosityLevel;
 
 /**
  * Parse the "verbosity" key from a config map and set the global log level.
- * 0=error, 1=warn, 2=info, 3=debug. Leaves the level unchanged if absent.
+ * 0=error, 1=warn, 2=info, 3=debug. Defaults to ERROR if not present.
  */
 void setVerbosityLevel(std::unordered_map<std::string, std::string>& configMap);
 
@@ -39,8 +26,7 @@ void setVerbosityLevel(std::unordered_map<std::string, std::string>& configMap);
   do {                                                                         \
     if (static_cast<int>(priority) <=                                          \
         static_cast<int>(                                                      \
-            qvac_lib_inference_addon_sd::logging::g_verbosityLevel.load(       \
-                std::memory_order_relaxed))) {                                 \
+            qvac_lib_inference_addon_sd::logging::g_verbosityLevel)) {         \
       QLOG(priority, message);                                                 \
     }                                                                          \
   } while (0)
