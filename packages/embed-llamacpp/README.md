@@ -237,7 +237,7 @@ const EmbedLlamacpp = require('@qvac/embed-llamacpp')
 
 const fit = EmbedLlamacpp.assessFit({
   modelPath: '/models/embed.gguf',
-  params: { 'gpu-layers': '99', 'batch-size': '1024' }
+  params: { 'batch-size': '1024' }
 })
 
 fit.status // 'fits' | 'does-not-fit' | 'error'
@@ -251,7 +251,11 @@ fit.hostBytes // the same, for the trailing host row
 
 `params` takes the load in llama's own CLI spelling without the leading `--`, exactly as the loader takes it: `gpu-layers`, `tensor-split`, `batch-size` and the rest. Each is dispatched through llama's argument table, so a placement pinned there reaches the projection. A setting llama does not recognise, or a flag asked to be off that can only assert itself, is `status: "error"` with `unsupported-config`.
 
-`minCtxSize` sets a floor the fitter may not reduce the context below, `marginBytes` the memory to leave free on every device, and `backendsDir` where the dynamically-loaded ggml backends live.
+Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
+
+The projection applies the embedding load's own normalization: the micro-batch follows `batch-size`, a single sequence uses a unified KV cache, and the context is pinned to the model's trained context, or capped at it.
+
+`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
 
 A model the fitter cannot read is `status: "error"`; only a broken request throws.
 
