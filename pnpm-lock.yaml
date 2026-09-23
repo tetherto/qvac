@@ -25,7 +25,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.12(zod@4.4.3)
       '@qvac/cli':
-        specifier: ^0.13.0
+        specifier: ^0.14.0
         version: link:../cli
     devDependencies:
       '@ai-sdk/openai-compatible':
@@ -381,8 +381,8 @@ importers:
         specifier: 8.5.2
         version: 8.5.2(@types/node@25.9.5)
       '@qvac/sdk':
-        specifier: ^0.19.0
-        version: 0.19.1(33e4f26373a3b0f577071c644d5fc8f3)
+        specifier: ^0.20.0
+        version: link:../sdk
       close-with-grace:
         specifier: ^2.1.0
         version: 2.5.0
@@ -974,7 +974,7 @@ importers:
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.24.0
-        version: link:../diffusion-cpp
+        version: 0.24.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
         specifier: ^0.41.1
         version: link:../embed-llamacpp
@@ -1628,7 +1628,7 @@ importers:
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.24.0
-        version: link:../diffusion-cpp
+        version: 0.24.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
         specifier: ^0.41.1
         version: link:../embed-llamacpp
@@ -2143,10 +2143,10 @@ importers:
     dependencies:
       '@qvac/ai-sdk-provider':
         specifier: ^0.7.0
-        version: link:../../packages/ai-sdk-provider
+        version: 0.7.0(@ai-sdk/openai-compatible@3.0.14(zod@4.4.3))(@qvac/cli@0.13.1(5de6fe107a099493e7e3b5dff4595224))(ai@7.0.37(zod@4.4.3))(zod@4.4.3)
       '@qvac/cli':
         specifier: ^0.13.0
-        version: link:../../packages/cli
+        version: 0.13.1(5de6fe107a099493e7e3b5dff4595224)
     devDependencies:
       '@types/node':
         specifier: ^24.2.1
@@ -2177,10 +2177,10 @@ importers:
         version: 3.0.14(zod@4.4.3)
       '@qvac/ai-sdk-provider':
         specifier: ^0.7.0
-        version: link:../../packages/ai-sdk-provider
+        version: 0.7.0(@ai-sdk/openai-compatible@3.0.14(zod@4.4.3))(@qvac/cli@0.13.1(5de6fe107a099493e7e3b5dff4595224))(ai@7.0.37(zod@4.4.3))(zod@4.4.3)
       '@qvac/cli':
         specifier: ^0.13.0
-        version: link:../../packages/cli
+        version: 0.13.1(5de6fe107a099493e7e3b5dff4595224)
       ai:
         specifier: ^7.0.0
         version: 7.0.37(zod@4.4.3)
@@ -4175,6 +4175,17 @@ packages:
   '@protobufjs/utf8@1.1.2':
     resolution: {integrity: sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug==}
 
+  '@qvac/ai-sdk-provider@0.7.0':
+    resolution: {integrity: sha512-/ci00B0jb44jdyNxlpYYutDdAaRaoc0Q4o1GYc7JA777ulPo7rZQH5R7he5Sc+cEAYcKyqmU6Qkr9amrqXGQfA==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@ai-sdk/openai-compatible': ^3.0
+      '@qvac/cli': ^0.13.0
+      ai: ^7.0
+    peerDependenciesMeta:
+      '@qvac/cli':
+        optional: true
+
   '@qvac/asr-ggml@0.3.3':
     resolution: {integrity: sha512-Ywgx3+y4DgxOz8wQe35/QMxt4eUND8cqdWKRhrD3ag5Nf5cBwV1eQSN9uXZlA75J4InJyi5sI7sAC4pXlnYmKQ==}
     engines: {bare: '>=1.20.0'}
@@ -4192,6 +4203,11 @@ packages:
     resolution: {integrity: sha512-pg3I4cmM38nJB+kzc0aeos/d06icjpKsQ3ZEhES788EuHl/4dKOPlOQZl7QOigX7PwZna9VHSiaJdvB+9psOSg==}
     engines: {bare: '>=1.24.0'}
 
+  '@qvac/cli@0.13.1':
+    resolution: {integrity: sha512-4zzI7ueWFexLfVk3N/TLYYjg0Y4SjO+asp1MOOMduFaSYWFQxdaBcgaKMDb1xIBSno8+ivD/2NTdpkf+qTY5eQ==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
   '@qvac/decoder-audio@0.5.0':
     resolution: {integrity: sha512-/5YrWUzlOw4GAH0wUUONTjmB61BHKMuxQ8bYNW0CV+rOyoJcOmCd4Y+Ufne6wqvtr0fH3RyHDNVYc01i6KABFw==}
 
@@ -4200,6 +4216,10 @@ packages:
 
   '@qvac/diffusion-cpp@0.21.0':
     resolution: {integrity: sha512-R6JdLb5gE1toP76nOLUx6mg98IRpbziXKVSgVoCqAV/rg2wHErGHxtAyW0wp+WfLewRNG2eTrhIicPYOX6fHBA==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/diffusion-cpp@0.24.0':
+    resolution: {integrity: sha512-yCK10Vehi+3lhpkvOYJrCLUvGASz/yjijyNqaFic29R808oUImbyLK86vjhyjehlD/qi5QucKCfvCPqr5JLh2A==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/dl-base@0.1.1':
@@ -12742,6 +12762,15 @@ snapshots:
 
   '@inquirer/ansi@2.0.7': {}
 
+  '@inquirer/checkbox@5.2.3(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/ansi': 2.0.7
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/figures': 2.0.8
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
+
   '@inquirer/checkbox@5.2.3(@types/node@25.9.5)':
     dependencies:
       '@inquirer/ansi': 2.0.7
@@ -12751,12 +12780,31 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.9.5
 
+  '@inquirer/confirm@6.3.0(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
+
   '@inquirer/confirm@6.3.0(@types/node@25.9.5)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@25.9.5)
       '@inquirer/type': 4.1.0(@types/node@25.9.5)
     optionalDependencies:
       '@types/node': 25.9.5
+
+  '@inquirer/core@12.0.1(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/ansi': 2.0.7
+      '@inquirer/figures': 2.0.8
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+      cli-width: 4.1.0
+      fast-wrap-ansi: 0.2.2
+      mute-stream: 3.0.0
+      signal-exit: 4.1.0
+    optionalDependencies:
+      '@types/node': 24.13.3
 
   '@inquirer/core@12.0.1(@types/node@25.9.5)':
     dependencies:
@@ -12770,6 +12818,14 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.9.5
 
+  '@inquirer/editor@5.3.1(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/external-editor': 3.0.4(@types/node@24.13.3)
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
+
   '@inquirer/editor@5.3.1(@types/node@25.9.5)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@25.9.5)
@@ -12778,12 +12834,26 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.9.5
 
+  '@inquirer/expand@5.1.3(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
+
   '@inquirer/expand@5.1.3(@types/node@25.9.5)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@25.9.5)
       '@inquirer/type': 4.1.0(@types/node@25.9.5)
     optionalDependencies:
       '@types/node': 25.9.5
+
+  '@inquirer/external-editor@3.0.4(@types/node@24.13.3)':
+    dependencies:
+      chardet: 2.2.0
+      iconv-lite: 0.7.3
+    optionalDependencies:
+      '@types/node': 24.13.3
 
   '@inquirer/external-editor@3.0.4(@types/node@25.9.5)':
     dependencies:
@@ -12794,12 +12864,26 @@ snapshots:
 
   '@inquirer/figures@2.0.8': {}
 
+  '@inquirer/input@5.1.4(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
+
   '@inquirer/input@5.1.4(@types/node@25.9.5)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@25.9.5)
       '@inquirer/type': 4.1.0(@types/node@25.9.5)
     optionalDependencies:
       '@types/node': 25.9.5
+
+  '@inquirer/number@4.2.1(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
 
   '@inquirer/number@4.2.1(@types/node@25.9.5)':
     dependencies:
@@ -12808,6 +12892,14 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.9.5
 
+  '@inquirer/password@5.2.0(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/ansi': 2.0.7
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
+
   '@inquirer/password@5.2.0(@types/node@25.9.5)':
     dependencies:
       '@inquirer/ansi': 2.0.7
@@ -12815,6 +12907,21 @@ snapshots:
       '@inquirer/type': 4.1.0(@types/node@25.9.5)
     optionalDependencies:
       '@types/node': 25.9.5
+
+  '@inquirer/prompts@8.5.2(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/checkbox': 5.2.3(@types/node@24.13.3)
+      '@inquirer/confirm': 6.3.0(@types/node@24.13.3)
+      '@inquirer/editor': 5.3.1(@types/node@24.13.3)
+      '@inquirer/expand': 5.1.3(@types/node@24.13.3)
+      '@inquirer/input': 5.1.4(@types/node@24.13.3)
+      '@inquirer/number': 4.2.1(@types/node@24.13.3)
+      '@inquirer/password': 5.2.0(@types/node@24.13.3)
+      '@inquirer/rawlist': 5.3.3(@types/node@24.13.3)
+      '@inquirer/search': 4.3.1(@types/node@24.13.3)
+      '@inquirer/select': 5.2.3(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
 
   '@inquirer/prompts@8.5.2(@types/node@25.9.5)':
     dependencies:
@@ -12831,12 +12938,27 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.9.5
 
+  '@inquirer/rawlist@5.3.3(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
+
   '@inquirer/rawlist@5.3.3(@types/node@25.9.5)':
     dependencies:
       '@inquirer/core': 12.0.1(@types/node@25.9.5)
       '@inquirer/type': 4.1.0(@types/node@25.9.5)
     optionalDependencies:
       '@types/node': 25.9.5
+
+  '@inquirer/search@4.3.1(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/figures': 2.0.8
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
 
   '@inquirer/search@4.3.1(@types/node@25.9.5)':
     dependencies:
@@ -12846,6 +12968,15 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.9.5
 
+  '@inquirer/select@5.2.3(@types/node@24.13.3)':
+    dependencies:
+      '@inquirer/ansi': 2.0.7
+      '@inquirer/core': 12.0.1(@types/node@24.13.3)
+      '@inquirer/figures': 2.0.8
+      '@inquirer/type': 4.1.0(@types/node@24.13.3)
+    optionalDependencies:
+      '@types/node': 24.13.3
+
   '@inquirer/select@5.2.3(@types/node@25.9.5)':
     dependencies:
       '@inquirer/ansi': 2.0.7
@@ -12854,6 +12985,10 @@ snapshots:
       '@inquirer/type': 4.1.0(@types/node@25.9.5)
     optionalDependencies:
       '@types/node': 25.9.5
+
+  '@inquirer/type@4.1.0(@types/node@24.13.3)':
+    optionalDependencies:
+      '@types/node': 24.13.3
 
   '@inquirer/type@4.1.0(@types/node@25.9.5)':
     optionalDependencies:
@@ -13350,6 +13485,17 @@ snapshots:
 
   '@protobufjs/utf8@1.1.2': {}
 
+  '@qvac/ai-sdk-provider@0.7.0(@ai-sdk/openai-compatible@3.0.14(zod@4.4.3))(@qvac/cli@0.13.1(5de6fe107a099493e7e3b5dff4595224))(ai@7.0.37(zod@4.4.3))(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/openai-compatible': 3.0.14(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.3
+      '@ai-sdk/provider-utils': 5.0.12(zod@4.4.3)
+      ai: 7.0.37(zod@4.4.3)
+    optionalDependencies:
+      '@qvac/cli': 0.13.1(5de6fe107a099493e7e3b5dff4595224)
+    transitivePeerDependencies:
+      - zod
+
   '@qvac/asr-ggml@0.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/error': 0.1.1
@@ -13411,6 +13557,42 @@ snapshots:
       - bare-tcp
       - react-native-b4a
 
+  '@qvac/cli@0.13.1(5de6fe107a099493e7e3b5dff4595224)':
+    dependencies:
+      '@fastify/cors': 11.3.0
+      '@fastify/multipart': 9.4.0
+      '@fastify/swagger': 9.8.1(supports-color@8.1.1)
+      '@fastify/swagger-ui': 6.1.1
+      '@inquirer/prompts': 8.5.2(@types/node@24.13.3)
+      '@qvac/sdk': 0.19.1(33e4f26373a3b0f577071c644d5fc8f3)
+      close-with-grace: 2.5.0
+      commander: 14.0.3
+      fastify: 5.10.0
+      fastify-plugin: 6.0.0
+      fastify-type-provider-zod: 5.1.0(@fastify/swagger@9.8.1(supports-color@8.1.1))(fastify@5.10.0)(openapi-types@12.1.3)(zod@4.4.3)
+      js-yaml: 4.3.0
+      tsx: 4.23.1
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@electron-forge/plugin-base'
+      - '@types/node'
+      - bare-buffer
+      - bare-events
+      - bare-fetch
+      - bare-link
+      - bare-pipe
+      - bare-tcp
+      - bare-url
+      - expo-build-properties
+      - expo-device
+      - expo-file-system
+      - openapi-types
+      - pear-pipe
+      - react-native-b4a
+      - react-native-bare-kit
+      - sodium-javascript
+      - supports-color
+
   '@qvac/decoder-audio@0.5.0(bare-abort-controller@1.1.2)':
     dependencies:
       '@qvac/error': 0.1.1
@@ -13427,6 +13609,14 @@ snapshots:
     optional: true
 
   '@qvac/diffusion-cpp@0.21.0(bare-abort-controller@1.1.2)':
+    dependencies:
+      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
+      '@qvac/logging': 0.1.1
+      bare-path: 3.1.1
+    transitivePeerDependencies:
+      - bare-abort-controller
+
+  '@qvac/diffusion-cpp@0.24.0(bare-abort-controller@1.1.2)':
     dependencies:
       '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
       '@qvac/logging': 0.1.1
