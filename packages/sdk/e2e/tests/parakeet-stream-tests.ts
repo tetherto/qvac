@@ -68,17 +68,24 @@ export const parakeetStreamUnifiedHappy: TestDefinition = {
   }
 }
 
-export const parakeetStreamMetadataRejected: TestDefinition = {
-  testId: 'parakeet-stream-metadata-rejected',
+/**
+ * Per-segment metadata over the duplex stream: same paced feed as the happy
+ * path, with `metadata: true`, so the session surfaces `segment` events
+ * carrying timings and the parakeet-only `isEndOfTurn` / `startsWord` flags.
+ */
+export const parakeetStreamMetadata: TestDefinition = {
+  testId: 'parakeet-stream-metadata',
   params: {
     audioFileName: AUDIO_FIXTURE,
-    chunkMs: 1000
+    chunkMs: 1000,
+    emitPartials: true,
+    trailingSilenceMs: 1500
   },
   expectation: { validation: 'function', fn: () => true },
   metadata: {
     category: 'parakeet',
     dependency: 'parakeet-tdt',
-    estimatedDurationMs: 60000
+    estimatedDurationMs: 120000
   }
 }
 
@@ -157,7 +164,7 @@ export const parakeetStreamIteratorThrow: TestDefinition = {
 export const parakeetStreamTests = [
   parakeetStreamHappy,
   parakeetStreamUnifiedHappy,
-  parakeetStreamMetadataRejected,
+  parakeetStreamMetadata,
   parakeetStreamEou,
   parakeetStreamDestroyMidUtterance,
   parakeetStreamIteratorThrow

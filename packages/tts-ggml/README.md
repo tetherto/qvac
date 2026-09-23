@@ -605,6 +605,23 @@ On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 and fails loudly when that backend cannot be resolved; unset (or empty)
 keeps the automatic preference above.
 
+### Core ML sidecars on Apple
+
+The macOS / iOS prebuilds carry the Apple Core ML (Neural Engine) sidecars
+for the Supertonic vocoder and the Audio8 codec. They are presence-driven:
+each stage runs on a compiled `.mlmodelc` found next to its model file
+(`supertonic3-q8_0.gguf` -> `supertonic3-vocoder.mlmodelc`) and falls back to
+the ggml graph when it is absent, so a model directory without sidecars
+behaves exactly as before. Sidecars are not part of the published model set
+yet; supply your own to opt in.
+
+Worth it where the GPU is consumer-class: on an Apple M4 the Supertonic
+vocoder runs 2.5-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
+end to end). On workstation parts the GPU wins — an M3 Ultra is 0.6-0.9x —
+so do not stage a sidecar there. `q4_0` models ignore the vocoder sidecar:
+it carries full-precision weights and would substitute a different vocoder
+rather than accelerate the quantized one.
+
 When the addon is built with `ENABLE_CUDA` — on in the published linux-x64
 prebuilds, opt-in on linux-arm64 and win32-x64 (`npm run build:cuda` or
 `bare-make generate -D ENABLE_CUDA=ON`) — the CUDA backend ships as a
