@@ -115,7 +115,11 @@ jobs:
       contents: read
       issues: write
     steps:
+      # The github-script step below works from the API, not the tree, so this
+      # job has no use for a persisted checkout token.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Open or update tracking issue
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # 8.0.0
