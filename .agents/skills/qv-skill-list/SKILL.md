@@ -42,6 +42,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-devops-pr-status`](../qv-devops-pr-status/SKILL.md) | Team DevOps PR dashboard: re-review, stale, needs-review, conflicts. | DevOps pod PR queue health. **Manual:** `/qv-devops-pr-status` |
 | [`qv-devops-why-my-pr-not`](../qv-devops-why-my-pr-not/SKILL.md) | Diagnose missing CI checks or merge blockers (labels, CODEOWNERS, approvals). | "Why aren't checks running?" / "Why can't I merge?" **Manual:** `/qv-devops-why-my-pr-not` |
 | [`qv-devops-daily-update`](../qv-devops-daily-update/SKILL.md) | Slack standup (Done / Planned / Blockers) from PRs, reviews, CI. | DevOps EOD or standup. **Manual:** `/qv-devops-daily-update` |
+| [`qv-mobile-test-dispatch`](../qv-mobile-test-dispatch/SKILL.md) | Start an addon mobile (Device Farm) test and pick the right prebuild source; where the Android/iOS and C++ logs are. | "Run mobile tests for X" / "test my native change on a device" / reading a mobile failure. **Manual:** `/qv-mobile-test-dispatch` |
 
 ---
 
@@ -136,6 +137,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | SDK team PR board | `qv-sdk-pr-status` |
 | DevOps team PR board | `qv-devops-pr-status` |
 | Why CI/merge is blocked | `qv-devops-why-my-pr-not` |
+| Run mobile tests on a device | `qv-mobile-test-dispatch` |
 | Write SDK PR body | `qv-sdk-pr-create` |
 | Sync SDK models.ts from registry | `qv-sdk-update-models` |
 | Write addon PR body | `qv-addon-pr-create` |
