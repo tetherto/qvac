@@ -281,3 +281,35 @@ test('a leg that could not confirm any backend is no-data, not a GPU result', ()
   }))
   assert.strictEqual(unverified.filter(isUsableRecord).length, 0)
 })
+
+test('a probe that threw is distinguished from a backend that cannot be read', () => {
+  // These look identical downstream — both leave backendDevice null — but one
+  // is a harness fault and the other a platform property. Conflating them is
+  // how `generationParams.n_predict`, which the API rejects outright, was
+  // read as "iOS cannot report its backend" across an entire qualifying run.
+  const { classify, isUsableRecord } = loadRunner('classify, isUsableRecord')
+  const samples = [700, 710, 705]
+  const cell = { device: 'gpu', mode: 'auto' }
+
+  assert.strictEqual(
+    classify(cell, samples, null, 'generationParams has unknown key: n_predict'),
+    'backend-probe-failed',
+    'a thrown probe is a harness fault'
+  )
+  assert.strictEqual(
+    classify(cell, samples, null, null),
+    'backend-unverified',
+    'a probe that ran and reported nothing is a platform gap'
+  )
+  // A thrown probe outranks even a matching backend: nothing it reports is trustworthy.
+  assert.strictEqual(classify(cell, samples, 'gpu', 'boom'), 'backend-probe-failed')
+
+  assert.strictEqual(
+    isUsableRecord({
+      status: 'backend-probe-failed', loadMsMedian: 700,
+      requestedDevice: 'gpu', backendDevice: 'gpu'
+    }),
+    false,
+    'a harness fault is never usable data'
+  )
+})

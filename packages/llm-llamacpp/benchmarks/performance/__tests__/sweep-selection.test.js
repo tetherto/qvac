@@ -195,9 +195,9 @@ test('the backend-verification generation is capped, all the way to the cell con
 
 test('the mobile backend probe uses the documented per-request generation key', () => {
   // GenerationParams (index.d.ts) accepts `predict`. The load-time config
-  // spelling is `n-predict` / `n_predict`, and using that per request caps
-  // nothing and fails silently — the cell then runs a full generation purely
-  // to read one field.
+  // spelling is `n-predict` / `n_predict`; passing that per request makes the
+  // API throw ("unknown key: n_predict"), so the probe never runs at all —
+  // every iOS row of run 35841997064 recorded a null backend for that reason.
   const fs = require('node:fs')
   const path = require('node:path')
   const src = fs.readFileSync(

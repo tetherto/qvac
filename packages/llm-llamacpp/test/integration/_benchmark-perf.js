@@ -129,8 +129,10 @@ function modelSpec(size, quant) {
 // only reason to generate at all is to learn which backend served the load.
 //
 // The per-request key is `predict` (GenerationParams in index.d.ts), NOT the
-// `n_predict` spelling the load-time config uses. Getting that wrong does not
-// fail loudly — it just does not cap anything.
+// `n_predict` spelling the load-time config uses. The API REJECTS an unknown
+// key outright — "generationParams has unknown key: n_predict. Valid keys
+// are temp, top_p, top_k, predict, ..." — so the mistake is loud at the API
+// and only became invisible because the caller caught it.
 async function runInference(addon, prompt, reasoningBudget, nPredict = null) {
   const startTime = Date.now()
   const generationParams = { reasoning_budget: parseInt(reasoningBudget, 10) }
@@ -299,14 +301,18 @@ function benchmarkModel(
             // backend actually served the load.
             if (loadMode !== null) {
               let stats = null
+              let probeError = null
               try {
                 ;({ stats } = await runInference(addon, prompt, REASONING_BUDGETS[0], 1))
               } catch (probeErr) {
-                t.comment(
-                  `[${id}] [${device}] backend probe failed (backend unverified): ` +
-                    `${probeErr && probeErr.message ? probeErr.message : probeErr}`
-                )
+                probeError = (probeErr && probeErr.message) || String(probeErr)
               }
+              // The load measurement is still worth recording, but a probe
+              // that THREW must fail the cell. Passing it turned an invalid
+              // generation param — rejected loudly by the API — into a green
+              // run whose every row merely read "backend unverified", which
+              // is what a platform that genuinely cannot report its backend
+              // looks like. The two must not be confusable.
               t.comment(
                 recordPerformance(labelFor(REASONING_BUDGETS[0]), null, {
                   stats,
@@ -316,7 +322,11 @@ function benchmarkModel(
                   loadMetrics
                 })
               )
-              t.pass(`[${id}] [${device}] load-mode cell measured`)
+              if (probeError) {
+                t.fail(`[${id}] [${device}] backend probe threw: ${probeError}`)
+              } else {
+                t.pass(`[${id}] [${device}] load-mode cell measured`)
+              }
               continue
             }
 

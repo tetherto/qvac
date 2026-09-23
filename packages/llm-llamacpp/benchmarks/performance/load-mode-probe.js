@@ -53,13 +53,19 @@ async function main () {
   // this host lacks falls back to the CPU silently, and without this the row
   // would be filed under the device that was asked for rather than the one
   // that ran. calibrate-model-fit.ts asserts the same thing for the same reason.
+  // Two different outcomes, kept apart. A probe that THREW tells us nothing
+  // and is a harness fault — swallowing it silently is how an invalid
+  // generation param was mistaken for a platform that cannot report its
+  // backend. A probe that ran and returned no backendDevice is a genuine
+  // reporting gap. Only the second is "unverified".
   let backendDevice = null
+  let backendProbeError = null
   try {
     const response = await addon.run([{ role: 'user', content: 'ping' }])
     await response.onUpdate(() => {}).await()
     backendDevice = (response.stats && response.stats.backendDevice) || null
-  } catch {
-    // A load-mode row is still valid without it; it is reported as unknown.
+  } catch (err) {
+    backendProbeError = (err && err.message) || String(err)
   }
 
   await addon.unload().catch(() => {})
@@ -74,6 +80,7 @@ async function main () {
     ok: true,
     loadMs,
     backendDevice,
+    backendProbeError,
     delta: diffMemorySamples(before, afterLoad),
     absolute: { before, afterLoad, afterUnload }
   }))

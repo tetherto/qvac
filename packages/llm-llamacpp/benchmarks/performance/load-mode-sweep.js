@@ -205,6 +205,7 @@ function bareCommand () {
 // producing nothing the report can use.
 function isUsableRecord (r) {
   if (r.status === 'failed') return false
+  if (r.status === 'backend-probe-failed') return false
   if (r.loadMsMedian == null) return false
   if (!r.backendDevice) return false
   if (r.requestedDevice && r.backendDevice !== r.requestedDevice) return false
@@ -256,8 +257,12 @@ function runProbe (modelPath, config, addonSource, tmpDir, label) {
   }
 }
 
-function classify (cell, loadSamples, backendDevice) {
+function classify (cell, loadSamples, backendDevice, probeError) {
   if (loadSamples.length === 0) return 'failed'
+  // The probe threw. That is a harness fault, not a property of the platform,
+  // and it must not be reported as "this device cannot say which backend ran"
+  // — an invalid generation param once masqueraded as exactly that.
+  if (probeError) return 'backend-probe-failed'
   // A cell that asked for one device and ran on another measured something
   // real, but not the thing it was asked to measure. Calling it 'measured'
   // would let a GPU-less runner publish CPU timings under a GPU heading, so
@@ -394,7 +399,8 @@ function main () {
     const backendDevices = [...new Set(cellSamples.map((s) => s.backendDevice).filter(Boolean))]
 
     const resolvedBackend = backendDevices.length === 1 ? backendDevices[0] : null
-    const status = failure ? 'failed' : classify(cell, loadSamples, resolvedBackend)
+    const probeError = cellSamples.map((sp) => sp.backendProbeError).find(Boolean) || null
+    const status = failure ? 'failed' : classify(cell, loadSamples, resolvedBackend, probeError)
     const record = {
       caseId: cell.caseId,
       modelId: cell.modelId,
@@ -471,7 +477,15 @@ function main () {
           `[${r.modelId}-${r.quantization}] [${r.requestedDevice}] ` +
           `[rb=-1] [kv=f16] [lm=${r.loadMode}]` +
           (r.mainGpu ? ` [mg=${r.mainGpu}]` : ''),
-        status: r.status === 'failed' ? 'crashed' : 'passed',
+        // A thrown probe is a harness failure, not a measurement, and is
+        // reported as crashed. Emitting it as passed would leave it with a
+        // null execution_provider, which the renderer would show as
+        // "Backend unverified" — indistinguishable from a platform that
+        // genuinely cannot report its backend.
+        status:
+          r.status === 'failed' || r.status === 'backend-probe-failed'
+            ? 'crashed'
+            : 'passed',
         // Observed backend ONLY — null when the probe could not establish it.
         // Never falls back to the request; that is the whole point.
         execution_provider: r.backendDevice || null,
