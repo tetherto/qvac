@@ -313,3 +313,24 @@ test('a probe that threw is distinguished from a backend that cannot be read', (
     'a harness fault is never usable data'
   )
 })
+
+test('a backend-probe-failed record carries the reason, not just the status', () => {
+  // Status without cause is what the darwin-x64 leg of run 35857883068
+  // produced: 18 rows marked backend-probe-failed and nothing in the artifact
+  // saying why, so a harness bug and a platform limitation looked identical
+  // without pulling the job log.
+  const src = fs.readFileSync(RUNNER, 'utf8')
+  assert.match(
+    src,
+    /backendProbeError: probeError/,
+    'the record must carry the probe error alongside the status'
+  )
+  // And it must come from the same value classify() judged, not be recomputed.
+  const probeLine = /const probeError = [^\n]+/.exec(src)
+  assert.ok(probeLine, 'probeError is derived once')
+  assert.match(
+    src,
+    /classify\(cell, loadSamples, resolvedBackend, probeError\)/,
+    'classify and the record read the same probeError'
+  )
+})

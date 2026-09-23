@@ -424,6 +424,10 @@ function main () {
       rssFileBytes: memory ? memory.rssFileBytes : null,
       lockedBytes: memory ? memory.lockedBytes : null,
       retainedAfterUnloadBytes: memory ? memory.retained : null,
+      // WHY the probe failed, not just that it did. Carrying only the status
+      // left `backend-probe-failed` rows in the artifact with no way to tell
+      // a harness bug from a platform limitation without the job log.
+      backendProbeError: probeError,
       error: failure
     }
     records.push(record)
