@@ -350,8 +350,6 @@ test('llmConfigBaseSchema: rejects negative layer counts', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'fit-ctx': -1 }).success, false)
 })
 
-// QVAC-25039: gpu_layers has no default, so the fit is free to place layers
-// whether or not the caller named `fit`.
 test('llmConfigSchema: gpu_layers stays unset', (t) => {
   t.absent('gpu_layers' in llmConfigSchema.parse({}))
   t.absent('gpu_layers' in llmConfigSchema.parse({ fit: true }))

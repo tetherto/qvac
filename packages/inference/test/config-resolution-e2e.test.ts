@@ -106,12 +106,7 @@ test('no patterns match = schema defaults only', (t) => {
   t.is(result.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
 })
 
-// QVAC-25039: gpu_layers must stay absent from a resolved config unless the
-// caller asked for it. Any value at all reads as user intent to qvac-fabric,
-// which then refuses to run its automatic GPU/CPU placement — it aborts with
-// "n_gpu_layers already set by user" and the model loads with every layer on
-// the GPU. Unset hands the addon fabric's own -1, which already means "every
-// layer" whenever the fit does not run.
+// gpu_layers stays absent from a resolved config unless the caller sets it.
 test('no gpu_layers default is injected, so the runtime fit can run', (t) => {
   const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
 
