@@ -116,7 +116,11 @@
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
-    "./addonLogging.js": "./addonLogging.js"
+    "./addonLogging.js": "./addonLogging.js",
+    "./lib/main-gpu": {
+      "types": "./lib/main-gpu.d.ts",
+      "default": "./lib/main-gpu.js"
+    }
   },
   "types": "index.d.ts"
 }
