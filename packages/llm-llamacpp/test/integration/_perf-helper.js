@@ -107,6 +107,11 @@ try {
           model: (extra && extra.model) || null,
           execution_provider: (extra && extra.execution_provider) || null,
           requested_device: (extra && extra.requested_device) || null,
+          // 'crashed' when the cell failed after producing figures (a thrown
+          // backend probe). Without it the renderer judges a row by its
+          // metrics alone, and a failed cell that recorded its load reads as
+          // a measurement whose backend merely went unreported.
+          status: (extra && extra.status) || null,
           metrics: Object.assign(
             {
               backend: null,
@@ -186,6 +191,7 @@ try {
             model: r.model || null,
             execution_provider: r.execution_provider,
             requested_device: r.requested_device || null,
+            status: r.status || null,
             metrics: r.metrics,
             output: lightweight ? null : r.output
           }))
@@ -302,6 +308,8 @@ function _num(v) {
  *                                  Null fields mean the counter was
  *                                  unavailable on this platform (no /proc on
  *                                  iOS), not that it read zero.
+ * @param {string} [extra.status]   'crashed' when the cell failed after
+ *                                  recording figures. Omitted otherwise.
  */
 function recordPerformance(label, totalTime, extra) {
   const stats = (extra && extra.stats) || null
@@ -371,6 +379,7 @@ function recordPerformance(label, totalTime, extra) {
       model: (extra && extra.model) || null,
       execution_provider: observedDevice,
       requested_device: requestedDevice,
+      status: (extra && extra.status) || null,
       output: (extra && extra._output) || null
     }
   )

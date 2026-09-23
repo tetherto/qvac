@@ -319,7 +319,11 @@ function benchmarkModel(
                   deviceId: device,
                   scenario: 'benchmark-perf',
                   model: modelFor(REASONING_BUDGETS[0]),
-                  loadMetrics
+                  loadMetrics,
+                  // Persisted, not only asserted: t.fail marks the TAP run,
+                  // but the report is built from this row, and a row with
+                  // load figures and no status renders as a measurement.
+                  status: probeError ? 'crashed' : null
                 })
               )
               if (probeError) {
