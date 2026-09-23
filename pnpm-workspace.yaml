@@ -39,3 +39,6 @@ minimumReleaseAgeExclude:
   - '@qvac/asr-ggml-linux-x64@0.5.3'
   - '@qvac/asr-ggml-win32-x64@0.5.3'
   - '@qvac/asr-ggml@0.5.3'
+  - '@qvac/cli@0.14.0'
+  - '@qvac/inference@0.20.0'
+  - '@qvac/sdk@0.20.0'
