@@ -44,7 +44,17 @@ RUNNERS = {
 
 
 def plan(raw):
-    requested = json.loads(raw or '["linux-x64"]')
+    try:
+        requested = json.loads(raw or '["linux-x64"]')
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"desktop_platforms is not valid JSON: {exc}. "
+            'Expected a JSON array, e.g. ["linux-x64","win32-x64"]'
+        )
+    if not isinstance(requested, list):
+        raise SystemExit(
+            f"desktop_platforms must be a JSON array, got {type(requested).__name__}"
+        )
     unknown = [p for p in requested if p not in RUNNERS]
     if unknown:
         raise SystemExit(
@@ -52,7 +62,14 @@ def plan(raw):
         )
     if not requested:
         raise SystemExit("desktop_platforms is empty; at least one platform is required")
-    return [dict(platform=p, **RUNNERS[p]) for p in requested]
+    # Deduplicate, preserving order. Two identical legs would both upload to
+    # llm-param-sweep-desktop-<platform>-<run_number> and silently clobber
+    # each other's artifact.
+    seen = []
+    for p in requested:
+        if p not in seen:
+            seen.append(p)
+    return [dict(platform=p, **RUNNERS[p]) for p in seen]
 
 
 def main():

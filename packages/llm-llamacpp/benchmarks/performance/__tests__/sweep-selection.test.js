@@ -220,3 +220,37 @@ test('the mobile backend probe uses the documented per-request generation key', 
   assert.match(block[0], /\bpredict\?: number/, 'predict is the declared field')
   assert.doesNotMatch(block[0], /\bn_predict\?/, 'n_predict is not a GenerationParams field')
 })
+
+test('naming an axis claims it whether or not a value is given', () => {
+  // The precedence rule is the whole reason selectorSet exists, but the add
+  // sat inside the value branch, so a BARE name never entered the set and the
+  // --load-mode-* flag won — the opposite of what the comment promised.
+  const flags = { 'load-mode-device': 'cpu', 'load-mode': 'auto', 'load-mode-ctx-size': '512' }
+
+  const valued = applyCliOverrides(createLoadModeSweep('linux'), {
+    ...flags,
+    'sweep-params': 'load-mode=mmap,device=gpu,ctx-size=4096'
+  })
+  assert.deepStrictEqual(valued.device, ['gpu'])
+  assert.deepStrictEqual(valued['load-mode'], ['mmap'])
+  assert.strictEqual(valued['ctx-size'], '4096')
+
+  const bare = applyCliOverrides(createLoadModeSweep('linux'), {
+    ...flags,
+    'sweep-params': 'load-mode,device,ctx-size'
+  })
+  assert.deepStrictEqual(bare.device, ['gpu'], 'bare device keeps the full range, not the flag')
+  assert.deepStrictEqual(
+    bare['load-mode'],
+    ['auto', 'none', 'mmap', 'mlock', 'mmap+mlock', 'dio'],
+    'bare load-mode keeps all six, not the flag'
+  )
+  assert.strictEqual(bare['ctx-size'], '2048', 'bare ctx-size keeps the default, not the flag')
+
+  // An axis the selector does NOT name still falls through to the flag.
+  const unnamed = applyCliOverrides(createLoadModeSweep('linux'), {
+    ...flags,
+    'sweep-params': 'load-mode'
+  })
+  assert.deepStrictEqual(unnamed.device, ['cpu'], 'unnamed axis still takes the per-leg flag')
+})

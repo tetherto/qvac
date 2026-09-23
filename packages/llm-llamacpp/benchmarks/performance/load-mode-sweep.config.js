@@ -126,7 +126,11 @@ function applyCliOverrides (sweep, args) {
   if (selected) {
     if (selected.has('load-mode')) {
       const modes = selected.get('load-mode')
-      if (modes !== null) { next['load-mode'] = modes.slice(); selectorSet.add('load-mode') }
+      // Naming the axis AT ALL claims it, valued or bare. Adding to
+      // selectorSet only inside the value branch let a bare name lose to the
+      // --load-mode-* flag, which is the opposite of the documented rule.
+      selectorSet.add('load-mode')
+      if (modes !== null) next['load-mode'] = modes.slice()
     }
     if (selected.has('quantization')) {
       const quants = selected.get('quantization')
@@ -135,10 +139,12 @@ function applyCliOverrides (sweep, args) {
     }
     if (selected.has('device')) {
       const devices = selected.get('device')
-      if (devices !== null) { next.device = devices.slice(); selectorSet.add('device') }
+      selectorSet.add('device')
+      if (devices !== null) next.device = devices.slice()
     }
     if (selected.has('ctx-size')) {
       const ctx = selected.get('ctx-size')
+      selectorSet.add('ctx-size')
       if (ctx !== null) {
         // The load-mode sweep holds one context: load cost scales with
         // artifact bytes, not context, so a second value would duplicate every
@@ -151,7 +157,6 @@ function applyCliOverrides (sweep, args) {
           )
         }
         next['ctx-size'] = ctx[0]
-        selectorSet.add('ctx-size')
       }
     }
     // Axes the load-mode sweep has no dimension for. Naming one alongside
