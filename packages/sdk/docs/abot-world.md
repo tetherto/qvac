@@ -6,6 +6,10 @@ can walk through a generated world. The SDK exposes it as `mode: 'world'` on the
 diffusion plugin, with two operations — `worldCreateScene` builds a world, and
 `worldStep` walks it.
 
+The model comes from the [ABot-World project](https://github.com/amap-cvlab/ABot-World)
+(Apache-2.0); QVAC ships a GGML conversion of its
+[published weights](https://huggingface.co/acvlab/ABot-World-0-5B-LF).
+
 ```ts
 const modelId = await loadModel({
   modelSrc: ABOT_WORLD_0_5B_Q8_0,
@@ -27,6 +31,55 @@ await stats
 const { frameStream } = worldStep({ modelId, keys: ['W', 'L'] })
 for await (const frame of frameStream) render(frame)
 ```
+
+## Fitting the walk into less VRAM
+
+Four `world` fields trade throughput for VRAM. They drive the same graph-cut
+executor and weight manager as MiniMax-H3, and are forwarded to the addon
+unchanged — the engine owns the grammar and the validation.
+
+```ts
+world: {
+  paramsBackend: 'diffusion=cpu',
+  maxVram: 2,
+  streamLayers: true,
+  kvCache: true,
+  verbosity: 3
+}
+```
+
+- **`paramsBackend`** chooses weight residency, independently of where graphs
+  execute. `diffusion` is the walk DiT, `vae` the taehv decoder.
+  `'diffusion=cpu'` stages DiT weights from CPU RAM; `'diffusion=disk'` reads
+  them from the model file on demand and releases them after use. Disk is never
+  selected automatically, and `vae=disk` is refused because taehv keeps its
+  prepared weights across steps. `offloadParamsToCpu` supplies a `*=cpu`
+  default that explicit assignments override.
+- **`maxVram`** budgets the DiT graph, in GiB or per device
+  (`'cuda0=6,vulkan0=4'`). Negative values reserve that much headroom out of
+  free device memory; `0` disables cuts. **This is not a total VRAM cap** — the
+  KV history, taehv execution and the scene allocate on top of it, so leave
+  room for them.
+- **`streamLayers`** keeps the leading DiT segments inside that budget and
+  transfers the rest from CPU parameters. It needs all three of CPU-backed DiT
+  weights, GPU execution and a nonzero `maxVram`; with any of them missing it
+  does nothing.
+- **`verbosity`** (`0`–`3`) sets the native log level, which surfaces the graph
+  budget and `residency=STREAMED` evidence through `addonLogging`. The level is
+  shared by diffusion instances while the session is alive and restored on
+  unload.
+
+Both recomputed history and `kvCache: true` work with these controls. Scene
+creation keeps its own encoder configuration — the walk's graph budget does not
+cut taehv or the scene encoders.
+
+These are nested under `world` on purpose. The flat `params_backend`,
+`max_vram`, `stream_layers` and `verbosity` used by `diffusion` and `video` do
+not reach a walk session, so passing one in world mode fails at `loadModel`
+naming its `world.*` equivalent rather than being silently dropped.
+
+The [addon documentation](../../diffusion-cpp/docs/abot-world.md#layer-streaming-and-disk-residency)
+carries the native log evidence and the measured effect of each setting.
 
 ## Hardware, and why there is no delegation
 

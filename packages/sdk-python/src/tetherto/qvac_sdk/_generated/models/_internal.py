@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field, RootModel
@@ -15887,6 +15887,13 @@ class Threads(RootModel[int]):
     ]
 
 
+class Verbosity1(IntEnum):
+    integer_0 = 0
+    integer_1 = 1
+    integer_2 = 2
+    integer_3 = 3
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -15929,6 +15936,34 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
         Field(
             alias="offloadParamsToCpu",
             description="Keep weights in CPU memory and offload during GPU compute.",
+        ),
+    ] = None
+    params_backend: Annotated[
+        str | None,
+        Field(
+            alias="paramsBackend",
+            description="Parameter residency for the walk session, independent of graph execution. 'diffusion' is the walk DiT and 'vae' the taehv decoder. 'diffusion=cpu' stages DiT weights from CPU RAM; 'diffusion=disk' reads them from the model file on demand. Disk is never selected automatically, and 'vae=disk' is rejected natively because taehv retains its prepared weights across steps. Explicit assignments override offloadParamsToCpu for those modules.",
+            max_length=4096,
+        ),
+    ] = None
+    max_vram: Annotated[
+        float | str | None,
+        Field(
+            alias="maxVram",
+            description="VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
+        ),
+    ] = None
+    stream_layers: Annotated[
+        bool | None,
+        Field(
+            alias="streamLayers",
+            description="Prefetch and evict DiT layers from CPU RAM. Only takes effect with graph cutting enabled by maxVram and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
+        ),
+    ] = None
+    verbosity: Annotated[
+        Verbosity1 | None,
+        Field(
+            description="Native log level while the session is alive: 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG. The level is process-wide and restored on unload."
         ),
     ] = None
     frame_jpeg_quality: Annotated[

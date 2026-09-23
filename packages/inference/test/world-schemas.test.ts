@@ -19,6 +19,10 @@ test('sdcppConfigSchema: accepts a world session config', (t) => {
       numFramePerBlock: 3,
       frameJpegQuality: 85,
       offloadParamsToCpu: false,
+      paramsBackend: 'diffusion=cpu,vae=cpu',
+      maxVram: 2,
+      streamLayers: true,
+      verbosity: 3,
       profile: true,
       threads: -1,
       backend: 'diffusion=cuda0,vae=cuda1'
@@ -37,6 +41,34 @@ test('sdcppConfigSchema: the world block is strict', (t) => {
   })
 
   t.absent(parsed.success, 'a mistyped world key is rejected rather than dropped')
+})
+
+test('sdcppConfigSchema: world memory controls reach native parsing unchanged', (t) => {
+  // The engine owns the budget grammar — GiB numbers, negative headroom, 0 to
+  // disable cuts, and per-device assignments — so the schema must not narrow
+  // any of those forms on the way through.
+  for (const maxVram of [0, 6, -1, '0', 'cuda0=6,vulkan0=-1']) {
+    const parsed = sdcppConfigSchema.parse({ mode: 'world', world: { maxVram } })
+    t.is(parsed.world?.maxVram, maxVram, `${JSON.stringify(maxVram)} survives the schema`)
+  }
+
+  t.is(
+    sdcppConfigSchema.parse({ mode: 'world' }).world,
+    undefined,
+    'omitting the block applies no implicit memory policy'
+  )
+
+  for (const world of [
+    { maxVram: true },
+    { streamLayers: 'true' },
+    { verbosity: 4 },
+    { paramsBackend: 1 }
+  ]) {
+    t.absent(
+      sdcppConfigSchema.safeParse({ mode: 'world', world }).success,
+      `${JSON.stringify(world)} is rejected`
+    )
+  }
 })
 
 test('sdcppConfigSchema: frameJpegQuality stays on the 0..100 scale', (t) => {

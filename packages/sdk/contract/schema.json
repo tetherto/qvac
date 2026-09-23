@@ -16011,6 +16011,40 @@
                           "description": "Keep weights in CPU memory and offload during GPU compute.",
                           "type": "boolean"
                         },
+                        "paramsBackend": {
+                          "description": "Parameter residency for the walk session, independent of graph execution. 'diffusion' is the walk DiT and 'vae' the taehv decoder. 'diffusion=cpu' stages DiT weights from CPU RAM; 'diffusion=disk' reads them from the model file on demand. Disk is never selected automatically, and 'vae=disk' is rejected natively because taehv retains its prepared weights across steps. Explicit assignments override offloadParamsToCpu for those modules.",
+                          "type": "string",
+                          "maxLength": 4096
+                        },
+                        "maxVram": {
+                          "description": "VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
+                          "type": ["number", "string"]
+                        },
+                        "streamLayers": {
+                          "description": "Prefetch and evict DiT layers from CPU RAM. Only takes effect with graph cutting enabled by maxVram and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
+                          "type": "boolean"
+                        },
+                        "verbosity": {
+                          "description": "Native log level while the session is alive: 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG. The level is process-wide and restored on unload.",
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "const": 0
+                            },
+                            {
+                              "type": "number",
+                              "const": 1
+                            },
+                            {
+                              "type": "number",
+                              "const": 2
+                            },
+                            {
+                              "type": "number",
+                              "const": 3
+                            }
+                          ]
+                        },
                         "frameJpegQuality": {
                           "description": "Frame encoding. 0 (default) emits lossless PNG; 1..100 emits JPEG at that quality on the standard scale (higher = better quality and larger frames). A block is roughly 14 MB of raw pixels at 832x480 and the default numFramePerBlock — more at a higher resolution or a larger block — so 85 is a good choice whenever frames cross a process or network boundary.",
                           "type": "integer",
