@@ -252,6 +252,31 @@ export const nativeProbePlanSchema = z.object({
   nGpuDevices: z.number().int().describe('GPU devices the offload would span.')
 })
 
+/**
+ * One device the fitter measured, plus a trailing `host` row for what the load
+ * places in ordinary RAM. `freeBytes` is the backend's own gauge: a device that
+ * shares the host pool, as Apple silicon and Adreno/Mali do, reports what it
+ * could address rather than what the machine would give back, so it is an upper
+ * bound there.
+ */
+export const nativeProbeDeviceSchema = z.object({
+  name: z.string().describe('Device name as the backend reports it, or `host`.'),
+  totalBytes: z.number().describe('Memory the device reports installed.'),
+  freeBytes: z.number().describe('Memory the device reports free, before the margin.'),
+  marginBytes: z.number().describe('Headroom the fitter withheld on this device.'),
+  modelBytes: z.number().describe('Weights the load would place here.'),
+  contextBytes: z.number().describe('Context and cache the load would place here.'),
+  computeBytes: z.number().describe('Compute buffers the load would place here.')
+})
+
+/**
+ * What the fitter measured, device by device. Absent where an engine reports a
+ * verdict without byte totals.
+ */
+export const nativeProbeProjectionSchema = z.object({
+  devices: z.array(nativeProbeDeviceSchema).describe('Every device the load would touch.')
+})
+
 export const nativeProbeFitSchema = z
   .object({
     verdict: nativeProbeVerdictSchema.describe(
@@ -265,7 +290,7 @@ export const nativeProbeFitSchema = z
     estimatorVersion: z
       .string()
       .describe(
-        'Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy — `native-probe-v1` withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker.'
+        'Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against what the system reports free, less the same 1024 MiB.'
       ),
     reason: z
       .string()
@@ -273,7 +298,12 @@ export const nativeProbeFitSchema = z
     message: z.string().optional().describe('Human-readable detail, when the reason has any.'),
     plan: nativeProbePlanSchema
       .optional()
-      .describe('Placement the probe projected. Present only on a `fit` verdict.')
+      .describe('Placement the probe projected. Present only on a `fit` verdict.'),
+    projection: nativeProbeProjectionSchema
+      .optional()
+      .describe(
+        'What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.'
+      )
   })
   .meta({ title: 'NativeProbeFit' })
 
@@ -287,6 +317,8 @@ export const assessModelFitResponseSchema = assessModelFitResultSchema.extend({
 
 export type NativeProbeVerdict = z.infer<typeof nativeProbeVerdictSchema>
 export type NativeProbePlan = z.infer<typeof nativeProbePlanSchema>
+export type NativeProbeDevice = z.infer<typeof nativeProbeDeviceSchema>
+export type NativeProbeProjection = z.infer<typeof nativeProbeProjectionSchema>
 export type NativeProbeFit = z.infer<typeof nativeProbeFitSchema>
 export type ModelFitVerdict = z.infer<typeof modelFitVerdictSchema>
 export type ModelFitModelRef = z.infer<typeof modelFitModelRefSchema>
