@@ -10,7 +10,7 @@ const cases = [
   ...['f16', 'q4_0', 'q8_0'].map((quantization) => ({
     path: `ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.${quantization}.gguf`,
     quantization,
-    expected: `PARAKEET_0_6B_${quantization.toUpperCase()}`
+    expected: `PARAKEET_NEMOTRON_0_6B_${quantization.toUpperCase()}`
   })),
   {
     path: 'ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf',

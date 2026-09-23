@@ -421,6 +421,8 @@ int ParakeetModel::resolveStreamingChunkMs(
     return configuredChunkMs;
   if (modelType == ModelType::NEMOTRON)
     return ParakeetConfig::DEFAULT_NEMOTRON_STREAMING_CHUNK_MS;
+  if (modelType == ModelType::RNNT)
+    return ParakeetConfig::DEFAULT_UNIFIED_STREAMING_CHUNK_MS;
   return ParakeetConfig::DEFAULT_STREAMING_CHUNK_MS;
 }
 

@@ -81,15 +81,20 @@ function covers(producerGlob, consumerPath) {
     consumerPath.startsWith(producerGlob.slice(0, -2))
 }
 
-// The check run a job publishes: "<name or id> / ts-checks" when it calls the
-// reusable, and just the job name when it runs its steps inline.
+// The check runs a job can publish. A job that calls the reusable publishes
+// "<name or id> / ts-checks" while it runs -- but when its own `if` is false the
+// called workflow never starts and GitHub records a single run under the BARE
+// job name instead, so both spellings are legitimate and the poller matches
+// either (see findCheck in .github/scripts/await-ts-checks/lib.mjs). A job that
+// runs its steps inline only ever publishes the bare name.
 function publishedNames() {
   const names = new Map()
   for (const [id, body] of producerJobs()) {
     if (id === 'matrix') continue
     const label = body.match(/^ {4}name:\s*(.+)$/m)?.[1].trim() ?? id
     const callsReusable = / {4}uses:\s*\.\/\.github\/workflows\/reusable-ts-checks\.yml/.test(body)
-    names.set(callsReusable ? `${label} / ts-checks` : label, id)
+    if (callsReusable) names.set(`${label} / ts-checks`, id)
+    names.set(label, id)
   }
   return names
 }
