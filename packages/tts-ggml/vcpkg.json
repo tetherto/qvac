@@ -19,7 +19,8 @@
       "default-features": false,
       "features": [
         "tts",
-        "metal"
+        "metal",
+        "coreml"
       ],
       "platform": "osx | ios"
     },

@@ -1,6 +1,21 @@
 # Changelog
 
-## [Unreleased]
+## [0.17.0] - 2026-09-23
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.1.0` -> `10549.3.0`:
+  - Fixed MTP pending-state position persistence.
+  - Added managed RPC server lifecycle APIs with safe socket shutdown and
+    network-resource cleanup.
+  - Reduced distributed RPC model loading time with weight-only caching,
+    direct I/O, parallel reads, and bounded upload queues.
+  - Fixed fit cleanup and parameter reporting while preserving caller
+    settings.
+  - Fixed Windows dynamic backend module loading and restricted DLL search
+    paths.
+  - Added CUDA CUTLASS block-scaled prefill and decode optimizations for FP4
+    weights.
 
 ### Removed
 

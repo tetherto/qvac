@@ -7,12 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Apple Core ML (Neural Engine) sidecars on the macOS / iOS builds, for the
+  Supertonic vocoder and the Audio8 codec. Presence-driven: a stage runs on a
+  compiled `.mlmodelc` staged next to its model file and falls back to ggml
+  when it is absent, so existing model directories are unaffected. On an
+  Apple M4 the Supertonic vocoder is 2.5-2.9x faster than on Metal; on
+  workstation-class GPUs Metal still wins, so sidecars are staged per
+  deployment. `q4_0` models keep the ggml vocoder.
+
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
   weightless fit-measure model that carries no vocabulary, which a memory-fit
   measurement never needs; loading a real model is unchanged and still
   requires one.
+- Raise the `speech-cpp` floor to `2026-09-21` for the Core ML sidecars above.
 - Raise the `speech-cpp` floor to `2026-09-18`. Audio8 synthesis is faster on
   CUDA builds (the decode loop issues far fewer kernel launches per frame), and
   CosyVoice3 gains a `bf16` flow tier for AVX512-BF16 CPUs. Existing GGUFs keep

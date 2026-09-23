@@ -374,10 +374,9 @@ ggml_vulkan: Device memory allocation of size 313262080 failed.
 
 Two separate things, both worth knowing before anyone measures this platform:
 
-- The SDK pins `n_gpu_layers: 99`, so llama.cpp's own fit cannot reduce the
-  layer count to what the device can hold, and the load hard-fails instead of
-  degrading. That is a product-level issue on small unified-memory devices,
-  independent of this feature.
+- This run had `n_gpu_layers` pinned at 99, so llama.cpp's fit aborted and the
+  load hard-failed instead of degrading. Loads no longer pin the layer count;
+  the platform has not been re-measured since.
 - `vulkaninfo` reports the heap as 7.44 GiB (all of system RAM, `uma: 1`) but
   the **budget** as 1.09 GiB. So the system-memory basis would not bound a load
   here even if it succeeded, which is the assumption the `shared` placement
