@@ -26,9 +26,15 @@ function perfReport(device, results) {
 
 // One result row as the mobile reporter emits it.
 function row(config, overrides = {}) {
+  // Both device fields, as the live reporters now emit them: the label says
+  // what was requested and the backend confirms what ran. A fixture without
+  // them is a pre-field artifact, covered by its own test below.
+  const requested = /\[cpu\]/.test(config) ? 'cpu' : /\[gpu\]/.test(config) ? 'gpu' : null
   return {
     test: config,
     status: 'passed',
+    execution_provider: requested,
+    requested_device: requested,
     metrics: {
       ttft_ms: 100,
       tps: 20,
@@ -175,6 +181,8 @@ function desktopRow(mode, loadMs) {
   return {
     test: `[qwen3.5-0.8b-Q4_0] [gpu] [rb=-1] [kv=f16] [lm=${mode}]`,
     status: 'passed',
+    execution_provider: 'gpu',
+    requested_device: 'gpu',
     metrics: {
       ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null,
       load_ms: loadMs,
@@ -335,6 +343,8 @@ test('desktop load-mode report renders as measured, not crashed', () => {
       {
         test: '[qwen3.5-0.8b-Q4_0] [gpu] [rb=-1] [kv=f16] [lm=auto]',
         status: 'passed',
+        execution_provider: 'gpu',
+        requested_device: 'gpu',
         metrics: {
           ttft_ms: null,
           tps: null,
@@ -449,6 +459,8 @@ test('absent memory counters are not reported as zero', () => {
         {
           test: '[qwen3.5-0.8b-Q4_0] [gpu] [rb=-1] [kv=f16] [lm=mlock]',
           status: 'passed',
+          execution_provider: 'gpu',
+          requested_device: 'gpu',
           metrics: {
             ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null,
             load_ms: 700, rss_bytes: 400 * MB,
@@ -636,4 +648,42 @@ test('a non-comparable row is excluded from deltas, baselines and the range', ()
   // The range spans only the two verified rows.
   assert.match(md, /load-time range: `mmap` 700 ms to `none` 1900 ms/, 'only comparable rows bound it')
   assert.doesNotMatch(md, /range: `mlock`/, 'an unverified row cannot be the floor')
+})
+
+test('an artifact predating the device fields renders as unverified, not verified', () => {
+  // Both fields are required, so a pre-field artifact cannot be shown to have
+  // run where it was asked to. Reporting it as a plain measurement would be
+  // the same false confidence this check exists to remove — the honest
+  // rendering is "unverified", and it must not feed the deltas or the range.
+  const md = render({
+    'legacy.json': {
+      device: { name: 'Desktop linux-x64' },
+      addon: 'llamacpp-llm',
+      desktop: true,
+      results: [
+        {
+          test: '[qwen3.5-0.8b-Q4_0] [gpu] [rb=-1] [kv=f16] [lm=auto]',
+          status: 'passed',
+          metrics: {
+            ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null,
+            load_ms: 800, rss_bytes: 500 * MB,
+            rss_anon_bytes: 130 * MB, rss_file_bytes: 370 * MB, locked_bytes: 0
+          }
+        },
+        {
+          test: '[qwen3.5-0.8b-Q4_0] [gpu] [rb=-1] [kv=f16] [lm=mmap]',
+          status: 'passed',
+          metrics: {
+            ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null,
+            load_ms: 700, rss_bytes: 500 * MB,
+            rss_anon_bytes: 130 * MB, rss_file_bytes: 370 * MB, locked_bytes: 0
+          }
+        }
+      ]
+    }
+  })
+
+  assert.match(md, /\| `auto` \| 800 \|.*Backend unverified/, 'no device fields means unverified')
+  assert.match(md, /\| `mmap` \| 700 \|.*Backend unverified/)
+  assert.doesNotMatch(md, /load-time range:/, 'unverified rows cannot bound a range')
 })

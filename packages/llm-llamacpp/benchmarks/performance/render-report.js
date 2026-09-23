@@ -605,12 +605,15 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
     // for. Labelling a mismatched or unverified row is not enough: letting it
     // serve as a baseline, take a margin, or bound the range would put a
     // number nobody can interpret into every other row's arithmetic.
-    const comparable = (r) => {
-      if (!r || r.crashed || r.loadMs === null) return false
-      if (r.requestedDevice && !r.observedDevice) return false
-      if (r.requestedDevice && r.observedDevice && r.requestedDevice !== r.observedDevice) return false
-      return true
-    }
+    // BOTH fields must be present and equal. An absent field is not a pass:
+    // a row carrying no device information cannot be shown to have run where
+    // it was asked to, and the earlier form returned true for exactly that
+    // case. Artifacts predating these fields therefore render as unverified,
+    // which is the honest answer — nothing in them establishes the backend.
+    const comparable = (r) =>
+      !!r && !r.crashed && r.loadMs !== null &&
+      !!r.requestedDevice && !!r.observedDevice &&
+      r.requestedDevice === r.observedDevice
 
     const auto = comparable(seen.get('auto')) ? seen.get('auto') : null
     const mmapRow = comparable(seen.get('mmap')) ? seen.get('mmap') : null
@@ -661,7 +664,7 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
       const want = r.requestedDevice
       const got = r.observedDevice
       if (want && got && got !== want) status = `**Ran on ${got}, not ${want} — not comparable**`
-      else if (want && !got) status = '**Backend unverified**'
+      else if (!want || !got) status = '**Backend unverified**'
       else if (mode === 'dio') status = 'Inert (fabric discards the flag)'
       else if (mode === 'mlock' || mode === 'mmap+mlock') {
         if (r.lockedBytes === null || r.lockedBytes === undefined) status = 'Measured (lock unverified)'

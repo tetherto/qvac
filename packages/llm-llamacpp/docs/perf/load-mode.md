@@ -210,11 +210,13 @@ this task did not do.
 
 The consequence is that **no mobile load-time margin here is backed by a
 spread**, so this document states mobile load times as observed values and
-draws no timing verdict from them — the report generator does the same, naming
-a fastest mode on desktop cells only. The memory figures do not have this
-problem: they are a property of the load rather than a timing, and the
-mapped-versus-anonymous gap is hundreds of MiB. The mobile verdicts below
-therefore rest on residency.
+draws no timing verdict from them. The consolidated GitHub report names no
+fastest mode on either platform — it keeps one figure per cell and cannot show
+the uncertainty a ranking needs — so any interpretation is made here, against
+the standalone sweep artifact, which carries the samples and their spread. The
+memory figures do not have this problem: they are a property of the load
+rather than a timing, and the mapped-versus-anonymous gap is hundreds of MiB.
+The mobile verdicts below therefore rest on residency.
 
 ## Method, and why each measurement is its own process
 
