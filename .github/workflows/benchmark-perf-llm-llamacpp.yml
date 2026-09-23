@@ -20,7 +20,7 @@ on:
         required: false
         type: string
       run_desktop:
-        description: "Run desktop benchmark (Linux GPU)"
+        description: "Run the desktop benchmark on each platform in desktop_platforms"
         required: false
         default: true
         type: boolean
