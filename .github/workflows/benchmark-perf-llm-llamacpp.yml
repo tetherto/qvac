@@ -468,8 +468,13 @@ jobs:
       - prebuild
       - verify-shards
     if: inputs.run_mobile && !inputs.summarize_only
+    # A called workflow cannot hold more than its caller grants, and GitHub
+    # rejects the whole run at startup when it asks for more. The mobile test
+    # workflow's job requests actions: read (its prebuild_run_id route reads
+    # another run's artifact), so it must be granted here.
     permissions:
       contents: read
+      actions: read
       packages: read
       pull-requests: write
       id-token: write
