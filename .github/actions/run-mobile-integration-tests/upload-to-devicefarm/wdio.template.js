@@ -90,11 +90,47 @@ exports.config = {
     // runs on crash paths where the WDIO command queue may have a pending
     // command stuck behind a long timeout (e.g. waitForDisplayed 60s on an
     // element that will never appear). Raw HTTP bypasses the queue.
+    // iOS reads bare_console.log from the app container. Android cannot: the app
+    // writes it to its private data dir, which adb cannot read and run-as
+    // refuses on a release-signed APK. Android's app output is in logcat under
+    // the `bare` tag instead, so this is not a gap. The one candidate below is
+    // the world-readable path an app could be changed to write to.
+    global.bareLogCandidates = function (isAndroid, bundleId) {
+      if (!isAndroid) return ['@' + bundleId + ':documents/bare_console.log'];
+      return ['/sdcard/Android/data/' + bundleId + '/files/bare_console.log'];
+    };
+
     global.flushBareLog = async function (reason) {
       if ('__ENABLE_FLUSH_BARE_LOG__' !== 'true') return;
-      try {
+      var isAndroid = (capabilities.platformName || '').toLowerCase() === 'android';
+      var candidates = global.bareLogCandidates(isAndroid, BUNDLE_ID);
+      var lastError = null;
+      for (var ci = 0; ci < candidates.length; ci++) {
+        try {
+          await global.pullBareLog(reason, candidates[ci]);
+          return;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      if (isAndroid) {
+        console.log(
+          '[bare-log] ' + reason + ': no bare_console.log on Android; app-side output is in ' +
+          'logcat_full.txt under the `bare` tag. Last error: ' +
+          (lastError ? lastError.message : 'none')
+        );
+        return;
+      }
+      console.log(
+        '[bare-log] ' + reason + ' flush failed: ' +
+        (lastError ? lastError.message : 'no candidate path')
+      );
+    };
+
+    global.pullBareLog = async function (reason, devicePath) {
+      {
         var http = require('http');
-        var body = JSON.stringify({ path: '@' + BUNDLE_ID + ':documents/bare_console.log' });
+        var body = JSON.stringify({ path: devicePath });
         var b64 = await new Promise(function (resolve, reject) {
           var req = http.request({
             hostname: '127.0.0.1', port: 4723,
@@ -112,12 +148,19 @@ exports.config = {
           req.write(body);
           req.end();
         });
+        // Appium returns a base64 string on success, an error object on failure.
+        // Passing the object to Buffer.from threw a type error that replaced
+        // Appium's real reason.
+        if (typeof b64 !== 'string') {
+          var why = (b64 && (b64.message || b64.error)) || JSON.stringify(b64);
+          throw new Error('pull_file returned no base64 payload — ' + why);
+        }
         var text = Buffer.from(b64, 'base64').toString();
         var logDir = process.env.DEVICEFARM_LOG_DIR || '.';
         require('fs').writeFileSync(logDir + '/bare_console.log', text);
-        console.log('[bare-log] ' + reason + ' flush ok (' + text.length + ' bytes)');
-      } catch (e) {
-        console.log('[bare-log] ' + reason + ' flush failed: ' + e.message);
+        console.log(
+          '[bare-log] ' + reason + ' flush ok (' + text.length + ' bytes) from ' + devicePath
+        );
       }
     };
 
