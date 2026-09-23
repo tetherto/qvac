@@ -1,16 +1,18 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
+import type { CompletionRun, CompletionStats, ToolCall, ToolCallError } from '@qvac/sdk'
 import { InferenceCancelledError } from '@qvac/sdk'
 import {
   drainCompletion,
-  completionTokensFromStats
+  completionTokensFromStats,
+  formatToolErrors
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { HttpError } from '@/serve/lib/http-error'
 
 function fakeRun(opts: {
   tokens?: string[]
   toolCalls?: ToolCall[]
+  toolErrors?: ToolCallError[]
   stats?: CompletionStats
   stopReason?: string
   final?: Promise<unknown>
@@ -19,6 +21,7 @@ function fakeRun(opts: {
     let seq = 0
     for (const t of opts.tokens ?? []) yield { type: 'contentDelta', seq: seq++, text: t }
     for (const call of opts.toolCalls ?? []) yield { type: 'toolCall', seq: seq++, call }
+    for (const error of opts.toolErrors ?? []) yield { type: 'toolError', seq: seq++, error }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
     yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
   }
@@ -134,6 +137,58 @@ describe('drainCompletion', () => {
           })
         ),
       (err) => err instanceof InferenceCancelledError
+    )
+  })
+})
+
+describe('drainCompletion tool errors', () => {
+  it('collects toolError events alongside successful calls', async () => {
+    const drained = await drainCompletion(
+      fakeRun({
+        toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Lugano' } }],
+        toolErrors: [{ code: 'PARSE_ERROR', message: 'bad json', raw: '{' }]
+      })
+    )
+    assert.deepEqual(drained.toolErrors, [{ code: 'PARSE_ERROR', message: 'bad json', raw: '{' }])
+    assert.equal(drained.toolCalls.length, 1)
+    assert.equal(drained.finishReason, 'tool_calls')
+  })
+
+  // Every tool call failing leaves no calls and no content, so finish_reason is
+  // the ordinary 'stop' -- the log line is the only signal the model tried.
+  it('reports stop when every tool call failed to parse', async () => {
+    const drained = await drainCompletion(
+      fakeRun({
+        toolErrors: [
+          { code: 'PARSE_ERROR', message: 'bad json' },
+          { code: 'VALIDATION_ERROR', message: 'city must be a string' }
+        ]
+      })
+    )
+    assert.equal(drained.toolErrors.length, 2)
+    assert.equal(drained.toolCalls.length, 0)
+    assert.equal(drained.finishReason, 'stop')
+  })
+
+  it('leaves toolErrors empty on a clean run', async () => {
+    const drained = await drainCompletion(fakeRun({ tokens: ['hi'] }))
+    assert.deepEqual(drained.toolErrors, [])
+  })
+})
+
+describe('formatToolErrors', () => {
+  it('returns an empty string when there are none', () => {
+    assert.equal(formatToolErrors([]), '')
+  })
+
+  it('counts errors and lists each distinct code once', () => {
+    assert.equal(
+      formatToolErrors([
+        { code: 'PARSE_ERROR', message: 'a' },
+        { code: 'PARSE_ERROR', message: 'b' },
+        { code: 'UNKNOWN_TOOL', message: 'c' }
+      ]),
+      ' toolerrors=3 (PARSE_ERROR,UNKNOWN_TOOL)'
     )
   })
 })

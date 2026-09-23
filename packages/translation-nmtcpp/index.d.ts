@@ -128,6 +128,13 @@ declare namespace TranslationNmtcpp {
          */
         gpu_backend?: string;
         gpuBackend?: string;
+        /** Raw ggml registry index or GPU class. Requires use_gpu/useGPU.
+         * Unsupported devices fall back to CPU; out-of-range indices warn and auto-select.
+         * Cannot be combined with gpu_backend/gpu_device or their camelCase aliases.
+         */
+        "main-gpu"?: number | string;
+        /** Alias for main-gpu; specifying both keys is rejected. */
+        main_gpu?: number | string;
         /**
          * Ordinal within the matching compute devices. Defaults to 0.
          * Example: { gpu_backend: "vulkan", gpu_device: 1 } → second Vulkan adapter.

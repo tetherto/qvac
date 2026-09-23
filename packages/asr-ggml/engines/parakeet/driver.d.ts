@@ -33,8 +33,10 @@ export interface ParakeetConfig {
      */
     streaming?: boolean;
     /**
-     * Streaming chunk cadence. Defaults to 320 ms for Nemotron and 2000 ms for
-     * existing models. Nemotron supports 80, 160, 320, 560, or 1120 ms.
+     * Streaming chunk cadence. Defaults to 320 ms for Nemotron, 560 ms for the
+     * Unified RNN-T model, and 2000 ms for existing models. Nemotron supports
+     * 80, 160, 320, 560, or 1120 ms; Unified RNN-T supports 80, 160, 560, or
+     * 1040 ms and snaps any other value down to the nearest trained chunk.
      */
     streamingChunkMs?: number;
     /** Sortformer rolling-history window in ms (default: 30000). */
@@ -45,7 +47,11 @@ export interface ParakeetConfig {
     streamingEnergyVad?: boolean;
     /** ASR encoder left-context window in milliseconds. */
     streamingLeftContextMs?: number;
-    /** ASR encoder right-lookahead window in milliseconds. */
+    /**
+     * ASR encoder right-lookahead window in milliseconds. Unified RNN-T
+     * cache-aware streaming supports 0, 80, 160, 240, 320, 560, or 1040 ms and
+     * snaps any other value down to the nearest trained right context.
+     */
     streamingRightLookaheadMs?: number;
     /** Enable v2.1 Sortformer AOSC speaker-cache streaming (default: true). */
     streamingSpkCacheEnable?: boolean;

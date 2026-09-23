@@ -292,3 +292,73 @@ test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
     true
   )
 })
+
+test('llmConfigBaseSchema: accepts valid tensor-read-lazy values', (t) => {
+  for (const value of ['on', 'auto', 'off']) {
+    t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': value }).success, true)
+  }
+})
+
+test('llmConfigBaseSchema: rejects invalid tensor-read-lazy values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': 'yes' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': true }).success, false)
+})
+
+test('llmConfigBaseSchema: accepts both forms of moe-cache-mib', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 2048 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 'auto' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects invalid moe-cache-mib values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 2048.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 'default' }).success, false)
+})
+
+test('llmConfigBaseSchema: accepts both forms of prefetch-weights', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': true }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 'auto' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects invalid prefetch-weights values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 'on' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 1 }).success, false)
+})
+
+test('llmConfigBaseSchema: accepts both forms of fit-target', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': 512 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '1024,512' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects fit-target values fabric would misparse', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': 'nonsense' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '512abc' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '-1' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': -1 }).success, false)
+})
+
+test('llmConfigBaseSchema: rejects non-positive batch and ubatch sizes', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'batch-size': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'ubatch-size': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-tokens': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-min-tokens': 0 }).success, false)
+})
+
+test('llmConfigBaseSchema: rejects negative layer counts', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'n-cpu-moe': -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'n-cpu-ffn': -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-ctx': -1 }).success, false)
+})
+
+test('llmConfigSchema: keeps the gpu_layers default when fit is unset', (t) => {
+  t.is(llmConfigSchema.parse({}).gpu_layers, 99)
+})
+
+test('llmConfigSchema: releases the gpu_layers default when fit is set', (t) => {
+  t.is(llmConfigSchema.parse({ fit: true }).gpu_layers, -1)
+  t.is(llmConfigSchema.parse({ fit: false }).gpu_layers, -1)
+})
+
+test('llmConfigSchema: an explicit gpu_layers wins over fit', (t) => {
+  t.is(llmConfigSchema.parse({ fit: true, gpu_layers: 20 }).gpu_layers, 20)
+})
