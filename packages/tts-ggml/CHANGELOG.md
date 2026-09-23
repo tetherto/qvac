@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
+  weightless fit-measure model that carries no vocabulary, which a memory-fit
+  measurement never needs; loading a real model is unchanged and still
+  requires one.
 - Raise the `speech-cpp` floor to `2026-09-18`. Audio8 synthesis is faster on
   CUDA builds (the decode loop issues far fewer kernel launches per frame), and
   CosyVoice3 gains a `bf16` flow tier for AVX512-BF16 CPUs. Existing GGUFs keep
