@@ -206,10 +206,12 @@ locking.
 OpenCL (Adreno), Hexagon, Vulkan integrated GPUs and CUDA integrated GPUs.
 Everywhere else it maps. The choice is therefore per-device, not per-platform.
 
-`mlock` warns and continues when the lock exceeds `RLIMIT_MEMLOCK`, so a load
-that succeeded may not have locked anything, and a GPU load locks nothing at
-all because the weights are in device memory. `dio` is accepted but qvac-fabric
-does not currently open the file with `O_DIRECT`.
+Locking warns and continues when it exceeds `RLIMIT_MEMLOCK`, so a load that
+succeeded may not have locked anything. `mlock` reads the weights into
+anonymous memory, and with a GPU most of them go to device memory, so there is
+little or nothing left on the host to lock; `mmap+mlock` locks the mapped file
+and does lock on a GPU load when the limit allows it. `dio` is accepted but
+qvac-fabric does not currently open the file with `O_DIRECT`.
 
 Measured load times and residency per platform and device, and what each mode
 costs, are in [docs/perf/load-mode.md](./docs/perf/load-mode.md).

@@ -171,18 +171,22 @@ npm run run:param-sweep -- --sweep-params="quantization=Q4_0|Q8_0,cache-type-k"
 node ./load-mode-sweep.js --sweep-params="load-mode=auto|mmap"
 ```
 
-### Naming a grid axis alongside `load-mode` applies to both
+### Naming a grid axis alongside `load-mode` narrows the load-mode sweep
+
+Naming an additive sweep (`load-mode`, `batch-sweep`) selects it *instead of*
+the throughput grid. A grid axis named alongside it narrows that sweep; it does
+not also start the grid.
 
 ```bash
-# 2 modes x 2 quantizations = 4 load-mode cells, AND the quantization grid.
+# 2 modes x 2 quantizations = 4 load-mode cells. No throughput grid.
 --sweep-params="load-mode=auto|mmap,quantization=Q4_0|Q8_0"
 
 # A bare name means every quantization the model has.
 --sweep-params="load-mode=auto|mmap,quantization"
 ```
 
-`quantization`, `device` and `ctx-size` narrow the load-mode sweep the same way
-they narrow the grid. This matters because the reason `load_mode` stays out of
+`quantization`, `device` and `ctx-size` narrow the load-mode sweep with the same
+syntax they use for the grid. This matters because the reason `load_mode` stays out of
 the main grid covers the *ratio* between modes, not the absolute cost: load
 time and residency both scale with artifact bytes, so whether the
 mapped-vs-anonymous gap holds at a larger quantization is a real question the
@@ -206,8 +210,9 @@ What stays additive is the relationship to the **70-cell main grid**:
 `load-mode` and `batch-sweep` each run as their own sweep rather than being
 crossed into it, so cost is bounded by what you asked for instead of
 multiplying the whole matrix. That is the PR #3300 precedent, and it is why
-`--sweep-params="load-mode,quantization"` gives you the grid plus a
-quantization-swept load-mode sweep — not 70 cells × 6 modes.
+`--sweep-params="load-mode,quantization"` gives you a quantization-swept
+load-mode sweep — not 70 cells × 6 modes. To run the grid as well, leave
+`sweep_params` empty or dispatch the grid separately.
 
 Two separators, deliberately: `,` between params and `|` between values. With
 commas on both sides `a=1,2,b` is ambiguous — there is no way to tell a second
@@ -227,14 +232,15 @@ including `mmap+mlock`.
 | `load-mode` | the additive load-mode sweep (`load-mode-sweep.js`) — load time and resident memory per `load_mode`, not throughput |
 
 A param that is named but unknown fails the run rather than being ignored, so
-a typo cannot silently sweep nothing. Naming only `load-mode` skips the
-parameter grid; naming only grid params skips the load-mode sweep.
+a typo cannot silently sweep nothing. Naming `load-mode` skips the parameter
+grid; naming only grid params skips the load-mode sweep.
 
 In CI this is the single `sweep_params` input on
 **Benchmark Performance — LLM Parameter Sweep**; the same string, same syntax.
-Note that a narrowed load-mode run cannot satisfy QVAC-25043's acceptance
-criteria — the report marks the modes you left out as coverage gaps rather than
-pretending they passed.
+A narrowed load-mode run does not cover every mode. The report labels the
+modes you left out "Not selected for this run" and keeps "Not measured
+(coverage gap)" for a mode that was selected and produced nothing, so a
+narrowed run cannot pass for full coverage.
 
 ## Sweep Flags
 
@@ -336,6 +342,18 @@ results/parameter-sweep/
 ├── llm-parameter-sweep-{timestamp}.md        # Markdown summary
 └── llm-parameter-sweep.progress.json         # Resume checkpoint
 ```
+
+The load-mode sweep writes to `results/load-mode/` (override with
+`--results-dir`):
+
+```
+results/load-mode/
+├── load-mode-sweep-{timestamp}.jsonl             # One record per cell, every sample
+└── load-mode-perf-{platform}-{timestamp}.json    # Perf-report schema, read by render-report.js
+```
+
+It renders no Markdown of its own: `render-report.js` builds the load-mode
+tables from the JSON, alongside the rest of the run's report.
 
 ### Metrics
 
