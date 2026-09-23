@@ -15,5 +15,8 @@
     "bare-fs": "latest",
     "bare-path": "latest",
     "bare-process": "latest"
+  },
+  "devDependencies": {
+    "bare": "*"
   }
 }

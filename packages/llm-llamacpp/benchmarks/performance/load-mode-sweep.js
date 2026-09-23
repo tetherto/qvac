@@ -138,17 +138,91 @@ function mib (bytes) {
   return Math.round((bytes / (1024 * 1024)) * 10) / 10
 }
 
-// How to invoke bare, resolved once. A bare `spawnSync('bare', ...)` depends on
-// bare being on PATH: it is on the linux-x64 runner and on dev machines, and is
-// not on darwin-x64 or linux-arm64, where every cell of run 35778027044 failed
-// with a null exit and no stderr. `npx --yes bare` is what the workflow already
-// uses for llm-parameter-sweep.js, so prefer PATH and fall back to that.
+// How to invoke bare, resolved once by actually running each candidate.
+//
+// Three traps, all seen in CI:
+//   - `bare` is on PATH on the linux-x64 runner and on dev machines, and is
+//     NOT on darwin-x64 or linux-arm64 (run 35778027044: every cell ENOENT).
+//   - On Windows the npm shims are .cmd, and since the CVE-2024-27980 fix Node
+//     REFUSES to spawn a .bat/.cmd without a shell. Naming `bare.cmd` directly
+//     does not help; the shim has to go through the command processor.
+//     (run 35810927805: the npx fallback engaged and failed ENOENT anyway.)
+//   - Through a command processor a missing inner command sets NO spawn error
+//     and returns a non-zero status, so "no error" is not proof it ran.
+// Hence: every candidate is a real invocation, selection requires a clean exit
+// AND a version on stdout, and nothing runnable is a loud throw rather than
+// letting every cell fail one at a time.
+// `bare` is a dependency of this package, so `npm install` — which the
+// workflow already runs here — puts it in node_modules/.bin. That local copy
+// comes FIRST and is why npx is a last resort rather than the normal path:
+// npx re-resolves the package on every invocation (~2s warm, far worse cold),
+// and the sweep spawns one process per sample, which cost darwin-x64 40
+// minutes for three cells in run 35810927805.
+function localBinDir () {
+  return nodePath.resolve(__dirname, 'node_modules', '.bin')
+}
+
+function bareCandidates (platform = process.platform, env = process.env, binDir = localBinDir()) {
+  if (platform === 'win32') {
+    const processor = env.ComSpec || 'cmd.exe'
+    return [
+      // Real executables can be spawned directly; npm shims cannot, and since
+      // the CVE-2024-27980 fix Node refuses .cmd without a shell, so those go
+      // through the command processor.
+      { command: nodePath.join(binDir, 'bare.exe'), prefix: [] },
+      { command: processor, prefix: ['/d', '/s', '/c', nodePath.join(binDir, 'bare.cmd')] },
+      { command: 'bare.exe', prefix: [] },
+      { command: processor, prefix: ['/d', '/s', '/c', 'bare.cmd'] },
+      { command: processor, prefix: ['/d', '/s', '/c', 'npx.cmd', '--yes', 'bare'] }
+    ]
+  }
+  return [
+    { command: nodePath.join(binDir, 'bare'), prefix: [] },
+    { command: 'bare', prefix: [] },
+    // Last resort: what the workflow uses for llm-parameter-sweep.js.
+    { command: 'npx', prefix: ['--yes', 'bare'] }
+  ]
+}
+
+// Picks the first candidate that genuinely executes. Separate from the memo so
+// tests can drive it with injected candidates and assert on real execution
+// rather than on how the list was spelled.
+function resolveBareCommand (candidates = bareCandidates()) {
+  const tried = []
+  for (const candidate of candidates) {
+    const probe = spawnSync(candidate.command, [...candidate.prefix, '--version'], { encoding: 'utf8' })
+    const label = [candidate.command, ...candidate.prefix].join(' ')
+    if (probe.error) {
+      tried.push(`${label} (${probe.error.code || probe.error.message})`)
+      continue
+    }
+    // A processor runs even when the thing it was asked to run does not, so a
+    // clean spawn is not enough — require the exit status AND real output.
+    // The two are reported separately: collapsing them once claimed "no
+    // version output" for a candidate that had printed some.
+    const version = (probe.stdout || '').trim()
+    if (probe.status !== 0) {
+      tried.push(`${label} (exit ${probe.status}${version ? '' : ', no output'})`)
+      continue
+    }
+    if (!version) {
+      tried.push(`${label} (exit 0 but printed no version)`)
+      continue
+    }
+    return { candidate, version }
+  }
+  throw new Error(
+    'Cannot invoke bare. Tried: ' + tried.join('; ') +
+    '. Install bare on PATH or make npx available on this runner.'
+  )
+}
+
 let _bareCommand = null
 function bareCommand () {
   if (_bareCommand) return _bareCommand
-  const onPath = spawnSync('bare', ['--version'], { encoding: 'utf8' })
-  _bareCommand = onPath.error ? ['npx', '--yes', 'bare'] : ['bare']
-  if (onPath.error) console.log(`bare not on PATH (${onPath.error.code}); using \`npx --yes bare\``)
+  const { candidate, version } = resolveBareCommand()
+  _bareCommand = candidate
+  console.log(`bare invocation: \`${[candidate.command, ...candidate.prefix].join(' ')}\` (${version})`)
   return _bareCommand
 }
 
@@ -162,8 +236,21 @@ function bareCommand () {
 function isUsableRecord (r) {
   if (r.status === 'failed') return false
   if (r.loadMsMedian == null) return false
-  if (r.backendDevice && r.requestedDevice && r.backendDevice !== r.requestedDevice) return false
+  if (!r.backendDevice) return false
+  if (r.requestedDevice && r.backendDevice !== r.requestedDevice) return false
   return true
+}
+
+// Why a probe produced nothing.
+//
+// result.error carries spawn-level failures (ENOENT, EACCES), and for those
+// stderr is undefined and status is null — so a message built only from the
+// stderr tail reads "probe produced no result (exit null): " and names nothing.
+// Two CI legs failed exactly that way and the artifacts could not say why.
+function describeProbeFailure (result) {
+  const stderrTail = (result.stderr || '').trim().split('\n').slice(-3).join(' | ')
+  const spawnError = result.error ? `${result.error.code || result.error.message}: ` : ''
+  return `${spawnError}probe produced no result (exit ${result.status}): ${stderrTail}`
 }
 
 // One measurement = one process. Returns the probe's parsed JSON, or a failure
@@ -171,7 +258,7 @@ function isUsableRecord (r) {
 function runProbe (modelPath, config, addonSource, tmpDir, label) {
   const configPath = nodePath.join(tmpDir, `config-${label}.json`)
   nodeFs.writeFileSync(configPath, JSON.stringify(config))
-  const [command, ...prefix] = bareCommand()
+  const { command, prefix } = bareCommand()
   const result = spawnSync(
     command,
     [
@@ -191,14 +278,7 @@ function runProbe (modelPath, config, addonSource, tmpDir, label) {
     .reverse()
     .find((line) => line.trim().startsWith('{') && line.includes('"ok"'))
 
-  if (!jsonLine) {
-    // result.error carries spawn-level failures (ENOENT, EACCES), where stderr
-    // is undefined and status is null. Reporting only the stderr tail turned a
-    // missing `bare` into a blank "exit null:" on every cell of two CI legs.
-    const stderrTail = (result.stderr || '').trim().split('\n').slice(-3).join(' | ')
-    const spawnError = result.error ? `${result.error.code || result.error.message}: ` : ''
-    return { ok: false, error: `${spawnError}probe produced no result (exit ${result.status}): ${stderrTail}` }
-  }
+  if (!jsonLine) return { ok: false, error: describeProbeFailure(result) }
   try {
     return JSON.parse(jsonLine)
   } catch (err) {
@@ -213,6 +293,12 @@ function classify (cell, loadSamples, backendDevice) {
   // would let a GPU-less runner publish CPU timings under a GPU heading, so
   // it gets its own status and is excluded from the usable-record count.
   if (backendDevice && backendDevice !== cell.device) return 'backend-mismatch'
+  // Unknown is NOT the same as matching. The probe reports null whenever its
+  // verification inference does not return stats — which is every cell on
+  // darwin-x64 in run 35810927805 — and treating that as agreement published
+  // a GPU-labelled row with no evidence any GPU ran. A device verdict needs a
+  // confirmed device, so this is its own status and is not usable data.
+  if (!backendDevice) return 'backend-unverified'
   // dio is accepted by the addon but never reaches the file open in fabric
   // (llama-model-load.cpp drops use_direct_io), so it cannot be distinguished
   // from `none` by measurement. Say so rather than reporting a phantom margin.
