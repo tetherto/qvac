@@ -19,6 +19,19 @@ const { resolveAddonCtor, parseAddonSource, parseArgs, readMemorySample, diffMem
 const { elapsedMs } = require('./math')
 
 const SETTLE_MS = 500
+// Engine log lines kept for a failure report. The addon's own error is terse
+// ("Failed to initialize model"); the reason — a missing backend, an
+// unreadable file — is only in what llama.cpp logged just before it. A
+// win32 leg once failed all 36 cells with nothing else to go on.
+const ENGINE_LOG_TAIL = 8
+const engineLog = []
+
+function keepLog (level) {
+  return (...args) => {
+    engineLog.push(`${level}: ${args.map(String).join(' ').trim()}`)
+    if (engineLog.length > ENGINE_LOG_TAIL) engineLog.shift()
+  }
+}
 
 function settle () {
   return new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
@@ -37,7 +50,10 @@ async function main () {
   const addon = new AddonCtor({
     files: { model: [path.resolve(modelPath)] },
     config,
-    logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+    // Buffered, never printed: stdout carries the one JSON result line. Every
+    // level is kept because backend-loading failures are not always logged
+    // as errors. Storing a string costs nothing measurable next to a load.
+    logger: { info: keepLog('info'), warn: keepLog('warn'), error: keepLog('error'), debug: () => {} },
     opts: { stats: true }
   })
 
@@ -88,9 +104,10 @@ async function main () {
 }
 
 main().catch((err) => {
+  const message = err && err.message ? err.message : String(err)
   console.log(JSON.stringify({
     ok: false,
-    error: err && err.message ? err.message : String(err)
+    error: engineLog.length ? `${message} — engine log: ${engineLog.join(' | ')}` : message
   }))
   process.exit(1)
 })
