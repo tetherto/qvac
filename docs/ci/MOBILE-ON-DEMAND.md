@@ -293,7 +293,7 @@ run that built the prebuilds, and take the number at the end of its URL
 
 Do **not** assume it is your addon's own workflow. Which workflow builds the
 bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
-`on-merge-<addon>.yml` for a branch build — so filtering by workflow name is
+`on-merge-nx.yml` for a branch build — so filtering by workflow name is
 unreliable. Scope by your PR's head commit instead:
 
 ```bash
@@ -400,7 +400,7 @@ Two names are involved and for one addon they differ, so set them separately
 rather than deriving one from the other:
 
 ```bash
-WF=llm-llamacpp             # workflow slug: on-merge-$WF.yml / integration-mobile-test-$WF.yml
+WF=llm-llamacpp             # workflow slug: integration-mobile-test-$WF.yml
 GPR_NAME=llm-llamacpp-mono  # the npm package name (minus @qvac/) plus -mono
 
 RUN_ID=$(gh run list --repo tetherto/qvac \
