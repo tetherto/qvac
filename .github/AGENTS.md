@@ -11,6 +11,8 @@ Read the relevant references before changing CI:
 - [`../docs/ci/SELF-HOSTED-RUNNERS.md`](../docs/ci/SELF-HOSTED-RUNNERS.md) for
   persistent runners and workspace cleanup.
 - [`../docs/ci/TEAMS.md`](../docs/ci/TEAMS.md) for approval ownership.
+- [`../docs/ci/MOBILE-ON-DEMAND.md`](../docs/ci/MOBILE-ON-DEMAND.md) for dispatching
+  addon mobile (Device Farm) tests and choosing the prebuild source.
 - [`../docs/agent-automation.md`](../docs/agent-automation.md) for automation safety.
 
 When editing workflows or composite actions:
