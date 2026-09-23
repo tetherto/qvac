@@ -139,8 +139,10 @@ jobs:
               exit 1
             fi
 
+            # Directory name, not the short name older branches used: it is what
+            # decides which of the 13 packages this one workflow publishes.
             if [ ! -f "packages/${branch_pkg}/project.json" ]; then
-              echo "::error::release branch names package '${branch_pkg}' but packages/${branch_pkg}/project.json does not exist"
+              echo "::error::release branch names '${branch_pkg}' but packages/${branch_pkg}/project.json does not exist. Use the package directory name, e.g. release-llm-llamacpp-0.53.1 not release-llm-0.53.1. See docs/gitflow.md."
               exit 1
             fi
 
@@ -172,7 +174,7 @@ jobs:
               continue
             fi
 
-            root=$(jq -r '.root' "$pj")
+            root=$(git show "${CONFIG_REF}:${pj}" | jq -r '.root')
             has_build=$(git show "${CONFIG_REF}:${pj}" | jq -r 'if .targets.build then "true" else "false" end')
 
             # Derived, not declared, like hasPrebuilds above. package.json is the
@@ -181,9 +183,7 @@ jobs:
             has_check=$(git show "${CONFIG_REF}:packages/${pkg}/package.json" 2>/dev/null \
               | jq -r 'if .scripts["check:generated"] then "true" else "false" end' || echo false)
 
-            # After `+ $onmerge` so the derived values win over stale project.json
-            # keys; buildStep defaults to "none" so a package that omits it builds
-            # nothing rather than running `npm run ""` and exiting 0.
+            # After `+ $onmerge` so the derived value wins over a stale project.json key.
             row=$(jq -n \
               --arg pkg "$pkg" \
               --arg workdir "$root" \
@@ -192,7 +192,7 @@ jobs:
               --argjson onmerge "$onmerge" \
               '{package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds}
                + $onmerge
-               + {verifyGenerated: $verifyGenerated, buildStep: ($onmerge.buildStep // "none")}')
+               + {verifyGenerated: $verifyGenerated}')
             rows=$(echo "$rows" | jq -c --argjson r "$row" '. + [$r]')
           done
 
@@ -264,6 +264,7 @@ jobs:
     needs: [detect, prebuild]
     if: >-
       always() && !cancelled() &&
+      needs.detect.result == 'success' &&
       needs.detect.outputs.pre-publish-rows != '[]'
     strategy:
       fail-fast: false
@@ -327,8 +328,9 @@ jobs:
       workdir: ${{ matrix.workdir }}
 
   # decoder-audio is the only package whose mobile run blocked publish on main.
-  # Static job because `uses:` cannot take an expression. tts-ggml's mobile run
-  # was post-publish and informational, so it is not restored.
+  # Static job because `uses:` cannot take an expression. asr-ggml,
+  # bci-whispercpp and tts-ggml ran theirs post-publish; those are the three
+  # mobile-post-publish-* jobs at the end of this file.
   mobile-gate-decoder-audio:
     name: Mobile gate (decoder-audio)
     needs: detect
@@ -338,6 +340,10 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
+      # The mobile workflow's build-and-test job requests actions: read for the
+      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
+      # reject this whole file at load time, before any job runs.
+      actions: read
     uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
     secrets: inherit
     with:
@@ -357,8 +363,9 @@ jobs:
     # Test gates are per-package in the steps below: needs.<job>.result is the
     # matrix-wide aggregate and `matrix` is unavailable in a job-level `if:`.
     # verify-generated and mobile-gate-decoder-audio are enforced here, aggregate
-    # and all. `success()` rather than `!= failure`, because a skipped gate is not
-    # a passed one; the only permitted absence is an empty selected row set.
+    # and all. verify-generated requires success, its only permitted absence being
+    # an empty row set; the mobile gate takes != failure because it is skipped for
+    # the twelve packages that are not decoder-audio.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
       (needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
@@ -386,6 +393,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Not left in .git/config while the publish steps run, as on main.
+          persist-credentials: false
 
       # Per-package pre-publish gate (see this job's `if:`).
       - name: Enforce this package's pre-publish test gate
@@ -411,26 +420,6 @@ jobs:
           package: ${{ matrix.package }}
           # fabric ships its C++ SDK under prebuilds/include and prebuilds/share.
           extra-dirs: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
-
-      - name: Set up Node.js
-        if: matrix.buildStep != 'none'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        if: matrix.buildStep != 'none'
-        working-directory: ${{ matrix.workdir }}
-        run: npm install --ignore-scripts --package-lock=false
-
-      # Via env, not interpolated: buildStep is a script name resolved from
-      # CONFIG_REF, and this job holds publish credentials.
-      - name: Run build step
-        if: matrix.buildStep != 'none'
-        working-directory: ${{ matrix.workdir }}
-        env:
-          BUILD_STEP: ${{ matrix.buildStep }}
-        run: npm run "$BUILD_STEP"
 
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         if: matrix.nameTransform == 'rename-prefix'
@@ -507,6 +496,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Not left in .git/config while the publish steps run, as on main.
+          persist-credentials: false
 
       # Per-package pre-publish gate (see the note on publish-gpr's `if:`).
       - name: Enforce this package's pre-publish test gate
@@ -531,26 +522,6 @@ jobs:
           package: ${{ matrix.package }}
           # fabric ships its C++ SDK under prebuilds/include and prebuilds/share.
           extra-dirs: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
-
-      - name: Set up Node.js
-        if: matrix.buildStep != 'none'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        if: matrix.buildStep != 'none'
-        working-directory: ${{ matrix.workdir }}
-        run: npm install --ignore-scripts --package-lock=false
-
-      # Via env, not interpolated: buildStep is a script name resolved from
-      # CONFIG_REF, and this job holds publish credentials.
-      - name: Run build step
-        if: matrix.buildStep != 'none'
-        working-directory: ${{ matrix.workdir }}
-        env:
-          BUILD_STEP: ${{ matrix.buildStep }}
-        run: npm run "$BUILD_STEP"
 
       # 12 of the 13 deleted workflows validated this before it reached the
       # external action, and qvac-actions does not check the charset itself.
@@ -579,7 +550,9 @@ jobs:
       # with version-locked optionalDependencies. npm only; GPR stays unsliced.
       - name: Slice platform packages
         if: matrix.slicePlatformPackages
-        run: node scripts/ci/slice-platform-packages.mjs --workdir ${{ matrix.workdir }} --out-dir "${{ runner.temp }}/platform-packages"
+        env:
+          WORKDIR: ${{ matrix.workdir }}
+        run: node scripts/ci/slice-platform-packages.mjs --workdir "$WORKDIR" --out-dir "${{ runner.temp }}/platform-packages"
 
       - name: Set up Node.js for platform package publish
         if: matrix.slicePlatformPackages
@@ -698,7 +671,10 @@ jobs:
   create-tag:
     name: Create tag (${{ matrix.package }})
     needs: [detect, publish-npm]
+    # !cancelled() or the implicit success() walks the whole graph, where the
+    # by-design-skipped pre-publish jobs would leave npm published and untagged.
     if: >-
+      !cancelled() &&
       needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
       needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
     strategy:
@@ -728,6 +704,10 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
+      # The mobile workflow's build-and-test job requests actions: read for the
+      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
+      # reject this whole file at load time, before any job runs.
+      actions: read
     uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
     secrets: inherit
     with:
@@ -746,6 +726,10 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
+      # The mobile workflow's build-and-test job requests actions: read for the
+      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
+      # reject this whole file at load time, before any job runs.
+      actions: read
     uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
     secrets: inherit
     with:
@@ -764,6 +748,10 @@ jobs:
       packages: read
       pull-requests: write
       id-token: write
+      # The mobile workflow's build-and-test job requests actions: read for the
+      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
+      # reject this whole file at load time, before any job runs.
+      actions: read
     uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
     secrets: inherit
     with:

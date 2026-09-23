@@ -203,7 +203,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/bci-whispercpp",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "bci-whispercpp",

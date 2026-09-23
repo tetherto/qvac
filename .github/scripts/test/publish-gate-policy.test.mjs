@@ -87,15 +87,40 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
-// Packages that opt into the gate, read from the same project.json flag the
-// consolidated pipeline builds its matrix from.
+// model-fit has generated wrappers and its own on-merge-model-fit.yml, but that
+// workflow has never called the verify reusable. Pre-existing and outside the
+// consolidation; listed here so the gap is stated rather than hidden by whichever
+// definition of "gated" happens to exclude it.
+const KNOWN_UNGATED = new Set(['model-fit'])
+
+// The packages the consolidated pipeline publishes, read from its own push paths
+// so the list cannot drift from the workflow.
+function consolidatedPackages() {
+  return [...read(CONSOLIDATED).matchAll(/^ {6}- "packages\/([^/]+)\/\*\*"$/gm)].map((m) => m[1])
+}
+
+// Packages that opt into the gate: an on-merge addon that has generated wrappers.
+//
+// Both halves are read from the packages themselves, never from the workflow
+// under test, or removing a package from that workflow would remove it from this
+// list too and the coverage assertion below could never fail.
+//
+// check:generated rather than a project.json flag, because that is what `detect`
+// reads: a flag could be cleared by the same push the gate is meant to check, and
+// two packages carried the script with no flag.
 function gatedPackages() {
   const packagesDir = join(root, 'packages')
   return readdirSync(packagesDir).filter((name) => {
     const projectJson = join(packagesDir, name, 'project.json')
-    if (!existsSync(projectJson)) return false
-    const project = JSON.parse(readFileSync(projectJson, 'utf8'))
-    return project?.targets?.['on-merge']?.options?.ci?.verifyGenerated === true
+    const packageJson = join(packagesDir, name, 'package.json')
+    if (!existsSync(projectJson) || !existsSync(packageJson)) return false
+    const isOnMergeAddon = Boolean(
+      JSON.parse(readFileSync(projectJson, 'utf8'))?.targets?.['on-merge'],
+    )
+    const hasGeneratedWrappers = Boolean(
+      JSON.parse(readFileSync(packageJson, 'utf8'))?.scripts?.['check:generated'],
+    )
+    return isOnMergeAddon && hasGeneratedWrappers
   })
 }
 
@@ -120,6 +145,10 @@ test('every package that opts into the gate is covered by a pipeline', () => {
     const source = read(CONSOLIDATED)
     assert.match(source, /verify-generated-rows: \$\{\{ steps\.rows\.outputs\.verify-generated-rows \}\}/)
     assert.match(source, /select\(\.verifyGenerated == true\)/)
+    // The row flag must be derived from the script, not read from project.json,
+    // or the push being gated could clear it.
+    assert.match(source, /scripts\["check:generated"\]/)
+    assert.match(source, /\+ \{verifyGenerated: \$verifyGenerated/)
     assert.match(
       source,
       /include: \$\{\{ fromJSON\(needs\.detect\.outputs\.verify-generated-rows\) \}\}/,
@@ -130,9 +159,16 @@ test('every package that opts into the gate is covered by a pipeline', () => {
     assert.match(source, /^ {4}if: needs\.detect\.outputs\.verify-generated-rows != '\[\]'$/m)
   }
 
-  const offenders = gated.filter(
-    (pkg) => !consolidated && !pipelines.includes(`.github/workflows/on-merge-${pkg}.yml`),
-  )
+  // A gated package is covered by the consolidated pipeline only if that pipeline
+  // actually publishes it; otherwise it needs its own on-merge-<pkg>.yml calling
+  // the verify reusable. Checking membership rather than the bare `consolidated`
+  // flag, so this cannot collapse to an empty filter.
+  const published = new Set(consolidatedPackages())
+  const offenders = gated.filter((pkg) => {
+    if (KNOWN_UNGATED.has(pkg)) return false
+    if (consolidated && published.has(pkg)) return false
+    return !pipelines.includes(`.github/workflows/on-merge-${pkg}.yml`)
+  })
   assert.deepEqual(offenders, [])
 })
 
