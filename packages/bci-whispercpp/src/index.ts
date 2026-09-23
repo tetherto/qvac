@@ -88,6 +88,10 @@ export interface BCIWhispercppConfig {
     use_gpu?: boolean;
     flash_attn?: boolean;
     gpu_device?: number;
+    /** Raw ggml registry index (number or integer string), or GPU class. */
+    "main-gpu"?: number | string;
+    /** Alias of main-gpu; supply only one spelling. */
+    main_gpu?: number | string;
   };
   miscConfig?: {
     caption_enabled?: boolean;

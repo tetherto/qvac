@@ -420,7 +420,7 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
       - name: Bootstrap (download models)
@@ -435,7 +435,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
       - name: Build Electron package
@@ -564,7 +564,7 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ~/snap/qvac-sdk-e2e/common/.qvac/models
-          key: qvac-snap-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
 
       - name: Bootstrap models inside Snap
         if: inputs.consumer == 'snap' && steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true'
@@ -580,7 +580,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ~/snap/qvac-sdk-e2e/common/.qvac/models
-          key: qvac-snap-models-${{ hashFiles('packages/sdk/models/registry/models.ts') }}
+          key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
 
       - name: Generate runId
         if: always()

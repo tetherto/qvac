@@ -8,6 +8,7 @@ import {
   parakeetEndOfTurnEventSchema,
   type TranscribeStreamEvent
 } from '@/schemas/transcription'
+import { toVadStateEvent } from '@/utils/asr-events'
 
 // =============================================================================
 // vadStateEventSchema / endOfTurnEventSchema round-trip
@@ -242,4 +243,17 @@ test('TranscribeStreamEvent: discriminated union narrows correctly', (t) => {
   t.is(Object.keys(seen).length, 4, 'all four event variants exercised')
   t.is(whisperEot, 1, 'whisper endOfTurn variant covered')
   t.is(parakeetEot, 1, 'parakeet endOfTurn variant covered')
+})
+
+test('toVadStateEvent: carries the detector source', (t) => {
+  t.is(
+    toVadStateEvent({ type: 'vad', speaking: true, score: 0.9, source: 'silero' }).source,
+    'silero',
+    "whisper's silero VAD is identified"
+  )
+  t.is(
+    toVadStateEvent({ type: 'vad', speaking: false, score: 0.1, source: 'energy' }).source,
+    'energy',
+    "the addon's reserved 'energy' value is passed through unchanged"
+  )
 })

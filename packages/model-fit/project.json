@@ -94,6 +94,7 @@
   },
   "implicitDependencies": [
     "inference-addon-cpp",
-    "lint-cpp"
+    "lint-cpp",
+    "qvac-addon-cmake"
   ]
 }
