@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-09-23#3` for the MOSS engine above.
+- Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
+  weightless fit-measure model that carries no vocabulary, which a memory-fit
+  measurement never needs; loading a real model is unchanged and still
+  requires one.
 - Raise the `speech-cpp` floor to `2026-09-21`, for the Core ML sidecars above
   and for a round of CosyVoice3 optimizations that needs no model change. On
   Metal, single-token LM decode runs one flash-attention op per layer instead
