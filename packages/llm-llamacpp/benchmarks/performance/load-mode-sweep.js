@@ -378,7 +378,12 @@ function main () {
           // ("Failed to initialize model") does not say why; llama.cpp's log
           // does. Only failed cells pay for it, and never a measured sample.
           const diag = runProbe(modelPath, stringify(cell.config), addonSource, tmpDir, `${cell.caseId}-diag`, ['--diagnose'])
-          failures.set(cell.caseId, !diag.ok && diag.error && diag.error.length > probe.error.length ? diag.error : probe.error)
+          // Both are kept: a re-run that fails differently, or does not fail
+          // at all, is evidence in its own right and must not be dropped.
+          failures.set(
+            cell.caseId,
+            `${probe.error} — diagnostic re-run: ${diag.ok ? 'loaded successfully' : diag.error}`
+          )
           continue
         }
         samples.get(cell.caseId).push(probe)
