@@ -1650,9 +1650,6 @@ importers:
       '@qvac/ocr-ggml':
         specifier: ^0.24.1
         version: link:../ocr-ggml
-      '@qvac/registry-client':
-        specifier: ^0.6.1
-        version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
       '@qvac/translation-nmtcpp':
         specifier: ^0.16.1
         version: link:../translation-nmtcpp
