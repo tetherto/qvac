@@ -121,7 +121,12 @@ function parseArgs (argv) {
     }
     const key = token.slice(2)
     const next = argv[i + 1]
-    if (!next || next.startsWith('--')) {
+    // `next === undefined` means the flag ended the argv; an EMPTY STRING is a
+    // real value. Treating '' as absent turned `--sweep-params ""` — what the
+    // workflow passes whenever the input is left at its default — into the
+    // boolean true, which then failed validation as an unknown param and broke
+    // the default dispatch of the existing throughput benchmark.
+    if (next === undefined || next.startsWith('--')) {
       parsed[key] = true
     } else {
       parsed[key] = normalizeArgValue(next)

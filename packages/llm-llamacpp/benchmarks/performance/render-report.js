@@ -110,7 +110,7 @@ function loadDir (dir, desktopDevice) {
       dir = parent
     }
   }
-  const meta = { addonVersion: null, repeats: null, promptTokens: null, expectedShards: null }
+  const meta = { addonVersion: null, repeats: null, promptTokens: null, expectedShards: null, selectedLoadModes: null }
   let rows = []
   for (const f of files) {
     const r = rowsFromFile(f, deviceFor(f), meta)
@@ -135,6 +135,7 @@ function rowsFromFile (file, desktopDevice, meta) {
   if (doc && typeof doc.addonVersion === 'string') {
     if (meta.addonVersion === null) meta.addonVersion = doc.addonVersion
     if (meta.expectedShards === null && Array.isArray(doc.expectedShards)) meta.expectedShards = doc.expectedShards
+    if (meta.selectedLoadModes === null && Array.isArray(doc.selectedLoadModes)) meta.selectedLoadModes = doc.selectedLoadModes
     return rows
   }
 
@@ -532,11 +533,20 @@ function mib (bytes) {
 // `auto` is the addon's default, so margins are quoted against it. `dio` is
 // accepted by the addon but currently discarded by qvac-fabric before the file
 // is opened, so it behaves as `none`; it is labelled rather than ranked.
-function loadModeSection (rows, desktopDevice, expectedShards) {
-  // Which modes this dispatch asked for, read from the shards run-meta
-  // stamped. Null (an older artifact with no stamp) means "assume all six",
-  // so a re-render of a pre-selector run still reports gaps as before.
-  const selectedModes = Array.isArray(expectedShards)
+function loadModeSection (rows, desktopDevice, expectedShards, selectedLoadModes) {
+  // Which modes this dispatch asked for.
+  //
+  // `selectedLoadModes` is stamped from the selector itself and covers every
+  // leg. `expectedShards` is the MOBILE shard list and is only a fallback for
+  // artifacts predating that stamp — and only when it is non-empty: a
+  // desktop-only dispatch stamps it as [], and reading that as "no mode was
+  // selected" labelled every absent desktop mode "Not selected for this run"
+  // and suppressed the gap warning, which is the one thing this section is
+  // here to police. No information must not read as a negative answer.
+  //
+  // Null means "assume all six", so a re-render of a pre-stamp run still
+  // reports gaps as it did before.
+  const fromShards = Array.isArray(expectedShards) && expectedShards.length > 0
     ? new Set(
         expectedShards
           .map((k) => /\|lm([^|]+)/.exec(k))
@@ -544,6 +554,9 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
           .map((m) => m[1])
       )
     : null
+  const selectedModes = Array.isArray(selectedLoadModes) && selectedLoadModes.length > 0
+    ? new Set(selectedLoadModes)
+    : fromShards
   const lmRows = rows.filter(r => /\[lm=/.test(r.config))
   if (lmRows.length === 0) return []
 
@@ -829,7 +842,7 @@ function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseli
 
   for (const l of mermaidSection(rows, desktopDevice, chartsUrl)) lines.push(l)
 
-  for (const l of loadModeSection(rows, desktopDevice, meta.expectedShards)) lines.push(l)
+  for (const l of loadModeSection(rows, desktopDevice, meta.expectedShards, meta.selectedLoadModes)) lines.push(l)
 
   const hasTokens = rows.some(r => r.tokens !== null)
 

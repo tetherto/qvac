@@ -225,10 +225,20 @@ jobs:
             const expectedShards = m.matrix()
               .filter((cell) => planned.has(m.runFunctionName(cell)))
               .map(m.mobileShardKey)
+            // The load modes this dispatch asked for, independent of mobile.
+            // expectedShards is the MOBILE target and is [] on a desktop-only
+            // run; scoring the desktop legs against that reported every absent
+            // mode as "not selected" and suppressed the coverage warning.
+            const lm = selected && selected.get('load-mode')
+            const selectedLoadModes =
+              !selected || !selected.has('load-mode') || lm === null
+                ? m.LOAD_MODES.slice()
+                : lm.slice()
             require('fs').writeFileSync('run-meta/run-meta.json', JSON.stringify({
               addonVersion: '@qvac/llm-llamacpp@' + pkg.version,
               sweepParams: process.env.SWEEP_PARAMS || '',
-              expectedShards
+              expectedShards,
+              selectedLoadModes
             }) + '\\n')
           "
           cat run-meta/run-meta.json

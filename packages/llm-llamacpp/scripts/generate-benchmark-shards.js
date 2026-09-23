@@ -28,15 +28,6 @@ const {
 
 const integrationDir = path.resolve(__dirname, '..', 'test', 'integration')
 const mobileAutoFile = path.resolve(__dirname, '..', 'test', 'mobile', 'integration.auto.cjs')
-const workflowFile = path.resolve(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  '.github',
-  'workflows',
-  'benchmark-perf-llm-llamacpp.yml'
-)
 
 const mode = process.argv.includes('--check')
   ? 'check'
@@ -211,9 +202,7 @@ if (mode === 'groups') {
     )
     process.exit(1)
   }
-  console.log(
-    `OK: workflow test_groups and integration.auto.cjs both match the matrix (${matrix().length} shards).`
-  )
+  console.log(`OK: integration.auto.cjs matches the matrix (${matrix().length} shards).`)
 } else if (mode === 'assert') {
   const missing = assertShards()
   if (missing) {

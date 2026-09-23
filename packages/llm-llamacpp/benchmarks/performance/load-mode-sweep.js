@@ -78,7 +78,12 @@ function parseArgs (argv) {
     }
     const key = token.slice(2)
     const next = argv[i + 1]
-    if (!next || next.startsWith('--')) {
+    // `next === undefined` means the flag ended the argv; an EMPTY STRING is a
+    // real value. Treating '' as absent turned `--sweep-params ""` — what the
+    // workflow passes whenever the input is left at its default — into the
+    // boolean true, which then failed validation as an unknown param and broke
+    // the default dispatch of the existing throughput benchmark.
+    if (next === undefined || next.startsWith('--')) {
       out[key] = true
     } else {
       out[key] = next
@@ -303,7 +308,6 @@ function main () {
   const tmpDir = nodeFs.mkdtempSync(nodePath.join(nodeOs.tmpdir(), 'qvac-load-mode-'))
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const jsonlPath = nodePath.join(resultsDir, `load-mode-sweep-${stamp}.jsonl`)
-  const mdPath = nodePath.join(resultsDir, `load-mode-sweep-${stamp}.md`)
   nodeFs.writeFileSync(jsonlPath, '')
 
   const cells = buildLoadModeCells(selectedModels, sweep)
@@ -510,10 +514,8 @@ function main () {
       }))
   }, null, 2))
 
-  nodeFs.writeFileSync(mdPath, renderMarkdown(records, addonSource, loadRepeats))
   console.log(`wrote ${reportPath}`)
   nodeFs.rmSync(tmpDir, { recursive: true, force: true })
-  console.log(`\nwrote ${mdPath}`)
 
   // A mode that cannot load is a legitimate result and stays a `failed` row.
   // A leg where NOTHING loaded is not data, it is a broken runner, and it must
@@ -526,94 +528,5 @@ function main () {
   }
 }
 
-// Grouped by the thing that decides the answer: the device the load targets.
-// Margins are against `auto`, the addon's default, and against `mmap`, which is
-// what the ticket's acceptance criteria name.
-function renderMarkdown (records, addonSource, loadRepeats) {
-  const lines = []
-  lines.push('# load_mode sweep')
-  lines.push('')
-  lines.push(`Addon source: \`${addonSource}\`. ${loadRepeats} samples per cell, each in its own process,`)
-  lines.push('with modes rotated between repetitions and one unmeasured warm-up per model.')
-  lines.push('')
-  lines.push('Every sample is a fresh process: a second load in the same process cannot be measured')
-  lines.push('(see `load-mode-probe.js`). All samples are warm-cache — a fresh process does not reset')
-  lines.push('the page cache, so no cold-load figure is claimed. Memory is the mean delta across samples.')
-  lines.push('')
-
-  const groups = new Map()
-  for (const r of records) {
-    const key = `${r.modelId} | q=${r.quantization} | ${r.device}${r.mainGpu ? ` (${r.mainGpu})` : ''}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(r)
-  }
-
-  for (const [key, rows] of groups) {
-    lines.push(`## ${key}`)
-    lines.push('')
-    lines.push('| mode | status | backend | load ms (median) | mean ± σ | samples | Δ vs auto | Δ vs mmap | rss MiB | anon MiB | file MiB | locked MiB |')
-    lines.push('|------|--------|---------|------------------|----------|---------|-----------|-----------|---------|----------|----------|------------|')
-    const auto = rows.find((r) => r.loadMode === 'auto')
-    const mmapRow = rows.find((r) => r.loadMode === 'mmap')
-    // Margins are computed from medians: an outlier-contaminated mean would
-    // report a stall as a property of the mode.
-    const pct = (ref, r) => (ref && ref.loadMsMedian && r.loadMsMedian
-      ? `${r.loadMsMedian >= ref.loadMsMedian ? '+' : ''}${round(((r.loadMsMedian / ref.loadMsMedian) - 1) * 100)}%`
-      : '—')
-    for (const r of rows) {
-      lines.push(
-        `| \`${r.loadMode}\` | ${r.status} | ${r.backendDevice || '?'} | ` +
-        `**${r.loadMsMedian ?? '—'}** | ${r.loadMsMean ?? '—'} ± ${r.loadMsStd ?? '—'} | ` +
-        `${(r.loadSamples || []).join(', ')} | ${pct(auto, r)} | ${pct(mmapRow, r)} | ` +
-        `${mib(r.rssBytes) ?? '—'} | ${mib(r.rssAnonBytes) ?? '—'} | ${mib(r.rssFileBytes) ?? '—'} | ` +
-        `${mib(r.lockedBytes) ?? '—'} |`
-      )
-    }
-    lines.push('')
-    // Two metrics, two winners. Naming one overall "best" would hide the case
-    // where the fastest mode is not the leanest — which is exactly the
-    // trade-off an integrated GPU presents.
-    // 'inert' rows are aliases of another mode (dio behaves as none), so they
-    // are reported but never nominated as a winner — crowning an alias would
-    // read as a recommendation to set a flag that does nothing.
-    const ok = rows.filter((r) => r.status === 'measured' && r.loadMsMean != null)
-    if (ok.length > 0) {
-      const fastest = ok.reduce((a, b) => (b.loadMsMedian < a.loadMsMedian ? b : a))
-      const memMetric = (r) => (r.rssAnonBytes != null && r.rssFileBytes != null
-        ? Math.max(r.rssAnonBytes, r.rssFileBytes) : r.rssBytes)
-      const withMem = ok.filter((r) => memMetric(r) != null)
-      const leanest = withMem.length > 0
-        ? withMem.reduce((a, b) => (memMetric(b) < memMetric(a) ? b : a))
-        : null
-      // A margin inside the samples' own spread is not a ranking. Modes whose
-      // means sit within a pooled sigma of the winner are named alongside it.
-      const near = (r, ref) => Math.abs(r.loadMsMedian - ref.loadMsMedian) <= (r.loadMsStd || 0) + (ref.loadMsStd || 0)
-      const tiedFast = ok.filter((r) => r !== fastest && near(r, fastest))
-      lines.push(
-        `- fastest load: \`${fastest.loadMode}\` (median ${fastest.loadMsMedian} ms)` +
-        (tiedFast.length > 0 ? `, tied within spread with ${tiedFast.map((r) => '`' + r.loadMode + '`').join(', ')}` : '')
-      )
-      if (leanest) lines.push(`- lowest resident: \`${leanest.loadMode}\` (rss ${mib(leanest.rssBytes)} MiB)`)
-      // A mean well above the median means at least one sample stalled. The
-      // median still stands; the mean should not be quoted for that cell.
-      const stalled = ok.filter((r) => r.loadMsMedian > 0 && r.loadMsMean / r.loadMsMedian > 1.15)
-      if (stalled.length > 0) {
-        lines.push(
-          `- ⚠ at least one stalled sample on ${stalled.map((r) => '`' + r.loadMode + '`').join(', ')} ` +
-          '(mean >15% above median) — read the median, not the mean, for those rows.'
-        )
-      }
-      if (leanest && leanest.loadMode !== fastest.loadMode) {
-        lines.push('- **no single winner**: the fastest mode is not the leanest; state the trade-off rather than picking one.')
-      }
-      const mislabelled = rows.filter((r) => r.backendDevice && r.backendDevice !== r.requestedDevice)
-      for (const r of mislabelled) {
-        lines.push(`- ⚠ \`${r.loadMode}\` requested \`${r.requestedDevice}\` but ran on \`${r.backendDevice}\` — not a comparable row.`)
-      }
-    }
-    lines.push('')
-  }
-  return lines.join('\n')
-}
 
 main()

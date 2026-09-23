@@ -115,3 +115,64 @@ test('whitespace around names and values is tolerated', () => {
   assert.deepStrictEqual(s.quantization, ['Q4_0', 'Q8_0'])
   assert.deepStrictEqual(s['cache-type-k'], ['f16', 'q8_0'])
 })
+
+// ── The DEFAULT dispatch, through the real argv the workflow builds ─────────
+// The existing tests pass '' / undefined / {} straight to parseSweepParams and
+// so assert the default INTENT. The workflow passes `--sweep-params "$VAR"`,
+// which with the input left at its default is a present-but-empty argv entry.
+// parseArgs treated that as a valueless flag, yielding the boolean true, which
+// failed validation as an unknown param — breaking the default dispatch of the
+// throughput benchmark that predates this branch.
+
+// utils.js is a bare module (it imports bare-*), so it cannot be required
+// under node. The functions under test have no bare dependencies of their own,
+// so they are extracted and compiled together — this still exercises the real
+// code rather than asserting on its source text.
+function extractFns(src, names) {
+  let out = ''
+  for (const name of names) {
+    const start = src.indexOf(`function ${name} `)
+    if (start === -1) continue
+    let depth = 0
+    let end = -1
+    for (let i = src.indexOf('{', start); i < src.length; i++) {
+      if (src[i] === '{') depth++
+      else if (src[i] === '}' && --depth === 0) { end = i + 1; break }
+    }
+    assert.notStrictEqual(end, -1, `${name}: braces balance`)
+    out += src.slice(start, end) + '\n'
+  }
+  return out
+}
+
+function loadParseArgs(file) {
+  const fs = require('node:fs')
+  const path = require('node:path')
+  const src = fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8')
+  const body = extractFns(src, ['parseArgs', 'normalizeArgValue', 'stripSurroundingQuotes'])
+  assert.match(body, /function parseArgs /, `${file} declares parseArgs`)
+  // eslint-disable-next-line no-new-func
+  return new Function(`${body}; return parseArgs`)()
+}
+
+// Both spellings of argv are covered by leading placeholders: load-mode-sweep
+// scans from index 0 and utils.js from index 2 (full process.argv), and both
+// skip tokens that do not start with '--'.
+const ARGV0 = ['node', 'script']
+
+for (const file of ['load-mode-sweep.js', 'utils.js']) {
+  test(`${file}: an empty --sweep-params is a value, not a valueless flag`, () => {
+    const parseArgs = loadParseArgs(file)
+    const parsed = parseArgs([...ARGV0, '--addon-source', 'local', '--sweep-params', ''])
+    assert.strictEqual(parsed['sweep-params'], '', 'empty string must survive as a value')
+    assert.notStrictEqual(parsed['sweep-params'], true, 'must not degrade into a boolean')
+    // ...and that value must mean "run everything", not "unknown param".
+    assert.strictEqual(parseSweepParams(parsed['sweep-params']), null, 'empty selector = run everything')
+  })
+
+  test(`${file}: a flag with no following token is still a boolean`, () => {
+    const parseArgs = loadParseArgs(file)
+    assert.strictEqual(parseArgs([...ARGV0, '--dry-run'])['dry-run'], true, 'trailing flag stays boolean')
+    assert.strictEqual(parseArgs([...ARGV0, '--dry-run', '--other'])['dry-run'], true, 'flag before flag stays boolean')
+  })
+}

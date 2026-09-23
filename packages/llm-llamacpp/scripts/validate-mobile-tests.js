@@ -8,8 +8,6 @@ const {
   generatedRunnerNames,
   validateTestGroups
 } = require('./lib/validate-test-groups')
-// Same exclusion the generator applies, from one shared definition: two
-// copies of this list would drift and the mismatch only shows up on device.
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')

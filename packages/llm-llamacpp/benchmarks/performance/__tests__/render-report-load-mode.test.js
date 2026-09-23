@@ -716,3 +716,38 @@ test('a run that expected mobile shards and got none still warns', () => {
 
   assert.match(md, /0 mobile devices reported/, 'a real coverage loss is still flagged')
 })
+
+test('a desktop-only run reports real coverage gaps, not "not selected"', () => {
+  // expectedShards is the MOBILE target and the workflow stamps it as [] on a
+  // desktop-only dispatch. Reading that as "no mode was selected" labelled
+  // every absent desktop mode "Not selected for this run" and suppressed the
+  // gap warning — defeating the one criterion this section polices.
+  const md = render({
+    'run-meta.json': { addonVersion: '@qvac/llm-llamacpp@0.53.2', expectedShards: [] },
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      lmRow('auto', { loadMs: 700 }),
+      lmRow('mmap', { loadMs: 710 })
+    ])
+  })
+
+  assert.match(md, /\| `mlock` \|.*Not measured \(coverage gap\)/, 'an absent mode is a gap')
+  assert.doesNotMatch(md, /Not selected for this run/, 'an empty mobile list is not a selection')
+  assert.match(md, /coverage gap: .*`mlock`/, 'and it is called out explicitly')
+})
+
+test('an explicit selector stamp still suppresses unselected modes', () => {
+  const md = render({
+    'run-meta.json': {
+      addonVersion: '@qvac/llm-llamacpp@0.53.2',
+      expectedShards: [],
+      selectedLoadModes: ['auto', 'mmap']
+    },
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      lmRow('auto', { loadMs: 700 }),
+      lmRow('mmap', { loadMs: 710 })
+    ])
+  })
+
+  assert.match(md, /\| `mlock` \|.*Not selected for this run/, 'narrowed runs stay quiet')
+  assert.doesNotMatch(md, /coverage gap/, 'and report no gap')
+})
