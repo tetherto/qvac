@@ -3166,34 +3166,34 @@
     "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
-    "description": "Bitnet 3B model",
+    "description": "BitNet b1.58 3B base model",
     "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-3B",
     "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "3B",
-    "tags": ["generation", "instruct", "bitnet"]
+    "tags": ["generation", "base", "bitnet"]
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-large",
-    "description": "Bitnet 0.7B model",
+    "description": "BitNet b1.58 0.7B base model",
     "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-large",
     "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "0.7B",
-    "tags": ["generation", "instruct", "bitnet"]
+    "tags": ["generation", "base", "bitnet"]
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     "engine": "@qvac/llm-llamacpp",
     "link": "https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
-    "description": "Bitnet 1B model",
+    "description": "BitNet b1.58 1B base model",
     "notes": "TQ2_0 quantization of https://huggingface.co/1bitLLM/bitnet_b1_58-xl",
     "licenseId": "MIT",
     "quantization": "TQ2_0",
     "params": "1B",
-    "tags": ["generation", "instruct", "bitnet"]
+    "tags": ["generation", "base", "bitnet"]
   },
   {
     "source": "https://huggingface.co/unsloth/FLUX.2-klein-4B-GGUF/resolve/8342a6a97b2d18acae5d62124735c39ba23060e2/flux-2-klein-4b-Q4_0.gguf",
@@ -8414,6 +8414,83 @@
     "params": "",
     "licenseId": "Apache-2.0",
     "tags": ["tts", "cosyvoice", "cosyvoice3", "s3tok", "tokenizer", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-bf16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 flow matching model (GGUF, multilingual)",
+    "quantization": "bf16",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 flow matching model (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 flow matching model (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 flow matching model (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "flow", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-hift-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 HiFT vocoder (GGUF, multilingual)",
+    "quantization": "fp16",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "hift", "vocoder", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 language model (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "llm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Fun-CosyVoice3 fused language model (GGUF, multilingual)",
+    "quantization": "q8_0",
+    "params": "0.5B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "cosyvoice", "cosyvoice3", "llm", "fused", "multilingual", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
   },

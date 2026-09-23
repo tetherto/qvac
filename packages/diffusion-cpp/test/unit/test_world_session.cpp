@@ -1,12 +1,16 @@
 #include <any>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 
+#include "handlers/SdCtxHandlers.hpp"
 #include "handlers/WorldSessionHandlers.hpp"
 #include "model-interface/WorldSessionModel.hpp"
+#include "utils/EsrganUpscaler.hpp"
+#include "utils/LoggingMacros.hpp"
 
 using namespace qvac_lib_inference_addon_sd;
 using qvac_errors::StatusError;
@@ -17,6 +21,28 @@ using qvac_errors::StatusError;
 // test_sd_model.cpp.
 
 class WorldSessionModelTest : public ::testing::Test {};
+
+TEST_F(WorldSessionModelTest, StreamingPlacementWarningIsVisibleByDefault) {
+  const auto previousVerbosity = logging::g_verbosityLevel.load();
+  logging::g_verbosityLevel =
+      qvac_lib_inference_addon_cpp::logger::Priority::ERROR;
+  testing::internal::CaptureStdout();
+  sdLogCallback(
+      SD_LOG_WARN,
+      "stable-diffusion.cpp:7874 - stream_layers has no effect unless "
+      "diffusion params backend is cpu; ignoring\n",
+      nullptr);
+  const auto output = testing::internal::GetCapturedStdout();
+  testing::internal::CaptureStdout();
+  sdLogCallback(SD_LOG_WARN, "ordinary warning", nullptr);
+  sdLogCallback(SD_LOG_INFO, "ordinary info", nullptr);
+  sdLogCallback(SD_LOG_WARN, nullptr, nullptr);
+  const auto filtered = testing::internal::GetCapturedStdout();
+  logging::g_verbosityLevel = previousVerbosity;
+  EXPECT_NE(output.find("[ERROR]"), std::string::npos);
+  EXPECT_NE(output.find("diffusion params backend is cpu"), std::string::npos);
+  EXPECT_TRUE(filtered.empty());
+}
 
 TEST_F(WorldSessionModelTest, ConstructWithEmptyConfigDoesNotThrow) {
   WorldSessionConfig config{};
@@ -43,6 +69,9 @@ TEST_F(WorldSessionModelTest, ConfigDefaultsMatchDocumentedContract) {
   EXPECT_EQ(config.localAttnSize, 0);    // 0 = engine default (8)
   EXPECT_EQ(config.frameJpegQuality, 0); // 0 = PNG frames
   EXPECT_FALSE(config.offloadParamsToCpu);
+  EXPECT_TRUE(config.paramsBackend.empty());
+  EXPECT_TRUE(config.maxVram.empty());
+  EXPECT_FALSE(config.streamLayers);
   EXPECT_FALSE(config.kvCache);
   EXPECT_FALSE(config.profile);
 }
@@ -120,6 +149,160 @@ TEST_F(WorldSessionModelTest, DestroyUnloadedModelIsNoop) {
 // `v == "true"` comparison, and silently kept the false default.
 
 class WorldSessionHandlersTest : public ::testing::Test {};
+
+TEST_F(
+    WorldSessionHandlersTest, VerbosityIsValidatedWithoutChangingGlobalState) {
+  const auto previous = logging::g_verbosityLevel.load();
+  WorldSessionConfig config;
+  EXPECT_FALSE(config.verbosity.has_value());
+  for (int level = 0; level <= 3; ++level) {
+    applyWorldSessionHandlers(config, {{"verbosity", std::to_string(level)}});
+    EXPECT_EQ(config.verbosity, level);
+    EXPECT_EQ(logging::g_verbosityLevel.load(), previous);
+  }
+  for (const auto* value : {"9", "-1", "oops", "2.5", "3x", ""}) {
+    try {
+      applyWorldSessionHandlers(config, {{"verbosity", value}});
+      FAIL() << value;
+    } catch (const StatusError& error) {
+      EXPECT_NE(error.codeString().find("InvalidArgument"), std::string::npos);
+      EXPECT_NE(std::string(error.what()).find("verbosity"), std::string::npos);
+    }
+  }
+}
+
+TEST_F(WorldSessionModelTest, VerbosityRestoresAcrossOverlappingSessions) {
+  using qvac_lib_inference_addon_cpp::logger::Priority;
+  const auto previous = logging::g_verbosityLevel.load();
+  WorldSessionConfig config;
+  config.verbosity = 3;
+  auto first = std::make_unique<WorldSessionModel>(config);
+  EXPECT_EQ(logging::g_verbosityLevel.load(), Priority::DEBUG);
+  config.verbosity = 1;
+  auto second = std::make_unique<WorldSessionModel>(config);
+  EXPECT_EQ(logging::g_verbosityLevel.load(), Priority::WARNING);
+  first.reset();
+  EXPECT_EQ(logging::g_verbosityLevel.load(), Priority::WARNING);
+  second.reset();
+  EXPECT_EQ(logging::g_verbosityLevel.load(), previous);
+  {
+    WorldSessionModel outer(config);
+    config.verbosity = 3;
+    {
+      WorldSessionModel inner(config);
+      EXPECT_EQ(logging::g_verbosityLevel.load(), Priority::DEBUG);
+    }
+    EXPECT_EQ(logging::g_verbosityLevel.load(), Priority::WARNING);
+  }
+  EXPECT_EQ(logging::g_verbosityLevel.load(), previous);
+}
+
+TEST_F(WorldSessionModelTest, VerbosityDoesNotOverwriteLaterGlobalSetting) {
+  using qvac_lib_inference_addon_cpp::logger::Priority;
+  const auto previous = logging::g_verbosityLevel.load();
+  {
+    WorldSessionConfig config;
+    config.verbosity = 3;
+    WorldSessionModel world(config);
+    std::unordered_map<std::string, std::string> settings{{"verbosity", "2"}};
+    logging::setVerbosityLevel(settings);
+    WorldSessionModel unconfigured(WorldSessionConfig{});
+    EXPECT_EQ(logging::g_verbosityLevel.load(), Priority::INFO);
+  }
+  EXPECT_EQ(logging::g_verbosityLevel.load(), Priority::INFO);
+  logging::g_verbosityLevel = previous;
+}
+
+TEST_F(WorldSessionModelTest, InvalidPlacementThrowsTypedBeforeLoadingModels) {
+  for (const auto* spec :
+       {"vae=disk",
+        "disk",
+        "default=disk",
+        "tae=DISK",
+        "vae=cpu,auto_encoder=disk",
+        "all=disk,diffusion=cpu"}) {
+    WorldSessionConfig config;
+    config.paramsBackend = spec;
+    WorldSessionModel model(config);
+    try {
+      model.load();
+      FAIL() << spec;
+    } catch (const StatusError& error) {
+      EXPECT_NE(error.codeString().find("InvalidArgument"), std::string::npos);
+      EXPECT_NE(std::string(error.what()).find("vae=disk"), std::string::npos);
+    }
+  }
+  for (const auto* spec :
+       {"nan",
+        "inf",
+        "1junk",
+        "cuda0=",
+        "=2",
+        "cuda0=nan,default=4",
+        "1e50",
+        "1=2=3"}) {
+    WorldSessionConfig config;
+    config.maxVram = spec;
+    WorldSessionModel model(config);
+    try {
+      model.load();
+      FAIL() << spec;
+    } catch (const StatusError& error) {
+      EXPECT_NE(error.codeString().find("InvalidArgument"), std::string::npos);
+      EXPECT_NE(std::string(error.what()).find("maxVram"), std::string::npos);
+    }
+  }
+}
+
+TEST_F(
+    WorldSessionHandlersTest, PlacementValidationPreservesEngineAssignments) {
+  for (const auto* spec :
+       {"",
+        "diffusion=disk",
+        "disk,vae=cpu",
+        "vae=disk,tae=cpu",
+        "vae=cpu,default=disk",
+        "diffusion=disk,vae=gpu"}) {
+    EXPECT_NO_THROW(validateWorldPlacement(spec, "")) << spec;
+  }
+  for (const auto* spec :
+       {"",
+        "0",
+        "-1",
+        "4.5",
+        "cuda0=6,vulkan0=-1",
+        "*=4,all=5,default=6",
+        "  , 2 , ",
+        "0,4",
+        "cuda0=1,cuda0=4"}) {
+    EXPECT_NO_THROW(validateWorldPlacement("", spec)) << spec;
+  }
+}
+
+TEST_F(WorldSessionHandlersTest, LayerStreamingUsesEngineAssignmentSyntax) {
+  WorldSessionConfig config{};
+  for (const auto& budget : {"6", "-1", "0", "cuda0=6,vulkan0=-1"}) {
+    applyWorldSessionHandlers(config, {{"maxVram", budget}});
+    EXPECT_EQ(config.maxVram, budget);
+  }
+  applyWorldSessionHandlers(
+      config,
+      {{"paramsBackend", "diffusion=disk,vae=cpu"},
+       {"offloadParamsToCpu", "true"},
+       {"streamLayers", "1"}});
+  EXPECT_EQ(config.paramsBackend, "diffusion=disk,vae=cpu");
+  EXPECT_TRUE(config.offloadParamsToCpu);
+  EXPECT_TRUE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "0"}});
+  EXPECT_FALSE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "true"}});
+  EXPECT_TRUE(config.streamLayers);
+  applyWorldSessionHandlers(config, {{"streamLayers", "false"}});
+  EXPECT_FALSE(config.streamLayers);
+  EXPECT_THROW(
+      applyWorldSessionHandlers(config, {{"streamLayers", "yes"}}),
+      StatusError);
+}
 
 TEST_F(WorldSessionHandlersTest, NumericBooleansParse) {
   WorldSessionConfig config{};
