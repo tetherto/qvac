@@ -31,7 +31,8 @@ function parseArgs (argv) {
     compareDir: null,
     baselineRunId: null,
     baselineRunNumber: null,
-    baselineRunUrl: null
+    baselineRunUrl: null,
+    knownIssues: []
   }
   for (let i = 2; i < argv.length; i++) {
     const t = argv[i]
@@ -45,6 +46,9 @@ function parseArgs (argv) {
     else if (t === '--baseline-run-id') a.baselineRunId = argv[++i]
     else if (t === '--baseline-run-number') a.baselineRunNumber = argv[++i]
     else if (t === '--baseline-run-url') a.baselineRunUrl = argv[++i]
+    // Repeatable. An infrastructure failure the run already knows about, so
+    // the summary names it instead of leaving a silent hole in Coverage.
+    else if (t === '--known-issue') a.knownIssues.push(argv[++i])
   }
   if (!a.dir) {
     throw new Error(
@@ -648,9 +652,22 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
     // saying so would contradict the note above this table.
     const anonRanked = ranked.filter(([, r]) => r.rssAnonBytes !== null && r.rssAnonBytes !== undefined)
     const rssRanked = ranked.filter(([, r]) => r.rssBytes !== null)
-    if (timed.length > 0) {
+    // Desktop cells are a median of five loads, so naming a fastest mode is a
+    // claim the samples support. A mobile cell is ONE load — the 20-minute iOS
+    // per-test ceiling leaves no room for repeats — so crowning a winner there
+    // would rank single samples, contradicting the limitation this report
+    // states. Mobile lists what was observed and stops short of a verdict.
+    if (timed.length > 0 && desktopKeys.has(device)) {
       const fastest = timed.reduce((a, b) => (b[1].loadMs < a[1].loadMs ? b : a))
       out.push(`- fastest load: \`${fastest[0]}\` (${fastest[1].loadMs} ms)`)
+    } else if (timed.length > 0) {
+      const observed = [...timed]
+        .sort((a, b) => a[1].loadMs - b[1].loadMs)
+        .map(([m, r]) => `\`${m}\` ${r.loadMs} ms`)
+        .join(', ')
+      out.push(
+        `- observed load times (one sample each, no timing winner claimed): ${observed}`
+      )
     }
     if (anonRanked.length > 0) {
       const leanest = anonRanked.reduce((a, b) => (b[1].rssAnonBytes < a[1].rssAnonBytes ? b : a))
@@ -700,7 +717,7 @@ function mermaidSection (rows, desktopDevice, chartsUrl) {
   ]
 }
 
-function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseline, chartsUrl) {
+function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseline, chartsUrl, knownIssues = []) {
   const byDevice = new Map()
   for (const r of rows) {
     // Load-mode rows measure load time and residency, not throughput, and
@@ -772,7 +789,25 @@ function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseli
   )
   lines.push('')
 
-  for (const l of coverageLines(rows, desktopDevice, devices, meta.expectedShards)) lines.push(l)
+  // Coverage counts every device that reported ANY row, not just the ones with
+  // throughput. `devices` above deliberately excludes load-mode rows so they do
+  // not render as a wall of "Crashed" in the throughput tables — but reusing
+  // that list here made a load-mode-only run report "0 mobile devices reported"
+  // while the very same report carried iPhone CPU and GPU results.
+  const coverageDevices = [...new Set(rows.map(r => r.device))].sort((a, b) => {
+    if (a === desktopDevice) return -1
+    if (b === desktopDevice) return 1
+    return a.localeCompare(b)
+  })
+  for (const l of coverageLines(rows, desktopDevice, coverageDevices, meta.expectedShards)) lines.push(l)
+  // Named causes for coverage this run already knows it will not have. Without
+  // these the report shows a hole and leaves the reader to guess whether a
+  // platform failed, was not dispatched, or silently dropped its artifacts.
+  if (knownIssues.length > 0) {
+    lines.push('**Known infrastructure failures in this run:**', '')
+    for (const issue of knownIssues) lines.push(`- ${issue}`)
+    lines.push('')
+  }
 
   for (const l of mermaidSection(rows, desktopDevice, chartsUrl)) lines.push(l)
 
@@ -1041,7 +1076,7 @@ function main () {
     return
   }
 
-  const md = render(rows, desktopDevice, meta, args.addonVersion, baselineMap, baseline, args.chartsUrl)
+  const md = render(rows, desktopDevice, meta, args.addonVersion, baselineMap, baseline, args.chartsUrl, args.knownIssues)
   if (args.output) fs.writeFileSync(args.output, md)
   else process.stdout.write(md)
 

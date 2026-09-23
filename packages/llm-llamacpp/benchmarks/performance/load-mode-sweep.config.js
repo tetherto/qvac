@@ -41,6 +41,11 @@ function defaultMainGpus () {
   return [null]
 }
 
+// One appropriate backend per platform by default. Measuring both everywhere
+// would double every leg and would ask for a GPU on the deliberately CPU-only
+// runners; `device=cpu` / `device=gpu` in the selector is how a run opts into
+// the other one, and that explicit choice outranks the workflow's own
+// --load-mode-device (see applyCliOverrides).
 function defaultDevices (platform) {
   return platform === 'android' ? ['cpu', 'gpu'] : ['gpu']
 }
@@ -105,19 +110,26 @@ function applyCliOverrides (sweep, args) {
   //
   // `null` (a bare name) means every quantization the model actually has;
   // buildLoadModeCells skips the ones whose file is missing.
+  // Axes the selector set by name. These outrank the --load-mode-* flags
+  // below: the flags are the workflow's per-leg defaults, the selector is what
+  // the dispatch explicitly asked for. Applying the flags unconditionally made
+  // the documented `device=cpu|gpu` filtering a no-op on every desktop leg,
+  // because the workflow always passed --load-mode-device.
+  const selectorSet = new Set()
   const selected = parseSweepParams(args['sweep-params'])
   if (selected) {
     if (selected.has('load-mode')) {
       const modes = selected.get('load-mode')
-      if (modes !== null) next['load-mode'] = modes.slice()
+      if (modes !== null) { next['load-mode'] = modes.slice(); selectorSet.add('load-mode') }
     }
     if (selected.has('quantization')) {
       const quants = selected.get('quantization')
       next.quantizations = quants === null ? null : quants.slice()
+      selectorSet.add('quantizations')
     }
     if (selected.has('device')) {
       const devices = selected.get('device')
-      if (devices !== null) next.device = devices.slice()
+      if (devices !== null) { next.device = devices.slice(); selectorSet.add('device') }
     }
     if (selected.has('ctx-size')) {
       const ctx = selected.get('ctx-size')
@@ -133,6 +145,7 @@ function applyCliOverrides (sweep, args) {
           )
         }
         next['ctx-size'] = ctx[0]
+        selectorSet.add('ctx-size')
       }
     }
     // Axes the load-mode sweep has no dimension for. Naming one alongside
@@ -150,6 +163,7 @@ function applyCliOverrides (sweep, args) {
   }
   for (const [argKey, sweepKey] of Object.entries(CLI_OVERRIDES)) {
     if (!Object.prototype.hasOwnProperty.call(args, argKey)) continue
+    if (selectorSet.has(sweepKey)) continue
     const values = splitCsv(args[argKey], argKey)
     if (sweepKey === 'main-gpu') {
       next[sweepKey] = values.map((v) => (v === 'none' ? null : v))

@@ -18,18 +18,28 @@ import sys
 # linux-arm64 and darwin-x64 reuse the runners the LLM integration workflow
 # already uses for them.
 #
-# `cpu_only` marks a leg with no usable GPU: the hosted arm64 runners have
-# none, and macos-15-large is a VM whose Metal device reports as "Apple
-# Paravirtual". Those legs still produce valid load-mode evidence — load_mode
-# is about how weights reach memory, and the CPU backend is where the
-# mapped-vs-anonymous residency split is widest — but they must be labelled
-# CPU-forced rather than passed off as GPU measurements.
+# No platform-level device forcing. A leg requests whatever device the sweep
+# selects and the addon reports which backend actually ran, so a GPU request
+# that silently falls back to CPU is recorded as a backend mismatch rather than
+# published as GPU evidence. That is the safety mechanism; hardcoding CPU by
+# platform name would instead quietly change what the requested matrix measures,
+# and this task's whole question is what happens per platform AND device.
+#
+# Evidence, for whoever revisits this:
+#   - ubuntu-22.04-arm genuinely has no GPU (integration-test-llm-llamacpp.yml
+#     marks both ARM64 Ubuntu legs no_gpu, and turboquant.test.js identifies its
+#     Vulkan backend as LLVMpipe software rendering).
+#   - macos-15-large is NOT GPU-less: it exposes an Apple Paravirtual Metal
+#     device. Other integration tests force CPU there because Metal is flaky for
+#     THEM, which does not establish that a load-only benchmark cannot use it.
+# Let the run answer it. `device=cpu` in sweep_params is how a dispatch asks for
+# CPU measurements deliberately.
 RUNNERS = {
     "linux-x64": {"runner": "qvac-ubuntu2204-x64-gpu"},
     "win32-x64": {"runner": "qvac-win25-x64-gpu"},
     "darwin-arm64": {"runner": '["self-hosted", "qvac-macos26-arm64-gpu"]'},
-    "darwin-x64": {"runner": "macos-15-large", "cpu_only": "true"},
-    "linux-arm64": {"runner": "ubuntu-22.04-arm", "cpu_only": "true"},
+    "darwin-x64": {"runner": "macos-15-large"},
+    "linux-arm64": {"runner": "ubuntu-22.04-arm"},
 }
 
 

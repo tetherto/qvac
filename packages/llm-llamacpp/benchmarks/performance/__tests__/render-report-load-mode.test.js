@@ -129,7 +129,15 @@ test('load-mode metrics survive aggregation and reach the rendered table', () =>
   assert.match(md, /\| `mmap` \| 700 \|/, 'mmap load time survives aggregation')
   assert.doesNotMatch(md, /undefined ms/, 'no undefined leaks into the winner line')
   assert.doesNotMatch(md, /null MiB/, 'no null leaks into the winner line')
-  assert.match(md, /fastest load: `mmap` \(700 ms\)/, 'fastest picked on real numbers')
+  // Pixel 8 is a mobile device, and a mobile cell is ONE load. Naming a
+  // fastest mode off single samples would contradict the sampling limitation
+  // this report documents, so mobile lists observed times and crowns nothing.
+  assert.doesNotMatch(md, /fastest load:/, 'no timing winner is crowned on mobile')
+  assert.match(
+    md,
+    /observed load times \(one sample each, no timing winner claimed\): `mmap` 700 ms, `auto` 900 ms/,
+    'mobile reports observed load times, fastest first, without a verdict'
+  )
   // Both margins: auto is the real default, mmap is named by the acceptance
   // criteria, and correcting the first does not remove the second.
   assert.match(md, /Δ vs auto/, 'margin against auto is present')
@@ -159,18 +167,52 @@ test('a mode with no row is flagged as a coverage gap, not omitted', () => {
   assert.match(md, /coverage gap: .*`none`/, 'missing modes are listed explicitly')
 })
 
-test('dio is labelled inert and never crowned', () => {
+// Desktop cells are a median of five loads, so a fastest mode IS claimed
+// there. Built with `desktop: true` — the flag aggregate() reads — because a
+// mobile fixture would make every assertion here pass vacuously.
+function desktopLoadModeReport(results) {
+  return { device: { name: 'Desktop linux-x64' }, addon: 'llamacpp-llm', desktop: true, results }
+}
+
+function desktopRow(mode, loadMs) {
+  return {
+    test: `[qwen3.5-0.8b-Q4_0] [gpu] [rb=-1] [kv=f16] [lm=${mode}]`,
+    status: 'passed',
+    metrics: {
+      ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null,
+      load_ms: loadMs,
+      rss_bytes: 500 * MB, rss_anon_bytes: 130 * MB, rss_file_bytes: 370 * MB, locked_bytes: 0
+    }
+  }
+}
+
+test('desktop crowns a fastest mode, mobile does not', () => {
   const md = render({
-    'perf-pixel.json': perfReport('Pixel 8', [
-      row(LM('auto', 'gpu'), { load_ms: 900 }),
+    'load-mode-perf-linux-x64.json': desktopLoadModeReport([
+      desktopRow('auto', 900),
+      desktopRow('mmap', 700)
+    ])
+  })
+
+  assert.match(md, /fastest load: `mmap` \(700 ms\)/, 'a median-of-five cell supports a verdict')
+  assert.doesNotMatch(md, /observed load times/, 'desktop does not use the mobile hedge')
+})
+
+test('dio is labelled inert and never crowned', () => {
+  // On DESKTOP, where a fastest mode is actually claimed — on mobile this
+  // assertion would hold trivially, since nothing is crowned there at all.
+  const md = render({
+    'load-mode-perf-linux-x64.json': desktopLoadModeReport([
+      desktopRow('auto', 900),
       // dio is the fastest here and must still not win: it is an alias of
       // `none`, so recommending it would mean recommending an inert flag.
-      row(LM('dio', 'gpu'), { load_ms: 100 })
+      desktopRow('dio', 100)
     ])
   })
 
   assert.match(md, /\| `dio` \|.*Inert \(fabric discards the flag\)/, 'dio labelled inert')
   assert.doesNotMatch(md, /fastest load: `dio`/, 'dio excluded from the winner pick')
+  assert.match(md, /fastest load: `auto`/, 'the crown goes to the fastest non-inert mode')
 })
 
 test('an mlock that locked nothing is not reported as a plain success', () => {

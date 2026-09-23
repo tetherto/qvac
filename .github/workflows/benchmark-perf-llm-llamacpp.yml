@@ -311,14 +311,19 @@ jobs:
       - name: Download prebuilds (from artifacts)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
-          path: ${{ runner.temp }}/prebuilds-staging
+          # Workspace-relative, NOT ${{ runner.temp }}: on Windows that expands
+          # to a backslash path (D:\a\_temp), and the backslashes are escape
+          # characters to the Git Bash step below, which mangled the path and
+          # failed the whole win32-x64 leg of run 35778027044 before the sweep
+          # ran. A relative path has no backslashes on any runner.
+          path: prebuilds-staging
           merge-multiple: true
 
       - name: Move prebuilds into the addon
         shell: bash
         run: |
           mkdir -p packages/llm-llamacpp/prebuilds
-          cp -r ${{ runner.temp }}/prebuilds-staging/* packages/llm-llamacpp/prebuilds/
+          cp -r prebuilds-staging/* packages/llm-llamacpp/prebuilds/
           ls -la packages/llm-llamacpp/prebuilds/
 
       - name: Detect GPU
@@ -367,16 +372,16 @@ jobs:
         shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
-          # CPU-only legs force the CPU backend explicitly rather than letting
-          # device selection fall back to it silently, so the rows say what
-          # they measured.
-          LOAD_MODE_DEVICE: ${{ matrix.cpu_only == 'true' && 'cpu' || 'gpu' }}
+          # No device is forced here. The leg requests what the sweep selects,
+          # and a GPU request that silently lands on the CPU is recorded as a
+          # backend mismatch rather than published as GPU evidence — that, not
+          # a platform-name allowlist, is what keeps the report honest.
+          # `device=cpu` in sweep_params asks for CPU measurements deliberately.
           SWEEP_PARAMS: ${{ needs.context.outputs.sweep_params }}
         run: |
           node ./load-mode-sweep.js \
             --addon-source local \
             --platform "$PLATFORM" \
-            --load-mode-device "$LOAD_MODE_DEVICE" \
             --sweep-params "$SWEEP_PARAMS" \
             --results-dir results/parameter-sweep
 
@@ -606,6 +611,14 @@ jobs:
               ARGS+=(--baseline-run-url "https://github.com/$REPO/actions/runs/$COMPARE_RUN_ID")
             fi
           fi
+
+          # Android cannot currently run ANY llm-llamacpp integration test: the
+          # bundle reaches bare-type (brittle -> bare-assert -> bare-inspect ->
+          # bare-type) and the app links no libbare-type, so every shard dies
+          # with ADDON_NOT_FOUND before its body runs. Naming it here keeps the
+          # summary from showing an unexplained hole where Android should be.
+          # Remove this once the mobile app links the addon.
+          ARGS+=(--known-issue "Android: every shard fails with ADDON_NOT_FOUND on bare-type (brittle -> bare-assert -> bare-inspect -> bare-type; the app links no libbare-type), so no Android row appears below. iOS is unaffected. Pre-existing — this workflow last ran mobile in July 2026.")
 
           node packages/llm-llamacpp/benchmarks/performance/render-report.js "${ARGS[@]}"
 

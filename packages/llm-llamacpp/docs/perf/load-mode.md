@@ -200,6 +200,27 @@ absent, not as zero — on platforms without `/proc`. `rss` is
 `model-fit`'s calibration harness and `asr-ggml`'s `memory-usage.js` use, so
 figures stay comparable across packages.
 
+## Desktop and mobile do not measure to the same precision
+
+Desktop takes five samples per cell, each in its own process, and reports a
+median. **Mobile takes one.** A Device Farm shard loads the model once and
+runs its generations against that load, so `load_ms` is a single sample
+repeated across the cell's rows — there is no spread to report and no median
+to protect against an outlier.
+
+That follows from how the mobile harness is built: a shard loads once and
+reuses that load for its generations, and shards run against the 20-minute iOS
+per-test ceiling. Adding repeated loads would mean reworking the shard, which
+this task did not do.
+
+The consequence is that **no mobile load-time margin here is backed by a
+spread**, so this document states mobile load times as observed values and
+draws no timing verdict from them — the report generator does the same, naming
+a fastest mode on desktop cells only. The memory figures do not have this
+problem: they are a property of the load rather than a timing, and the
+mapped-versus-anonymous gap is hundreds of MiB. The mobile verdicts below
+therefore rest on residency.
+
 ## Method, and why each measurement is its own process
 
 Every cell is measured in a fresh process. This is load-bearing, not hygiene:

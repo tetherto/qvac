@@ -138,14 +138,44 @@ function mib (bytes) {
   return Math.round((bytes / (1024 * 1024)) * 10) / 10
 }
 
+// How to invoke bare, resolved once. A bare `spawnSync('bare', ...)` depends on
+// bare being on PATH: it is on the linux-x64 runner and on dev machines, and is
+// not on darwin-x64 or linux-arm64, where every cell of run 35778027044 failed
+// with a null exit and no stderr. `npx --yes bare` is what the workflow already
+// uses for llm-parameter-sweep.js, so prefer PATH and fall back to that.
+let _bareCommand = null
+function bareCommand () {
+  if (_bareCommand) return _bareCommand
+  const onPath = spawnSync('bare', ['--version'], { encoding: 'utf8' })
+  _bareCommand = onPath.error ? ['npx', '--yes', 'bare'] : ['bare']
+  if (onPath.error) console.log(`bare not on PATH (${onPath.error.code}); using \`npx --yes bare\``)
+  return _bareCommand
+}
+
+// Does this record carry a measurement anyone can use?
+//
+// Not the same question as "did the probe exit cleanly". A cell that requested
+// the GPU and silently ran on the CPU loaded fine and reports a time, but the
+// renderer already marks it "not a comparable row" — counting it as data would
+// let an all-GPU leg that quietly fell back to CPU pass the no-data guard while
+// producing nothing the report can use.
+function isUsableRecord (r) {
+  if (r.status === 'failed') return false
+  if (r.loadMsMedian == null) return false
+  if (r.backendDevice && r.requestedDevice && r.backendDevice !== r.requestedDevice) return false
+  return true
+}
+
 // One measurement = one process. Returns the probe's parsed JSON, or a failure
 // record carrying whatever the probe managed to say.
 function runProbe (modelPath, config, addonSource, tmpDir, label) {
   const configPath = nodePath.join(tmpDir, `config-${label}.json`)
   nodeFs.writeFileSync(configPath, JSON.stringify(config))
+  const [command, ...prefix] = bareCommand()
   const result = spawnSync(
-    'bare',
+    command,
     [
+      ...prefix,
       nodePath.resolve(__dirname, 'load-mode-probe.js'),
       '--model', modelPath,
       '--config', configPath,
@@ -162,8 +192,12 @@ function runProbe (modelPath, config, addonSource, tmpDir, label) {
     .find((line) => line.trim().startsWith('{') && line.includes('"ok"'))
 
   if (!jsonLine) {
+    // result.error carries spawn-level failures (ENOENT, EACCES), where stderr
+    // is undefined and status is null. Reporting only the stderr tail turned a
+    // missing `bare` into a blank "exit null:" on every cell of two CI legs.
     const stderrTail = (result.stderr || '').trim().split('\n').slice(-3).join(' | ')
-    return { ok: false, error: `probe produced no result (exit ${result.status}): ${stderrTail}` }
+    const spawnError = result.error ? `${result.error.code || result.error.message}: ` : ''
+    return { ok: false, error: `${spawnError}probe produced no result (exit ${result.status}): ${stderrTail}` }
   }
   try {
     return JSON.parse(jsonLine)
@@ -172,8 +206,13 @@ function runProbe (modelPath, config, addonSource, tmpDir, label) {
   }
 }
 
-function classify (cell, loadSamples) {
+function classify (cell, loadSamples, backendDevice) {
   if (loadSamples.length === 0) return 'failed'
+  // A cell that asked for one device and ran on another measured something
+  // real, but not the thing it was asked to measure. Calling it 'measured'
+  // would let a GPU-less runner publish CPU timings under a GPU heading, so
+  // it gets its own status and is excluded from the usable-record count.
+  if (backendDevice && backendDevice !== cell.device) return 'backend-mismatch'
   // dio is accepted by the addon but never reaches the file open in fabric
   // (llama-model-load.cpp drops use_direct_io), so it cannot be distinguished
   // from `none` by measurement. Say so rather than reporting a phantom margin.
@@ -298,7 +337,8 @@ function main () {
       : null
     const backendDevices = [...new Set(cellSamples.map((s) => s.backendDevice).filter(Boolean))]
 
-    const status = failure ? 'failed' : classify(cell, loadSamples)
+    const resolvedBackend = backendDevices.length === 1 ? backendDevices[0] : null
+    const status = failure ? 'failed' : classify(cell, loadSamples, resolvedBackend)
     const record = {
       caseId: cell.caseId,
       modelId: cell.modelId,
@@ -391,6 +431,16 @@ function main () {
   console.log(`wrote ${reportPath}`)
   nodeFs.rmSync(tmpDir, { recursive: true, force: true })
   console.log(`\nwrote ${mdPath}`)
+
+  // A mode that cannot load is a legitimate result and stays a `failed` row.
+  // A leg where NOTHING loaded is not data, it is a broken runner, and it must
+  // not report success: darwin-x64 and linux-arm64 both went green on 0/18 in
+  // run 35778027044, and the artifacts looked like real (empty) reports.
+  const measured = records.filter(isUsableRecord)
+  if (measured.length === 0) {
+    console.error(`\nload-mode sweep: 0 of ${records.length} cells produced a usable measurement — no data.`)
+    process.exitCode = 1
+  }
 }
 
 // Grouped by the thing that decides the answer: the device the load targets.

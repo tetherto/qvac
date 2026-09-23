@@ -122,3 +122,29 @@ test('every selector still yields a non-empty mobile batch list', () => {
     assert.ok(plan(sel).batches.length > 0, `"${sel}" selects at least one mobile batch`)
   }
 })
+
+test('an explicit device= in the selector outranks --load-mode-device', () => {
+  // The workflow passes --load-mode-device on its CPU-only legs. That is a
+  // per-leg default, not a decision: a dispatch that names device= must win,
+  // or the documented device filtering is a no-op wherever the flag is set.
+  const sweep = applyCliOverrides(createLoadModeSweep('linux'), {
+    'sweep-params': 'load-mode=auto,device=gpu',
+    'load-mode-device': 'cpu'
+  })
+  assert.deepStrictEqual(sweep.device, ['gpu'], 'selector device must beat the flag')
+})
+
+test('--load-mode-device still applies when the selector is silent about device', () => {
+  const sweep = applyCliOverrides(createLoadModeSweep('linux'), {
+    'sweep-params': 'load-mode=auto',
+    'load-mode-device': 'cpu'
+  })
+  assert.deepStrictEqual(sweep.device, ['cpu'], 'the per-leg default still applies')
+})
+
+test('the desktop default stays one backend, not both', () => {
+  // Measuring both everywhere doubles every leg and asks for a GPU on the
+  // deliberately CPU-only runners. Opting in is what device= is for.
+  assert.deepStrictEqual(createLoadModeSweep('linux').device, ['gpu'])
+  assert.deepStrictEqual(createLoadModeSweep('android').device, ['cpu', 'gpu'])
+})
