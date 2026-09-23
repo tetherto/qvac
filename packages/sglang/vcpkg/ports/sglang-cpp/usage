@@ -1,0 +1,13 @@
+sglang-cpp installs the native server next to its rank worker:
+
+    bin/sglang_cpp_server
+    bin/sgl_qwen_rank_worker
+
+Pass --artifacts the package root, which contains the architecture
+directory (sm90/ or sm121/) and registry/models-887c401e1.json:
+
+    lib/sglang-cpp/
+
+The server looks for sgl_qwen_rank_worker beside its own executable, or at
+SGL_CPP_RANK_WORKER. CUDA, LibTorch, and NCCL are host libraries and are not
+bundled in this port.

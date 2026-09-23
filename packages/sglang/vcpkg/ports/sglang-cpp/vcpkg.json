@@ -1,0 +1,13 @@
+{
+  "name": "sglang-cpp",
+  "version-date": "2026-09-22",
+  "description": "Native SGLang C++/LibTorch server binaries and packaged AOT kernels",
+  "homepage": "https://github.com/jpgaribotti/sglang-cpp",
+  "supports": "linux",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}

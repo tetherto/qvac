@@ -1,0 +1,45 @@
+{
+  "name": "@qvac/sglang",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Experimental wrapper that stages and launches the sglang-cpp server",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "sglang-cpp-server": "./bin/sglang-cpp-server.js"
+  },
+  "files": [
+    "index.js",
+    "bin",
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "cmake -S . -B build",
+    "test": "node --test test/*.test.js",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write ."
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/sglang"
+  },
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/sglang/packages/sglang#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "cmake-vcpkg": "^1.2.0",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0"
+  }
+}
