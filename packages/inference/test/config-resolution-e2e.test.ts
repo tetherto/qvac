@@ -106,6 +106,38 @@ test('no patterns match = schema defaults only', (t) => {
   t.is(result.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
 })
 
+// QVAC-25039: gpu_layers must stay absent from a resolved config unless the
+// caller asked for it. Any value at all reads as user intent to qvac-fabric,
+// which then refuses to run its automatic GPU/CPU placement — it aborts with
+// "n_gpu_layers already set by user" and the model loads with every layer on
+// the GPU. Unset hands the addon fabric's own -1, which already means "every
+// layer" whenever the fit does not run.
+test('no gpu_layers default is injected, so the runtime fit can run', (t) => {
+  const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
+
+  t.absent('gpu_layers' in LLM_CONFIG_DEFAULTS, 'not in the schema defaults')
+
+  const resolved = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    {},
+    ctx,
+    [],
+    []
+  )
+  t.absent('gpu_layers' in resolved, 'not in a resolved config either')
+
+  // The escape hatch still works: an explicit value is passed through, and
+  // pinning the layer count is what turns the fit off.
+  const pinned = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    { gpu_layers: 12 },
+    ctx,
+    [],
+    []
+  )
+  t.is(pinned.gpu_layers, 12, 'an explicit gpu_layers still pins the count')
+})
+
 // Resolution parses through the permissive base schema, so the retired key
 // is dropped here too rather than failing the load.
 test('config resolution strips retired n_discarded instead of rejecting it', (t) => {
