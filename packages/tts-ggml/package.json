@@ -1,7 +1,7 @@
 {
   "name": "@qvac/tts-ggml",
   "version": "0.9.2",
-  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 engines from tts-cpp)",
+  "description": "Text to Speech (TTS) addon for qvac (ggml backend, wrapping the chatterbox + supertonic + parler + cosyvoice3 + audio8 + moss engines from tts-cpp)",
   "addon": true,
   "engines": {
     "bare": ">=1.19.0"
@@ -57,6 +57,7 @@
     "example:parler": "bare examples/parler-tts.js \"Hey, how are you doing today?\"",
     "example:parler-enhanced": "bare examples/parler-enhanced.js \"Hello from enhanced Parler.\"",
     "example:audio8": "bare examples/audio8-tts.js \"Audio eight speaks on-device.\"",
+    "example:moss": "bare examples/moss-tts.js \"MOSS speaks on-device.\"",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
     "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",

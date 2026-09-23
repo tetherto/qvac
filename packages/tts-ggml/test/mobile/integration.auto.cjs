@@ -46,6 +46,10 @@ async function runLavasrEnhancerTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/lavasr-enhancer.test.js', options)
 }
 
+async function runMossTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/moss.test.js', options)
+}
+
 async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multiple-runs.test.js', options)
 }
@@ -93,6 +97,7 @@ module.exports = {
   runCosyvoice3Test,
   runGpuSmokeTest,
   runLavasrEnhancerTest,
+  runMossTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,
   runParlerWerTest,
