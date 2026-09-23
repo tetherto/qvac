@@ -231,7 +231,7 @@ function describeProbeFailure (result) {
 
 // One measurement = one process. Returns the probe's parsed JSON, or a failure
 // record carrying whatever the probe managed to say.
-function runProbe (modelPath, config, addonSource, tmpDir, label) {
+function runProbe (modelPath, config, addonSource, tmpDir, label, extraArgs = []) {
   const configPath = nodePath.join(tmpDir, `config-${label}.json`)
   nodeFs.writeFileSync(configPath, JSON.stringify(config))
   const { command, prefix } = bareCommand()
@@ -242,7 +242,8 @@ function runProbe (modelPath, config, addonSource, tmpDir, label) {
       nodePath.resolve(__dirname, 'load-mode-probe.js'),
       '--model', modelPath,
       '--config', configPath,
-      '--addon-source', addonSource
+      '--addon-source', addonSource,
+      ...extraArgs
     ],
     { cwd: __dirname, encoding: 'utf8', env: process.env, maxBuffer: 64 * 1024 * 1024 }
   )
@@ -373,7 +374,11 @@ function main () {
         const modelPath = nodePath.join(cell.modelDir, cell.modelName)
         const probe = runProbe(modelPath, stringify(cell.config), addonSource, tmpDir, `${cell.caseId}-${repeat}`)
         if (!probe.ok) {
-          failures.set(cell.caseId, probe.error)
+          // Re-run once with the native log attached. The addon's own error
+          // ("Failed to initialize model") does not say why; llama.cpp's log
+          // does. Only failed cells pay for it, and never a measured sample.
+          const diag = runProbe(modelPath, stringify(cell.config), addonSource, tmpDir, `${cell.caseId}-diag`, ['--diagnose'])
+          failures.set(cell.caseId, !diag.ok && diag.error && diag.error.length > probe.error.length ? diag.error : probe.error)
           continue
         }
         samples.get(cell.caseId).push(probe)

@@ -15,7 +15,14 @@
 const path = require('bare-path')
 const fs = require('bare-fs')
 const process = require('bare-process')
-const { resolveAddonCtor, parseAddonSource, parseArgs, readMemorySample, diffMemorySamples } = require('./utils')
+const {
+  resolveAddonCtor,
+  resolveAddonLogging,
+  parseAddonSource,
+  parseArgs,
+  readMemorySample,
+  diffMemorySamples
+} = require('./utils')
 const { elapsedMs } = require('./math')
 
 const SETTLE_MS = 500
@@ -25,6 +32,14 @@ const SETTLE_MS = 500
 // win32 leg once failed all 36 cells with nothing else to go on.
 const ENGINE_LOG_TAIL = 8
 const engineLog = []
+
+// --diagnose: also capture llama.cpp's native log, which is where the reason
+// for a failed load actually is (the JS logger above only sees the addon's
+// own messages). Only the orchestrator's one-off re-run of a failed cell
+// passes it, so no measured load pays for native-to-JS log callbacks.
+const NATIVE_LOG_TAIL = 30
+const NATIVE_PRIORITY = ['ERROR', 'WARNING', 'INFO', 'DEBUG']
+const nativeLog = []
 
 function keepLog (level) {
   return (...args) => {
@@ -42,7 +57,15 @@ async function main () {
   const modelPath = args.model
   if (!modelPath) throw new Error('--model is required')
   const config = JSON.parse(fs.readFileSync(args.config, 'utf8'))
-  const AddonCtor = resolveAddonCtor(parseAddonSource(args['addon-source']))
+  const addonSource = parseAddonSource(args['addon-source'])
+  const AddonCtor = resolveAddonCtor(addonSource)
+  if (args.diagnose) {
+    resolveAddonLogging(addonSource).setLogger((priority, message) => {
+      nativeLog.push(`${NATIVE_PRIORITY[priority] || priority}: ${String(message).trim()}`)
+      if (nativeLog.length > NATIVE_LOG_TAIL) nativeLog.shift()
+    })
+    config.verbosity = '2'
+  }
 
   await settle()
   const before = readMemorySample()
@@ -105,9 +128,8 @@ async function main () {
 
 main().catch((err) => {
   const message = err && err.message ? err.message : String(err)
-  console.log(JSON.stringify({
-    ok: false,
-    error: engineLog.length ? `${message} — engine log: ${engineLog.join(' | ')}` : message
-  }))
+  let error = engineLog.length ? `${message} — engine log: ${engineLog.join(' | ')}` : message
+  if (nativeLog.length) error += ` — native log: ${nativeLog.join(' | ')}`
+  console.log(JSON.stringify({ ok: false, error }))
   process.exit(1)
 })

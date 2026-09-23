@@ -52,6 +52,11 @@ function loadNpmLlmAddon () {
   return require('@qvac/llm-llamacpp')
 }
 
+// The native log hook of the same addon build resolveAddonCtor loads.
+function resolveAddonLogging (addonSource) {
+  return addonSource === 'npm' ? require('@qvac/llm-llamacpp/addonLogging') : require('../../addonLogging')
+}
+
 function parseAddonSource (value) {
   const normalized = String(value || 'local').trim().toLowerCase()
   if (normalized === 'local' || normalized === 'npm') return normalized
@@ -203,6 +208,7 @@ function buildConfigObject (runtimeConfig) {
 }
 
 module.exports = {
+  resolveAddonLogging,
   DEFAULT_SWEEP_CTX_SIZES,
   DEFAULT_SWEEP_BATCH_SIZES,
   PROMPT_CTX_SIZES,
