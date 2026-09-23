@@ -1,13 +1,13 @@
 ---
-name: release-fabric-consumers
-description: Release the qvac-fabric consumers to npm after the bundled version-bump PR merges — one release branch + on-merge dispatch per consumer, stopping at the npm approval gate. Supports --exclude to hold packages back. Phase C after rollout-phase-b.
+name: release-fabric-consumers-a
+description: Release the qvac-fabric VCPKG consumers to npm after the bundled version-bump PR merges — one release branch + on-merge dispatch per consumer, stopping at the npm approval gate. Supports --exclude to hold packages back. Phase C after rollout-phase-b. For the npm-runtime consumers (classification-ggml, vla-ggml) use release-fabric-consumers-b instead.
 argument-hint: "[base-branch] [--exclude <pkg>[,<pkg>...]]"
 disable-model-invocation: true
 ---
 
-# Release qvac-fabric consumers to npm
+# Release qvac-fabric vcpkg consumers to npm
 
-Publish the **qvac-fabric consumers** to npm in one coordinated pass. This is the
+Publish the **qvac-fabric vcpkg consumers** to npm in one coordinated pass. This is the
 final phase of a fabric rollout — the step **after** `rollout-phase-b`'s bundled
 version-bump PR (vcpkg `version>=` + `package.json` + `CHANGELOG.md` for the full roster)
 has merged to `main`. It applies the single-package `release` workflow to every consumer
@@ -18,22 +18,22 @@ It reuses the same mechanics as `/release` (cut a `release-*` branch → dispatc
 the `latest` tag, and creates a git tag), but for the whole release set, and it is aware
 of the per-consumer quirks and the mandatory human approval gate.
 
-**The release set** is the full consumer roster (see the table below) minus anything named
+**The release set** is the full consumer roster (derived — see *The consumers* below) minus anything named
 in `--exclude`. Every step below operates on the release set, not the roster.
 
 ## Usage
 
-`/release-fabric-consumers [base-branch] [--exclude <pkg>[,<pkg>...]]`
+`/release-fabric-consumers-a [base-branch] [--exclude <pkg>[,<pkg>...]]`
 
 ```
-/release-fabric-consumers
-/release-fabric-consumers main --exclude model-fit
-/release-fabric-consumers main --exclude model-fit,vla-ggml
+/release-fabric-consumers-a
+/release-fabric-consumers-a main --exclude model-fit
+/release-fabric-consumers-a main --exclude model-fit,ocr-ggml
 ```
 
 - `[base-branch]` — optional; the branch the version bumps landed on. Defaults to `main`.
 - `--exclude <pkg>[,<pkg>...]` — optional; comma-separated **`packages/` directory names**
-  (the first column of the consumer table) to hold back from this pass. Everything else in
+  (as they appear in the derived roster) to hold back from this pass. Everything else in
   the roster is released.
 
 **Validate `--exclude` before touching anything.** A value that does not match a `packages/`
@@ -44,9 +44,8 @@ every consumer is likewise an error, not an empty success.
 
 ## Prerequisites
 
-- The consumer bump is **merged to `<base-branch>`** — either `rollout-phase-b`'s own bundled PR
-  (e.g. qvac#3334) or, in `--on-top-of-pr` mode, the feature PR the bumps rode in on (e.g.
-  qvac#3725). The target versions live on `origin/<base-branch>`.
+- The bundled consumer bump PR (the `rollout-phase-b` output — e.g. qvac#3334) is
+  **merged to `<base-branch>`**. The target versions live on `origin/<base-branch>`.
 - For each consumer **in the release set**, `origin/<base-branch>`'s `package.json` version is
   **higher** than the current npm `latest` (i.e. npm is one bump behind). If not, the version
   bump PR hasn't merged yet — stop.
@@ -87,23 +86,50 @@ roster on schedule while a first-publish package waits.
 
 ## The consumers
 
-This table is the **full roster**. The release set is this list minus `--exclude`.
+### THE ROSTER IS DERIVED, NEVER RECALLED
+
+This is the **same roster `/rollout-phase-a` and `/rollout-phase-b` derive** — the packages whose
+version bumps Phase B just landed. Derive it the same way, every time:
+```bash
+git -C <repo> grep -l "qvac-fabric" origin/main -- "packages/*/vcpkg.json"
+```
+Print the list and its count `<N>`, and use **that** everywhere below that says "the consumers" or
+"the roster". The release set is that list minus `--exclude`.
+
+**Snapshot — 2026-09-18:** just **two** packages, `fabric` and `llm-llamacpp`.
+
+The roster went 7 → 6 → 2 as addons migrated off the vcpkg port to the published npm package
+`@qvac/fabric`: `classification-ggml`, then `vla-ggml`
+([#3998](https://github.com/tetherto/qvac/pull/3998), 2026-09-01), then `model-fit`, `ocr-ggml`,
+`translation-nmtcpp` and `embed-llamacpp` (qvac#4362, `581b1d094`). All six now pin `@qvac/fabric`
+in `package.json` instead, so **none of them belongs in this pass** — they are released by
+**`/release-fabric-consumers-b`**, which bumps their caret once the new `fabric` is actually on npm
+(see *Release `fabric` first* below for why that follow-up is needed at all). Older runs and reports
+will still mention them. Do not re-add one.
+
+### Per-package release facts
+
+Look each package up here once the roster is derived. The workflow-name and git-tag columns are
+**not** uniform — see Restrictions & nuances.
 
 | Package dir (`packages/`) | npm name | on-merge workflow | git-tag created |
 |---|---|---|---|
-| `embed-llamacpp` | `@qvac/embed-llamacpp` | `on-merge-embed-llamacpp.yml` | `llamacpp-embed-v<ver>` |
 | `fabric` | `@qvac/fabric` | `on-merge-fabric.yml` | `fabric-v<ver>` |
 | `llm-llamacpp` | `@qvac/llm-llamacpp` | `on-merge-llm-llamacpp.yml` | `llamacpp-llm-v<ver>` |
-| `model-fit` | `@qvac/model-fit` | `on-merge-model-fit.yml` | `model-fit-v<ver>` |
-| `ocr-ggml` | `@qvac/ocr-ggml` | `on-merge-ocr-ggml.yml` | `ocr-ggml-v<ver>` |
-| `translation-nmtcpp` | `@qvac/translation-nmtcpp` | `on-merge-translation-nmtcpp.yml` | `v<ver>` (bare) |
-| `vla-ggml` | `@qvac/vla-ggml` | **`on-merge-vla.yml`** ⚠️ | `vla-v<ver>` |
 
-The workflow-name and git-tag columns are **not** uniform — see Restrictions & nuances.
+If the derived roster contains a package that is **not** in this table, do not guess its workflow or
+tag: read `repo_name` out of its `on-merge-*.yml` (see Restrictions & nuances) and add the row.
+Historical rows, for reading old reports: `embed-llamacpp` → `llamacpp-embed-v<ver>`, `model-fit` →
+`model-fit-v<ver>`, `ocr-ggml` → `ocr-ggml-v<ver>`, `translation-nmtcpp` → `translation-nmtcpp-v<ver>`
+(older `nmtcpp-v<ver>` tags predate a rename; both exist on the remote).
 
-`classification-ggml` is **not** in this list. It dropped the `qvac-fabric` vcpkg
-dependency and now consumes the published npm package `@qvac/fabric`, so it is not part
-of a fabric rollout — see *Release `fabric` first* below for the one follow-up it needs.
+**`.github/fabric-consumers.json` on `origin/main` is the authority**, not this table. It
+lists the npm-runtime consumers under `npm_runtime`. Read it at the start of a pass — a
+package can migrate between rollouts, and this table is a snapshot:
+
+```bash
+git -C <repo> show origin/main:.github/fabric-consumers.json
+```
 
 ## Working repo & the golden guardrail
 
@@ -124,27 +150,36 @@ build-validated on the fabric sync PR; a canary-first order is a fine alternativ
 ### Release `fabric` first
 
 `@qvac/fabric` is the shared runtime addon the others build against, and it is also a
-**caret dependency of `@qvac/classification-ggml`**. Publish it ahead of the rest so
-downstream installs resolve against the new build rather than the previous one.
+**caret dependency of the npm-runtime consumers** — `@qvac/classification-ggml` and
+`@qvac/vla-ggml`. Publish it ahead of the rest so downstream installs resolve against the
+new build rather than the previous one.
 
-Then check the caret. Read both values rather than assuming either — they move every
+Then check each caret. Read both sides rather than assuming either — they move every
 release, so any version written here would be wrong by the time you read it:
 
 ```bash
 git -C <repo> grep -h "@qvac/fabric" origin/main -- packages/classification-ggml/package.json
+git -C <repo> grep -h "@qvac/fabric" origin/main -- packages/vla-ggml/package.json
 git -C <repo> grep -h '"version"' origin/main -- packages/fabric/package.json
 ```
 
 On a `0.x` version **a caret locks the minor**: `^0.<m>.<p>` absorbs later `0.<m>.x`
 automatically but will **not** cross to `0.<m+1>.0`. So if this release moves
-`@qvac/fabric`'s minor past the one classification-ggml's caret pins,
-`classification-ggml` needs a manual dependency bump — track it as a **follow-up after the
-release**, not as part of the rollout PR. This has happened before and is expected to
-recur; `packages/classification-ggml/CHANGELOG.md` records each crossing.
+`@qvac/fabric`'s minor past the one a consumer's caret pins, that consumer needs a manual
+dependency bump — track it as a **follow-up after the release**, not as part of the
+rollout PR. That follow-up is exactly what **`/release-fabric-consumers-b`** does: it waits
+for the new `@qvac/fabric` to be published, bumps both carets in one PR, and releases the
+two addons. This has happened before and is expected to recur; each package's
+`CHANGELOG.md` records its crossings.
+
+They are not necessarily in step with each other or with `fabric`: as of 2026-09-01
+`classification-ggml` pinned `^0.8.0` and `vla-ggml` `^0.9.0` against a published
+`fabric 0.9.0`, so one was already a minor behind. Check each separately; do not infer one
+from the other.
 
 If `fabric` is in `--exclude`, this ordering step does not apply to that pass and the
-`classification-ggml` caret follow-up does not arise — release the rest of the set in
-parallel and say in the report that the ordering constraint was moot.
+caret follow-ups do not arise — release the rest of the set in parallel and say in the
+report that the ordering constraint was moot.
 
 ### Step 1 — Sync and read target versions
 ```bash
@@ -170,8 +205,8 @@ git -C <repo> push origin release-<pkg>-<ver>                    # non-force, no
 ```bash
 gh workflow run "<on-merge-wf>" --repo tetherto/qvac --ref release-<pkg>-<ver>
 ```
-The workflow file for `vla-ggml` is `on-merge-vla.yml`. Pushing a fresh `release-*` branch
-usually does **not** auto-trigger (path filter sees no new commits), so the explicit
+Take the workflow file from the roster table — the names are not uniform. Pushing a fresh
+`release-*` branch usually does **not** auto-trigger (path filter sees no new commits), so the explicit
 dispatch is the trigger — but check `gh run list --branch release-<pkg>-<ver>` and, if a
 push-triggered run already exists, do NOT double-dispatch.
 
@@ -195,7 +230,7 @@ consumer table, and nothing else on those lines:
 <addon>: <CI run link>
 ```
 
-- `<addon>` is the **`packages/` directory name** (`fabric`, `embed-llamacpp`, `vla-ggml`,
+- `<addon>` is the **`packages/` directory name** (`fabric`, `embed-llamacpp`, `ocr-ggml`,
   `translation-nmtcpp`, …) — not the npm name, not the workflow name.
 - `<CI run link>` is the run's `url` from the `gh run list --json` call above, i.e.
   `https://github.com/tetherto/qvac/actions/runs/<run-id>`.
@@ -210,9 +245,9 @@ Worked example (`--exclude model-fit`):
 fabric: https://github.com/tetherto/qvac/actions/runs/31390432306
 embed-llamacpp: https://github.com/tetherto/qvac/actions/runs/31390431726
 llm-llamacpp: https://github.com/tetherto/qvac/actions/runs/31390432200
-ocr-ggml: https://github.com/tetherto/qvac/actions/runs/31390430929
-translation-nmtcpp: https://github.com/tetherto/qvac/actions/runs/31390430912
-vla-ggml: https://github.com/tetherto/qvac/actions/runs/31390432221 — build running
+model-fit: https://github.com/tetherto/qvac/actions/runs/31390430929
+ocr-ggml: https://github.com/tetherto/qvac/actions/runs/31390430912
+translation-nmtcpp: https://github.com/tetherto/qvac/actions/runs/31390432221 — build running
 ```
 
 After the list, note the gate detail once — gated job `publish-npm`, environment `npm`, and which
@@ -237,17 +272,19 @@ Consolidated table: package, npm `latest`, git tag, public-install ✓, CI run l
 branches are never merged back to `main`; offer to delete the leftover local branches.
 
 State explicitly which packages were **excluded and why** (e.g. `model-fit — first publish, awaiting
-dated CHANGELOG entry and version decision`). A pass that silently covers six of seven is
+dated CHANGELOG entry and version decision`). A pass that silently covers `<N>-1` of `<N>` is
 indistinguishable later from one that dropped a package by accident.
 
 ## Restrictions & nuances (hard-won)
 
-- **Workflow-name map is not uniform.** 6 consumers use `on-merge-<pkg>.yml`, but
-  **`vla-ggml` uses `on-merge-vla.yml`** (short name, no `-ggml`). This is the release
-  (on-merge) workflow — distinct from the PR-validation workflow `on-pr-vla.yml`.
+- **Workflow-name map is not uniform.** Both current consumers use `on-merge-<pkg>.yml`, but do
+  not generalise that — the roster has carried exceptions before (`vla-ggml`, while it was
+  a consumer, used `on-merge-vla.yml`: short name, no `-ggml`). Read the table, and note the
+  release (on-merge) workflow is distinct from the PR-validation `on-pr-<pkg>.yml`.
 - **git-tag naming varies per package** — do NOT assume `<pkg>-v<ver>`. Use the table:
-  `llamacpp-embed-v<ver>`, `fabric-v<ver>`, `llamacpp-llm-v<ver>`, `model-fit-v<ver>`,
-  `ocr-ggml-v<ver>`, bare `v<ver>` for `translation-nmtcpp`, and `vla-v<ver>`.
+  `fabric-v<ver>` and `llamacpp-llm-v<ver>` for the current roster, and note that the
+  migrated packages used `llamacpp-embed-v<ver>`, `model-fit-v<ver>`, `ocr-ggml-v<ver>` and
+  `translation-nmtcpp-v<ver>` — several do not follow the directory name mechanically.
   The tag comes from `create-release-tag.yml`, which builds `<repo_name>-v<published_version>`
   from the `repo_name` each `on-merge-*.yml` passes it — read that input if a new consumer
   appears rather than guessing from the directory name.
@@ -294,6 +331,6 @@ llm-llamacpp 29736366470, ocr-ggml 29736373159, translation-nmtcpp 29736374927,
 vla-ggml 29736376662. All paused at `publish-npm`; after a `qvac-internal-release` member
 approved, all 6 published to npm `latest` and created their (differently-named) git tags.
 
-This is a **historical record, not the current roster** — `classification-ggml` was still a
-fabric consumer then, and `fabric` / `model-fit` had not been added. The flow it demonstrates
-is unchanged; use the table above for who to release.
+This is a **historical record, not the current roster** — `classification-ggml` and `vla-ggml`
+were still fabric consumers then, and `fabric` / `model-fit` had not been added. The flow it
+demonstrates is unchanged; use the table above for who to release.
