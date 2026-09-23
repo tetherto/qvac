@@ -141,3 +141,36 @@ export function validateSegments(segments: unknown): TestResult {
       `non-decreasing audio-time order.`
   }
 }
+
+/**
+ * `validateSegments` plus the two flags only the parakeet engine emits. The
+ * addon sets both on every parakeet segment, batch and streaming alike, so a
+ * missing flag means the SDK dropped it on the way out.
+ */
+export function validateParakeetSegments(segments: unknown): TestResult {
+  const base = validateSegments(segments)
+  if (!base.passed) return base
+
+  const list = segments as Partial<TranscribeSegment>[]
+  for (let i = 0; i < list.length; i++) {
+    const flags = checkParakeetFlags(list[i]!, i)
+    if (flags) return flags
+  }
+  return {
+    passed: true,
+    output: `${base.output} All carry the parakeet isEndOfTurn / startsWord flags.`
+  }
+}
+
+export function checkParakeetFlags(
+  seg: Partial<TranscribeSegment>,
+  index: number
+): TestResult | undefined {
+  if (typeof seg.isEndOfTurn !== 'boolean') {
+    return { passed: false, output: `Segment ${index}: missing/invalid isEndOfTurn` }
+  }
+  if (typeof seg.startsWord !== 'boolean') {
+    return { passed: false, output: `Segment ${index}: missing/invalid startsWord` }
+  }
+  return undefined
+}

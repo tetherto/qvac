@@ -8579,7 +8579,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     gpu_layers: Annotated[
         float | None,
         Field(
-            description="Number of model layers to offload to the GPU. Default 99 (offload all)."
+            description="Number of model layers to offload to the GPU. Unset by default, which lets the runtime fit the placement to free device memory (offloading every layer when it fits). Setting it pins the layer count and disables that fit."
         ),
     ] = None
     lora: Annotated[
@@ -8833,7 +8833,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     fit: Annotated[
         bool | None,
         Field(
-            description="Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting this field releases the `gpu_layers` default so fit can choose it, which offloads every layer rather than 99 if fit then gives up; setting `gpu_layers` alongside it pins the value and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it."
+            description="Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting `gpu_layers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it."
         ),
     ] = None
     fit_target: Annotated[
