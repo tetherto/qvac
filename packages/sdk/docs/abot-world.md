@@ -83,12 +83,18 @@ carries the native log evidence and the measured effect of each setting.
 
 ## Hardware, and why there is no delegation
 
-The walk session holds the DiT, the pixel decoder and the scene resident.
-Measured at the validated 832x480 tier: **16.3 GB steady plus ~2.7 GB transient
-at the first block**, so it needs **≥ 20 GB free VRAM on a dedicated GPU** — a
-24 GB card is the practical minimum. A co-tenant process holding VRAM will OOM
-the first block even though loading succeeded. A **448x256** tier runs on ~6 GB
-cards; it is far below interactive frame rates but is what the E2E lane uses.
+By default the walk session holds the DiT, the pixel decoder and the scene
+resident. Measured with resident weights on the validated 832x480 CUDA
+configuration: **16.3 GB steady plus ~2.7 GB transient at the first block**, so
+it needs **≥ 20 GB free VRAM on a dedicated GPU** — a 24 GB card is the
+practical minimum for that configuration. A co-tenant process holding VRAM will
+OOM the first block even though loading succeeded.
+
+[Layer streaming](#fitting-the-walk-into-less-vram) changes weight residency,
+so these figures do not apply to a streamed walk; a minimum for the streamed
+832x480 configuration has not been measured yet. Separately, a validated
+**448x256** tier runs on ~6 GB cards; it is far below interactive frame rates
+but is what the E2E lane uses.
 
 A world session is bound to the worker holding that GPU and runs there. There is
 no route to run one on a remote peer.

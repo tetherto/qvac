@@ -11,7 +11,7 @@ World simulation runs on a **customized Diffusion engine** ([`qvac-ext-stable-di
 The session runs on the machine hosting the worker; there is no remote route.
 
 <Callout type="warn">
-World simulation is hardware-intensive. The default **832×480** tier needs **≥20 GB** of video memory (a 24 GB card in practice). Pass **448×256** to use the low-VRAM tier, which runs on ~6 GB cards well below interactive frame rates.
+World simulation is hardware-intensive. With weights held in video memory (the default), the **832×480** tier needs **≥20 GB** (a 24 GB card in practice). [Layer streaming](#fitting-the-walk-into-less-video-memory) changes where weights live, and a minimum for a streamed 832×480 walk has not been measured yet. Pass **448×256** to use the low-VRAM tier, which runs on ~6 GB cards well below interactive frame rates.
 </Callout>
 
 ## Functions
