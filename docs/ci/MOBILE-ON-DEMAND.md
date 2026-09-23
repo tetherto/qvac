@@ -55,7 +55,7 @@ jq -r '(.android//{})|[..|strings]|unique|.[]' packages/$PKG/test/mobile/test-gr
 #    same workflow on the same branch cancels the first.
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref "$BRANCH" \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9" \
+  -f devices_custom="Google Pixel 9 Pro" \
   -f device_model_operator=EQUALS \
   -f tests=<runnerName> \
   -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
@@ -102,20 +102,24 @@ is green, when you are re-running a known failure or iterating on one test.
 | iOS      | `Apple iPhone 16 Pro`, `Apple iPhone 17 Pro` |
 
 Leave `tests` empty to run the addon's whole suite. Android and iOS are separate
-dispatches, so a full first pass is two runs:
+dispatches, and **the second cancels the first if the Android run is still
+going** — the concurrency group is keyed on workflow and ref, not platform (see
+[One run at a time](#one-run-at-a-time-per-branch)). So a full
+first pass is two runs, in sequence:
 
 ```bash
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref "$BRANCH" \
   -f platform=Android \
   -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS \
-  -f prebuild_run_id=$RUN_ID
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
 
+# iOS — only after the Android run finishes, or it cancels it
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref "$BRANCH" \
   -f platform=iOS \
   -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
   -f device_model_operator=EQUALS \
-  -f prebuild_run_id=$RUN_ID
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
 ```
 
 **Not supported.** Adding these to `devices_custom` will schedule and bill a run,
@@ -376,9 +380,9 @@ tells you where to look.
 ```bash
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9" \
+  -f devices_custom="Google Pixel 9 Pro" \
   -f device_model_operator=EQUALS \
-  -f prebuild_run_id=$RUN_ID
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
 ```
 
 The build job's *Resolve prebuilds from a run id* step prints the provenance:
@@ -488,7 +492,7 @@ dispatch on the same branch cancels the first — see the concurrency note below
 # Android
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9, Samsung Galaxy S25 Ultra" \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra" \
   -f device_model_operator=EQUALS \
   -f tests="runContinuousBatchingTest" \
   -f package="$PKG"
@@ -496,7 +500,7 @@ gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRAN
 # iOS — only after the Android run finishes
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=iOS \
-  -f devices_custom="Apple iPhone 17, Apple iPhone 16 Pro" \
+  -f devices_custom="Apple iPhone 17 Pro, Apple iPhone 16 Pro" \
   -f device_model_operator=EQUALS \
   -f tests="runContinuousBatchingTest" \
   -f package="$PKG"
@@ -595,7 +599,8 @@ gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
   -f device_model_operator=EQUALS
 ```
 
-These run in parallel and each reports its own verdict. (Once the workflow is on
+Run the iOS dispatch only after the Android one finishes — same workflow, same
+branch, so a second dispatch cancels the first. (Once the workflow is on
 the default branch you can do the same from **Actions → Run workflow** in the UI.)
 
 ### 2. Narrow after a failure — one device, one test
