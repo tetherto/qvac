@@ -81,8 +81,8 @@ For model artifacts available as constants, see [SDK — Models](/introduction#m
 `transcribeStream()` opens a duplex session for both engines — write audio chunks via `session.write(...)`, iterate events with `for await (const event of session) { ... }`. Events are typed as a discriminated union `{ type }`:
 
 - `{ type: "text", text }` — incremental transcript text.
-- `{ type: "segment", segment }` — segment metadata (whisper-only when `metadata: true`).
-- `{ type: "vad", speaking, probability }` — voice-activity-detection state (whisper-only).
+- `{ type: "segment", segment }` — segment metadata when `metadata: true`, on both engines. Parakeet segments also carry `isEndOfTurn` and `startsWord`.
+- `{ type: "vad", speaking, probability, source }` — voice-activity-detection state (whisper-only; `source` is `"silero"`).
 - `{ type: "endOfTurn", source: "whisper", silenceDurationMs }` — turn boundary detected from a measured silence window (whisper).
 - `{ type: "endOfTurn", source: "parakeet" }` — turn boundary detected from the EOU model's `<EOU>` token (parakeet; no silence window — the event is token-driven).
 

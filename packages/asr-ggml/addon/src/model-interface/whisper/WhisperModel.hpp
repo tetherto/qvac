@@ -18,6 +18,10 @@
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/WhisperTypes.hpp"
 
+#ifdef QVAC_ASR_GGML_TESTING
+#include "model-interface/WhisperGpuSelection.hpp"
+#endif
+
 namespace qvac::asrggml::whisper {
 
 class WhisperModel
@@ -145,6 +149,25 @@ public:
       !std::is_same<typename std::decay<T>::type, WhisperConfig>::value,
       void>::type
   saveLoadParams(T&&, Args&&...) {}
+
+#ifdef QVAC_ASR_GGML_TESTING
+  template <typename Registry>
+  main_gpu::WhisperLoadSelection resolveMainGpuSelectionForTesting(
+      bool useGpu, int gpuDevice, bool hasLegacyGpuDevice,
+      const Registry& registry) const {
+    return main_gpu::resolveWhisperLoadSelection(
+        useGpu,
+        gpuDevice,
+        hasLegacyGpuDevice,
+        cfg_.whisperContextCfg,
+        registry);
+  }
+
+  static bool configContextIsChangedForTesting(
+      const WhisperConfig& oldCfg, const WhisperConfig& newCfg) {
+    return configContextIsChanged(oldCfg, newCfg);
+  }
+#endif
 
 private:
   static bool configContextIsChanged(

@@ -415,28 +415,28 @@ TEST(SdCtxHandlers_Verbosity, SupportedLevelsSetGlobalVerbosity) {
   applySdCtxHandlers(
       cfg0, std::unordered_map<std::string, std::string>{{"verbosity", "0"}});
   EXPECT_EQ(
-      logging::g_verbosityLevel,
+      logging::g_verbosityLevel.load(),
       qvac_lib_inference_addon_cpp::logger::Priority::ERROR);
 
   SdCtxConfig cfg1;
   applySdCtxHandlers(
       cfg1, std::unordered_map<std::string, std::string>{{"verbosity", "1"}});
   EXPECT_EQ(
-      logging::g_verbosityLevel,
+      logging::g_verbosityLevel.load(),
       qvac_lib_inference_addon_cpp::logger::Priority::WARNING);
 
   SdCtxConfig cfg2;
   applySdCtxHandlers(
       cfg2, std::unordered_map<std::string, std::string>{{"verbosity", "2"}});
   EXPECT_EQ(
-      logging::g_verbosityLevel,
+      logging::g_verbosityLevel.load(),
       qvac_lib_inference_addon_cpp::logger::Priority::INFO);
 
   SdCtxConfig cfg3;
   applySdCtxHandlers(
       cfg3, std::unordered_map<std::string, std::string>{{"verbosity", "3"}});
   EXPECT_EQ(
-      logging::g_verbosityLevel,
+      logging::g_verbosityLevel.load(),
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG);
 }
 
@@ -450,7 +450,7 @@ TEST(SdCtxHandlers_Verbosity, InvalidValueFallsBackToError) {
       std::unordered_map<std::string, std::string>{{"verbosity", "bogus"}});
 
   EXPECT_EQ(
-      logging::g_verbosityLevel,
+      logging::g_verbosityLevel.load(),
       qvac_lib_inference_addon_cpp::logger::Priority::ERROR);
 }
 

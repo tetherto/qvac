@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-18`. MiniMax-Music3 generates faster
+  with the model files you already have: the RVQ depth decoder keeps a K/V cache
+  instead of recomputing its prefix on every codebook step, and the flow default
+  is 20 steps instead of 30 (`inferenceSteps` still overrides it). On an AMD
+  Strix Halo a 10 s track goes from 57.0 s to 39.1 s on Vulkan. Synth files
+  re-converted with the new engine also quantize the depth decoder with the
+  chosen tier, worth a further 2.6 s there.
 - Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
   one engine stack. Nothing in the window touches the audiogen engine, so
   published behavior is unchanged.

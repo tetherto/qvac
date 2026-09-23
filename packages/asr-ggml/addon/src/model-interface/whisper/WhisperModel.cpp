@@ -36,6 +36,7 @@
 #include "addon/AsrErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/WhisperGpuSelection.hpp"
 #include "model-interface/WhisperTypes.hpp"
 
 namespace qvac::asrggml::whisper {
@@ -310,6 +311,40 @@ void WhisperModel::load() {
 #endif
 
     whisper_context_params contextParams = toWhisperContextParams(cfg_);
+    bool reportMissingGpuFallback = false;
+
+    // Resolve the raw registry identity before translating to Whisper's
+    // GPU/IGPU ordinal. An excluded explicit target falls back only to CPU.
+    if (contextParams.use_gpu &&
+        !cfg_.whisperContextCfg.contains("gpu_device")) {
+      const auto selected = main_gpu::resolveWhisperLoadSelection(
+          contextParams.use_gpu,
+          contextParams.gpu_device,
+          false,
+          cfg_.whisperContextCfg);
+      if (selected.outOfRange) {
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            "main-gpu registry index is out of range; using normal GPU "
+            "selection");
+      }
+      contextParams.use_gpu = selected.useGpu;
+      if (contextParams.use_gpu) {
+        contextParams.gpu_device = selected.gpuDevice;
+      } else if (!selected.refused.empty()) {
+        std::string message =
+            "GPU execution requested but no eligible device is available; "
+            "falling back to CPU. Refused GPU-type devices:";
+        for (const auto& identity : selected.refused) {
+          message += " [" + identity + "]";
+        }
+        QLOG(
+            qvac_lib_inference_addon_cpp::logger::Priority::WARNING,
+            message.c_str());
+      } else {
+        reportMissingGpuFallback = selected.warnMissingGpuFallback;
+      }
+    }
 
     // Adreno guard: when ggml registers an Adreno OpenCL device (Android,
     // where it also registers a Vulkan device for the same GPU and Vulkan is
@@ -317,7 +352,8 @@ void WhisperModel::load() {
     // driver SIGSEGVs in ggml compute (vkCmdBindPipeline), whereas OpenCL is
     // the supported Adreno backend. No-op on Mali / desktop (no Adreno OpenCL
     // device registers there), so the proven Mali->Vulkan path is untouched.
-    if (contextParams.use_gpu) {
+    if (contextParams.use_gpu &&
+        cfg_.whisperContextCfg.contains("gpu_device")) {
       const int adrenoOpenclDeviceIndex = adrenoOpenclGpuDeviceIndex();
       if (adrenoOpenclDeviceIndex >= 0 &&
           adrenoOpenclDeviceIndex != contextParams.gpu_device) {
@@ -360,7 +396,9 @@ void WhisperModel::load() {
         qvac_lib_inference_addon_cpp::logger::Priority::INFO,
         "Whisper model loaded successfully");
 
-    captureActiveBackendInfo(contextParams.use_gpu, contextParams.gpu_device);
+    captureActiveBackendInfo(
+        contextParams.use_gpu || reportMissingGpuFallback,
+        contextParams.gpu_device);
 
     // Warm up the model on first load to avoid first-segment delay
     if (!is_warmed_up_) {
@@ -822,9 +860,9 @@ void WhisperModel::cancel() const {
 bool WhisperModel::configContextIsChanged(
     const WhisperConfig& oldCfg, const WhisperConfig& newCfg) {
   // Context parameters that require reload: model, use_gpu, flash_attn,
-  // gpu_device
+  // gpu_device, main-gpu, main_gpu
   const std::vector<std::string> contextKeys = {
-      "model", "use_gpu", "flash_attn", "gpu_device"};
+      "model", "use_gpu", "flash_attn", "gpu_device", "main-gpu", "main_gpu"};
 
   return std::ranges::any_of(contextKeys, [&](const std::string& key) {
     const auto oldIt = oldCfg.whisperContextCfg.find(key);

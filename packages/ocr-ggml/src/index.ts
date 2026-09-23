@@ -18,6 +18,7 @@ import {
   type OcrGgmlRunOptions,
 } from "./ocr-ggml";
 import { QvacErrorAddonOcrGgml, ERR_CODES, errorMessage } from "./lib/error";
+import { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } from "./lib/main-gpu";
 
 /**
  * OCR pipeline backing the addon.
@@ -145,6 +146,16 @@ export interface OcrGgmlParams {
    * the README).
    */
   gpuDevice?: number;
+  /**
+   * Raw ggml registry index (integer number/string), or a GPU class (case-insensitive).
+   * An unavailable/excluded in-range device or absent class falls back to CPU.
+   * Out-of-range indices warn and use the default dedicated-first selection.
+   * Requires a GPU backendDevice; CPU remains the default. Cannot be combined
+   * with gpuDevice or main_gpu. Adreno Vulkan safety checks still apply.
+   */
+  "main-gpu"?: number | string;
+  /** Alias for main-gpu; provide only one spelling. */
+  main_gpu?: number | string;
 }
 
 export type { BackendInfo, OcrGgmlRunOptions };
@@ -323,6 +334,23 @@ export class OcrGgml {
       });
     }
 
+    const selectors = ["main-gpu", "main_gpu", "gpuDevice"] as const;
+    if (selectors.filter((key) => this.params[key] !== undefined).length > 1) {
+      throw new TypeError("Use only one of main-gpu, main_gpu, or gpuDevice");
+    }
+    const rawMainGpu = this.params["main-gpu"] !== undefined
+      ? this.params["main-gpu"] : this.params.main_gpu;
+    const mainGpu = typeof rawMainGpu === "string"
+      ? (/^[+-]?\d+$/.test(rawMainGpu) ? Number(rawMainGpu) : rawMainGpu.toLowerCase())
+      : rawMainGpu;
+    if (
+      mainGpu !== undefined && mainGpu !== "dedicated" && mainGpu !== "integrated" &&
+      !(typeof mainGpu === "number" && Number.isInteger(mainGpu) &&
+        mainGpu >= MIN_MAIN_GPU_INDEX && mainGpu <= MAX_MAIN_GPU_INDEX)
+    ) {
+      throw new TypeError("main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'");
+    }
+
     const configurationParams: OcrGgmlConfigurationParams = {
       pathDetector: this.params.pathDetector,
       pathRecognizer: this.params.pathRecognizer,
@@ -342,6 +370,8 @@ export class OcrGgml {
       "pipelineType",
       "backendDevice",
       "gpuDevice",
+      "main-gpu",
+      "main_gpu",
     ];
     for (const field of optionalFields) {
       if (this.params[field] !== undefined) {
