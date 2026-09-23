@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Bounded FuzzTest coverage for `parseMainGpu` and
+  `preferredBackendTypeFromString`. Linux C++ CI runs the suite after unit
+  tests. The parsers compile without `@qvac/fabric`, so ASan and LeakSanitizer
+  stay at full strength. No public addon API changes.
+
 ## [0.41.3] - 2026-09-18
 
 ### Changed

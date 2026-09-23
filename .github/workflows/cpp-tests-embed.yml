@@ -375,3 +375,16 @@ jobs:
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
 
+      # After coverage has harvested the BUILD_TESTING tree. fuzz:build
+      # reconfigures build/ with BUILD_FUZZING=ON and would otherwise wipe
+      # the coverage artefacts. Bounded unit-test mode; coverage-guided
+      # `--fuzz_for` is a later scheduled job. See docs/architecture/ADDON-FUZZING.md.
+      - name: Build fuzz targets
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:run
