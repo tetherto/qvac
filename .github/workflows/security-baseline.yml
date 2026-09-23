@@ -93,6 +93,7 @@ jobs:
           .github/scripts/test/publish-gate-policy.test.mjs
           .github/scripts/test/publish-gpr-skip-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
+          .github/scripts/test/mobile-caller-permissions.test.mjs
           .github/scripts/test/await-ts-checks.test.mjs
           .github/scripts/test/ts-check-names.test.mjs
           .github/scripts/test/model-cache-sync.test.mjs

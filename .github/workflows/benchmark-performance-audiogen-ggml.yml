@@ -44,6 +44,7 @@ on:
 permissions:
   contents: read
   packages: read
+  actions: read
 
 jobs:
   context:

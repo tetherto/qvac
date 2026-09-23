@@ -299,6 +299,7 @@ jobs:
       - post-build-gate
     if: (needs.post-build-gate.outputs.should_run_tests == 'true')
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write

@@ -36,6 +36,7 @@ permissions:
   contents: read
   packages: read
   id-token: write
+  actions: read
 
 jobs:
   context:

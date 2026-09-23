@@ -48,6 +48,7 @@ permissions:
   contents: read
   packages: read
   id-token: write
+  actions: read
 
 # Safe here because this workflow is dispatch-only. The called leaves must NOT
 # get one: in a reusable, github.workflow resolves to the caller, so the group
