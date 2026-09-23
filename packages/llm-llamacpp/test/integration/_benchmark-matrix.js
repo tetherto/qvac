@@ -238,12 +238,23 @@ function validateSweepValues(selected) {
   }
 }
 
+// An empty selector runs everything. Otherwise, naming an additive sweep
+// selects THAT sweep instead of the throughput grid, and any grid axis named
+// alongside it narrows the additive sweep rather than selecting the grid too.
+//
+// Without that second rule a shared axis silently bought both: on
+// `load-mode=auto,device=cpu|gpu` — the shape of the acceptance selector —
+// `device` is a grid axis, so a dispatch asking for a minutes-long load-mode
+// sweep also started the throughput grid it had excluded by naming load-mode.
 function sweepSelection(selected) {
   if (!selected) return { grid: true, loadMode: true, batchSweep: true }
+  const loadMode = selected.has('load-mode')
+  const batchSweep = selected.has('batch-sweep')
   return {
-    grid: [...selected.keys()].some((n) => GRID_PARAM_NAMES.includes(n)),
-    loadMode: selected.has('load-mode'),
-    batchSweep: selected.has('batch-sweep')
+    grid:
+      !loadMode && !batchSweep && [...selected.keys()].some((n) => GRID_PARAM_NAMES.includes(n)),
+    loadMode,
+    batchSweep
   }
 }
 

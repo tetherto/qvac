@@ -71,11 +71,14 @@ test('"quantization" runs the grid only', () => {
 })
 
 // A grid axis named alongside load-mode narrows BOTH sweeps.
-test('"load-mode=auto|mmap,quantization=Q4_0|Q8_0" sweeps quantization in both', () => {
+test('"load-mode=auto|mmap,quantization=Q4_0|Q8_0" narrows the load-mode sweep, not the grid', () => {
+  // A grid axis named alongside an additive sweep narrows THAT sweep. It does
+  // not also select the grid: naming load-mode is how a dispatch says it does
+  // not want the grid, and a shared axis must not quietly buy it back.
   const p = plan('load-mode=auto|mmap,quantization=Q4_0|Q8_0')
-  assert.strictEqual(p.gridCases, 2, 'two quantizations on the grid')
+  assert.strictEqual(p.gridCases, 0, 'the grid is not selected')
   assert.strictEqual(p.loadModeCells, 4, '2 modes x 2 quantizations in the load-mode sweep')
-  assert.deepStrictEqual(p.batches, [...CACHE_BATCHES, 'loadmode'])
+  assert.deepStrictEqual(p.batches, ['loadmode'])
 })
 
 test('a bare quantization name sweeps every quantization the model has', () => {
@@ -94,8 +97,25 @@ test('device and ctx-size narrow the load-mode sweep too', () => {
 // own sweep, never multiplied into the 70-cell matrix.
 test('load-mode is not crossed into the main grid', () => {
   const p = plan('load-mode,quantization')
-  assert.strictEqual(p.gridCases, 3, 'grid sized by its own axes alone')
+  assert.strictEqual(p.gridCases, 0, 'naming load-mode excludes the grid')
   assert.ok(p.loadModeCells < 3 * 6, 'load-mode cells are not gridCases x modes')
+})
+
+test('a grid axis named with an additive sweep never starts the grid', () => {
+  // The acceptance selector's shape. `device` is a grid axis, so under the
+  // old rule this dispatch ran a 45-run throughput grid alongside a
+  // minutes-long load-mode sweep — observed on win32-x64 in run 35825109178.
+  for (const sel of [
+    'load-mode=auto,device=cpu|gpu',
+    'load-mode,device=cpu|gpu',
+    'batch-sweep,device=gpu',
+    'load-mode,ctx-size=2048'
+  ]) {
+    assert.strictEqual(plan(sel).gridCases, 0, `${sel} must not start the grid`)
+  }
+  // ...while a selector naming only grid axes still does.
+  assert.ok(plan('quantization').gridCases > 0, 'a pure grid selector is unaffected')
+  assert.ok(plan('device=gpu').gridCases > 0)
 })
 
 test('"batch-sweep" selects the additive batch sweep alone', () => {
