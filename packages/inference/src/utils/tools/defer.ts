@@ -1,4 +1,5 @@
 import type { Tool } from '@/schemas/tools'
+import { UnknownDeferredToolError } from '@/errors/index'
 import { validateTools, type ToolInput } from '@/utils/tool-helpers'
 
 /**
@@ -326,4 +327,40 @@ export function executeToolSearch(
   const fresh = matches.filter((tool) => !loaded.has(tool.name))
 
   return buildToolSearchResult(query, fresh, alreadyLoaded)
+}
+
+/**
+ * Load named deferred tools without a model turn, for a caller that already
+ * knows what the conversation needs. Returns the same `tool` message a
+ * `tool_search` for those names would, for the caller to append to its
+ * history, or `null` when every name is already callable.
+ *
+ * Nothing is held in the SDK: the loaded set is still read back from the
+ * history, so this is only a shortcut for writing the entry.
+ */
+export function loadTools(
+  tools: readonly Tool[] | readonly ToolInput[],
+  names: readonly string[],
+  history: readonly HistoryMessage[]
+): HistoryMessage | null {
+  const { tools: wire } = validateTools([...tools] as Tool[] | ToolInput[])
+  const byName = new Map(wire.map((tool) => [tool.name, tool]))
+
+  const unknown = names.filter((name) => name !== TOOL_SEARCH_NAME && !byName.has(name))
+  if (unknown.length > 0) throw new UnknownDeferredToolError([...new Set(unknown)])
+
+  const requested: Tool[] = []
+  for (const name of new Set(names)) {
+    const tool = byName.get(name)
+    // Always-loaded tools and tool_search are in the prompt already.
+    if (tool && isDeferred(tool)) requested.push(tool)
+  }
+
+  const loaded = loadedToolNames(history)
+  const fresh = requested.filter((tool) => !loaded.has(tool.name))
+  if (fresh.length === 0) return null
+
+  const alreadyLoaded = requested.filter((tool) => loaded.has(tool.name)).map((tool) => tool.name)
+  const query = requested.map((tool) => tool.name).join(' ')
+  return { role: 'tool', content: buildToolSearchResult(query, fresh, alreadyLoaded) }
 }

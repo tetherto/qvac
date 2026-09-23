@@ -16,6 +16,7 @@ export const SDK_CLIENT_ERROR_CODES = {
   MODEL_TYPE_REQUIRED: 50008,
   MODEL_SRC_TYPE_MISMATCH: 50009,
   REQUEST_VALIDATION_FAILED: 50010,
+  UNKNOWN_DEFERRED_TOOL: 50011,
 
   // RPC Communication Errors (50,200-50,399)
   RPC_NO_HANDLER: 50200,
@@ -92,6 +93,10 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED]: {
     name: 'REQUEST_VALIDATION_FAILED',
     message: (errors: string) => `Invalid request:\n${errors}`
+  },
+  [SDK_CLIENT_ERROR_CODES.UNKNOWN_DEFERRED_TOOL]: {
+    name: 'UNKNOWN_DEFERRED_TOOL',
+    message: (names: string) => `Cannot load unregistered tools: ${names}`
   },
 
   // RPC Communication Errors (50,200-50,399)

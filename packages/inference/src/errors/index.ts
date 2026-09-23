@@ -35,6 +35,12 @@ export class InvalidToolSchemaError extends QvacErrorBase {
   }
 }
 
+export class UnknownDeferredToolError extends QvacErrorBase {
+  constructor(names: readonly string[], cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.UNKNOWN_DEFERRED_TOOL, [names.join(', ')], cause))
+  }
+}
+
 export class ModelTypeRequiredError extends QvacErrorBase {
   constructor(cause?: unknown) {
     super(createErrorOptions(ERROR_CODES.MODEL_TYPE_REQUIRED, undefined, cause))

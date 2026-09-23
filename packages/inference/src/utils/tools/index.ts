@@ -5,6 +5,7 @@ export {
   buildCatalog,
   buildToolSearchTool,
   executeToolSearch,
+  loadTools,
   loadedToolNames,
   partitionTools,
   resolveDeferredTools,

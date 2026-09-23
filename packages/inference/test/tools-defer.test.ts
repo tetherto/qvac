@@ -1,11 +1,13 @@
 import test from 'brittle'
 import { z } from 'zod'
 import type { Tool } from '@/schemas/tools'
+import { ERROR_CODES } from '@/schemas/errors'
 import {
   TOOL_SEARCH_NAME,
   buildCatalog,
   buildToolSearchTool,
   executeToolSearch,
+  loadTools,
   loadedToolNames,
   partitionTools,
   resolveDeferredTools,
@@ -251,4 +253,74 @@ test('the same search on the same inventory is byte-identical', (t) => {
     executeToolSearch(INVENTORY, { query: 'repository' }, []),
     'a repeated search cannot move the divergence point'
   )
+})
+
+test('loadTools writes the entry a tool_search for that name would', (t) => {
+  t.alike(loadTools(INVENTORY, ['create_issue'], []), {
+    role: 'tool',
+    content: executeToolSearch(INVENTORY, { query: 'create_issue' }, [])
+  })
+})
+
+test('a preloaded tool is callable on the first completion', (t) => {
+  const entry = loadTools(INVENTORY, ['read_file', 'list_prs'], [])
+  t.ok(entry)
+  const history = [entry!, { role: 'user', content: 'read the readme' }]
+
+  const resolved = resolveDeferredTools(INVENTORY, history)
+  t.alike(
+    resolved?.callableTools.map((item) => item.name),
+    ['get_weather', TOOL_SEARCH_NAME, 'list_prs', 'read_file'],
+    'callable in registration order, whatever order they were loaded in'
+  )
+  t.alike(
+    resolved?.toolsToRender.map((item) => item.name),
+    ['get_weather', TOOL_SEARCH_NAME],
+    'preloading does not change the prompt block'
+  )
+})
+
+test('loadTools appends nothing for names the conversation already carries', (t) => {
+  const history = [loadTools(INVENTORY, ['create_issue'], [])!]
+  t.is(loadTools(INVENTORY, ['create_issue'], history), null)
+  t.is(loadTools(INVENTORY, ['get_weather', TOOL_SEARCH_NAME], []), null, 'already in the prompt')
+
+  const partial = JSON.parse(
+    loadTools(INVENTORY, ['create_issue', 'list_prs'], history)!.content
+  ) as {
+    tool_search: { loaded: string[]; already_loaded: string[] }
+    tools: Tool[]
+  }
+  t.alike(partial.tool_search.loaded, ['list_prs'])
+  t.alike(partial.tool_search.already_loaded, ['create_issue'])
+  t.alike(
+    partial.tools.map((item) => item.name),
+    ['list_prs'],
+    'only the new definition is appended'
+  )
+})
+
+test('loadTools rejects names that are not registered', (t) => {
+  try {
+    loadTools(INVENTORY, ['create_issue', 'delete_repo'], [])
+    t.fail('expected an error')
+  } catch (error) {
+    t.is((error as { code?: number }).code, ERROR_CODES.UNKNOWN_DEFERRED_TOOL)
+    t.ok((error as Error).message.includes('delete_repo'))
+  }
+})
+
+test('loadTools accepts the Zod-schema form', (t) => {
+  const input = [
+    { name: 'get_weather', description: 'Weather', parameters: z.object({ city: z.string() }) },
+    {
+      name: 'search_docs',
+      description: 'Search docs',
+      parameters: z.object({ query: z.string() }),
+      deferLoading: true
+    }
+  ]
+  const entry = loadTools(input, ['search_docs'], [])
+  const parsed = JSON.parse(entry!.content) as { tools: Tool[] }
+  t.alike(Object.keys(parsed.tools[0]!.parameters.properties), ['query'])
 })

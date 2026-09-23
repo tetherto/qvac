@@ -189,6 +189,25 @@ name; the SDK searches the registered tools outside inference and appends the
 matching definitions to the conversation as a tool result, and the model calls
 them by name on its next step.
 
+When you already know a conversation needs certain tools, load them yourself
+instead of waiting for the model to search. `loadTools()` returns the same tool
+message a `tool_search` for those names would; append it to the history and the
+tools are callable on the next `completion()`:
+
+```ts
+import { completion, loadTools } from '@qvac/sdk'
+
+const history = [{ role: 'user', content: "What's my horoscope for Aquarius?" }]
+
+const entry = loadTools(tools, ['get_horoscope'], history)
+if (entry) history.push(entry)
+
+const result = completion({ modelId, history, stream: true, tools })
+```
+
+It returns `null` when every name is already loaded or always loaded, and
+throws `UNKNOWN_DEFERRED_TOOL` for a name that is not in `tools`.
+
 Notes:
 
 * Tools without `deferLoading` behave exactly as before.
