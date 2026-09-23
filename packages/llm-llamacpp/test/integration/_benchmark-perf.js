@@ -127,10 +127,14 @@ function modelSpec(size, quant) {
 // nPredict caps the generation. The throughput path leaves it unset so the
 // addon's configured length applies; a load-mode cell passes 1, because its
 // only reason to generate at all is to learn which backend served the load.
+//
+// The per-request key is `predict` (GenerationParams in index.d.ts), NOT the
+// `n_predict` spelling the load-time config uses. Getting that wrong does not
+// fail loudly — it just does not cap anything.
 async function runInference(addon, prompt, reasoningBudget, nPredict = null) {
   const startTime = Date.now()
   const generationParams = { reasoning_budget: parseInt(reasoningBudget, 10) }
-  if (nPredict !== null) generationParams.n_predict = nPredict
+  if (nPredict !== null) generationParams.predict = nPredict
   const response = await addon.run(prompt, { generationParams })
   const chunks = []
   let error = null

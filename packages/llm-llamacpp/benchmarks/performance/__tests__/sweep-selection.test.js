@@ -192,3 +192,31 @@ test('the backend-verification generation is capped, all the way to the cell con
     )
   }
 })
+
+test('the mobile backend probe uses the documented per-request generation key', () => {
+  // GenerationParams (index.d.ts) accepts `predict`. The load-time config
+  // spelling is `n-predict` / `n_predict`, and using that per request caps
+  // nothing and fails silently — the cell then runs a full generation purely
+  // to read one field.
+  const fs = require('node:fs')
+  const path = require('node:path')
+  const src = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', '..', 'test', 'integration', '_benchmark-perf.js'),
+    'utf8'
+  )
+  assert.match(src, /generationParams\.predict = nPredict/, 'per-request cap uses `predict`')
+  assert.doesNotMatch(
+    src,
+    /generationParams\.n_predict/,
+    'the load-time spelling is not a per-request key'
+  )
+
+  const dts = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', '..', 'index.d.ts'),
+    'utf8'
+  )
+  const block = /interface GenerationParams \{[\s\S]*?\n {4}\}/.exec(dts)
+  assert.ok(block, 'GenerationParams is declared')
+  assert.match(block[0], /\bpredict\?: number/, 'predict is the declared field')
+  assert.doesNotMatch(block[0], /\bn_predict\?/, 'n_predict is not a GenerationParams field')
+})
