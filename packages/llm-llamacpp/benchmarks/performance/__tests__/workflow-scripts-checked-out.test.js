@@ -92,3 +92,21 @@ test('sparse checkouts list only paths that exist', () => {
     }
   }
 })
+
+test('no step embeds a multi-line inline node script', () => {
+  // Inside a double-quoted shell string, a double quote anywhere in the
+  // script — a comment included — ends the string. Node then runs the
+  // truncated script and exits cleanly, so the step fails later with no error
+  // from node at all. That is how stamp-version broke every dispatch. Scripts
+  // longer than one line belong in .github/scripts/, where they can be tested.
+  const text = fs.readFileSync(WORKFLOW, 'utf8')
+  const offenders = text
+    .split('\n')
+    .map((line, i) => ({ line, n: i + 1 }))
+    .filter(({ line }) => /node\s+-e\s+["']\s*$/.test(line))
+  assert.deepStrictEqual(
+    offenders.map(({ n, line }) => `${n}: ${line.trim()}`),
+    [],
+    'move these scripts into .github/scripts/'
+  )
+})

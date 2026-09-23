@@ -197,6 +197,7 @@ jobs:
         with:
           ref: ${{ needs.context.outputs.ref }}
           sparse-checkout: |
+            .github/scripts/stamp-run-meta.js
             packages/llm-llamacpp/package.json
             packages/llm-llamacpp/test/integration/_benchmark-matrix.js
           sparse-checkout-cone-mode: false
@@ -206,41 +207,7 @@ jobs:
           RUN_MOBILE: ${{ inputs.run_mobile }}
         shell: bash
         run: |
-          mkdir -p run-meta
-          # Stamp the shards THIS dispatch selected, not the whole matrix.
-          # Coverage is scored against this list, so stamping all 86 on a
-          # load-mode-only run would report 74 phantom gaps for cases the
-          # dispatch deliberately did not select.
-          node -e "
-            const pkg = require('./packages/llm-llamacpp/package.json')
-            const m = require('./packages/llm-llamacpp/test/integration/_benchmark-matrix.js')
-            // expectedShards is the MOBILE coverage target. A desktop-only
-            // dispatch requests none, so stamping the planned mobile shards
-            // there would report coverage missing for a leg that never ran.
-            const wantsMobile = process.env.RUN_MOBILE === 'true'
-            const selected = m.parseSweepParams(process.env.SWEEP_PARAMS || '')
-            const planned = new Set(
-              wantsMobile ? m.planMobileBatches(selected).flatMap((b) => b.groups.map((g) => g.grep)) : []
-            )
-            const expectedShards = m.matrix()
-              .filter((cell) => planned.has(m.runFunctionName(cell)))
-              .map(m.mobileShardKey)
-            // The load modes this dispatch asked for, independent of mobile.
-            // expectedShards is the MOBILE target and is [] on a desktop-only
-            // run; scoring the desktop legs against that reported every absent
-            // mode as "not selected" and suppressed the coverage warning.
-            const lm = selected && selected.get('load-mode')
-            const selectedLoadModes =
-              !selected || !selected.has('load-mode') || lm === null
-                ? m.LOAD_MODES.slice()
-                : lm.slice()
-            require('fs').writeFileSync('run-meta/run-meta.json', JSON.stringify({
-              addonVersion: '@qvac/llm-llamacpp@' + pkg.version,
-              sweepParams: process.env.SWEEP_PARAMS || '',
-              expectedShards,
-              selectedLoadModes
-            }) + '\\n')
-          "
+          node .github/scripts/stamp-run-meta.js
           cat run-meta/run-meta.json
       - name: Upload run-meta
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
