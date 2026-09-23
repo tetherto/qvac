@@ -2073,7 +2073,7 @@ test('assess: a second GPU with an unusable reading still makes the choice ambig
 const NATIVE_FIT: NativeProbeFit = {
   verdict: 'fit',
   basis: 'native-probe',
-  estimatorVersion: 'native-probe-v1',
+  estimatorVersion: 'native-probe-v2',
   reason: 'fits'
 }
 
@@ -2091,7 +2091,7 @@ test('assess: the engine fitter outranks the coefficients that model it', (t) =>
   t.is(result.verdict, 'likely-fits')
   t.is(result.evidence, 'native-fit')
   t.is(result.models[0]?.evidence, 'native-fit')
-  t.is(result.models[0]?.estimatorVersion, 'native-probe-v1')
+  t.is(result.models[0]?.estimatorVersion, 'native-probe-v2')
   t.absent(result.estimate, 'the fitter reports no byte range to publish')
   t.ok(result.budget, 'the memory sample is still reported')
   t.alike(

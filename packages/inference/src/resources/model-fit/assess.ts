@@ -375,7 +375,7 @@ function nativeModelResult(
  * told (an AMD APU on linux), fails it: the weights may live where the budget
  * cannot see them.
  */
-function boundBySystemMemory(
+export function boundBySystemMemory(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined
 ): boolean {
@@ -741,7 +741,7 @@ function worst(a: ModelFitVerdict, b: ModelFitVerdict): ModelFitVerdict {
  * per-process cap, so it deliberately keeps the system basis with the mobile
  * reserve.
  */
-function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
+export function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
   return platform === 'ios-arm64' ? 'process-memory' : 'system-memory'
 }
 
@@ -761,7 +761,7 @@ function basisEvidence(basis: ModelFitBasis) {
  * relation the OS enforces — so every budget field keeps the same meaning
  * under either basis.
  */
-function resolveBudget(
+export function resolveBudget(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined,
   basis: ModelFitBasis,
