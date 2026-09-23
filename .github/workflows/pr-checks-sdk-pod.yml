@@ -409,6 +409,13 @@ jobs:
 
               if [ "$PKG" = "sdk" ]; then
                 run "install $src" bun install
+              elif [ "$PM" = "npm" ]; then
+                # --ignore-scripts: this job writes GITHUB_TOKEN into the
+                # workspace .npmrc before installing, so a dependency lifecycle
+                # script would run with that token in reach. No npm-managed pod
+                # package needs one — see
+                # .github/scripts/test/install-scripts-policy.test.mjs.
+                run "install $src" npm install --ignore-scripts
               else
                 run "install $src" "$PM" install
               fi
