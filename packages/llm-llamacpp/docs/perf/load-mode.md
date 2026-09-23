@@ -111,11 +111,6 @@ single-GPU host and is out of scope here. It is recorded because anyone
 shipping to integrated-GPU hosts would want to know, and because it is why this
 section quotes medians.
 
-An earlier revision of this document quoted ~13%, then ~43%, for the integrated
-anonymous penalty. Both were artifacts — the first of back-to-back priming, the
-second of cross-device interleaving. The figure below (~9%) comes from medians
-of five isolated samples and is consistent across the last two runs.
-
 ## What the numbers say
 
 **`auto` selects the right path on every device selection measured.** Its
@@ -294,15 +289,3 @@ one session reads against a polluted baseline.
 
 Run them with `sweep_params=load-mode` on **Benchmark Performance — LLM
 Parameter Sweep**: 12 mobile shards instead of 86, and no six-hour grid.
-
-## Related gaps this measurement exposed
-
-Neither is fixed here; both are downstream of the addon.
-
-- **SDK callers cannot request `auto`.** `packages/inference/src/schemas/llamacpp-config.ts`
-  enumerates five values, omitting the one that is the default; so do the
-  exported contract and the generated Python model. Callers get `auto` by
-  default but cannot pin it.
-- **`assessModelFit` rejects `auto`.** `packages/model-fit/addon/src/fit/LlamaLoadConfig.cpp`
-  `parseLoadMode` has the same five-value map, so it and `loadModel` disagree on
-  the accepted value set.

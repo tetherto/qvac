@@ -138,32 +138,18 @@ function mib (bytes) {
   return Math.round((bytes / (1024 * 1024)) * 10) / 10
 }
 
-// How to invoke bare, resolved once by actually running each candidate.
+// How to invoke bare. CI installs a global bare via setup-bare-tooling, so the
+// normal path is simply `bare`; npx remains for a local shell without one.
 //
-// Three traps, all seen in CI:
-//   - `bare` is on PATH on the linux-x64 runner and on dev machines, and is
-//     NOT on darwin-x64 or linux-arm64 (run 35778027044: every cell ENOENT).
-//   - On Windows the npm shims are .cmd, and since the CVE-2024-27980 fix Node
-//     REFUSES to spawn a .bat/.cmd without a shell. Naming `bare.cmd` directly
-//     does not help; the shim has to go through the command processor.
-//     (run 35810927805: the npx fallback engaged and failed ENOENT anyway.)
-//   - Through a command processor a missing inner command sets NO spawn error
-//     and returns a non-zero status, so "no error" is not proof it ran.
-// Hence: every candidate is a real invocation, selection requires a clean exit
-// AND a version on stdout, and nothing runnable is a loud throw rather than
-// letting every cell fail one at a time.
-// The workflow installs a global bare via .github/actions/setup-bare-tooling,
-// so `bare` should be on PATH on every runner. npx stays as a last resort for
-// a local shell that has no global bare — but it is NOT the normal path: npx
-// re-resolves the package on every invocation (~2s warm, far worse cold) and
-// the sweep spawns one process per sample.
+// Selection runs the candidate rather than trusting the name: on Windows the
+// npm shims are .cmd and, since the CVE-2024-27980 fix, Node refuses to spawn
+// a .bat/.cmd without a shell, so those go through the command processor — and
+// through a processor a missing inner command sets no spawn error and exits
+// non-zero, which is why a clean spawn alone is not proof it ran.
 function bareCandidates (platform = process.platform, env = process.env) {
   if (platform === 'win32') {
     const processor = env.ComSpec || 'cmd.exe'
     return [
-      // Real executables can be spawned directly; npm shims cannot, and since
-      // the CVE-2024-27980 fix Node refuses .cmd without a shell, so those go
-      // through the command processor.
       { command: 'bare.exe', prefix: [] },
       { command: processor, prefix: ['/d', '/s', '/c', 'bare.cmd'] },
       { command: processor, prefix: ['/d', '/s', '/c', 'npx.cmd', '--yes', 'bare'] }
@@ -175,9 +161,6 @@ function bareCandidates (platform = process.platform, env = process.env) {
   ]
 }
 
-// Picks the first candidate that genuinely executes. Separate from the memo so
-// tests can drive it with injected candidates and assert on real execution
-// rather than on how the list was spelled.
 function resolveBareCommand (candidates = bareCandidates()) {
   const tried = []
   for (const candidate of candidates) {
@@ -187,10 +170,6 @@ function resolveBareCommand (candidates = bareCandidates()) {
       tried.push(`${label} (${probe.error.code || probe.error.message})`)
       continue
     }
-    // A processor runs even when the thing it was asked to run does not, so a
-    // clean spawn is not enough — require the exit status AND real output.
-    // The two are reported separately: collapsing them once claimed "no
-    // version output" for a candidate that had printed some.
     const version = (probe.stdout || '').trim()
     if (probe.status !== 0) {
       tried.push(`${label} (exit ${probe.status}${version ? '' : ', no output'})`)
@@ -204,7 +183,7 @@ function resolveBareCommand (candidates = bareCandidates()) {
   }
   throw new Error(
     'Cannot invoke bare. Tried: ' + tried.join('; ') +
-    '. Install bare on PATH or make npx available on this runner.'
+    '. CI installs one via .github/actions/setup-bare-tooling; locally, install bare or make npx available.'
   )
 }
 
@@ -222,7 +201,7 @@ function bareCommand () {
 // Not the same question as "did the probe exit cleanly". A cell that requested
 // the GPU and silently ran on the CPU loaded fine and reports a time, but the
 // renderer already marks it "not a comparable row" — counting it as data would
-// let an all-GPU leg that quietly fell back to CPU pass the no-data guard while
+// let a leg that quietly fell back to another device pass the no-data guard while
 // producing nothing the report can use.
 function isUsableRecord (r) {
   if (r.status === 'failed') return false
@@ -285,9 +264,9 @@ function classify (cell, loadSamples, backendDevice) {
   // it gets its own status and is excluded from the usable-record count.
   if (backendDevice && backendDevice !== cell.device) return 'backend-mismatch'
   // Unknown is NOT the same as matching. The probe reports null whenever its
-  // verification inference does not return stats — which is every cell on
-  // darwin-x64 in run 35810927805 — and treating that as agreement published
-  // a GPU-labelled row with no evidence any GPU ran. A device verdict needs a
+  // verification inference returns no stats, and treating that as agreement
+  // publishes a device-labelled row with no evidence that device ran.
+  // A device verdict needs a
   // confirmed device, so this is its own status and is not usable data.
   if (!backendDevice) return 'backend-unverified'
   // dio is accepted by the addon but never reaches the file open in fabric
@@ -483,11 +462,20 @@ function main () {
         // The label the renderer parses back into a shard key and a
         // load-mode row: same [model] [backend] [kv=] [lm=] grammar the
         // mobile reporter emits.
+        // Labelled with the REQUESTED device, so rows group by what was asked
+        // for. What actually ran travels beside it in execution_provider and
+        // the renderer compares the two. Labelling with the observed backend
+        // and falling back to the requested one when it was unknown made an
+        // unverified CPU fallback indistinguishable from a real GPU row.
         test:
-          `[${r.modelId}-${r.quantization}] [${r.backendDevice || r.requestedDevice}] ` +
+          `[${r.modelId}-${r.quantization}] [${r.requestedDevice}] ` +
           `[rb=-1] [kv=f16] [lm=${r.loadMode}]` +
           (r.mainGpu ? ` [mg=${r.mainGpu}]` : ''),
         status: r.status === 'failed' ? 'crashed' : 'passed',
+        // Observed backend ONLY — null when the probe could not establish it.
+        // Never falls back to the request; that is the whole point.
+        execution_provider: r.backendDevice || null,
+        requested_device: r.requestedDevice,
         metrics: {
           ttft_ms: null,
           tps: null,
@@ -511,8 +499,8 @@ function main () {
 
   // A mode that cannot load is a legitimate result and stays a `failed` row.
   // A leg where NOTHING loaded is not data, it is a broken runner, and it must
-  // not report success: darwin-x64 and linux-arm64 both went green on 0/18 in
-  // run 35778027044, and the artifacts looked like real (empty) reports.
+  // not report success — the artifacts of such a leg still look like
+  // well-formed (empty) reports.
   const measured = records.filter(isUsableRecord)
   if (measured.length === 0) {
     console.error(`\nload-mode sweep: 0 of ${records.length} cells produced a usable measurement — no data.`)

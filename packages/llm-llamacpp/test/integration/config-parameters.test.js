@@ -97,7 +97,10 @@ const scenarios = [
   },
   // One scenario per value the addon accepts (LoadFitNormalization.cpp
   // kLoadModes). They assert acceptance and a working load, not which memory
-  // path the engine took — that is behaviour, and load-mode.test.js measures it.
+  // path the engine took. Which mode is actually cheaper to load, and by how
+  // much, is measured by the load-mode benchmark sweep and reported in
+  // docs/perf/load-mode.md — an integration test is the wrong place for a
+  // measurement whose thresholds depend on the host.
   //
   // None of these may be tightened into a failure expectation on a platform
   // where the mode degrades: llama.cpp warns and continues when mlock exceeds

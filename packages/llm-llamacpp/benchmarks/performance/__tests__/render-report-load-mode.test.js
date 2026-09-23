@@ -129,15 +129,12 @@ test('load-mode metrics survive aggregation and reach the rendered table', () =>
   assert.match(md, /\| `mmap` \| 700 \|/, 'mmap load time survives aggregation')
   assert.doesNotMatch(md, /undefined ms/, 'no undefined leaks into the winner line')
   assert.doesNotMatch(md, /null MiB/, 'no null leaks into the winner line')
-  // Pixel 8 is a mobile device, and a mobile cell is ONE load. Naming a
-  // fastest mode off single samples would contradict the sampling limitation
-  // this report documents, so mobile lists observed times and crowns nothing.
-  assert.doesNotMatch(md, /fastest load:/, 'no timing winner is crowned on mobile')
-  assert.match(
-    md,
-    /observed load times \(one sample each, no timing winner claimed\): `mmap` 700 ms, `auto` 900 ms/,
-    'mobile reports observed load times, fastest first, without a verdict'
-  )
+  // No winner anywhere: the consolidated summary keeps one figure per cell and
+  // cannot show the uncertainty a ranking would need. It reports the range and
+  // the per-mode deltas, and leaves interpretation to docs/perf/load-mode.md.
+  assert.doesNotMatch(md, /fastest load:/, 'no timing winner is crowned')
+  assert.doesNotMatch(md, /lowest anonymous resident|lowest total resident/, 'no memory winner')
+  assert.match(md, /load-time range: `mmap` 700 ms to `auto` 900 ms/, 'the range is stated instead')
   // Both margins: auto is the real default, mmap is named by the acceptance
   // criteria, and correcting the first does not remove the second.
   assert.match(md, /Δ vs auto/, 'margin against auto is present')
@@ -186,7 +183,10 @@ function desktopRow(mode, loadMs) {
   }
 }
 
-test('desktop crowns a fastest mode, mobile does not', () => {
+test('desktop reports a range too, and still crowns nothing', () => {
+  // Desktop cells ARE a median of five, but the consolidated report does not
+  // carry the sample count or spread, so it is not the place to declare a
+  // winner either. The standalone sweep artifact has the statistics.
   const md = render({
     'load-mode-perf-linux-x64.json': desktopLoadModeReport([
       desktopRow('auto', 900),
@@ -194,25 +194,25 @@ test('desktop crowns a fastest mode, mobile does not', () => {
     ])
   })
 
-  assert.match(md, /fastest load: `mmap` \(700 ms\)/, 'a median-of-five cell supports a verdict')
-  assert.doesNotMatch(md, /observed load times/, 'desktop does not use the mobile hedge')
+  assert.match(md, /load-time range: `mmap` 700 ms to `auto` 900 ms/)
+  assert.doesNotMatch(md, /fastest load:/, 'no verdict without the uncertainty to back it')
 })
 
-test('dio is labelled inert and never crowned', () => {
-  // On DESKTOP, where a fastest mode is actually claimed — on mobile this
-  // assertion would hold trivially, since nothing is crowned there at all.
+test('dio is labelled inert and kept out of the reported range', () => {
   const md = render({
     'load-mode-perf-linux-x64.json': desktopLoadModeReport([
       desktopRow('auto', 900),
-      // dio is the fastest here and must still not win: it is an alias of
-      // `none`, so recommending it would mean recommending an inert flag.
+      desktopRow('mmap', 700),
+      // dio is the fastest number here and must not bound the range: it is an
+      // alias of `none`, so presenting it as the floor would read as advice to
+      // set an inert flag.
       desktopRow('dio', 100)
     ])
   })
 
   assert.match(md, /\| `dio` \|.*Inert \(fabric discards the flag\)/, 'dio labelled inert')
-  assert.doesNotMatch(md, /fastest load: `dio`/, 'dio excluded from the winner pick')
-  assert.match(md, /fastest load: `auto`/, 'the crown goes to the fastest non-inert mode')
+  assert.match(md, /\| `dio` \| 100 \|/, 'its measurement is still shown')
+  assert.match(md, /load-time range: `mmap` 700 ms to `auto` 900 ms/, 'dio does not bound the range')
 })
 
 test('an mlock that locked nothing is not reported as a plain success', () => {
@@ -238,7 +238,12 @@ test('memory ranking prefers anonymous RSS where the platform reports it', () =>
     ])
   })
 
-  assert.match(md, /lowest anonymous resident: `mmap`/, 'ranked on anonymous RSS, not total rss')
+  // The consolidated report no longer ranks, so what must survive is the
+  // DATA that makes the inversion visible: mmap higher on total rss, lower on
+  // anonymous. A reader (and docs/perf/load-mode.md) draws the conclusion.
+  assert.match(md, /\| `mmap` \|.*\| 480 \| 120 \| 350 \|/, 'mmap: high rss, low anon')
+  assert.match(md, /\| `none` \|.*\| 300 \| 280 \| 20 \|/, 'none: low rss, high anon')
+  assert.doesNotMatch(md, /lowest anonymous resident|lowest total resident/, 'no memory winner')
 })
 
 test('a platform without /proc ranks total rss and says so', () => {
@@ -249,8 +254,11 @@ test('a platform without /proc ranks total rss and says so', () => {
     ])
   })
 
-  assert.match(md, /lowest total resident: `auto`/, 'falls back to total rss')
-  assert.match(md, /anonymous RSS unavailable on this platform/, 'states the limitation')
+  // No /proc: anon and file must render as absent rather than as zero, which
+  // would read as "this mode costs no anonymous memory".
+  assert.match(md, /\| `auto` \|.*\| 400 \| - \| - \|/, 'absent counters render as -, not 0')
+  assert.match(md, /\| `mmap` \|.*\| 500 \| - \| - \|/)
+  assert.doesNotMatch(md, /\| 0 \| 0 \|/, 'nulls must not become zeros')
 })
 
 test('a crashed mode is reported as failing, not as a coverage gap', () => {
@@ -453,7 +461,6 @@ test('absent memory counters are not reported as zero', () => {
 
   assert.match(md, /\| `mlock` \|.*Measured \(lock unverified\)/, 'unverifiable lock says so')
   assert.doesNotMatch(md, /lock had no effect/, 'absent counter is not read as a zero lock')
-  assert.match(md, /lowest total resident/, 'falls back to total rss rather than ranking on a fake 0 anon')
 })
 
 // A narrowed dispatch must not read as a broken one: modes it deliberately
@@ -506,4 +513,101 @@ test('cross-product rows never leak into the load-mode section', () => {
 
   assert.doesNotMatch(md, /## Load modes/, 'no load-mode section without load-mode rows')
   assert.doesNotMatch(md, /4242/, 'a cross-product load time is not rendered as a load-mode result')
+})
+
+// ── Backend verification, end to end ────────────────────────────────────────
+// Classification was tested in the runner in isolation, which said nothing
+// about whether the verdict survives to the GitHub summary. It did not: the
+// emitter collapsed every non-crash state to `passed` and labelled the row
+// with the requested device when the observed one was unknown, so an
+// unverified CPU fallback rendered as a passed GPU measurement.
+
+function lmRow(mode, { requested = 'gpu', observed = 'gpu', loadMs = 700 } = {}) {
+  return {
+    test: `[qwen3.5-0.8b-Q4_0] [${requested}] [rb=-1] [kv=f16] [lm=${mode}]`,
+    status: 'passed',
+    execution_provider: observed,
+    requested_device: requested,
+    metrics: {
+      ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null,
+      load_ms: loadMs,
+      rss_bytes: 500 * MB, rss_anon_bytes: 130 * MB, rss_file_bytes: 370 * MB, locked_bytes: 0
+    }
+  }
+}
+
+function desktopDoc(results) {
+  return { device: { name: 'Desktop linux-x64' }, addon: 'llamacpp-llm', desktop: true, results }
+}
+
+test('a GPU request that ran on the CPU is not published as a GPU measurement', () => {
+  const md = render({
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      lmRow('auto', { requested: 'gpu', observed: 'cpu', loadMs: 900 })
+    ])
+  })
+  assert.match(md, /Ran on cpu, not gpu — not comparable/, 'the fallback is stated in the table')
+  assert.doesNotMatch(md, /\| `auto` \| 900 \|.*\| Measured \|/, 'must not read as a plain measurement')
+})
+
+test('a backend that could not be confirmed is flagged, not assumed to match', () => {
+  // The darwin-x64 shape: loaded fine, reported no backend at all.
+  const md = render({
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      lmRow('auto', { requested: 'gpu', observed: null, loadMs: 2602 })
+    ])
+  })
+  assert.match(md, /Backend unverified/, 'unknown is reported as unknown')
+  assert.doesNotMatch(md, /\| `auto` \| 2602 \|.*\| Measured \|/, 'unknown must not read as confirmed')
+})
+
+test('a confirmed match still renders as a plain measurement', () => {
+  const md = render({
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      lmRow('auto', { requested: 'gpu', observed: 'gpu', loadMs: 700 })
+    ])
+  })
+  assert.match(md, /\| `auto` \| 700 \|.*\| Measured \|/, 'a verified row is unaffected')
+  assert.doesNotMatch(md, /Backend unverified|not comparable/)
+})
+
+test('mobile carries the same verification, from its own execution_provider', () => {
+  // The mobile helper records execution_provider but the renderer ignored it
+  // and derived the backend from the test label, so a phone falling back to
+  // CPU appeared under the requested backend exactly as desktop did.
+  const md = render({
+    'perf-pixel.json': perfReport('Pixel 8', [
+      { ...lmRow('auto', { requested: 'gpu', observed: 'cpu', loadMs: 950 }) }
+    ])
+  })
+  assert.match(md, /Ran on cpu, not gpu — not comparable/, 'mobile rows are checked too')
+})
+
+test('integrated and dedicated main-gpu rows do not collide', () => {
+  // On a host with both GPU classes the same mode is two different loads. The
+  // runner labels them [mg=...]; keying only on device and backend made the
+  // second silently overwrite the first, showing one unexplained figure.
+  const mg = (mode, cls, loadMs) => ({
+    test: `[qwen3.5-0.8b-Q4_0] [gpu] [rb=-1] [kv=f16] [lm=${mode}] [mg=${cls}]`,
+    status: 'passed',
+    execution_provider: 'gpu',
+    requested_device: 'gpu',
+    metrics: {
+      ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null,
+      load_ms: loadMs,
+      rss_bytes: 500 * MB, rss_anon_bytes: 130 * MB, rss_file_bytes: 370 * MB, locked_bytes: 0
+    }
+  })
+
+  const md = render({
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      mg('auto', 'integrated', 738),
+      mg('auto', 'dedicated', 764)
+    ])
+  })
+
+  assert.match(md, /main-gpu: integrated/, 'the integrated group is rendered')
+  assert.match(md, /main-gpu: dedicated/, 'the dedicated group is rendered')
+  assert.match(md, /\| `auto` \| 738 \|/, 'the integrated measurement survives')
+  assert.match(md, /\| `auto` \| 764 \|/, 'the dedicated measurement survives')
 })

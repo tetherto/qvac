@@ -197,27 +197,22 @@ device in [docs/perf/load-mode.md](./docs/perf/load-mode.md).
 | `mlock` | no — reads anonymously, then locks | yes | no |
 | `mmap+mlock` | yes | yes | no |
 | `none` | no | no | no |
-| `dio` | no | no | requested, but see below |
+| `dio` | no | no | requested, but inert — see below |
 
 `mlock` is **not** "`mmap` plus locking" — it is the anonymous path plus
 locking.
 
 `auto` loads anonymously when a selected device sets `mmap_support = false`:
 OpenCL (Adreno), Hexagon, Vulkan integrated GPUs and CUDA integrated GPUs.
-Everywhere else it maps. Measured on linux-x64, that saves ~196 MiB resident on
-an integrated GPU where mapping buys nothing, and avoids a 2.3× load-time
-penalty on a discrete one — so the choice is per-device rather than
-per-platform.
+Everywhere else it maps. The choice is therefore per-device, not per-platform.
 
-Two caveats worth knowing before selecting a mode explicitly:
+`mlock` warns and continues when the lock exceeds `RLIMIT_MEMLOCK`, so a load
+that succeeded may not have locked anything, and a GPU load locks nothing at
+all because the weights are in device memory. `dio` is accepted but qvac-fabric
+does not currently open the file with `O_DIRECT`.
 
-- **`dio` currently does nothing.** qvac-fabric accepts the mode but never
-  opens the file with `O_DIRECT`, so it behaves exactly like `none`. Its
-  underlying implementation is Linux-only in any case.
-- **A failed lock is not an error.** `mlock` warns and continues when the lock
-  exceeds `RLIMIT_MEMLOCK` (8 MB on a stock Linux, and typically unavailable on
-  Android), so a load that "succeeded" may not have locked anything. On a GPU
-  load `mlock` locks nothing at all, because the weights are in device memory.
+Measured load times and residency per platform and device, and what each mode
+costs, are in [docs/perf/load-mode.md](./docs/perf/load-mode.md).
 
 #### KV-cache type & auto-default
 

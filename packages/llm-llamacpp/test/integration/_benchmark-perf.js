@@ -124,11 +124,14 @@ function modelSpec(size, quant) {
   }
 }
 
-async function runInference(addon, prompt, reasoningBudget) {
+// nPredict caps the generation. The throughput path leaves it unset so the
+// addon's configured length applies; a load-mode cell passes 1, because its
+// only reason to generate at all is to learn which backend served the load.
+async function runInference(addon, prompt, reasoningBudget, nPredict = null) {
   const startTime = Date.now()
-  const response = await addon.run(prompt, {
-    generationParams: { reasoning_budget: parseInt(reasoningBudget, 10) }
-  })
+  const generationParams = { reasoning_budget: parseInt(reasoningBudget, 10) }
+  if (nPredict !== null) generationParams.n_predict = nPredict
+  const response = await addon.run(prompt, { generationParams })
   const chunks = []
   let error = null
   response
@@ -256,15 +259,23 @@ function benchmarkModel(
               logger: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} },
               opts: { stats: true }
             })
-            const memBefore = readMemorySample()
+            // Load timing and residency are sampled for load-mode cells
+            // only. The established throughput grid is not a load benchmark
+            // and did not ask for these columns; adding them to all 70 cells
+            // would change that suite's output for a question it is not
+            // answering. Widen this only if a task asks for it.
+            const memBefore = loadMode !== null ? readMemorySample() : null
             const loadStart = Date.now()
             await addon.load()
             const loadMs = Date.now() - loadStart
-            const memAfter = readMemorySample()
-            loadMetrics = { load_ms: loadMs, ...memoryDelta(memBefore, memAfter) }
+            if (loadMode !== null) {
+              loadMetrics = { load_ms: loadMs, ...memoryDelta(memBefore, readMemorySample()) }
+            }
             t.comment(
-              `[${id}] [${device}] load ${loadMs}ms ` +
-                `rss=${loadMetrics.rss_bytes} anon=${loadMetrics.rss_anon_bytes} file=${loadMetrics.rss_file_bytes}`
+              loadMetrics
+                ? `[${id}] [${device}] load ${loadMs}ms ` +
+                    `rss=${loadMetrics.rss_bytes} anon=${loadMetrics.rss_anon_bytes} file=${loadMetrics.rss_file_bytes}`
+                : `[${id}] [${device}] load ${loadMs}ms`
             )
           } catch (loadErr) {
             // Load failed (e.g. unsupported quantized KV cache) — placeholders
@@ -277,6 +288,36 @@ function benchmarkModel(
           }
 
           try {
+            // A load-mode cell measures the LOAD, and the renderer excludes
+            // its rows from every throughput comparison. Running the full
+            // throughput programme here — a warm-up, both reasoning budgets
+            // and PERF_RUNS generations of up to n_predict tokens each — is
+            // Device Farm time spent producing numbers nothing reads. One
+            // short generation is still needed, and only to learn which
+            // backend actually served the load.
+            if (loadMode !== null) {
+              let stats = null
+              try {
+                ;({ stats } = await runInference(addon, prompt, REASONING_BUDGETS[0], 1))
+              } catch (probeErr) {
+                t.comment(
+                  `[${id}] [${device}] backend probe failed (backend unverified): ` +
+                    `${probeErr && probeErr.message ? probeErr.message : probeErr}`
+                )
+              }
+              t.comment(
+                recordPerformance(labelFor(REASONING_BUDGETS[0]), null, {
+                  stats,
+                  deviceId: device,
+                  scenario: 'benchmark-perf',
+                  model: modelFor(REASONING_BUDGETS[0]),
+                  loadMetrics
+                })
+              )
+              t.pass(`[${id}] [${device}] load-mode cell measured`)
+              continue
+            }
+
             // Warm up once per backend, not per reasoning budget. The warm-up
             // primes the GPU kernels/caches for this loaded model; reasoning
             // budget is a per-call generation param that does not change the

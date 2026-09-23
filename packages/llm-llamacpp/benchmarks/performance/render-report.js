@@ -31,8 +31,7 @@ function parseArgs (argv) {
     compareDir: null,
     baselineRunId: null,
     baselineRunNumber: null,
-    baselineRunUrl: null,
-    knownIssues: []
+    baselineRunUrl: null
   }
   for (let i = 2; i < argv.length; i++) {
     const t = argv[i]
@@ -46,9 +45,6 @@ function parseArgs (argv) {
     else if (t === '--baseline-run-id') a.baselineRunId = argv[++i]
     else if (t === '--baseline-run-number') a.baselineRunNumber = argv[++i]
     else if (t === '--baseline-run-url') a.baselineRunUrl = argv[++i]
-    // Repeatable. An infrastructure failure the run already knows about, so
-    // the summary names it instead of leaving a silent hole in Coverage.
-    else if (t === '--known-issue') a.knownIssues.push(argv[++i])
   }
   if (!a.dir) {
     throw new Error(
@@ -233,7 +229,13 @@ function rowsFromFile (file, desktopDevice, meta) {
         rssBytes: num(m.rss_bytes),
         rssAnonBytes: num(m.rss_anon_bytes),
         rssFileBytes: num(m.rss_file_bytes),
-        lockedBytes: num(m.locked_bytes)
+        lockedBytes: num(m.locked_bytes),
+        // Requested vs OBSERVED backend, kept apart. Neither falls back to
+        // the other: a row whose observed backend is null was never confirmed,
+        // and one that disagrees ran somewhere else. Collapsing them let an
+        // unverified CPU fallback render as a passed GPU measurement.
+        observedDevice: r.execution_provider || null,
+        requestedDevice: r.requested_device || null
       })
     }
     return rows
@@ -338,6 +340,8 @@ function aggregate (rows) {
       rssAnonBytes: firstNonNull('rssAnonBytes'),
       rssFileBytes: firstNonNull('rssFileBytes'),
       lockedBytes: firstNonNull('lockedBytes'),
+      observedDevice: firstNonNull('observedDevice'),
+      requestedDevice: firstNonNull('requestedDevice'),
       sampleCount: real.length
     })
   }
@@ -558,13 +562,23 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
   // difference this sweep exists to measure — and would silently drop whichever
   // backend sorted second.
   const backendOf = (config) => (/\[cpu\]/.test(config) ? 'cpu' : /\[gpu\]/.test(config) ? 'gpu' : null)
+  // main-gpu is part of the key. On a host with both an integrated and a
+  // discrete GPU the same mode is two different loads, and the runner already
+  // labels them [mg=integrated] / [mg=dedicated] — but keying on device and
+  // backend alone made those two rows collide, so one silently overwrote the
+  // other and the report showed a single unexplained figure.
+  const mainGpuOf = (config) => {
+    const m = /\[mg=([^\]]+)\]/.exec(config)
+    return m ? m[1] : null
+  }
   const groups = new Map()
   for (const r of lmRows) {
     const mode = /\[lm=([^\]]+)\]/.exec(r.config)
     if (!mode) continue
     const backend = backendOf(r.config)
-    const key = `${r.device}@@${backend || 'unknown'}`
-    if (!groups.has(key)) groups.set(key, { device: r.device, backend, modes: new Map() })
+    const mainGpu = mainGpuOf(r.config)
+    const key = `${r.device}@@${backend || 'unknown'}@@${mainGpu || '-'}`
+    if (!groups.has(key)) groups.set(key, { device: r.device, backend, mainGpu, modes: new Map() })
     const modes = groups.get(key).modes
     if (!modes.has(mode[1]) || (modes.get(mode[1]).crashed && !r.crashed)) modes.set(mode[1], r)
   }
@@ -584,7 +598,7 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
   })
 
   for (const key of keys) {
-    const { device, backend, modes: seen } = groups.get(key)
+    const { device, backend, mainGpu, modes: seen } = groups.get(key)
     if (seen.size === 0) continue
 
     const auto = seen.get('auto')
@@ -600,7 +614,10 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
       return `${d >= 0 ? '+' : ''}${Math.round(d * 10) / 10}%`
     }
 
-    out.push(`### ${device}${backend ? ` — ${backend}` : ''}`, '')
+    out.push(
+      `### ${device}${backend ? ` — ${backend}` : ''}${mainGpu ? ` (main-gpu: ${mainGpu})` : ''}`,
+      ''
+    )
     out.push('| Mode | Load (ms) | Δ vs auto | Δ vs mmap | rss (MiB) | anon (MiB) | file (MiB) | locked (MiB) | Status |')
     out.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |')
     // Fixed order, not measured order: a reader comparing two devices should
@@ -626,8 +643,15 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
       // A lock that silently did not happen is not a measured mlock. Where the
       // locked counter is unavailable (no /proc), say the lock was unverified
       // rather than implying it took effect.
+      // Backend first: a row that did not run where it was asked to is not a
+      // measurement of that device, whatever else is true of it, and an
+      // unconfirmed backend is not agreement.
       let status = 'Measured'
-      if (mode === 'dio') status = 'Inert (fabric discards the flag)'
+      const want = r.requestedDevice
+      const got = r.observedDevice
+      if (want && got && got !== want) status = `**Ran on ${got}, not ${want} — not comparable**`
+      else if (want && !got) status = '**Backend unverified**'
+      else if (mode === 'dio') status = 'Inert (fabric discards the flag)'
       else if (mode === 'mlock' || mode === 'mmap+mlock') {
         if (r.lockedBytes === null || r.lockedBytes === undefined) status = 'Measured (lock unverified)'
         else if (r.lockedBytes === 0) status = 'Measured (lock had no effect)'
@@ -640,44 +664,25 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
     }
     out.push('')
 
-    // Two metrics can name two different modes, so both are stated and no
-    // single overall winner is manufactured. 'dio' is excluded: crowning an
-    // alias of `none` would read as advice to set an inert flag.
-    const ranked = [...seen.entries()].filter(([m, r]) => m !== 'dio' && !r.crashed)
-    const timed = ranked.filter(([, r]) => r.loadMs !== null)
-    // Ranked on anonymous RSS where the platform exposes it, because total rss
-    // ranks mapped modes backwards — the mapped weights are file-backed and
-    // evictable, so a mapped load reads higher on rss while costing less of the
-    // memory the system must actually find. Falling back to total rss without
-    // saying so would contradict the note above this table.
-    const anonRanked = ranked.filter(([, r]) => r.rssAnonBytes !== null && r.rssAnonBytes !== undefined)
-    const rssRanked = ranked.filter(([, r]) => r.rssBytes !== null)
-    // Desktop cells are a median of five loads, so naming a fastest mode is a
-    // claim the samples support. A mobile cell is ONE load — the 20-minute iOS
-    // per-test ceiling leaves no room for repeats — so crowning a winner there
-    // would rank single samples, contradicting the limitation this report
-    // states. Mobile lists what was observed and stops short of a verdict.
-    if (timed.length > 0 && desktopKeys.has(device)) {
-      const fastest = timed.reduce((a, b) => (b[1].loadMs < a[1].loadMs ? b : a))
-      out.push(`- fastest load: \`${fastest[0]}\` (${fastest[1].loadMs} ms)`)
-    } else if (timed.length > 0) {
-      const observed = [...timed]
-        .sort((a, b) => a[1].loadMs - b[1].loadMs)
-        .map(([m, r]) => `\`${m}\` ${r.loadMs} ms`)
-        .join(', ')
+    // No winner is named here. The consolidated summary keeps only one figure
+    // per cell — the sample count, spread and stalled-sample flags live in the
+    // standalone sweep report — so a "fastest mode" line would rank numbers
+    // whose uncertainty this document cannot show, and mobile cells are a
+    // single load each. Memory ranking has the same problem from the other
+    // side: file-backed residency is the differentiator on GPU, anonymous on
+    // CPU, and total rss can contradict both.
+    //
+    // Measurements, deltas, coverage and status are presented; the trade-offs
+    // are interpreted in docs/perf/load-mode.md against the full sweep output.
+    const observed = [...seen.entries()].filter(([m, r]) => m !== 'dio' && !r.crashed)
+    const timed = observed.filter(([, r]) => r.loadMs !== null)
+    if (timed.length > 1) {
+      const spread = [...timed].sort((a, b) => a[1].loadMs - b[1].loadMs)
+      const lo = spread[0]
+      const hi = spread[spread.length - 1]
       out.push(
-        `- observed load times (one sample each, no timing winner claimed): ${observed}`
-      )
-    }
-    if (anonRanked.length > 0) {
-      const leanest = anonRanked.reduce((a, b) => (b[1].rssAnonBytes < a[1].rssAnonBytes ? b : a))
-      out.push(`- lowest anonymous resident: \`${leanest[0]}\` (${mib(leanest[1].rssAnonBytes)} MiB anon)`)
-    } else if (rssRanked.length > 0) {
-      const leanest = rssRanked.reduce((a, b) => (b[1].rssBytes < a[1].rssBytes ? b : a))
-      out.push(
-        `- lowest total resident: \`${leanest[0]}\` (${mib(leanest[1].rssBytes)} MiB rss) — ` +
-        'anonymous RSS unavailable on this platform, so this ranks total rss and may favour an ' +
-        'unmapped mode for memory it does not truly cost'
+        `- load-time range: \`${lo[0]}\` ${lo[1].loadMs} ms to \`${hi[0]}\` ${hi[1].loadMs} ms ` +
+        '(see the per-mode deltas above; the sweep artifact carries the spread)'
       )
     }
     const missing = ['auto', 'none', 'mmap', 'mlock', 'mmap+mlock', 'dio']
@@ -717,7 +722,7 @@ function mermaidSection (rows, desktopDevice, chartsUrl) {
   ]
 }
 
-function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseline, chartsUrl, knownIssues = []) {
+function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseline, chartsUrl) {
   const byDevice = new Map()
   for (const r of rows) {
     // Load-mode rows measure load time and residency, not throughput, and
@@ -800,14 +805,6 @@ function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseli
     return a.localeCompare(b)
   })
   for (const l of coverageLines(rows, desktopDevice, coverageDevices, meta.expectedShards)) lines.push(l)
-  // Named causes for coverage this run already knows it will not have. Without
-  // these the report shows a hole and leaves the reader to guess whether a
-  // platform failed, was not dispatched, or silently dropped its artifacts.
-  if (knownIssues.length > 0) {
-    lines.push('**Known infrastructure failures in this run:**', '')
-    for (const issue of knownIssues) lines.push(`- ${issue}`)
-    lines.push('')
-  }
 
   for (const l of mermaidSection(rows, desktopDevice, chartsUrl)) lines.push(l)
 
@@ -1076,7 +1073,7 @@ function main () {
     return
   }
 
-  const md = render(rows, desktopDevice, meta, args.addonVersion, baselineMap, baseline, args.chartsUrl, args.knownIssues)
+  const md = render(rows, desktopDevice, meta, args.addonVersion, baselineMap, baseline, args.chartsUrl)
   if (args.output) fs.writeFileSync(args.output, md)
   else process.stdout.write(md)
 

@@ -1,8 +1,11 @@
 name: Benchmark Performance — LLM Parameter Sweep
 
-# Manually-triggered LLM benchmark (no sweep inputs — everything is in the scripts).
-# Desktop: bare benchmarks/performance/llm-parameter-sweep.js on a Linux GPU runner.
-# Mobile:  runBenchmarkPerfTest on Android + iOS via Device Farm.
+# Manually-triggered LLM benchmark.
+# Desktop: the throughput grid (llm-parameter-sweep.js) and/or the additive
+#          load-mode sweep (load-mode-sweep.js), per platform in desktop_platforms.
+# Mobile:  runBenchmarkPerf* shards on Android + iOS via Device Farm.
+#
+# `sweep_params` selects what runs; empty means everything.
 #
 # To change what runs, edit:
 #   desktop: models.manifest.json (models) + llm-parameter-sweep.config.js (sweep dims)
@@ -274,9 +277,11 @@ jobs:
     # would multiply that; `desktop_platforms` opts the others in per dispatch.
     strategy:
       fail-fast: false
-      # Sequential: these are shared self-hosted GPU runners and a parallel
-      # desktop leg would contend with the mobile legs for the same pool.
-      max-parallel: 1
+      # Parallel. Each platform has its own runner pool — linux-x64 and
+      # win32-x64 are distinct self-hosted GPU pools, darwin-x64 and
+      # linux-arm64 are GitHub-hosted — so nothing here contends. Serialising
+      # them only makes each leg wait on the queue time of the ones before it,
+      # which defeats the point of a narrowed selector.
       matrix:
         include: ${{ fromJSON(needs.context.outputs.desktop_matrix) }}
     runs-on: ${{ startsWith(matrix.runner, '[') && fromJSON(matrix.runner) || matrix.runner }}
@@ -298,10 +303,8 @@ jobs:
 
       # Node AND a global bare, via the action the prebuild workflows already
       # use. The load-mode sweep spawns one bare process per sample, and bare
-      # is not on PATH by default on every runner — plain setup-node left
-      # darwin-x64 and linux-arm64 with no bare at all (run 35778027044) and
-      # made `npx --yes bare` the fallback, which re-resolves the package on
-      # every spawn.
+      # is not on PATH by default on every runner; without it the sweep falls
+      # back to `npx --yes bare`, which re-resolves the package on every spawn.
       - name: Setup Bare tooling
         uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
         with:
@@ -319,9 +322,8 @@ jobs:
         with:
           # Workspace-relative, NOT ${{ runner.temp }}: on Windows that expands
           # to a backslash path (D:\a\_temp), and the backslashes are escape
-          # characters to the Git Bash step below, which mangled the path and
-          # failed the whole win32-x64 leg of run 35778027044 before the sweep
-          # ran. A relative path has no backslashes on any runner.
+          # characters to the Git Bash step below, which mangles the path. A
+          # relative path has no backslashes on any runner.
           path: prebuilds-staging
           merge-multiple: true
 
@@ -617,14 +619,6 @@ jobs:
               ARGS+=(--baseline-run-url "https://github.com/$REPO/actions/runs/$COMPARE_RUN_ID")
             fi
           fi
-
-          # Android cannot currently run ANY llm-llamacpp integration test: the
-          # bundle reaches bare-type (brittle -> bare-assert -> bare-inspect ->
-          # bare-type) and the app links no libbare-type, so every shard dies
-          # with ADDON_NOT_FOUND before its body runs. Naming it here keeps the
-          # summary from showing an unexplained hole where Android should be.
-          # Remove this once the mobile app links the addon.
-          ARGS+=(--known-issue "Android: every shard fails with ADDON_NOT_FOUND on bare-type (brittle -> bare-assert -> bare-inspect -> bare-type; the app links no libbare-type), so no Android row appears below. iOS is unaffected. Pre-existing — this workflow last ran mobile in July 2026.")
 
           node packages/llm-llamacpp/benchmarks/performance/render-report.js "${ARGS[@]}"
 
