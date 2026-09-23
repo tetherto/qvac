@@ -16,6 +16,64 @@ This applies to all 14 mobile addons: `asr-ggml`, `audiogen-ggml`,
 2. Click **Run workflow** and fill in the inputs (below).
 3. Click **Run workflow**.
 
+> Agents (Claude Code, Codex, Cursor) can walk you through this: the
+> `qv-mobile-test-dispatch` skill in `.agents/skills/` is the operating procedure
+> built on this page.
+
+### Quick start — test your own PR on a device
+
+The common case, end to end. Device Farm is billed per device minute, so filter
+to one test and one device unless you need more.
+
+```bash
+ADDON=llm-llamacpp          # workflow slug: integration-mobile-test-$ADDON.yml
+PKG=llm-llamacpp            # package dir: packages/$PKG (vla is the odd one: vla vs vla-ggml)
+PR=1234
+BRANCH=$(git branch --show-current)
+
+# 0. Your PR must carry the `prebuilds` label (or run-desktop/run-mobile-addon-tests),
+#    or CI builds no prebuilds and there is no run id to point at.
+
+# 1. The run that built YOUR addon's bundle for THIS commit, whatever workflow built it.
+SHA=$(gh pr view "$PR" --repo tetherto/qvac --json headRefOid --jq .headRefOid)
+for rid in $(gh api "repos/tetherto/qvac/actions/runs?head_sha=$SHA&per_page=100" \
+               --jq '.workflow_runs[].id'); do
+  gh api "repos/tetherto/qvac/actions/runs/$rid/artifacts?per_page=100" \
+    --jq ".artifacts[]|select(.name==\"prebuilds-$PKG\" and .expired==false)|.name" \
+    2>/dev/null | grep -q . && { RUN_ID=$rid; break; }
+done
+echo "run id: $RUN_ID"
+
+# 2. A valid test filter (a mocha --grep over runner NAMES).
+jq -r '(.android//{})|[..|strings]|unique|.[]' packages/$PKG/test/mobile/test-groups.json 2>/dev/null \
+  || grep -oE '\brun[A-Z][A-Za-z0-9_]*' packages/$PKG/test/mobile/integration.auto.cjs | sort -u
+
+# 3. Dispatch. Android and iOS are separate runs, and a second dispatch of the
+#    same workflow on the same branch cancels the first.
+gh workflow run integration-mobile-test-$ADDON.yml --repo tetherto/qvac --ref "$BRANCH" \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 9" \
+  -f device_model_operator=EQUALS \
+  -f tests=<runnerName> \
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
+```
+
+Then check the build job's setup step printed the run and commit you meant:
+
+```
+Verified: prebuilds come from run <id> — artifact 'prebuilds-<pkg>', …, head <sha>, branch <branch> (<repo>), success
+```
+
+**Common stops**, all of which fail fast and for free:
+
+| message | meaning |
+|---|---|
+| `tests filter '<x>' matches none of the N known runners` | wrong runner name — the error lists the valid ones |
+| `Run <id> has no 'prebuilds-<pkg>' … That run built prebuilds for: …` | that run did not build your addon (nx only builds affected ones) |
+| `Run <id> is still '<status>'` | the prebuild job has not uploaded yet — wait, same run id |
+| `prebuild_run_id and a pinned package are mutually exclusive` | clear whichever of the two you did not mean |
+| `[prestage] FATAL: tests grep /<x>/ matched no known runner` | the name is in neither the addon's `test-groups.json` nor its `integration.auto.cjs` — a typo; take one from the lists above |
+
 ### Inputs
 
 | Input | What it does |
@@ -25,7 +83,8 @@ This applies to all 14 mobile addons: `asr-ggml`, `audiogen-ggml`,
 | **devices_custom** | A free-text field for one **or more** device models, comma-separated (e.g. `Pixel 9, Pixel 8`). When set, it **overrides** the dropdown. Use it for new/uncommon devices or to run several at once. |
 | **device_model_operator** | How the model name is matched: `EQUALS` (**default** — that exact fleet model only; dropdown values are exact fleet names) or `CONTAINS` (any model containing the value — Device Farm picks by availability, so `Pixel 9` can also match `Pixel 9 Pro`). Default is `EQUALS` so a single-device run bills exactly the model you picked. |
 | **tests** | Optional test filter — see [below](#the-tests-filter). Empty = the full mobile suite. |
-| **package** (or **package_spec**) | Which build to actually put on the phone — see [below](#which-build-gets-tested). Default **empty** resolves the **published `@qvac/<addon>@latest`** on a manual run, *not* your branch — a manual dispatch builds no prebuild artifacts of its own. To test unmerged native code you must pin a GPR dev build; see [Testing unmerged / unpublished native code](#testing-unmerged--unpublished-native-code). |
+| **prebuild_run_id** | The run id whose `prebuilds` artifact holds the native binaries to install. **This is the route for testing your own PR on a device** — see [below](#testing-unmerged--unpublished-native-code). Outranks `package`, and a wrong or expired run id **fails the run** instead of quietly resolving `@latest`. |
+| **package** (or **package_spec**) | Which *published* build to put on the phone — see [below](#which-build-gets-tested). Default **empty** resolves the **published `@qvac/<addon>@latest`** on a manual run, *not* your branch — a manual dispatch builds no prebuild artifacts of its own. Use it for a release or a build from **another** branch; for your own PR prefer `prebuild_run_id`. Mutually exclusive with it. |
 | **ref** | Git ref to check out for the **test harness / app** (not the native binary — see below). |
 
 ### Device selection: dropdown + free-text
@@ -155,11 +214,38 @@ If in doubt, run once **without** a filter and open the Device Farm run's
 `bare_console.log` / the "Run → tests" legend on the job summary — it enumerates
 the `run*` names that executed, which you can then narrow with `tests`.
 
+### Where the logs are when a run fails
+
+`test-results.json` only records the harness assertion, which is the same for
+every failure. The reason is in the app's own output:
+
+| what | Android | iOS |
+|---|---|---|
+| JS / bare runtime, TAP, the failure | `logcat_full.txt`, `bare` tag | `bare_console.log` |
+| **native C++ / engine** | `logcat_full.txt`, `bare` tag, `[C++ TEST]` prefix | `bare_console.log`, `[C++ TEST]` prefix |
+
+```bash
+gh run download <run-id> --repo tetherto/qvac --dir ./logs
+grep -aE "E bare|I bare" logs/**/*logcat_full.txt   # Android: test + native
+grep -a "\[C++ TEST\]"    logs/**/*bare_console.log  # iOS: native
+```
+
+Use `logcat_full.txt`, **not** the smaller `Logcat.logcat`, and grep the `bare`
+tag rather than TAP markers — the runtime prints through logcat, so `ok 1` never
+appears as a raw line. There is no `bare_console.log` on Android by construction
+(private app data, unreadable by adb on a release-signed APK).
+
 ### Which build gets tested
 
 A manual run does **not** compile the native addon — it installs a **prebuilt**
-one. Which prebuild depends on the `package` / `package_spec` input:
+one. Sources are tried in this order:
 
+- **`prebuild_run_id=<run id>`** → install the `prebuilds` artifact **that run
+  already built**. Highest precedence: when set, every source below is skipped,
+  and resolution **fails closed** — a run id that is wrong, private, builds no
+  prebuilds, or whose artifact has expired fails the run rather than sliding
+  back to `@latest`. This is the route for testing **your own PR**; see
+  [below](#testing-unmerged--unpublished-native-code).
 - **Empty (default)** → artifact-first resolution: prebuild artifacts **from the
   same run**, then the published **`@qvac/<addon>@latest`** if there are none.
   A standalone dispatch builds no prebuilds of its own, so in practice **empty
@@ -174,12 +260,127 @@ one. Which prebuild depends on the `package` / `package_spec` input:
   leftovers or do not exist. Setting any non-empty spec flips
   `force-npm-prebuild` on.
 
+`prebuild_run_id` and `package` are two different answers to "which binary goes
+on the phone", so setting **both is an error** — the run fails and tells you to
+clear one, rather than picking for you.
+
 ### Testing unmerged / unpublished native code
 
 `--ref <branch>` gives you the branch's JS harness, tests and app — but **never**
-its compiled `.bare`. If your change touches `addon/src/**`, you must pin a GPR
-dev build, or the run exercises your new tests against the **published** engine
-and passes for the wrong reason.
+its compiled `.bare`. If your change touches `addon/src/**`, the run otherwise
+exercises your new tests against the **published** engine and passes for the
+wrong reason. That has happened: a PR ran mobile on five addons, went green on
+all of them, and every run had `package` empty — so each one installed the
+published release instead of the ~300 lines of new C++ under review.
+
+Two routes. Pick by **whose build you need**.
+
+#### Route A — your own PR: `prebuild_run_id` (use this)
+
+Your PR's `on-pr-<addon>` run already compiled the prebuilds. Point the mobile
+dispatch at that run and it installs those exact binaries — **no `tmp-*` branch,
+no On Merge dispatch, no wait for a publish, no hand-assembled package name.**
+
+**First, your PR must have built prebuilds at all.** The prebuild stage is
+**label-gated** by `ci-router`: it only runs when the PR carries `prebuilds`,
+`run-desktop-addon-tests`, or `run-mobile-addon-tests`. With none of those there
+is no bundle and no run id to point at — add the `prebuilds` label and let CI
+re-run first.
+
+**Where the run id comes from.** Easiest: open the PR's **Checks** tab, click the
+run that built the prebuilds, and take the number at the end of its URL
+(`.../actions/runs/<run id>`).
+
+Do **not** assume it is your addon's own workflow. Which workflow builds the
+bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
+`on-merge-<addon>.yml` for a branch build — so filtering by workflow name is
+unreliable. Scope by your PR's head commit instead:
+
+```bash
+PKG=llm-llamacpp   # the package directory name, i.e. packages/<PKG>
+PR=4519            # your PR number
+
+SHA=$(gh pr view "$PR" --repo tetherto/qvac --json headRefOid --jq .headRefOid)
+RUN_ID=$(for rid in $(gh api "repos/tetherto/qvac/actions/runs?head_sha=$SHA&per_page=100" \
+                        --jq '.workflow_runs[].id'); do
+  gh api "repos/tetherto/qvac/actions/runs/$rid/artifacts?per_page=100" \
+    --jq ".artifacts[]|select(.name==\"prebuilds-$PKG\" and .expired==false)|.name" \
+    2>/dev/null | grep -q . && { echo "$rid"; break; }
+done)
+
+# An empty RUN_ID would dispatch the "unchanged" path and quietly resolve
+# @qvac/<addon>@latest — the published-release-goes-green failure this whole
+# route exists to close. Stop instead.
+[ -n "$RUN_ID" ] || { echo "no run for $SHA carries prebuilds-$PKG (is the 'prebuilds' label on the PR?)" >&2; exit 1; }
+echo "$RUN_ID"
+```
+
+That finds the run carrying **your addon's** bundle for **this commit**, whatever
+built it. If it prints nothing, either the label is missing or — on the nx path —
+that run only built the addons it considered affected, and yours was not one. The
+dispatch failure message lists which addons a run did build, so a wrong guess
+tells you where to look.
+
+```bash
+gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 9" \
+  -f device_model_operator=EQUALS \
+  -f prebuild_run_id=$RUN_ID
+```
+
+The build job's *Resolve prebuilds from a run id* step prints the provenance:
+
+```
+Verified: prebuilds come from run 33179656677 — artifact 'prebuilds-llm-llamacpp',
+workflow 'On PR Trigger (LLM)', head 1d2c3b4…,
+branch feat/backend-selection (tetherto/qvac), success
+```
+
+That line names the **head SHA** the binaries were built from. Check it against
+your branch tip: a run id resolves whether or not it built the commit you meant,
+so this is what tells you the binaries are the ones under review. The **`ref`**
+input and the prebuild run are deliberately independent — that is what lets you
+test a JS-only fix against prebuilds from an earlier commit — so nothing can
+infer the mismatch for you.
+
+This route **fails closed** by design. A run id that does not exist, that you
+cannot read, that built no prebuilds, or whose artifact has aged out of
+retention fails the run with the reason and what to do about it. It never falls
+back to `@latest` — that silent fallback is the bug this route exists to remove.
+
+Three things to know:
+
+- **Artifacts expire.** Retention is set per repository, so an old run id stops
+  working. Re-run the prebuild job on your PR and use the new run id.
+- **The artifact must cover your platform.** A prebuild run whose iOS leg was
+  cancelled still publishes a bundle, just without `ios-arm64`; the run fails
+  with the directories the artifact does contain, rather than building an app
+  around a missing binary.
+- **`audiogen-ggml` is the exception.** It loads its composite actions from the
+  default branch (a supply-chain guard for its `release`-environment job), so it
+  only honours `prebuild_run_id` once that support is on the default branch.
+  Until then the run fails with an explicit message rather than quietly
+  installing `@latest` — use `-f package_spec=@tetherto/audiogen-ggml-mono@<dev>`
+  in the meantime. Note that `@qvac/audiogen-ggml` publishes **no prebuilds**, so
+  an empty input cannot work for this addon at all.
+- **Check which repository built it.** This repo is fork-first, so a PR's
+  `on-pr` run is usually `pull_request_target` on a *fork* — it appears in this
+  repo's run list while its head repository is the contributor's fork. That is
+  the normal case and is not blocked: a fork's prebuilds only exist because the
+  merge/release team already approved `fork-ci` on that run. But the binaries do
+  get bundled into an app and executed on org devices, so the provenance line
+  names the head repository and a run from a **different** repository than the
+  one you expected raises a `::warning::`. Read it before trusting a green run.
+
+It also works for **`ocr-ggml` and `translation-nmtcpp`**, which Route B cannot
+serve at all (see the note at the end of that section).
+
+#### Route B — a build from another branch, or a published release
+
+Route A needs a run you can point at. When you need someone *else's* branch, an
+older commit whose artifact has expired, or a specific published version, pin a
+package instead.
 
 **Step 1 — publish a dev build of your branch.** Push it as `tmp-<TICKET>`; the
 addon's *On Merge Trigger* workflow builds the prebuilds and publishes
@@ -262,32 +463,35 @@ Verified: prebuilds come from @tetherto/<addon>-mono@<version> (pinned, GitHub P
 If you instead see `downloading @qvac/<addon>@latest from npm (registry.npmjs.org)`,
 the pin did not arrive and you are testing the published release.
 
-**The input is named `package` on most addons but `package_spec` on three:**
+**The Route B input is named `package` on most addons but `package_spec` on three.**
+`prebuild_run_id` (Route A) has the same name everywhere:
 
 | input | addons |
 |---|---|
 | `-f package=` | `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`, `embed-llamacpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `vla` |
 | `-f package_spec=` | `asr-ggml`, `audiogen-ggml`, `tts-ggml` |
 | *(no such input)* | `inference-addon-cpp` |
+| `-f prebuild_run_id=` | every addon above **except** `decoder-audio` and `inference-addon-cpp` (see *Addons that need none of this*) |
 
 **Addons that need none of this:** `inference-addon-cpp` compiles its `.bare` in
 the same run from `ref`, and `decoder-audio` has no native prebuild of its own
 (it rides on `bare-ffmpeg`'s, so its `package` input does not change what is
-tested) — for both, plain `--ref <branch>` is enough.
+tested) — for both, plain `--ref <branch>` is enough, which is why neither
+exposes `prebuild_run_id`.
 
-> **Two addons cannot do this today.** `ocr-ggml` and `translation-nmtcpp` never
-> publish a GPR dev build — their `publish-gpr` job is skipped on every push
-> because it depends transitively on the `release-merge-guard` job, which is
-> skipped on any non-`release-*` branch, and unlike `build` it does not opt out
-> with `!cancelled()`. `@tetherto/ocr-ggml-mono` has therefore never existed, and
-> `@tetherto/translation-nmtcpp-mono` is frozen at 2026-06-30. Until that is
-> fixed there is no way to put unmerged native code for those two on a device.
+> **Two addons publish no mobile prebuilds to npm.** `@qvac/asr-ggml` and
+> `@qvac/audiogen-ggml` ship none, so an **empty** input cannot work for them —
+> the run fails with "No prebuilds directory found in package". Their
+> `@tetherto/<addon>-mono` dev builds *do* carry prebuilds, so Route B works; so
+> does Route A. (`@qvac/decoder-audio` also ships none, but it needs no prebuilds
+> of its own — see below.)
 
 > The **`ref`** input defaults to **blank**, so the run checks out the branch you
 > dispatch from (`gh workflow run … --ref <branch>` — no `-f ref=` needed). Pass
 > `-f ref=<tag/sha>` only to override it. `ref` drives the JS test harness and
 > the app; it does **not** drive the native prebuild, which always comes from an
-> artifact or a package (see above).
+> artifact (this run's, or the run named by `prebuild_run_id`) or a package
+> (see above).
 >
 > The `tests`-filter / shard-count validation reads the runner list from the
 > **same commit** the build executes, so if your branch renames or adds runners

@@ -54,6 +54,14 @@ Consequences for release changelog / metadata PRs:
 `backmerge/release-<pkg>-<x.y.z>` heads are fine — they do not match the
 `release-*` push trigger.
 
+**Release changelog PRs** (metadata + notes onto `release-<pkg>-x.y.z`):
+
+- Title is `chore:` (optional `[mod]` when the cut is catalog-only). Do not put
+  `[bc]` on the release title; breaking lives in `breaking.md`.
+- Body API / Models / Breaking sections are copied from
+  `changelog/<this version>/`, not from an earlier hop or the generator
+  summary. Delete a section only when that file is absent.
+
 ## Workflow
 
 1. Identify base and current branch — note whether the base is `main` or a `release-<pkg>-<x.y.z>` branch. For release PRs, apply **Release PR branch naming** above (base three-part; head not `release-*`)
@@ -93,6 +101,7 @@ Infer first, ask only if uncertain:
 - `[bc]`: removed/changed existing public API signatures
 - `[mod]`: changes to model constant definitions
 - ASK only if change scope is ambiguous
+- **Release changelog PRs** (base `release-*`, diff is notes / NOTICE / version / generated docs): title is `chore:` (optional `[mod]`). Do not copy `[bc]` / `[api]` from the notes into the title. Body API / Models / Breaking still copy `changelog/<this version>/`.
 
 **Testing section:**
 - If test files modified → "Unit tests added/updated for X"
@@ -270,7 +279,7 @@ Before outputting the PR description, verify:
 - [ ] "What problem" describes user impact, not implementation
 - [ ] "How it solves" is high-level approach, not line-by-line
 - [ ] Unused sections are deleted
-- [ ] `[bc]` tag has BEFORE/AFTER code examples
+- [ ] `[bc]` tag has BEFORE/AFTER code examples (feature PRs). Release changelog PRs: no `[bc]` on the title; Breaking section copies `breaking.md` when that file exists
 - [ ] `[api]` tag has usage example
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
@@ -280,6 +289,7 @@ Before outputting the PR description, verify:
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
+- [ ] Release changelog PRs: title is `chore:` (no `[bc]`); body API / Models / Breaking match `changelog/<this version>/`
 - [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `fork-ci` re-approval called out)
 - [ ] PR is Ready for review when baseline CI is expected (not left as Draft unintentionally)
 

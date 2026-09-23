@@ -40,7 +40,11 @@ System requirements for Python scanning:
 1. Ask which package to generate NOTICE for (or `--all` for all packages)
 2. Source `.env` in the shell
 3. Run the generator script — this writes NOTICE files directly
-4. Only use `--dry-run` if the user explicitly asks for it
+4. If JS stdout is `Found 0 JS dependencies` while `HEAD`'s NOTICE still has a
+   JS section, restore that JS block from `HEAD`. (`npm install failed` is
+   written to gitignored `NOTICE_LOG.txt`, not stdout.) Keep successful
+   model-scan additions. Do not commit a wiped JS section.
+5. Only use `--dry-run` if the user explicitly asks for it
 
 **Do NOT commit changes.** The user will review and commit manually.
 
