@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import { parakeetTests } from '../../../parakeet-tests.js'
+import { validateParakeetSegments } from '../../transcription-segments.js'
 
 export class ParakeetExecutor extends AbstractModelExecutor<typeof parakeetTests> {
   pattern = /^parakeet-/
@@ -25,8 +26,8 @@ export class ParakeetExecutor extends AbstractModelExecutor<typeof parakeetTests
 
     try {
       if (p.metadata === true) {
-        await transcribe({ modelId, audioChunk: audioPath, metadata: true })
-        return { passed: false, output: 'Expected error but transcription succeeded' }
+        const segments = await transcribe({ modelId, audioChunk: audioPath, metadata: true })
+        return validateParakeetSegments(segments)
       }
 
       const text = await transcribe({ modelId, audioChunk: audioPath })
