@@ -528,7 +528,8 @@ function mib (bytes) {
 //
 // Reads the [lm=…] rows the additive load-mode sweep produces. Each cell is
 // reported once per device; the reasoning-budget and run repeats a cell carries
-// all share one load, so the first non-crashed row per (device, mode) stands.
+// all share one load, so the first non-crashed row per (device, backend,
+// main-gpu, model, mode) stands.
 //
 // `auto` is the addon's default, so margins are quoted against it. `dio` is
 // accepted by the addon but currently discarded by qvac-fabric before the file
@@ -592,14 +593,23 @@ function loadModeSection (rows, desktopDevice, expectedShards, selectedLoadModes
     const m = /\[mg=([^\]]+)\]/.exec(config)
     return m ? m[1] : null
   }
+  // The model (with its quantization) is part of the key too. A desktop leg
+  // sweeps every model it has, so keying without it kept whichever model's row
+  // arrived first for each mode and silently dropped the rest — a
+  // three-model run published one model's figures under the platform's name.
+  const modelOf = (config) => {
+    const m = /^\[([^\]]+)\]/.exec(config)
+    return m ? m[1] : null
+  }
   const groups = new Map()
   for (const r of lmRows) {
     const mode = /\[lm=([^\]]+)\]/.exec(r.config)
     if (!mode) continue
     const backend = backendOf(r.config)
     const mainGpu = mainGpuOf(r.config)
-    const key = `${r.device}@@${backend || 'unknown'}@@${mainGpu || '-'}`
-    if (!groups.has(key)) groups.set(key, { device: r.device, backend, mainGpu, modes: new Map() })
+    const model = modelOf(r.config)
+    const key = `${r.device}@@${backend || 'unknown'}@@${mainGpu || '-'}@@${model || '-'}`
+    if (!groups.has(key)) groups.set(key, { device: r.device, backend, mainGpu, model, modes: new Map() })
     const modes = groups.get(key).modes
     if (!modes.has(mode[1]) || (modes.get(mode[1]).crashed && !r.crashed)) modes.set(mode[1], r)
   }
@@ -619,7 +629,7 @@ function loadModeSection (rows, desktopDevice, expectedShards, selectedLoadModes
   })
 
   for (const key of keys) {
-    const { device, backend, mainGpu, modes: seen } = groups.get(key)
+    const { device, backend, mainGpu, model, modes: seen } = groups.get(key)
     if (seen.size === 0) continue
 
     // A row is comparable only if the backend it ran on is the one it asked
@@ -650,7 +660,7 @@ function loadModeSection (rows, desktopDevice, expectedShards, selectedLoadModes
     }
 
     out.push(
-      `### ${device}${backend ? ` — ${backend}` : ''}${mainGpu ? ` (main-gpu: ${mainGpu})` : ''}`,
+      `### ${device}${backend ? ` — ${backend}` : ''}${mainGpu ? ` (main-gpu: ${mainGpu})` : ''}${model ? ` · \`${model}\`` : ''}`,
       ''
     )
     out.push('| Mode | Load (ms) | Δ vs auto | Δ vs mmap | rss (MiB) | anon (MiB) | file (MiB) | locked (MiB) | Status |')
@@ -904,6 +914,10 @@ function render (rows, desktopDevice, meta, addonVersionArg, baselineMap, baseli
     }
     lines.push('')
   }
+
+  // A load-mode-only dispatch has no throughput rows, so there is nothing to
+  // rank; an empty header-only table read as a rendering failure.
+  if (devices.length === 0) return lines.join('\n') + '\n'
 
   lines.push('## Best configuration per device')
   lines.push('')

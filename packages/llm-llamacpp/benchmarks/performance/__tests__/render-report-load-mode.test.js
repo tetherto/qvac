@@ -624,6 +624,49 @@ test('integrated and dedicated main-gpu rows do not collide', () => {
   assert.match(md, /\| `auto` \| 764 \|/, 'the dedicated measurement survives')
 })
 
+test('every model a leg swept gets its own table', () => {
+  // A desktop leg sweeps every model it has. Keying groups without the model
+  // kept whichever model's row arrived first for each mode, so a three-model
+  // run published one model's figures and dropped the other two.
+  const lm = (model, mode, loadMs) => ({
+    test: `[${model}] [cpu] [rb=-1] [kv=f16] [lm=${mode}]`,
+    status: 'passed',
+    execution_provider: 'cpu',
+    requested_device: 'cpu',
+    metrics: {
+      ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null,
+      load_ms: loadMs,
+      rss_bytes: 500 * MB, rss_anon_bytes: 130 * MB, rss_file_bytes: 370 * MB, locked_bytes: 0
+    }
+  })
+
+  const md = render({
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      lm('qwen3-1.7b-Q4_0', 'auto', 707),
+      lm('qwen3.5-0.8b-Q4_0', 'auto', 811),
+      lm('qwen3.5-2b-Q4_0', 'auto', 927)
+    ])
+  })
+
+  assert.match(md, /— cpu · `qwen3-1\.7b-Q4_0`/, 'the first model has a table')
+  assert.match(md, /— cpu · `qwen3\.5-0\.8b-Q4_0`/, 'the second model has a table')
+  assert.match(md, /— cpu · `qwen3\.5-2b-Q4_0`/, 'the third model has a table')
+  assert.match(md, /\| `auto` \| 707 \|/, 'the first model survives')
+  assert.match(md, /\| `auto` \| 811 \|/, 'the second model survives')
+  assert.match(md, /\| `auto` \| 927 \|/, 'the third model survives')
+})
+
+test('a load-mode-only run renders no empty throughput ranking', () => {
+  const md = render({
+    'perf-pixel.json': perfReport('Pixel 8', [
+      row(LM('auto', 'gpu'), { ttft_ms: null, tps: null, pp_tps: null, generated_tokens: null })
+    ])
+  })
+
+  assert.match(md, /## Load modes/, 'the load-mode section is rendered')
+  assert.doesNotMatch(md, /## Best configuration per device/, 'no header-only ranking table')
+})
+
 test('a non-comparable row is excluded from deltas, baselines and the range', () => {
   // Labelling the row is not enough. If it can serve as a baseline, take a
   // margin, or bound the load-time range, a number nobody can interpret
