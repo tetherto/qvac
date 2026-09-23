@@ -219,10 +219,10 @@ test('a cell that ran on a different backend is classified, not counted as measu
     'backend-mismatch',
     'a GPU request served by the CPU is not a GPU measurement'
   )
-  // Mismatch outranks the dio alias: knowing it ran on the wrong device
-  // matters more than knowing the flag is inert.
+  // dio gets no status of its own: whether the flag takes effect depends on
+  // the fabric version and platform, so the measurement decides, not a label.
   assert.strictEqual(classify({ device: 'gpu', mode: 'dio' }, samples, 'cpu'), 'backend-mismatch')
-  assert.strictEqual(classify({ device: 'gpu', mode: 'dio' }, samples, 'gpu'), 'inert')
+  assert.strictEqual(classify({ device: 'gpu', mode: 'dio' }, samples, 'gpu'), 'measured')
   // Unknown is NOT agreement. Every darwin-x64 cell in run 35810927805 came
   // back with a null backend and was published as a measured GPU row.
   assert.strictEqual(

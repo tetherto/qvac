@@ -206,21 +206,23 @@ test('desktop reports a range too, and still crowns nothing', () => {
   assert.doesNotMatch(md, /fastest load:/, 'no verdict without the uncertainty to back it')
 })
 
-test('dio is labelled inert and kept out of the reported range', () => {
+test('dio is reported as a measurement like any other mode', () => {
+  // dio used to be labelled inert and kept out of the range, because fabric
+  // before 0.17 dropped the flag. From 0.17 it opens the file with O_DIRECT
+  // on Linux and Android and loads up to 3x slower there on CPU, so a fixed
+  // "inert" label hid a real, large effect behind a claim that nothing
+  // happened.
   const md = render({
     'load-mode-perf-linux-x64.json': desktopLoadModeReport([
       desktopRow('auto', 900),
       desktopRow('mmap', 700),
-      // dio is the fastest number here and must not bound the range: it is an
-      // alias of `none`, so presenting it as the floor would read as advice to
-      // set an inert flag.
-      desktopRow('dio', 100)
+      desktopRow('dio', 2400)
     ])
   })
 
-  assert.match(md, /\| `dio` \|.*Inert \(fabric discards the flag\)/, 'dio labelled inert')
-  assert.match(md, /\| `dio` \| 100 \|/, 'its measurement is still shown')
-  assert.match(md, /load-time range: `mmap` 700 ms to `auto` 900 ms/, 'dio does not bound the range')
+  assert.doesNotMatch(md, /Inert/, 'no fixed inert label')
+  assert.match(md, /\| `dio` \| 2400 \|.*\| Measured \|/, 'dio is a plain measurement')
+  assert.match(md, /load-time range: `mmap` 700 ms to `dio` 2400 ms/, 'dio takes part in the range')
 })
 
 test('an mlock that locked nothing is not reported as a plain success', () => {

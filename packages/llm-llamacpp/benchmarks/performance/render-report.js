@@ -696,7 +696,6 @@ function loadModeSection (rows, desktopDevice, expectedShards, selectedLoadModes
       const got = r.observedDevice
       if (want && got && got !== want) status = `**Ran on ${got}, not ${want} — not comparable**`
       else if (!want || !got) status = '**Backend unverified**'
-      else if (mode === 'dio') status = 'Inert (fabric discards the flag)'
       else if (mode === 'mlock' || mode === 'mmap+mlock') {
         if (r.lockedBytes === null || r.lockedBytes === undefined) status = 'Measured (lock unverified)'
         else if (r.lockedBytes === 0) status = 'Measured (lock had no effect)'
@@ -719,7 +718,7 @@ function loadModeSection (rows, desktopDevice, expectedShards, selectedLoadModes
     //
     // Measurements, deltas, coverage and status are presented; the trade-offs
     // are interpreted in docs/perf/load-mode.md against the full sweep output.
-    const timed = [...seen.entries()].filter(([m, r]) => m !== 'dio' && comparable(r))
+    const timed = [...seen.entries()].filter(([, r]) => comparable(r))
     if (timed.length > 1) {
       const spread = [...timed].sort((a, b) => a[1].loadMs - b[1].loadMs)
       const lo = spread[0]

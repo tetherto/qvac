@@ -280,10 +280,11 @@ function classify (cell, loadSamples, backendDevice, probeError) {
   // A device verdict needs a
   // confirmed device, so this is its own status and is not usable data.
   if (!backendDevice) return 'backend-unverified'
-  // dio is accepted by the addon but never reaches the file open in fabric
-  // (llama-model-load.cpp drops use_direct_io), so it cannot be distinguished
-  // from `none` by measurement. Say so rather than reporting a phantom margin.
-  if (cell.mode === 'dio') return 'inert'
+  // dio is measured like every other mode. Whether it does anything depends
+  // on the fabric version and the platform — fabric before 0.17 dropped the
+  // flag everywhere, and from 0.17 O_DIRECT is implemented on Linux and
+  // Android only — so a fixed label here would be wrong on one side or the
+  // other. The measurement says which case a row is.
   return 'measured'
 }
 

@@ -197,7 +197,7 @@ device in [docs/perf/load-mode.md](./docs/perf/load-mode.md).
 | `mlock` | no — reads anonymously, then locks | yes | no |
 | `mmap+mlock` | yes | yes | no |
 | `none` | no | no | no |
-| `dio` | no | no | requested, but inert — see below |
+| `dio` | no | no | yes on Linux and Android; ignored elsewhere — see below |
 
 `mlock` is **not** "`mmap` plus locking" — it is the anonymous path plus
 locking.
@@ -210,8 +210,14 @@ Locking warns and continues when it exceeds `RLIMIT_MEMLOCK`, so a load that
 succeeded may not have locked anything. `mlock` reads the weights into
 anonymous memory, and with a GPU most of them go to device memory, so there is
 little or nothing left on the host to lock; `mmap+mlock` locks the mapped file
-and does lock on a GPU load when the limit allows it. `dio` is accepted but
-qvac-fabric does not currently open the file with `O_DIRECT`.
+and does lock on a GPU load when the limit allows it.
+
+`dio` opens the model with `O_DIRECT` on Linux and Android, bypassing the page
+cache; on Windows, macOS and iOS it loads exactly as `none`. It is not a speed
+option: on CPU loads it measured 1.2–3× slower than `none` on the Linux and
+Android benchmark hosts, and no faster on GPU loads.
+Releases before 0.54.0 (`@qvac/fabric` below 0.17) ignore the flag on every
+platform.
 
 Measured load times and residency per platform and device, and what each mode
 costs, are in [docs/perf/load-mode.md](./docs/perf/load-mode.md).
