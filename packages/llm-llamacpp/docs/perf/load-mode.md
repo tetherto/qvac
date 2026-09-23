@@ -273,8 +273,8 @@ Results are written as JSONL plus a rendered markdown table.
 | linux-x64 | **done** | — |
 | darwin-arm64 | not measured | a run on `qvac-macos26-arm64-gpu` or `qvac-dev-mac-arm64`. No `RssAnon` equivalent on darwin; expect `rss` only, and note unified memory means the mapped/copied split does not arise as it does on linux |
 | win32-x64 | not measured | a run on `qvac-win25-x64-gpu`. `llama_mmap` prefetches with `PrefetchVirtualMemory`, which fills the standby list without faulting pages into the working set, so the Windows memory column will not be comparable with the others |
-| darwin-x64 | not measured | hosted `macos-15-large` only, a VM whose Metal device reports as "Apple Paravirtual device"; measure CPU-forced and label it so |
-| linux-arm64 | not measured | Jetson Orin Nano. `model-fit`'s calibration records this host failing to load at all under the SDK's pinned `n_gpu_layers: 99`; expect to record it as blocked |
+| darwin-x64 | not measured | hosted `macos-15-large`, a VM exposing an Apple Paravirtual Metal device. No device is forced: the run requests both and the report states which backend actually served each load |
+| linux-arm64 | not measured | hosted `ubuntu-22.04-arm`, which has no GPU — its Vulkan backend is LLVMpipe software rendering. Expect GPU requests to be recorded as backend mismatches and the CPU rows to carry the result |
 | Android | not measured | Device Farm. The highest-value remaining target: Adreno/OpenCL sets `mmap_support = false`, so `auto` should diverge from `mmap` as it does on the integrated GPU above. `mlock` will likely fail on `RLIMIT_MEMLOCK` |
 | iOS | not measured | Device Farm. Metal supports mmap, so expect `auto` ≡ `mmap` |
 
@@ -287,5 +287,8 @@ load. Each backend gets its own session because `unload()` leaves
 mode-dependent residency behind, so a CPU load measured after a GPU load in
 one session reads against a polluted baseline.
 
-Run them with `sweep_params=load-mode` on **Benchmark Performance — LLM
-Parameter Sweep**: 12 mobile shards instead of 86, and no six-hour grid.
+Run them with `sweep_params=load-mode,device=cpu|gpu` on **Benchmark
+Performance — LLM Parameter Sweep**, with `desktop_platforms` set to the four
+platforms above: both devices on every platform, 12 mobile shards instead of
+86, and no six-hour grid. A GPU request on a host without one is reported as a
+backend mismatch rather than silently measured on the CPU.

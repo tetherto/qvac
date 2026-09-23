@@ -45,9 +45,9 @@ on:
           of the throughput grid. Known params: quantization, device,
           ctx-size, threads, batch-size, ubatch-size, flash-attn,
           cache-type-k, cache-type-v, reasoning-budget, load-mode,
-          batch-sweep. Examples - "load-mode" (the QVAC-25043 qualifying run:
-          12 mobile shards instead of 86, and no 6h grid),
-          "load-mode=auto|mmap,device=gpu", "quantization=Q4_0|Q8_0". An axis a
+          batch-sweep. Examples - "load-mode,device=cpu|gpu" (the QVAC-25043
+          acceptance run: both devices on every platform, no 6h grid),
+          "load-mode=auto|mmap", "quantization=Q4_0|Q8_0". An axis a
           shard runs internally, or a selection matching no case, fails in the
           context job rather than running something other than what was asked.
         required: false

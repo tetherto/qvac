@@ -240,10 +240,8 @@ function benchmarkModel(
 
           let addon = null
           // Load time and resident memory are the quantities a load-mode cell
-          // exists to measure, and neither was recorded before. They are
-          // captured for every cell, not only load-mode ones: the cost is one
-          // clock read and one /proc read, and a cross-product baseline is what
-          // makes a load-mode row interpretable.
+          // exists to measure. They are captured for those cells only — see
+          // the sampling below.
           let loadMetrics = null
           try {
             addon = new LlmLlamacpp({

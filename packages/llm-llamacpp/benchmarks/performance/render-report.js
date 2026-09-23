@@ -601,14 +601,25 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
     const { device, backend, mainGpu, modes: seen } = groups.get(key)
     if (seen.size === 0) continue
 
-    const auto = seen.get('auto')
-    const mmapRow = seen.get('mmap')
+    // A row is comparable only if the backend it ran on is the one it asked
+    // for. Labelling a mismatched or unverified row is not enough: letting it
+    // serve as a baseline, take a margin, or bound the range would put a
+    // number nobody can interpret into every other row's arithmetic.
+    const comparable = (r) => {
+      if (!r || r.crashed || r.loadMs === null) return false
+      if (r.requestedDevice && !r.observedDevice) return false
+      if (r.requestedDevice && r.observedDevice && r.requestedDevice !== r.observedDevice) return false
+      return true
+    }
+
+    const auto = comparable(seen.get('auto')) ? seen.get('auto') : null
+    const mmapRow = comparable(seen.get('mmap')) ? seen.get('mmap') : null
     // Margin against `auto` (the real default) and against `mmap` (named
     // explicitly by the acceptance criteria). Both, because correcting the
     // stale premise about which is the default does not remove the
     // requirement to report the mmap margin.
     const pctVs = (ref, r) => {
-      if (!ref || ref.crashed || ref.loadMs === null || r.crashed || r.loadMs === null) return '-'
+      if (!ref || !comparable(r)) return '-'
       if (r === ref) return '—'
       const d = ((r.loadMs / ref.loadMs) - 1) * 100
       return `${d >= 0 ? '+' : ''}${Math.round(d * 10) / 10}%`
@@ -674,8 +685,7 @@ function loadModeSection (rows, desktopDevice, expectedShards) {
     //
     // Measurements, deltas, coverage and status are presented; the trade-offs
     // are interpreted in docs/perf/load-mode.md against the full sweep output.
-    const observed = [...seen.entries()].filter(([m, r]) => m !== 'dio' && !r.crashed)
-    const timed = observed.filter(([, r]) => r.loadMs !== null)
+    const timed = [...seen.entries()].filter(([m, r]) => m !== 'dio' && comparable(r))
     if (timed.length > 1) {
       const spread = [...timed].sort((a, b) => a[1].loadMs - b[1].loadMs)
       const lo = spread[0]

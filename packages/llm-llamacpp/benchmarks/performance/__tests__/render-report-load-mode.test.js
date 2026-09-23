@@ -611,3 +611,29 @@ test('integrated and dedicated main-gpu rows do not collide', () => {
   assert.match(md, /\| `auto` \| 738 \|/, 'the integrated measurement survives')
   assert.match(md, /\| `auto` \| 764 \|/, 'the dedicated measurement survives')
 })
+
+test('a non-comparable row is excluded from deltas, baselines and the range', () => {
+  // Labelling the row is not enough. If it can serve as a baseline, take a
+  // margin, or bound the load-time range, a number nobody can interpret
+  // leaks into every other row's arithmetic.
+  const md = render({
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      // auto ran somewhere else: it must not become the Δ-vs-auto baseline.
+      lmRow('auto', { requested: 'gpu', observed: 'cpu', loadMs: 3000 }),
+      lmRow('mmap', { requested: 'gpu', observed: 'gpu', loadMs: 700 }),
+      lmRow('none', { requested: 'gpu', observed: 'gpu', loadMs: 1900 }),
+      // unverified, and the fastest number present — must not bound the range
+      lmRow('mlock', { requested: 'gpu', observed: null, loadMs: 100 })
+    ])
+  })
+
+  assert.match(md, /Ran on cpu, not gpu/, 'the mismatched row is still shown and labelled')
+  assert.match(md, /Backend unverified/, 'the unverified row is still shown and labelled')
+  // Δ vs auto is unavailable for EVERY row, because auto itself is not
+  // comparable — the column reads '-', never a percentage.
+  assert.match(md, /\| `mmap` \| 700 \| - \| — \|/, 'no Δ vs auto; Δ vs mmap is its own baseline')
+  assert.match(md, /\| `none` \| 1900 \| - \| \+171\.4% \|/, 'Δ vs mmap still computed from a verified row')
+  // The range spans only the two verified rows.
+  assert.match(md, /load-time range: `mmap` 700 ms to `none` 1900 ms/, 'only comparable rows bound it')
+  assert.doesNotMatch(md, /range: `mlock`/, 'an unverified row cannot be the floor')
+})
