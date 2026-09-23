@@ -1,0 +1,9 @@
+node_modules
+build
+dist
+prebuilds
+addon
+/index.js
+/addon.js
+/index.d.ts
+/addon.d.ts

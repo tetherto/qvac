@@ -1069,6 +1069,37 @@ importers:
         specifier: ^0.26.0
         version: 0.26.0
 
+  packages/llm-sglang:
+    dependencies:
+      '@qvac/infer-base':
+        specifier: ^0.8.0
+        version: 0.8.0
+      '@qvac/sglang':
+        specifier: workspace:*
+        version: link:../sglang
+    devDependencies:
+      '@types/node':
+        specifier: ^24.2.1
+        version: 24.13.3
+      cmake-bare:
+        specifier: ^1.7.5
+        version: 1.10.1
+      cmake-npm:
+        specifier: ^1.1.0
+        version: 1.1.2
+      cmake-vcpkg:
+        specifier: ^1.2.0
+        version: 1.2.0
+      prettier:
+        specifier: ^3.9.4
+        version: 3.9.6
+      prettier-config-holepunch:
+        specifier: ^2.0.0
+        version: 2.0.0(prettier@3.9.6)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
   packages/logging:
     dependencies:
       bare-env:
@@ -1840,6 +1871,18 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/sglang:
+    devDependencies:
+      cmake-vcpkg:
+        specifier: ^1.2.0
+        version: 1.2.0
+      prettier:
+        specifier: ^3.9.4
+        version: 3.9.6
+      prettier-config-holepunch:
+        specifier: ^2.0.0
+        version: 2.0.0(prettier@3.9.6)
 
   packages/test-suite:
     dependencies:
@@ -5067,6 +5110,7 @@ packages:
   '@smithy/core@3.30.0':
     resolution: {integrity: sha512-dl2yRglDxfzH9uJ4fSo4zTaAHa0zH7+V7BZMRWy8hEYIKT1BiqMUK/CN6T3ADQ3kbA5N1tmUulroJ2UtONS7Kw==}
     engines: {node: '>=18.0.0'}
+    deprecated: Deprecated due to a bug in custom logger data redaction. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.4.14':
     resolution: {integrity: sha512-QgbuahIb2qxQeZQvNK0sw3aF3JH5zwH8j2lLp5DUasVXexGGMWULAR+7z0omPXFolCP/m5wN9M5lm9EGdSviTQ==}

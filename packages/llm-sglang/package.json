@@ -1,0 +1,63 @@
+{
+  "name": "@qvac/llm-sglang",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Experimental SGLang addon that implements the inference-addon-cpp interface",
+  "addon": true,
+  "scripts": {
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build:ts && node --test test/*.test.js",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:run": "node scripts/run-cpp-tests.js",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "format": "prettier --write \"**/*.{js,cjs,mjs,ts}\"",
+    "format:check": "prettier --check \"**/*.{js,cjs,mjs,ts}\""
+  },
+  "files": [
+    "binding.js",
+    "index.js",
+    "addon.js",
+    "index.d.ts",
+    "addon.d.ts",
+    "prebuilds",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/llm-sglang"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://github.com/tetherto/qvac/tree/sglang/packages/llm-sglang#readme",
+  "engines": {
+    "node": ">=18",
+    "bare": ">=1.24.0"
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "types": "index.d.ts",
+  "dependencies": {
+    "@qvac/infer-base": "^0.8.0",
+    "@qvac/sglang": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "cmake-bare": "^1.7.5",
+    "cmake-npm": "^1.1.0",
+    "cmake-vcpkg": "^1.2.0",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.9.2"
+  }
+}

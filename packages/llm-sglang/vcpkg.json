@@ -1,0 +1,22 @@
+{
+  "name": "llm-sglang",
+  "version-string": "0.0.0",
+  "dependencies": [
+    {
+      "name": "qvac-lib-inference-addon-cpp",
+      "version>=": "1.4.0"
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build and run unit tests",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

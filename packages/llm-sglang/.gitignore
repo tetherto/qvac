@@ -1,0 +1,10 @@
+node_modules/
+build/
+prebuilds/
+dist/
+vcpkg_installed/
+.vcpkg/
+compile_commands.json
+.clang-format
+.clang-tidy
+*.log
