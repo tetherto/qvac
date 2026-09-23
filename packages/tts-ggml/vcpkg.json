@@ -15,11 +15,12 @@
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-18",
+      "version>=": "2026-09-21",
       "default-features": false,
       "features": [
         "tts",
-        "metal"
+        "metal",
+        "coreml"
       ],
       "platform": "osx | ios"
     },
