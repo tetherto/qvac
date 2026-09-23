@@ -48,7 +48,6 @@ permissions:
   contents: read
   packages: read
   id-token: write
-  actions: read
 
 # Safe here because this workflow is dispatch-only. The called leaves must NOT
 # get one: in a reusable, github.workflow resolves to the caller, so the group
@@ -140,6 +139,7 @@ jobs:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"asr-ggml"') }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write
@@ -156,6 +156,7 @@ jobs:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"audiogen-ggml"') }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write
@@ -171,6 +172,7 @@ jobs:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"bci-whispercpp"') }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write
@@ -186,6 +188,7 @@ jobs:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"diffusion-cpp"') }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write
@@ -201,6 +204,7 @@ jobs:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"llm-llamacpp"') }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write
@@ -219,6 +223,7 @@ jobs:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"ocr-ggml"') }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write
@@ -234,6 +239,7 @@ jobs:
     needs: [matrix, context, prebuild]
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) && contains(needs.matrix.outputs.matrix,'"package":"tts-ggml"') }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write

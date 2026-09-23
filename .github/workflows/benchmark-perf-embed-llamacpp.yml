@@ -63,7 +63,6 @@ permissions:
   contents: read
   packages: read
   id-token: write
-  actions: read
 
 jobs:
   context:
@@ -291,6 +290,7 @@ jobs:
       - verify-shards
     if: inputs.run_mobile && !inputs.summarize_only
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write

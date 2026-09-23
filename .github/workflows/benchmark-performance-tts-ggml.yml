@@ -38,7 +38,6 @@ on:
 permissions:
   contents: read
   packages: read
-  actions: read
 
 env:
   ADDON_DIR: packages/tts-ggml
@@ -103,6 +102,7 @@ jobs:
       - context
       - prebuild
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write

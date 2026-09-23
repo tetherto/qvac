@@ -48,16 +48,26 @@ function workflowPerms(lines) {
   return i === -1 ? null : permsAt(lines, i, 0)
 }
 
-// Leaves whose build-and-test job needs the caller to grant actions: read.
+// Leaves where ANY job declares actions: read. Not pinned to the job name:
+// keying on 'build-and-test' meant renaming that job, or a different job in a
+// leaf gaining the permission, silently dropped the leaf from the checked set
+// and stopped verifying every one of its callers. Over-requiring a grant is
+// safe; missing one aborts the run.
 function leavesNeedingActionsRead() {
   return new Set(
     workflows().filter((name) => {
       if (!name.startsWith('integration-mobile-test-')) return false
-      return Object.entries(jobPerms(read(name))).some(
-        ([job, perms]) => job === 'build-and-test' && perms.actions !== undefined,
-      )
+      return Object.values(jobPerms(read(name))).some((perms) => perms.actions !== undefined)
     }),
   )
+}
+
+// Line indexes where a job key starts, so a job's span is [start, next start).
+function jobStarts(lines) {
+  return lines.reduce((acc, line, i) => {
+    if (/^ {2}[A-Za-z0-9_-]+:\s*$/.test(line)) acc.push(i)
+    return acc
+  }, [])
 }
 
 // { jobId: {scope: level} } for every job-level permissions block.
@@ -87,9 +97,17 @@ function mobileCalls() {
         const jm = lines[j].match(/^ {2}([A-Za-z0-9_-]+):\s*$/)
         if (jm) { job = jm[1]; break }
       }
+
+      // Search the WHOLE job, not forward from `uses:`. YAML mapping order is
+      // free and 16 of the callers put `permissions:` above `uses:`; scanning
+      // forward missed those and fell back to the workflow-level block, which
+      // a job-level block overrides outright. That reported a grant the job
+      // does not have — fail-open, in the one direction this test guards.
+      const starts = jobStarts(lines)
+      const jobStart = Math.max(...starts.filter((s) => s <= i))
+      const jobEnd = Math.min(...starts.filter((s) => s > jobStart), lines.length)
       let granted = null
-      for (let j = i; j < lines.length; j++) {
-        if (j > i && /^ {2}\S/.test(lines[j])) break
+      for (let j = jobStart; j < jobEnd; j++) {
         if (/^ {4}permissions:\s*$/.test(lines[j])) { granted = permsAt(lines, j, 4); break }
       }
       found.push({ caller: name, job, target: m[1], granted: granted ?? wf })

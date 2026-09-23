@@ -36,7 +36,6 @@ permissions:
   contents: read
   packages: read
   id-token: write
-  actions: read
 
 jobs:
   context:
@@ -104,6 +103,7 @@ jobs:
       - prebuild
     if: ${{ !cancelled() && (needs.context.outputs.run_mobile != 'false') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write
