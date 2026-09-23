@@ -160,7 +160,7 @@ Custom `fetch` wrappers receive requests after managed authorization has been ap
 
 ```bash
 # Managed mode needs the QVAC CLI available (optional peer dependency):
-npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli@^0.13.0
+npm install @qvac/ai-sdk-provider ai @ai-sdk/openai-compatible @qvac/cli@^0.14.0
 ```
 
 ```ts
@@ -233,7 +233,7 @@ const res = await fetch(`${qvac.baseURL}/models`, {
 
 Treat it as secret material. The property is non-enumerable, so `{ ...provider }`, `Object.keys(provider)`, and object dumps never carry it; never log it or hand it to an untrusted process.
 
-Neither the detached runner nor the `qvac serve` it starts receives the key through argv: both read it from a one-shot `0600` file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`. Every CLI in the supported `^0.13.0` peer range takes `--api-key-file`, so the argv fallback is reached only behind a `serveBinPath` override, whose version cannot be determined.
+Neither the detached runner nor the `qvac serve` it starts receives the key through argv: both read it from a one-shot `0600` file, so it cannot be recovered from `ps` or `/proc/<pid>/cmdline`. Every CLI in the supported `^0.14.0` peer range takes `--api-key-file`, so the argv fallback is reached only behind a `serveBinPath` override, whose version cannot be determined.
 
 ### Per-model configuration
 

@@ -14,8 +14,22 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Cache-aware streaming for `parakeet-unified-en-0.6b`. The engine keeps
+  per-layer attention and convolution caches across steps instead of
+  re-encoding a sliding window, so `streamingChunkMs` now selects a trained
+  operating point: 80, 160, 560, or 1040 ms, with `streamingRightLookaheadMs`
+  at 0, 80, 160, 240, 320, 560, or 1040 ms. Values outside those sets snap
+  down to the nearest trained one. Omitting `streamingChunkMs` now yields
+  560 ms for this model instead of the generic 2000 ms.
+
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-18#1`, keeping the speech packages on
+  one engine stack. The pinned engine adds cache-aware streaming for the
+  Unified RNN-T model, on top of the optional Apple-only Core ML sidecar for
+  the Sortformer diarization encoder that the prebuilds keep disabled.
 - Raise the `speech-cpp` floor to `2026-09-18`, keeping the speech packages on
   one engine stack. The pinned engine adds an Apple-only Core ML sidecar for the
   Parakeet Unified RNN-T encoder, presence-driven on a compiled `.mlmodelc` next
