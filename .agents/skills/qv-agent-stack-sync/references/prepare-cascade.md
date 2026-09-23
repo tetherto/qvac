@@ -17,36 +17,38 @@ Reuse if it exists. Do not force-push.
 ### 2. Head + metadata
 
 ```bash
-git checkout -b release/<slug>-<version> ORG_REMOTE/release-<slug>-<version>
+git checkout -b chore/<slug>-<version>-changelog ORG_REMOTE/release-<slug>-<version>
 ```
+
+Head must not start with `release-`: the cli / ai-sdk-provider / plugin publish
+workflows trigger on push to `release-*` and publish to npm. Full naming:
+`qv-sdk-pr-create` → "Release PR branch naming".
 
 1. Bump `package.json` (and `openclaw.plugin.json` when present).
 2. Apply planned dep / peer ranges.
-3. Changelog + NOTICE:
+3. Follow `qv-sdk-changelog` for this `--package` (lockstep `--base-commit`,
+   published-version audit, LLM, prettier, NOTICE). Do not call the generator as a
+   shortcut.
+4. `--package=sdk` only: `qv-sdk-inference-version` + docs Step 8 from
+   `qv-sdk-changelog`. It writes the range from a published engine version, so
+   the `inference` release merges and publishes before the SDK draft is promoted.
 
-```bash
-node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<slug>
-```
-
-Author `CHANGELOG_LLM.md`, prettier-check, rebuild aggregate, announcement-post (gitignored), NOTICE. Path map: `scripts/sdk/package-paths.cjs`.
-
-4. `--package=sdk` only: `qv-sdk-inference-version` + docs Step 8 from `qv-sdk-changelog`. It
-   writes the range from a published engine version, so the `inference` release merges and
-   publishes before the SDK draft is promoted.
-
-Commit `chore[notask]: release @qvac/<slug> <version>` (use `chore[bc|notask]:` when breaking). Push to `ORG_REMOTE`.
+Commit `chore[notask]: release @qvac/<slug> <version>` — no `[bc]` on the title.
+Push to `ORG_REMOTE`.
 
 ### 3. Draft release PR
 
 ```bash
 gh pr create --repo tetherto/qvac --draft \
   --base release-<slug>-<version> \
-  --head release/<slug>-<version> \
+  --head chore/<slug>-<version>-changelog \
   --title "chore[notask]: release @qvac/<slug> <version>" \
   --body "..."
 ```
 
-SDK pod template. Note future dep versions if lower npm is not live. Publish is human-gated.
+SDK pod template. Body API / Models / Breaking copied from
+`changelog/<this version>/`. Note future dep versions if lower npm is not live.
+Publish is human-gated.
 
 ### 4. Draft backmerge PR
 

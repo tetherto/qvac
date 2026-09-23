@@ -25,7 +25,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.12(zod@4.4.3)
       '@qvac/cli':
-        specifier: ^0.13.0
+        specifier: ^0.14.0
         version: link:../cli
     devDependencies:
       '@ai-sdk/openai-compatible':
@@ -381,7 +381,7 @@ importers:
         specifier: 8.5.2
         version: 8.5.2(@types/node@25.9.5)
       '@qvac/sdk':
-        specifier: ^0.19.0
+        specifier: ^0.20.0
         version: link:../sdk
       close-with-grace:
         specifier: ^2.1.0
@@ -974,7 +974,7 @@ importers:
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.24.0
-        version: link:../diffusion-cpp
+        version: 0.24.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
         specifier: ^0.41.1
         version: link:../embed-llamacpp
@@ -982,7 +982,7 @@ importers:
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.53.0
+        specifier: ^0.53.1
         version: link:../llm-llamacpp
       '@qvac/ocr-ggml':
         specifier: ^0.24.1
@@ -1628,7 +1628,7 @@ importers:
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.24.0
-        version: link:../diffusion-cpp
+        version: 0.24.0(bare-abort-controller@1.1.2)
       '@qvac/embed-llamacpp':
         specifier: ^0.41.1
         version: link:../embed-llamacpp
@@ -1636,13 +1636,13 @@ importers:
         specifier: ^0.1.1
         version: 0.1.1
       '@qvac/inference':
-        specifier: ^0.19.1
+        specifier: ^0.20.0
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
         version: link:../langdetect-text
       '@qvac/llm-llamacpp':
-        specifier: ^0.53.0
+        specifier: ^0.53.1
         version: link:../llm-llamacpp
       '@qvac/logging':
         specifier: ^0.1.0
@@ -2142,10 +2142,10 @@ importers:
   plugins/openclaw:
     dependencies:
       '@qvac/ai-sdk-provider':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../../packages/ai-sdk-provider
       '@qvac/cli':
-        specifier: ^0.13.0
+        specifier: ^0.14.0
         version: link:../../packages/cli
     devDependencies:
       '@types/node':
@@ -2176,10 +2176,10 @@ importers:
         specifier: ^3.0.0
         version: 3.0.14(zod@4.4.3)
       '@qvac/ai-sdk-provider':
-        specifier: ^0.7.0
+        specifier: ^0.8.0
         version: link:../../packages/ai-sdk-provider
       '@qvac/cli':
-        specifier: ^0.13.0
+        specifier: ^0.14.0
         version: link:../../packages/cli
       ai:
         specifier: ^7.0.0
@@ -4184,6 +4184,10 @@ packages:
 
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
+
+  '@qvac/diffusion-cpp@0.24.0':
+    resolution: {integrity: sha512-yCK10Vehi+3lhpkvOYJrCLUvGASz/yjijyNqaFic29R808oUImbyLK86vjhyjehlD/qi5QucKCfvCPqr5JLh2A==}
+    engines: {bare: '>=1.24.0'}
 
   '@qvac/dl-base@0.1.1':
     resolution: {integrity: sha512-AacmpwhUrgWQGO8dqlBNk8SLaxjWZlwBdnoj26cTVHA/L5zHAh9PisxuVbsSrXpigv342t2+PwmJv5ZH9GN97Q==}
@@ -12229,7 +12233,7 @@ snapshots:
       getenv: 2.0.0
       glob: 13.0.6
       ignore: 5.3.2
-      minimatch: 10.2.5
+      minimatch: 10.2.6
       p-limit: 3.1.0
       resolve-from: 5.0.0
       semver: 7.8.5
@@ -13229,6 +13233,14 @@ snapshots:
       bare-os: 3.9.3
       which-runtime: 1.4.0
     optional: true
+
+  '@qvac/diffusion-cpp@0.24.0(bare-abort-controller@1.1.2)':
+    dependencies:
+      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
+      '@qvac/logging': 0.1.1
+      bare-path: 3.1.1
+    transitivePeerDependencies:
+      - bare-abort-controller
 
   '@qvac/dl-base@0.1.1(bare-abort-controller@1.1.2)':
     dependencies:
@@ -14923,7 +14935,7 @@ snapshots:
   bare-inspector@6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))):
     dependencies:
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-http1: 4.5.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
+      bare-http1: 4.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-url: 2.5.4
       bare-ws: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
@@ -14935,10 +14947,10 @@ snapshots:
       - bare-pipe
       - react-native-b4a
 
-  bare-lief@0.2.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6):
+  bare-lief@0.2.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4):
     dependencies:
       bare-assert: 1.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
-      require-addon: 1.2.0(bare-url@2.4.6)
+      require-addon: 1.2.0(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -14949,13 +14961,13 @@ snapshots:
   bare-link@3.3.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2)):
     dependencies:
       bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-lief: 0.2.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.4.6)
-      bare-module-resolve: 1.12.4(bare-url@2.4.6)
+      bare-lief: 0.2.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-url@2.5.4)
+      bare-module-resolve: 1.12.4(bare-url@2.5.4)
       bare-os: 3.9.3
       bare-path: 3.1.1
       bare-semver: 1.1.0
       bare-subprocess: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-url: 2.4.6
+      bare-url: 2.5.4
       paparam: 1.10.1
     transitivePeerDependencies:
       - bare-abort-controller
@@ -15608,7 +15620,7 @@ snapshots:
     dependencies:
       bare-crypto: 1.15.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-http1: 4.5.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
+      bare-http1: 4.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.5.4)
       bare-stream: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
     optionalDependencies:
@@ -22712,7 +22724,7 @@ snapshots:
   terser@5.49.0:
     dependencies:
       '@jridgewell/source-map': 0.3.11
-      acorn: 8.17.0
+      acorn: 8.18.0
       commander: 2.20.3
       source-map-support: 0.5.21
 

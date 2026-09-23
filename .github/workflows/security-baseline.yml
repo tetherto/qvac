@@ -94,6 +94,7 @@ jobs:
           .github/scripts/test/publish-gpr-skip-policy.test.mjs
           .github/scripts/test/runner-names.test.mjs
           .github/scripts/test/await-ts-checks.test.mjs
+          .github/scripts/test/ts-check-names.test.mjs
           .github/scripts/test/model-cache-sync.test.mjs
           .github/scripts/test/cache-models-branches.test.mjs
 

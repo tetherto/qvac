@@ -213,6 +213,9 @@ bool paramsBackendSpecOverridesCpuDefault(const std::string& spec);
  * the engine rejects it with a specific error.
  */
 bool maxVramSpecHasNonZeroBudget(const std::string& spec);
+
+void validateWorldPlacement(
+    const std::string& paramsBackend, const std::string& maxVram);
 /** Prepends the offload_to_cpu default before explicit module assignments. */
 std::string
 effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu);
