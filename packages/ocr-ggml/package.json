@@ -120,7 +120,9 @@
     "./lib/main-gpu": {
       "types": "./lib/main-gpu.d.ts",
       "default": "./lib/main-gpu.js"
-    }
+    },
+    "./binding": "./binding.js",
+    "./binding.js": "./binding.js"
   },
   "types": "index.d.ts"
 }
