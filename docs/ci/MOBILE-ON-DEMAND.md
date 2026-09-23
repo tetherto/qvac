@@ -622,8 +622,9 @@ This is the cheap, fast loop for reproducing/fixing a single failure without pay
 for the whole pool again.
 
 **Attach the run to the PR.** A re-run is only evidence if a reviewer can open it,
-so put its link in the PR — in the description when it is part of the case that
-the change works, or as a comment when it answers a specific review question.
+so put its link in the PR. Prefer a **comment**: it appends, so nothing can be
+lost and nothing has to be read back first. Use the description only when the
+link belongs in the write-up itself.
 
 ```
 Re-ran runChatterboxSpeedTest on Samsung Galaxy S26 Ultra after 4e1f2a9:
@@ -631,7 +632,24 @@ https://github.com/tetherto/qvac/actions/runs/<id> — total=1 passed=1
 ```
 
 Say which **test** and which **device**, so the link is readable without opening
-it. Read the verdict from the run's `test-results.json` rather than the workflow
+it.
+
+Pass the text as a **file**, never as a shell argument:
+
+```bash
+# compose the note in /tmp/pr-<num>-note.md first
+gh pr comment <num> --repo tetherto/qvac --body-file /tmp/pr-<num>-note.md
+```
+
+Inside a double-quoted shell argument, backticks and `$(...)` are command
+substitutions that run before `gh` does. This repository is public and
+fork-first, so PR bodies and the `test-results.json`, `logcat_full.txt` and
+`bare_console.log` a run produces are written by third parties. Never interpolate
+any of them into a command. The same applies to `gh pr edit`: read the body to a
+file, append there, and write it back with `--body-file`, which replaces the
+whole description. If you are driving this with an agent, it must show the
+composed text and the exact command and get your approval before posting; see
+`.agents/skills/qv-mobile-test-dispatch/SKILL.md` Step 6. Read the verdict from the run's `test-results.json` rather than the workflow
 conclusion — a green workflow is not the same as a passed test, and Device Farm's
 own `Totals:` line counts its own suite, not your runners. When a run is red, see
 [Where the logs are when a run fails](#where-the-logs-are-when-a-run-fails).
