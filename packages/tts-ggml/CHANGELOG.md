@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Bounded FuzzTest coverage for the JS-adapter config string parsers
+  (`parseIntString`, `parseFloatString`). Linux C++ CI runs the suite after
+  unit tests. The parsers compile without tts-cpp, so ASan and LeakSanitizer
+  stay at full strength. No public addon API changes.
+
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-09-18`. Audio8 synthesis is faster on
