@@ -641,15 +641,11 @@ Pass the text as a **file**, never as a shell argument:
 gh pr comment <num> --repo tetherto/qvac --body-file /tmp/pr-<num>-note.md
 ```
 
-Inside a double-quoted shell argument, backticks and `$(...)` are command
-substitutions that run before `gh` does. This repository is public and
-fork-first, so PR bodies and the `test-results.json`, `logcat_full.txt` and
-`bare_console.log` a run produces are written by third parties. Never interpolate
-any of them into a command. The same applies to `gh pr edit`: read the body to a
-file, append there, and write it back with `--body-file`, which replaces the
-whole description. If you are driving this with an agent, it must show the
-composed text and the exact command and get your approval before posting; see
-`.agents/skills/qv-mobile-test-dispatch/SKILL.md` Step 6. Read the verdict from the run's `test-results.json` rather than the workflow
+Backticks and `$(...)` inside a double-quoted argument run before `gh` does, and
+on a fork PR the body and the run artifacts are written by someone else. Same for
+`gh pr edit`: read the body to a file, append there, write it back with
+`--body-file`. An agent doing this must show the text and the command and get
+your approval first. Read the verdict from the run's `test-results.json` rather than the workflow
 conclusion — a green workflow is not the same as a passed test, and Device Farm's
 own `Totals:` line counts its own suite, not your runners. When a run is red, see
 [Where the logs are when a run fails](#where-the-logs-are-when-a-run-fails).

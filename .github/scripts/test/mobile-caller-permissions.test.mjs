@@ -1,22 +1,8 @@
-// Every job that calls a mobile leaf must grant `actions: read`.
-//
-// The leaves' build-and-test job reads another run and downloads its artifact
-// for prebuild_run_id (QVAC-24335), so it declares `actions: read`. A reusable
-// workflow cannot hold more permission than the job calling it grants, and
-// build-and-test always runs under workflow_call — validate-devices is the job
-// that gets skipped there, not this one.
-//
-// Nothing caught this when the permission was added: GitHub only checks when a
-// caller runs, and the 28 Device Farm runs used to validate that change were
-// dispatched straight at the leaves, where there is no caller. Three on-merge
-// workflows went from success to startup_failure three seconds after the merge
-// and stayed there.
-//
-// Deliberately narrow. A general "caller covers everything the callee requests"
-// check reports calls that work today, because a leaf's other jobs declare
-// permissions their callers never grant and are skipped or tolerated in that
-// context. This asserts the one permission whose absence is known to abort the
-// run, rather than a model of the rule that the tree contradicts.
+// Every job that calls a mobile leaf must grant `actions: read`, which the
+// leaves need to download another run's prebuilds. A reusable workflow cannot
+// hold more permission than its caller grants, and GitHub only checks when a
+// caller runs — dispatching a leaf directly never exercises one, which is how
+// three on-merge workflows went to startup_failure unnoticed.
 //
 // Indentation-scoped, not YAML-parsed: these suites run on bare node with no
 // dependencies, matching the others in this directory.
@@ -32,7 +18,6 @@ const WORKFLOW_DIR = join(root, '.github/workflows')
 const workflows = () => readdirSync(WORKFLOW_DIR).filter((n) => /\.ya?ml$/.test(n))
 const read = (name) => readFileSync(join(WORKFLOW_DIR, name), 'utf8').split('\n')
 
-// Entries of the permissions block whose key sits at `indent`.
 function permsAt(lines, start, indent) {
   const entries = {}
   for (let i = start + 1; i < lines.length; i++) {
@@ -48,11 +33,8 @@ function workflowPerms(lines) {
   return i === -1 ? null : permsAt(lines, i, 0)
 }
 
-// Leaves where ANY job declares actions: read. Not pinned to the job name:
-// keying on 'build-and-test' meant renaming that job, or a different job in a
-// leaf gaining the permission, silently dropped the leaf from the checked set
-// and stopped verifying every one of its callers. Over-requiring a grant is
-// safe; missing one aborts the run.
+// Any job declaring it, not just build-and-test: keying on a job name meant a
+// rename silently dropped the leaf and stopped checking all of its callers.
 function leavesNeedingActionsRead() {
   return new Set(
     workflows().filter((name) => {
@@ -62,7 +44,6 @@ function leavesNeedingActionsRead() {
   )
 }
 
-// Line indexes where a job key starts, so a job's span is [start, next start).
 function jobStarts(lines) {
   return lines.reduce((acc, line, i) => {
     if (/^ {2}[A-Za-z0-9_-]+:\s*$/.test(line)) acc.push(i)
@@ -70,7 +51,6 @@ function jobStarts(lines) {
   }, [])
 }
 
-// { jobId: {scope: level} } for every job-level permissions block.
 function jobPerms(lines) {
   const out = {}
   let job = null
@@ -82,7 +62,6 @@ function jobPerms(lines) {
   return out
 }
 
-// Each local call to a mobile leaf, with the calling job's effective grant.
 function mobileCalls() {
   const need = leavesNeedingActionsRead()
   const found = []
@@ -98,11 +77,8 @@ function mobileCalls() {
         if (jm) { job = jm[1]; break }
       }
 
-      // Search the WHOLE job, not forward from `uses:`. YAML mapping order is
-      // free and 16 of the callers put `permissions:` above `uses:`; scanning
-      // forward missed those and fell back to the workflow-level block, which
-      // a job-level block overrides outright. That reported a grant the job
-      // does not have — fail-open, in the one direction this test guards.
+      // Whole job span, not forward from `uses:`: most callers put
+      // `permissions:` above it, and a job block overrides the workflow one.
       const starts = jobStarts(lines)
       const jobStart = Math.max(...starts.filter((s) => s <= i))
       const jobEnd = Math.min(...starts.filter((s) => s > jobStart), lines.length)
