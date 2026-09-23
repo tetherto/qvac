@@ -22,13 +22,15 @@ import {
 import {
   idToWorkspace,
   InvalidVectorStoreIdError,
-  vectorStoreToOpenAI,
-  searchResultsToOpenAI,
-  type VectorStoreRagInfo,
   type CreateVectorStoreInput,
   type UpdateVectorStoreInput,
   type VectorStoreMeta
-} from '@/serve/extensions/openai/adapters/vector-stores-store'
+} from '@/serve/core/stores/vector-stores'
+import {
+  vectorStoreToOpenAI,
+  searchResultsToOpenAI,
+  type VectorStoreRagInfo
+} from '@/serve/extensions/openai/adapters/vector-stores-shape'
 import type { ResolvedModelEntry, ServeConfig } from '@/serve/core/config/types'
 import type { QvacContext } from '@/serve/core/context'
 import { ensureReady } from '@/serve/core/plugins/require-model'

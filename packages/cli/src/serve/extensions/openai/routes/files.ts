@@ -2,7 +2,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { HttpError } from '@/serve/lib/http-error'
 import { multipartToBody } from '@/serve/lib/multipart'
 import { filesUploadBody, fileIdParams } from '@/serve/extensions/openai/schemas/files'
-import type { EphemeralFileRecord } from '@/serve/extensions/openai/adapters/ephemeral-files-store'
+import type { EphemeralFileRecord } from '@/serve/core/stores/ephemeral-files'
 import { openaiState } from '@/serve/extensions/openai/state'
 
 function toOpenAIFile(id: string, record: EphemeralFileRecord): Record<string, unknown> {

@@ -4,9 +4,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
+import { formatToolErrors } from '@/serve/core/completion'
 import {
   drainCompletion,
-  formatToolErrors,
   type OpenAiFinishReason
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { requireModel } from '@/serve/core/plugins/require-model'

@@ -1,10 +1,8 @@
 import type { ServerResponse } from 'node:http'
 import type { CompletionRun, Tool } from '@qvac/sdk'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
-import {
-  drainCompletion,
-  formatToolErrors
-} from '@/serve/extensions/openai/adapters/completion-result'
+import { formatToolErrors } from '@/serve/core/completion'
+import { drainCompletion } from '@/serve/extensions/openai/adapters/completion-result'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
 import type { GenerationParams, ResponseFormat } from '@/serve/extensions/openai/schemas/common'
 import {
