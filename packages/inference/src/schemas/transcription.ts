@@ -1,5 +1,10 @@
 import { z } from 'zod'
+import type ASRGgml from '@qvac/asr-ggml'
 import type Buffer from 'bare-buffer'
+import {
+  inferenceBackendDiagnosticsSchema,
+  type InferenceBackendDiagnostics
+} from '@/schemas/system-resources'
 
 export const audioInputSchema = z.discriminatedUnion('type', [
   z.object({
@@ -46,20 +51,98 @@ export const transcribeStatsSchema = z.object({
   backendId: z.number().optional(),
   gpuUnsupported: z.number().optional(),
   gpuMemTotalMb: z.number().optional(),
-  gpuMemFreeMb: z.number().optional()
+  gpuMemFreeMb: z.number().optional(),
+
+  // Shared engine counters.
+  totalTime: z.number().optional().describe('Total native inference time for the run, in ms.'),
+  totalWallMs: z
+    .number()
+    .optional()
+    .describe('Wall-clock time spent inside the native engine for the run, in ms.'),
+  totalSamples: z.number().optional().describe('Audio samples processed across the run.'),
+  processCalls: z
+    .number()
+    .optional()
+    .describe('Native `process()` invocations made across the run.'),
+
+  // Whisper-only stage timings.
+  whisperSampleMs: z.number().optional().describe('Whisper: sampling time, in ms.'),
+  whisperBatchdMs: z.number().optional().describe('Whisper: batched-decode time, in ms.'),
+  whisperPromptMs: z.number().optional().describe('Whisper: prompt-processing time, in ms.'),
+
+  // Parakeet-only counters.
+  totalTranscriptions: z
+    .number()
+    .optional()
+    .describe('Parakeet: transcriptions produced across the session.'),
+  modelLoadMs: z.number().optional().describe('Parakeet: model load time, in ms.'),
+  totalEncodedFrames: z
+    .number()
+    .optional()
+    .describe('Parakeet: encoder frames produced across the run.'),
+  encoderOnCoreml: z
+    .number()
+    .optional()
+    .describe('Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.')
 })
+
+/**
+ * The addon's own `BackendId` members, as a key→value record. A type-only
+ * import, so the schema never loads the addon at runtime.
+ */
+type AddonBackendIds = {
+  readonly [K in keyof typeof ASRGgml.BackendId]: (typeof ASRGgml.BackendId)[K]
+}
+
+/**
+ * Compute backends the ASR engines report through `stats.backendId`, as the
+ * addon's `BackendId` enum defines them. Exported so callers can decode the
+ * number instead of hardcoding it.
+ *
+ * Kept as a literal because it feeds the contract, and checked against the
+ * addon's enum by `satisfies`: a backend the addon adds or removes is a compile
+ * error here rather than a silently short vocabulary.
+ */
+export const ASR_BACKEND_IDS = Object.freeze({
+  CPU: 0,
+  Metal: 1,
+  CUDA: 2,
+  Vulkan: 3,
+  OpenCL: 4,
+  Other: 99
+} as const satisfies AddonBackendIds)
+
+export type AsrBackendId = (typeof ASR_BACKEND_IDS)[keyof typeof ASR_BACKEND_IDS]
 
 export const transcribeSegmentSchema = z.object({
   text: z.string(),
   startMs: z.number(),
   endMs: z.number(),
   append: z.boolean(),
-  id: z.number()
+  id: z.number(),
+  isEndOfTurn: z
+    .boolean()
+    .optional()
+    .describe(
+      'Segment ends on a recognized end-of-utterance boundary. Parakeet engine only (EOU-capable checkpoints); absent on whisper.'
+    ),
+  startsWord: z
+    .boolean()
+    .optional()
+    .describe(
+      'Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.'
+    )
 })
 
 export const vadStateEventSchema = z.object({
   speaking: z.boolean(),
-  probability: z.number()
+  probability: z.number(),
+  source: z
+    .enum(['silero', 'energy'])
+    .optional()
+    .describe(
+      "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events."
+    )
 })
 
 export const whisperEndOfTurnEventSchema = z.object({
@@ -115,7 +198,12 @@ const transcriptionResultBase = z.object({
   error: z.string().optional(),
   segment: transcribeSegmentSchema.optional(),
   vad: vadStateEventSchema.optional(),
-  endOfTurn: endOfTurnEventSchema.optional()
+  endOfTurn: endOfTurnEventSchema.optional(),
+  diagnostics: inferenceBackendDiagnosticsSchema
+    .optional()
+    .describe(
+      'Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
+    )
 })
 
 export const transcribeResponseSchema = transcriptionResultBase.extend({
@@ -202,6 +290,8 @@ export type TranscribeStreamClientParams = {
 
 export interface TranscribeStreamSession {
   stats: Promise<TranscribeStats | undefined>
+  /** Backend selection detail for the session, settled from the same terminal frame as `stats`. */
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
@@ -210,6 +300,8 @@ export interface TranscribeStreamSession {
 
 export interface TranscribeStreamMetadataSession {
   stats: Promise<TranscribeStats | undefined>
+  /** Backend selection detail for the session, settled from the same terminal frame as `stats`. */
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
@@ -229,6 +321,8 @@ export type TranscribeStreamEvent =
 
 export interface TranscribeStreamConversationSession {
   stats: Promise<TranscribeStats | undefined>
+  /** Backend selection detail for the session, settled from the same terminal frame as `stats`. */
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void

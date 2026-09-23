@@ -409,6 +409,8 @@ if(BUILD_TESTING)
   add_executable(asr_ggml_tests
     # whisper suite
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_whisper_lifecycle.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/AddonCppTest.cpp
     # parakeet suite
     ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_core.cpp
@@ -445,7 +447,8 @@ if(BUILD_TESTING)
   # `#ifdef BACKENDS_SUBDIR` blocks must see the same define as the module
   # target — see the note above the module-target define.
   target_compile_definitions(asr_ggml_tests PRIVATE
-    BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+    BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
+    QVAC_ASR_GGML_TESTING)
 
   set_target_properties(asr_ggml_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/addon/tests)

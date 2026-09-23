@@ -7,8 +7,12 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
+    # cmake/qvac-addon/** is native input for every consuming addon (link line,
+    # exported symbols, build-time assertions). Keep this list contiguous:
+    # ts-check-names.test.mjs stops at the first non-entry line.
     paths:
       - "packages/**"
+      - "cmake/qvac-addon/**"
   workflow_dispatch:
     inputs:
       repository:
@@ -112,6 +116,7 @@ jobs:
       perfrtf: ${{ steps.filter.outputs.perfrtf }}
       prebuilds: ${{ steps.filter.outputs.prebuilds }}
       packages: ${{ steps.filter.outputs.packages }}
+      cppbaseline: ${{ steps.filter.outputs.cppbaseline }}
       linking: ${{ steps.filter.outputs.linking }}
       fabricconsumers: ${{ steps.filter.outputs.fabricconsumers }}
     steps:
@@ -170,6 +175,11 @@ jobs:
             # Passed to the leaves as their explicit `packages:`; each would otherwise
             # self-affect against its own target and miss the on-pr carveOut.
             echo "packages=$(echo "$M" | jq -c '[.[] | .package] | unique')"
+            # Packages whose C++ tests run on every PR without the
+            # run-cpp-addon-tests label (on-pr options.ci cppTestsBaseline).
+            # cpp-tests below hands this list to cpp-tests-nx when the label is
+            # absent, so a baseline package never merges with its suite skipped.
+            echo "cppbaseline=$(echo "$M" | jq -c '[.[] | select(.cppTestsBaseline == true) | .package] | unique')"
             echo "linking=$(echo "$M" | jq -c '[.[] | select(.prebuildLinkingScript != null) | {package, workdir, prebuildLinkingScript}] | unique_by(.package)')"
             # Not duplicated into project.json: the one list on-pr-fabric fans out over.
             echo "fabricconsumers=$(jq -c '.npm_runtime' .fabric-consumers-head/.github/fabric-consumers.json)"
@@ -266,10 +276,16 @@ jobs:
 
   cpp-tests:
     needs: [fork-approval, authorize, ci-router, matrix, sanity-checks, detect-fabric-stack, resolve-fabric-prebuilds]
+    # The run-cpp-addon-tests label opts every affected package in. Without it
+    # only the packages declaring cppTestsBaseline on their on-pr target run;
+    # `packages:` below picks the matching list. A skipped or failed matrix
+    # exposes cppbaseline as '', which `!= '[]'` would read as a non-empty
+    # list, hence the explicit result check.
     if: |
       always() && !cancelled() &&
       needs.authorize.outputs.allowed == 'true' &&
-      needs.ci-router.outputs.run_cpp_tests == 'true' &&
+      needs.matrix.result == 'success' &&
+      (needs.ci-router.outputs.run_cpp_tests == 'true' || needs.matrix.outputs.cppbaseline != '[]') &&
       needs.matrix.outputs.packages != '[]' &&
       needs.detect-fabric-stack.result == 'success' &&
       needs.sanity-checks.result != 'failure' && needs.sanity-checks.result != 'cancelled' &&
@@ -286,7 +302,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || inputs.repository || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
-      packages: ${{ needs.matrix.outputs.packages }}
+      packages: ${{ needs.ci-router.outputs.run_cpp_tests == 'true' && needs.matrix.outputs.packages || needs.matrix.outputs.cppbaseline }}
       fabric-consumers: ${{ needs.matrix.outputs.fabricconsumers }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
@@ -366,7 +382,9 @@ jobs:
       workdir: ${{ matrix.workdir }}
       include-rocm-sdk: ${{ matrix.includeRocmSdk == true }}
       # Without this the lint lane compiles against the released @qvac/fabric.
-      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
+      # Scoped like cpp-tests-nx: llm-llamacpp takes fabric through vcpkg, has
+      # no node_modules/@qvac/fabric, and the overlay hard-fails there.
+      fabric-overlay-artifact: ${{ (needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && contains(fromJSON(needs.matrix.outputs.fabricconsumers), matrix.package)) && 'fabric-prebuilds' || '' }}
 
   # main #4396 moved TS checks out of the privileged workflow: on-pr-<pkg>-ts.yml
   # runs them on pull_request against PR head, and this only awaits the result.

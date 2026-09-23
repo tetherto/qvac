@@ -141,6 +141,128 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "Proportions for distributing layers/rows across GPUs, e.g. `'1,1'` (equal) or `'3,1'` (75/25)."
     ),
+  'batch-size': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe('Logical maximum batch size, the tokens submitted per decode call. Default 2048.'),
+  'ubatch-size': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe('Physical maximum batch size, the tokens computed in one pass. Default 512.'),
+  'cpu-moe': z
+    .boolean()
+    .optional()
+    .describe(
+      'Keep all Mixture-of-Experts weights on the CPU, freeing accelerator memory for the rest of the model. Mixture-of-Experts models only. Default false.'
+    ),
+  'n-cpu-moe': z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      'Keep the Mixture-of-Experts weights of the first N layers on the CPU. Mixture-of-Experts models only, and a finer-grained alternative to `cpu-moe`.'
+    ),
+  'kv-offload': z
+    .boolean()
+    .optional()
+    .describe(
+      'Whether to hold the KV cache in accelerator memory. Default true. Set false to keep it in system memory, which frees accelerator memory at the cost of decode speed.'
+    ),
+  'image-max-tokens': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      'Upper bound on the tokens one image may occupy. Vision models only. Unset uses the model default.'
+    ),
+  'image-min-tokens': z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      'Lower bound on the tokens one image may occupy. Vision models only. Unset uses the model default.'
+    ),
+  threads: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      'CPU threads to use during generation. Unset uses one thread per physical core; a value of 0 or below uses every logical CPU, which is a different and usually larger count.'
+    ),
+  'threads-batch': z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      'CPU threads to use during batch and prompt processing. Setting it governs generation too and discards `threads` and `cpu-mask`; leave it unset for `threads` to apply to both.'
+    ),
+  'cpu-mask': z
+    .string()
+    .optional()
+    .describe(
+      "CPU affinity mask as an arbitrarily long hex string, e.g. `'ff'`. Unset applies no affinity. Ignored when `threads-batch` is set."
+    ),
+  'cpu-mask-batch': z
+    .string()
+    .optional()
+    .describe(
+      'CPU affinity mask for batch and prompt processing, in the same form as `cpu-mask`. Honoured only alongside `threads-batch`; without it `cpu-mask` takes over.'
+    ),
+  'override-tensor': z
+    .string()
+    .optional()
+    .describe(
+      "Buffer type overrides for tensors matching a pattern, as comma-separated `<tensor name pattern>=<buffer type>` entries, e.g. `'blk\\.(1[0-9])\\.ffn_(up|down|gate)_exps=CPU'` to keep those experts in system memory."
+    ),
+  'n-cpu-ffn': z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Keep the dense FFN weights of the first N layers on the CPU.'),
+  'moe-cache-mib': z
+    .union([z.number().int().min(0), z.literal('auto')])
+    .optional()
+    .describe(
+      "Persistent accelerator cache for Mixture-of-Experts weights, in MiB. Default `'auto'`, which sizes it during `fit`."
+    ),
+  'prefetch-weights': z
+    .union([z.boolean(), z.literal('auto')])
+    .optional()
+    .describe(
+      "Overlap host-to-accelerator weight copies with compute. Default `'auto'`, which enables it for fitted dense models."
+    ),
+  'tensor-read-lazy': z
+    .enum(['on', 'auto', 'off'])
+    .optional()
+    .describe(
+      "On-demand reading of large tensors such as per-layer embeddings, which requires mmap: `'on'` reads their rows from disk instead of keeping them resident, `'off'` always keeps them resident, `'auto'` (default) applies `'on'` above 4 GiB."
+    ),
+  fit: z
+    .boolean()
+    .optional()
+    .describe(
+      'Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting this field releases the `gpu_layers` default so fit can choose it, which offloads every layer rather than 99 if fit then gives up; setting `gpu_layers` alongside it pins the value and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.'
+    ),
+  'fit-target': z
+    .union([z.number().int().min(0), z.string().regex(/^\d+(,\d+)*$/)])
+    .optional()
+    .describe(
+      "Free margin `fit` aims to leave per device, in MiB. A single value is broadcast across devices; a comma-separated list such as `'1024,512'` sets them individually. Default 1024."
+    ),
+  'fit-ctx': z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Smallest context size `fit` may settle on. Default 4096.'),
   openclCacheDir: z
     .string()
     .optional()
@@ -192,11 +314,20 @@ export const LLM_CONFIG_DEFAULTS = {
   image_tile_mode: 'sequential'
 } as const satisfies Partial<LlmConfigInput>
 
+/**
+ * `llama_model_default_params().n_gpu_layers`. Fabric's fit aborts and rolls
+ * back every argument it had computed when `n_gpu_layers` holds any other
+ * value, so a caller opting into `fit` gets this in place of the default above.
+ */
+const LLAMA_GPU_LAYERS_DEFAULT = -1
+
 // Full schema - applies defaults via transform (no duplication)
-export const llmConfigSchema = llmConfigBaseSchema.transform((data) => ({
-  ...LLM_CONFIG_DEFAULTS,
-  ...data
-}))
+export const llmConfigSchema = llmConfigBaseSchema.transform((data) => {
+  const merged = { ...LLM_CONFIG_DEFAULTS, ...data }
+  return data.fit !== undefined && data.gpu_layers === undefined
+    ? { ...merged, gpu_layers: LLAMA_GPU_LAYERS_DEFAULT }
+    : merged
+})
 
 export type LlmConfig = z.infer<typeof llmConfigSchema>
 

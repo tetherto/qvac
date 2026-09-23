@@ -11,12 +11,12 @@ import { getEngineLogger } from '@/logging/index'
 import { TranscriptionFailedError } from '@/errors/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
-import { toTranscribeSegment, type WhisperAddonSegment } from '@/utils/transcribe-metadata'
+import { toTranscribeSegment, type AsrAddonSegment } from '@/utils/transcribe-metadata'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
 
 interface BciAddonResponse {
-  iterate(): AsyncIterable<WhisperAddonSegment[] | WhisperAddonSegment>
+  iterate(): AsyncIterable<AsrAddonSegment[] | AsrAddonSegment>
   stats?: {
     tokensPerSecond?: number
     totalTokens?: number

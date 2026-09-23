@@ -97,6 +97,16 @@ export interface OcrGgmlParams {
      * the README).
      */
     gpuDevice?: number;
+    /**
+     * Raw ggml registry index (integer number/string), or a GPU class (case-insensitive).
+     * An unavailable/excluded in-range device or absent class falls back to CPU.
+     * Out-of-range indices warn and use the default dedicated-first selection.
+     * Requires a GPU backendDevice; CPU remains the default. Cannot be combined
+     * with gpuDevice or main_gpu. Adreno Vulkan safety checks still apply.
+     */
+    "main-gpu"?: number | string;
+    /** Alias for main-gpu; provide only one spelling. */
+    main_gpu?: number | string;
 }
 export type { BackendInfo, OcrGgmlRunOptions };
 export interface OcrGgmlArgs {

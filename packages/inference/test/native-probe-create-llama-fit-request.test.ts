@@ -96,6 +96,61 @@ test('createLlamaFitRequest: leaves the floor unset for an auto context', (t) =>
   t.absent('nCtxMin' in plan.config)
 })
 
+test('createLlamaFitRequest: forwards placement and fit settings for model-fit to judge', (t) => {
+  const plan = completionRequest({
+    'batch-size': 1024,
+    'ubatch-size': 256,
+    'cpu-moe': true,
+    'n-cpu-moe': 2,
+    'n-cpu-ffn': 4,
+    'override-tensor': 'blk\\.1[0-9]\\.ffn_up_exps=CPU',
+    'moe-cache-mib': 2048,
+    'kv-offload': false,
+    'prefetch-weights': 'auto',
+    'tensor-read-lazy': 'on',
+    fit: true,
+    'fit-target': '1024,512',
+    'fit-ctx': 8192,
+    'image-max-tokens': 512,
+    'image-min-tokens': 64
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.is(plan.config.params['batch-size'], '1024')
+  t.is(plan.config.params['ubatch-size'], '256')
+  t.is(plan.config.params['cpu-moe'], '')
+  t.is(plan.config.params['n-cpu-moe'], '2')
+  t.is(plan.config.params['n-cpu-ffn'], '4')
+  t.is(plan.config.params['override-tensor'], 'blk\\.1[0-9]\\.ffn_up_exps=CPU')
+  t.is(plan.config.params['moe-cache-mib'], '2048')
+  t.is(plan.config.params['no-kv-offload'], '')
+  t.absent('kv-offload' in plan.config.params)
+  t.is(plan.config.params['prefetch-weights'], 'auto')
+  t.is(plan.config.params['tensor-read-lazy'], 'on')
+  t.is(plan.config.params['fit'], 'true')
+  t.is(plan.config.params['fit-target'], '1024,512')
+  t.is(plan.config.params['fit-ctx'], '8192')
+  t.is(plan.config.params['image-max-tokens'], '512')
+  t.is(plan.config.params['image-min-tokens'], '64')
+})
+
+test('createLlamaFitRequest: drops CPU scheduling settings, which cannot move device memory', (t) => {
+  const plan = completionRequest({
+    threads: 8,
+    'threads-batch': 16,
+    'cpu-mask': 'ff',
+    'cpu-mask-batch': 'f0'
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.absent('threads' in plan.config.params)
+  t.absent('threads-batch' in plan.config.params)
+  t.absent('cpu-mask' in plan.config.params)
+  t.absent('cpu-mask-batch' in plan.config.params)
+})
+
 test('createLlamaFitRequest: refuses a load carrying an unclassified setting', (t) => {
   t.alike(completionRequest({ some_new_load_knob: 7 }), {
     supported: false,
