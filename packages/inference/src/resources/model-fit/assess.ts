@@ -375,7 +375,7 @@ function nativeModelResult(
  * told (an AMD APU on linux), fails it: the weights may live where the budget
  * cannot see them.
  */
-function boundBySystemMemory(
+export function boundBySystemMemory(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined
 ): boolean {

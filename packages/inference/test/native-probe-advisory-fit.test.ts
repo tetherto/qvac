@@ -68,7 +68,7 @@ const zeroResident = () => Promise.resolve(0)
 // Every outcome carries the same provenance, so `alike` needs it in each
 // expectation. Asserted rather than ignored: it is what tells a caller which
 // evidence class and headroom policy produced the verdict.
-const PROVENANCE = { basis: 'native-probe', estimatorVersion: 'native-probe-v1' } as const
+const PROVENANCE = { basis: 'native-probe', estimatorVersion: 'native-probe-v2' } as const
 
 function fitReturning(result: IsolatedFitResult) {
   const calls: unknown[][] = []
@@ -319,4 +319,134 @@ test('advisory fit: absorbs a resident-bytes probe that rejects', async (t) => {
     reason: 'internal-error',
     message: 'TypeError: registry unavailable'
   })
+})
+
+const GIB = 1024 ** 3
+
+// 5 GiB on the device, 256 MiB on the host.
+const FIT_WITH_PROJECTION: FitLlamaResult = {
+  ...FIT_PLAN,
+  projection: [
+    {
+      name: 'Metal',
+      totalBytes: 24 * GIB,
+      freeBytes: 20 * GIB,
+      marginBytes: GIB,
+      modelBytes: 4 * GIB,
+      contextBytes: GIB,
+      computeBytes: 0
+    },
+    {
+      name: 'host',
+      totalBytes: 24 * GIB,
+      freeBytes: 22 * GIB,
+      marginBytes: GIB,
+      modelBytes: 256 * 1024 * 1024,
+      contextBytes: 0,
+      computeBytes: 0
+    }
+  ]
+}
+
+const PROJECTED_DEMAND = 5 * GIB + 256 * 1024 * 1024
+
+test('advisory fit: carries the per-device figures the fitter measured', async (t) => {
+  const { logger } = recordingLogger()
+  const { runFit } = fitReturning({ status: 'completed', result: FIT_WITH_PROJECTION })
+
+  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    mobile: false,
+    residentModelBytes: zeroResident,
+    availableSystemBytes: () => Promise.resolve(PROJECTED_DEMAND + 2 * GIB),
+    runFit,
+    logger
+  })
+
+  t.is(outcome.verdict, 'fit')
+  t.alike(outcome.projection, { devices: FIT_WITH_PROJECTION.projection })
+})
+
+test('advisory fit: omits the projection where the fitter reports none', async (t) => {
+  const { logger } = recordingLogger()
+  const { runFit } = fitReturning({ status: 'completed', result: FIT_PLAN })
+
+  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    mobile: false,
+    residentModelBytes: zeroResident,
+    runFit,
+    logger
+  })
+
+  t.is(outcome.projection, undefined)
+})
+
+test('advisory fit: refuses a projected fit the machine cannot hold', async (t) => {
+  const { logger } = recordingLogger()
+  const { runFit } = fitReturning({ status: 'completed', result: FIT_WITH_PROJECTION })
+
+  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    mobile: false,
+    residentModelBytes: zeroResident,
+    availableSystemBytes: () => Promise.resolve(4 * GIB),
+    runFit,
+    logger
+  })
+
+  t.is(outcome.verdict, 'does-not-fit')
+  t.is(outcome.reason, 'exceeds-available-memory')
+  t.ok(outcome.message?.includes('5376 MiB'))
+  t.alike(outcome.projection, { devices: FIT_WITH_PROJECTION.projection })
+})
+
+// 5376 MiB of demand against 6 GiB free fits on the raw figure and only fails
+// once the 1024 MiB margin comes off, so this is what covers that term.
+test('advisory fit: the base margin is withheld from the system budget', async (t) => {
+  const { logger } = recordingLogger()
+  const { runFit } = fitReturning({ status: 'completed', result: FIT_WITH_PROJECTION })
+
+  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    mobile: false,
+    residentModelBytes: zeroResident,
+    availableSystemBytes: () => Promise.resolve(6 * GIB),
+    runFit,
+    logger
+  })
+
+  t.is(outcome.verdict, 'does-not-fit')
+  t.is(outcome.reason, 'exceeds-available-memory')
+})
+
+test('advisory fit: keeps the fitter verdict where no system sample is available', async (t) => {
+  const { logger } = recordingLogger()
+  const { runFit } = fitReturning({ status: 'completed', result: FIT_WITH_PROJECTION })
+
+  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    mobile: false,
+    residentModelBytes: zeroResident,
+    availableSystemBytes: () => Promise.resolve(undefined),
+    runFit,
+    logger
+  })
+
+  t.is(outcome.verdict, 'fit')
+})
+
+// A refusal is the fitter's own; this side only ever narrows a `fit`.
+test('advisory fit: leaves a refusal alone whatever the machine reports', async (t) => {
+  const { logger } = recordingLogger()
+  const { runFit } = fitReturning({
+    status: 'completed',
+    result: { ...FIT_WITH_PROJECTION, status: 1, fits: false, reason: 'does-not-fit' } as never
+  })
+
+  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    mobile: false,
+    residentModelBytes: zeroResident,
+    availableSystemBytes: () => Promise.resolve(64 * GIB),
+    runFit,
+    logger
+  })
+
+  t.is(outcome.reason, 'does-not-fit')
+  t.alike(outcome.projection, { devices: FIT_WITH_PROJECTION.projection })
 })

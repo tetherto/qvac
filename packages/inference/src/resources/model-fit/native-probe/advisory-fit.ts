@@ -22,20 +22,22 @@ const ADVISORY_FIT_TIMEOUT_MS = 30_000
 const ADVISORY_FIT_BASE_MARGIN_MIB = 1024
 
 /**
- * Names the headroom policy these two numbers add up to: withhold
- * `ADVISORY_FIT_BASE_MARGIN_MIB`, plus the on-disk bytes of every model already
- * resident in this worker.
+ * Names the headroom policy: the fitter withholds
+ * `ADVISORY_FIT_BASE_MARGIN_MIB` plus the on-disk bytes of every model resident
+ * in this worker, and a `fit` is then judged against what the system reports
+ * free, less the same base.
  *
  * Deliberately *not* `interactive-v1` (withhold 20%, cap 2 GiB desktop / 1 GiB
- * mobile), which `assessModelFit` applies. That policy is applied by the SDK to
- * a budget the SDK computed; here the child owns the budget (total − wired −
- * compressor, measured inside the disposable process) and `marginMiB` is the
- * only lever this side has. Reconciling the two means one entry point owning
- * both bases — see the precedence note on `nativeProbeFitSchema`.
+ * mobile), which `assessModelFit` applies to a budget the SDK computed.
+ * Reconciling the two means one entry point owning both bases — see the
+ * precedence note on `nativeProbeFitSchema`.
  */
-const NATIVE_PROBE_ESTIMATOR_VERSION = 'native-probe-v1'
+const NATIVE_PROBE_ESTIMATOR_VERSION = 'native-probe-v2'
 
 const BYTES_PER_MIB = 1024 * 1024
+
+/** The fitter appends this row after the devices it assigned to. */
+const HOST_ROW = 'host'
 
 /**
  * `fit` and `does-not-fit` are projections of the load the SDK is about to run,
@@ -71,6 +73,7 @@ export interface AdvisoryFitOptions {
   timeoutMs?: number
   runFit?: typeof runIsolatedFit
   logger?: Logger
+  availableSystemBytes?: () => Promise<number | undefined>
   residentModelBytes?: () => Promise<number>
 }
 
@@ -166,7 +169,111 @@ function unknown(reason: string, message?: string): AdvisoryFitOutcome {
     : { ...PROVENANCE, verdict: 'unknown', reason, message }
 }
 
+/**
+ * The fitter's per-device measurements. They come from a second no-alloc
+ * probe, and a probe that fails is reported as an absent projection.
+ */
+function projectionOf(result: FitLlamaResult): AdvisoryFitOutcome['projection'] {
+  const rows = result.projection
+  if (rows === undefined || rows.length === 0) return undefined
+  return { devices: rows }
+}
+
+function mib(bytes: number): string {
+  return `${Math.round(bytes / BYTES_PER_MIB)} MiB`
+}
+
+/**
+ * What the operating system would give back, which no backend reports. Metal
+ * answers with its working-set allowance minus this process's own allocations,
+ * so another application's resident pages read as free, and the host row counts
+ * little beyond wired and compressed memory.
+ */
+async function defaultAvailableSystemBytes(): Promise<number | undefined> {
+  const { getResourceCollector } = await import('@/resources/instance')
+  const collector = getResourceCollector()
+  if (!collector) return undefined
+  const { totalBytes, usedBytes } = collector.sample().memory
+  if (totalBytes.status !== 'supported' || usedBytes.status !== 'supported') return undefined
+  return Math.max(0, totalBytes.value - usedBytes.value)
+}
+
+/**
+ * Whether a device's allocations come out of the pool the system budget
+ * measures. The host row always does. A device row does only where every
+ * allocation is system RAM, which is what `boundBySystemMemory` decides.
+ */
+async function deviceRowsCountAgainstSystem(): Promise<boolean> {
+  const [{ getResourceCollector }, { boundBySystemMemory }, { detectPlatform }] = await Promise.all(
+    [
+      import('@/resources/instance'),
+      import('@/resources/model-fit/assess'),
+      import('@/resources/model-fit/platform')
+    ]
+  )
+  const collector = getResourceCollector()
+  // Unknown counts them: admitting a load that cannot decode is the failure
+  // this check exists to stop, and refusing one that would have fitted is
+  // advisory only.
+  if (!collector) return true
+  const resources = { capabilities: collector.getCapabilities(), sample: collector.sample() }
+  return boundBySystemMemory(resources, detectPlatform())
+}
+
+/**
+ * Peak the projection places on the pool the system budget measures. A
+ * discrete card's memory is not that pool, so charging its rows here would
+ * refuse a load the machine can hold.
+ */
+function projectedDemandBytes(
+  outcome: AdvisoryFitOutcome,
+  countDevices: boolean
+): number | undefined {
+  const devices = outcome.projection?.devices
+  if (devices === undefined || devices.length === 0) return undefined
+  const counted = countDevices ? devices : devices.filter((device) => device.name === HOST_ROW)
+  if (counted.length === 0) return undefined
+  return counted.reduce(
+    (total, device) => total + device.modelBytes + device.contextBytes + device.computeBytes,
+    0
+  )
+}
+
+/**
+ * Judges a `fit` against the machine. The fitter decides placement and reports
+ * what the load costs; only this side knows what is free, so only this side can
+ * refuse on capacity.
+ *
+ * The margin cannot carry this. It is subtracted from each device's own free,
+ * and a device whose total sits below the machine's — Metal caps its allowance
+ * near 74% of system memory — would be charged the shortfall twice.
+ *
+ * A projection with no devices leaves the fitter's verdict standing.
+ */
+function withMachineBudget(
+  outcome: AdvisoryFitOutcome,
+  availableBytes: number | undefined,
+  countDevices: boolean
+): AdvisoryFitOutcome {
+  if (outcome.verdict !== 'fit' || availableBytes === undefined) return outcome
+
+  const demand = projectedDemandBytes(outcome, countDevices)
+  if (demand === undefined) return outcome
+
+  const budget = availableBytes - ADVISORY_FIT_BASE_MARGIN_MIB * BYTES_PER_MIB
+  if (demand <= budget) return outcome
+
+  return {
+    ...outcome,
+    verdict: 'does-not-fit',
+    reason: 'exceeds-available-memory',
+    message: `needs ${mib(demand)} against a ${mib(Math.max(0, budget))} budget (${mib(availableBytes)} free, less a ${ADVISORY_FIT_BASE_MARGIN_MIB} MiB margin)`
+  }
+}
+
 function classify(result: FitLlamaResult): AdvisoryFitOutcome {
+  const projection = projectionOf(result)
+
   if (result.status === 0) {
     return {
       ...PROVENANCE,
@@ -176,11 +283,17 @@ function classify(result: FitLlamaResult): AdvisoryFitOutcome {
         nCtx: result.nCtx,
         nGpuLayers: result.nGpuLayers,
         nGpuDevices: result.nGpuDevices
-      }
+      },
+      ...(projection !== undefined && { projection })
     }
   }
   if (result.status === 1) {
-    return { ...PROVENANCE, verdict: 'does-not-fit', reason: result.reason }
+    return {
+      ...PROVENANCE,
+      verdict: 'does-not-fit',
+      reason: result.reason,
+      ...(projection !== undefined && { projection })
+    }
   }
   // `model-unreadable`, `no-backend-device`, and `unsupported-config` are all
   // absence of evidence, not evidence of insufficiency.
@@ -203,7 +316,11 @@ function report(logger: Logger, input: AdvisoryFitInput, outcome: AdvisoryFitOut
   }
 
   if (outcome.verdict === 'does-not-fit') {
-    logger.warn(`${prefix} projected not to fit (advisory only — the load continues unchanged)`)
+    logger.warn(
+      `${prefix} projected not to fit (advisory only — the load continues unchanged): ${
+        outcome.reason
+      }${outcome.message === undefined ? '' : ` (${outcome.message})`}`
+    )
     return
   }
 
@@ -254,6 +371,7 @@ export async function runAdvisoryFitCheck(
       return outcome
     }
 
+    const availableBytes = await (options.availableSystemBytes ?? defaultAvailableSystemBytes)()
     const residentBytes = await (options.residentModelBytes ?? defaultResidentModelBytes)()
     const residentReserveMiB = Math.ceil(residentBytes / BYTES_PER_MIB)
 
@@ -272,7 +390,11 @@ export async function runAdvisoryFitCheck(
 
     const outcome =
       result.status === 'completed'
-        ? classify(result.result)
+        ? withMachineBudget(
+            classify(result.result),
+            availableBytes,
+            await deviceRowsCountAgainstSystem()
+          )
         : unknown(result.reason, result.message)
     report(logger, input, outcome)
     return outcome
