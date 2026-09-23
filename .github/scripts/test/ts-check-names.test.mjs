@@ -141,14 +141,11 @@ test('every ts-check name referenced in the repo is actually published', () => {
   )
 })
 
-test('each producer job always publishes a check and gates its work on the nx-affected list', () => {
+test('each producer job is gated on the nx-affected list', () => {
   for (const [id, body] of producerJobs()) {
     if (id === 'matrix') continue
-    assert.doesNotMatch(body, /^ {4}if:/m, `${id} must always publish its check`)
-    const guard = id === 'ts-checks'
-      ? body.match(/^ {6}RUN_CHECKS:\s*(.+)$/m)?.[1].trim()
-      : body.match(/^ {6}run_checks:\s*(.+)$/m)?.[1].trim()
-    assert.ok(guard, `${id} does not gate its package checks on the nx matrix`)
+    const guard = body.match(/^ {4}if:\s*(.+)$/m)?.[1].trim()
+    assert.ok(guard, `${id} has no if:, so it runs even when nx did not select it`)
     assert.match(
       guard,
       /contains\(fromJSON\(needs\.matrix\.outputs\.tspackages\), '[a-z0-9-]+'\)/,

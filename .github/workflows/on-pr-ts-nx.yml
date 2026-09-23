@@ -71,52 +71,52 @@ jobs:
   # "<job id> / ts-checks", and on-pr-nx polls for those exact strings.
   classification-ggml-pr-head-ts-checks:
     needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'classification-ggml')
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/classification-ggml
-      run_checks: ${{ contains(fromJSON(needs.matrix.outputs.tspackages), 'classification-ggml') }}
 
   embed-pr-head-ts-checks:
     needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'embed-llamacpp')
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/embed-llamacpp
-      run_checks: ${{ contains(fromJSON(needs.matrix.outputs.tspackages), 'embed-llamacpp') }}
 
   llm-pr-head-ts-checks:
     needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'llm-llamacpp')
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/llm-llamacpp
-      run_checks: ${{ contains(fromJSON(needs.matrix.outputs.tspackages), 'llm-llamacpp') }}
 
   model-fit-pr-head-ts-checks:
     needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'model-fit')
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/model-fit
-      run_checks: ${{ contains(fromJSON(needs.matrix.outputs.tspackages), 'model-fit') }}
 
   ocr-ggml-pr-head-ts-checks:
     needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'ocr-ggml')
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/ocr-ggml
-      run_checks: ${{ contains(fromJSON(needs.matrix.outputs.tspackages), 'ocr-ggml') }}
 
   translation-nmtcpp-pr-head-ts-checks:
     needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'translation-nmtcpp')
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/translation-nmtcpp
-      run_checks: ${{ contains(fromJSON(needs.matrix.outputs.tspackages), 'translation-nmtcpp') }}
 
   vla-pr-head-ts-checks:
     needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'vla-ggml')
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/vla-ggml
-      run_checks: ${{ contains(fromJSON(needs.matrix.outputs.tspackages), 'vla-ggml') }}
 
   # diffusion predates reusable-ts-checks and runs its steps inline, so its
   # check run is "diffusion-pr-head-ts-checks" with no "/ ts-checks" suffix.
@@ -125,47 +125,35 @@ jobs:
   ts-checks:
     name: diffusion-pr-head-ts-checks
     needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'diffusion-cpp')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      RUN_CHECKS: ${{ contains(fromJSON(needs.matrix.outputs.tspackages), 'diffusion-cpp') }}
     steps:
-      - name: Package is not affected
-        if: env.RUN_CHECKS != 'true'
-        run: echo "No TypeScript checks are needed for packages/diffusion-cpp."
-
       - name: Checkout code
-        if: env.RUN_CHECKS == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        if: env.RUN_CHECKS == 'true'
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 20
 
       - name: Install dependencies
-        if: env.RUN_CHECKS == 'true'
         working-directory: packages/diffusion-cpp
         run: npm install --ignore-scripts --package-lock=false --registry=https://registry.npmjs.org/
 
       - name: Type declaration check
-        if: env.RUN_CHECKS == 'true'
         working-directory: packages/diffusion-cpp
         run: npm run test:dts
 
       - name: Run lint
-        if: env.RUN_CHECKS == 'true'
         working-directory: packages/diffusion-cpp
         run: npm run lint
 
       - name: Install Bare
-        if: env.RUN_CHECKS == 'true'
         run: npm install --global --force bare --registry=https://registry.npmjs.org/
 
       - name: Run unit tests
-        if: env.RUN_CHECKS == 'true'
         working-directory: packages/diffusion-cpp
         run: npm run test:unit
