@@ -4,6 +4,10 @@
 
 ### Added
 
+- Bounded FuzzTest coverage for `parseInteger` and `canonicalKey`. Linux C++
+  CI runs the suite after unit tests. The parsers compile without
+  `@qvac/fabric`, so ASan and LeakSanitizer stay at full strength. No public
+  addon API changes.
 - A fit stub is documented and covered as an accepted `modelPath`, single-file
   and 2-way split: a short GGUF with the hyperparameters and tensor infos but no
   tokenizer tables and no data section, which the registry serves in place of
