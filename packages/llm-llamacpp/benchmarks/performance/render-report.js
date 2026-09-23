@@ -424,7 +424,15 @@ function coverageLines (rows, desktopDevice, devices, expectedShards) {
   // matrix they never ran.
   const desktopNames = new Set(rows.filter(r => r.isDesktop).map(r => r.device))
   const mobileDevices = devices.filter(d => !desktopNames.has(d))
+  // An explicitly EMPTY stamped expectation means mobile was not selected for
+  // this dispatch, which is not a coverage problem. Warning there produced
+  // "0 mobile devices reported. 0 shards expected per device." on every
+  // desktop-only run — a contradiction that reads like lost data.
+  const mobileWasSelected = !(Array.isArray(expectedShards) && expectedShards.length === 0)
   if (!mobileDevices.length) {
+    if (!mobileWasSelected) {
+      return ['## Coverage', '', 'Desktop only — mobile was not selected for this run.', '']
+    }
     return [
       '## Coverage',
       '',

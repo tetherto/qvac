@@ -46,7 +46,7 @@ function plan(text) {
   return { gridCases, loadModeCells, batchSweep: runs.batchSweep, batches }
 }
 
-test('empty selector runs everything — the qualifying dispatch', () => {
+test('empty selector runs everything — the default dispatch', () => {
   const p = plan('')
   assert.strictEqual(p.gridCases, 12, 'full grid')
   assert.strictEqual(p.loadModeCells, 6, 'all six load modes')
@@ -70,7 +70,8 @@ test('"quantization" runs the grid only', () => {
   assert.deepStrictEqual(p.batches, CACHE_BATCHES, 'no batchsweep or loadmode batch')
 })
 
-// A grid axis named alongside load-mode narrows BOTH sweeps.
+// A grid axis named alongside load-mode narrows the load-mode sweep only;
+// naming an additive sweep excludes the throughput grid.
 test('"load-mode=auto|mmap,quantization=Q4_0|Q8_0" narrows the load-mode sweep, not the grid', () => {
   // A grid axis named alongside an additive sweep narrows THAT sweep. It does
   // not also select the grid: naming load-mode is how a dispatch says it does

@@ -338,7 +338,12 @@ jobs:
         id: gpu
         shell: bash
         run: |
-          gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr -d '\r' || echo "GPU")
+          # Empty when nothing is detected, NOT the literal "GPU". nvidia-smi
+          # cannot see Metal and does not exist on every runner, so a fallback
+          # name asserted a GPU on hosts that have none — darwin-x64 and
+          # linux-arm64 both stamped "(GPU)" while their load rows recorded a
+          # CPU fallback. An absent name is stamped as no suffix at all.
+          gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 | tr -d '\r' || true)
           echo "name=$gpu_name" >> "$GITHUB_OUTPUT"
 
       - name: Install benchmark dependencies
@@ -404,7 +409,12 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           mkdir -p packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep
-          printf '{"desktopDevice":"Desktop %s (%s)"}\n' "$PLATFORM" "$GPU_NAME" \
+          if [ -n "$GPU_NAME" ]; then
+            label="Desktop $PLATFORM ($GPU_NAME)"
+          else
+            label="Desktop $PLATFORM"
+          fi
+          printf '{"desktopDevice":"%s"}\n' "$label" \
             > packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/desktop-meta.json
           cat packages/llm-llamacpp/benchmarks/performance/results/parameter-sweep/desktop-meta.json
 

@@ -687,3 +687,32 @@ test('an artifact predating the device fields renders as unverified, not verifie
   assert.match(md, /\| `mmap` \| 700 \|.*Backend unverified/)
   assert.doesNotMatch(md, /load-time range:/, 'unverified rows cannot bound a range')
 })
+
+test('a desktop-only run does not warn about missing mobile data', () => {
+  // An explicitly empty stamped expectation means mobile was not selected.
+  // Warning there rendered "0 mobile devices reported. 0 shards expected per
+  // device." on every desktop-only run — a contradiction that reads as loss.
+  const md = render({
+    'run-meta.json': { addonVersion: '@qvac/llm-llamacpp@0.53.2', expectedShards: [] },
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      lmRow('auto', { requested: 'gpu', observed: 'gpu', loadMs: 700 })
+    ])
+  })
+
+  assert.doesNotMatch(md, /0 mobile devices reported/, 'no warning when mobile was not selected')
+  assert.match(md, /Desktop only — mobile was not selected/, 'says so plainly instead')
+})
+
+test('a run that expected mobile shards and got none still warns', () => {
+  const md = render({
+    'run-meta.json': {
+      addonVersion: '@qvac/llm-llamacpp@0.53.2',
+      expectedShards: ['qwen3.5-0.8b-Q4_0|lmauto|gpu']
+    },
+    'load-mode-perf-linux-x64.json': desktopDoc([
+      lmRow('auto', { requested: 'gpu', observed: 'gpu', loadMs: 700 })
+    ])
+  })
+
+  assert.match(md, /0 mobile devices reported/, 'a real coverage loss is still flagged')
+})
