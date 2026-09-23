@@ -152,34 +152,25 @@ function mib (bytes) {
 // Hence: every candidate is a real invocation, selection requires a clean exit
 // AND a version on stdout, and nothing runnable is a loud throw rather than
 // letting every cell fail one at a time.
-// `bare` is a dependency of this package, so `npm install` — which the
-// workflow already runs here — puts it in node_modules/.bin. That local copy
-// comes FIRST and is why npx is a last resort rather than the normal path:
-// npx re-resolves the package on every invocation (~2s warm, far worse cold),
-// and the sweep spawns one process per sample, which cost darwin-x64 40
-// minutes for three cells in run 35810927805.
-function localBinDir () {
-  return nodePath.resolve(__dirname, 'node_modules', '.bin')
-}
-
-function bareCandidates (platform = process.platform, env = process.env, binDir = localBinDir()) {
+// The workflow installs a global bare via .github/actions/setup-bare-tooling,
+// so `bare` should be on PATH on every runner. npx stays as a last resort for
+// a local shell that has no global bare — but it is NOT the normal path: npx
+// re-resolves the package on every invocation (~2s warm, far worse cold) and
+// the sweep spawns one process per sample.
+function bareCandidates (platform = process.platform, env = process.env) {
   if (platform === 'win32') {
     const processor = env.ComSpec || 'cmd.exe'
     return [
       // Real executables can be spawned directly; npm shims cannot, and since
       // the CVE-2024-27980 fix Node refuses .cmd without a shell, so those go
       // through the command processor.
-      { command: nodePath.join(binDir, 'bare.exe'), prefix: [] },
-      { command: processor, prefix: ['/d', '/s', '/c', nodePath.join(binDir, 'bare.cmd')] },
       { command: 'bare.exe', prefix: [] },
       { command: processor, prefix: ['/d', '/s', '/c', 'bare.cmd'] },
       { command: processor, prefix: ['/d', '/s', '/c', 'npx.cmd', '--yes', 'bare'] }
     ]
   }
   return [
-    { command: nodePath.join(binDir, 'bare'), prefix: [] },
     { command: 'bare', prefix: [] },
-    // Last resort: what the workflow uses for llm-parameter-sweep.js.
     { command: 'npx', prefix: ['--yes', 'bare'] }
   ]
 }

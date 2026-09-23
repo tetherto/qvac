@@ -61,6 +61,12 @@ function createLoadModeSweep (platform) {
     'load-mode': LOAD_MODES.slice(),
     'main-gpu': defaultMainGpus(),
     'ctx-size': '2048',
+    // The probe generates only to learn which backend actually ran, so it is
+    // capped at one token (as verify-prompts.js and prepare-prompts.js do for
+    // their throwaway generations). Without a cap the addon default is
+    // unbounded, and every sample paid for a full generation on top of the
+    // load it was there to measure.
+    'n-predict': '1',
     'flash-attn': 'on',
     'cache-type-k': 'f16',
     'cache-type-v': 'f16',
@@ -207,6 +213,7 @@ function buildLoadModeCells (modelEntries, sweep) {
               'cache-type-k': sweep['cache-type-k'],
               'cache-type-v': sweep['cache-type-v'],
               threads: sweep.threads,
+              'n-predict': sweep['n-predict'],
               'load-mode': mode
             }
             if (mainGpu !== null) config['main-gpu'] = mainGpu

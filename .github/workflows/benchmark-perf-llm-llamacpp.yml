@@ -27,7 +27,7 @@ on:
         default: true
         type: boolean
       desktop_platforms:
-        description: 'JSON array of desktop platforms. Default ["linux-x64"]. QVAC-25043 needs ["linux-x64","win32-x64","darwin-x64","linux-arm64"]; darwin-arm64 is also available. darwin-x64 and linux-arm64 are CPU-only runners.'
+        description: 'JSON array of desktop platforms. Default ["linux-x64"]. QVAC-25043 needs ["linux-x64","win32-x64","darwin-x64","linux-arm64"]; darwin-arm64 is also available. linux-arm64 (ubuntu-22.04-arm) has no GPU; darwin-x64 (macos-15-large) exposes only Apple Paravirtual Metal. No device is forced — a GPU request that lands on the CPU is reported as a backend mismatch.'
         required: false
         default: '["linux-x64"]'
         type: string
@@ -296,10 +296,16 @@ jobs:
         with:
           ref: ${{ needs.context.outputs.ref }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+      # Node AND a global bare, via the action the prebuild workflows already
+      # use. The load-mode sweep spawns one bare process per sample, and bare
+      # is not on PATH by default on every runner — plain setup-node left
+      # darwin-x64 and linux-arm64 with no bare at all (run 35778027044) and
+      # made `npx --yes bare` the fallback, which re-resolves the package on
+      # every spawn.
+      - name: Setup Bare tooling
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
         with:
-          node-version: lts/*
+          shell_type: ${{ startsWith(matrix.platform, 'win32') && 'powershell' || 'bash' }}
 
       - name: Install addon dependencies
         working-directory: packages/llm-llamacpp
@@ -344,8 +350,8 @@ jobs:
 
       # Skippable so a load-mode dispatch does not have to pay for it. The
       # parameter sweep is a ~6h GPU run; the load-mode sweep is minutes, and
-      # on the CPU-only legs (darwin-x64, linux-arm64) the parameter sweep
-      # would additionally be asking a GPU-shaped run of a runner with no GPU.
+      # and on runners with no usable GPU the parameter sweep would additionally
+      # be asking a GPU-shaped run of a host that cannot serve it.
       # Skipped when the selector names only load-mode, so a load-mode run
       # does not pay for a ~6h grid it did not ask for.
       - name: Run parameter sweep

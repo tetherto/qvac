@@ -148,3 +148,26 @@ test('the desktop default stays one backend, not both', () => {
   assert.deepStrictEqual(createLoadModeSweep('linux').device, ['gpu'])
   assert.deepStrictEqual(createLoadModeSweep('android').device, ['cpu', 'gpu'])
 })
+
+test('the backend-verification generation is capped, all the way to the cell config', () => {
+  // The probe generates purely to learn which backend ran. Uncapped, the addon
+  // default is unbounded and every sample paid for a full generation on top of
+  // the load it existed to measure. Asserting the sweep value alone is not
+  // enough: buildLoadModeCells rebuilds config from a fixed field list, and
+  // the cap was silently dropped there when it was only added to the sweep.
+  const sweep = createLoadModeSweep('linux')
+  assert.strictEqual(sweep['n-predict'], '1', 'the sweep pins one token')
+
+  const cells = buildLoadModeCells(
+    [{ id: 'm', modelDir: '/m', quantizationFiles: { Q4_0: 'a.gguf' } }],
+    sweep
+  )
+  assert.ok(cells.length > 0)
+  for (const cell of cells) {
+    assert.strictEqual(
+      cell.config['n-predict'],
+      '1',
+      `${cell.caseId} must carry the cap into the config the probe actually runs`
+    )
+  }
+})

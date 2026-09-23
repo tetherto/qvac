@@ -88,8 +88,7 @@ test('Windows routes npm shims through the command processor, POSIX does not', (
   // Node refuses to spawn a .bat/.cmd without a shell (CVE-2024-27980 fix), so
   // naming `bare.cmd` directly cannot work — the shim needs the processor.
   const { bareCandidates } = loadRunner('bareCandidates')
-  const BIN = path.join('/pkg', 'node_modules', '.bin')
-  const win = bareCandidates('win32', { ComSpec: 'C:\\Windows\\system32\\cmd.exe' }, BIN)
+  const win = bareCandidates('win32', { ComSpec: 'C:\\Windows\\system32\\cmd.exe' })
 
   for (const c of win) {
     const shim = [c.command, ...c.prefix].find((t) => String(t).endsWith('.cmd'))
@@ -98,34 +97,36 @@ test('Windows routes npm shims through the command processor, POSIX does not', (
       assert.deepStrictEqual(c.prefix.slice(0, 3), ['/d', '/s', '/c'], 'processor flags present')
     }
   }
-  const label = (c) => [c.command, ...c.prefix].join(' ')
-  assert.ok(win.some((c) => label(c).includes('npx.cmd')), 'the npx shim is tried')
+  assert.ok(win.some((c) => c.command === 'bare.exe'), 'a real executable is tried directly')
+  assert.ok(
+    win.some((c) => [c.command, ...c.prefix].join(' ').includes('npx.cmd')),
+    'the npx shim remains available'
+  )
+  assert.ok(bareCandidates('win32', {}).every((c) => c.command), 'falls back to cmd.exe with no ComSpec')
 
-  const posix = bareCandidates('linux', {}, BIN)
-  assert.deepStrictEqual(posix, [
-    { command: path.join(BIN, 'bare'), prefix: [] },
+  assert.deepStrictEqual(bareCandidates('linux', {}), [
     { command: 'bare', prefix: [] },
     { command: 'npx', prefix: ['--yes', 'bare'] }
   ], 'no processor indirection off Windows')
 })
 
-test('the locally installed bare is preferred, and npx is the last resort', () => {
-  // npx re-resolves the package on EVERY invocation (~2s warm, far worse on a
-  // cold runner) and the sweep spawns one process per sample — that is what
-  // cost darwin-x64 40 minutes for three cells. `bare` is a devDependency so
-  // node_modules/.bin holds a copy; it must be tried before anything else.
+test('a global bare is preferred and npx is the last resort on every platform', () => {
+  // The workflow installs a global bare via setup-bare-tooling. npx stays only
+  // for a local shell without one: it re-resolves the package on EVERY
+  // invocation (~2s warm, far worse cold) and the sweep spawns one process per
+  // sample — that is what cost darwin-x64 40 minutes for three cells.
   const { bareCandidates } = loadRunner('bareCandidates')
-  const BIN = path.join('/pkg', 'node_modules', '.bin')
   for (const platform of ['linux', 'darwin', 'win32']) {
-    const labels = bareCandidates(platform, { ComSpec: 'cmd.exe' }, BIN).map(
+    const labels = bareCandidates(platform, { ComSpec: 'cmd.exe' }).map(
       (c) => [c.command, ...c.prefix].join(' ')
     )
-    const firstLocal = labels.findIndex((l) => l.includes(BIN))
     const firstNpx = labels.findIndex((l) => l.includes('npx'))
-    assert.notStrictEqual(firstLocal, -1, `${platform}: the local bin is tried`)
     assert.notStrictEqual(firstNpx, -1, `${platform}: npx remains available`)
-    assert.strictEqual(firstLocal, 0, `${platform}: the local bin is tried FIRST`)
     assert.strictEqual(firstNpx, labels.length - 1, `${platform}: npx is tried LAST`)
+    assert.ok(
+      labels.slice(0, firstNpx).some((l) => l.includes('bare')),
+      `${platform}: a direct bare invocation is tried first`
+    )
   }
 })
 
