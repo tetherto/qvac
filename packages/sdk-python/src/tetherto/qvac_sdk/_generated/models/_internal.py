@@ -2320,7 +2320,7 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
         int | None,
         Field(
             alias="windowStartTimestep",
-            description="Absolute timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so this is what maps them onto the stream timeline.",
+            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
             ge=0,
             le=9007199254740991,
         ),
@@ -2637,7 +2637,7 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
         int | None,
         Field(
             alias="windowStartTimestep",
-            description="Absolute timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so this is what maps them onto the stream timeline.",
+            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
             ge=0,
             le=9007199254740991,
         ),
@@ -19747,7 +19747,7 @@ class TranscribeResponseSegment(GeneratedBaseModel):
         int | None,
         Field(
             alias="windowStartTimestep",
-            description="Absolute timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so this is what maps them onto the stream timeline.",
+            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
             ge=0,
             le=9007199254740991,
         ),
@@ -20111,7 +20111,7 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
         int | None,
         Field(
             alias="windowStartTimestep",
-            description="Absolute timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so this is what maps them onto the stream timeline.",
+            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
             ge=0,
             le=9007199254740991,
         ),

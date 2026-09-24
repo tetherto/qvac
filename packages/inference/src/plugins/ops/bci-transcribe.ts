@@ -20,16 +20,14 @@ import { generateRandomRequestId } from '@/runtime/request-id'
 interface BciAddonResponse {
   iterate(): AsyncIterable<AsrAddonSegment[] | AsrAddonSegment>
   /**
-   * The stats `BCIModel.cpp` actually emits. It reports no `audioDurationMs`,
-   * `realTimeFactor`, `encoderMs`, `decoderMs` or `melSpecMs` — those belong to
-   * the asr-ggml engines, and declaring them here promised a shape the addon
-   * never produces.
+   * The stats `BCIModel.cpp` emits. Its `totalTime` is left out: the addon
+   * reports it in seconds, while the shared schema field is milliseconds, and
+   * `totalWallMs` already carries the same measurement in ms.
    */
   stats?: {
     tokensPerSecond?: number
     totalTokens?: number
     totalSegments?: number
-    totalTime?: number
     totalWallMs?: number
     processCalls?: number
     whisperEncodeMs?: number
@@ -182,7 +180,6 @@ export async function* bciTranscribe(
     ...(response.stats?.whisperPromptMs !== undefined && {
       whisperPromptMs: response.stats.whisperPromptMs
     }),
-    ...(response.stats?.totalTime !== undefined && { totalTime: response.stats.totalTime }),
     ...(response.stats?.totalWallMs !== undefined && { totalWallMs: response.stats.totalWallMs }),
     ...(response.stats?.processCalls !== undefined && {
       processCalls: response.stats.processCalls

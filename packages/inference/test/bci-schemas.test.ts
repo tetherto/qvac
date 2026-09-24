@@ -314,7 +314,7 @@ test('loadModelSrcRequestSchema: accepts a BCI load via the canonical modelType'
 })
 
 // =============================================================================
-// QVAC-24488 — surface parity with @qvac/bci-whispercpp 0.9.1
+// Segment and stats fields specific to BCI
 // =============================================================================
 
 test('bci segments carry windowStartTimestep for delta streaming', (t) => {
@@ -357,7 +357,6 @@ test('bci stats accept every field BCIModel.cpp emits', (t) => {
     tokensPerSecond: 12,
     totalTokens: 24,
     totalSegments: 3,
-    totalTime: 900,
     totalWallMs: 950,
     processCalls: 4,
     whisperEncodeTime: 10,

@@ -231,7 +231,8 @@ const bciGauges = (res: { stats?: TranscribeStats }): Record<string, number> => 
   }
   if (res.stats?.totalTokens !== undefined) gauges['totalTokens'] = res.stats.totalTokens
   if (res.stats?.totalSegments !== undefined) gauges['totalSegments'] = res.stats.totalSegments
-  if (res.stats?.totalTime !== undefined) gauges['totalTime'] = res.stats.totalTime
+  // No totalTime gauge: the addon reports it in seconds while every other
+  // producer of this gauge uses ms. totalWallMs is the same measurement in ms.
   if (res.stats?.totalWallMs !== undefined) gauges['totalWallMs'] = res.stats.totalWallMs
   if (res.stats?.processCalls !== undefined) gauges['processCalls'] = res.stats.processCalls
   if (res.stats?.whisperEncodeTime !== undefined) {
