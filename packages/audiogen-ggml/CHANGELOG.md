@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Bounded FuzzTest coverage for the JS-adapter number parsers
+  (`parseInteger`, `parseFloat`, `checkedInteger`, `checkedFloat`). Linux C++
+  CI runs the suite; this addon has no addon-level C++ unit tests yet. The
+  parsers compile without audiogen-cpp, so ASan and LeakSanitizer stay at
+  full strength. No public addon API changes.
+
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-09-23`. The ACE-Step memory-fit
