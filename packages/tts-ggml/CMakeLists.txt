@@ -161,6 +161,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/JSAdapter.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/audio8/Audio8Model.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/chatterbox/ChatterboxModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/moss/MossModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/parler/ParlerModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/supertonic/SupertonicModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/cosyvoice/CosyvoiceModel.cpp
@@ -334,6 +335,7 @@ if(BUILD_TESTING)
       addon/tests/test_audio8_config.cpp
       addon/tests/test_backend_utils.cpp
       addon/tests/test_chatterbox_config.cpp
+      addon/tests/test_moss_config.cpp
       addon/tests/test_parler_config.cpp
       addon/tests/test_supertonic_config.cpp
       addon/tests/test_cosyvoice_config.cpp
@@ -348,6 +350,7 @@ if(BUILD_TESTING)
       addon/tests/AddonCppTest.cpp
       addon/src/model-interface/audio8/Audio8Model.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp
+      addon/src/model-interface/moss/MossModel.cpp
       addon/src/model-interface/parler/ParlerModel.cpp
       addon/src/model-interface/supertonic/SupertonicModel.cpp
       addon/src/model-interface/cosyvoice/CosyvoiceModel.cpp

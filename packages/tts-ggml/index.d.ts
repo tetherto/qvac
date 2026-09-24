@@ -7,6 +7,7 @@ declare const ENGINE_SUPERTONIC = "supertonic";
 declare const ENGINE_COSYVOICE3 = "cosyvoice3";
 declare const ENGINE_PARLER = "parler";
 declare const ENGINE_AUDIO8 = "audio8";
+declare const ENGINE_MOSS = "moss";
 declare const COSYVOICE_DIALECTS: {
     readonly cantonese: "广东话";
     readonly northeastern: "东北话";
@@ -54,7 +55,7 @@ declare const EMOTIONS: readonly ["command", "anger", "narration", "conversation
 declare const PACES: readonly ["slow", "moderate", "fast"];
 type Emotion = (typeof EMOTIONS)[number];
 type Pace = (typeof PACES)[number];
-type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8;
+type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8 | typeof ENGINE_MOSS;
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
  * from these fields (Chatterbox vs Supertonic) unless overridden via
@@ -97,6 +98,18 @@ interface TTSGgmlFiles {
      */
     audio8CodecEncoder?: string;
     audio8CodecEncoderPath?: string;
+    /** MOSS Delay backbone GGUF path. Overrides `modelDir`. */
+    mossBackbone?: string;
+    mossBackbonePath?: string;
+    /** MOSS codec synthesis half (codes to 24 kHz wav). Overrides `modelDir`. */
+    mossCodecDecoder?: string;
+    mossCodecDecoderPath?: string;
+    /**
+     * MOSS codec analysis half (wav to codes). Only needed to clone a voice
+     * from `referenceAudio`; a text-only deployment can leave it out.
+     */
+    mossCodecEncoder?: string;
+    mossCodecEncoderPath?: string;
     /**
      * CosyVoice3 model directory holding the sub-model GGUFs
      * (`cosyvoice3-{llm,flow,hift}-*.gguf`) plus `voice.gguf`, `vocab.json` and
@@ -194,6 +207,8 @@ interface TTSGgmlRuntimeConfig {
      * CosyVoice3 native chunk streaming emits at 24 kHz: a different rate is
      * only accepted there when the LavaSR enhancer is active, because the
      * enhancer's overlap-reprocess window resamples without chunk seams.
+     *
+     * MOSS emits its native 24 kHz only and rejects any other rate.
      */
     outputSampleRate?: number;
     backendsDir?: string;
@@ -278,7 +293,8 @@ interface Audio8VoiceFields {
      * re-bakes the same recording (it is forwarded to the new addon instance)
      * but cannot switch to a different one, so changing voices means a new
      * instance. Audio8: the recording to clone, with `referenceText`
-     * alongside it.
+     * alongside it. MOSS: the recording to clone, sampled at 24 kHz and
+     * fixed at construction; needs `files.mossCodecEncoder`.
      */
     referenceAudio?: string;
     /** Audio8: what `referenceAudio` says. Required when cloning. */
@@ -307,6 +323,7 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
      * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
      * Audio8: pass 99 to use Vulkan on Linux and Windows.
+     * MOSS: any non-zero value selects the GPU backend.
      * CosyVoice3: pass 99 to offload on Metal (macOS / iOS), Vulkan (desktop
      * Linux / Windows), or OpenCL/Adreno (Android); other hosts fall back to
      * CPU by policy.
@@ -330,9 +347,10 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
     threads?: number;
     /**
      * Native streaming chunk size; 0 disables. Chatterbox / CosyVoice3: speech
-     * tokens per chunk. Supertonic: text tokens (Unicode code points) per chunk,
-     * about 50 for English (CJK is denser, 25-30). Supertonic native streaming
-     * cannot be combined with the LavaSR enhancer or denoiser.
+     * tokens per chunk. MOSS: codec frames per chunk (12.5 per second).
+     * Supertonic: text tokens (Unicode code points) per chunk, about 50 for
+     * English (CJK is denser, 25-30). Supertonic native streaming cannot be
+     * combined with the LavaSR enhancer or denoiser.
      */
     streamChunkTokens?: number;
     /**
@@ -534,9 +552,9 @@ interface TTSOutputChunk {
     /** Signed 16-bit mono PCM audio payload. */
     outputArray: Int16Array;
     /**
-     * Output sample rate. The native engine rate (24000 for Chatterbox and
-     * CosyVoice3; 44100 for Supertonic, Parler, and Audio8), or 48000 when the
-     * LavaSR enhancer is active.
+     * Output sample rate. The native engine rate (24000 for Chatterbox,
+     * CosyVoice3 and MOSS; 44100 for Supertonic, Parler, and Audio8), or 48000
+     * when the LavaSR enhancer is active.
      */
     sampleRate?: number;
 }
@@ -561,8 +579,9 @@ interface RuntimeStats {
     /** 1 when a present GPU is unsupported by engine policy; 0 otherwise. */
     gpuUnsupported?: number;
     /**
-     * Audio8 only: codec frames generated, on a fixed 46 ms grid. This is the
-     * unit its `tokensPerSecond` counts, in batch and in streaming alike.
+     * Audio8 and MOSS only: codec frames generated (Audio8 on a fixed 46 ms
+     * grid, MOSS at 12.5 per second). This is the unit their `tokensPerSecond`
+     * counts, in batch and in streaming alike.
      */
     generatedFrames?: number;
     /** Chatterbox only: T3 decode wall time of the last synthesis, in ms. */
@@ -657,7 +676,7 @@ interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields, TTSCon
 }
 /**
  * GGML-backed TTS via the `tts-cpp` library. Wraps the chatterbox,
- * supertonic, parler, cosyvoice3 and audio8 engines behind a single
+ * supertonic, parler, cosyvoice3, audio8 and moss engines behind a single
  * engine-agnostic JavaScript surface. Engine type is auto-detected from
  * `files` or selected explicitly with `engine`.
  *
@@ -674,6 +693,7 @@ declare class TTSGgml {
     static readonly ENGINE_COSYVOICE3 = "cosyvoice3";
     static readonly ENGINE_PARLER = "parler";
     static readonly ENGINE_AUDIO8 = "audio8";
+    static readonly ENGINE_MOSS = "moss";
     opts: object;
     exclusiveRun: boolean;
     logger: object;
@@ -743,6 +763,9 @@ declare class TTSGgml {
     private _audio8LmPath?;
     private _audio8CodecDecoderPath?;
     private _audio8CodecEncoderPath?;
+    private _mossBackbonePath?;
+    private _mossCodecDecoderPath?;
+    private _mossCodecEncoderPath?;
     private _referenceText?;
     private _greedy?;
     private _description?;
@@ -762,6 +785,7 @@ declare class TTSGgml {
     constructor(options?: TTSGgmlOptions);
     private _resolveEngineAndModelPaths;
     private _resolveAudio8ModelPaths;
+    private _resolveMossModelPaths;
     private _assignSynthesisOptions;
     private _assertEngineStreamingSupport;
     private _requestsChunkStreaming;
@@ -773,6 +797,9 @@ declare class TTSGgml {
      */
     private _assertEngineScopedOptions;
     private _assertAudio8OptionConsistency;
+    private _assertMossOptionConsistency;
+    private _assertMossOutputRate;
+    private _assertMossVoiceConsistent;
     /**
      * A recording without its transcript is accepted by the model but degrades
      * the clone silently, and a transcript alone has nothing to attach to, so
@@ -856,8 +883,8 @@ declare class TTSGgml {
     private _runTextStreamOrchestrator;
     private _sentenceStreamTextIterableDrive;
     /**
-     * Audio8 reports `tokensPerSecond` as codec frames per second, so the
-     * streaming aggregate has to count frames too rather than characters.
+     * Audio8 and MOSS report `tokensPerSecond` as codec frames per second, so
+     * the streaming aggregate has to count frames too rather than characters.
      */
     private _pacesOnFrames;
     private _runStreamOrchestrator;
@@ -869,6 +896,7 @@ declare class TTSGgml {
     private _buildSupertonicParams;
     private _buildParlerParams;
     private _buildAudio8Params;
+    private _buildMossParams;
     /** The knobs every engine in SAMPLING_ENGINES reads. */
     private _assignSamplingParams;
     /**
@@ -897,6 +925,7 @@ declare class TTSGgml {
     private _captureReloadableState;
     private _restoreReloadableState;
     private _applyReloadableRuntimeConfig;
+    private _assertMossReloadKeepsVoice;
     private _applyReloadableConditioning;
     private _applyReloadableParlerConfig;
     /**
