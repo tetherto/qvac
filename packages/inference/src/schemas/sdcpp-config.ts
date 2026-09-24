@@ -98,8 +98,10 @@ export const sdcppConfigSchema = z.object({
         'worldCreateScene({ ... }) and worldStep({ ... }). It requires ' +
         '`taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes ' +
         'and/or `sceneSrc` to walk a pre-built one. World sessions run only on ' +
-        'the machine hosting the worker and need a dedicated GPU with at least ' +
-        '20 GB free VRAM.'
+        'the machine hosting the worker and need a dedicated GPU. At 832x480, ' +
+        'the default walk with resident weights needs at least 20 GB free VRAM. ' +
+        '`world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can ' +
+        'reduce that requirement.'
     ),
   threads: z.number().optional().describe('CPU threads for loading and CPU ops. Default: auto.'),
   device: z
