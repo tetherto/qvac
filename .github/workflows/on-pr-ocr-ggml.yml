@@ -16,6 +16,7 @@ on:
     paths:
       - "packages/ocr-ggml/**"
       - ".github/workflows/*ocr-ggml*.yml"
+      - ".github/workflows/cpp-tests-ocr.yml"
       - "packages/fabric/vcpkg.json"
       - "packages/fabric/vcpkg-configuration.json"
   workflow_dispatch:
@@ -233,6 +234,33 @@ jobs:
       sha: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
       pr_head_sha: ${{ github.event.pull_request.head.sha }}
       workdir: packages/ocr-ggml
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
+
+  cpp-tests:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.sanity-checks.result == 'success' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_cpp_tests == 'true' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
+    needs:
+      - fork-approval
+      - authorize
+      - sanity-checks
+      - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
+    uses: ./.github/workflows/cpp-tests-ocr.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   await-ts-checks:
@@ -467,7 +495,7 @@ jobs:
 
   merge-guard:
     # run-mobile-integration-tests removed — mobile is on-demand only now.
-    needs: [authorize, ci-router, sanity-checks, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, detect-fabric-stack, resolve-fabric-prebuilds, run-integration-tests, await-ts-checks]
+    needs: [authorize, ci-router, sanity-checks, cpp-tests, prebuild, prebuild-artifact-reuse, prebuild-artifact-save, detect-native-changes, detect-fabric-stack, resolve-fabric-prebuilds, run-integration-tests, await-ts-checks]
     # Always run so the PR still gets a status check even if fork-approval is
     # skipped or fails; matches on-pr-tts-ggml.yml's pattern. !cancelled()
     # ensures this doesn't hold the concurrency group open after a
@@ -480,7 +508,7 @@ jobs:
       # it is trustworthy. If detection failed, or the prebuild hand-off failed
       # on a stack PR, the skips are consequences of that failure and must not
       # read as passes.
-      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' || needs.await-ts-checks.result == 'skipped') }}
+      sanity-checks-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && needs.sanity-checks.result == 'success' && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success' || needs.await-ts-checks.result == 'skipped') && (needs.cpp-tests.result == 'success' || needs.cpp-tests.result == 'skipped') }}
       build-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || needs.prebuild.result == 'skipped' || needs.prebuild-artifact-reuse.outputs.reuse_hit == 'true') }}
       # run-mobile-integration-tests removed — mobile is on-demand only now.
       integration-tests-status: ${{ needs.detect-fabric-stack.result != 'failure' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'skipped') }}

@@ -33,12 +33,18 @@
     "test": "npm run lint && npm run test:types && npm run test:unit && npm run test:integration",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:dts": "npm run test:types",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target addon-test",
     "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-model": "bash scripts/convert-model.sh",
-    "setup-models": "bash scripts/setup-venv.sh"
+    "setup-models": "bash scripts/setup-venv.sh",
+    "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target ocr-decode-image-fuzz",
+    "fuzz:build:continuous": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=ON && bare-make build --target ocr-decode-image-fuzz",
+    "fuzz:run": "npm run test:scripts && node scripts/run-cpp-fuzz.js",
+    "fuzz": "npm run fuzz:build && npm run fuzz:run",
+    "fuzz:continuous": "npm run fuzz:build:continuous && node scripts/run-cpp-fuzz.js --continuous",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-fuzz.test.js"
   },
   "files": [
     "addonLogging.js",
