@@ -16,7 +16,7 @@ Only catalog model constants get a verdict.
 
 ## Functions
 
-1. [`assessModelFit()`](/reference/api#assessmodelfit) — pass the candidate model constants with the workload you intend to run.
+1. [`assessModelFit()`](/reference/api#assessmodelfit) — describe the loads you are considering, as `loadModel()` takes them.
 2. [`downloadAsset()`](/reference/api#downloadasset) or [`loadModel()`](/reference/api#loadmodel) — fetch whichever candidate you picked.
 
 For how to use each function, see [SDK — API reference](/reference/api/).
@@ -26,7 +26,11 @@ For how to use each function, see [SDK — API reference](/reference/api/).
 ```ts
 assessModelFit({
   models: [
-    { model: QWEN3_8B_INST_Q4_K_M, workload: { kind: "llm", contextTokens: 8192 } },
+    {
+      modelSrc: QWEN3_8B_INST_Q4_K_M,
+      modelType: "llm",
+      modelConfig: { ctx_size: 8192 },
+    },
   ],
   execution: "sequential",
 });
@@ -34,11 +38,13 @@ assessModelFit({
 
 ### `models`
 
-The candidates, at least one. They are assessed together, against a single budget.
+The candidates, at least one. They are assessed together, against a single budget. Each takes the same three parameters as [`loadModel()`](/reference/api#loadmodel):
 
-- `model` — a catalog model constant. Its name, checksum and registry coordinates are read; the byte totals and transformer facts come from the resource profile that checksum resolves to, and the coordinates locate the description the fitter reads.
-- `workload` — what you intend to run on it: `{ kind: "llm", contextTokens }` for completion and embedding models, `{ kind: "audio", windowMs, streaming }` for speech-to-text, with an optional `batch` for concurrent windows per call.
-- `artifacts` — optional. Extra catalog constants the same load also requires, such as a VAD or a pivot model. Their bytes are added to this candidate.
+- `modelSrc` — the model, as `loadModel()` takes it. A catalog constant resolves to the registry's weightless description of the artifact; a path already on disk is read directly.
+- `modelType` — the engine that would run the load.
+- `modelConfig` — optional. The config `loadModel()` would be given, including the companion model sources a compound load needs.
+
+The engine's own plugin resolves that config, so the settings the fitter reads are the ones the load would run with, and the same object can be handed to `loadModel()` afterwards. The estimator reads its workload from the same config: `ctx_size` for a token context, `duration_ms` for an audio window.
 
 ### `execution`
 
@@ -78,7 +84,7 @@ What backs the verdict.
 | `calibration` | A two-sided `estimate` from coefficients measured on this platform. | any verdict |
 | `computed-only` | A floor from catalog facts alone — artifact bytes, plus the KV cache for llama.cpp models — reported as `floorBytes`. | `likely-too-large` or `unknown` |
 
-`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable only for a single llama.cpp candidate, without companion `artifacts`, whose registry record publishes a description; a set of candidates, a candidate with companions, a model with no description, and an offline caller keep the calibrated estimate.
+`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable only for a single llama.cpp candidate whose registry record publishes a description; a set of candidates, a model with no description, and an offline caller keep the calibrated estimate.
 
 Read `evidence` alongside the verdict, because the same `unknown` can mean different things:
 - Under `calibration`, the numbers came out too close to call.
@@ -102,7 +108,7 @@ Both device bases additionally require the `system-memory` budget to hold, becau
 Every `unknown` names its cause here — on the model when the cause is that model, on the result when it is the machine. The ones you are most likely to meet:
 - No validated calibration for this platform, or for the GPU placement the model would use.
 - The model is not a catalog constant, so there is no resource profile to read.
-- The workload kind does not match the model's engine — an `llm` workload on a whisper model, or the reverse.
+- The model's engine has no estimator, so nothing sizes the load beyond its weights.
 
 ## Where verdicts are available
 
@@ -110,7 +116,7 @@ Every `unknown` names its cause here — on the model when the cause is that mod
 
 Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers Android, iOS, `win32-arm64`, audio workloads, and every engine with no estimator yet.
 
-`native-fit` is independent of calibration. Wherever the engine's fitter runs — every platform with a llama.cpp addon, mobile included — a single llama.cpp candidate with a published description and no companion `artifacts` gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
+`native-fit` is independent of calibration. Wherever the engine's fitter runs — every platform with a llama.cpp addon, mobile included — a single llama.cpp candidate with a published description gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
 
 The per-platform calibration matrix, which changes with every release, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
 
