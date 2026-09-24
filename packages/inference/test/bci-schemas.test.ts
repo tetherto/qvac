@@ -7,7 +7,8 @@ import {
   bciTranscribeResponseSchema,
   bciStreamOptsSchema,
   bciTranscribeStreamRequestSchema,
-  bciTranscribeStreamResponseSchema
+  bciTranscribeStreamResponseSchema,
+  bciStreamSegmentSchema
 } from '@/schemas/bci'
 import { transcribeSegmentSchema, transcribeStatsSchema } from '@/schemas/transcription'
 import { toTranscribeSegment } from '@/utils/transcribe-metadata'
@@ -328,8 +329,17 @@ test('bci segments carry windowStartTimestep for delta streaming', (t) => {
     toAppend: true,
     windowStartTimestep: 1500
   })
-  t.is(mapped.windowStartTimestep, 1500, 'the absolute window origin survives')
-  t.ok(transcribeSegmentSchema.safeParse(mapped).success, 'schema-valid')
+  t.is(mapped.windowStartTimestep, 1500, 'the absolute window origin survives the mapper')
+  t.is(
+    bciStreamSegmentSchema.parse(mapped).windowStartTimestep,
+    1500,
+    'and the BCI stream segment schema declares it, so parsing keeps it'
+  )
+  t.is(
+    'windowStartTimestep' in transcribeSegmentSchema.parse(mapped),
+    false,
+    'while the shared ASR segment shape drops it, never promising it to ASR callers'
+  )
 
   const batch = toTranscribeSegment({ text: 'x', start: 0, end: 1 })
   t.is(
@@ -350,10 +360,11 @@ test('bci response frames accept the diagnostics payload', (t) => {
 })
 
 test('bci stats accept every field BCIModel.cpp emits', (t) => {
-  // The native model reports these 15 and nothing else — notably no
+  // The 14 fields the SDK surfaces of what the native model reports: no
   // audioDurationMs / realTimeFactor / encoderMs / decoderMs / melSpecMs,
-  // which belong to the asr-ggml engines.
-  const result = transcribeStatsSchema.safeParse({
+  // which belong to the asr-ggml engines, and no totalTime, which the addon
+  // reports in seconds while this schema is in ms.
+  const emitted = {
     tokensPerSecond: 12,
     totalTokens: 24,
     totalSegments: 3,
@@ -368,6 +379,9 @@ test('bci stats accept every field BCIModel.cpp emits', (t) => {
     backendId: 1,
     gpuMemTotalMb: 8192,
     gpuMemFreeMb: 4096
-  })
-  t.ok(result.success, 'the emitted stats surface round-trips')
+  }
+  // The schema is not strict, so parsing junk would still "succeed": compare
+  // the parsed output instead, which fails if a field is missing from the
+  // schema and gets stripped.
+  t.alike(transcribeStatsSchema.parse(emitted), emitted, 'every emitted field survives parsing')
 })

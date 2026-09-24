@@ -59,16 +59,33 @@ const bciTranscriptionResultBase = z.object({
   done: z.boolean().optional(),
   stats: transcribeStatsSchema.optional(),
   error: z.string().optional(),
-  segment: transcribeSegmentSchema.optional(),
+  segment: transcribeSegmentSchema.optional()
+})
+
+/**
+ * A streamed BCI segment. Only the sliding-window stream produces
+ * `windowStartTimestep`, so it is not on the shared segment shape.
+ */
+export const bciStreamSegmentSchema = transcribeSegmentSchema.extend({
+  windowStartTimestep: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      "Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline."
+    )
+})
+
+export const bciTranscribeResponseSchema = bciTranscriptionResultBase.extend({
+  type: z.literal('bciTranscribe'),
+  // Batch only: the addon reports no stats for a stream, so no backend
+  // verdict can be derived there.
   diagnostics: inferenceBackendDiagnosticsSchema
     .optional()
     .describe(
       'Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.'
     )
-})
-
-export const bciTranscribeResponseSchema = bciTranscriptionResultBase.extend({
-  type: z.literal('bciTranscribe')
 })
 
 /**
@@ -123,7 +140,8 @@ export const bciTranscribeStreamRequestSchema = bciTranscribeBaseSchema.extend({
 })
 
 export const bciTranscribeStreamResponseSchema = bciTranscriptionResultBase.extend({
-  type: z.literal('bciTranscribeStream')
+  type: z.literal('bciTranscribeStream'),
+  segment: bciStreamSegmentSchema.optional()
 })
 
 export type NeuralInput = z.infer<typeof neuralInputSchema>
@@ -134,6 +152,7 @@ export type BciTranscribeClientParamsParsed = z.output<typeof bciTranscribeClien
 export type BciStreamOpts = z.infer<typeof bciStreamOptsSchema>
 export type BciTranscribeStreamRequest = z.infer<typeof bciTranscribeStreamRequestSchema>
 export type BciTranscribeStreamResponse = z.infer<typeof bciTranscribeStreamResponseSchema>
+export type BciStreamSegment = z.infer<typeof bciStreamSegmentSchema>
 
 /** Client parameters for `bciTranscribe()`. */
 export interface BciTranscribeClientParams {

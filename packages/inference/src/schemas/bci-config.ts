@@ -52,7 +52,7 @@ const bciWhisperConfigSchema = z
       .boolean()
       .optional()
       .describe(
-        "Let the model detect the spoken language instead of forcing `language`. Accepted by the addon's whisperConfig validator."
+        "Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call."
       ),
     greedy_best_of: z
       .number()

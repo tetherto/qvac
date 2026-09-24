@@ -2316,15 +2316,6 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
         ),
     ] = None
-    window_start_timestep: Annotated[
-        int | None,
-        Field(
-            alias="windowStartTimestep",
-            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
-            ge=0,
-            le=9007199254740991,
-        ),
-    ] = None
 
 
 class BciTranscribeResponseDiagnosticsSelectedDevice(Enum):
@@ -2444,6 +2435,7 @@ class BciTranscribeResponse(GeneratedBaseModel):
     segment: Annotated[
         BciTranscribeResponseSegment | None, Field(title="BciTranscribeResponseSegment")
     ] = None
+    type: Literal["bciTranscribe"] = "bciTranscribe"
     diagnostics: Annotated[
         BciTranscribeResponseDiagnostics | None,
         Field(
@@ -2451,7 +2443,6 @@ class BciTranscribeResponse(GeneratedBaseModel):
             title="BciTranscribeResponseDiagnostics",
         ),
     ] = None
-    type: Literal["bciTranscribe"] = "bciTranscribe"
 
 
 class BciTranscribeStreamRequestStreamOptsEmit(Enum):
@@ -2637,117 +2628,10 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
         int | None,
         Field(
             alias="windowStartTimestep",
-            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
+            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
             ge=0,
             le=9007199254740991,
         ),
-    ] = None
-
-
-class BciTranscribeStreamResponseDiagnosticsSelectedDevice(Enum):
-    cpu = "cpu"
-    gpu = "gpu"
-
-
-class BciTranscribeStreamResponseDiagnosticsGraphicsApi(Enum):
-    vulkan = "vulkan"
-    opencl = "opencl"
-    opengl = "opengl"
-    webgpu = "webgpu"
-    metal = "metal"
-    direct3d11 = "direct3d11"
-    direct3d12 = "direct3d12"
-    cuda = "cuda"
-    level_zero = "levelZero"
-    rocm = "rocm"
-
-
-class BciTranscribeStreamResponseDiagnosticsDriver(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    name: Annotated[str, Field(min_length=1)]
-    version: Annotated[str | None, Field(min_length=1)] = None
-
-
-class BciTranscribeStreamResponseDiagnosticsFallbackRequestedDevice(Enum):
-    cpu = "cpu"
-    gpu = "gpu"
-
-
-class BciTranscribeStreamResponseDiagnosticsFallback(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    requested_backend: Annotated[
-        str | None, Field(alias="requestedBackend", min_length=1)
-    ] = None
-    requested_device: Annotated[
-        BciTranscribeStreamResponseDiagnosticsFallbackRequestedDevice | None,
-        Field(
-            alias="requestedDevice",
-            title="BciTranscribeStreamResponseDiagnosticsFallbackRequestedDevice",
-        ),
-    ] = None
-    reason: Annotated[str, Field(min_length=1)]
-
-
-class BciTranscribeStreamResponseDiagnosticsProbeStatus(Enum):
-    compatible = "compatible"
-    incompatible = "incompatible"
-    unknown = "unknown"
-
-
-class BciTranscribeStreamResponseDiagnosticsProbe(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    status: Annotated[
-        BciTranscribeStreamResponseDiagnosticsProbeStatus,
-        Field(title="BciTranscribeStreamResponseDiagnosticsProbeStatus"),
-    ]
-    backend: Annotated[str, Field(min_length=1)]
-    reason: str | None = None
-
-
-class BciTranscribeStreamResponseDiagnostics(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
-    selected_device: Annotated[
-        BciTranscribeStreamResponseDiagnosticsSelectedDevice,
-        Field(
-            alias="selectedDevice",
-            title="BciTranscribeStreamResponseDiagnosticsSelectedDevice",
-        ),
-    ]
-    graphics_api: Annotated[
-        BciTranscribeStreamResponseDiagnosticsGraphicsApi | None,
-        Field(
-            alias="graphicsApi",
-            title="BciTranscribeStreamResponseDiagnosticsGraphicsApi",
-        ),
-    ] = None
-    driver: Annotated[
-        BciTranscribeStreamResponseDiagnosticsDriver | None,
-        Field(title="BciTranscribeStreamResponseDiagnosticsDriver"),
-    ] = None
-    gpu_id: Annotated[
-        str | None,
-        Field(
-            alias="gpuId",
-            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
-            min_length=1,
-        ),
-    ] = None
-    fallback: Annotated[
-        BciTranscribeStreamResponseDiagnosticsFallback | None,
-        Field(title="BciTranscribeStreamResponseDiagnosticsFallback"),
-    ] = None
-    probe: Annotated[
-        BciTranscribeStreamResponseDiagnosticsProbe | None,
-        Field(title="BciTranscribeStreamResponseDiagnosticsProbe"),
     ] = None
 
 
@@ -2765,13 +2649,6 @@ class BciTranscribeStreamResponse(GeneratedBaseModel):
     segment: Annotated[
         BciTranscribeStreamResponseSegment | None,
         Field(title="BciTranscribeStreamResponseSegment"),
-    ] = None
-    diagnostics: Annotated[
-        BciTranscribeStreamResponseDiagnostics | None,
-        Field(
-            description="Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
-            title="BciTranscribeStreamResponseDiagnostics",
-        ),
     ] = None
     type: Literal["bciTranscribeStream"] = "bciTranscribeStream"
 
@@ -9729,7 +9606,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Let the model detect the spoken language instead of forcing `language`. Accepted by the addon's whisperConfig validator."
+            description="Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call."
         ),
     ] = None
     greedy_best_of: Annotated[
@@ -19743,15 +19620,6 @@ class TranscribeResponseSegment(GeneratedBaseModel):
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
         ),
     ] = None
-    window_start_timestep: Annotated[
-        int | None,
-        Field(
-            alias="windowStartTimestep",
-            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
-            ge=0,
-            le=9007199254740991,
-        ),
-    ] = None
 
 
 class TranscribeResponseVadSource(Enum):
@@ -20105,15 +19973,6 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
         Field(
             alias="startsWord",
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
-        ),
-    ] = None
-    window_start_timestep: Annotated[
-        int | None,
-        Field(
-            alias="windowStartTimestep",
-            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. BCI streaming with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
-            ge=0,
-            le=9007199254740991,
         ),
     ] = None
 

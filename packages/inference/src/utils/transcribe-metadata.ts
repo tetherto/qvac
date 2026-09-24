@@ -28,7 +28,9 @@ export interface AsrAddonSegment {
  * engine-specific fields are carried through only when the engine sent them,
  * so a segment does not gain fields whose value would be meaningless.
  */
-export function toTranscribeSegment(chunk: AsrAddonSegment): TranscribeSegment {
+export function toTranscribeSegment(
+  chunk: AsrAddonSegment
+): TranscribeSegment & { windowStartTimestep?: number } {
   return {
     text: chunk.text,
     startMs: (chunk.start ?? 0) * 1000,

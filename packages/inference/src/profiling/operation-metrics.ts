@@ -222,7 +222,7 @@ registerOperationMetrics<{ modelId?: string }, { stats?: TranscribeStats }>({
 // BCI runs on the same whisper.cpp decoder as the whisper ASR engine, so it
 // reports that engine's stage timings plus its own window counters. The
 // streaming variant gets no stats from the addon — only the timing.
-const bciGauges = (res: { stats?: TranscribeStats }): Record<string, number> => {
+function bciGauges(res: { stats?: TranscribeStats }): Record<string, number> {
   const gauges: Record<string, number> = {}
   const modelExecMs = readModelExecutionMs(res)
   if (modelExecMs !== undefined) gauges['modelExecutionTime'] = modelExecMs
