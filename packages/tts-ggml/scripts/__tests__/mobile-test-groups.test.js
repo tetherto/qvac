@@ -32,7 +32,8 @@ const EXPECTED_ASSIGNMENTS = {
   'cross-model-compatibility': [
     'runMultipleRunsTest',
     'runGpuSmokeTest',
-    'runOutputSampleRateTest'
+    'runOutputSampleRateTest',
+    'runVoiceControlsTest'
   ]
 }
 
