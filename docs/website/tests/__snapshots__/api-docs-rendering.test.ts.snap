@@ -3,6 +3,8 @@
 exports[`single-page template > renders a complete API summary page 1`] = `
 "---
 title: API Summary — v0.9.1
+sidebarTitle: API
+icon: BookA
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
@@ -125,6 +127,8 @@ and read \`error.code\` / \`error.cause\`. Code ranges:
 exports[`single-page template renders a complete API summary page 1`] = `
 "---
 title: API Summary — v0.9.1
+sidebarTitle: API
+icon: BookA
 description: One-page reference of all public functions and objects exported by @qvac/sdk
 ---
 
