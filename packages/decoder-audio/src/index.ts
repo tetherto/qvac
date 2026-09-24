@@ -10,6 +10,9 @@ import {
 
 import { ERR_CODES, QvacErrorDecoderAudio } from "./utils/error";
 
+export { VideoFrameDecoder, VIDEO_DEFAULTS, VIDEO_LIMITS } from "./video";
+export type { VideoFrame, VideoInfo, VideoStats, VideoOptions, VideoInput, VideoReader } from "./video";
+
 /** Output sample formats this decoder can resample to. */
 export type AudioFormatName = "s16le" | "f32le";
 

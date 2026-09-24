@@ -18,6 +18,9 @@ declare module "bare-ffmpeg" {
   export type ChannelLayoutInput = ChannelLayout | number | string;
 
   export class Frame {
+    width: number;
+    height: number;
+    pts: number;
     format: number;
     sampleRate: number;
     nbSamples: number;
@@ -49,6 +52,9 @@ declare module "bare-ffmpeg" {
 
   export class Packet {
     constructor(buffer?: Uint8Array);
+    readonly streamIndex: number;
+    readonly isKeyframe: boolean;
+    readonly pts: number;
     unref(): void;
     destroy(): void;
   }
@@ -84,6 +90,11 @@ declare module "bare-ffmpeg" {
   }
 
   export class CodecParameters {
+    readonly width: number;
+    readonly height: number;
+    readonly type: number;
+    readonly sampleAspectRatio: Rational;
+    readonly colorTRC: number;
     readonly sampleRate: number;
     readonly format: number;
     readonly channelLayout: ChannelLayout;
@@ -100,7 +111,7 @@ declare module "bare-ffmpeg" {
 
   /** Decoding side of a stream. Returned by `Stream.decoder()`. */
   export class CodecContext {
-    open(): void;
+    open(options?: Dictionary): void;
     sendPacket(packet: Packet): boolean;
     /** Fills `frame` and returns true while frames remain available. */
     receiveFrame(frame: Frame): boolean;
@@ -108,6 +119,9 @@ declare module "bare-ffmpeg" {
   }
 
   export class Stream {
+    readonly timeBase: Rational;
+    readonly duration: number;
+    readonly sideData: { type: number; name: string; data: Uint8Array }[];
     readonly index: number;
     readonly codec: Codec;
     readonly codecParameters: CodecParameters;
@@ -117,8 +131,33 @@ declare module "bare-ffmpeg" {
   export class InputFormatContext {
     constructor(io: IOContext);
     readonly streams: Stream[];
+    readonly duration: number;
     /** Reads the next packet; returns false at end of stream. */
     readFrame(packet: Packet): boolean;
+    destroy(): void;
+  }
+
+  export class Rational {
+    readonly numerator: number;
+    readonly denominator: number;
+  }
+
+  export class Dictionary {
+    static from(entries: Record<string, string>): Dictionary;
+    destroy(): void;
+  }
+
+  export class Image {
+    constructor(format: string, width: number, height: number, align?: number);
+    readonly data: Buffer;
+    fill(frame: Frame): void;
+    read(frame: Frame): void;
+  }
+
+  export class Scaler {
+    constructor(sourceFormat: number, sourceWidth: number, sourceHeight: number,
+      targetFormat: string, targetWidth: number, targetHeight: number);
+    scale(source: Frame, target: Frame): number;
     destroy(): void;
   }
 

@@ -24,8 +24,28 @@ exports.ERR_CODES = Object.freeze({
     DECODER_NOT_LOADED: 11010,
     STREAM_INDEX_OUT_OF_BOUNDS: 11011,
     JOB_CANCELLED: 11012,
+    INVALID_VIDEO_INPUT: 11013,
+    VIDEO_LIMIT_EXCEEDED: 11014,
+    UNSUPPORTED_VIDEO: 11015,
+    VIDEO_DECODE_FAILED: 11016,
 });
 addCodes({
+    [exports.ERR_CODES.INVALID_VIDEO_INPUT]: {
+        name: "INVALID_VIDEO_INPUT",
+        message: (detail) => `Invalid video input: ${detail}`,
+    },
+    [exports.ERR_CODES.VIDEO_LIMIT_EXCEEDED]: {
+        name: "VIDEO_LIMIT_EXCEEDED",
+        message: (detail) => `Video limit exceeded: ${detail}`,
+    },
+    [exports.ERR_CODES.UNSUPPORTED_VIDEO]: {
+        name: "UNSUPPORTED_VIDEO",
+        message: (detail) => `Unsupported video: ${detail}`,
+    },
+    [exports.ERR_CODES.VIDEO_DECODE_FAILED]: {
+        name: "VIDEO_DECODE_FAILED",
+        message: (detail) => `Video decoding failed: ${detail}`,
+    },
     [exports.ERR_CODES.FAILED_TO_LOAD_WEIGHTS]: {
         name: "FAILED_TO_LOAD_WEIGHTS",
         message: (message) => `Failed to load weights, error: ${message}`,
