@@ -2,7 +2,7 @@
   {
     "source": "https://huggingface.co/BSC-LT/salamandraTA-2B-instruct-GGUF/blob/60046856fcac87c47fb0c706e994e70f01eda62b/salamandrata_2b_inst_q8.gguf",
     "engine": "@qvac/llm-llamacpp",
-    "description": "",
+    "description": "SalamandraTA 2B instruct model",
     "quantization": "q8",
     "params": "2B",
     "licenseId": "Apache-2.0",
