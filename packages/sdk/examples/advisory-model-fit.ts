@@ -30,10 +30,12 @@
  *     gpt-oss-20B   Q4_K_M  10.8 GiB  @  32k ctx
  *     gte-large     fp16     0.6 GiB  (embedding, context pinned to 512)
  *
- *   PROJECTED NOT TO FIT — try any of these to see a `does-not-fit` verdict
+ *   PROJECTED NOT TO FIT — with `gpu_layers: 99` pinned
  *     gpt-oss-20B   Q4_K_M  10.8 GiB  @ 128k ctx with an f32 KV cache ← below
- *     Gemma 4 31B   Q4_K_M  18.3 GiB  @   1k ctx   ← the weights alone do not
- *                                                    fit with gpu_layers: 99
+ *
+ * These rows were measured with `gpu_layers` pinned at 99. Loads no longer pin
+ * the layer count, and the `does-not-fit` row has not been re-measured
+ * unpinned.
  *
  * gpt-oss-20B at 128k context FITS with the default KV cache and DOES NOT FIT
  * once `cache-type-k`/`cache-type-v` are set to `f32`. Same model, same
@@ -42,10 +44,9 @@
  *
  * Two boundaries worth understanding when reading verdicts:
  *
- * 1. The verdict answers for a PLACEMENT, not a model. The SDK's schema
- *    default is `gpu_layers: 99` ("everything on the GPU"), so `does-not-fit`
- *    means "not at this placement". Omit `gpu_layers` and the fitter is free
- *    to move layers to the CPU side instead.
+ * 1. The verdict answers for a PLACEMENT, not a model. With `gpu_layers`
+ *    unset, the fitter may move layers to the CPU side; setting it pins the
+ *    layer count, and `does-not-fit` then means "not at this placement".
  * 2. A `does-not-fit` configuration can still RUN on macOS when the OS
  *    compresses and pages hard enough — and a `fits` configuration right at
  *    the boundary can still fail at first decode under memory pressure.

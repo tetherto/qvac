@@ -3,7 +3,7 @@
 const test = require('brittle')
 const OcrGgml = require('../..').OcrGgml
 const { ERR_CODES, QvacErrorAddonOcrGgml } = require('../..')
-const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('../../lib/main-gpu')
+const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('@qvac/ocr-ggml/lib/main-gpu')
 
 async function captureRejection(fn) {
   try {

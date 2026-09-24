@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.42.0] - 2026-09-23
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.1` -> `^0.17.0`, carrying
+  `qvac-fabric` `10549.1.0` -> `10549.3.0`. This includes the managed RPC
+  lifecycle, distributed-load improvements, MTP and fit correctness fixes,
+  Windows backend loading fixes, and CUDA FP4 optimizations. No API change for
+  this package.
+
 ## [0.41.3] - 2026-09-18
 
 ### Changed

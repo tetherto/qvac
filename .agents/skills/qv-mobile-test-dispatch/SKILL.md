@@ -27,11 +27,17 @@ operating procedure, that doc is the source of truth.
 
 ## Safety rules
 
-- **Device Farm costs money.** Never dispatch the full suite to explore. Always
-  pass a `tests` filter and the smallest device set that answers the question.
-- **`llm-llamacpp` is sharded** (7 Android groups, 13 iOS groups). An empty
-  `tests` filter fans out the whole set as separate Device Farm runs. Always
-  filter for LLM.
+- **Device Farm costs money.** Never dispatch the full suite to explore. Once a
+  first run has been done, pass a `tests` filter and the smallest device set that
+  answers the question.
+- **The exception is a first run on an addon**, which is deliberately the full
+  matrix: every supported device, every test. See
+  [Step 3b](#step-3b--which-devices-to-run-on). Narrow only after it is green.
+- **`llm-llamacpp` is sharded** (7 Android groups, 13 iOS groups) and an empty
+  `tests` filter fans each group out as its own Device Farm run — multiplied by
+  the device list. A full first run on a sharded addon is legitimate but
+  expensive, so say what it will cost before dispatching it; outside a first run,
+  always filter for LLM.
 - **One platform per dispatch.** Android and iOS are separate runs.
 - **A second dispatch of the same workflow on the same branch cancels the
   first.** To cover both platforms, either wait, or use different addons in
@@ -64,7 +70,7 @@ take the number at the end of its URL.
 
 Do **not** filter by the addon's own workflow name. Which workflow built the
 bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
-`on-merge-<addon>.yml` for a branch build. Scope by the PR's head commit:
+`on-merge-nx.yml` for a branch build. Scope by the PR's head commit:
 
 ```bash
 PKG=llm-llamacpp   # the package directory name, i.e. packages/<PKG>
@@ -109,19 +115,64 @@ a name from the commands above. (That FATAL used to fire for *valid* runners too
 because the prestage generator kept its own list; `readKnownRunners()` now reads
 `test-groups.json` directly.)
 
+## Step 3b — which devices to run on
+
+**A first run on an addon covers every supported device and every test.** That is
+what says whether the change is good. Narrow only afterwards, when re-running a
+known failure or iterating on one test.
+
+| Platform | Supported devices |
+|----------|-------------------|
+| Android  | `Google Pixel 9 Pro`, `Samsung Galaxy S25 Ultra`, `Samsung Galaxy S26 Ultra` |
+| iOS      | `Apple iPhone 16 Pro`, `Apple iPhone 17 Pro` |
+
+Not supported — these will schedule and bill, but a failure on one is not acted
+on: **Pixel 8 and older** (below the targeted floor) and **Pixel 10** (not
+adopted). Any other fleet device can be added deliberately, e.g. to reproduce a
+report on specific hardware; say why when you do.
+
+`Google Pixel 9` and `Google Pixel 9 Pro` are different fleet models under the
+default `EQUALS` operator. The supported one is the Pro.
+
 ## Step 4 — dispatch
+
+First run — full matrix, one dispatch per platform, `tests` left empty. **Run them
+in sequence, not back to back:** the concurrency group is keyed on workflow and
+ref and does NOT include the platform, so dispatching iOS while Android is still
+running cancels Android. Wait for the first to finish, then fire the second.
 
 ```bash
 gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9" \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
+  -f device_model_operator=EQUALS \
+  -f prebuild_run_id=<run id>
+
+# iOS — only after the Android run finishes, or it cancels it
+gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
+  -f platform=iOS \
+  -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
+  -f device_model_operator=EQUALS \
+  -f prebuild_run_id=<run id>
+```
+
+Report a first run as complete only when **both** platforms actually completed. A
+cancelled Android leg is not a pass, and on `llm-llamacpp` it also discards a
+seed-models step budgeted at up to 120 minutes.
+
+Follow-up — one device, one test, after something fails:
+
+```bash
+gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
+  -f platform=Android \
+  -f devices_custom="Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS \
   -f tests=<runnerName> \
   -f prebuild_run_id=<run id>
 ```
 
 - `devices_custom` takes a comma-separated list and overrides the `device`
-  dropdown. Names are full fleet names (`Google Pixel 9`, `Apple iPhone 16 Pro`).
+  dropdown. Names are full fleet names (`Google Pixel 9 Pro`, `Apple iPhone 16 Pro`).
 - `device_model_operator=EQUALS` bills exactly that model; `CONTAINS` may pick a
   different variant.
 - `ref` selects the JS harness, tests and app — **not** the native binary. It and
@@ -148,6 +199,37 @@ Warnings worth acting on:
 
 The run-id path **fails closed** — a wrong, private, unfinished or expired run id
 fails the run with the reason rather than falling back to `@latest`.
+
+Read the verdict from the run's `test-results.json`, not the workflow conclusion:
+a green workflow is not the same as a passed test, and Device Farm's `Totals:`
+line counts its own suite rather than your runners.
+
+## Step 6 — attach the run to the PR
+
+A run is only evidence if a reviewer can open it. After a re-run, the link belongs
+on the PR — as a **comment** when it answers a review question, or in the
+**description** when it is part of the case that the change works.
+
+**This writes to a public repository, so never post without explicit approval.**
+Draft the line, show it, and post only when the human says to — the same shape
+`qv-pr-review` uses for its own writes. Show the exact command before running it.
+
+Name the test and the device, so the line reads without opening anything:
+
+```
+Re-ran runChatterboxSpeedTest on Samsung Galaxy S26 Ultra after 4e1f2a9:
+https://github.com/tetherto/qvac/actions/runs/<id> — total=1 passed=1
+```
+
+Prefer `gh pr comment`: it adds, so nothing can be lost. **`gh pr edit --body`
+replaces the WHOLE description** — appending a line blind will silently drop the
+author's write-up, recoverable only from GitHub's edit history. If the
+description really is the right place, read the current body first, show the
+merged result in full, and write only once that has been approved.
+
+Quote the counts from `test-results.json`. Never report a pass you have not read
+out of that file — say what actually ran, including when the answer is that a
+failure is still reproducing, and when a leg was cancelled rather than run.
 
 ## Per-addon notes
 

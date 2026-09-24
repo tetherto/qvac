@@ -22,11 +22,14 @@ This applies to all 14 mobile addons: `asr-ggml`, `audiogen-ggml`,
 
 ### Quick start — test your own PR on a device
 
-The common case, end to end. Device Farm is billed per device minute, so filter
-to one test and one device unless you need more.
+The common case, end to end. A first run on an addon should cover every supported
+device and every test — see [Which devices to run on](#which-devices-to-run-on).
+The single-device, single-test form below is the follow-up shape: once you are
+re-running a known failure or iterating on one test, narrow it, because Device
+Farm is billed per device minute.
 
 ```bash
-ADDON=llm-llamacpp          # workflow slug: integration-mobile-test-$ADDON.yml
+WF=llm-llamacpp             # workflow slug: integration-mobile-test-$WF.yml
 PKG=llm-llamacpp            # package dir: packages/$PKG (vla is the odd one: vla vs vla-ggml)
 PR=1234
 BRANCH=$(git branch --show-current)
@@ -50,9 +53,9 @@ jq -r '(.android//{})|[..|strings]|unique|.[]' packages/$PKG/test/mobile/test-gr
 
 # 3. Dispatch. Android and iOS are separate runs, and a second dispatch of the
 #    same workflow on the same branch cancels the first.
-gh workflow run integration-mobile-test-$ADDON.yml --repo tetherto/qvac --ref "$BRANCH" \
+gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref "$BRANCH" \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9" \
+  -f devices_custom="Google Pixel 9 Pro" \
   -f device_model_operator=EQUALS \
   -f tests=<runnerName> \
   -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
@@ -79,13 +82,58 @@ Verified: prebuilds come from run <id> — artifact 'prebuilds-<pkg>', …, head
 | Input | What it does |
 |-------|--------------|
 | **platform** | The one platform this run targets — `Android` or `iOS`. A manual run is always a single platform. |
-| **device** | A searchable dropdown of common pool devices (e.g. `Pixel 9`, `iPhone 17`). Pick `(custom)` if you want to type your own in `devices_custom`. |
-| **devices_custom** | A free-text field for one **or more** device models, comma-separated (e.g. `Pixel 9, Pixel 8`). When set, it **overrides** the dropdown. Use it for new/uncommon devices or to run several at once. |
+| **device** | A searchable dropdown of common pool devices. Pick `(custom)` if you want to type your own in `devices_custom`. The dropdown predates the current supported roster, so for a first run prefer `devices_custom` — see [Which devices to run on](#which-devices-to-run-on). |
+| **devices_custom** | A free-text field for one **or more** device models, comma-separated (e.g. `Google Pixel 9 Pro, Samsung Galaxy S25 Ultra`). When set, it **overrides** the dropdown. This is how you run the full supported set in one dispatch. |
 | **device_model_operator** | How the model name is matched: `EQUALS` (**default** — that exact fleet model only; dropdown values are exact fleet names) or `CONTAINS` (any model containing the value — Device Farm picks by availability, so `Pixel 9` can also match `Pixel 9 Pro`). Default is `EQUALS` so a single-device run bills exactly the model you picked. |
 | **tests** | Optional test filter — see [below](#the-tests-filter). Empty = the full mobile suite. |
 | **prebuild_run_id** | The run id whose `prebuilds` artifact holds the native binaries to install. **This is the route for testing your own PR on a device** — see [below](#testing-unmerged--unpublished-native-code). Outranks `package`, and a wrong or expired run id **fails the run** instead of quietly resolving `@latest`. |
 | **package** (or **package_spec**) | Which *published* build to put on the phone — see [below](#which-build-gets-tested). Default **empty** resolves the **published `@qvac/<addon>@latest`** on a manual run, *not* your branch — a manual dispatch builds no prebuild artifacts of its own. Use it for a release or a build from **another** branch; for your own PR prefer `prebuild_run_id`. Mutually exclusive with it. |
 | **ref** | Git ref to check out for the **test harness / app** (not the native binary — see below). |
+
+### Which devices to run on
+
+**The first run on an addon is the full matrix: every supported device, every
+test.** That is what tells you whether the change is good. Narrow only after it
+is green, when you are re-running a known failure or iterating on one test.
+
+| Platform | Supported devices |
+|----------|-------------------|
+| Android  | `Google Pixel 9 Pro`, `Samsung Galaxy S25 Ultra`, `Samsung Galaxy S26 Ultra` |
+| iOS      | `Apple iPhone 16 Pro`, `Apple iPhone 17 Pro` |
+
+Leave `tests` empty to run the addon's whole suite. Android and iOS are separate
+dispatches, and **the second cancels the first if the Android run is still
+going** — the concurrency group is keyed on workflow and ref, not platform (see
+[One run at a time](#one-run-at-a-time-per-branch)). So a full
+first pass is two runs, in sequence:
+
+```bash
+gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref "$BRANCH" \
+  -f platform=Android \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
+  -f device_model_operator=EQUALS \
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
+
+# iOS — only after the Android run finishes, or it cancels it
+gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref "$BRANCH" \
+  -f platform=iOS \
+  -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
+  -f device_model_operator=EQUALS \
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
+```
+
+**Not supported.** Adding these to `devices_custom` will schedule and bill a run,
+but a failure on one is not a failure the team acts on:
+
+- **Pixel 8 and anything older.** Below the floor the addons target.
+- **Pixel 10.** Not adopted; it is deferred in the perf fleet too.
+
+You can still add any other fleet device deliberately — to reproduce a report on
+specific hardware, say. Note it in the PR so a reviewer knows why the device list
+is not the standard one.
+
+**`Google Pixel 9` is not `Google Pixel 9 Pro`.** Under the default `EQUALS`
+operator they are different fleet models, and the supported one is the Pro.
 
 ### Device selection: dropdown + free-text
 
@@ -136,10 +184,15 @@ match works depends on `device_model_operator`:
 
 The dropdown uses **exact** names so they work with either operator:
 
-| Platform | Exact `MODEL` values (dropdown) | Manufacturer |
-|----------|---------------------------------|--------------|
-| Android  | `Google Pixel 9`, `Google Pixel 8`, `Samsung Galaxy S25 Ultra` | `Google` / `Samsung` |
-| iOS      | `Apple iPhone 17`, `Apple iPhone 16 Pro`, `Apple iPhone 15` | `Apple` |
+| Platform | Supported `MODEL` values | Manufacturer |
+|----------|--------------------------|--------------|
+| Android  | `Google Pixel 9 Pro`, `Samsung Galaxy S25 Ultra`, `Samsung Galaxy S26 Ultra` | `Google` / `Samsung` |
+| iOS      | `Apple iPhone 16 Pro`, `Apple iPhone 17 Pro` | `Apple` |
+
+These are the models the team supports — see
+[Which devices to run on](#which-devices-to-run-on). The fleet carries others,
+and `devices_custom` will happily run them; they are simply not what a result is
+judged against.
 
 `devices_custom` accepts any of the above, a bare substring (with `CONTAINS`), or
 any other model on the fleet. **This table can drift** as the fleet changes, so the
@@ -293,12 +346,15 @@ run that built the prebuilds, and take the number at the end of its URL
 
 Do **not** assume it is your addon's own workflow. Which workflow builds the
 bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
-`on-merge-<addon>.yml` for a branch build — so filtering by workflow name is
+`on-merge-nx.yml` for a branch build — so filtering by workflow name is
 unreliable. Scope by your PR's head commit instead:
 
 ```bash
 PKG=llm-llamacpp   # the package directory name, i.e. packages/<PKG>
+WF=llm-llamacpp    # workflow slug: integration-mobile-test-<WF>.yml. Not always
+                   # $PKG — integration-mobile-test-vla.yml builds packages/vla-ggml.
 PR=4519            # your PR number
+BRANCH=$(git branch --show-current)
 
 SHA=$(gh pr view "$PR" --repo tetherto/qvac --json headRefOid --jq .headRefOid)
 RUN_ID=$(for rid in $(gh api "repos/tetherto/qvac/actions/runs?head_sha=$SHA&per_page=100" \
@@ -324,9 +380,9 @@ tells you where to look.
 ```bash
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9" \
+  -f devices_custom="Google Pixel 9 Pro" \
   -f device_model_operator=EQUALS \
-  -f prebuild_run_id=$RUN_ID
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
 ```
 
 The build job's *Resolve prebuilds from a run id* step prints the provenance:
@@ -400,11 +456,11 @@ Two names are involved and for one addon they differ, so set them separately
 rather than deriving one from the other:
 
 ```bash
-WF=llm-llamacpp             # workflow slug: on-merge-$WF.yml / integration-mobile-test-$WF.yml
+WF=llm-llamacpp             # workflow slug: integration-mobile-test-$WF.yml
 GPR_NAME=llm-llamacpp-mono  # the npm package name (minus @qvac/) plus -mono
 
 RUN_ID=$(gh run list --repo tetherto/qvac \
-  --workflow on-merge-$WF.yml --branch $BRANCH \
+  --workflow on-merge-nx.yml --branch $BRANCH \
   --limit 1 --json databaseId --jq '.[0].databaseId')
 
 PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
@@ -413,11 +469,15 @@ PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
 echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
 ```
 
+The 13 native addons publish from the single `on-merge-nx.yml`, so the run is
+found by branch rather than by a per-addon workflow name. `model-fit` still has
+its own `on-merge-model-fit.yml`.
+
 For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
-exception:** its workflows are `on-merge-vla.yml` /
-`integration-mobile-test-vla.yml`, but the package is `@qvac/vla-ggml`, so
-`WF=vla` and `GPR_NAME=vla-ggml-mono`. If unsure, read `addon-npm-name` from the
-mobile workflow and append `-mono` to the part after the slash.
+exception:** its mobile workflow is `integration-mobile-test-vla.yml`, but the
+package is `@qvac/vla-ggml`, so `WF=vla` and `GPR_NAME=vla-ggml-mono`. If
+unsure, read `addon-npm-name` from the mobile workflow and append `-mono` to the
+part after the slash.
 
 An empty `$PKG` means either that run published nothing — usually because the
 push touched nothing under `packages/<addon>/`, so the path-scoped workflow
@@ -436,7 +496,7 @@ dispatch on the same branch cancels the first — see the concurrency note below
 # Android
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9, Samsung Galaxy S25 Ultra" \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra" \
   -f device_model_operator=EQUALS \
   -f tests="runContinuousBatchingTest" \
   -f package="$PKG"
@@ -444,7 +504,7 @@ gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRAN
 # iOS — only after the Android run finishes
 gh workflow run integration-mobile-test-$WF.yml --repo tetherto/qvac --ref $BRANCH \
   -f platform=iOS \
-  -f devices_custom="Apple iPhone 17, Apple iPhone 16 Pro" \
+  -f devices_custom="Apple iPhone 17 Pro, Apple iPhone 16 Pro" \
   -f device_model_operator=EQUALS \
   -f tests="runContinuousBatchingTest" \
   -f package="$PKG"
@@ -533,7 +593,7 @@ Run the full suite across the phones you care about (one dispatch per platform):
 # Android — across the pool phones (one run per exact model)
 gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
   -f platform=Android \
-  -f devices_custom="Google Pixel 9, Google Pixel 8, Samsung Galaxy S25 Ultra" \
+  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS
 
 # iOS — the iPhones
@@ -543,7 +603,8 @@ gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
   -f device_model_operator=EQUALS
 ```
 
-These run in parallel and each reports its own verdict. (Once the workflow is on
+Run the iOS dispatch only after the Android one finishes — same workflow, same
+branch, so a second dispatch cancels the first. (Once the workflow is on
 the default branch you can do the same from **Actions → Run workflow** in the UI.)
 
 ### 2. Narrow after a failure — one device, one test
@@ -553,16 +614,31 @@ When a device fails, don't re-run everything. Re-dispatch **just that device** w
 [the tests filter](#the-tests-filter)):
 
 ```bash
-# e.g. runChatterboxSpeedTest failed on the Pixel 8 — re-run only that
+# e.g. runChatterboxSpeedTest failed on the S26 Ultra — re-run only that
 gh workflow run integration-mobile-test-tts-ggml.yml --ref <branch> \
   -f platform=Android \
-  -f devices_custom="Google Pixel 8" \
+  -f devices_custom="Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS \
   -f tests="runChatterboxSpeedTest"
 ```
 
 This is the cheap, fast loop for reproducing/fixing a single failure without paying
 for the whole pool again.
+
+**Attach the run to the PR.** A re-run is only evidence if a reviewer can open it,
+so put its link in the PR — in the description when it is part of the case that
+the change works, or as a comment when it answers a specific review question.
+
+```
+Re-ran runChatterboxSpeedTest on Samsung Galaxy S26 Ultra after 4e1f2a9:
+https://github.com/tetherto/qvac/actions/runs/<id> — total=1 passed=1
+```
+
+Say which **test** and which **device**, so the link is readable without opening
+it. Read the verdict from the run's `test-results.json` rather than the workflow
+conclusion — a green workflow is not the same as a passed test, and Device Farm's
+own `Totals:` line counts its own suite, not your runners. When a run is red, see
+[Where the logs are when a run fails](#where-the-logs-are-when-a-run-fails).
 
 ### Run-count cap (fail-fast)
 
@@ -577,11 +653,13 @@ scheduler as a backstop):
   addons are always `specs = 1`; `inference-addon-cpp` counts one shard per desktop
   suite (regenerated at validation time), so its fan-out is bounded correctly too.
 
-So the broad example above (3 devices, no filter) is fine on every addon — e.g.
-`tts-ggml` has 9 Android shards → `9 × 3 = 27` runs. Broad coverage on a
-shard-heavy addon may hit the cap (e.g. `llm-llamacpp` iOS has 13 shards →
-`13 × 3 = 39`); if you exceed it, either **add a `tests` filter** (drops `specs`
-to 1) or **reduce devices**. Both caps fail fast and free.
+The full supported matrix fits on every addon today: 3 Android devices and 2 iOS
+devices, so the worst cases are `tts-ggml` Android at `9 × 3 = 27` runs and
+`llm-llamacpp` iOS at `13 × 2 = 26`. Adding devices beyond the supported set is
+what pushes a shard-heavy addon over — `llm-llamacpp` iOS with 3 devices is
+`13 × 3 = 39`, and a fourth breaks the cap. If you exceed it, either **add a
+`tests` filter** (drops `specs` to 1) or **reduce devices**. Both caps fail fast
+and free.
 
 ## What changed on PRs
 
