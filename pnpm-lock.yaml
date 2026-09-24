@@ -1005,6 +1005,12 @@ importers:
       bare-console:
         specifier: '*'
         version: 6.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      bare-events:
+        specifier: ^2.9.1
+        version: 2.9.1(bare-abort-controller@1.1.2)
+      bare-process:
+        specifier: ^4.5.1
+        version: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-stdio:
         specifier: ^1.0.3
         version: 1.0.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
