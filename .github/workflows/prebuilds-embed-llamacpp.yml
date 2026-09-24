@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-embed-llamacpp.yml
+# Build-only workflow. Publishing is handled by on-merge-nx.yml.
 name: Prebuilds (Embed)
 
 on:

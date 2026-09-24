@@ -195,8 +195,9 @@ parler-indic-q8_0.gguf     (~1.3 GB; also -f16 / -f32; 21 Indic languages)
 # from the cosyvoice3-llm-*.gguf file
 cosyvoice3/
   cosyvoice3-llm-*.gguf    (~973 MB q8_0 — Qwen2.5 speech LM)
-  cosyvoice3-flow-*.gguf   (~1.3 GB f32 — DiT conditional-flow-matching)
-  cosyvoice3-hift-*.gguf   (~83 MB f32 — CausalHiFT vocoder)
+  cosyvoice3-flow-*.gguf   (~1.3 GB f32 — DiT conditional-flow-matching; also
+                            -f16 / -bf16 / -q8_0 / -q4_0)
+  cosyvoice3-hift-*.gguf   (~83 MB f32 — CausalHiFT vocoder; also -f16)
   voice.gguf               (baked default voice: timbre + prompt tensors)
   vocab.json  merges.txt   (Qwen2 BPE tokenizer)
   cosyvoice3-s3tok-*.gguf  (~275 MB q8_0 / ~497 MB f16 — speech tokenizer;
@@ -220,9 +221,14 @@ npm run download-models:registry -- --output /path/to/models
 ```
 
 CosyVoice3 and Audio8 are not currently included in that registry command.
-Stage their layouts shown above from local converted artifacts. The package
-converts upstream Chatterbox, Supertonic, and Parler checkpoints via a Python
-venv pipeline:
+Stage their layouts shown above from local converted artifacts. CosyVoice3
+resolves each component by filename prefix and does not rank quantizations, so
+stage one file per component or name it explicitly with
+`files.cosyvoiceFlowModelPath` / `cosyvoiceHiftModelPath`. Which flow tier is
+fastest depends on the backend — `q8_0` on Vulkan / CUDA, `f16` on Metal,
+`bf16` on AVX512-BF16 CPUs and `f16` on other CPUs — and the `f16` HiFT is the
+recommendation everywhere. The package converts upstream Chatterbox,
+Supertonic, and Parler checkpoints via a Python venv pipeline:
 
 ```bash
 npm run setup-models   # creates ./venv, installs requirements.txt, runs convert-models.sh
@@ -604,6 +610,23 @@ On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 (`cuda` | `vulkan` | `metal` | `opencl`) pins the cascade to one backend
 and fails loudly when that backend cannot be resolved; unset (or empty)
 keeps the automatic preference above.
+
+### Core ML sidecars on Apple
+
+The macOS / iOS prebuilds carry the Apple Core ML (Neural Engine) sidecars
+for the Supertonic vocoder and the Audio8 codec. They are presence-driven:
+each stage runs on a compiled `.mlmodelc` found next to its model file
+(`supertonic3-q8_0.gguf` -> `supertonic3-vocoder.mlmodelc`) and falls back to
+the ggml graph when it is absent, so a model directory without sidecars
+behaves exactly as before. Sidecars are not part of the published model set
+yet; supply your own to opt in.
+
+Worth it where the GPU is consumer-class: on an Apple M4 the Supertonic
+vocoder runs 2.5-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
+end to end). On workstation parts the GPU wins — an M3 Ultra is 0.6-0.9x —
+so do not stage a sidecar there. `q4_0` models ignore the vocoder sidecar:
+it carries full-precision weights and would substitute a different vocoder
+rather than accelerate the quantized one.
 
 When the addon is built with `ENABLE_CUDA` — on in the published linux-x64
 prebuilds, opt-in on linux-arm64 and win32-x64 (`npm run build:cuda` or
