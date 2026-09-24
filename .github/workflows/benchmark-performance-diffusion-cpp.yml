@@ -100,6 +100,7 @@ jobs:
       - prebuild
     if: ${{ !cancelled() && inputs.run_mobile && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && inputs.prebuild_package != '')) }}
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write
