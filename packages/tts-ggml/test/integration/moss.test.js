@@ -17,7 +17,7 @@ const MOSS_SAMPLES_PER_FRAME = 1920
 const TEST_TIMEOUT_MS = 1800000
 const SYNTHESIS_TEXT = 'The MOSS integration test checks this generated voice.'
 const MODEL_DIR_ENV = 'QVAC_TEST_MOSS_MODEL_DIR'
-const ENCODER_FILE = 'moss-codec-encoder-f16.gguf'
+const ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i
 const DIALOGUE_BACKBONE_RE = /^moss-ttsd(-[a-z0-9_]+)?\.gguf$/i
 const DIALOGUE_TEXT =
   '[S1] And so, my fellow Americans, [S2] ask what you can do for your country. ' +
@@ -80,14 +80,16 @@ function removeFiles(paths) {
   for (const file of paths) fs.unlinkSync(file)
 }
 
-function hasEncoder() {
-  return fs.existsSync(path.join(modelDir, ENCODER_FILE))
+function modelDirHas(pattern) {
+  return !skipWithoutModels && fs.readdirSync(modelDir).some((entry) => pattern.test(entry))
 }
 
-function findDialogueBackbone() {
-  if (skipWithoutModels) return null
-  const name = fs.readdirSync(modelDir).find((entry) => DIALOGUE_BACKBONE_RE.test(entry))
-  return name ? path.join(modelDir, name) : null
+function hasEncoder() {
+  return modelDirHas(ENCODER_RE)
+}
+
+function hasDialogueBackbone() {
+  return modelDirHas(DIALOGUE_BACKBONE_RE)
 }
 
 function collectChunk(result, data) {
@@ -203,8 +205,8 @@ test(
   { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
   async (t) => {
     const sourceAudio = resolveRefWavPath({})
-    if (!fs.existsSync(path.join(modelDir, ENCODER_FILE))) {
-      t.comment(`skipping: ${ENCODER_FILE} is not in ${modelDir}`)
+    if (!hasEncoder()) {
+      t.comment(`skipping: no moss-codec-encoder GGUF in ${modelDir}`)
       return
     }
     if (!fs.existsSync(sourceAudio)) {
@@ -247,9 +249,8 @@ test(
   'MOSS TTS: dialogue synthesis clones one reference per speaker',
   { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
   async (t) => {
-    const backbone = findDialogueBackbone()
-    if (!backbone || !hasEncoder()) {
-      t.comment(`skipping: the TTSD backbone or ${ENCODER_FILE} is not in ${modelDir}`)
+    if (!hasDialogueBackbone() || !hasEncoder()) {
+      t.comment(`skipping: the TTSD backbone or the codec encoder is not in ${modelDir}`)
       return
     }
     const sourceAudio = resolveRefWavPath({})
@@ -262,7 +263,10 @@ test(
       await withLoadedModel(
         { dialogueReferences: references, seed: 7, files: { modelDir: path.resolve(modelDir) } },
         async (model) => {
-          t.is(model._mossBackbonePath, backbone, 'dialogue picks the TTSD backbone')
+          t.ok(
+            DIALOGUE_BACKBONE_RE.test(path.basename(model._mossBackbonePath)),
+            'dialogue picks the TTSD backbone'
+          )
           const started = Date.now()
           const result = await synthesize(model, DIALOGUE_TEXT)
           assertAudio(t, 'MOSS dialogue', result)

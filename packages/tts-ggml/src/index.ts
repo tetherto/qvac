@@ -280,6 +280,12 @@ const MOSS_DECODER_RE = /^moss-codec-decoder(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_NATIVE_SAMPLE_RATE = 24000;
 const MOSS_FRAMES_PER_SECOND = 12.5;
+const MOSS_MAX_NEW_TOKENS = 2048;
+const MOSS_MAX_CHANNELS = 32;
+const MOSS_TERMINATION_ROWS = 2;
+const MOSS_MAX_DURATION_TOKENS =
+  MOSS_MAX_NEW_TOKENS - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
+const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"] as const;
 
 /** Per-call engine fields forwarded verbatim onto the native job object. */
 type JobFields = ParlerDescFields &
@@ -392,7 +398,8 @@ interface TTSGgmlFiles {
   mossCodecDecoderPath?: string;
   /**
    * MOSS codec analysis half (wav to codes). Only needed to clone a voice
-   * from `referenceAudio`; a text-only deployment can leave it out.
+   * from `referenceAudio` or for `dialogueReferences`; a text-only deployment
+   * can leave it out.
    */
   mossCodecEncoder?: string;
   mossCodecEncoderPath?: string;
@@ -846,19 +853,19 @@ interface TTSGgmlOptions
   /** Audio8: take the argmax instead of sampling. */
   greedy?: boolean;
   /**
-   * MOSS: target length in codec frames (12.5 per second); 0 or unset keeps
-   * the length free. Targets up to about 2,000 frames (160 s) fit the engine's
-   * generation budget; a longer one fails at load. Set at construction or with
-   * `reload()`, not per call.
+   * MOSS: target length in codec frames (12.5 per second), from 0 to 2015
+   * (about 161 s); 0 or unset keeps the length free. Set at construction or
+   * with `reload()`, not per call.
    */
   durationTokens?: number;
   /**
    * MOSS-TTSD dialogue: one 24 kHz reference recording per speaker, in the
    * order the text tags them (`[S1]`, `[S2]`, ...). The model continues the
    * references, so the input text must open with each reference's transcript
-   * under its tag, followed by the lines to generate. Needs
+   * under its tag, followed by the lines to generate; sentence streaming is
+   * therefore rejected (use `run()` or `streamChunkTokens`). Needs
    * `files.mossCodecEncoder`, excludes `referenceAudio`, and is fixed for the
-   * instance. With a `modelDir`, prefers a `moss-ttsd-*.gguf` backbone.
+   * instance. With a `modelDir`, requires a `moss-ttsd-*.gguf` backbone.
    */
   dialogueReferences?: string[];
   minNewTokens?: number;
@@ -1786,12 +1793,15 @@ function assertAudio8SamplingFinite(
   }
 }
 
-const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"] as const;
+function isValidDurationTokens(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= MOSS_MAX_DURATION_TOKENS;
+}
 
-function assertMossDurationTokens(value: number | undefined, where: string): void {
-  if (value === undefined || (Number.isInteger(value) && value >= 0)) return;
+function assertMossDurationTokens(value: number | null | undefined, where: string): void {
+  if (value == null || isValidDurationTokens(value)) return;
   throw new Error(
-    `tts-ggml: ${where}: durationTokens must be an integer >= 0 (0 = free length)`,
+    `tts-ggml: ${where}: durationTokens must be an integer from 0 to ` +
+      `${MOSS_MAX_DURATION_TOKENS} (0 = free length)`,
   );
 }
 
@@ -2189,7 +2199,7 @@ class TTSGgml {
 
   private _mossBackbonePatterns(): RegExp[] {
     return this._dialogueReferences
-      ? [MOSS_DIALOGUE_BACKBONE_RE, MOSS_BACKBONE_RE]
+      ? [MOSS_DIALOGUE_BACKBONE_RE]
       : [MOSS_BACKBONE_RE, MOSS_DIALOGUE_BACKBONE_RE];
   }
 
@@ -2218,7 +2228,7 @@ class TTSGgml {
 
   private _assignMossVoiceOptions(options: TTSGgmlOptions): void {
     this._dialogueReferences = copyDialogueReferences(options.dialogueReferences);
-    this._durationTokens = options.durationTokens;
+    this._durationTokens = options.durationTokens ?? undefined;
   }
 
   private _assignSynthesisOptions(options: TTSGgmlOptions): void {
@@ -2519,8 +2529,7 @@ class TTSGgml {
   private _assertNoMossOnlyOptions(): void {
     const mossOnly = setOptionNames({
       durationTokens: this._durationTokens,
-      dialogueReferences:
-        this._dialogueReferences === undefined ? undefined : "set",
+      dialogueReferences: this._dialogueReferences !== undefined || undefined,
     });
     if (mossOnly.length === 0) return;
     throw new Error(
@@ -2544,6 +2553,21 @@ class TTSGgml {
           "encoder GGUF (files.mossCodecEncoder)",
       );
     }
+    if (!this._mossBackbonePath) {
+      throw new Error(
+        "tts-ggml: dialogue synthesis with the moss engine needs the MOSS-TTSD " +
+          "backbone: stage moss-ttsd-*.gguf in modelDir or set files.mossBackbone",
+      );
+    }
+  }
+
+  private _assertSentenceStreamingAllowed(where: string): void {
+    if (this._dialogueReferences === undefined) return;
+    throw new Error(
+      `tts-ggml: ${where}: MOSS dialogue cannot be split into sentences, ` +
+        "because every job must open with the reference transcripts; use " +
+        "run() or native streaming (streamChunkTokens)",
+    );
   }
 
   private _assertMossOutputRate(): void {
@@ -2850,6 +2874,7 @@ class TTSGgml {
     QvacResponse<TTSOutputChunk & SentenceStreamChunkMeta>
   > {
     if (input?.streamOutput === true) {
+      this._assertSentenceStreamingAllowed("run with streamOutput");
       if (
         typeof input.input !== "string" ||
         input.input.trim().length === 0
@@ -2915,6 +2940,7 @@ class TTSGgml {
   ): Promise<
     QvacResponse<TTSOutputChunk & SentenceStreamChunkMeta>
   > {
+    this._assertSentenceStreamingAllowed("runStreaming");
     const jobFields = this._resolveJobFields(
       options,
       "runStreaming",
@@ -3841,7 +3867,9 @@ class TTSGgml {
 
   private _assertMossReloadKeepsVoice(newConfig: Record<string, unknown>): void {
     if (this._engineType !== ENGINE_MOSS) return;
-    const voiceKeys = keysPresent(newConfig, MOSS_INSTANCE_VOICE_KEYS);
+    const voiceKeys = MOSS_INSTANCE_VOICE_KEYS.filter(
+      (key) => newConfig[key] !== undefined,
+    );
     if (voiceKeys.length === 0) return;
     throw new Error(
       `tts-ggml: reload: the moss engine encodes ${voiceKeys.join(", ")} ` +
@@ -3851,11 +3879,11 @@ class TTSGgml {
 
   private _applyMossReload(newConfig: Record<string, unknown>): void {
     if (this._engineType !== ENGINE_MOSS) return;
-    const durationTokens = (newConfig as { durationTokens?: number })
+    const durationTokens = (newConfig as { durationTokens?: number | null })
       .durationTokens;
     if (durationTokens === undefined) return;
     assertMossDurationTokens(durationTokens, "reload");
-    this._durationTokens = durationTokens;
+    this._durationTokens = durationTokens ?? undefined;
   }
 
   // Cross-engine conditioning is reloadable on every engine that supports it,

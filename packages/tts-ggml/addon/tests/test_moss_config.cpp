@@ -16,6 +16,7 @@
 #include "model-interface/moss/MossConfig.hpp"
 #include "model-interface/moss/MossModel.hpp"
 
+using qvac::ttsggml::moss::MOSS_MAX_DURATION_TOKENS;
 using qvac::ttsggml::moss::MOSS_NATIVE_SAMPLE_RATE;
 using qvac::ttsggml::moss::MOSS_SAMPLES_PER_FRAME;
 using qvac::ttsggml::moss::MossConfig;
@@ -226,6 +227,10 @@ TEST(MossValidate, DurationTokensNonNegative) {
   EXPECT_NO_THROW(MossModel{cfg});
   cfg.durationTokens = DURATION_TOKENS;
   EXPECT_NO_THROW(MossModel{cfg});
+  cfg.durationTokens = MOSS_MAX_DURATION_TOKENS;
+  EXPECT_NO_THROW(MossModel{cfg});
+  cfg.durationTokens = MOSS_MAX_DURATION_TOKENS + 1;
+  EXPECT_THROW(MossModel{cfg}, StatusError);
 }
 
 TEST(MossValidate, ThreadsNonNegative) {

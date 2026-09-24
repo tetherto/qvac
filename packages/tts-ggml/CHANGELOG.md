@@ -22,17 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Component resolution goes by filename prefix and does not rank
   quantizations, so stage one file per component or name it explicitly.
 - MOSS engine (`engine: 'moss'`, OpenMOSS MOSS-TTS v1.5 Delay): 24 kHz
-  synthesis from three GGUFs (`files.mossBackbone`, `files.mossCodecDecoder`,
-  and `files.mossCodecEncoder` to clone a voice from `referenceAudio`),
-  auto-detected from `modelDir`. `streamChunkTokens > 0` streams fixed-size
-  chunks of codec frames (12.5 per second) while the backbone is still
-  generating. Desktop only: the backbone has 8B parameters.
-- MOSS directable speech and dialogue: `durationTokens` sets a target length in
-  codec frames, `[pause Ns]` markers and inline Pinyin / IPA steer the speech,
-  and `dialogueReferences` (one 24 kHz recording per speaker, with the text
-  opening with their transcripts) drives MOSS-TTSD multi-speaker dialogue, with
-  the `moss-ttsd-*.gguf` backbone picked from `modelDir`. `backendsDir` now reaches MOSS, and MOSS no longer produces
-  garbage on ARM CPUs.
+  synthesis from a backbone and the two codec halves (`files.mossBackbone`,
+  `files.mossCodecDecoder`, and `files.mossCodecEncoder` to clone a voice from
+  `referenceAudio`), auto-detected from `modelDir`. `streamChunkTokens > 0`
+  streams fixed-size chunks of codec frames (12.5 per second) while the
+  backbone is still generating. `durationTokens` sets a target length,
+  `[pause Ns]` markers and inline Pinyin / IPA steer the speech, and
+  `dialogueReferences` (one 24 kHz recording per speaker, with the text opening
+  with their transcripts) drives MOSS-TTSD multi-speaker dialogue on the
+  `moss-ttsd-*.gguf` backbone. Desktop only: the backbones have 8B parameters.
 - Engine options, results and library queries that tts-cpp already provided
   but the addon did not expose:
   - Chatterbox: `nPredict` (the per-call speech-token cap, previously fixed at
@@ -64,9 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-09-24` for MOSS directable speech,
-  dialogue and the ARM CPU fix above.
-- Raise the `speech-cpp` floor to `2026-09-23#3` for the MOSS engine above.
+- Raise the `speech-cpp` floor to `2026-09-24` for the MOSS engine above.
 - Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
   weightless fit-measure model that carries no vocabulary, which a memory-fit
   measurement never needs; loading a real model is unchanged and still

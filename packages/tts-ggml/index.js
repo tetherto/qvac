@@ -244,6 +244,11 @@ const MOSS_DECODER_RE = /^moss-codec-decoder(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_NATIVE_SAMPLE_RATE = 24000;
 const MOSS_FRAMES_PER_SECOND = 12.5;
+const MOSS_MAX_NEW_TOKENS = 2048;
+const MOSS_MAX_CHANNELS = 32;
+const MOSS_TERMINATION_ROWS = 2;
+const MOSS_MAX_DURATION_TOKENS = MOSS_MAX_NEW_TOKENS - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
+const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"];
 /** Engines that draw tokens, and so accept temperature / topK / topP / maxFrames. */
 const SAMPLING_ENGINES = [ENGINE_PARLER, ENGINE_AUDIO8];
 // Per-engine supported subsets, mirroring controls::supported_emotions() /
@@ -780,11 +785,14 @@ function assertAudio8SamplingFinite(sampling, where) {
         throw new Error(`tts-ggml: ${where}: ${field} must be a finite number`);
     }
 }
-const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"];
+function isValidDurationTokens(value) {
+    return Number.isInteger(value) && value >= 0 && value <= MOSS_MAX_DURATION_TOKENS;
+}
 function assertMossDurationTokens(value, where) {
-    if (value === undefined || (Number.isInteger(value) && value >= 0))
+    if (value == null || isValidDurationTokens(value))
         return;
-    throw new Error(`tts-ggml: ${where}: durationTokens must be an integer >= 0 (0 = free length)`);
+    throw new Error(`tts-ggml: ${where}: durationTokens must be an integer from 0 to ` +
+        `${MOSS_MAX_DURATION_TOKENS} (0 = free length)`);
 }
 function copyDialogueReferences(references) {
     if (references == null)
@@ -1079,7 +1087,7 @@ class TTSGgml {
     }
     _mossBackbonePatterns() {
         return this._dialogueReferences
-            ? [MOSS_DIALOGUE_BACKBONE_RE, MOSS_BACKBONE_RE]
+            ? [MOSS_DIALOGUE_BACKBONE_RE]
             : [MOSS_BACKBONE_RE, MOSS_DIALOGUE_BACKBONE_RE];
     }
     _findMossBackbone(modelDir) {
@@ -1092,7 +1100,7 @@ class TTSGgml {
     }
     _assignMossVoiceOptions(options) {
         this._dialogueReferences = copyDialogueReferences(options.dialogueReferences);
-        this._durationTokens = options.durationTokens;
+        this._durationTokens = options.durationTokens ?? undefined;
     }
     _assignSynthesisOptions(options) {
         this._referenceAudio = options.referenceAudio;
@@ -1342,7 +1350,7 @@ class TTSGgml {
     _assertNoMossOnlyOptions() {
         const mossOnly = setOptionNames({
             durationTokens: this._durationTokens,
-            dialogueReferences: this._dialogueReferences === undefined ? undefined : "set",
+            dialogueReferences: this._dialogueReferences !== undefined || undefined,
         });
         if (mossOnly.length === 0)
             return;
@@ -1361,6 +1369,17 @@ class TTSGgml {
             throw new Error("tts-ggml: dialogue synthesis with the moss engine needs the codec " +
                 "encoder GGUF (files.mossCodecEncoder)");
         }
+        if (!this._mossBackbonePath) {
+            throw new Error("tts-ggml: dialogue synthesis with the moss engine needs the MOSS-TTSD " +
+                "backbone: stage moss-ttsd-*.gguf in modelDir or set files.mossBackbone");
+        }
+    }
+    _assertSentenceStreamingAllowed(where) {
+        if (this._dialogueReferences === undefined)
+            return;
+        throw new Error(`tts-ggml: ${where}: MOSS dialogue cannot be split into sentences, ` +
+            "because every job must open with the reference transcripts; use " +
+            "run() or native streaming (streamChunkTokens)");
     }
     _assertMossOutputRate() {
         if (this._outputSampleRate == null ||
@@ -1585,6 +1604,7 @@ class TTSGgml {
     }
     async run(input) {
         if (input?.streamOutput === true) {
+            this._assertSentenceStreamingAllowed("run with streamOutput");
             if (typeof input.input !== "string" ||
                 input.input.trim().length === 0) {
                 throw new QvacErrorAddonTTSGgml({
@@ -1629,6 +1649,7 @@ class TTSGgml {
      * small streamed fragments are coalesced.
      */
     async runStreaming(textStream, options = {}) {
+        this._assertSentenceStreamingAllowed("runStreaming");
         const jobFields = this._resolveJobFields(options, "runStreaming");
         const streamOptions = this._resolveRunStreamingOptions(textStream, options);
         let normalized = this._normalizeTextStream(textStream);
@@ -2435,7 +2456,7 @@ class TTSGgml {
     _assertMossReloadKeepsVoice(newConfig) {
         if (this._engineType !== ENGINE_MOSS)
             return;
-        const voiceKeys = keysPresent(newConfig, MOSS_INSTANCE_VOICE_KEYS);
+        const voiceKeys = MOSS_INSTANCE_VOICE_KEYS.filter((key) => newConfig[key] !== undefined);
         if (voiceKeys.length === 0)
             return;
         throw new Error(`tts-ggml: reload: the moss engine encodes ${voiceKeys.join(", ")} ` +
@@ -2449,7 +2470,7 @@ class TTSGgml {
         if (durationTokens === undefined)
             return;
         assertMossDurationTokens(durationTokens, "reload");
-        this._durationTokens = durationTokens;
+        this._durationTokens = durationTokens ?? undefined;
     }
     // Cross-engine conditioning is reloadable on every engine that supports it,
     // so both families change emotion the same way.

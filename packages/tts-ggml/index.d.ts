@@ -109,7 +109,8 @@ interface TTSGgmlFiles {
     mossCodecDecoderPath?: string;
     /**
      * MOSS codec analysis half (wav to codes). Only needed to clone a voice
-     * from `referenceAudio`; a text-only deployment can leave it out.
+     * from `referenceAudio` or for `dialogueReferences`; a text-only deployment
+     * can leave it out.
      */
     mossCodecEncoder?: string;
     mossCodecEncoderPath?: string;
@@ -541,19 +542,19 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
     /** Audio8: take the argmax instead of sampling. */
     greedy?: boolean;
     /**
-     * MOSS: target length in codec frames (12.5 per second); 0 or unset keeps
-     * the length free. Targets up to about 2,000 frames (160 s) fit the engine's
-     * generation budget; a longer one fails at load. Set at construction or with
-     * `reload()`, not per call.
+     * MOSS: target length in codec frames (12.5 per second), from 0 to 2015
+     * (about 161 s); 0 or unset keeps the length free. Set at construction or
+     * with `reload()`, not per call.
      */
     durationTokens?: number;
     /**
      * MOSS-TTSD dialogue: one 24 kHz reference recording per speaker, in the
      * order the text tags them (`[S1]`, `[S2]`, ...). The model continues the
      * references, so the input text must open with each reference's transcript
-     * under its tag, followed by the lines to generate. Needs
+     * under its tag, followed by the lines to generate; sentence streaming is
+     * therefore rejected (use `run()` or `streamChunkTokens`). Needs
      * `files.mossCodecEncoder`, excludes `referenceAudio`, and is fixed for the
-     * instance. With a `modelDir`, prefers a `moss-ttsd-*.gguf` backbone.
+     * instance. With a `modelDir`, requires a `moss-ttsd-*.gguf` backbone.
      */
     dialogueReferences?: string[];
     minNewTokens?: number;
@@ -824,6 +825,7 @@ declare class TTSGgml {
     private _assertMossOptionConsistency;
     private _assertNoMossOnlyOptions;
     private _assertMossDialogueReferences;
+    private _assertSentenceStreamingAllowed;
     private _assertMossOutputRate;
     private _assertMossVoiceConsistent;
     /**

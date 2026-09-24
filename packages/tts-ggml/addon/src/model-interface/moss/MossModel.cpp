@@ -92,19 +92,14 @@ void validateCounts(const MossConfig& cfg) {
         general_error::InvalidArgument,
         "streamChunkTokens must be >= 0 (0 = non-streaming)");
   }
-  if (cfg.durationTokens.has_value() && *cfg.durationTokens < 0) {
+  if (cfg.durationTokens.has_value() &&
+      (*cfg.durationTokens < 0 ||
+       *cfg.durationTokens > MOSS_MAX_DURATION_TOKENS)) {
     throw StatusError(
         general_error::InvalidArgument,
-        "durationTokens must be >= 0 (0 = free length)");
+        "durationTokens must be 0.." +
+            std::to_string(MOSS_MAX_DURATION_TOKENS) + " (0 = free length)");
   }
-}
-
-std::filesystem::path resolveBackendsDir(const std::string& configured) {
-  std::filesystem::path dir(configured);
-#ifdef BACKENDS_SUBDIR
-  dir = (dir / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-  return dir;
 }
 
 void validateGpuIntent(const MossConfig& cfg) {
