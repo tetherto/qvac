@@ -247,6 +247,15 @@ jobs:
       # A benchmark run needs every DiT variant, the functional suite only
       # turbo-q4. They get separate cache entries so the bigger set neither
       # displaces the smaller one nor gets mistaken for it on a key hit.
+      #
+      # Both suffixes are non-empty on purpose. An empty one made this leg's
+      # restore-key prefix `models-audiogen-ggml-v1-`, a strict prefix of the
+      # all-dit-variants key -- and both legs hash the same download script, so
+      # they miss their exact keys together. The functional leg would then
+      # prefix-match the benchmark entry (the server returns the most recently
+      # written), find every file present, skip its download and save the whole
+      # sweep back under its own key. Absorbing: from then on both entries hold
+      # the superset and this leg never restores just turbo-q4 again.
       - name: Cache AudioGen GGML GGUF models
         id: model-cache
         if: runner.environment != 'github-hosted'
@@ -255,7 +264,7 @@ jobs:
           package: audiogen-ggml
           paths: packages/audiogen-ggml/models
           hash-files-glob: packages/audiogen-ggml/scripts/download-audiogen-ggml-models.js
-          cache-key-suffix: ${{ inputs.run_rtf_benchmarks && 'all-dit-variants' || '' }}
+          cache-key-suffix: ${{ inputs.run_rtf_benchmarks && 'all-dit-variants' || 'turbo-q4' }}
           enable-cross-os: 'true'
 
       - name: Download GGUF models from registry

@@ -55,7 +55,7 @@ function jobBlock(source, jobName) {
 // The `if:` value, flattened to one line. Accepts BOTH block-scalar styles:
 // `>`/`>-`/`>+` and `|`/`|-`/`|+`. Handling only `>-` made a `|-` job fall
 // through to the inline branch and return the scalar indicator itself ("|-")
-// as the condition — on-merge-decoder-audio.yml uses `if: |-` today.
+// as the condition, which on-merge-decoder-audio.yml hit before consolidation.
 function condition(jobText) {
   if (!jobText) return ''
   const folded = jobText.match(/^ {4}if:[ \t]*[|>][-+]?[ \t]*\n((?: {6}.*\n|\n)*)/m)
@@ -72,8 +72,8 @@ function condition(jobText) {
 //
 //   needs: [a, b]     inline array
 //   needs:\n  - a     block sequence  (may be interleaved with comments)
-//   needs: a          plain scalar    — on-merge-vla.yml and
-//                                       on-merge-classification-ggml.yml use it
+//   needs: a          plain scalar    — used by the per-package on-merge
+//                                       workflows before consolidation
 //
 // Returns null (not []) when a `needs:` key exists but nothing parses out, so
 // callers can fail loudly instead of treating a parser failure as a clean bill
@@ -261,6 +261,28 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
   test(`${slug}: a GPR publish does not re-run integration tests on merge`, () => {
     const gate = jobBlock(read(carrier), 'post-build-gate')
     assert.ok(gate, 'post-build-gate exists')
+
+    // The consolidated gate serves five packages under two policies, so the rule
+    // cannot be "publish-gpr is absent from the step". It is per package: this
+    // slug must not opt in. asr-ggml, bci-whispercpp and tts-ggml do opt in,
+    // matching what their own on-merge-<pkg>.yml intends on main.
+    if (carrier === CONSOLIDATED) {
+      assert.match(
+        gate,
+        /needs\.publish-npm\.result/,
+        'the gate must still open for a real npm release',
+      )
+      const ci =
+        JSON.parse(read(`packages/${slug}/project.json`)).targets?.['on-merge']?.options?.ci ?? {}
+      assert.notEqual(
+        ci.postIntegrationOnGpr,
+        true,
+        `${slug} must not set postIntegrationOnGpr: a GPR dev publish must not ` +
+          're-run its integration tests, they already ran on the PR and ' +
+          'merge-guard gated on them (#4175).',
+      )
+      return
+    }
 
     // Only the shell `if` test decides; an `echo` naming publish-gpr is
     // deliberate diagnostics, so the assertion must look at the gating

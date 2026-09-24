@@ -120,9 +120,24 @@ git push -u origin feature-<package>-<short-desc>
 | Branch type | Pattern | Created in upstream by | Purpose | Publishes to | Notes |
 |---|---|---:|---|---|---|
 | Main | `main` | Maintainers | All active development | GitHub Packages (**dev**) | Default integration branch |
-| Release | `release-<package>-<x.y.z>` | Maintainers | Versioned release line | **NPM** | Stable releases only |
+| Release | `release-<package>-<x.y.z>` | Maintainers | Versioned release line | **NPM** | Stable releases only. `<package>` is the **directory name** under `packages/`, see below |
 | Feature | `feature-<package>-*` | Optional (maintainers) | Share a dev build for a large/isolated effort | GitHub Packages (**feature**) | Never publish to NPM |
 | Temp | `tmp-<package>-*` | Optional (maintainers) | Experiments / QA previews | GitHub Packages (**temp**) | Never publish to NPM |
+
+**Release branch names use the package directory name**
+
+`<package>` in `release-<package>-<x.y.z>` must be a directory under `packages/`.
+Use `release-llm-llamacpp-0.53.1`, not the short `release-llm-0.53.1` some older
+branches used. Same for `vla-ggml`, `ocr-ggml`, `embed-llamacpp`, `diffusion-cpp`,
+`classification-ggml` and `translation-nmtcpp`.
+
+The 13 native addons publish from one workflow rather than one file each, so the
+branch name is what selects which package reaches NPM. `on-merge-nx.yml` checks it
+twice, both against the directory name: `packages/<package>/project.json` must
+exist, and the package the run selected must be exactly that one. A name it cannot
+resolve fails the run rather than guessing, since a wrong guess would publish the
+wrong package. Nothing is published either way, but the release is blocked until
+the branch is recut under the right name.
 
 **Publishing semantics**
 
@@ -212,6 +227,27 @@ Instead, ensure `main` reflects the shipped version + changelog via one of these
 - **Otherwise (common):** open a follow-up PR from a fork into upstream `main` that applies the same version/changelog changes.
 
 > Goal: `main` remains the single source of truth for current development state, while release lines are controlled targets for NPM publishing.
+
+### 5) `@qvac/inference` before `@qvac/sdk`
+
+`@qvac/sdk` and `@qvac/inference` expose the same API, so their versions share a
+major and minor. The SDK's `@qvac/inference` dependency range is installed from NPM
+when the SDK is built for release, so the engine is published first.
+
+Moving both to a new major.minor is therefore two releases, in order:
+
+1. `release-inference-<x.y.z>` → `publish-inference.yml` publishes `@qvac/inference`
+   and tags `inference-v<x.y.z>`.
+2. `release-sdk-<x.y.z>` → the release PR sets `packages/sdk` `version` and its
+   `@qvac/inference` range to that version (`/qv-sdk-inference-version`), then
+   `publish-sdk.yml` publishes `@qvac/sdk` and `tetherto-qvac-sdk`.
+
+Each gets its own changelog and its own backmerge PR to `main`. Patch releases are
+independent: an SDK patch leaves its range alone, and an engine patch is picked up by
+the existing range with no SDK release at all.
+
+`packages/sdk` `lint` fails when its own version and its `@qvac/inference` range
+differ in major or minor, so the two cannot drift unnoticed.
 
 ---
 

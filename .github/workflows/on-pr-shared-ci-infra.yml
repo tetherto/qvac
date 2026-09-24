@@ -11,6 +11,7 @@ on:
       - ".github/workflows/on-pr-shared-ci-infra.yml"
       - ".github/actions/cache-models/**"
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
+      - ".github/actions/run-mobile-integration-tests/setup/**"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
       - "packages/ocr-ggml/.agent/setup.sh"
@@ -47,6 +48,12 @@ jobs:
         run: node --test .github/actions/cache-models/test/*.test.mjs
       - name: Run seed-and-presign action unit tests
         run: node --test .github/actions/run-mobile-integration-tests/seed-and-presign-models/test/*.test.mjs
+      # The prebuild_run_id resolver decides which native binary reaches a
+      # device. Nothing else runs it pre-merge: the mobile workflows are
+      # dispatch-only, so a broken resolver would first surface as a failed
+      # manual run, or worse as a run that installed the wrong build.
+      - name: Run mobile setup prebuild-run resolver unit tests
+        run: node --test .github/actions/run-mobile-integration-tests/setup/test/*.test.mjs
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without

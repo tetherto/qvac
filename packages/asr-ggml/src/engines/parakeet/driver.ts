@@ -60,8 +60,10 @@ export interface ParakeetConfig {
    */
   streaming?: boolean;
   /**
-   * Streaming chunk cadence. Defaults to 320 ms for Nemotron and 2000 ms for
-   * existing models. Nemotron supports 80, 160, 320, 560, or 1120 ms.
+   * Streaming chunk cadence. Defaults to 320 ms for Nemotron, 560 ms for the
+   * Unified RNN-T model, and 2000 ms for existing models. Nemotron supports
+   * 80, 160, 320, 560, or 1120 ms; Unified RNN-T supports 80, 160, 560, or
+   * 1040 ms and snaps any other value down to the nearest trained chunk.
    */
   streamingChunkMs?: number;
   /** Sortformer rolling-history window in ms (default: 30000). */
@@ -72,7 +74,11 @@ export interface ParakeetConfig {
   streamingEnergyVad?: boolean;
   /** ASR encoder left-context window in milliseconds. */
   streamingLeftContextMs?: number;
-  /** ASR encoder right-lookahead window in milliseconds. */
+  /**
+   * ASR encoder right-lookahead window in milliseconds. Unified RNN-T
+   * cache-aware streaming supports 0, 80, 160, 240, 320, 560, or 1040 ms and
+   * snaps any other value down to the nearest trained right context.
+   */
   streamingRightLookaheadMs?: number;
   /** Enable v2.1 Sortformer AOSC speaker-cache streaming (default: true). */
   streamingSpkCacheEnable?: boolean;
@@ -307,23 +313,37 @@ export class ParakeetDriver implements AsrDriver {
     const streamingOpts = this._validateStreamingOptions(opts);
     const addon = this._requireAddon();
     const response = this.ctx.job.start() as QvacResponse<ASRStreamOutput>;
+    let closing = false;
+    const markClosing = (): void => {
+      closing = true;
+    };
+
     try {
       await addon.startStreaming(streamingOpts);
     } catch (error) {
       this.ctx.job.fail(asError(error));
       throw error;
     }
-    void this._pumpStreamingAudio(audio).catch((error: unknown) => {
-      void this.addon?.endStreaming().catch(() => {});
-      this.ctx.job.fail(asError(error));
-    });
-    // `endStreaming` already resets the interface state, so settlement of
-    // the response is the end of driver teardown.
-    const done = response.await().then(
-      () => {},
-      () => {},
+
+    const pumpDone = this._pumpStreamingAudio(audio, markClosing).catch(
+      async (error: unknown) => {
+        markClosing();
+        const teardown = this.addon?.endStreaming().catch(() => {});
+        this.ctx.job.fail(asError(error));
+        await teardown;
+      }
     );
-    return { response, done };
+
+    const responseDone = response.await();
+    const done = Promise.allSettled([responseDone, pumpDone]).then(() => {});
+
+    return {
+      response,
+      done,
+      get closing(): boolean {
+        return closing;
+      },
+    };
   }
 
   _validateStreamingOptions(
@@ -361,7 +381,10 @@ export class ParakeetDriver implements AsrDriver {
     await addon.append({ type: END_OF_INPUT });
   }
 
-  async _pumpStreamingAudio(audio: NormalizedAudioStream): Promise<void> {
+  async _pumpStreamingAudio(
+    audio: NormalizedAudioStream,
+    markClosing: () => void,
+  ): Promise<void> {
     const addon = this._requireAddon();
     this.ctx.logger.debug(
       "Start pumping audio into duplex streaming session",
@@ -373,6 +396,7 @@ export class ParakeetDriver implements AsrDriver {
     this.ctx.logger.debug(
       "Audio stream completed; closing duplex streaming session",
     );
+    markClosing();
     await addon.endStreaming();
   }
 

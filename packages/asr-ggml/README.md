@@ -74,7 +74,7 @@ GGUF metadata** — there is no `modelType` to pass.
 |---------|-----------|---------|-------------:|-------|
 | **CTC** (`parakeet-ctc-0.6b`) | English | argmax CTC | ~700 MiB | Fast, no punctuation/capitalization |
 | **TDT** (`parakeet-tdt-0.6b-v3`) | ~25 | RNN-T greedy + duration | ~715 MiB | Recommended default; PnC + language auto-detect |
-| **Unified** (`parakeet-unified-en-0.6b`) | English | RNN-T | ~715 MiB | One checkpoint for batch and low-latency streaming; PnC |
+| **Unified** (`parakeet-unified-en-0.6b`) | English | RNN-T | ~715 MiB | One checkpoint for batch and cache-aware streaming at 80/160/560/1040 ms; PnC |
 | **EOU** (`parakeet-eou-120m-v1`) | English | RNN-T greedy + `<EOU>` | ~132 MiB | Streaming-trained; native end-of-turn token |
 | **Indic Conformer CTC** (`indic-conformer-ctc`) | Indic aggregate | argmax CTC + language mask | ~701 MiB | Multilingual Indic; set `parakeetConfig.language` (e.g. `"hi"`) |
 | **Sortformer v1** (`sortformer-4spk-v1`) | n/a | Diarization head (sliding history) | ~141 MiB | 4-speaker. Default for **offline** diarization |
@@ -95,7 +95,7 @@ language coverage, translation, and diarization.
 | If you need… | Use this model | Notes |
 | --- | --- | --- |
 | Default multilingual / English ASR (batch or duplex stream) | `parakeet-tdt-0.6b-v3` (q8_0 GGUF) | Recommended Parakeet default: ~25 languages, punctuation/capitalization, language auto-detect, low-latency streaming. |
-| English batch and low-latency streaming with one checkpoint | `parakeet-unified-en-0.6b` | Standard RNN-T with punctuation and capitalization; use when multilingual TDT or native EOU tokens are not required. |
+| English batch and low-latency streaming with one checkpoint | `parakeet-unified-en-0.6b` | Standard RNN-T with punctuation and capitalization; use when multilingual TDT or native EOU tokens are not required. Streaming uses the native cache-aware encoder: `streamingChunkMs` accepts 80, 160, 560, or 1040 and `streamingRightLookaheadMs` 0, 80, 160, 240, 320, 560, or 1040, both snapped down to the nearest trained value. Defaults to 560 ms. |
 | Native end-of-turn for conversational / duplex English | `parakeet-eou-120m-v1` | Emits `<EOU>`; smallest Parakeet (~132 MiB). Pair with TDT when you need broader language coverage *and* EOU. |
 | Fast English-only, no punctuation | `parakeet-ctc-0.6b` | Lowest decode cost in the Parakeet family; no PnC. |
 | Indic-language ASR (Hindi and other Indic ids) | `indic-conformer-ctc` | Pass `parakeetConfig.language` (e.g. `"hi"`). Same Parakeet engine; GGUF lives under `indic_conformer/` in the registry. |
@@ -149,8 +149,9 @@ npm install @qvac/asr-ggml
 ### Platform packages
 
 `@qvac/asr-ggml` is a meta package that ships the JavaScript wrapper only.
-The native prebuild for each host lives in a version-locked platform package
-selected at install time through `os`/`cpu` filtered `optionalDependencies`:
+The native prebuild for each desktop host lives in a version-locked platform
+package selected at install time through `os`/`cpu` filtered
+`optionalDependencies`:
 
 | Host | Package |
 | --- | --- |
@@ -159,16 +160,33 @@ selected at install time through `os`/`cpu` filtered `optionalDependencies`:
 | darwin-arm64 | `@qvac/asr-ggml-darwin-arm64` |
 | darwin-x64 | `@qvac/asr-ggml-darwin-x64` |
 | win32-x64 | `@qvac/asr-ggml-win32-x64` |
-| android-arm64 | `@qvac/asr-ggml-android-arm64` |
-| ios (device + simulators) | `@qvac/asr-ggml-ios` |
 
-Do not depend on platform packages directly. Supported installers are npm 7+,
-pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip the
-platform package and fail at require time with an error naming the missing
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time with an error naming the missing
 package; a locally built `prebuilds/` directory in the package root always
 takes precedence. Use `require('@qvac/asr-ggml').resolveBackendsDir()` to
 locate the directory holding the host's prebuilt binaries and dynamically
 loaded ggml backends.
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/asr-ggml` version:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/asr-ggml-android-arm64` |
+| ios (device + simulators) | `@qvac/asr-ggml-ios` |
+
+```json
+{
+  "dependencies": {
+    "@qvac/asr-ggml": "x.y.z",
+    "@qvac/asr-ggml-android-arm64": "x.y.z"
+  }
+}
+```
 
 ## Quickstart
 
@@ -436,7 +454,7 @@ Notes:
 
 - **GPU is opt-in.** `use_gpu` defaults to `false`; set it in `contextParams`.
 - **Four context keys force a full reload** — `model`, `use_gpu`,
-  `flash_attn`, `gpu_device`. Changing any of them destroys and rebuilds the
+  `flash_attn`, `gpu_device`, `main-gpu`, `main_gpu`. Changing any of them destroys and rebuilds the
   whisper context (seconds, depending on model size). Everything in
   `whisperConfig` is applied in place.
 - `backendsDir` (in `whisperConfig`) overrides where dynamically-loaded ggml
@@ -569,6 +587,25 @@ compiles the CUDA backend.
 
 Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
 parakeet needs `parakeetConfig.useGPU: true`.
+
+
+For Whisper GPU selection, set `contextParams['main-gpu']` (or the alias
+`contextParams.main_gpu`) to a raw ggml registry index, an integer string,
+`'dedicated'`, or `'integrated'` (class names are case-insensitive). With GPU
+enabled and no explicit selector, dedicated GPUs are preferred. A class
+selector is strict: if that class is unavailable, execution falls back to CPU.
+An in-range numeric selector preserves its registry identity before backend
+filtering; a CPU, excluded backend, or refused Adreno Vulkan slot falls back to
+CPU without selecting another GPU. An out-of-range index logs a warning and
+uses normal selection. The supported local families are Metal, CUDA, Vulkan,
+and OpenCL; the existing Adreno OpenCL guard still applies.
+
+`main-gpu` does not enable GPU execution by itself. `use_gpu: false` always
+selects CPU. The legacy `contextParams.gpu_device` retains its existing
+Whisper GPU/IGPU-ordinal meaning and Adreno guard. Combining it with either
+new selector spelling, or supplying both new spellings, is rejected.
+
+This selector currently applies to the Whisper engine.
 
 `getBackendInfo()` reports what actually ran — `backendName`, `backendId`
 (see the `BackendId` enum), string `backendDevice`, `backendDescription`,

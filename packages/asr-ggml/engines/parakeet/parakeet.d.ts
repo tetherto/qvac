@@ -15,7 +15,10 @@ export interface ParakeetConfigurationParams {
     /** Indic CTC language id or Nemotron locale alias; empty selects auto. */
     language?: string;
     streaming?: boolean;
-    /** Model-specific when omitted: Nemotron 320 ms, existing models 2000 ms. */
+    /**
+     * Model-specific when omitted: Nemotron 320 ms, Unified RNN-T 560 ms,
+     * existing models 2000 ms.
+     */
     streamingChunkMs?: number;
     streamingHistoryMs?: number;
     streamingEmitPartials?: boolean;

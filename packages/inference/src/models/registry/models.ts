@@ -16678,7 +16678,7 @@ export const models = [
     params: '0.6B'
   },
   {
-    name: 'PARAKEET_0_6B_F16',
+    name: 'PARAKEET_NEMOTRON_0_6B_F16',
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf',
     registrySource: 's3',
@@ -16695,7 +16695,7 @@ export const models = [
     params: '0.6B'
   },
   {
-    name: 'PARAKEET_0_6B_Q4_0',
+    name: 'PARAKEET_NEMOTRON_0_6B_Q4_0',
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf',
     registrySource: 's3',
@@ -16712,7 +16712,7 @@ export const models = [
     params: '0.6B'
   },
   {
-    name: 'PARAKEET_0_6B_Q8_0',
+    name: 'PARAKEET_NEMOTRON_0_6B_Q8_0',
     registryPath:
       'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf',
     registrySource: 's3',
@@ -24274,8 +24274,8 @@ export const PARAKEET_UNIFIED_0_6B_Q8_0 = {
   params: models[619].params
 } as const
 
-export const PARAKEET_0_6B_F16 = {
-  name: 'PARAKEET_0_6B_F16',
+export const PARAKEET_NEMOTRON_0_6B_F16 = {
+  name: 'PARAKEET_NEMOTRON_0_6B_F16',
   src: `registry://${models[620].registrySource}/${models[620].registryPath}`,
   registryPath: models[620].registryPath,
   registrySource: models[620].registrySource,
@@ -24292,8 +24292,8 @@ export const PARAKEET_0_6B_F16 = {
   params: models[620].params
 } as const
 
-export const PARAKEET_0_6B_Q4_0 = {
-  name: 'PARAKEET_0_6B_Q4_0',
+export const PARAKEET_NEMOTRON_0_6B_Q4_0 = {
+  name: 'PARAKEET_NEMOTRON_0_6B_Q4_0',
   src: `registry://${models[621].registrySource}/${models[621].registryPath}`,
   registryPath: models[621].registryPath,
   registrySource: models[621].registrySource,
@@ -24310,8 +24310,8 @@ export const PARAKEET_0_6B_Q4_0 = {
   params: models[621].params
 } as const
 
-export const PARAKEET_0_6B_Q8_0 = {
-  name: 'PARAKEET_0_6B_Q8_0',
+export const PARAKEET_NEMOTRON_0_6B_Q8_0 = {
+  name: 'PARAKEET_NEMOTRON_0_6B_Q8_0',
   src: `registry://${models[622].registrySource}/${models[622].registryPath}`,
   registryPath: models[622].registryPath,
   registrySource: models[622].registrySource,
@@ -26236,6 +26236,27 @@ export const WHISPER_Q8_0_1 = {
   params: models[733].params
 } as const
 
+export const PARAKEET_0_6B_F16 = {
+  ...PARAKEET_NEMOTRON_0_6B_F16,
+  name: 'PARAKEET_0_6B_F16'
+} as const
+
+export const PARAKEET_0_6B_Q4_0 = {
+  ...PARAKEET_NEMOTRON_0_6B_Q4_0,
+  name: 'PARAKEET_0_6B_Q4_0'
+} as const
+
+export const PARAKEET_0_6B_Q8_0 = {
+  ...PARAKEET_NEMOTRON_0_6B_Q8_0,
+  name: 'PARAKEET_0_6B_Q8_0'
+} as const
+
+const modelNameCompatibilityAliases: Readonly<Record<string, RegistryItem>> = {
+  PARAKEET_0_6B_F16: PARAKEET_0_6B_F16,
+  PARAKEET_0_6B_Q4_0: PARAKEET_0_6B_Q4_0,
+  PARAKEET_0_6B_Q8_0: PARAKEET_0_6B_Q8_0
+}
+
 /**
  * Looks up a model in the built-in catalog by its constant name.
  *
@@ -26243,7 +26264,7 @@ export const WHISPER_Q8_0_1 = {
  * @returns The matching `RegistryItem`, or `undefined` when no catalog entry has that name.
  */
 export function getModelByName(name: string): RegistryItem | undefined {
-  return models.find((model) => model.name === name)
+  return models.find((model) => model.name === name) ?? modelNameCompatibilityAliases[name]
 }
 
 /**

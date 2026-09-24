@@ -1,0 +1,34 @@
+← 200 GET /v1/models (3ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=2 stream=true tools=36 genParams={"predict":3594}
+  streaming done tokens=60 finish=tool_calls ttft=194644ms tps=12.2 prompt=11653 cache=20110 gen=60 backend=cpu
+← 200 POST /v1/chat/completions (291.34s)
+← 200 GET /v1/models (1ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=4 stream=true tools=36 genParams={"predict":3497}
+← 200 GET /v1/models (3ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=2 stream=true tools=36 genParams={"predict":6069}
+  streaming done tokens=60 finish=tool_calls ttft=181215ms tps=13.6 prompt=11653 cache=18314 gen=60 backend=cpu
+← 200 POST /v1/chat/completions (254.27s)
+← 200 GET /v1/models (0ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=4 stream=true tools=36 genParams={"predict":5962}
+  streaming done tokens=58 finish=tool_calls ttft=182337ms tps=13.6 prompt=11763 cache=18422 gen=58 backend=cpu
+← 200 POST /v1/chat/completions (255.14s)
+← 200 GET /v1/models (0ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=6 stream=true tools=36 genParams={"predict":5855}
+← 200 GET /v1/models (4ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=2 stream=true tools=36 genParams={"predict":6069}
+  streaming done tokens=57 finish=tool_calls ttft=174676ms tps=13.7 prompt=11653 cache=18311 gen=57 backend=cpu
+← 200 POST /v1/chat/completions (246.66s)
+← 200 GET /v1/models (1ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=4 stream=true tools=36 genParams={"predict":5954}
+  streaming done tokens=56 finish=tool_calls ttft=176595ms tps=13.6 prompt=11781 cache=18438 gen=56 backend=cpu
+← 200 POST /v1/chat/completions (248.47s)
+← 200 GET /v1/models (0ms)
+→ POST /v1/chat/completions
+  chat model=qwen3.5-0.8b messages=6 stream=true tools=36 genParams={"predict":5839}

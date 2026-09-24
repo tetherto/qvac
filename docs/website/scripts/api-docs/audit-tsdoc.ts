@@ -20,6 +20,10 @@ import type {
   ProjectReflection,
 } from "typedoc";
 import type { AuditDiagnostic, AuditOptions, AuditResult } from "./types.js";
+import {
+  CURATED_SINGLETON_NAMES,
+  convertCuratedSingletons,
+} from "./curated-singletons.js";
 
 // ---------------------------------------------------------------------------
 // TypeDoc bootstrap (shared by CLI + tests)
@@ -121,11 +125,23 @@ export async function auditTsDoc(
   // extraction logic in `extract.ts > extractApiObjects` so parity is
   // maintained. Each method is reported as `objectName.methodName` so the
   // audit table keeps them distinct from top-level functions.
-  const allVariables = project.getReflectionsByKind(
-    ReflectionKind.Variable,
-  ) as DeclarationReflection[];
+  //
+  // Singletons re-exported from a sibling package are absent from this project
+  // (TypeDoc models the re-export as an unresolvable `Reference`), so the
+  // caller passes their reflections in via `options.curatedVariables`.
+  const allVariables = [
+    ...(project.getReflectionsByKind(
+      ReflectionKind.Variable,
+    ) as DeclarationReflection[]),
+    ...((options.curatedVariables ?? []) as DeclarationReflection[]),
+  ];
 
   for (const decl of allVariables) {
+    // Audit object methods only for the curated singletons rendered in the API
+    // summary. Matched by exported name, like `extractApiObjects` — a source
+    // path filter breaks as soon as a declaration moves between packages.
+    if (!CURATED_SINGLETON_NAMES.has(decl.name)) continue;
+
     const declType: any = (decl as any).type;
     const children: any[] | undefined =
       declType?.declaration?.children ?? (decl as any).children;
@@ -142,10 +158,6 @@ export async function auditTsDoc(
       (decl as any).sources?.[0]?.file?.fullFileName ??
       "") as string;
     const normalizedPath = sourcePath.replace(/\\/g, "/");
-    // Audit object methods only for the curated objects we render in the
-    // API summary. Currently that's just the `profiler` object under
-    // `packages/sdk/profiling/`; new public objects must opt in here.
-    if (!normalizedPath.includes("/profiling/")) continue;
     if (normalizedPath.includes("/server/") || normalizedPath.includes("/examples/")) continue;
 
     for (const m of methodProps) {
@@ -390,7 +402,10 @@ if (isMain) {
 
   console.log(`Auditing TSDoc for SDK at: ${sdkPath}`);
   const project = await bootstrapProject(sdkPath);
-  const result = await auditTsDoc(project, sdkPath);
+  const { variables } = await convertCuratedSingletons(sdkPath, project);
+  const result = await auditTsDoc(project, sdkPath, {
+    curatedVariables: variables,
+  });
 
   if (strict && result.complete < result.total) {
     console.error(

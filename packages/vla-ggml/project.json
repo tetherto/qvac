@@ -58,7 +58,7 @@
           "modelCache": [
             {
               "paths": "packages/vla-ggml/model/vla",
-              "hashFilesGlob": ".github/workflows/integration-test-nx.yml",
+              "hashFilesGlob": "packages/vla-ggml/project.json",
               "warm": "false"
             }
           ],
@@ -122,7 +122,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/vla-ggml",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "none",
           "repoName": "vla",
@@ -134,6 +133,7 @@
   },
   "implicitDependencies": [
     "inference-addon-cpp",
-    "lint-cpp"
+    "lint-cpp",
+    "qvac-addon-cmake"
   ]
 }
