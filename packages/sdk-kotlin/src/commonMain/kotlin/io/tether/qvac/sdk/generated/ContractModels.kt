@@ -163,6 +163,7 @@ data class BciTranscribeRequest(
 
 @Serializable
 data class BciTranscribeResponse(
+    val diagnostics: JsonObject? = null,
     val done: Boolean? = null,
     val error: String? = null,
     val segment: JsonObject? = null,

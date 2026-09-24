@@ -9471,8 +9471,8 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioGenStream\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"data\":{\"type\":\"string\"},\"sampleRate\":{\"type\":\"integer\"},\"channels\":{\"type\":\"integer\"},\"bitsPerSample\":{\"type\":\"integer\"},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"done\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"audioUnderstand\"},\"progress\":{\"type\":\"object\",\"required\":[\"stage\",\"step\",\"total\"],\"properties\":{\"stage\":{\"type\":\"string\"},\"step\":{\"type\":\"integer\"},\"total\":{\"type\":\"integer\"}}},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"],\"properties\":{\"caption\":{\"type\":\"string\"},\"bpm\":{\"type\":\"number\"},\"duration\":{\"type\":\"number\"},\"keyscale\":{\"type\":\"string\"},\"timesignature\":{\"type\":\"string\"},\"vocalLanguage\":{\"type\":\"string\"},\"audioCodes\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}}},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"enum\":[\"completed\",\"cancelled\"]},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDurationMs\":{\"type\":\"number\"},\"totalTimeMs\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"lyricsScore\":{\"type\":\"number\"},\"lrc\":{\"type\":\"string\"},\"qualityScore\":{\"type\":\"number\"},\"understand\":{\"type\":\"object\",\"required\":[\"caption\",\"bpm\",\"duration\",\"keyscale\",\"timesignature\",\"vocalLanguage\",\"audioCodes\"]}}},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"events\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"batchCompletionStream\"},\"done\":{\"type\":\"boolean\"},\"ids\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"events\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"event\"]}},\"stats\":{\"type\":\"object\",\"properties\":{\"timeToFirstToken\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"promptTokensPerSecond\":{\"type\":\"number\"},\"cacheTokens\":{\"type\":\"number\"},\"promptTokens\":{\"type\":\"number\"},\"generatedTokens\":{\"type\":\"number\"},\"emittedTokens\":{\"type\":\"number\"},\"avgConcurrentSeq\":{\"type\":\"number\"},\"toolDefinitionsDropped\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]}}}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribe\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribe\"},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"},\"windowStartTimestep\":{\"type\":\"integer\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"success\":{\"type\":\"boolean\"},\"cancelled\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"results\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"classify\"},\"results\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"label\",\"confidence\"]}},\"done\":{\"type\":\"boolean\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"turn\":{\"type\":\"integer\"},\"events\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"call\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stats\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stopReason\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\"]}]}},\"toolCallback\":{\"type\":\"object\",\"required\":[\"callId\",\"name\",\"arguments\"],\"properties\":{\"callId\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"arguments\":{\"type\":\"object\"}}},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"const\":\"maxToolTurns\"}}}").jsonObject,
@@ -10297,6 +10297,7 @@ data class BciTranscribeResponse(
     @SerialName("segment") val `segment`: BciTranscribeResponseSegment? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "bciTranscribe",
+    @SerialName("diagnostics") val `diagnostics`: BciTranscribeResponseDiagnostics? = null,
 )
 
 @Serializable
@@ -10339,6 +10340,70 @@ data class BciTranscribeResponseSegment(
     @SerialName("isEndOfTurn") val `isEndOfTurn`: Boolean? = null,
     @SerialName("startsWord") val `startsWord`: Boolean? = null,
 )
+
+@Serializable
+data class BciTranscribeResponseDiagnostics(
+    @SerialName("selectedBackend") val `selectedBackend`: String,
+    @SerialName("selectedDevice") val `selectedDevice`: BciTranscribeResponseDiagnosticsSelectedDevice,
+    @SerialName("graphicsApi") val `graphicsApi`: BciTranscribeResponseDiagnosticsGraphicsApi? = null,
+    @SerialName("driver") val `driver`: BciTranscribeResponseDiagnosticsDriver? = null,
+    @SerialName("gpuId") val `gpuId`: String? = null,
+    @SerialName("fallback") val `fallback`: BciTranscribeResponseDiagnosticsFallback? = null,
+    @SerialName("probe") val `probe`: BciTranscribeResponseDiagnosticsProbe? = null,
+)
+
+@Serializable
+enum class BciTranscribeResponseDiagnosticsSelectedDevice {
+    @SerialName("cpu") `CPU`,
+    @SerialName("gpu") `GPU`,
+}
+
+@Serializable
+enum class BciTranscribeResponseDiagnosticsGraphicsApi {
+    @SerialName("vulkan") `VULKAN`,
+    @SerialName("opencl") `OPENCL`,
+    @SerialName("opengl") `OPENGL`,
+    @SerialName("webgpu") `WEBGPU`,
+    @SerialName("metal") `METAL`,
+    @SerialName("direct3d11") `DIRECT3D11`,
+    @SerialName("direct3d12") `DIRECT3D12`,
+    @SerialName("cuda") `CUDA`,
+    @SerialName("levelZero") `LEVELZERO`,
+    @SerialName("rocm") `ROCM`,
+}
+
+@Serializable
+data class BciTranscribeResponseDiagnosticsDriver(
+    @SerialName("name") val `name`: String,
+    @SerialName("version") val `version`: String? = null,
+)
+
+@Serializable
+data class BciTranscribeResponseDiagnosticsFallback(
+    @SerialName("requestedBackend") val `requestedBackend`: String? = null,
+    @SerialName("requestedDevice") val `requestedDevice`: BciTranscribeResponseDiagnosticsFallbackRequestedDevice? = null,
+    @SerialName("reason") val `reason`: String,
+)
+
+@Serializable
+enum class BciTranscribeResponseDiagnosticsFallbackRequestedDevice {
+    @SerialName("cpu") `CPU`,
+    @SerialName("gpu") `GPU`,
+}
+
+@Serializable
+data class BciTranscribeResponseDiagnosticsProbe(
+    @SerialName("status") val `status`: BciTranscribeResponseDiagnosticsProbeStatus,
+    @SerialName("backend") val `backend`: String,
+    @SerialName("reason") val `reason`: String? = null,
+)
+
+@Serializable
+enum class BciTranscribeResponseDiagnosticsProbeStatus {
+    @SerialName("compatible") `COMPATIBLE`,
+    @SerialName("incompatible") `INCOMPATIBLE`,
+    @SerialName("unknown") `UNKNOWN`,
+}
 
 @Serializable
 data class BciTranscribeStreamResponse(
@@ -10390,6 +10455,7 @@ data class BciTranscribeStreamResponseSegment(
     @SerialName("id") val `id`: Double,
     @SerialName("isEndOfTurn") val `isEndOfTurn`: Boolean? = null,
     @SerialName("startsWord") val `startsWord`: Boolean? = null,
+    @SerialName("windowStartTimestep") val `windowStartTimestep`: Long? = null,
 )
 
 @Serializable
