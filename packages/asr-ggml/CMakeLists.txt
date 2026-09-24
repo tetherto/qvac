@@ -1,7 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
+# rather than qvac_addon_preproject() so overlay triplets and Android STL
+# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+
 option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage" OFF)
+qvac_addon_fuzz_manifest()
 
 # Vulkan / Metal / OpenCL are wired per-platform by the unconditional
 # speech-cpp dependencies in vcpkg.json. CUDA is opt-in because it needs
@@ -58,6 +64,11 @@ find_path(
   "inference-addon-cpp/ModelInterfaces.hpp"
   REQUIRED
 )
+
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the
+# fuzz targets and skip engine find_package() + the .bare module so pure
+# parse/transform drivers keep full ASan + LSan.
+qvac_addon_fuzz_only_return()
 
 find_package(whisper CONFIG REQUIRED)
 find_package(qvac-parakeet CONFIG REQUIRED)
@@ -469,3 +480,5 @@ if(BUILD_TESTING)
   # aborting before the actual test step starts.
   add_test(NAME asr_ggml_tests COMMAND asr_ggml_tests)
 endif()
+
+qvac_addon_add_fuzz_subdirectory()
