@@ -468,11 +468,18 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
   file(GLOB _qvac_fabric_test_backends
     "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${_qvac_host}/qvac__fabric/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
   if(_qvac_fabric_test_backends)
-    add_custom_command(TARGET ${test_target} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${_qvac_fabric_test_backends}
-        ${CMAKE_CURRENT_BINARY_DIR}/
-      COMMENT "Staging @qvac/fabric ggml backends next to ${test_target}")
+    get_property(_qvac_stage_target DIRECTORY PROPERTY QVAC_FABRIC_TEST_BACKENDS_TARGET)
+    if(NOT _qvac_stage_target)
+      string(MD5 _qvac_stage_id "${CMAKE_CURRENT_BINARY_DIR}")
+      set(_qvac_stage_target "qvac_fabric_test_backends_${_qvac_stage_id}")
+      add_custom_target(${_qvac_stage_target}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          ${_qvac_fabric_test_backends}
+          ${CMAKE_CURRENT_BINARY_DIR}/
+        COMMENT "Staging @qvac/fabric ggml backends for tests")
+      set_property(DIRECTORY PROPERTY QVAC_FABRIC_TEST_BACKENDS_TARGET "${_qvac_stage_target}")
+    endif()
+    add_dependencies(${test_target} ${_qvac_stage_target})
   endif()
 
   if(APPLE)
