@@ -12,6 +12,7 @@ import { translationBergamotTests } from './translation-bergamot-tests.js'
 import { translationBergamotCacheTests } from './translation-bergamot-cache-tests.js'
 import { translationLlmTests } from './translation-llm-tests.js'
 import { modelInfoTests } from './model-info-tests.js'
+import { modelFitTests } from './model-fit-tests.js'
 import { kvCacheTests } from './kv-cache-tests.js'
 import { kvCacheRestartTests } from './kv-cache-restart-tests.js'
 import { errorTests } from './error-tests.js'
@@ -297,6 +298,9 @@ export const tests = [
 
   // Model info tests (includes both registry-side and loaded-model introspection)
   ...modelInfoTests,
+
+  // Model fit tests (pre-download assessment, and the probe the load ran)
+  ...modelFitTests,
 
   // KV cache tests
   ...kvCacheTests,

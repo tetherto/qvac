@@ -36,7 +36,15 @@ import {
   PARAKEET_EOU_120M_V1_Q4_0,
   VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
   MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
-  SMOLVLA_LIBERO_VISION_Q8
+  SMOLVLA_LIBERO_VISION_Q8,
+  BCI_WINDOWED,
+  FLUX_2_KLEIN_4B_Q4_0,
+  FLUX_2_KLEIN_4B_VAE,
+  QWEN3_4B_Q4_K_M,
+  AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+  AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+  AUDIOGEN_VAE_BF16
 } from '@qvac/sdk'
 import { ResourceManager } from '../shared/resource-manager.js'
 import { collectTestDeps } from '../shared/collect-test-deps.js'
@@ -53,6 +61,7 @@ import { KvCacheExecutor } from '../shared/executors/kv-cache-executor.js'
 import { MobileLoggingExecutor } from './executors/logging-executor.js'
 import { RegistryExecutor } from '../shared/executors/registry-executor.js'
 import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
+import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
 import { MobileTranscriptionExecutor } from './executors/transcription-executor.js'
@@ -397,6 +406,43 @@ resources.define('tts-supertonic-enhanced', {
   }
 })
 
+resources.define('bci', {
+  constant: BCI_WINDOWED,
+  type: 'bci-whispercpp-transcription',
+  skipPreDownload: true,
+  config: {
+    whisperConfig: { language: 'en', temperature: 0.0 },
+    miscConfig: { caption_enabled: false },
+    bciConfig: { day_idx: 1 }
+  }
+})
+
+resources.define('diffusion', {
+  constant: FLUX_2_KLEIN_4B_Q4_0,
+  type: 'sdcpp-generation',
+  skipPreDownload: true,
+  config: {
+    device: 'gpu',
+    threads: 4,
+    prediction: 'flux2_flow',
+    llmModelSrc: QWEN3_4B_Q4_K_M,
+    vaeModelSrc: FLUX_2_KLEIN_4B_VAE
+  }
+})
+
+resources.define('audiogen-turbo', {
+  type: 'audiogen-ggml',
+  skipPreDownload: true,
+  config: {
+    textEncModelSrc: AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0,
+    lmModelSrc: AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
+    ditModelSrc: AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
+    vaeModelSrc: AUDIOGEN_VAE_BF16,
+    useGPU: true,
+    inferenceSteps: 8
+  }
+})
+
 resources.define('parakeet-tdt', {
   constant: PARAKEET_TDT_0_6B_V3_Q4_0,
   type: 'parakeet-transcription',
@@ -598,6 +644,14 @@ export const executor = createExecutor({
       'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
     ),
     new SkipExecutor(
+      /^model-fit-probe-bci$/,
+      'BCI addon tests are desktop-only until mobile support is enabled; the smoke assessment needs no load and still runs'
+    ),
+    new SkipExecutor(
+      /^model-fit-probe-(?:audiogen|diffusion)$/,
+      'Reading the projection needs a resident model, and both sets are too heavy to load on Device Farm devices; the smoke assessment needs no load and still runs'
+    ),
+    new SkipExecutor(
       /^audio-(gen|edit|understand)-/,
       'ACE-Step AudioGen loads four large GGUFs and is covered by desktop e2e'
     ),
@@ -678,6 +732,7 @@ export const executor = createExecutor({
     new MobileRagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
+    new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
