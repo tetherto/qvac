@@ -1,6 +1,6 @@
 'use strict'
 
-// Opt-in standalone Android Bare entrypoint. It never skips missing inputs or
+// Development-only standalone Android Bare entrypoint. It never skips missing inputs or
 // unavailable backends. Profile and timing runs must use separate processes.
 const fs = require('bare-fs')
 const path = require('bare-path')
@@ -10,11 +10,16 @@ const {
   requireCondition,
   wordErrorRate,
   assertBackend,
-  profileEvidence,
   assertEnvironment
 } = require('./hexagon-validation.cjs')
 
 const report = { results: [] }
+
+function marker(kind, value) {
+  // Native MODULE backends log directly to stderr. Synchronous stdout writes
+  // keep these windows ordered when the caller captures both streams with 2>&1.
+  fs.writeSync(1, `HEXAGON_CTC_${kind} ${JSON.stringify(value)}\n`)
+}
 
 function verifyHash(filename, expected) {
   requireCondition(
@@ -61,11 +66,9 @@ async function main() {
   )
   const backends = mode === 'profile' ? ['hexagon'] : ['cpu', 'opencl', 'hexagon']
   for (const backend of backends) {
-    const messages = []
     nativeLogging.setLogger((_priority, message) => {
       if (mode === 'profile') {
-        messages.push(message)
-        console.log(message)
+        fs.writeSync(1, message + '\n')
       }
     })
     const model = new ASRGgml({
@@ -78,13 +81,14 @@ async function main() {
       let previousStats = {}
       for (const sample of manifest.samples) {
         await new Promise((resolve) => setTimeout(resolve, 100))
-        messages.length = 0
         const pcm = fs.readFileSync(resolve(sample.pcm))
         requireCondition(
           pcm.length === sample.seconds * 16000 * 2,
           'Audio must be exact-duration 16 kHz mono s16le PCM'
         )
         const transcript = []
+        const identity = { sample: sample.pcm, seconds: sample.seconds, sha256: sample.sha256 }
+        if (mode === 'profile') marker('PROFILE_BEGIN', identity)
         const response = await model.run(pcm)
         await response
           .onUpdate((output) => {
@@ -121,8 +125,7 @@ async function main() {
         const wer = wordErrorRate(sample.reference, text)
         const result = {
           backend,
-          sample: sample.pcm,
-          seconds: sample.seconds,
+          ...identity,
           text,
           wer,
           info,
@@ -132,7 +135,7 @@ async function main() {
         console.log('HEXAGON_CTC_SAMPLE ' + JSON.stringify(result))
         if (mode === 'profile') {
           await new Promise((resolve) => setTimeout(resolve, 100))
-          result.profile = profileEvidence(messages)
+          marker('PROFILE_END', identity)
         }
         if (mode === 'timing') {
           result.rtf = stats.totalWallMs / stats.audioDurationMs
@@ -150,17 +153,21 @@ async function main() {
     } finally {
       await model.destroy()
     }
-    // Native logging is asynchronous; allow queued callbacks to drain before
-    // requiring profile evidence. A missing callback still fails the gate.
+    // Drain addon logs; separately-loaded backend logs are captured on stderr.
     await new Promise((resolve) => setTimeout(resolve, 100))
     nativeLogging.releaseLogger()
   }
-  console.log('HEXAGON_CTC_RESULT ' + JSON.stringify(report))
+  if (mode === 'profile') {
+    report.evidence = 'pending external validation'
+    marker('PROFILE_CAPTURE', report)
+  } else {
+    marker('RESULT', report)
+  }
 }
 
 main().catch((error) => {
   report.error = error.message
-  console.log('HEXAGON_CTC_FAILED ' + JSON.stringify(report))
+  marker('FAILED', report)
   console.error(error.stack || error)
   process.exitCode = 1
 })

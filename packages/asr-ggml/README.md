@@ -655,7 +655,7 @@ before backend discovery, preserving existing device DSP search paths.
 prove device selection, not execution of individual operators.
 
 For device validation, the standalone Android Bare entrypoint
-`test/mobile/hexagon-ctc.cjs` takes a local manifest and runs through the
+`scripts/device/hexagon-ctc.cjs` takes a local manifest and runs through the
 public `ASRGgml` API. Supply the frozen model/audio paths and actual reference
 transcripts (paths are relative to the manifest):
 
@@ -672,12 +672,32 @@ transcripts (paths are relative to the manifest):
 }
 ```
 
+This development harness is excluded from published packages. Stage both
+`scripts/device/hexagon-*.cjs` files with the built addon checkout and its
+development dependencies, including Android-compatible `bare-subprocess`,
+on the phone. Installing only the published runtime package is insufficient.
 Run in two fresh device processes with 16 kHz mono s16le raw audio:
 
 ```bash
-GGML_HEXAGON_PROFILE=0 bare test/mobile/hexagon-ctc.cjs manifest.json timing
-GGML_HEXAGON_PROFILE=1 bare test/mobile/hexagon-ctc.cjs manifest.json profile
+GGML_HEXAGON_PROFILE=0 bare scripts/device/hexagon-ctc.cjs manifest.json timing
+GGML_HEXAGON_PROFILE=1 bare scripts/device/hexagon-ctc.cjs manifest.json profile > profile.log 2>&1
 ```
+
+Record the device command's exit status and require it to be zero. A capture
+marker cannot rule out a later teardown crash. Then copy `profile.log` back
+to the host and run the mandatory verifier, also requiring exit status zero:
+
+```bash
+node scripts/device/validate-hexagon-profile.cjs profile.log
+```
+
+The backend MODULE can have its own native logger, so its DSP records go
+directly to stderr instead of the addon JavaScript log callback. Capture
+**both streams**. The device profile run only reports capture completion;
+evidence remains pending until the host verifier passes. Synchronous sample
+markers delimit each workload. The verifier rejects missing/duplicate markers,
+incomplete or failed runs, and inconsistent hashes. Execution evidence outside
+the corresponding sample window does not count toward validation.
 
 The runner verifies model and audio hashes using Android's `sha256sum`.
 The timing pass requires CPU, OpenCL, and HTP0, prints transcripts, native

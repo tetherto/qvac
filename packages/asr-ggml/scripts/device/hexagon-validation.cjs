@@ -61,7 +61,9 @@ function assertBackend(backend, info, stats) {
 function profileEvidence(messages) {
   const result = { im2col: 0, conv2dDw: 0, hmxMatmul: 0 }
   for (const message of messages) {
-    if (!/ggml-hex: HTP0 profile-op /.test(message) || !/cycles [1-9][0-9]*/.test(message)) continue
+    if (!/^ggml-hex: HTP0 profile-op /.test(message) || !/cycles [1-9][0-9]*/.test(message)) {
+      continue
+    }
     if (/profile-op IM2COL\|/.test(message)) result.im2col++
     if (/profile-op CONV_2D_DW\|/.test(message)) result.conv2dDw++
     if (/profile-op MUL_MAT\|/.test(message) && /hmx-tiled/.test(message)) result.hmxMatmul++
@@ -105,10 +107,95 @@ function assertEnvironment(env, mode) {
   }
 }
 
+function validateProfileCapture(log) {
+  const windows = []
+  let active = null
+  let capture = null
+  const sameIdentity = (a, b) =>
+    a.sample === b.sample && a.seconds === b.seconds && a.sha256 === b.sha256
+  for (const line of log.split(/\r?\n/)) {
+    requireCondition(!line.startsWith('HEXAGON_CTC_FAILED '), 'Device validation failed')
+    requireCondition(
+      !line.startsWith('HEXAGON_CTC_RESULT '),
+      'Expected a profile capture, not a timing result'
+    )
+    if (line.startsWith('HEXAGON_CTC_PROFILE_BEGIN ')) {
+      requireCondition(
+        !active && !capture && windows.length < 2,
+        'Duplicate, nested, or late profile window'
+      )
+      const identity = JSON.parse(line.slice('HEXAGON_CTC_PROFILE_BEGIN '.length))
+      requireCondition(
+        identity.seconds === [30, 60][windows.length],
+        'Profile windows must be ordered 30s then 60s'
+      )
+      requireCondition(
+        typeof identity.sample === 'string' &&
+          identity.sample.length > 0 &&
+          /^[0-9a-f]{64}$/.test(identity.sha256),
+        'Profile window needs sample identity and SHA256'
+      )
+      requireCondition(
+        !windows.some((window) => window.sample === identity.sample),
+        'Repeated profile sample'
+      )
+      active = { ...identity, messages: [] }
+    } else if (line.startsWith('HEXAGON_CTC_PROFILE_END ')) {
+      const identity = JSON.parse(line.slice('HEXAGON_CTC_PROFILE_END '.length))
+      requireCondition(
+        active && sameIdentity(active, identity),
+        'Missing or mismatched profile window end'
+      )
+      const { messages, ...sample } = active
+      windows.push({ ...sample, profile: profileEvidence(messages) })
+      active = null
+    } else if (line.startsWith('HEXAGON_CTC_PROFILE_CAPTURE ')) {
+      requireCondition(
+        !active && !capture && windows.length === 2,
+        'Incomplete or duplicate profile capture'
+      )
+      capture = JSON.parse(line.slice('HEXAGON_CTC_PROFILE_CAPTURE '.length))
+      requireCondition(
+        capture.mode === 'profile' &&
+          capture.evidence === 'pending external validation' &&
+          !capture.error &&
+          /^[0-9a-f]{64}$/.test(capture.modelSha256) &&
+          typeof capture.model === 'string' &&
+          capture.model.length > 0 &&
+          capture.results?.length === 2 &&
+          capture.audioSha256?.length === 2,
+        'Invalid profile capture result'
+      )
+      for (let i = 0; i < windows.length; i++) {
+        const result = capture.results[i]
+        requireCondition(
+          sameIdentity(result, windows[i]) && capture.audioSha256[i] === windows[i].sha256,
+          'Capture result differs from profiled samples'
+        )
+        requireCondition(result.backend === 'hexagon', 'Wrong backend in profile result')
+        assertBackend('hexagon', result.info, result.stats)
+        requireCondition(
+          typeof result.text === 'string' &&
+            result.text.trim().length > 0 &&
+            !/^\[.*\]$/.test(result.text.trim()) &&
+            Number.isFinite(result.wer) &&
+            result.wer >= 0,
+          'Invalid profile transcription'
+        )
+      }
+    } else if (active) {
+      active.messages.push(line)
+    }
+  }
+  requireCondition(!active && capture, 'Missing complete successful profile capture')
+  return { ...capture, evidence: 'verified', samples: windows }
+}
+
 module.exports = {
   requireCondition,
   wordErrorRate,
   assertBackend,
   profileEvidence,
-  assertEnvironment
+  assertEnvironment,
+  validateProfileCapture
 }
