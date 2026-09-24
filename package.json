@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "packageManager": "pnpm@11.17.0",
   "devDependencies": {
+    "@nx/js": "23.1.0",
     "nx": "23.1.0"
   }
 }

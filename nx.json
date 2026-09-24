@@ -3,7 +3,37 @@
   "analytics": false,
   "targetDefaults": {
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        "^build"
+      ]
+    }
+  },
+  "release": {
+    "groups": {
+      "engine": {
+        "projects": [
+          "@qvac/inference",
+          "@qvac/sdk"
+        ],
+        "projectsRelationship": "fixed",
+        "versionPlans": true
+      },
+      "agentstack": {
+        "projects": [
+          "@qvac/cli",
+          "@qvac/ai-sdk-provider",
+          "@qvac/opencode-plugin",
+          "@qvac/openclaw-plugin"
+        ],
+        "projectsRelationship": "independent",
+        "versionPlans": true
+      }
+    },
+    "versionPlans": true,
+    "version": {
+      "updateDependents": "auto",
+      "preserveMatchingDependencyRanges": false,
+      "adjustSemverBumpsForZeroMajorVersion": false
     }
   }
 }
