@@ -1,0 +1,283 @@
+---
+title: Transcription
+icon: Speech
+description: Automatic speech recognition (ASR) for speech-to-text — i.e., generate text transcriptions from audio input.
+schemaType: HowTo
+---
+
+## Overview
+
+Transcription uses your choice of either [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (via the GGML-based [`parakeet-cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp/tree/master/engines/parakeet) engine) as inference engine. Load a model using `modelType: "whisper"` for `qvac-fabric-speech.cpp`, or `modelType: "parakeet-transcription"` for Parakeet. Parakeet supports multilingual transcription (TDT), English-only transcription (CTC), English transcription with a single model that supports both batch and duplex streaming (Unified), Indic-language transcription (Indic Conformer CTC), speaker diarization (Sortformer), and end-of-utterance detection (EOU) for duplex streaming.
+
+Provide audio input as `audioChunk`, either as a file path (string) or an in-memory audio buffer.
+
+`transcribe()` returns the full transcription as a single `string`. If you need partial results as they become available, use `transcribeStream()` to receive text chunks in real-time. Both whisper and parakeet expose duplex `transcribeStream()` sessions; see "Streaming with `transcribeStream()`" below.
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`transcribe()`](/sdk/reference/api#transcribe) or [`transcribeStream()`](/sdk/reference/api#transcribestream)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+### `qvac-fabric-speech.cpp`
+
+You should load two models:
+- a [`whisper.cpp`](https://github.com/ggml-org/whisper.cpp)-compatible model for transcription. Model file format: `*.bin`; and
+- a VAD model (e.g., Silero) converted to GGML. Model file format: `*.bin` _(optional, recommended)_.
+
+### Parakeet
+
+As of `@qvac/transcription-parakeet` 0.6.0, Parakeet ships as a **single GGUF** per variant — the addon auto-detects TDT / CTC / Unified / Sortformer / EOU from `parakeet.model.type` GGUF metadata. There is no `modelConfig.modelType` discriminator, no per-variant `parakeet*Src` artifact fields, and no `ParakeetArtifactsRequiredError`. Just supply the GGUF via the top-level `modelSrc`:
+
+```ts
+await loadModel({
+  modelSrc: PARAKEET_TDT_0_6B_V3_Q8_0,    // multilingual, ~750MB
+  modelType: "parakeet-transcription",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_CTC_0_6B_Q8_0,       // english-only, streaming-capable
+  modelType: "parakeet-transcription",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_UNIFIED_0_6B_Q8_0,   // english; batch + streaming, ~740MB
+  modelType: "parakeet-transcription",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_SORTFORMER_4SPK_V1_Q8_0,  // 4-speaker diarization
+  modelType: "parakeet-transcription",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_EOU_120M_V1_Q8_0,    // end-of-utterance detection
+  modelType: "parakeet-transcription",
+});
+
+await loadModel({
+  modelSrc: PARAKEET_INDIC_CONFORMER_CTC_Q8_0,  // Indic languages
+  modelType: "parakeet",
+  modelConfig: { language: "hi" },              // required; e.g. "hi", "ta"
+});
+```
+
+For model artifacts available as constants, see [SDK — Models](/sdk#models).
+
+<Callout type="info">
+**Migrating from pre-0.6 Parakeet (ONNX multi-file):** the legacy multi-file ONNX `modelConfig` shape (`parakeetEncoderSrc` / `parakeetDecoderSrc` / `parakeetVocabSrc` / `parakeetPreprocessorSrc`, plus `parakeetCtcModelSrc` / `parakeetTokenizerSrc` and `parakeetSortformerSrc` for the CTC/Sortformer variants) is no longer supported. Passing any of those fields raises a structured `LegacyParakeetModelDeprecatedError` with a migration message. The legacy ONNX constants (e.g. `PARAKEET_TDT_ENCODER_INT8`, `PARAKEET_CTC_FP32`, `PARAKEET_SORTFORMER_FP32`) remain exported for one minor cycle for codemod migrations only and will be removed in a future release.
+</Callout>
+
+<Callout type="info">
+**On VAD:** when using `qvac-fabric-speech.cpp`, you can optionally provide a separate model for voice activity detection (VAD); this is recommended. In turn, Parakeet handles VAD internally, so no additional model or configuration is required.
+</Callout>
+
+## Streaming with `transcribeStream()`
+
+`transcribeStream()` opens a duplex session for both engines — write audio chunks via `session.write(...)`, iterate events with `for await (const event of session) { ... }`. Events are typed as a discriminated union `{ type }`:
+
+- `{ type: "text", text }` — incremental transcript text.
+- `{ type: "segment", segment }` — segment metadata when `metadata: true`, on both engines. Parakeet segments also carry `isEndOfTurn` and `startsWord`.
+- `{ type: "vad", speaking, probability, source }` — voice-activity-detection state (whisper-only; `source` is `"silero"`).
+- `{ type: "endOfTurn", source: "whisper", silenceDurationMs }` — turn boundary detected from a measured silence window (whisper).
+- `{ type: "endOfTurn", source: "parakeet" }` — turn boundary detected from the EOU model's `<EOU>` token (parakeet; no silence window — the event is token-driven).
+
+The `source` field on `endOfTurn` lets consumers narrow the union: whisper events always carry a numeric `silenceDurationMs`; parakeet events never do.
+
+After the iterator completes, await `session.stats` to read terminal engine statistics. The promise resolves to `undefined` when the engine does not report stats.
+
+```ts
+for await (const event of session) {
+  // Handle text, segment, VAD, or end-of-turn events.
+}
+
+const stats = await session.stats;
+console.log(stats?.audioDuration, stats?.realTimeFactor);
+```
+
+<Callout type="info">
+**Wire compatibility:** post-0.6 servers emit `source` on every `endOfTurn` frame. SDK parsers still accept the legacy whisper wire shape `{ silenceDurationMs }` (no `source`) and normalize it to `source: "whisper"`. Upgrade client and server together when using parakeet `source: "parakeet"` events — older servers never emit that branch.
+</Callout>
+
+### Parakeet duplex streaming
+
+Pass `parakeetStreamingConfig` to `transcribeStream()` to override per-call streaming knobs (each falls back to its `parakeetConfig.streaming*` load-time counterpart):
+
+```ts
+const session = await transcribeStream({
+  modelId,
+  parakeetStreamingConfig: {
+    chunkMs: 1000,            // encoder cadence
+    historyMs: 30000,         // sortformer rolling-history window
+    leftContextMs: 500,       // ASR encoder left-context window
+    rightLookaheadMs: 200,    // ASR encoder right-lookahead window
+    emitPartials: true,       // emit partial segments before chunk boundaries
+    emitEnergyVad: false,     // CTC/TDT energy-based VAD hint (engine-internal)
+  },
+});
+
+for await (const event of session) {
+  switch (event.type) {
+    case "text":
+      process.stdout.write(event.text);
+      break;
+    case "endOfTurn":
+      // event.source: "whisper" | "parakeet"
+      console.log("\n[endOfTurn] turn boundary detected\n");
+      break;
+  }
+}
+```
+
+The synthetic `{ type: "endOfTurn", source: "parakeet" }` event surfaces whenever the EOU model emits an `<EOU>` token, and is the parakeet equivalent of whisper's silence-window EOU. Pair it with the `PARAKEET_EOU_120M_V1_Q8_0` checkpoint when you need explicit turn boundaries from parakeet.
+
+## Examples
+
+### `qvac-fabric-speech.cpp`
+
+The following script shows an example of `qvac-fabric-speech.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/whispercpp-prompt.js title="whispercpp-prompt.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/whispercpp-prompt.ts title="whispercpp-prompt.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription.py title="transcription.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parakeet TDT
+
+The following script shows an example of multilingual transcription using the Parakeet TDT model from a WAV file:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-tdt-filesystem.js title="parakeet-tdt-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-tdt-filesystem.ts title="parakeet-tdt-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parakeet CTC
+
+The following script shows an example of English-only transcription using the Parakeet CTC model from a WAV file:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-ctc-filesystem.js title="parakeet-ctc-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-ctc-filesystem.ts title="parakeet-ctc-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parakeet Unified
+
+The following script shows an example of English transcription using the Parakeet Unified model from a WAV file. Load it once and use it with either `transcribe()` for batch or `transcribeStream()` for low-latency streaming.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-unified-filesystem.js title="parakeet-unified-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-unified-filesystem.ts title="parakeet-unified-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parakeet Indic Conformer
+
+The following script shows an example of Indic-language transcription using the Parakeet Indic Conformer CTC model from a WAV file:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-indic-conformer-filesystem.js title="parakeet-indic-conformer-filesystem.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-indic-conformer-filesystem.ts title="parakeet-indic-conformer-filesystem.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### Parakeet Sortformer
+
+The following script shows an example of speaker diarization using the Parakeet Sortformer model, followed by per-segment transcription with the TDT model:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/asr/parakeet-sortformer.js title="parakeet-sortformer.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-sortformer.ts title="parakeet-sortformer.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>

@@ -275,8 +275,12 @@
 # The segment is written out rather than matched by a placeholder. A
 # `/sdk/:version` pattern would claim every first-level SDK path to cover
 # one, and a literal line makes a cut visible in the diff.
+/sdk/v0.19/        /sdk/v0.19/index.html        200
+/sdk/v0.19         /sdk/v0.19/                  301
 /sdk/v0.18/        /sdk/v0.18/index.html        200
 /sdk/v0.18         /sdk/v0.18/                  301
+/cli/v0.13/        /cli/v0.13/index.html        200
+/cli/v0.13         /cli/v0.13/                  301
 /cli/v0.12/        /cli/v0.12/index.html        200
 /cli/v0.12         /cli/v0.12/                  301
 

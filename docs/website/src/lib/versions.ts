@@ -30,9 +30,10 @@ export interface DocumentedVersion {
 }
 
 /**
- * `collection` — a product collection versioned as a whole, publishing one
- * current line and one older line. `package` — an inventory entry publishing
- * one page per release, with no current version.
+ * `collection` — a product collection versioned as a whole, publishing its
+ * current line and every line cut before it, however many that is. `package`
+ * — an inventory entry publishing one page per release, with no current
+ * version.
  */
 export type DocumentedSoftwareKind = 'collection' | 'package';
 
@@ -50,7 +51,8 @@ export interface DocumentedSoftware {
  * `@qvac/cli`. Each is named after the package its lines follow, so the thing
  * being versioned and the thing being named are the same.
  *
- * The inventory publishes the two most recent releases of each package. The
+ * The inventory publishes at least the two most recent releases of each
+ * package and never drops one it has published, so an entry only grows. The
  * Python client carries no version of its own — `pyproject.toml` stamps it
  * from `packages/sdk/package.json` — so it takes the SDK's numbers.
  */
@@ -60,7 +62,8 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'collection',
     path: '/sdk',
     versions: [
-      { version: 'v0.19', folder: '(v0.19)' },
+      { version: 'v0.20', folder: '(v0.20)' },
+      { version: 'v0.19', folder: 'v0.19' },
       { version: 'v0.18', folder: 'v0.18' },
     ],
   },
@@ -69,7 +72,8 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'collection',
     path: '/cli',
     versions: [
-      { version: 'v0.13', folder: '(v0.13)' },
+      { version: 'v0.14', folder: '(v0.14)' },
+      { version: 'v0.13', folder: 'v0.13' },
       { version: 'v0.12', folder: 'v0.12' },
     ],
   },
@@ -78,6 +82,7 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'package',
     path: '/ecosystem/inventory/sdk',
     versions: [
+      { version: 'v0.20', folder: 'v0.20' },
       { version: 'v0.19', folder: 'v0.19' },
       { version: 'v0.18', folder: 'v0.18' },
     ],
@@ -87,6 +92,7 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'package',
     path: '/ecosystem/inventory/sdk-python',
     versions: [
+      { version: 'v0.20', folder: 'v0.20' },
       { version: 'v0.19', folder: 'v0.19' },
       { version: 'v0.18', folder: 'v0.18' },
     ],
@@ -96,6 +102,7 @@ export const DOCUMENTED_SOFTWARE = [
     kind: 'package',
     path: '/ecosystem/inventory/cli',
     versions: [
+      { version: 'v0.14', folder: 'v0.14' },
       { version: 'v0.13', folder: 'v0.13' },
       { version: 'v0.12', folder: 'v0.12' },
     ],

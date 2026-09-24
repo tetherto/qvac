@@ -1,7 +1,6 @@
-# software-inventory-docs Specification
-
 ## Purpose
-TBD - created by archiving change version-docs-by-collection. Update Purpose after archive.
+
+The Software Inventory: one entry per published package, each listing the versions the site carries and serving the package README as released. Where an entry is entered from, how its versions are moved between, what a version page may not restate, and the rule that an entry only ever grows.
 ## Requirements
 ### Requirement: Each package is entered at an index that lists its versions
 
@@ -120,12 +119,18 @@ A README is written for someone standing in the repository, so a published inven
 
 ### Requirement: The inventory covers the SDK, Python, CLI, and provider packages
 
-This change SHALL publish inventory entries for `@qvac/sdk`, the Python client, `@qvac/cli`, and `@qvac/ai-sdk-provider`. Each MUST carry its two most recent released versions. A package with only one release published SHALL carry one version, and MUST gain its second at its next minor release with no new structure.
+The inventory SHALL publish entries for `@qvac/sdk`, the Python client, `@qvac/cli`, and `@qvac/ai-sdk-provider`. Each MUST carry at least its two most recent released versions, and MUST NOT drop a version page it has already published. Coverage is a floor rather than a window: an entry grows as releases accumulate and never shrinks, so a version page keeps resolving for as long as its entry exists. A package with only one release published SHALL carry one version, and MUST gain its second at its next minor release with no new structure.
 
 #### Scenario: A package with two releases carries two versions
 
-- **WHEN** a package has published two or more minor releases
-- **THEN** its entry documents the two most recent, both listed on its index
+- **WHEN** a package has published exactly two minor releases
+- **THEN** its entry documents both, each listed on its index
+
+#### Scenario: A third release is added, not swapped in
+
+- **WHEN** a package that already documents two versions publishes a third
+- **THEN** its entry gains a page for the new version and keeps the pages it had
+- **AND** every version page published before the release still resolves at the path it was published at
 
 #### Scenario: A package with one release carries one version
 

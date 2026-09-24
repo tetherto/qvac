@@ -118,19 +118,6 @@ function checkCollection(
   const problems: string[] = [];
   const groups = versionFolders.filter((folder) => isCurrentLineFolder(folder));
 
-  // A cut preserves the outgoing line and opens the next one, which holds a
-  // collection at two. A third means the cut left the oldest behind, and what
-  // becomes of it — retired, or published on — is not something the site
-  // decides on its own.
-  if (software.versions.length > 2) {
-    const oldest = software.versions.at(-1);
-    problems.push(
-      `${software.path}: ${software.versions.length} lines declared (${software.versions
-        .map((version) => version.version)
-        .join(', ')}), and a collection carries two — retire ${oldest?.version} before cutting the next`,
-    );
-  }
-
   if (groups.length !== 1) {
     problems.push(
       `${software.path}: a versioned collection has exactly one current line, found ${groups.length}` +

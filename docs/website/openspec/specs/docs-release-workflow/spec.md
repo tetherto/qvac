@@ -1,7 +1,6 @@
-# docs-release-workflow Specification
-
 ## Purpose
-TBD - created by archiving change version-docs-by-collection. Update Purpose after archive.
+
+What a release does to the documentation. When a line is cut and what the cut consists of, which surfaces regenerate themselves from the line set, which redirects a cut owes and which it does not, and what the build rejects in a malformed cut.
 ## Requirements
 ### Requirement: A line is cut as soon as the previous release is live
 
@@ -87,22 +86,32 @@ Every surface derived from the line set — the switcher, the sidebars, the cano
 - **WHEN** a derived surface disagrees with the declared line set
 - **THEN** the build fails and names the surface
 
-### Requirement: A cut is performed by hand and caught by the build
+### Requirement: A cut is performed by hand, and the build rejects a malformed one
 
-Cutting a line SHALL be an ordinary content change — a rename, a copy, a manifest edit, and an edit to the redirects — performed by hand. No tool is required to make a cut correct; the build MUST be what rejects an incorrect one. A cut leaving a collection with anything but exactly one folder group, with a patch-shaped line name, with a line numbered above the folder group, with three lines, or with folders and manifest entries that do not correspond MUST fail the build.
+Cutting a line SHALL be an ordinary content change — a rename, a copy, a manifest edit, and an edit to the redirects — performed by hand. No tool is required to make a cut correct; the build MUST be what rejects an incorrect one. A cut leaving a collection with anything but exactly one folder group, with a patch-shaped line name, with a line numbered above the folder group, or with folders and manifest entries that do not correspond MUST fail the build. The number of lines a cut leaves behind SHALL NOT be a reason to reject it.
 
 #### Scenario: A cut needs no tooling
 
-- **WHEN** an operator renames the folder group, copies it forward, updates the manifest, and adds the new line's redirect rules
-- **THEN** the site builds and serves both lines, with no script involved
+- **WHEN** an operator renames the folder group, copies it forward, updates the manifest, and adds the preserved line's index rules
+- **THEN** the site builds and serves every line, with no script involved
 
 #### Scenario: An invalid structure fails the build
 
 - **WHEN** a collection ends up with zero or two folder groups, a patch-shaped line name, or a line numbered above the folder group
 - **THEN** the build fails and names the collection and the offending folder
 
-#### Scenario: A third line fails the build
+#### Scenario: A third line builds
 
-- **WHEN** a collection ends up with three lines
-- **THEN** the build fails and names the oldest, because what becomes of it is not defined by this change
+- **WHEN** a collection ends up with three lines, or with more
+- **THEN** the build succeeds, and every line is published, switchable, and given its own corpus
+
+#### Scenario: A cut adds the preserved line's index rules
+
+- **WHEN** a cut preserves the outgoing line under its plain versioned folder
+- **THEN** `public/_redirects` gains that line's index pair — the `200` rewrite and the `301` below it — because the line's last segment carries a dot and so misses the CDN's slash normalization
+
+#### Scenario: A cut that drops no page adds no page rule
+
+- **WHEN** the new line is an exact copy of the one it was cut from
+- **THEN** no redirect is added for any page, because none stopped resolving
 
