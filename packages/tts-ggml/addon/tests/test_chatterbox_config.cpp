@@ -16,8 +16,10 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 #include <gtest/gtest.h>
 #include <tts-cpp/chatterbox/engine.h>
@@ -32,14 +34,38 @@ using qvac_errors::StatusError;
 
 namespace {
 
-std::filesystem::path testTempDir() {
-  return std::filesystem::temp_directory_path() / "qvac-tts-ggml-chatterbox-tests";
+constexpr const char* TEST_DIR_PREFIX = "qvac-tts-ggml-chatterbox-tests-";
+
+class TestTempDir {
+ public:
+  TestTempDir() : path_(createUniqueDir()) {}
+  TestTempDir(const TestTempDir&) = delete;
+  TestTempDir& operator=(const TestTempDir&) = delete;
+  ~TestTempDir() {
+    std::error_code ignored;
+    std::filesystem::remove_all(path_, ignored);
+  }
+  const std::filesystem::path& path() const { return path_; }
+
+ private:
+  static std::filesystem::path createUniqueDir() {
+    std::random_device entropy;
+    auto dir = std::filesystem::temp_directory_path() /
+               (std::string(TEST_DIR_PREFIX) + std::to_string(entropy()));
+    std::filesystem::create_directories(dir);
+    return dir;
+  }
+
+  std::filesystem::path path_;
+};
+
+const std::filesystem::path& testTempDir() {
+  static const TestTempDir dir;
+  return dir.path();
 }
 
 std::filesystem::path tempPath(const std::string& suffix) {
-  auto dir = testTempDir();
-  std::filesystem::create_directories(dir);
-  return dir / suffix;
+  return testTempDir() / suffix;
 }
 
 void writeStubFile(const std::filesystem::path& p,
