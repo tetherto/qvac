@@ -49,11 +49,11 @@ export function validateAndJoinPath(basePath: string, ...components: string[]): 
 }
 
 /**
- * Unlike validateAndJoinPath, this never rewrites the name, so cache filenames
- * stay byte-stable and previously downloaded files keep hitting.
+ * Joins `name` under `basePath` without sanitizing it, so cache filenames stay
+ * byte-stable. Throws PathTraversalError on a null byte or a `..` segment.
  */
 export function joinWithinBase(basePath: string, name: string): string {
-  if (name.includes('\0')) {
+  if (name.includes('\0') || name.split(/[\\/]/).includes('..')) {
     throw new PathTraversalError(name, basePath)
   }
 

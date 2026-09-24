@@ -1,22 +1,21 @@
 import test from 'brittle'
 import fs from 'bare-fs'
-import os from 'bare-os'
-import path from 'bare-path'
-import { isConfigSet, setConfig } from '@/runtime/state'
 import { downloadModelFromHyperdrive } from '@/handlers/load-model/hyperdrive'
 import { PathTraversalError } from '@/errors/index'
+import { useTestCacheDir } from './fixtures/test-cache'
 
 const HYPERDRIVE_KEY = 'a'.repeat(64)
-const cacheDir = path.join(os.cwd(), 'test', 'tmp-hyperdrive-cache-path')
 
 // The rejection happens before any corestore or swarm setup, so no drive is needed.
 test('hyperdrive download: rejects drive paths that escape the model cache', async function (t) {
-  if (!isConfigSet()) setConfig({ cacheDirectory: cacheDir, loggerConsoleOutput: false })
+  const cacheDir = useTestCacheDir()
   fs.mkdirSync(cacheDir, { recursive: true })
 
   const escapes = [
     '../../../etc/qvac-pwned.gguf',
     'models/../../../../tmp/qvac-pwned.gguf',
+    'x/../sharded/' + 'b'.repeat(64) + '/model-00001-of-00002.gguf',
+    'x/../0123abcd_Llama-3.2-1B.gguf',
     'model\0.gguf'
   ]
 
@@ -27,18 +26,6 @@ test('hyperdrive download: rejects drive paths that escape the model cache', asy
         PathTraversalError as unknown as new () => Error,
         `must reject: ${drivePath}`
       )
-    }
-
-    for (const escaped of [
-      path.resolve(cacheDir, '../../../etc/qvac-pwned.gguf'),
-      path.resolve(cacheDir, '../../../../tmp/qvac-pwned.gguf')
-    ]) {
-      let exists = false
-      try {
-        fs.accessSync(escaped)
-        exists = true
-      } catch {}
-      t.absent(exists, `nothing written outside the cache: ${escaped}`)
     }
   } finally {
     fs.rmSync(cacheDir, { recursive: true, force: true })

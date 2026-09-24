@@ -119,6 +119,14 @@ test('joinWithinBase: throws on traversal', function (t) {
   t.exception(() => joinWithinBase('/base/dir', 'a1b2c3_models/../../../../tmp/pwned.gguf'))
 })
 
+test('joinWithinBase: throws on a .. segment that stays inside the base', function (t) {
+  t.exception(() =>
+    joinWithinBase('/base/dir', 'a1b2c3_x/../sharded/key/model-00001-of-00002.gguf')
+  )
+  t.exception(() => joinWithinBase('/base/dir', 'a1b2c3_x/../d4e5f6_Llama-3.2-1B.gguf'))
+  t.exception(() => joinWithinBase('/base/dir', 'a1b2c3_x\\..\\d4e5f6_Llama-3.2-1B.gguf'))
+})
+
 test('joinWithinBase: nests absolute-looking names under the base', function (t) {
   t.is(joinWithinBase('/base/dir', '/etc/passwd'), join('/base/dir', 'etc/passwd'))
 })
