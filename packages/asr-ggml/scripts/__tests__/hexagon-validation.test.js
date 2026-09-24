@@ -22,7 +22,11 @@ test('device validation refuses compute bypass and diagnostics in timing mode', 
   assertEnvironment({ GGML_HEXAGON_PROFILE: '1', GGML_HEXAGON_OPSTAGE: '3' }, 'profile')
   for (const env of [
     { GGML_HEXAGON_OPSTAGE: '1' },
+    { GGML_HEXAGON_OPSTAGE: '0b11' },
+    { GGML_HEXAGON_OPSTAGE: '03' },
     { GGML_HEXAGON_USE_HMX: '0' },
+    { GGML_HEXAGON_USE_HMX: '0x1' },
+    { GGML_HEXAGON_NHMX: '1e2' },
     { GGML_HEXAGON_NHMX: '0' },
     { GGML_HEXAGON_PROFILE: '1' },
     { GGML_HEXAGON_VERBOSE: '1' },

@@ -73,12 +73,20 @@ function profileEvidence(messages) {
 }
 
 function assertEnvironment(env, mode) {
+  // Accept a strict decimal subset understood identically by native atoi /
+  // strtoul(base 0). JavaScript's Number also accepts bypasses like 0b11.
+  const nativeUnsigned = (value) =>
+    typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && Number(value) <= 2147483647
   requireCondition(
-    env.GGML_HEXAGON_OPSTAGE === undefined || (Number(env.GGML_HEXAGON_OPSTAGE) & 3) === 3,
+    env.GGML_HEXAGON_OPSTAGE === undefined ||
+      (nativeUnsigned(env.GGML_HEXAGON_OPSTAGE) && (Number(env.GGML_HEXAGON_OPSTAGE) & 3) === 3),
     'Hexagon queue and compute stages must both be enabled'
   )
   for (const key of ['GGML_HEXAGON_USE_HMX', 'GGML_HEXAGON_NHMX']) {
-    requireCondition(env[key] === undefined || Number(env[key]) > 0, `${key} must enable HMX`)
+    requireCondition(
+      env[key] === undefined || (nativeUnsigned(env[key]) && Number(env[key]) > 0),
+      `${key} must enable HMX`
+    )
   }
   if (mode === 'timing') {
     for (const key of [
