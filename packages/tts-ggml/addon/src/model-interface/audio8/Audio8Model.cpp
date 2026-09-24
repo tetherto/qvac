@@ -349,6 +349,7 @@ Audio8Model::Output Audio8Model::synthesize(const AnyInput& input) {
 
   sampleRate_ = result.sample_rate;
   generatedFrames_ = result.frames;
+  timings_ = result.timings;
   totalSamples_ = static_cast<int64_t>(result.pcm.size());
   audioDurationMs_ = static_cast<double>(result.duration_s) * 1000.0;
   totalTime_ = std::chrono::duration<double>(t1 - t0).count();
@@ -393,6 +394,17 @@ qvac_lib_inference_addon_cpp::RuntimeStats Audio8Model::runtimeStats() const {
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
   stats.emplace_back("generatedFrames", static_cast<int64_t>(generatedFrames_));
+  // Engine StageTimings of the last synthesis (ms; disjoint stages).
+  stats.emplace_back("voiceEncodeMs", timings_.voice_encode_ms);
+  stats.emplace_back("promptMs", timings_.prompt_ms);
+  stats.emplace_back("prefillMs", timings_.prefill_ms);
+  stats.emplace_back("sampleMs", timings_.sample_ms);
+  stats.emplace_back("fastDecodeMs", timings_.fast_decode_ms);
+  stats.emplace_back("slowDecodeMs", timings_.slow_decode_ms);
+  stats.emplace_back("codecLatentMs", timings_.codec_latent_ms);
+  stats.emplace_back("codecSynthMs", timings_.codec_synth_ms);
+  stats.emplace_back("resampleMs", timings_.resample_ms);
+  stats.emplace_back("stageTotalMs", timings_.total_ms);
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
