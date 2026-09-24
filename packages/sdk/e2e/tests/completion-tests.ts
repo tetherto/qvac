@@ -398,13 +398,15 @@ export const completionCountInWords = createCompletionTest(
   { validation: 'contains-any', contains: ['one', 'two', 'three'] }
 )
 
+// Spelled out as "Add": with the padded "12 + 12" wording LLAMA_3_2_1B greedily
+// answers 144 (multiplication) through the SDK chat path.
 export const completionWithWhitespace = createCompletionTest(
   'completion-whitespace',
   {
     history: [
       {
         role: 'user',
-        content: '   What is 12 + 12?   Answer with just the number.   '
+        content: '   Add 12 and 12.   Reply with only the number.   '
       }
     ],
     stream: false,
