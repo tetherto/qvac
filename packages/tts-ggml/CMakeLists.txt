@@ -341,6 +341,8 @@ if(BUILD_TESTING)
       addon/tests/test_streaming_enhancer.cpp
       addon/tests/test_output_resampler.cpp
       addon/tests/test_pcm_conversion.cpp
+      addon/tests/test_log_forwarding.cpp
+      addon/tests/test_voice_controls_query.cpp
       addon/tests/AddonCppTest.cpp
       addon/src/model-interface/audio8/Audio8Model.cpp
       addon/src/model-interface/chatterbox/ChatterboxModel.cpp

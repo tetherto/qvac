@@ -149,6 +149,23 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   cfg.streamFirstChunkTokens  = readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamCfmSteps          = readOptionalInt(configurationParams, env, "cfmSteps");
   cfg.cfgRate                 = readOptionalFloat(configurationParams, env, "cfgRate");
+  cfg.batchCfmSteps =
+      readOptionalInt(configurationParams, env, "batchCfmSteps");
+  cfg.streamLeftContextTokens =
+      readOptionalInt(configurationParams, env, "streamLeftContextTokens");
+  cfg.nPredict = readOptionalInt(configurationParams, env, "nPredict");
+  cfg.maxSentenceChars =
+      readOptionalInt(configurationParams, env, "maxSentenceChars");
+  cfg.crossfadeMs = readOptionalInt(configurationParams, env, "crossfadeMs");
+  cfg.topK = readOptionalInt(configurationParams, env, "topK");
+  cfg.topP = readOptionalFloat(configurationParams, env, "topP");
+  cfg.temperature = readOptionalFloat(configurationParams, env, "temperature");
+  cfg.repeatPenalty =
+      readOptionalFloat(configurationParams, env, "repeatPenalty");
+  cfg.exaggeration =
+      readOptionalFloat(configurationParams, env, "exaggeration");
+  cfg.cfgWeight = readOptionalFloat(configurationParams, env, "cfgWeight");
+  cfg.minP = readOptionalFloat(configurationParams, env, "minP");
   // useGPU is tri-state on the C++ side: std::nullopt means "unspecified"
   // (let the engine pick its default); true/false are explicit user
   // intent.  ChatterboxModel::validateConfig rejects useGPU/nGpuLayers
@@ -276,6 +293,8 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   supertonic::SupertonicConfig cfg;
   cfg.modelGgufPath = readOptionalString(configurationParams, env, "supertonicModelPath");
   cfg.voice         = readOptionalString(configurationParams, env, "voice");
+  cfg.voiceJsonPath =
+      readOptionalString(configurationParams, env, "voiceJsonPath");
   {
     auto lang = readOptionalString(configurationParams, env, "language");
     if (!lang.empty()) cfg.language = std::move(lang);
@@ -293,6 +312,16 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.openclCacheDir    = readOptionalString(configurationParams, env, "openclCacheDir");
   cfg.vulkanCacheDir =
       readOptionalString(configurationParams, env, "vulkanCacheDir");
+  cfg.vulkanDevice = readOptionalInt(configurationParams, env, "vulkanDevice");
+  cfg.prewarmText = readOptionalString(configurationParams, env, "prewarmText");
+  cfg.streamChunkTokens =
+      readOptionalInt(configurationParams, env, "streamChunkTokens");
+  cfg.streamFirstChunkTokens =
+      readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
+  cfg.streamChunkTolerancePct =
+      readOptionalInt(configurationParams, env, "streamChunkTolerancePct");
+  cfg.streamMinChunkTokens =
+      readOptionalInt(configurationParams, env, "streamMinChunkTokens");
   // LavaSR neural enhancement: a non-empty GGUF path turns it on.
   cfg.enhancerGgufPath =
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
@@ -319,6 +348,12 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "cosyvoiceS3tokModelPath");
   cfg.campplusModelPath = readOptionalString(
       configurationParams, env, "cosyvoiceCampplusModelPath");
+  cfg.vocabPath =
+      readOptionalString(configurationParams, env, "cosyvoiceVocabPath");
+  cfg.mergesPath =
+      readOptionalString(configurationParams, env, "cosyvoiceMergesPath");
+  cfg.voiceModelPath =
+      readOptionalString(configurationParams, env, "cosyvoiceVoiceModelPath");
   cfg.referenceAudio =
       readOptionalString(configurationParams, env, "referenceAudio");
   cfg.promptText = readOptionalString(configurationParams, env, "promptText");
@@ -335,6 +370,9 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.vulkanDevice = readOptionalInt(configurationParams, env, "vulkanDevice");
+  cfg.flowCutPrompt =
+      readOptionalBool(configurationParams, env, "flowCutPrompt");
   cfg.outputSampleRate =
       readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.cfmSteps = readOptionalInt(configurationParams, env, "cfmSteps");

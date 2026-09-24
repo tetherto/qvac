@@ -2,6 +2,7 @@
 
 #include <any>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
 #include <utility>
@@ -15,7 +16,10 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <js.h>
+#include <tts-cpp/log.h>
 
+#include "addon/GgmlLogForwarding.hpp"
+#include "addon/VoiceControlsCatalog.hpp"
 #include "js-interface/JSAdapter.hpp"
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/audio8/Audio8Model.hpp"
@@ -33,6 +37,16 @@ using chatterbox::ChatterboxModel;
 using cosyvoice::CosyvoiceModel;
 using parler::ParlerModel;
 using supertonic::SupertonicModel;
+
+// One process-wide install of the native log sink. tts_cpp_log_set passes the
+// callback to ggml_log_set, so ggml-origin lines (backend selection, device
+// enumeration, ...) reach the JS logger instead of raw stderr. Engine
+// diagnostics that tts-cpp still prints with fprintf(stderr) bypass it until
+// tts-cpp routes them through its own log sink.
+inline void installNativeLogForwarderOnce() {
+  static std::once_flag once;
+  std::call_once(once, [] { tts_cpp_log_set(&forwardGgmlLog, nullptr); });
+}
 
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
@@ -88,6 +102,8 @@ struct JsStreamingPcmHandler
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
+
+  installNativeLogForwarderOnce();
 
   JsArgsParser args(env, info);
   auto configurationParams = args.getJsObject(1, "configurationParams");
@@ -181,6 +197,14 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     JSAdapter adapter;
     adapter.assertNoPerCallSupertonicControls(
         args.getJsObject(1, "inputObj"), env);
+    // Native streaming (config streamChunkTokens > 0) uses the same queue
+    // bridge as chatterbox; a batch config leaves this callback unused.
+    auto outputQueue = instance.addonCpp->outputQueue;
+    modelInput.chunkCallback =
+        [outputQueue](std::vector<int16_t>&& pcm, int chunkIndex, bool isLast) {
+          StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
+          outputQueue->queueResult(std::any(std::move(chunk)));
+        };
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
@@ -249,6 +273,37 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   };
 
   return instance.runJob(std::any(std::move(modelInput)));
+}
+JSCATCH
+
+inline js::Array
+toJsStringArray(js_env_t* env, const std::vector<std::string>& values) {
+  auto array = js::Array::create(env);
+  for (size_t i = 0; i < values.size(); ++i) {
+    array.set(
+        env, static_cast<uint32_t>(i), js::String::create(env, values[i]));
+  }
+  return array;
+}
+
+// Instance-free capability query: tts-cpp's canonical emotion / pace
+// vocabulary and each engine's supported subset, keyed by tts-cpp's engine
+// name, so a host can list what is settable before loading a model.
+inline js_value_t*
+getVoiceControls(js_env_t* env, js_callback_info_t* /*info*/) try {
+  const VoiceControlsCatalog catalog = voiceControlsCatalog();
+  auto result = js::Object::create(env);
+  result.setProperty(env, "emotions", toJsStringArray(env, catalog.emotions));
+  result.setProperty(env, "paces", toJsStringArray(env, catalog.paces));
+  auto engines = js::Object::create(env);
+  for (const EngineVoiceControls& engine : catalog.engines) {
+    auto entry = js::Object::create(env);
+    entry.setProperty(env, "emotions", toJsStringArray(env, engine.emotions));
+    entry.setProperty(env, "paces", toJsStringArray(env, engine.paces));
+    engines.setProperty(env, engine.engine.c_str(), entry);
+  }
+  result.setProperty(env, "engines", engines);
+  return result;
 }
 JSCATCH
 

@@ -284,12 +284,12 @@ test('Parler: parler-only options on other engines throw', (t) => {
   t.exception(
     () =>
       new TTSGgml({
-        engine: TTSGgml.ENGINE_CHATTERBOX,
-        files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' },
+        engine: TTSGgml.ENGINE_SUPERTONIC,
+        files: { supertonicModel: './models/supertonic.gguf' },
         temperature: 0.8
       }),
     /parler\/audio8-only/,
-    'temperature on chatterbox throws (audio8 samples too, so it is shared)'
+    'temperature on supertonic throws (audio8 and chatterbox sample too, so it is shared)'
   )
 })
 
