@@ -53,10 +53,6 @@ export interface SafeFetchOptions {
   captureHashFromHost?: (host: string) => boolean
 }
 
-function protocolFor(url: URL) {
-  return url.protocol === 'https:' ? https : http
-}
-
 function assertSecureHop(url: URL, previous: URL | null): void {
   if (isSecureDownloadUrl(url)) return
   const reason = previous
@@ -76,7 +72,6 @@ function requestOnce(
   signal: AbortSignal | undefined
 ): Promise<IncomingMessage> {
   return new Promise<IncomingMessage>((resolve, reject) => {
-    const protocol = protocolFor(url)
     let settled = false
     let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -97,7 +92,7 @@ function requestOnce(
     }
     const onAbort = () => fail(new DownloadCancelledError())
 
-    const req = protocol.request(url, { method, headers }, (res) => {
+    const onResponse = (res: IncomingMessage) => {
       if (settled) {
         res.destroy()
         return
@@ -105,7 +100,20 @@ function requestOnce(
       settled = true
       cleanup()
       resolve(res)
-    })
+    }
+
+    // Call through one module at a time: the union of the two request()
+    // overload sets shares no signature once bare-https's own bare-http1 types
+    // drift from this package's, so `protocol.request` does not resolve. The
+    // https branch's response is still declared against that older copy — the
+    // object is the same at runtime, so it is re-read as this package's
+    // bare-http1 IncomingMessage at the boundary.
+    const req =
+      url.protocol === 'https:'
+        ? https.request(url, { method, headers }, (res) =>
+            onResponse(res as unknown as IncomingMessage)
+          )
+        : http.request(url, { method, headers }, onResponse)
 
     req.on('error', (error: Error) => fail(error))
 
