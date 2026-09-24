@@ -16,12 +16,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Apple M4 the Supertonic vocoder is 2.5-2.9x faster than on Metal; on
   workstation-class GPUs Metal still wins, so sidecars are staged per
   deployment. `q4_0` models keep the ggml vocoder.
+- **CosyVoice3 weight tiers in the README.** The model-directory layout now
+  names the flow (`f16` / `bf16` / `q8_0` / `q4_0`) and HiFT (`f16`) tiers the
+  engine accepts beside `f32`, and which one is fastest on each backend.
+  Component resolution goes by filename prefix and does not rank
+  quantizations, so stage one file per component or name it explicitly.
 
 ### Changed
 
-- Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to `2026-09-23#1`: the speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2), and fixes a crash in CosyVoice3 GPU synthesis on NVIDIA GPUs with cooperative-matrix2 support. Same models, same GPU backends, no API change.
-
-- Raise the `speech-cpp` floor to `2026-09-21` for the Core ML sidecars above.
+- Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to
+  `2026-09-23#1`. The speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2),
+  and its Vulkan backend no longer crashes during CosyVoice3 GPU synthesis on
+  NVIDIA GPUs that report cooperative-matrix2 support. Parler and Audio8 also
+  accept a weightless fit-measure model that carries no vocabulary, which a
+  memory-fit measurement never needs; loading a real model is unchanged and
+  still requires one. Same models, same backends, no API change.
+- Raise the `speech-cpp` floor to `2026-09-21`, for the Core ML sidecars above
+  and for a round of CosyVoice3 optimizations that needs no model change. On
+  Metal, single-token LM decode runs one flash-attention op per layer instead
+  of a masked matmul/softmax chain, and the DiT's grouped positional
+  convolution collapses from 64 dispatches per Euler step to one batched
+  im2col plus one batched matmul. On every backend the HiFT snake activations
+  emit one fused op instead of about five, and the vocoder's host-side sine
+  excitation is threaded across the `threads` option — the one vocoder cost a
+  faster GPU does not shrink (59.7 → 34.7 ms on an M3 Ultra, byte-identical
+  output). End to end that is 1.12x on an M3 Ultra, rising to 1.20x with an LM
+  GGUF re-converted to the fused q/k/v layout, which the engine reads
+  alongside the existing separate projections.
 - Raise the `speech-cpp` floor to `2026-09-18`. Audio8 synthesis is faster on
   CUDA builds (the decode loop issues far fewer kernel launches per frame), and
   CosyVoice3 gains a `bf16` flow tier for AVX512-BF16 CPUs. Existing GGUFs keep

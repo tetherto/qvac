@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing lives in on-merge-classification-ggml.yml.
+# Build-only workflow. Publishing lives in on-merge-nx.yml.
 name: Prebuilds (GGML Classification)
 
 on:

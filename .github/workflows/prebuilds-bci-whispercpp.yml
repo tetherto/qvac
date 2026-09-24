@@ -1,4 +1,4 @@
-# Build-only workflow. Publishing is handled by on-merge-bci-whispercpp.yml
+# Build-only workflow. Publishing is handled by on-merge-nx.yml.
 name: "Prebuilds (BCI Whispercpp)"
 
 on:
