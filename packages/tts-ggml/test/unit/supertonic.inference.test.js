@@ -206,7 +206,7 @@ test('Supertonic: native streaming with the LavaSR enhancer or denoiser is rejec
         files: { supertonicModel: './models/supertonic.gguf', lavasrEnhancer: './e.gguf' },
         extra: { streamChunkTokens: 50 }
       }),
-    /enhancer is not supported with supertonic native chunk streaming/
+    /enhancer\/denoiser are not supported with supertonic native chunk streaming/
   )
   t.exception(
     () =>
@@ -214,7 +214,7 @@ test('Supertonic: native streaming with the LavaSR enhancer or denoiser is rejec
         files: { supertonicModel: './models/supertonic.gguf', lavasrDenoiser: './d.gguf' },
         extra: { streamChunkTokens: 50 }
       }),
-    /denoiser is not yet supported with native chunk streaming/
+    /enhancer\/denoiser are not supported with supertonic native chunk streaming/
   )
   const batch = createMockedSupertonicModel({
     files: { supertonicModel: './models/supertonic.gguf', lavasrEnhancer: './e.gguf' },

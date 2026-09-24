@@ -140,8 +140,8 @@ void validateStreamingOptions(const SupertonicConfig& cfg) {
     throw StatusError(
         general_error::InvalidArgument,
         "SupertonicModel: the LavaSR enhancer/denoiser are not supported with "
-        "native chunk streaming (streamChunkTokens > 0). Use batch or "
-        "sentence-level streaming for enhanced output.");
+        "native chunk streaming (streamChunkTokens > 0). Use batch synthesis "
+        "or sentence-level streaming for enhanced or denoised output.");
   }
 }
 

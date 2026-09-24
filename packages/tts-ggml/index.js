@@ -1075,13 +1075,17 @@ class TTSGgml {
         this._normalizeNumbers = options.normalizeNumbers;
     }
     _assertEngineStreamingSupport() {
+        // Checked ahead of the shared denoiser guard below: Supertonic rejects both
+        // LavaSR stages for one reason (tts-cpp has only one-shot enhance /
+        // denoise, and the engine reports no native rate before synthesis).
         if (this._engineType === ENGINE_SUPERTONIC &&
-            this._enhancerGgufPath &&
+            (this._enhancerGgufPath || this._denoiserGgufPath) &&
             this._requestsChunkStreaming()) {
-            throw new Error("tts-ggml: the LavaSR enhancer is not supported with supertonic " +
-                "native chunk streaming (streamChunkTokens > 0). Use batch " +
-                "synthesis or sentence-level streaming via runStream() / " +
-                "runStreaming() / run({ streamOutput: true }) for enhanced output.");
+            throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+                "supertonic native chunk streaming (streamChunkTokens > 0). Use " +
+                "batch synthesis or sentence-level streaming via runStream() / " +
+                "runStreaming() / run({ streamOutput: true }) for enhanced or " +
+                "denoised output.");
         }
         if (this._engineType === ENGINE_AUDIO8 &&
             (this._streamChunkTokens != null ||
