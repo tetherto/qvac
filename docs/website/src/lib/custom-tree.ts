@@ -67,7 +67,7 @@ const inventoryFolder: Node = {
   index: {
     type: 'page',
     name: 'Software inventory',
-    url: '/platform/inventory',
+    url: '/ecosystem/inventory',
   },
   children: inventoryChildren(),
 };
@@ -106,7 +106,7 @@ function inventoryVersionRoots(): Node[] {
           // trailing slash back into every href it renders.
           url: `${software.path}/${version.version}`,
         },
-        children: platformChildren.map((node) =>
+        children: ecosystemChildren.map((node) =>
           node === inventoryFolder ? { ...inventoryFolder, defaultOpen: true } : node,
         ),
       }),
@@ -114,36 +114,12 @@ function inventoryVersionRoots(): Node[] {
   );
 }
 
-const platformChildren: Node[] = [
+const ecosystemChildren: Node[] = [
   {
     name: 'Overview',
-    url: '/platform',
+    url: '/ecosystem',
     type: 'page',
     icon: resolveIcon('House'),
-  },
-  {
-    type: 'separator',
-    name: 'About QVAC',
-  },
-  {
-    name: 'How it works',
-    url: '/platform/about/how-it-works',
-    type: 'page',
-    icon: resolveIcon('Cog'),
-  },
-  {
-    name: 'Vision',
-    type: 'folder',
-    icon: resolveIcon('Telescope'),
-    index: { type: 'page', name: 'Vision', url: '/platform/about/vision' },
-    children: [
-      {
-        name: 'Public launch',
-        url: '/platform/about/public-launch',
-        type: 'page',
-        icon: resolveIcon('Megaphone'),
-      },
-    ],
   },
   {
     type: 'separator',
@@ -154,16 +130,16 @@ const platformChildren: Node[] = [
     name: 'Addons',
     type: 'folder',
     icon: resolveIcon('Blocks'),
-    index: { type: 'page', name: 'Addons', url: '/platform/addons' },
+    index: { type: 'page', name: 'Addons', url: '/ecosystem/addons' },
     children: [
-      { name: 'llm-llamacpp', url: '/platform/addons/llm-llamacpp', type: 'page' },
-      { name: 'embed-llamacpp', url: '/platform/addons/embed-llamacpp', type: 'page' },
-      { name: 'translation-nmtcpp', url: '/platform/addons/translation-nmtcpp', type: 'page' },
-      { name: 'transcription-whispercpp', url: '/platform/addons/transcription-whispercpp', type: 'page' },
-      { name: 'transcription-parakeet', url: '/platform/addons/transcription-parakeet', type: 'page' },
-      { name: 'tts-ggml', url: '/platform/addons/tts-ggml', type: 'page' },
-      { name: 'audiogen-ggml', url: '/platform/addons/audiogen-ggml', type: 'page' },
-      { name: 'diffusion-cpp', url: '/platform/addons/diffusion-cpp', type: 'page' },
+      { name: 'llm-llamacpp', url: '/ecosystem/addons/llm-llamacpp', type: 'page' },
+      { name: 'embed-llamacpp', url: '/ecosystem/addons/embed-llamacpp', type: 'page' },
+      { name: 'translation-nmtcpp', url: '/ecosystem/addons/translation-nmtcpp', type: 'page' },
+      { name: 'transcription-whispercpp', url: '/ecosystem/addons/transcription-whispercpp', type: 'page' },
+      { name: 'transcription-parakeet', url: '/ecosystem/addons/transcription-parakeet', type: 'page' },
+      { name: 'tts-ggml', url: '/ecosystem/addons/tts-ggml', type: 'page' },
+      { name: 'audiogen-ggml', url: '/ecosystem/addons/audiogen-ggml', type: 'page' },
+      { name: 'diffusion-cpp', url: '/ecosystem/addons/diffusion-cpp', type: 'page' },
     ],
   },
 ];
@@ -207,10 +183,10 @@ interface Collection {
  */
 const COLLECTIONS: Collection[] = [
   {
-    name: 'Platform',
-    description: 'What QVAC is and what ships with it',
-    path: '/platform',
-    children: platformChildren,
+    name: 'Ecosystem',
+    description: 'Everything QVAC publishes, and the add-ons that extend it',
+    path: '/ecosystem',
+    children: ecosystemChildren,
   },
   {
     name: 'SDK',
@@ -218,9 +194,9 @@ const COLLECTIONS: Collection[] = [
     path: '/sdk',
   },
   {
-    name: 'Provider',
-    description: 'Run and connect the model provider server',
-    path: '/provider',
+    name: 'CLI',
+    description: 'Install the CLI and use every function of the tool',
+    path: '/cli',
   },
   {
     name: 'Resources',

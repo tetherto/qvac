@@ -1,20 +1,22 @@
 #!/usr/bin/env bun
 /**
- * Replays every URL the site used to serve against the built output, and
+ * Replays every URL the site owes a reader against the built output, and
  * fails if any of them stops resolving.
  *
- * Two sets are replayed, one per reorganization the site has been through:
+ * Two sets are replayed, one per reorganization:
  *
- *   - `tests/fixtures/pre-move-urls.json` — what the site served before the
- *     collections reorganization put a collection name in front of all 69
- *     pages. Every public URL changed at once, so each one depends on a
- *     redirect.
- *   - `tests/fixtures/pre-versioning-urls.json` — what it served before the
- *     SDK was cut into documentation lines. Almost nothing moved: the cut
- *     keeps the version-less paths answering from the current line, so these
- *     URLs are expected to resolve on their own, and the fixture is here to
- *     prove that they still do. The exceptions are the sixteen retired
- *     patch-series archives, which left the published set and redirect.
+ *   - `tests/fixtures/pre-move-urls.json` — what production serves today. The
+ *     collections reorganization puts a collection name in front of all 69
+ *     pages, so every public URL changes at once and each one depends on a
+ *     redirect. This is the only set readers, search engines, and external
+ *     links actually point at.
+ *   - `tests/fixtures/pre-versioning-urls.json` — the same set as the
+ *     collections reorganization leaves it, replayed before the collections
+ *     are cut into documentation lines. Almost nothing moves: the cut keeps
+ *     the version-less paths answering from the current line, so these URLs
+ *     are expected to resolve on their own, and the fixture is here to prove
+ *     that they still do. The exception is the sixteen retired patch-series
+ *     archives, which leave the published set and redirect.
  *
  * A missing or mis-ordered rule is invisible in the diff and only shows up as
  * a 404 in production, on a URL search engines and external links already

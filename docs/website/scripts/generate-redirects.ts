@@ -50,7 +50,12 @@ function asMarkdown(url: string): string {
 }
 
 export function buildRedirectLines(moves: Move[]): string[] {
-  const byUrl = [...moves].sort((a, b) => a.fromUrl.localeCompare(b.fromUrl));
+  const byUrl = [...moves]
+    // A page whose URL the move left alone needs no rule, and a rule whose
+    // source is the page itself would be a loop the CDN answers before the
+    // page does.
+    .filter((move) => move.fromUrl !== move.toUrl)
+    .sort((a, b) => a.fromUrl.localeCompare(b.fromUrl));
   const pairs: Array<[string, string]> = [];
   for (const move of byUrl) {
     pairs.push([asDirectory(move.fromUrl), asDirectory(move.toUrl)]);
@@ -67,14 +72,15 @@ export function buildRedirectLines(moves: Move[]): string[] {
 }
 
 function buildBlock(moves: Move[]): string {
-  const pages = moves.length;
+  const lines = buildRedirectLines(moves);
+  const pages = lines.length / 2;
   return [
     BEGIN_MARKER,
     "#",
     `# One 301 per moved page (${pages}), then one per Markdown twin (${pages}).`,
     "# Regenerate with: bun run scripts/generate-redirects.ts",
     "",
-    ...buildRedirectLines(moves),
+    ...lines,
     "",
     END_MARKER,
   ].join("\n");
@@ -110,13 +116,16 @@ async function main() {
         "public/_redirects is stale — run `bun run scripts/generate-redirects.ts`",
       );
     }
-    console.log(`_redirects is up to date (${moves.length * 2} rules)`);
+    console.log(
+      `_redirects is up to date (${buildRedirectLines(moves).length} rules)`,
+    );
     return;
   }
 
   await fs.writeFile(REDIRECTS_PATH, updated, "utf-8");
+  const pages = buildRedirectLines(moves).length / 2;
   console.log(
-    `Wrote ${moves.length * 2} rules (${moves.length} pages + ${moves.length} Markdown twins) to public/_redirects`,
+    `Wrote ${pages * 2} rules (${pages} pages + ${pages} Markdown twins) to public/_redirects`,
   );
 }
 

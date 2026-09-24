@@ -100,7 +100,7 @@ export function classifyUrl(url: string, collections: Collection[]): UrlClass {
  * Inside its own collection an artifact may name only its own line. Another
  * versioned collection may be named, but only at its current line: the lines
  * of two collections are cut independently, so nothing pins one release of the
- * SDK to one release of the Provider. Everything unversioned is free.
+ * SDK to one release of the CLI. Everything unversioned is free.
  *
  * A `scope` of null is an artifact above the lines — the root router, a
  * collection resolver, the site corpus. Naming every line is what those are

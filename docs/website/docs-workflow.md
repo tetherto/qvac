@@ -48,7 +48,7 @@ Content falls into two categories:
 
 | Category | Path | Committed? |
 |---|---|---|
-| Manual content (guides, tutorials, addons) | one collection folder per top level: `content/docs/platform/`, `content/docs/sdk/`, `content/docs/provider/`, `content/docs/resources/` | Yes |
+| Manual content (guides, tutorials, addons) | one collection folder per top level: `content/docs/ecosystem/`, `content/docs/sdk/`, `content/docs/cli/`, `content/docs/resources/` | Yes |
 | SDK API summary (generated) | `content/docs/sdk/<current line>/reference/api.mdx` | Yes (committed once per minor release) |
 | SDK release notes (generated) | `content/docs/sdk/<current line>/reference/release-notes.mdx` | Yes (committed on every minor and patch release) |
 

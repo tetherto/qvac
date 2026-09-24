@@ -176,7 +176,7 @@ export const DEFAULT_FEATURES: Feature[] = [
     description:
       'Launch an HTTP server that exposes an OpenAI-compatible API for integration with the broader AI ecosystem.',
     angle: 225,
-    href: '/provider/http-server',
+    href: '/cli/http-server',
   },
   {
     id: 'unified',

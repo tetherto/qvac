@@ -13,7 +13,7 @@
  *   - the current line of every other versioned collection, mirroring how a
  *     line's pages and artifacts may reference another collection — the two
  *     are cut independently, so nothing pins one release of the SDK to one
- *     release of the Provider;
+ *     release of the CLI;
  *   - every collection that publishes no lines.
  *
  * Outside any line — Platform, Resources, the site root — the reader has no

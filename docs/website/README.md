@@ -23,7 +23,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3001/platform, not the site root. Every page lives under a collection, so `/` has no page of its own: in production the CDN redirects it to the Platform overview, and the dev server never reads `public/_redirects`, so there it just 404s.
+Open http://localhost:3001/ecosystem, not the site root. Every page lives under a collection, so `/` has no page of its own: in production the CDN redirects it to the Ecosystem overview, and the dev server never reads `public/_redirects`, so there it just 404s.
 
 ## Build
 
@@ -55,7 +55,7 @@ npm run serve
 
 ## Cutting a documentation line
 
-A versioned collection — SDK, Provider — publishes two lines: the current one,
+A versioned collection — SDK, CLI — publishes two lines: the current one,
 whose folder is a Fumadocs group so its pages answer at the version-less paths,
 and the previous one, whose folder is plain so its pages carry the version. Cut
 the next line as soon as a release goes live, not when the next one is being
@@ -103,7 +103,7 @@ patch-shaped folder name, a line numbered above the group, a URL that stopped
 resolving, and an artifact that reaches into another line.
 
 Documenting an inventory release is the same shape one level down: add
-`content/docs/platform/inventory/<pkg>/v<major>.<minor>/index.md` with the
+`content/docs/ecosystem/inventory/<pkg>/v<major>.<minor>/index.md` with the
 README as released, add the row to that package's index, add the manifest entry.
 The `:version` rules in `public/_redirects` already cover the new folder.
 

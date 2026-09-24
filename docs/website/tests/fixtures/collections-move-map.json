@@ -1,122 +1,108 @@
 [
   {
-    "collection": "platform",
+    "collection": "sdk",
     "from": "about/how-it-works.mdx",
-    "to": "platform/about/how-it-works.mdx",
+    "to": "sdk/how-it-works.mdx",
     "fromUrl": "/about/how-it-works",
-    "toUrl": "/platform/about/how-it-works"
+    "toUrl": "/sdk/how-it-works"
   },
   {
-    "collection": "platform",
-    "from": "about/public-launch.mdx",
-    "to": "platform/about/public-launch.mdx",
-    "fromUrl": "/about/public-launch",
-    "toUrl": "/platform/about/public-launch"
-  },
-  {
-    "collection": "platform",
-    "from": "about/vision.mdx",
-    "to": "platform/about/vision.mdx",
-    "fromUrl": "/about/vision",
-    "toUrl": "/platform/about/vision"
-  },
-  {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/audiogen-ggml/index.mdx",
-    "to": "platform/addons/audiogen-ggml/index.mdx",
+    "to": "ecosystem/addons/audiogen-ggml/index.mdx",
     "fromUrl": "/addons/audiogen-ggml",
-    "toUrl": "/platform/addons/audiogen-ggml"
+    "toUrl": "/ecosystem/addons/audiogen-ggml"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/diffusion-cpp/index.mdx",
-    "to": "platform/addons/diffusion-cpp/index.mdx",
+    "to": "ecosystem/addons/diffusion-cpp/index.mdx",
     "fromUrl": "/addons/diffusion-cpp",
-    "toUrl": "/platform/addons/diffusion-cpp"
+    "toUrl": "/ecosystem/addons/diffusion-cpp"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/embed-llamacpp/index.mdx",
-    "to": "platform/addons/embed-llamacpp/index.mdx",
+    "to": "ecosystem/addons/embed-llamacpp/index.mdx",
     "fromUrl": "/addons/embed-llamacpp",
-    "toUrl": "/platform/addons/embed-llamacpp"
+    "toUrl": "/ecosystem/addons/embed-llamacpp"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/index.mdx",
-    "to": "platform/addons/index.mdx",
+    "to": "ecosystem/addons/index.mdx",
     "fromUrl": "/addons",
-    "toUrl": "/platform/addons"
+    "toUrl": "/ecosystem/addons"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/llm-llamacpp/index.mdx",
-    "to": "platform/addons/llm-llamacpp/index.mdx",
+    "to": "ecosystem/addons/llm-llamacpp/index.mdx",
     "fromUrl": "/addons/llm-llamacpp",
-    "toUrl": "/platform/addons/llm-llamacpp"
+    "toUrl": "/ecosystem/addons/llm-llamacpp"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/ocr-onnx/index.mdx",
-    "to": "platform/addons/index.mdx",
+    "to": "ecosystem/addons/index.mdx",
     "fromUrl": "/addons/ocr-onnx",
-    "toUrl": "/platform/addons"
+    "toUrl": "/ecosystem/addons"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/transcription-parakeet/index.mdx",
-    "to": "platform/addons/transcription-parakeet/index.mdx",
+    "to": "ecosystem/addons/transcription-parakeet/index.mdx",
     "fromUrl": "/addons/transcription-parakeet",
-    "toUrl": "/platform/addons/transcription-parakeet"
+    "toUrl": "/ecosystem/addons/transcription-parakeet"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/transcription-whispercpp/index.mdx",
-    "to": "platform/addons/transcription-whispercpp/index.mdx",
+    "to": "ecosystem/addons/transcription-whispercpp/index.mdx",
     "fromUrl": "/addons/transcription-whispercpp",
-    "toUrl": "/platform/addons/transcription-whispercpp"
+    "toUrl": "/ecosystem/addons/transcription-whispercpp"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/translation-nmtcpp/index.mdx",
-    "to": "platform/addons/translation-nmtcpp/index.mdx",
+    "to": "ecosystem/addons/translation-nmtcpp/index.mdx",
     "fromUrl": "/addons/translation-nmtcpp",
-    "toUrl": "/platform/addons/translation-nmtcpp"
+    "toUrl": "/ecosystem/addons/translation-nmtcpp"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "addons/tts-ggml/index.mdx",
-    "to": "platform/addons/tts-ggml/index.mdx",
+    "to": "ecosystem/addons/tts-ggml/index.mdx",
     "fromUrl": "/addons/tts-ggml",
-    "toUrl": "/platform/addons/tts-ggml"
+    "toUrl": "/ecosystem/addons/tts-ggml"
   },
   {
-    "collection": "platform",
+    "collection": "ecosystem",
     "from": "index.mdx",
-    "to": "platform/index.mdx",
+    "to": "ecosystem/index.mdx",
     "fromUrl": "/",
-    "toUrl": "/platform"
+    "toUrl": "/ecosystem"
   },
   {
-    "collection": "provider",
+    "collection": "cli",
     "from": "cli/http-server/connection.mdx",
-    "to": "provider/http-server/connection.mdx",
+    "to": "cli/http-server/connection.mdx",
     "fromUrl": "/cli/http-server/connection",
-    "toUrl": "/provider/http-server/connection"
+    "toUrl": "/cli/http-server/connection"
   },
   {
-    "collection": "provider",
+    "collection": "cli",
     "from": "cli/http-server/index.mdx",
-    "to": "provider/http-server/index.mdx",
+    "to": "cli/http-server/index.mdx",
     "fromUrl": "/cli/http-server",
-    "toUrl": "/provider/http-server"
+    "toUrl": "/cli/http-server"
   },
   {
-    "collection": "provider",
+    "collection": "cli",
     "from": "cli/http-server/integration.mdx",
-    "to": "provider/http-server/integration.mdx",
+    "to": "cli/http-server/integration.mdx",
     "fromUrl": "/cli/http-server/integration",
-    "toUrl": "/provider/http-server/integration"
+    "toUrl": "/cli/http-server/integration"
   },
   {
     "collection": "sdk",
@@ -245,11 +231,11 @@
     "toUrl": "/sdk/ai-capabilities/world-simulation"
   },
   {
-    "collection": "sdk",
+    "collection": "cli",
     "from": "cli/index.mdx",
-    "to": "sdk/cli/index.mdx",
+    "to": "cli/index.mdx",
     "fromUrl": "/cli",
-    "toUrl": "/sdk/cli"
+    "toUrl": "/cli"
   },
   {
     "collection": "sdk",

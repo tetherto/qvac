@@ -65,18 +65,18 @@ describe('contentPathsOfLink', () => {
   })
 
   it('resolves a link arriving from another collection in the current line', () => {
-    expect(contentPathsOfLink('/sdk/quickstart', 'platform/index.mdx')[0])
+    expect(contentPathsOfLink('/sdk/quickstart', 'ecosystem/index.mdx')[0])
       .toBe('sdk/(v0.19)/quickstart')
   })
 
   it('leaves a link that names its version alone', () => {
-    expect(contentPathsOfLink('/sdk/v0.18/quickstart', 'platform/index.mdx'))
+    expect(contentPathsOfLink('/sdk/v0.18/quickstart', 'ecosystem/index.mdx'))
       .toEqual(['sdk/v0.18/quickstart'])
   })
 
   it('leaves a link to an unversioned collection alone', () => {
-    expect(contentPathsOfLink('/platform/addons', 'sdk/v0.18/index.mdx'))
-      .toEqual(['platform/addons'])
+    expect(contentPathsOfLink('/ecosystem/addons', 'sdk/v0.18/index.mdx'))
+      .toEqual(['ecosystem/addons'])
   })
 
   it('points a link at a page missing from the line, so the check fails', () => {

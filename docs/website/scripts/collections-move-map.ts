@@ -45,7 +45,7 @@ const FIXTURE_PATH = path.join(
   "collections-move-map.json",
 );
 
-export type Collection = "platform" | "sdk" | "provider" | "resources";
+export type Collection = "ecosystem" | "sdk" | "cli" | "resources";
 
 export interface Move {
   collection: Collection;
@@ -64,35 +64,40 @@ export interface Move {
  * anything unclaimed belongs to the SDK, which is the collection that
  * inherits every page no other one asks for.
  *
- * `cli` is split: `cli/http-server/**` documents the provider server, while
- * `cli/index.mdx` documents the SDK's own CLI, so the more specific prefix is
- * listed first.
+ * The whole `cli/` tree — the CLI page and the HTTP server pages under it —
+ * becomes the CLI collection, which is where it already sat before the move.
  */
 const COLLECTION_OF: Array<{ prefix: string; collection: Collection }> = [
-  { prefix: "index.mdx", collection: "platform" },
-  { prefix: "about/", collection: "platform" },
-  { prefix: "addons/", collection: "platform" },
-  { prefix: "cli/http-server/", collection: "provider" },
+  { prefix: "index.mdx", collection: "ecosystem" },
+  { prefix: "addons/", collection: "ecosystem" },
+  { prefix: "cli/", collection: "cli" },
 ];
 
 /**
- * The two pages that become their collection's landing page. Everything else
- * keeps the path it has today, under its collection.
+ * Pages whose destination the prefix rule cannot derive: the two that become
+ * a collection's landing page, and the one that changes collection outright —
+ * `how-it-works` documents the SDK, so it moves into the SDK and drops the
+ * `about/` segment on the way. Everything else keeps the path it has today,
+ * under its collection.
  */
-const OVERVIEWS: Record<string, string> = {
-  "index.mdx": "platform/index.mdx",
+const EXPLICIT_DESTINATION: Record<string, string> = {
+  "index.mdx": "ecosystem/index.mdx",
   "introduction.mdx": "sdk/index.mdx",
+  "about/how-it-works.mdx": "sdk/how-it-works.mdx",
 };
 
 /**
- * Provider drops the `cli/` prefix its pages carry today: the CLI page itself
- * stays in the SDK, so `/provider/cli/http-server` would name a tool that
- * lives in another collection.
+ * Pages that leave the published set instead of moving into a collection.
+ * They document no distributable, so they have no destination to redirect
+ * to; `public/_redirects` sends their URLs to the Ecosystem overview by hand.
  */
-const PROVIDER_PREFIX_REWRITE = {
-  from: "cli/http-server/",
-  to: "provider/http-server/",
-};
+const RETIRED = new Set(["about/vision.mdx", "about/public-launch.mdx"]);
+
+/**
+ * The CLI collection is the one folder that already carries its collection's
+ * name, so its pages keep the path they have rather than gaining a prefix.
+ */
+const SELF_PREFIXED = "cli/";
 
 export function collectionOf(contentPath: string): Collection {
   for (const { prefix, collection } of COLLECTION_OF) {
@@ -104,15 +109,10 @@ export function collectionOf(contentPath: string): Collection {
 }
 
 export function destinationOf(contentPath: string): string {
-  const overview = OVERVIEWS[contentPath];
-  if (overview) return overview;
+  const explicit = EXPLICIT_DESTINATION[contentPath];
+  if (explicit) return explicit;
 
-  if (contentPath.startsWith(PROVIDER_PREFIX_REWRITE.from)) {
-    return (
-      PROVIDER_PREFIX_REWRITE.to +
-      contentPath.slice(PROVIDER_PREFIX_REWRITE.from.length)
-    );
-  }
+  if (contentPath.startsWith(SELF_PREFIXED)) return contentPath;
 
   return `${collectionOf(contentPath)}/${contentPath}`;
 }
@@ -148,13 +148,12 @@ async function walkMdx(dir: string, base = dir): Promise<string[]> {
  * describes where pages came from — use `loadMoveMap` instead.
  */
 export async function buildMoveMap(): Promise<Move[]> {
-  const files = (await walkMdx(CONTENT_DIR)).sort();
-  const collections = new Set<string>([
-    "platform",
-    "sdk",
-    "provider",
-    "resources",
-  ]);
+  const files = (await walkMdx(CONTENT_DIR))
+    .filter((file) => !RETIRED.has(file))
+    .sort();
+  // `cli` is absent on purpose: a `cli/` folder is what the pre-move tree
+  // looks like, not evidence that the move already ran.
+  const collections = new Set<string>(["ecosystem", "sdk", "resources"]);
 
   const alreadyMoved = files.filter((file) =>
     collections.has(file.split("/")[0]!),

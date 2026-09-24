@@ -220,7 +220,7 @@ describe('sidebar-consistency', () => {
 
       expect(
         rendered.filter(
-          (url) => url.startsWith('/platform/inventory/') && /\/v\d+\.\d+$/.test(url),
+          (url) => url.startsWith('/ecosystem/inventory/') && /\/v\d+\.\d+$/.test(url),
         ),
       ).toEqual([])
     })

@@ -25,7 +25,7 @@ const COLLECTIONS: Collection[] = [
     ],
   },
   {
-    path: '/provider',
+    path: '/cli',
     package: '@qvac/cli',
     lines: [
       { version: 'v0.9', current: true },
@@ -37,7 +37,7 @@ const COLLECTIONS: Collection[] = [
 const V016 = { collection: '/sdk', version: 'v0.16' };
 const V017 = { collection: '/sdk', version: 'v0.17' };
 
-const PREFIXES = ['/sdk', '/provider', '/platform', '/resources', '/llms.txt'];
+const PREFIXES = ['/sdk', '/cli', '/ecosystem', '/resources', '/llms.txt'];
 
 describe('classifyUrl', () => {
   it('reads a version segment as the line it names', () => {
@@ -57,7 +57,7 @@ describe('classifyUrl', () => {
   });
 
   it('leaves a collection that publishes no lines unversioned', () => {
-    expect(classifyUrl('/platform/about/vision', COLLECTIONS)).toEqual({
+    expect(classifyUrl('/ecosystem/addons', COLLECTIONS)).toEqual({
       kind: 'unversioned',
     });
   });
@@ -94,31 +94,31 @@ describe('leakReason', () => {
   });
 
   it('accepts an unversioned page from any line', () => {
-    expect(leakReason('/platform/about/vision', V016, COLLECTIONS)).toBeNull();
+    expect(leakReason('/ecosystem/addons', V016, COLLECTIONS)).toBeNull();
     expect(leakReason('/resources/corpus-protocol', V016, COLLECTIONS)).toBeNull();
   });
 
   it('accepts another versioned collection at its current line', () => {
-    expect(leakReason('/provider/http-server', V016, COLLECTIONS)).toBeNull();
+    expect(leakReason('/cli/http-server', V016, COLLECTIONS)).toBeNull();
   });
 
   it('rejects another versioned collection at an older line', () => {
-    expect(leakReason('/provider/v0.8/http-server', V016, COLLECTIONS)).toContain(
+    expect(leakReason('/cli/v0.8/http-server', V016, COLLECTIONS)).toContain(
       'not that collection',
     );
   });
 
   it('lets an artifact above the lines name every line', () => {
     expect(leakReason('/sdk/v0.16/llms-full.txt', null, COLLECTIONS)).toBeNull();
-    expect(leakReason('/provider/v0.8/', null, COLLECTIONS)).toBeNull();
+    expect(leakReason('/cli/v0.8/', null, COLLECTIONS)).toBeNull();
   });
 });
 
 describe('extractUrls', () => {
   it('takes a Markdown link and a bare path', () => {
-    const text = 'See [quickstart](/sdk/quickstart) or /platform/addons for more.';
+    const text = 'See [quickstart](/sdk/quickstart) or /ecosystem/addons for more.';
     expect(extractUrls(text, PREFIXES).sort()).toEqual([
-      '/platform/addons',
+      '/ecosystem/addons',
       '/sdk/quickstart',
     ]);
   });
@@ -152,7 +152,7 @@ describe('the manifest the gate reads', () => {
     const collections = collectionsFromManifest();
     expect(collections.map((collection) => collection.path)).toEqual([
       '/sdk',
-      '/provider',
+      '/cli',
     ]);
     for (const collection of collections) {
       expect(collection.lines.filter((line) => line.current)).toHaveLength(1);

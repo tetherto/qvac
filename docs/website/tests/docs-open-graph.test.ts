@@ -43,7 +43,7 @@ describe('isReleaseNotesPage', () => {
   });
 
   it('does not match the segment outside its section', () => {
-    expect(isReleaseNotesPage(page('/platform/release-notes'))).toBe(false);
+    expect(isReleaseNotesPage(page('/ecosystem/release-notes'))).toBe(false);
   });
 });
 

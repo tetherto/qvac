@@ -46,9 +46,9 @@ export interface DocumentedSoftware {
 }
 
 /**
- * The SDK collection tracks `@qvac/sdk` and the Provider collection tracks
- * `@qvac/cli`, which implements the OpenAI-compatible HTTP server it
- * documents.
+ * The SDK collection tracks `@qvac/sdk` and the CLI collection tracks
+ * `@qvac/cli`. Each is named after the package its lines follow, so the thing
+ * being versioned and the thing being named are the same.
  *
  * The inventory publishes the two most recent releases of each package. The
  * Python client carries no version of its own — `pyproject.toml` stamps it
@@ -67,7 +67,7 @@ export const DOCUMENTED_SOFTWARE = [
   {
     package: '@qvac/cli',
     kind: 'collection',
-    path: '/provider',
+    path: '/cli',
     versions: [
       { version: 'v0.13', folder: '(v0.13)' },
       { version: 'v0.12', folder: 'v0.12' },
@@ -76,7 +76,7 @@ export const DOCUMENTED_SOFTWARE = [
   {
     package: '@qvac/sdk',
     kind: 'package',
-    path: '/platform/inventory/sdk',
+    path: '/ecosystem/inventory/sdk',
     versions: [
       { version: 'v0.19', folder: 'v0.19' },
       { version: 'v0.18', folder: 'v0.18' },
@@ -85,7 +85,7 @@ export const DOCUMENTED_SOFTWARE = [
   {
     package: 'tetherto-qvac-sdk',
     kind: 'package',
-    path: '/platform/inventory/sdk-python',
+    path: '/ecosystem/inventory/sdk-python',
     versions: [
       { version: 'v0.19', folder: 'v0.19' },
       { version: 'v0.18', folder: 'v0.18' },
@@ -94,7 +94,7 @@ export const DOCUMENTED_SOFTWARE = [
   {
     package: '@qvac/cli',
     kind: 'package',
-    path: '/platform/inventory/cli',
+    path: '/ecosystem/inventory/cli',
     versions: [
       { version: 'v0.13', folder: 'v0.13' },
       { version: 'v0.12', folder: 'v0.12' },
@@ -103,7 +103,7 @@ export const DOCUMENTED_SOFTWARE = [
   {
     package: '@qvac/ai-sdk-provider',
     kind: 'package',
-    path: '/platform/inventory/ai-sdk-provider',
+    path: '/ecosystem/inventory/ai-sdk-provider',
     versions: [
       { version: 'v0.7', folder: 'v0.7' },
       { version: 'v0.6', folder: 'v0.6' },

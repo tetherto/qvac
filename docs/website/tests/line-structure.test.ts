@@ -34,7 +34,7 @@ const sdk: DocumentedSoftware = {
 const cliPackage: DocumentedSoftware = {
   package: '@qvac/cli',
   kind: 'package',
-  path: '/platform/inventory/cli',
+  path: '/ecosystem/inventory/cli',
   versions: [
     { version: 'v0.9', folder: 'v0.9' },
     { version: 'v0.8', folder: 'v0.8' },

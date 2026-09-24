@@ -7,7 +7,7 @@ source of truth for the framework, build, and deployment behavior.
 - Keep source changes under this package and documentation content under
   `content/`, following the existing structure.
 - Create every page inside a collection. Each top-level folder under
-  `content/docs/` — `platform`, `sdk`, `provider`, `resources` — is one
+  `content/docs/` — `ecosystem`, `sdk`, `cli`, `resources` — is one
   collection and owns the URL namespace formed by its name, so no `.mdx` file
   sits directly under `content/docs/`.
 - Rewrite pages in place when guidance changes. Remove superseded instructions

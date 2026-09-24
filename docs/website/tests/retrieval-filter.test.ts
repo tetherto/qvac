@@ -22,15 +22,15 @@ import {
 const SDK = documentedSoftwareOfKind('collection').find(
   (software) => software.path === '/sdk',
 )!;
-const PROVIDER = documentedSoftwareOfKind('collection').find(
-  (software) => software.path === '/provider',
+const CLI = documentedSoftwareOfKind('collection').find(
+  (software) => software.path === '/cli',
 )!;
 
 const SDK_CURRENT = versionOfFolder(getCurrentLine(SDK)!.folder);
 const SDK_OLDER = SDK.versions.find(
   (version) => version.version !== SDK_CURRENT,
 )!.version;
-const PROVIDER_CURRENT = versionOfFolder(getCurrentLine(PROVIDER)!.folder);
+const CLI_CURRENT = versionOfFolder(getCurrentLine(CLI)!.folder);
 
 describe('pageAttributes', () => {
   it('states the line of a page that carries no version in its URL', () => {
@@ -52,8 +52,8 @@ describe('pageAttributes', () => {
   });
 
   it('gives an unversioned page a collection and no line', () => {
-    expect(pageAttributes('/platform/about/vision')).toEqual({
-      collection: 'Platform',
+    expect(pageAttributes('/ecosystem/addons')).toEqual({
+      collection: 'Ecosystem',
     });
   });
 
@@ -79,15 +79,15 @@ describe('allowedLines', () => {
   it('takes the current line of every other versioned collection', () => {
     const allowed = allowedLines(`/sdk/${SDK_OLDER}/quickstart`);
     expect(allowed).toContainEqual({
-      collection: 'Provider',
-      line: PROVIDER_CURRENT,
+      collection: 'CLI',
+      line: CLI_CURRENT,
     });
   });
 
   it('takes every current line when the reader is outside them all', () => {
-    expect(allowedLines('/platform/about/vision')).toEqual([
+    expect(allowedLines('/ecosystem/addons')).toEqual([
       { collection: 'SDK', line: SDK_CURRENT },
-      { collection: 'Provider', line: PROVIDER_CURRENT },
+      { collection: 'CLI', line: CLI_CURRENT },
     ]);
   });
 
@@ -97,7 +97,7 @@ describe('allowedLines', () => {
       '/sdk',
       `/sdk/${SDK_OLDER}`,
       `/sdk/${SDK_OLDER}/reference/api`,
-      '/provider/http-server',
+      '/cli/http-server',
       '/resources/corpus-protocol',
     ]) {
       const collections = allowedLines(pathname).map((entry) => entry.collection);
@@ -117,7 +117,7 @@ describe('retrievalFilter', () => {
   it('admits the collections that publish no lines', () => {
     const filter = retrievalFilter(`/sdk/${SDK_OLDER}/quickstart`);
     expect(filter.attributes.$or).toContainEqual({
-      collection: { $in: ['Platform', 'Resources'] },
+      collection: { $in: ['Ecosystem', 'Resources'] },
     });
   });
 
@@ -132,7 +132,7 @@ describe('retrievalFilter', () => {
   });
 
   it('falls back to the current lines outside any line', () => {
-    expect(retrievalFilter('/platform')).toEqual(retrievalFilter('/'));
+    expect(retrievalFilter('/ecosystem')).toEqual(retrievalFilter('/'));
   });
 });
 
@@ -145,6 +145,6 @@ describe('lineLabelOf', () => {
 
   it('leaves the current line and unversioned pages unlabelled', () => {
     expect(lineLabelOf('https://docs.qvac.tether.io/sdk/quickstart/')).toBeNull();
-    expect(lineLabelOf('/platform/about/vision')).toBeNull();
+    expect(lineLabelOf('/ecosystem/addons')).toBeNull();
   });
 });

@@ -106,7 +106,7 @@ describe('switching lines', () => {
   })
 
   it('offers nothing outside a versioned collection', () => {
-    expect(collectionOfPath([synthetic], '/platform/architecture')).toBeNull()
+    expect(collectionOfPath([synthetic], '/ecosystem/architecture')).toBeNull()
   })
 })
 

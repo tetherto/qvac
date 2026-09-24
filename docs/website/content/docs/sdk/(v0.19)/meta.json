@@ -5,11 +5,11 @@
   "pages": [
     "---Getting started---",
     "index",
+    "how-it-works",
     "system-requirements",
     "js-ts-sdk",
     "python-sdk",
     "configuration",
-    "cli",
     "---Models---",
     "...models",
     "---AI capabilities---",
