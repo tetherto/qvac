@@ -1097,6 +1097,7 @@ LlamaFitExecution invokeLlamaFit(
       execution.buftOverrides.data(),
       margins.data(),
       nCtxMin,
+      nullptr,
       // prefetch_weights_auto. False keeps the projection identical to what
       // this addon reported before qvac-fabric 10549.0.0: fabric gates its
       // automatic weight prefetch on this flag, so false leaves an explicit

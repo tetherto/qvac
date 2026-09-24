@@ -1567,6 +1567,7 @@ int main() {
                                      llama_model_tensor_buft_override*,
                                      size_t*,
                                      uint32_t,
+                                     const common_fit_extra_model*,
                                      bool,
                                      ggml_log_level) {
                                    ++completionFitCalls;
@@ -1607,6 +1608,7 @@ int main() {
                                     llama_model_tensor_buft_override*,
                                     size_t*,
                                     uint32_t,
+                                    const common_fit_extra_model*,
                                     bool,
                                     ggml_log_level) {
                                   ++embeddingFitCalls;
@@ -1640,6 +1642,7 @@ int main() {
                   llama_model_tensor_buft_override*,
                   size_t*,
                   uint32_t,
+                  const common_fit_extra_model*,
                   bool,
                   ggml_log_level) {
                 ++unsupportedFitCalls;
