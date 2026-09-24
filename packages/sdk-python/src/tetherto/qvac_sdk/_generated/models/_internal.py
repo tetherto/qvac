@@ -4794,6 +4794,158 @@ class LoadedModelInfoToolDialect(Enum):
     dsml = "dsml"
 
 
+class NativeProbeFitVerdict(Enum):
+    fit = "fit"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class NativeProbeFitPlan(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    n_ctx: Annotated[
+        int,
+        Field(
+            alias="nCtx",
+            description="Context the probe resolved for this load, in tokens.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_layers: Annotated[
+        int,
+        Field(
+            alias="nGpuLayers",
+            description="Layers the probe would offload.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_devices: Annotated[
+        int,
+        Field(
+            alias="nGpuDevices",
+            description="GPU devices the offload would span.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class NativeProbeFitProjection(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    device_name: Annotated[
+        str | None,
+        Field(
+            alias="deviceName", description="Device the projection was made against."
+        ),
+    ] = None
+    device_bytes: Annotated[
+        float | None,
+        Field(
+            alias="deviceBytes",
+            description="Peak the load would place on the device, under the workload the probe assumed.",
+        ),
+    ] = None
+    host_bytes: Annotated[
+        float | None,
+        Field(alias="hostBytes", description="Peak the load would place in host RAM."),
+    ] = None
+    weights_bytes: Annotated[
+        float | None,
+        Field(alias="weightsBytes", description="Model weights, within `deviceBytes`."),
+    ] = None
+    context_bytes: Annotated[
+        float | None,
+        Field(
+            alias="contextBytes",
+            description="Context, KV cache and decoder state, within `deviceBytes`.",
+        ),
+    ] = None
+    compute_bytes: Annotated[
+        float | None,
+        Field(
+            alias="computeBytes",
+            description="Compute buffers and graph arenas, within `deviceBytes`.",
+        ),
+    ] = None
+    device_free_bytes: Annotated[
+        float | None,
+        Field(
+            alias="deviceFreeBytes",
+            description="Device memory free when the probe ran.",
+        ),
+    ] = None
+    device_total_bytes: Annotated[
+        float | None,
+        Field(alias="deviceTotalBytes", description="Device memory installed."),
+    ] = None
+    report: Annotated[
+        str | None,
+        Field(
+            description="The engine's own per-module memory table, suitable for a log line."
+        ),
+    ] = None
+
+
+class NativeProbeFit(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    verdict: Annotated[
+        NativeProbeFitVerdict,
+        Field(
+            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.",
+            title="NativeProbeFitVerdict",
+        ),
+    ]
+    basis: Annotated[
+        Literal["native-probe"],
+        Field(
+            description="Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
+        ),
+    ] = "native-probe"
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Engine package whose fitter produced this outcome. Absent when none ran."
+        ),
+    ] = None
+    estimator_version: Annotated[
+        str,
+        Field(
+            alias="estimatorVersion",
+            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against what the system reports free, less the same 1024 MiB, counting device memory only where it comes out of system RAM.",
+        ),
+    ]
+    reason: Annotated[
+        str,
+        Field(
+            description="Machine-readable reason for the verdict. Never parsed out of log text."
+        ),
+    ]
+    message: Annotated[
+        str | None, Field(description="Human-readable detail, when the reason has any.")
+    ] = None
+    plan: Annotated[
+        NativeProbeFitPlan | None,
+        Field(
+            description="Placement the probe projected. Present only on a `fit` verdict.",
+            title="NativeProbeFitPlan",
+        ),
+    ] = None
+    projection: Annotated[
+        NativeProbeFitProjection | None,
+        Field(
+            description="What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
+            title="NativeProbeFitProjection",
+        ),
+    ] = None
+
+
 class LoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4809,6 +4961,14 @@ class LoadedModelInfo(GeneratedBaseModel):
     tool_dialect: Annotated[
         LoadedModelInfoToolDialect | None,
         Field(alias="toolDialect", title="LoadedModelInfoToolDialect"),
+    ] = None
+    fit_probe: Annotated[
+        NativeProbeFit | None,
+        Field(
+            alias="fitProbe",
+            description="Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.",
+            title="NativeProbeFit",
+        ),
     ] = None
 
 

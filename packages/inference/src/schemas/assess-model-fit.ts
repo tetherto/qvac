@@ -225,8 +225,8 @@ export const assessModelFitResultSchema = z.object({
  * The other fit question, kept in this file on purpose: `assessModelFit` above
  * answers "should I download this?" from calibrated coefficients and a checksum,
  * while the native probe answers "will the load I am about to run fit?" by
- * reading the GGUF on disk in a disposable child. Two evidence classes, so two
- * verdict vocabularies:
+ * handing the model file and the resolved settings to the fitter of the engine
+ * that would run it. Two evidence classes, so two verdict vocabularies:
  *
  * - `likely-fits` / `likely-too-large` hedge because a formula is an estimate.
  * - `fit` / `does-not-fit` do not, because the probe measured this build of this
@@ -249,6 +249,12 @@ export const nativeProbePlanSchema = z.object({
  * all measure the same things: the diffusion fitter answers with a placement
  * and a per-module table rather than a total, so it fills `report` alone.
  *
+ * `weightsBytes`, `contextBytes` and `computeBytes` divide `deviceBytes` where
+ * the engine separates them, and are absent together where it reports only a
+ * total. They are summed across devices, as `deviceBytes` is, so a load spread
+ * over more than one device is described by its totals and `deviceName` names
+ * the first.
+ *
  * `deviceFreeBytes` is the backend's own gauge. A device sharing the host pool,
  * as Apple silicon and Adreno/Mali do, reports what it could address rather
  * than what the machine would give back, so it is an upper bound there.
@@ -260,6 +266,15 @@ export const nativeProbeProjectionSchema = z.object({
     .optional()
     .describe('Peak the load would place on the device, under the workload the probe assumed.'),
   hostBytes: z.number().optional().describe('Peak the load would place in host RAM.'),
+  weightsBytes: z.number().optional().describe('Model weights, within `deviceBytes`.'),
+  contextBytes: z
+    .number()
+    .optional()
+    .describe('Context, KV cache and decoder state, within `deviceBytes`.'),
+  computeBytes: z
+    .number()
+    .optional()
+    .describe('Compute buffers and graph arenas, within `deviceBytes`.'),
   deviceFreeBytes: z.number().optional().describe('Device memory free when the probe ran.'),
   deviceTotalBytes: z.number().optional().describe('Device memory installed.'),
   report: z
@@ -271,12 +286,12 @@ export const nativeProbeProjectionSchema = z.object({
 export const nativeProbeFitSchema = z
   .object({
     verdict: nativeProbeVerdictSchema.describe(
-      'Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.'
+      'Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.'
     ),
     basis: z
       .literal('native-probe')
       .describe(
-        'Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings.'
+        "Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
       ),
     engine: z
       .string()
@@ -285,7 +300,7 @@ export const nativeProbeFitSchema = z
     estimatorVersion: z
       .string()
       .describe(
-        'Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against what the system reports free, less the same 1024 MiB.'
+        'Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against what the system reports free, less the same 1024 MiB, counting device memory only where it comes out of system RAM.'
       ),
     reason: z
       .string()
