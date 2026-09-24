@@ -21,9 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engine accepts beside `f32`, and which one is fastest on each backend.
   Component resolution goes by filename prefix and does not rank
   quantizations, so stage one file per component or name it explicitly.
+- MOSS engine (`engine: 'moss'`, OpenMOSS MOSS-TTS v1.5 Delay): 24 kHz
+  synthesis from three GGUFs (`files.mossBackbone`, `files.mossCodecDecoder`,
+  and `files.mossCodecEncoder` to clone a voice from `referenceAudio`),
+  auto-detected from `modelDir`. `streamChunkTokens > 0` streams fixed-size
+  chunks of codec frames (12.5 per second) while the backbone is still
+  generating. Desktop only: the backbone has 8B parameters.
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-23#3` for the MOSS engine above.
 - Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
   weightless fit-measure model that carries no vocabulary, which a memory-fit
   measurement never needs; loading a real model is unchanged and still

@@ -346,7 +346,7 @@ run that built the prebuilds, and take the number at the end of its URL
 
 Do **not** assume it is your addon's own workflow. Which workflow builds the
 bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
-`on-merge-<addon>.yml` for a branch build — so filtering by workflow name is
+`on-merge-nx.yml` for a branch build — so filtering by workflow name is
 unreliable. Scope by your PR's head commit instead:
 
 ```bash
@@ -456,11 +456,11 @@ Two names are involved and for one addon they differ, so set them separately
 rather than deriving one from the other:
 
 ```bash
-WF=llm-llamacpp             # workflow slug: on-merge-$WF.yml / integration-mobile-test-$WF.yml
+WF=llm-llamacpp             # workflow slug: integration-mobile-test-$WF.yml
 GPR_NAME=llm-llamacpp-mono  # the npm package name (minus @qvac/) plus -mono
 
 RUN_ID=$(gh run list --repo tetherto/qvac \
-  --workflow on-merge-$WF.yml --branch $BRANCH \
+  --workflow on-merge-nx.yml --branch $BRANCH \
   --limit 1 --json databaseId --jq '.[0].databaseId')
 
 PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
@@ -469,11 +469,15 @@ PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
 echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
 ```
 
+The 13 native addons publish from the single `on-merge-nx.yml`, so the run is
+found by branch rather than by a per-addon workflow name. `model-fit` still has
+its own `on-merge-model-fit.yml`.
+
 For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
-exception:** its workflows are `on-merge-vla.yml` /
-`integration-mobile-test-vla.yml`, but the package is `@qvac/vla-ggml`, so
-`WF=vla` and `GPR_NAME=vla-ggml-mono`. If unsure, read `addon-npm-name` from the
-mobile workflow and append `-mono` to the part after the slash.
+exception:** its mobile workflow is `integration-mobile-test-vla.yml`, but the
+package is `@qvac/vla-ggml`, so `WF=vla` and `GPR_NAME=vla-ggml-mono`. If
+unsure, read `addon-npm-name` from the mobile workflow and append `-mono` to the
+part after the slash.
 
 An empty `$PKG` means either that run published nothing — usually because the
 push touched nothing under `packages/<addon>/`, so the path-scoped workflow
