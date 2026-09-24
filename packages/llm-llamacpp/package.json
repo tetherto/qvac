@@ -1,6 +1,6 @@
 {
   "name": "@qvac/llm-llamacpp",
-  "version": "0.53.2",
+  "version": "0.54.0",
   "description": "llama addon for qvac",
   "addon": true,
   "scripts": {
@@ -92,7 +92,7 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
-    "@qvac/fabric": "^0.16.1",
+    "@qvac/fabric": "^0.17.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
