@@ -2,12 +2,6 @@ cmake_minimum_required(VERSION 3.25)
 
 # Shared addon build helpers. See docs/architecture/ADDON-CMAKE-TEMPLATE.md.
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
-
-option(RPC_RDMA "Build qvac-fabric RPC with libibverbs/RDMA auto-negotiation support" OFF)
-if(RPC_RDMA)
-  list(APPEND VCPKG_MANIFEST_FEATURES "rpc-rdma")
-endif()
-
 qvac_addon_preproject()
 
 project(inference-addon-llama LANGUAGES C CXX)

@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -90,12 +91,22 @@ using BackendResolver = std::function<SelectedBackend(
 using RpcDeviceRegistrar =
     std::function<std::vector<std::string>(const std::string&)>;
 
+// Consume every successful prefetch before reporting a failed endpoint, so
+// fabric cannot retain an idle connection for a later endpoint.
+std::vector<ggml_backend_reg_t> collectRpcRegistrations(
+    const std::vector<std::string>& endpoints,
+    const std::vector<uint8_t>& prefetchOk, bool didPrefetch,
+    const std::function<ggml_backend_reg_t(const char*)>& addServer);
+
 struct NormalizationDependencies {
   BackendResolver resolveBackend;
   /// Authoritative eligible device set for explicit placement and every
   /// multi-GPU split mode.
   std::function<backend_selection::SplitDeviceSelection()> splitDevices;
   RpcDeviceRegistrar registerRpcDevices;
+  /// Process-wide RPC devices registered by this addon, including earlier
+  /// loads.
+  std::function<std::unordered_set<std::string>()> addonRpcDeviceNames;
 };
 
 struct NormalizedLoad {
