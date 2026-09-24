@@ -626,8 +626,9 @@ This is the cheap, fast loop for reproducing/fixing a single failure without pay
 for the whole pool again.
 
 **Attach the run to the PR.** A re-run is only evidence if a reviewer can open it,
-so put its link in the PR — in the description when it is part of the case that
-the change works, or as a comment when it answers a specific review question.
+so put its link in the PR. Prefer a **comment**: it appends, so nothing can be
+lost and nothing has to be read back first. Use the description only when the
+link belongs in the write-up itself.
 
 ```
 Re-ran runChatterboxSpeedTest on Samsung Galaxy S26 Ultra after 4e1f2a9:
@@ -635,7 +636,20 @@ https://github.com/tetherto/qvac/actions/runs/<id> — total=1 passed=1
 ```
 
 Say which **test** and which **device**, so the link is readable without opening
-it. Read the verdict from the run's `test-results.json` rather than the workflow
+it.
+
+Pass the text as a **file**, never as a shell argument:
+
+```bash
+# compose the note in /tmp/pr-<num>-note.md first
+gh pr comment <num> --repo tetherto/qvac --body-file /tmp/pr-<num>-note.md
+```
+
+Backticks and `$(...)` inside a double-quoted argument run before `gh` does, and
+on a fork PR the body and the run artifacts are written by someone else. Same for
+`gh pr edit`: read the body to a file, append there, write it back with
+`--body-file`. An agent doing this must show the text and the command and get
+your approval first. Read the verdict from the run's `test-results.json` rather than the workflow
 conclusion — a green workflow is not the same as a passed test, and Device Farm's
 own `Totals:` line counts its own suite, not your runners. When a run is red, see
 [Where the logs are when a run fails](#where-the-logs-are-when-a-run-fails).

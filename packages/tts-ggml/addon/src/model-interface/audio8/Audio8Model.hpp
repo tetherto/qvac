@@ -8,13 +8,11 @@
 #include <string>
 #include <vector>
 
+#include <tts-cpp/audio8/engine.h>
+
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/audio8/Audio8Config.hpp"
-
-namespace tts_cpp::audio8 {
-class Engine;
-}
 
 namespace qvac::ttsggml::audio8 {
 
@@ -125,6 +123,8 @@ private:
   double tokensPerSecond_ = 0.0;
   int generatedFrames_ = 0;
   int sampleRate_ = AUDIO8_NATIVE_SAMPLE_RATE;
+  // Engine per-stage wall clock of the last synthesis.
+  tts_cpp::audio8::StageTimings timings_{};
 
   int backendDevice_ = 0;
   int backendId_ = 0;

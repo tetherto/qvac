@@ -93,6 +93,7 @@ jobs:
       - context
       - prebuild
     permissions:
+      actions: read
       contents: read
       packages: read
       pull-requests: write

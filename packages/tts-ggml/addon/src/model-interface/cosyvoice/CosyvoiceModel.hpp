@@ -130,6 +130,12 @@ private:
   // as backendIdFromName() in BackendUtils.hpp.
   int enhancerBackendDevice_ = -1;
   int enhancerBackendId_ = -1;
+  // LavaSR denoiser backend, same codes and sentinels as the enhancer's.
+  int denoiserBackendDevice_ = -1;
+  int denoiserBackendId_ = -1;
+
+  // Engine per-stage timings and work counters of the last synthesis.
+  tts_cpp::cosyvoice::StageTimings timings_{};
 };
 
 // Streaming is requested when the config asks for chunked output and the job
