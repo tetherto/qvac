@@ -342,16 +342,17 @@ SupertonicModel::SynthesizeResult SupertonicModel::synthesize(
   tts_cpp::supertonic::SynthesisResult result;
   try {
     if (streaming) {
-      // The engine calls this synchronously on this thread, once per chunk,
-      // at the emitted rate; the returned result still holds the full PCM.
+      // The engine calls this on this thread, once per chunk, at the emitted
+      // rate; the returned result still holds the full PCM. The sink is
+      // captured by copy so the lambda does not depend on that timing.
       result = engine->synthesize(
           text,
-          [&chunkCallback](
+          [sink = chunkCallback](
               const float* pcm,
               std::size_t samples,
               int chunkIndex,
               bool isLast) {
-            chunkCallback(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
+            sink(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
           });
     } else {
       result = engine->synthesize(text);
