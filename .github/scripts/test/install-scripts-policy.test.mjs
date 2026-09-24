@@ -31,6 +31,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const SCAN_ROOTS = ['.github/workflows', '.github/actions', 'scripts']
 const SCAN_EXTENSIONS = ['.yml', '.yaml', '.sh', '.mjs', '.cjs']
 
+// package.json scripts are scanned too: a workflow step can read as
+// `npm run <script>` while the install itself lives in the manifest, which
+// would otherwise sit outside the policy entirely.
+const MANIFEST_ROOTS = ['packages', 'plugins']
+
 // Sites that legitimately run install scripts. Every entry must still match a
 // real site, so a stale one fails rather than quietly widening the policy.
 const ALLOWED = [
@@ -86,6 +91,29 @@ const ALLOWED = [
     reason:
       'Reached only when $PM is bun (inference, ai-sdk-provider); the npm branch above passes the flag explicitly. Kept detectable so a revert to the $PM indirection for npm is caught.',
   },
+  {
+    file: 'packages/sdk/e2e/package.json',
+    match: '"install:build"',
+    reason:
+      'Same consumer tree as the SDK e2e workflow installs: electron and react-native both install through postinstall.',
+  },
+  ...[
+    'packages/cli/package.json',
+    'plugins/openclaw/package.json',
+    'plugins/opencode/package.json',
+  ].map((file) => ({
+    file,
+    match: '"dev:link"',
+    reason: 'Developer convenience for linking siblings locally; no CI lane runs it.',
+  })),
+  ...['packages/llm-llamacpp/package.json', 'packages/embed-llamacpp/package.json'].map(
+    (file) => ({
+      file,
+      match: '"quickstart"',
+      reason:
+        "Documented command for consumers; the install fetches the published addon onto the reader's machine, not in CI.",
+    }),
+  ),
 ]
 
 // Sites still to migrate, tracked on QVAC-25458. This list only shrinks; adding
@@ -115,6 +143,7 @@ const PENDING = [
     '.github/workflows/integration-test-translation-nmtcpp.yml',
     '.github/workflows/integration-test-tts-ggml.yml',
     '.github/workflows/integration-test-vla.yml',
+    '.github/workflows/cpp-tests-nx.yml',
     '.github/workflows/reusable-cpp-tests-translation-nmtcpp.yml',
     '.github/workflows/reusable-prebuilds.yml',
     '.github/actions/cpp-lint/action.yaml',
@@ -148,6 +177,16 @@ const PENDING = [
     '.github/workflows/benchmark-translation-nmtcpp.yml',
     '.github/workflows/benchmark-vlm-model-comparison.yml',
   ].map((file) => ({ file, match: 'npm install', reason: 'QVAC-25458 PR 4' })),
+  {
+    file: 'packages/bci-whispercpp/package.json',
+    match: '"test:mobile:generate"',
+    reason: 'QVAC-25458 PR 4 — run by the integration-mobile-test-* lanes',
+  },
+  {
+    file: 'packages/embed-llamacpp/package.json',
+    match: '"performance:install"',
+    reason: 'QVAC-25458 PR 4 — benchmark helper, no CI caller today',
+  },
 ]
 
 function filesUnder(directory) {
@@ -206,25 +245,101 @@ function isCommand(text, matchIndex) {
   return COMMAND_POSITION.test(prefix)
 }
 
+// A `run:` built from a GitHub expression picks one quoted arm per matrix leg,
+// so each arm is its own command and has to carry the flag on its own. Reading
+// the whole line would let one flagged arm cover an unflagged sibling.
+function expressionArms(text) {
+  if (!text.includes('${{')) return []
+  return [...text.matchAll(/'([^']*)'/g)]
+    .map((match) => match[1])
+    .filter((arm) => INSTALL.test(arm))
+}
+
+function scanSource(file, source, sites) {
+  for (const { line, text } of logicalLines(source)) {
+    const arms = expressionArms(text)
+    if (arms.length > 0) {
+      for (const arm of arms) {
+        if (GLOBAL.test(arm)) continue
+        sites.push({
+          file,
+          line,
+          text: arm.trim(),
+          ignoresScripts: /--ignore-scripts/.test(arm),
+        })
+      }
+      continue
+    }
+
+    const match = INSTALL.exec(text)
+    if (match === null) continue
+    if (GLOBAL.test(text)) continue
+    if (!isCommand(text, match.index)) continue
+    sites.push({
+      file,
+      line,
+      text: text.trim(),
+      ignoresScripts: /--ignore-scripts/.test(text),
+    })
+  }
+}
+
+function manifestsUnder(directory) {
+  let entries
+  try {
+    entries = readdirSync(join(root, directory), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  return entries.flatMap((entry) => {
+    if (entry.name === 'node_modules') return []
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) return manifestsUnder(path)
+    return entry.name === 'package.json' ? [path] : []
+  })
+}
+
+function scanManifest(file, source, sites) {
+  let scripts
+  try {
+    scripts = JSON.parse(source).scripts ?? {}
+  } catch {
+    return
+  }
+  for (const [name, command] of Object.entries(scripts)) {
+    if (typeof command !== 'string') continue
+    if (!INSTALL.test(command) || GLOBAL.test(command)) continue
+    const needle = `"${name}"`
+    const index = source.indexOf(needle)
+    sites.push({
+      file,
+      line: index === -1 ? 0 : source.slice(0, index).split('\n').length,
+      text: `${needle}: ${command}`,
+      ignoresScripts: /--ignore-scripts/.test(command),
+    })
+  }
+}
+
 function installSites() {
   const sites = []
   for (const directory of SCAN_ROOTS) {
     for (const file of filesUnder(directory)) {
       // These assert on workflow text; their own mentions are not commands.
       if (file.startsWith(join('.github', 'scripts', 'test'))) continue
-      const source = readFileSync(join(root, file), 'utf8')
-      for (const { line, text } of logicalLines(source)) {
-        const match = INSTALL.exec(text)
-        if (match === null) continue
-        if (GLOBAL.test(text)) continue
-        if (!isCommand(text, match.index)) continue
-        sites.push({
-          file: file.split('\\').join('/'),
-          line,
-          text: text.trim(),
-          ignoresScripts: /--ignore-scripts/.test(text),
-        })
-      }
+      scanSource(
+        file.split('\\').join('/'),
+        readFileSync(join(root, file), 'utf8'),
+        sites,
+      )
+    }
+  }
+  for (const directory of MANIFEST_ROOTS) {
+    for (const file of manifestsUnder(directory)) {
+      scanManifest(
+        file.split('\\').join('/'),
+        readFileSync(join(root, file), 'utf8'),
+        sites,
+      )
     }
   }
   return sites
@@ -277,6 +392,7 @@ test('the scan sees the sites it is meant to police', () => {
     '.github/workflows/trigger-reusable-lib-cli.yml',
     '.github/workflows/pr-checks-sdk-pod.yml',
     'scripts/ci/openclaw-upstream-compat-smoke.sh',
+    'packages/cli/package.json',
   ]) {
     assert.ok(files.has(expected), `detector found no install site in ${expected}`)
   }
@@ -284,5 +400,28 @@ test('the scan sees the sites it is meant to police', () => {
   assert.ok(
     sites.some((site) => site.text.includes('"$PM" install')),
     'detector no longer sees the $PM indirection in pr-checks-sdk-pod.yml',
+  )
+
+  // The cli build job runs `npm run sdk-source:workspace`, whose install lives
+  // in the manifest rather than the workflow.
+  assert.ok(
+    sites.some(
+      (site) =>
+        site.file === 'packages/cli/package.json' &&
+        site.text.includes('"sdk-source:workspace"'),
+    ),
+    'detector no longer sees installs inside package.json scripts',
+  )
+
+  // Both arms of an expression-built `run:` must be separate sites, or one
+  // flagged arm hides an unflagged sibling.
+  const nxArms = sites.filter(
+    (site) => site.file === '.github/workflows/cpp-tests-nx.yml',
+  )
+  assert.equal(nxArms.length, 2, 'expected both expression arms in cpp-tests-nx.yml')
+  assert.equal(
+    nxArms.filter((site) => site.ignoresScripts).length,
+    1,
+    'expected exactly one flagged arm in cpp-tests-nx.yml',
   )
 })
