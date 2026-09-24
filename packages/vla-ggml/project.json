@@ -122,7 +122,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/vla-ggml",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "none",
           "repoName": "vla",
