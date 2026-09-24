@@ -283,7 +283,7 @@
     "pear-pipe": "^1.0.6",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
-    "react-native-bare-kit": "^0.14.0",
+    "react-native-bare-kit": "^0.15.5",
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
