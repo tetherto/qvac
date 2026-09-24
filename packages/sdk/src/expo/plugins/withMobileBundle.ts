@@ -18,10 +18,10 @@ const DEFERRED_MODULES = ['expo-file-system', 'react-native-bare-kit']
 
 /**
  * Desktop-only spawn path, deferred so bare-pack does not walk `bare-process`
- * -> `bare-posix` (no `android-arm64` prebuild). Mobile advisory uses
- * in-process `@qvac/model-fit` (`fitParams`), not this subprocess.
+ * -> `bare-posix` (no `android-arm64` prebuild). Mobile runs the engine fitter
+ * on a worker thread instead, so it never reaches this.
  */
-const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn', '@qvac/model-fit/process']
+const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn']
 
 type MobilePlatform = 'android' | 'ios'
 

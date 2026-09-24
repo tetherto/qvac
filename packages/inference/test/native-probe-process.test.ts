@@ -9,17 +9,13 @@ import { runIsolatedFit } from '@/resources/model-fit/native-probe/run-isolated-
 //
 // Resolved against the compiled test's own location: the fixture compiles to
 // ./fixtures/native-probe/fit-runner-fixture.js beside it under test/dist.
-// `import.meta` is not modeled by this package's TS libs; the compiled test
-// runs as ESM under Bare where it exists.
-const testModuleUrl = (import.meta as unknown as { url: string }).url
 const runnerFixturePath = fileURLToPath(
-  new URL('./fixtures/native-probe/fit-runner-fixture.js', testModuleUrl)
+  new URL('./fixtures/native-probe/fit-runner-fixture.js', import.meta.url)
 )
 
 function run(mode: 'completed' | 'error' | 'hang' | 'abort') {
   return runIsolatedFit(
-    'completion',
-    { modelPath: '/tmp/not-used.gguf', params: { device: 'gpu' } },
+    { engine: 'llm-llamacpp', request: { modelPath: '/tmp/not-used.gguf' } },
     {
       runnerPath: runnerFixturePath,
       runnerArgs: [mode],
@@ -35,8 +31,8 @@ test('process: a real child returning a valid response completes', async (t) => 
 
   t.is(result.status, 'completed')
   if (result.status === 'completed') {
-    t.is(result.result.status, 0)
-    t.is(result.result.nCtx, 4096)
+    t.is(result.probe.engine, 'llm-llamacpp')
+    t.is(result.probe.result.status, 'fits')
   }
 })
 

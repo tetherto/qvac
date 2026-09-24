@@ -1,46 +1,26 @@
 /**
- * Advisory llama.cpp fit check (QVAC-22629).
+ * Advisory model fit check.
  *
- * Before a completion or embedding load, the SDK runs `@qvac/model-fit` in one
- * disposable Bare child and projects whether the exact configuration it is
- * about to load will fit in device memory.
+ * Before a load, the SDK runs the fitter belonging to the engine that would
+ * run it and projects whether the exact configuration it is about to load will
+ * fit in device memory. Desktop runs it in a disposable Bare child; mobile,
+ * which cannot spawn one, runs it in process.
  *
  * The result is ADVISORY. It never blocks a load. `does-not-fit` is logged and
  * the ordinary load path runs unchanged. Crashes, timeouts, malformed
  * responses, unsupported configurations, and internal errors all resolve to
- * "no evidence" and are equally non-blocking. Nothing consumes the verdict
- * yet — this PR only produces it.
+ * "no evidence" and are equally non-blocking. No verdict changes the load;
+ * `getLoadedModelInfo` returns it as `fitProbe`.
  *
  * The verdict is emitted on the SDK server log stream, not to stdout, so this
  * example subscribes to `loggingStream({ id: SDK_LOG_ID })` and reprints the
  * `[advisory-fit:…]` lines.
  *
- * ---------------------------------------------------------------------------
- * What fits on this machine (Apple M4 Pro, 24 GiB unified memory)
- * ---------------------------------------------------------------------------
- *
- * Measured with `@qvac/model-fit@0.8.0` (the first release carrying the
- * qvac-fabric#214 memory-reporting fix) at the default 1024 MiB margin. The
- * fitter budgets against what the machine can actually keep resident
- * (total − wired − compressor: 17.4 GiB on this machine at idle), not the raw
- * RAM figure.
- *
- *   PROJECTED TO FIT — all layers on GPU
- *     Qwen3.5 0.8B  Q4_K_M   0.5 GiB  @   4k ctx
- *     gpt-oss-20B   Q4_K_M  10.8 GiB  @  32k ctx
- *     gte-large     fp16     0.6 GiB  (embedding, context pinned to 512)
- *
- *   PROJECTED NOT TO FIT — with `gpu_layers: 99` pinned
- *     gpt-oss-20B   Q4_K_M  10.8 GiB  @ 128k ctx with an f32 KV cache ← below
- *
- * These rows were measured with `gpu_layers` pinned at 99. Loads no longer pin
- * the layer count, and the `does-not-fit` row has not been re-measured
- * unpinned.
- *
- * gpt-oss-20B at 128k context FITS with the default KV cache and DOES NOT FIT
- * once `cache-type-k`/`cache-type-v` are set to `f32`. Same model, same
- * context, same machine — the verdict tracks the configuration, not the file
- * size.
+ * The fitter budgets against what the machine can keep resident, not the raw
+ * RAM figure, at a default 1024 MiB margin. The verdict tracks the
+ * configuration rather than the file size: one model at one context can fit
+ * with the default KV cache and not fit once `cache-type-k`/`cache-type-v`
+ * are set to `f32`.
  *
  * Two boundaries worth understanding when reading verdicts:
  *
@@ -114,8 +94,7 @@ try {
   // Unloaded before the next phase, so the second verdict is measured on an
   // idle machine and stays comparable to the fixture tables above. Leaving it
   // loaded would shift the verdict: the check reserves resident weight bytes
-  // through the fit margin, and since model-fit 0.8.0 the fit child also sees
-  // system-wide wired memory.
+  // through the fit margin, and the fitter also sees system-wide wired memory.
   await unloadModel({ modelId: smallModelId, clearStorage: false })
   watchVerdicts()
 

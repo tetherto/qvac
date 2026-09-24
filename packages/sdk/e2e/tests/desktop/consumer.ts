@@ -83,6 +83,7 @@ import { ConfigReloadExecutor } from '../shared/executors/node/config-reload-exe
 import { NodeLoggingExecutor } from '../shared/executors/node/logging-executor.js'
 import { RegistryExecutor } from '../shared/executors/registry-executor.js'
 import { ModelInfoExecutor } from '../shared/executors/model-info-executor.js'
+import { ModelFitExecutor } from '../shared/executors/model-fit-executor.js'
 import { WrongModelExecutor } from '../shared/executors/wrong-model-executor.js'
 import { ErrorExecutor } from '../shared/executors/error-executor.js'
 import { TtsExecutor } from '../shared/executors/tts-executor.js'
@@ -703,6 +704,7 @@ export const executor = createExecutor({
     new RagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
+    new ModelFitExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),

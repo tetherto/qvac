@@ -47,7 +47,7 @@ const modelLoadTests = [
 ] as const
 
 export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoadTests> {
-  pattern = /^model-(?!info-)/
+  pattern = /^model-(?!info-|fit-)/
 
   protected handlers = {
     [modelLoadLlm.testId]: this.loadLlm.bind(this),

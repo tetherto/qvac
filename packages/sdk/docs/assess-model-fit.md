@@ -345,10 +345,11 @@ under it, upper bound over it), and, with several discrete GPUs, a fit that
 holds on the largest card but not the smallest. In both cases the `estimate`
 and `budget` fields are present, so the caller can see how close it was.
 
-## Relationship to `@qvac/model-fit`
+## Relationship to the load-time probe
 
-`assessModelFit` is the zero-download tier: metadata only, available before a
-single byte is fetched. `@qvac/model-fit` is the post-download tier — it reads
-the real file and is the stronger evidence once you have it. They answer the
-same question at different points in the lifecycle, and neither replaces the
-other.
+`assessModelFit` is the pre-download tier: it reads the registry's weightless
+description of a model, so it answers before the weights exist locally. The
+probe `loadModel` runs, reported as `fitProbe` on `getLoadedModelInfo`, is the
+post-download tier — it reads the real file and is the stronger evidence once
+you have it. Both call the same engine fitter, at different points in the
+lifecycle, and neither replaces the other.

@@ -23,8 +23,10 @@ description: One-page reference of all public functions and objects exported by 
 Assesses, before anything is downloaded, whether the given models are likely
 to fit in this device's memory.
 
-Advisory only: it does not download weights, run a native fit probe, block
-`loadModel`, reserve memory, or make a performance claim. `unknown` is a real
+Advisory only: it does not download weights, block `loadModel`, reserve
+memory, or make a performance claim. For a single candidate it reads the
+registry's weightless description of the load and runs the engine's own fitter
+against it. `unknown` is a real
 answer — it means the available evidence does not support a verdict either
 way, and callers should treat it as "cannot say", not "no".
 

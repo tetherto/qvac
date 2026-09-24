@@ -722,8 +722,6 @@ JavaScript Dependencies
     https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
     https://github.com/tetherto/qvac
-  @qvac/model-fit@0.12.2
-    https://github.com/tetherto/qvac
   @qvac/ocr-ggml@0.24.3
     https://github.com/tetherto/qvac
   @qvac/rag@0.8.1

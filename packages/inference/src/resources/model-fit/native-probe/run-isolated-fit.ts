@@ -1,16 +1,27 @@
-import {
-  encodeFitLlamaProcessRequest,
-  FIT_PROCESS_MAX_RESPONSE_BYTES,
-  parseFitProcessResponse,
-  resolveFitProcessRunnerPath,
-  type FitLlamaProcessConfig,
-  type FitLlamaResult,
-  type LlamaLoadKind
-} from '@qvac/model-fit/process'
 import type { AbortSignal } from 'bare-abort-controller'
+import { fileURLToPath } from 'bare-url'
 import env from 'bare-env'
 import spawnBare from 'bare-runtime/spawn'
 import { arch, isAndroid, isBrowser, isIOS, platform } from 'which-runtime'
+
+import type { FitProbeRequest } from '@/resources/model-fit/native-probe/engine-fit'
+import type {
+  FitRunResult,
+  FitRunUnknownReason
+} from '@/resources/model-fit/native-probe/fit-outcome'
+import {
+  encodeFitProcessRequest,
+  FIT_PROCESS_MAX_RESPONSE_BYTES,
+  parseFitProcessResponse
+} from '@/resources/model-fit/native-probe/fit-process'
+
+/**
+ * The child is this package's own runner, built beside this module, so the
+ * engine dispatch it performs is the same code the in-process path runs.
+ */
+function resolveFitRunnerPath(): string {
+  return fileURLToPath(new URL('./fit-runner.js', import.meta.url))
+}
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const TERMINATION_GRACE_MS = 1_000
@@ -35,23 +46,8 @@ const FIT_ENVIRONMENT_KEYS = [
   'ROCR_VISIBLE_DEVICES'
 ] as const
 
-export type IsolatedFitUnknownReason =
-  | 'unsupported-platform'
-  | 'spawn-failed'
-  | 'timeout'
-  | 'cancelled'
-  | 'crashed'
-  | 'invalid-response'
-  | 'invocation-error'
-
-export type IsolatedFitResult =
-  | { status: 'completed'; result: FitLlamaResult }
-  | {
-      status: 'unknown'
-      reason: IsolatedFitUnknownReason
-      message: string
-      stderrTail?: string
-    }
+export type IsolatedFitUnknownReason = FitRunUnknownReason
+export type IsolatedFitResult = FitRunResult
 
 export interface SpawnContext {
   command: string
@@ -184,15 +180,14 @@ function parseResponse(line: string, stderrTail: Buffer): IsolatedFitResult {
         stderrTail
       )
     }
-    return { status: 'completed', result: response.result }
+    return { status: 'completed', probe: response.probe }
   } catch (error) {
     return unknown('invalid-response', formatError(error), stderrTail)
   }
 }
 
 export function runIsolatedFit(
-  loadKind: LlamaLoadKind,
-  config: FitLlamaProcessConfig,
+  probe: FitProbeRequest,
   options: RunIsolatedFitOptions = {}
 ): Promise<IsolatedFitResult> {
   const runtime = options.runtime ?? {
@@ -481,10 +476,7 @@ export function runIsolatedFit(
       child = spawnProcess({
         command: 'bare',
         options: {
-          args: [
-            options.runnerPath ?? resolveFitProcessRunnerPath(),
-            ...(options.runnerArgs ?? [])
-          ],
+          args: [options.runnerPath ?? resolveFitRunnerPath(), ...(options.runnerArgs ?? [])],
           platform: runtime.platform,
           arch: runtime.arch,
           stdio,
@@ -551,7 +543,7 @@ export function runIsolatedFit(
     }
 
     try {
-      stdin.end(encodeFitLlamaProcessRequest(loadKind, config))
+      stdin.end(encodeFitProcessRequest(probe))
     } catch (error) {
       requestTermination(
         'invalid-response',
