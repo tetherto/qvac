@@ -449,6 +449,8 @@ test('Audio8: streaming keeps tokensPerSecond on the codec frame grid', async (t
   await r.onUpdate(() => {}).await()
 
   const stats = r.stats
+  t.absent(stats.codecSidecarLoaded, 'unreported sidecar state stays absent')
+  t.absent(stats.codecOnCoreml, 'unreported call state stays absent')
   t.ok(stats.generatedFrames > 0, 'the frame count survives the aggregation')
   t.is(
     stats.tokensPerSecond,
@@ -588,3 +590,45 @@ test('Audio8: reload can correct the transcript on its own', async (t) => {
   t.is(params.referenceText, 'Alice really says this.', 'the transcript is corrected')
   await model.unload()
 })
+
+for (const method of ['runStream', 'runStreaming']) {
+  for (const finalValue of [0, 1, undefined]) {
+    test(`Audio8: ${method} preserves the last reported Core ML flags (${finalValue})`, async (t) => {
+      class SidecarStatsBinding extends RecordingBinding {
+        _callCallbacks(type, data, error) {
+          if (type !== 'RuntimeStats') return super._callCallbacks(type, data, error)
+          const value = this.jobs.length === 1 ? 1 : finalValue
+          const flags =
+            value === undefined ? {} : { codecSidecarLoaded: value, codecOnCoreml: value }
+          return super._callCallbacks(type, { ...data, ...flags }, error)
+        }
+      }
+      const binding = new SidecarStatsBinding()
+      const model = createMockedAudio8Model({ binding })
+      await model.load()
+      async function* tokens() {
+        yield 'First streamed sentence. '
+        yield 'Second streamed sentence.'
+      }
+      const response =
+        method === 'runStream'
+          ? await model.runStream('First chunk sentence. Second chunk sentence.', {
+              maxChunkScalars: 20
+            })
+          : await model.runStreaming(tokens(), { accumulateSentences: false })
+      await response.onUpdate(() => {}).await()
+      t.ok(binding.jobs.length >= 2, 'multiple native syntheses completed')
+      t.is(
+        response.stats.codecSidecarLoaded,
+        finalValue ?? 1,
+        'last reported attachment state survives'
+      )
+      t.is(
+        response.stats.codecOnCoreml,
+        finalValue ?? 1,
+        'last reported call state survives, without summing'
+      )
+      await model.unload()
+    })
+  }
+}

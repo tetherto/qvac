@@ -21,19 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engine accepts beside `f32`, and which one is fastest on each backend.
   Component resolution goes by filename prefix and does not rank
   quantizations, so stage one file per component or name it explicitly.
-- **Audio8 Core ML codec sidecar (macOS / iOS).** The Apple prebuilds now
-  enable `speech-cpp[coreml]`, so a compiled `audio8-codec-decoder.mlmodelc`
-  placed next to the Audio8 decoder GGUF (any quant tier) moves the codec's
-  synthesis stack -- the largest stage of a CPU synthesis -- onto Apple Core
-  ML at `load()`, with a ggml fallback when the sidecar is absent or cannot
-  serve a call. `RuntimeStats` gains `codecSidecarLoaded` (0/1, whether the
-  sidecar is attached) and `codecOnCoreml` (0/1, whether this synthesis ran
-  the codec on it).
-  Export the sidecar with `qvac-fabric-speech.cpp`'s
-  `export-audio8-codec-coreml.py`; the language model keeps running on the
-  selected ggml backend. `speech-cpp` floor moves from `2026-09-18` to
-  `2026-09-21`, which also retires a failing sidecar after its first call so
-  later syntheses go straight to ggml.
+- **Audio8 Core ML runtime stats.** `codecSidecarLoaded` reports whether the
+  codec sidecar remains attached; `codecOnCoreml` reports whether the last
+  synthesis used it. Both flags survive streaming as the last reported chunk
+  value, reset on unload, and ignore results from an engine replaced by reload.
 
 ### Changed
 

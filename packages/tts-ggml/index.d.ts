@@ -466,7 +466,7 @@ interface RuntimeStats {
      * Audio8 only, macOS / iOS: 1 while an Apple Core ML sidecar for the codec's
      * synthesis stack is attached (a compiled `audio8-codec-decoder.mlmodelc`
      * next to the decoder GGUF); 0 without one, or once a failing sidecar has
-     * been retired.
+     * been retired. Streams report the last chunk that supplied this field.
      */
     codecSidecarLoaded?: number;
     /**
@@ -475,6 +475,7 @@ interface RuntimeStats {
      * to the decoder GGUF on macOS / iOS -- 0 when it ran on the ggml backend
      * `backendId` reports (which the language model always uses). A loaded
      * sidecar that cannot serve a call falls back to ggml and reports 0 for it.
+     * Streams report the last chunk that supplied this field, not a sum.
      */
     codecOnCoreml?: number;
 }

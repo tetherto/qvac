@@ -104,6 +104,15 @@ public:
       const Audio8Config& current, const Audio8Config& next, int nativeRate);
 
 private:
+  friend struct Audio8ModelTestPeer;
+
+  void completeSynthesis(
+      const std::shared_ptr<tts_cpp::audio8::Engine>& engine,
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds,
+      bool sidecarLoaded);
+  void recordSynthesisResultLocked(
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds);
+
   Output synthesize(const AnyInput& input);
 
   void loadLocked();

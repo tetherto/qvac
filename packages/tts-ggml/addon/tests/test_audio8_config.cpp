@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <limits>
 #include <memory>
 #include <random>
@@ -17,10 +18,34 @@
 #include "model-interface/audio8/Audio8Config.hpp"
 #include "model-interface/audio8/Audio8Model.hpp"
 
+namespace qvac::ttsggml::audio8 {
+struct Audio8ModelTestPeer {
+  static std::shared_ptr<tts_cpp::audio8::Engine>
+  installEngine(Audio8Model& model, bool sidecarLoaded) {
+    // Identity-only handle: completion never dereferences it or loads GGUFs.
+    auto owner = std::make_shared<int>(0);
+    auto engine = std::shared_ptr<tts_cpp::audio8::Engine>(
+        owner, reinterpret_cast<tts_cpp::audio8::Engine*>(owner.get()));
+    std::lock_guard lk(model.engineMu_);
+    model.engine_ = engine;
+    model.codecSidecarLoaded_ = sidecarLoaded;
+    model.codecOnCoreml_ = false;
+    return engine;
+  }
+  static void complete(
+      Audio8Model& model,
+      const std::shared_ptr<tts_cpp::audio8::Engine>& engine,
+      const tts_cpp::audio8::SynthesisResult& result, bool sidecarLoaded) {
+    model.completeSynthesis(engine, result, 0.5, sidecarLoaded);
+  }
+};
+} // namespace qvac::ttsggml::audio8
+
 using qvac::ttsggml::backendIdFromName;
 using qvac::ttsggml::kBackendDeviceGpu;
 using qvac::ttsggml::audio8::Audio8Config;
 using qvac::ttsggml::audio8::Audio8Model;
+using qvac::ttsggml::audio8::Audio8ModelTestPeer;
 using qvac_errors::StatusError;
 
 namespace {
@@ -300,6 +325,61 @@ TEST(Audio8Validate, LoadIsDeferredAndStubFailsToParse) {
   EXPECT_FALSE(m->isLoaded());
   EXPECT_THROW(m->load(), StatusError);
   EXPECT_FALSE(m->isLoaded());
+}
+
+TEST(Audio8Stats, UnloadClearsSidecarAndLastCallFlags) {
+  Audio8Model model(minimallyValidStubConfig());
+  const auto engine = Audio8ModelTestPeer::installEngine(model, true);
+  Audio8ModelTestPeer::complete(
+      model, engine, resultOnBackend("coreml-all"), true);
+  EXPECT_EQ(runtimeInt(model, "codecSidecarLoaded"), 1);
+  EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 1);
+  model.unload();
+  EXPECT_EQ(runtimeInt(model, "codecSidecarLoaded"), 0);
+  EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 0);
+}
+
+TEST(
+    Audio8Stats, InFlightCompletionCannotRestoreStateAfterUnloadOrReplacement) {
+  for (const bool replaceEngine : {false, true}) {
+    Audio8Model model(minimallyValidStubConfig());
+    const auto oldEngine = Audio8ModelTestPeer::installEngine(model, true);
+    std::promise<void> releaseCompletion;
+    auto completionReady = releaseCompletion.get_future();
+    auto inFlight = std::async(std::launch::async, [&] {
+      completionReady.wait();
+      Audio8ModelTestPeer::complete(
+          model, oldEngine, resultOnBackend("coreml-all"), true);
+    });
+    model.unload();
+    std::shared_ptr<tts_cpp::audio8::Engine> replacement;
+    if (replaceEngine) {
+      replacement = Audio8ModelTestPeer::installEngine(model, false);
+    }
+    releaseCompletion.set_value();
+    inFlight.get();
+    EXPECT_EQ(runtimeInt(model, "codecSidecarLoaded"), 0);
+    EXPECT_EQ(runtimeInt(model, "codecOnCoreml"), 0);
+    EXPECT_EQ(runtimeInt(model, "totalSamples"), 0);
+    if (replacement) {
+      Audio8ModelTestPeer::complete(
+          model, replacement, resultOnBackend("ggml"), false);
+      EXPECT_EQ(runtimeInt(model, "totalSamples"), 4096);
+    }
+  }
+}
+
+TEST(Audio8Stats, RetiredOldSidecarCannotClearReplacementSidecar) {
+  Audio8Model model(minimallyValidStubConfig());
+  const auto oldEngine = Audio8ModelTestPeer::installEngine(model, true);
+  model.unload();
+  const auto replacement = Audio8ModelTestPeer::installEngine(model, true);
+  Audio8ModelTestPeer::complete(
+      model, oldEngine, resultOnBackend("ggml"), false);
+  EXPECT_EQ(runtimeInt(model, "codecSidecarLoaded"), 1);
+  Audio8ModelTestPeer::complete(
+      model, replacement, resultOnBackend("ggml"), false);
+  EXPECT_EQ(runtimeInt(model, "codecSidecarLoaded"), 0);
 }
 
 TEST(Audio8Stats, CoremlBackendIsRecognisedByNamedPrefix) {

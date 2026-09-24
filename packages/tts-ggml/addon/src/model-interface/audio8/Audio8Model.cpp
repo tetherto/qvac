@@ -273,7 +273,11 @@ void Audio8Model::loadLocked() {
   gpuUnsupported_ = wantsGpu && backendDevice_ == kBackendDeviceCpu;
 }
 
-void Audio8Model::unloadLocked() { engine_.reset(); }
+void Audio8Model::unloadLocked() {
+  engine_.reset();
+  codecSidecarLoaded_ = false;
+  codecOnCoreml_ = false;
+}
 
 void Audio8Model::cancel() const {
   cancelRequested_.store(true, std::memory_order_relaxed);
@@ -348,8 +352,11 @@ Audio8Model::Output Audio8Model::synthesize(const AnyInput& input) {
         std::string("audio8.synthesize: ") + e.what());
   }
   const auto t1 = std::chrono::steady_clock::now();
-  recordSynthesisResult(result, std::chrono::duration<double>(t1 - t0).count());
-  codecSidecarLoaded_ = engine->codec_on_coreml();
+  completeSynthesis(
+      engine,
+      result,
+      std::chrono::duration<double>(t1 - t0).count(),
+      engine->codec_on_coreml());
 
   return pcmFloatToInt16(result.pcm);
 }
@@ -384,6 +391,24 @@ bool Audio8Model::codecBackendIsCoreml(const std::string& backend) {
 
 void Audio8Model::recordSynthesisResult(
     const tts_cpp::audio8::SynthesisResult& result, double totalSeconds) {
+  std::lock_guard lk(engineMu_);
+  recordSynthesisResultLocked(result, totalSeconds);
+}
+
+void Audio8Model::completeSynthesis(
+    const std::shared_ptr<tts_cpp::audio8::Engine>& engine,
+    const tts_cpp::audio8::SynthesisResult& result, double totalSeconds,
+    bool sidecarLoaded) {
+  std::lock_guard lk(engineMu_);
+  // A completed job may belong to an engine that reload or unload replaced.
+  if (engine_ != engine)
+    return;
+  recordSynthesisResultLocked(result, totalSeconds);
+  codecSidecarLoaded_ = sidecarLoaded;
+}
+
+void Audio8Model::recordSynthesisResultLocked(
+    const tts_cpp::audio8::SynthesisResult& result, double totalSeconds) {
   sampleRate_ = result.sample_rate;
   generatedFrames_ = result.frames;
   totalSamples_ = static_cast<int64_t>(result.pcm.size());
@@ -398,6 +423,7 @@ void Audio8Model::recordSynthesisResult(
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats Audio8Model::runtimeStats() const {
+  std::lock_guard lk(engineMu_);
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
   stats.emplace_back("totalTime", totalTime_);
   stats.emplace_back("tokensPerSecond", tokensPerSecond_);
