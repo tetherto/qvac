@@ -145,6 +145,10 @@ test(
               'backendDevice surfaced in stats'
             )
             t.ok(typeof result.data.stats.backendId === 'number', 'backendId surfaced in stats')
+            const { t3Tokens, t3Ms, s3genMs, denoiserBackendDevice } = result.data.stats
+            t.ok(t3Tokens > 0, 'stats report the speech tokens T3 emitted')
+            t.ok(t3Ms > 0 && s3genMs > 0, 'stats report the T3 and S3Gen stage times')
+            t.is(denoiserBackendDevice, -1, 'no denoiser loaded -> denoiserBackendDevice=-1')
           } else {
             t.fail('expected stats from MTL run')
           }
