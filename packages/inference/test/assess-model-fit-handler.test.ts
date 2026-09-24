@@ -1,89 +1,104 @@
 import test from 'brittle'
 
-import { fitLoad } from '@/handlers/assess-model-fit'
-import { createLlamaFitRequest } from '@/resources/model-fit/native-probe/create-llama-fit-request'
-import type { ModelFitCandidate } from '@/schemas/assess-model-fit'
-import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
+import { estimateTargetFor } from '@/handlers/assess-model-fit'
 import { ModelType } from '@/schemas/index'
 
-const MODEL = { name: 'MODEL', sha256Checksum: 'a'.repeat(64) }
-
-function llm(contextTokens = 8192): ModelFitCandidate {
-  return { model: MODEL, workload: { kind: 'llm', contextTokens } }
+const CONSTANT = {
+  src: 'registry://s3/models/model.gguf',
+  name: 'MODEL',
+  sha256Checksum: 'a'.repeat(64),
+  registryPath: 'models/model.gguf',
+  registrySource: 's3'
 }
 
-function profileFor(engine: ModelResourceProfile['engine']) {
-  return () => ({ engine }) as ModelResourceProfile
-}
-
-// The fitter refuses a load with no `device`, so the workload has to go through
-// the same default resolution a real load does or no verdict is ever reached.
-test('handler: a completion load carries the device defaults a real load resolves', (t) => {
-  const load = fitLoad(llm(), profileFor(ModelType.llamacppCompletion))
-
-  t.ok(load, 'a completion model has a fitter')
-  if (!load) return
-  t.is(load.modelType, ModelType.llamacppCompletion)
-  t.is(load.modelConfig['ctx_size'], 8192, "the caller's context is kept")
-  t.ok(typeof load.modelConfig['device'] === 'string', 'a device is resolved')
-
-  const plan = createLlamaFitRequest({
-    modelType: load.modelType,
-    modelPath: '/nonexistent/stub.gguf',
-    modelConfig: load.modelConfig,
-    isShardedModel: false
+test('handler: a completion load is sized by the context its config carries', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.llamacppCompletion,
+    modelConfig: { ctx_size: 8192 }
   })
-  t.ok(plan.supported, 'the resolved load is one the fitter can answer for')
-  if (plan.supported) {
-    t.is(plan.config.params['ctx_size'], '8192')
-    t.ok(plan.config.params['device'], 'the device reaches the fit request')
-  }
+
+  t.alike(target.workload, { kind: 'llm', contextTokens: 8192 })
+  t.is(target.model.name, 'MODEL')
+  t.is(target.model.sha256Checksum, CONSTANT.sha256Checksum)
+  t.is(target.model.registryPath, CONSTANT.registryPath)
 })
 
-// An embedding model asked for a completion context larger than it declares
-// is an error to the fitter, not a verdict. The catalog knows the engine.
-test('handler: an embedding model is fitted as an embedding load, without a context', (t) => {
-  const load = fitLoad(llm(), profileFor(ModelType.llamacppEmbedding))
-
-  t.ok(load, 'an embedding model has a fitter')
-  if (!load) return
-  t.is(load.modelType, ModelType.llamacppEmbedding)
-  t.absent(load.modelConfig['ctx_size'], 'the fitter reads the window the model declares')
-  t.ok(typeof load.modelConfig['device'] === 'string', 'a device is resolved')
-
-  const plan = createLlamaFitRequest({
-    modelType: load.modelType,
-    modelPath: '/nonexistent/stub.gguf',
-    modelConfig: load.modelConfig,
-    isShardedModel: false
+test('handler: a transcription load is sized by its audio window', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: { duration_ms: 15_000, streaming: true }
   })
-  t.ok(plan.supported, 'the resolved embedding load is one the fitter can answer for')
-  if (plan.supported) t.is(plan.loadKind, 'embedding')
+
+  t.alike(target.workload, { kind: 'audio', windowMs: 15_000, streaming: true })
 })
 
-// The estimator adds companion bytes; the fitter would read one file and answer
-// for the model alone, so the set must keep the estimate.
-test('handler: a candidate with companion artifacts gets no fitter', (t) => {
-  const candidate: ModelFitCandidate = { ...llm(), artifacts: [MODEL] }
+test('handler: an audio load with no window declared takes the engine default', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.parakeetTranscription
+  })
 
-  t.absent(fitLoad(candidate, profileFor(ModelType.llamacppCompletion)))
+  t.alike(target.workload, { kind: 'audio', windowMs: 30_000, streaming: false })
 })
 
-test('handler: a model outside the catalog is fitted as a completion load', (t) => {
-  const load = fitLoad(llm(4096), () => undefined)
+// Without a checksum no resource profile resolves, which is what makes the
+// estimator answer `unknown` rather than guess.
+test('handler: a source outside the catalog carries no checksum', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: '/models/local.gguf',
+    modelType: ModelType.llamacppCompletion,
+    modelConfig: { ctx_size: 4096 }
+  })
 
-  t.is(load?.modelType, ModelType.llamacppCompletion)
-  t.is(load?.modelConfig['ctx_size'], 4096)
+  t.is(target.model.sha256Checksum, '')
+  t.is(target.model.name, '/models/local.gguf')
 })
 
-test('handler: an engine with no fit path resolves no load', (t) => {
-  t.absent(fitLoad(llm(), profileFor(ModelType.ttsGgml)))
+test('handler: a load with no primary source is labelled by its model type', (t) => {
+  const target = estimateTargetFor({
+    modelType: ModelType.audiogenGgml,
+    modelConfig: { lmModelSrc: CONSTANT, ditModelSrc: CONSTANT }
+  })
+
+  t.is(target.model.name, ModelType.audiogenGgml)
+  t.is(target.model.sha256Checksum, '')
 })
 
-test('handler: a non-llm workload resolves no load', (t) => {
-  const candidate: ModelFitCandidate = {
-    model: MODEL,
-    workload: { kind: 'audio', windowMs: 30_000, streaming: true }
-  }
-  t.absent(fitLoad(candidate, profileFor(ModelType.whispercppTranscription)))
+// The estimate sizes the whole set, so a companion the config carries is
+// counted alongside the primary rather than silently dropped.
+test('handler: companion sources in the config are counted', (t) => {
+  const vad = { ...CONSTANT, name: 'VAD', sha256Checksum: 'b'.repeat(64) }
+
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: { vadModelSrc: vad, vad_params: { threshold: 0.35 } }
+  })
+
+  t.is(target.artifacts?.length, 1)
+  t.is(target.artifacts?.[0]?.name, 'VAD')
+  t.is(target.artifacts?.[0]?.sha256Checksum, vad.sha256Checksum)
+})
+
+test('handler: the same companion named twice is counted once', (t) => {
+  const target = estimateTargetFor({
+    modelType: ModelType.audiogenGgml,
+    modelConfig: { lmModelSrc: CONSTANT, ditModelSrc: CONSTANT }
+  })
+
+  t.is(target.artifacts?.length, 1)
+})
+
+// `duration_ms` is the longest clip a caller will transcribe. The engine
+// chunks anything longer, so it never sizes working memory above one window.
+test('handler: an audio window is capped at what the engine holds whole', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: { duration_ms: 600_000 }
+  })
+
+  t.alike(target.workload, { kind: 'audio', windowMs: 30_000, streaming: false })
 })

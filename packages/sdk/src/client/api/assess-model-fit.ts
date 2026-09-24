@@ -17,11 +17,12 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * should treat it as "cannot say", not "no".
  *
  * For a single candidate it fetches the registry's weightless description of
- * the artifact — tens of KB, never the weights — and runs the engine's own
- * fitter against it, reported as `native-fit` evidence. Where that is
- * unavailable, and for a set of candidates, the calibrated estimate stands.
+ * every source that load names — tens of KB each, never the weights — and runs
+ * the engine's own fitter against them, reported as `native-fit` evidence.
+ * Where that is unavailable, and for a set of candidates, the calibrated
+ * estimate stands.
  *
- * @param input - Candidates with their intended workloads, the declared
+ * @param input - Loads to assess in `loadModel`'s own parameters, the declared
  *   execution mode, and the headroom policy.
  * @returns Per-model and combined verdicts, with the budget and bounds they came
  *   from, plus every assumption that was made.

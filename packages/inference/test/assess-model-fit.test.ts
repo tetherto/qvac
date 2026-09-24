@@ -8,7 +8,7 @@ import type { CalibrationPoint } from '@/resources/model-fit/calibration/fit'
 import type { PlatformCalibration } from '@/resources/model-fit/types'
 import type { GgufFacts, ModelResourceProfile } from '@/schemas/model-resource-profile'
 import type { SystemResources } from '@/schemas/system-resources'
-import type { ModelFitCandidate, NativeProbeFit } from '@/schemas/assess-model-fit'
+import type { ModelFitEstimateTarget, NativeProbeFit } from '@/schemas/assess-model-fit'
 
 const MIB = 1024 * 1024
 const GIB = 1024 * 1024 * 1024
@@ -136,7 +136,7 @@ function resources(
   return value
 }
 
-function candidate(overrides: Partial<ModelFitCandidate> = {}): ModelFitCandidate {
+function candidate(overrides: Partial<ModelFitEstimateTarget> = {}): ModelFitEstimateTarget {
   return {
     model: {
       name: 'TEST_MODEL',
@@ -680,7 +680,7 @@ test('assess: sequential takes the largest working peak, concurrent sums them', 
   // modes — an LLM load holds everything resident, so it cannot.
   const cal = calibration({ audioWindowBytes: { lower: 60 * MIB, upper: 60 * MIB } })
 
-  const models: ModelFitCandidate[] = [
+  const models: ModelFitEstimateTarget[] = [
     candidate({
       model: { name: 'A', sha256Checksum: 'a'.repeat(64) },
       workload: { kind: 'audio', windowMs: 30_000, streaming: false }
@@ -724,7 +724,7 @@ test('assess: co-resident LLM loads count every model’s overhead, so the modes
   const cal = calibration({ fixedOverheadBytes: { lower: 1 * GIB, upper: 1 * GIB } })
   const facts = denseFacts({ blockCount: 1, headCountKv: 1, contextLength: 8192 })
 
-  const models: ModelFitCandidate[] = [
+  const models: ModelFitEstimateTarget[] = [
     candidate({
       model: { name: 'A', sha256Checksum: 'a'.repeat(64) },
       workload: { kind: 'llm', contextTokens: 1 }
@@ -1132,7 +1132,7 @@ test('assess: on a calibrated platform a model the estimator refuses falls back 
           ggufFacts: undefined
         })
   // 8 GiB total, 3 GiB used: a 4 GiB budget.
-  const assess = (models: ModelFitCandidate[], whisperBytes: number) =>
+  const assess = (models: ModelFitEstimateTarget[], whisperBytes: number) =>
     assessModelFitFromResources({
       models,
       execution: 'sequential',

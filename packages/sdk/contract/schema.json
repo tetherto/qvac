@@ -295,112 +295,147 @@
           "items": {
             "type": "object",
             "properties": {
-              "model": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "description": "Catalog name of the model entry."
-                  },
-                  "sha256Checksum": {
-                    "type": "string",
-                    "description": "Expected SHA-256 checksum of the model file."
-                  },
-                  "registryPath": {
-                    "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
-                    "type": "string"
-                  },
-                  "registrySource": {
-                    "description": "Registry source identifier, e.g. `huggingface`.",
-                    "type": "string"
-                  }
-                },
-                "required": ["name", "sha256Checksum"],
-                "description": "Catalog model constant to assess.",
-                "title": "AssessModelFitRequestModelsItemModel"
-              },
-              "artifacts": {
-                "description": "Additional catalog constants this load also requires.",
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string",
-                      "description": "Catalog name of the model entry."
-                    },
-                    "sha256Checksum": {
-                      "type": "string",
-                      "description": "Expected SHA-256 checksum of the model file."
-                    },
-                    "registryPath": {
-                      "description": "Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
-                      "type": "string"
-                    },
-                    "registrySource": {
-                      "description": "Registry source identifier, e.g. `huggingface`.",
-                      "type": "string"
-                    }
-                  },
-                  "required": ["name", "sha256Checksum"],
-                  "title": "AssessModelFitRequestModelsItemArtifactsItem"
-                }
-              },
-              "workload": {
-                "oneOf": [
+              "modelSrc": {
+                "description": "The model to assess, as `loadModel` takes it. Optional for the loads `loadModel` also takes without one, where every source is a config field.",
+                "anyOf": [
                   {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "const": "llm"
-                      },
-                      "contextTokens": {
-                        "type": "integer",
-                        "exclusiveMinimum": 0,
-                        "maximum": 9007199254740991,
-                        "description": "Context window the caller intends to use, in tokens."
-                      }
-                    },
-                    "required": ["kind", "contextTokens"],
-                    "description": "Token-context workload for llama.cpp completion and embedding models.",
-                    "title": "AssessModelFitRequestModelsItemWorkloadLlm"
+                    "type": "string"
                   },
                   {
                     "type": "object",
                     "properties": {
-                      "kind": {
+                      "src": {
                         "type": "string",
-                        "const": "audio"
+                        "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
                       },
-                      "windowMs": {
-                        "type": "number",
-                        "exclusiveMinimum": 0,
-                        "description": "Audio window handed to the engine per call, in milliseconds."
+                      "name": {
+                        "description": "Display name for this model instance; overrides the name derived from the source.",
+                        "type": "string"
                       },
-                      "streaming": {
-                        "type": "boolean",
-                        "description": "Whether the caller streams continuously."
+                      "modelId": {
+                        "description": "Unique identifier used to reference the model in QVAC calls.",
+                        "type": "string"
                       },
-                      "batch": {
-                        "description": "Concurrent windows per call.",
-                        "type": "integer",
-                        "exclusiveMinimum": 0,
-                        "maximum": 9007199254740991
+                      "registryPath": {
+                        "description": "Registry-relative path to the model (set for registry-backed models).",
+                        "type": "string"
+                      },
+                      "registrySource": {
+                        "description": "Registry source identifier, e.g. `huggingface`.",
+                        "type": "string"
+                      },
+                      "blobCoreKey": {
+                        "description": "Hyperdrive blob core key for the model file.",
+                        "type": "string"
+                      },
+                      "blobIndex": {
+                        "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                        "type": "number"
+                      },
+                      "engine": {
+                        "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                        "type": "string"
+                      },
+                      "expectedSize": {
+                        "description": "Expected total size of the model file in bytes.",
+                        "type": "number"
+                      },
+                      "sha256Checksum": {
+                        "description": "Expected SHA-256 checksum of the model file.",
+                        "type": "string"
+                      },
+                      "addon": {
+                        "description": "Inference addon / capability category this model belongs to.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "llamacpp-completion",
+                              "whispercpp-transcription",
+                              "bci-whispercpp-transcription",
+                              "llamacpp-embedding",
+                              "nmtcpp-translation",
+                              "onnx-tts",
+                              "tts-ggml",
+                              "parakeet-transcription",
+                              "ggml-ocr",
+                              "sdcpp-generation",
+                              "audiogen-ggml",
+                              "ggml-vla",
+                              "ggml-classification",
+                              "llm",
+                              "whisper",
+                              "bci",
+                              "embeddings",
+                              "nmt",
+                              "parakeet",
+                              "tts",
+                              "ocr",
+                              "diffusion",
+                              "audiogen",
+                              "vla",
+                              "classification"
+                            ],
+                            "title": "AssessModelFitRequestModelsItemModelSrcAddon"
+                          },
+                          {
+                            "type": "string",
+                            "const": "vad"
+                          }
+                        ]
                       }
                     },
-                    "required": ["kind", "windowMs", "streaming"],
-                    "description": "Audio-window workload for speech-to-text models.",
-                    "title": "AssessModelFitRequestModelsItemWorkloadAudio"
+                    "required": ["src"],
+                    "title": "AssessModelFitRequestModelsItemModelSrc"
                   }
+                ]
+              },
+              "modelType": {
+                "type": "string",
+                "enum": [
+                  "llamacpp-completion",
+                  "whispercpp-transcription",
+                  "bci-whispercpp-transcription",
+                  "llamacpp-embedding",
+                  "nmtcpp-translation",
+                  "onnx-tts",
+                  "tts-ggml",
+                  "parakeet-transcription",
+                  "ggml-ocr",
+                  "sdcpp-generation",
+                  "audiogen-ggml",
+                  "ggml-vla",
+                  "ggml-classification",
+                  "llm",
+                  "whisper",
+                  "bci",
+                  "embeddings",
+                  "nmt",
+                  "parakeet",
+                  "tts",
+                  "ocr",
+                  "diffusion",
+                  "audiogen",
+                  "vla",
+                  "classification"
                 ],
-                "description": "Workload the caller intends to run."
+                "description": "Engine that would run the load.",
+                "title": "AssessModelFitRequestModelsItemModelType"
+              },
+              "modelConfig": {
+                "description": "The config `loadModel` would be given, including any companion model sources.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {},
+                "title": "AssessModelFitRequestModelsItemModelConfig"
               }
             },
-            "required": ["model", "workload"],
+            "required": ["modelType"],
             "title": "AssessModelFitRequestModelsItem"
           },
-          "description": "Candidates to assess together under one memory budget."
+          "description": "Models to assess together under one memory budget."
         },
         "execution": {
           "default": "sequential",
