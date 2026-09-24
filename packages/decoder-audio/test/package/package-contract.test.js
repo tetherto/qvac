@@ -111,6 +111,7 @@ function assertInstalledModulesResolve(consumerRoot) {
 
 test('published files declare every external runtime module', () => {
   const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'))
+  assert.equal(packageJson.dependencies['@qvac/infer-base'], '^0.6.2')
   const packedFiles = runPack().files
   const packedPaths = new Set(packedFiles.map((file) => file.path))
   const externalModules = collectExternalModules(packedFiles, packageJson)
