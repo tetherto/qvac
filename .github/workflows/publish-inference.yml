@@ -86,6 +86,25 @@ jobs:
           package-json-path: packages/inference/package.json
           changelog-path: packages/inference/CHANGELOG.md
 
+  # Same check as on-pr-inference-shared-runtime-libs.yml, re-run against the
+  # peers on npm at publish time.
+  shared-runtime-libs:
+    name: Shared runtime libs resolve once
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Check @qvac/inference with all optional peers
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/inference
+
   build:
     needs:
       - fork-approval
@@ -158,7 +177,10 @@ jobs:
       - fork-approval
       - build
       - release-merge-guard
-    if: needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'
+      - shared-runtime-libs
+    if: >-
+      needs.shared-runtime-libs.result == 'success' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
     environment: npm
     outputs:
