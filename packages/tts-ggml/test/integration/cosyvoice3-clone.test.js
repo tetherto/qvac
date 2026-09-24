@@ -22,7 +22,10 @@ const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
-const useGPU = !isMobile && proc.env.NO_GPU === 'false'
+// GPU unless the lane says NO_GPU=true, like the other integration tests: the
+// nx workflow leaves NO_GPU unset on its GPU rows, and zero-shot cloning on CPU
+// runs past the 30-min timeout.
+const useGPU = !isMobile && proc.env.NO_GPU !== 'true'
 
 function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
