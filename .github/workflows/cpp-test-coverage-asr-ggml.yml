@@ -271,6 +271,24 @@ jobs:
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
 
+      # Keep collecting diagnostics after a test failure, but never let the
+      # continue-on-error above turn an abort or missing report into green CI.
+      - name: Require successful C++ test execution
+        if: always() && !cancelled()
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          CPP_TEST_OUTCOME: ${{ steps.cpp-tests.outcome }}
+        run: |
+          if [ "$CPP_TEST_OUTCOME" != "success" ]; then
+            echo "::error::C++ test execution did not succeed (outcome: $CPP_TEST_OUTCOME)"
+            exit 1
+          fi
+          if [ ! -s build/addon/tests/cpp-test-results.xml ]; then
+            echo "::error::C++ tests did not produce a nonempty test report"
+            exit 1
+          fi
+
   coverage-report:
     permissions:
       contents: read
@@ -300,4 +318,3 @@ jobs:
               echo "" >> $GITHUB_STEP_SUMMARY
             fi
           done
-
