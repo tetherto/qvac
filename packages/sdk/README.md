@@ -75,6 +75,12 @@ try {
 node quickstart.js
 ```
 
+A first `loadModel()` call also starts the SDK's worker. If that startup ever
+exceeds its budget (cold disk cache, antivirus scanning the native addon), the
+call fails with `RPC_INIT_TIMEOUT`. Re-running usually succeeds; to give every
+start more room, raise `rpcInitTimeoutMs` in `qvac.config.*` or set the
+`QVAC_RPC_INIT_TIMEOUT_MS` environment variable.
+
 ## System resource diagnostics
 
 Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and
