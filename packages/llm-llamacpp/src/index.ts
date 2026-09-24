@@ -1122,6 +1122,10 @@ namespace LlmLlamacpp {
      * than being skipped. Endpoints must run a server built from the same
      * qvac-fabric revision as this addon, since the RPC wire protocol is
      * versioned and mismatched builds refuse to connect.
+     * With the default `split-mode: 'none'`, `devices` must name one device;
+     * automatic single-device selection never picks an RPC device.
+     * A load also fails if its final device selection uses none of the devices
+     * registered by these endpoints.
      *
      * The channel is unauthenticated: use it only on a trusted private network.
      */
@@ -1132,7 +1136,8 @@ namespace LlmLlamacpp {
      * visible device — which is rarely what you want once remote devices are
      * registered, since the list then mixes local and remote. Names come from
      * the ggml registry (`RPC0`, `RPC1`, … for remote devices, in the order
-     * given to `rpc-servers`).
+     * given to `rpc-servers`). Multiple names require `split-mode: 'layer'`
+     * or `'tensor'`; the default `'none'` accepts only one device.
      */
     devices?: string;
     "cache-type-k"?: string;

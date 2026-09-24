@@ -28,9 +28,7 @@
         "cwd": "packages/llm-llamacpp",
         "ci": {
           "artifactNamePrefix": "llama-cpp-",
-          "includeVulkanSdk": true,
-          "linuxExtraPackages": "libibverbs-dev",
-          "postArtifactBuildCommand": "bash ../../.github/scripts/validate-rpc-rdma-build.sh"
+          "includeVulkanSdk": true
         }
       },
       "inputs": [

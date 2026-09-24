@@ -196,26 +196,35 @@ Remote devices are named `RPC0`, `RPC1`, … in the order given to `rpc-servers`
 Set `devices` to name exactly which ones take part. Without it, split modes
 distribute across *every* visible device — sensible for local multi-GPU, but
 rarely what you want here, because the registry then mixes local and remote.
+With the default `split-mode: 'none'`, name only one device (e.g. `RPC0`);
+multiple names such as `RPC0,RPC1` require `split-mode: 'layer'` or `'tensor'`.
+Under `'none'`, omitting `devices` also fails before connecting: automatic
+single-device selection ignores RPC devices even when a local GPU is available.
+The load likewise fails if multiple devices are named under `'none'`, instead
+of silently using only the first device.
+In any split mode, specifying `rpc-servers` while selecting only local devices
+also fails: at least one RPC device registered by this load must participate.
 The addon forwards the endpoint list, device list, split mode, and split weights
 without imposing a device-count limit. Fabric determines which device counts a
 parallel mode supports.
 
-Automatic backend selection never considers RPC devices on its own — it can't
-reason about whether a remote device is reachable or suitable the way it can
-for local hardware. **On a machine with no local GPU, `rpc-servers` without
-`devices` fails the load** rather than silently running the model on the local
-CPU. Set `devices` in that case (e.g. `'RPC0,RPC1'`).
+Automatic *single-device* selection never considers RPC devices; with
+`split-mode: 'none'`, name one explicitly (e.g. `RPC0`). In `layer` and `tensor`
+mode, the eligible RPC devices are included in the split set even on a headless
+node without `devices`. Name them explicitly when you want to restrict that
+set. If neither the servers nor the local machine expose an eligible GPU, the
+load fails rather than silently running on the local CPU.
 
 ### Requirements and caveats
 
 - **Matching builds.** The RPC wire protocol is versioned. Client and every
   server must be built from the same qvac-fabric revision; mismatched builds
   refuse to connect.
-- **RDMA-capable builds.** RDMA uses qvac-fabric's `GGML_RPC_RDMA` path and
-  auto-negotiates over the existing RPC endpoint when both sides support it.
-  Build both `@qvac/llm-llamacpp` and `@qvac/ggml-rpc-server` with the
-  `rpc-rdma` vcpkg feature; a server-only RDMA build still falls back to TCP
-  with a TCP-only client.
+- **RDMA.** RPC transport currently uses TCP with the published `@qvac/fabric`
+  client prebuild linked by this addon. Building `@qvac/llm-llamacpp` with a
+  `rpc-rdma` vcpkg feature would not change that prebuild. RDMA negotiation
+  requires an RDMA-enabled `@qvac/fabric` client build as well as an
+  RDMA-enabled server; an RDMA-enabled server alone falls back to TCP.
 - **Model file.** Needed only on the machine loading it. Weights are pushed to
   the remote devices.
 - **Reachability at load.** Every endpoint must be reachable when the model
@@ -252,18 +261,18 @@ load_tensors: layer   9 assigned to device RPC1
 rpc-servers ──> Remote devices registered FIRST, so the steps below see them
   │              alongside local ones (RPC0, RPC1, ... in the order given)
   ▼
-device ─── 'cpu' ──> All GPU params ignored, CPU inference
+device ─── 'cpu' ──> RPC request rejected; otherwise CPU inference
   │
   └── 'gpu' ──> Backend selection runs (considers main-gpu)
                   │
-                  ├── No GPU found ──> CPU fallback
-                  │   split-mode, tensor-split, main-gpu all cleared
+                  ├── No eligible GPU found ──> Error if rpc-servers was set;
+                  │   otherwise CPU fallback, GPU params cleared
                   │
                   └── GPU found
                         │
-                        ├── devices = 'RPC0,RPC1' (any split-mode)
-                        │   Passed through verbatim as --device; the two
-                        │   branches below do not apply
+                        ├── devices = 'RPC0,RPC1'
+                        │   Requires split-mode = 'layer' | 'tensor';
+                        │   explicit list pins placement to both devices
                         │
                         ├── split-mode = 'none' (default)
                         │   Model pinned to single chosen GPU via --device
@@ -289,9 +298,9 @@ The path taken depends on the split mode, and the two are genuinely different co
 - **`split-mode: 'none'`** (or omitted): `chooseBackend()` picks a single device, honouring `main-gpu`. The chosen backend name is passed as `--device <backend>`, pinning inference to that one GPU.
 - **`split-mode: 'layer'` or `'tensor'`**: `chooseBackend()` is not used at all. The eligible device list is built first, and everything is derived from it: placement, the device handles, the OpenCL/Metal/Adreno traits and the device count. `main-gpu` is ignored.
 
-In both cases, only devices whose backend family is in the allowlist are considered. If nothing survives, a warning names the rejected device and registry identities, and the load falls back to CPU with `split-mode` reset to `'none'` and `tensor-split` erased.
+In both cases, only devices whose backend family is in the allowlist are considered. If nothing survives, a load without `rpc-servers` falls back to CPU with `split-mode` reset to `'none'` and `tensor-split` erased; a load that requested RPC fails instead. A warning names rejected device and registry identities when applicable.
 
-- **`devices` set** (any split-mode): the list is passed through verbatim as `--device`, and the split-device selection rules below do not apply. This is the most predictable way to constrain which RPC devices take part.
+- **`devices` set** (any split-mode): the addon resolves RPC aliases, validates the named devices against the eligible set, and passes that selection as `--device`. This is the most predictable way to constrain which RPC devices take part; under `'none'`, only one name is allowed.
 
 ### Why the device list is pinned in split modes
 
@@ -370,9 +379,12 @@ Skips integrated GPUs during backend selection. Falls back to CPU if no discrete
 | Scenario | Result |
 |----------|--------|
 | `device: 'cpu'` with split params set | All split params silently ignored |
-| `device: 'gpu'` but no GPU available | Falls back to CPU; `split-mode` reset to `'none'`, `tensor-split` erased, warning logged |
+| `device: 'gpu'` but no eligible GPU available | Without `rpc-servers`, falls back to CPU with `split-mode` reset to `'none'` and `tensor-split` erased; with `rpc-servers`, throws `InvalidArgument` |
 | `split-mode: 'layer'` or `'tensor'` with any `main-gpu` | `main-gpu` is ignored and a warning is logged. It does not filter the split device list and cannot by itself cause CPU fallback. Every eligible device participates |
 | `split-mode: 'none'` with `tensor-split` set | `tensor-split` has no effect (only one GPU is used) |
+| `split-mode: 'none'` with multiple explicit `devices` | Throws `InvalidArgument`; use `'layer'` or `'tensor'` to use every named device |
+| `rpc-servers` with `split-mode: 'none'` and no `devices` | Throws `InvalidArgument` before connecting; automatic single-device selection ignores RPC devices |
+| `rpc-servers` with final placement containing no device registered by this load | Throws `InvalidArgument`; remove `rpc-servers` or include a current RPC device in `devices` |
 | Invalid `split-mode` value | Throws `InvalidArgument` error |
 | `split-mode: 'row'` | Throws `InvalidArgument` — the mode was removed; the error directs callers to `'layer'` or `'tensor'` |
 | `split-mode: 'tensor'` with an unsupported architecture | Throws `InvalidArgument` before loading, naming the architecture and suggesting `'layer'` |
