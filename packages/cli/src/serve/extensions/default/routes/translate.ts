@@ -35,7 +35,10 @@ Translate text with a configured NMT model, backed by the SDK's \`translate()\`.
 
 \`text\` is a single string, or an array of up to ${MAX_BATCH_INPUTS} for batch.
 \`translations\` comes back in the order the inputs were given, one entry per
-input. \`stats\` is returned for a single input; a batch does not report stats.
+input. \`stats\` is returned for a single input and describes that request
+alone. A batch does not report stats, and neither does the first single input
+after a batch on the same model, whose work the engine cannot separate from the
+batch's.
 
 \`stream: true\` emits Server-Sent Events. A single input emits
 \`translation.chunk\` events carrying \`delta\` as the text is decoded. An array
