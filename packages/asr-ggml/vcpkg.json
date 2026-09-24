@@ -12,42 +12,28 @@
     },
     {
       "name": "ggml-speech",
-      "version>=": "2026-09-15",
+      "version>=": "2026-09-24",
       "default-features": false
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-18#1",
+      "version>=": "2026-09-24",
       "default-features": false,
-      "features": [
-        "whisper",
-        "parakeet",
-        "coreml",
-        "metal"
-      ],
+      "features": ["whisper", "parakeet", "coreml", "metal"],
       "platform": "osx | ios"
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-18#1",
+      "version>=": "2026-09-24",
       "default-features": false,
-      "features": [
-        "whisper",
-        "parakeet",
-        "vulkan",
-        "opencl"
-      ],
+      "features": ["whisper", "parakeet", "vulkan", "opencl"],
       "platform": "android"
     },
     {
       "name": "speech-cpp",
-      "version>=": "2026-09-18#1",
+      "version>=": "2026-09-24",
       "default-features": false,
-      "features": [
-        "whisper",
-        "parakeet",
-        "vulkan"
-      ],
+      "features": ["whisper", "parakeet", "vulkan"],
       "platform": "!(osx | ios | android)"
     },
     {
@@ -78,20 +64,16 @@
       "dependencies": [
         {
           "name": "speech-cpp",
-          "version>=": "2026-09-18#1",
+          "version>=": "2026-09-24",
           "default-features": false,
-          "features": [
-            "cuda"
-          ],
+          "features": ["cuda"],
           "platform": "!(osx | ios | android)"
         }
       ]
     },
     "tests": {
       "description": "Build C++ unit tests",
-      "dependencies": [
-        "gtest"
-      ]
+      "dependencies": ["gtest"]
     }
   }
 }

@@ -7,16 +7,16 @@
   "registries": [
     {
       "kind": "git",
+      "baseline": "61a9a71959c196b6be6a03ef6adcbabf83142705",
+      "reference": "61a9a71959c196b6be6a03ef6adcbabf83142705",
+      "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
+      "packages": ["ggml-speech", "speech-cpp"]
+    },
+    {
+      "kind": "git",
       "baseline": "16c71a39e5a0fc0bdb3fad03beef8f38ee00ee3b",
       "repository": "https://github.com/microsoft/vcpkg",
-      "packages": [
-        "gtest",
-        "vulkan",
-        "vulkan-headers",
-        "vulkan-loader",
-        "spirv-headers",
-        "zlib"
-      ]
+      "packages": ["gtest", "vulkan", "vulkan-headers", "vulkan-loader", "spirv-headers", "zlib"]
     }
   ]
 }
