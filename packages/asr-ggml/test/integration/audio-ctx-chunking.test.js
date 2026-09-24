@@ -3,7 +3,13 @@ const fs = require('bare-fs')
 const path = require('bare-path')
 const test = require('brittle')
 const ASRGgml = require('../../index.js')
-const { ensureWhisperModel, getTestPaths, createAudioStream, isMobile } = require('./helpers.js')
+const {
+  ensureWhisperModel,
+  getTestPaths,
+  createAudioStream,
+  isMobile,
+  WHISPER_TEST_THREADS
+} = require('./helpers.js')
 
 const LONG_AUDIO_TIMEOUT_MS = 30 * 60 * 1000
 
@@ -88,7 +94,8 @@ test('Audio context chunking - long audio file with 30s chunks', { skip: isMobil
       language: 'en',
       audio_format: 's16le',
       temperature: 0.0,
-      suppress_nst: true
+      suppress_nst: true,
+      n_threads: WHISPER_TEST_THREADS
     }
   }
 

@@ -199,7 +199,9 @@ function functionalModelsByTest(manifest) {
     runParlerTest: parler,
     runSupertonicMtlTest: supertonicMtl,
     runSupertonicTest: supertonic,
-    runSupertonic3QuantTest: supertonic3
+    runSupertonic3QuantTest: supertonic3,
+    // Model-free: compares the JS vocabulary tables with the native one.
+    runVoiceControlsTest: []
   }
 }
 

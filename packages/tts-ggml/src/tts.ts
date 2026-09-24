@@ -22,6 +22,9 @@ export interface TTSJobData {
   noise?: string;
   reverb?: string;
   quality?: string;
+  // CosyVoice3 per-call instruction (sibling of `input`), read by
+  // JSAdapter::readVoiceControls with emotion / pace.
+  instruct?: string;
   // Audio8 per-call voice cloning (siblings of `input`), read by
   // JSAdapter::readAudio8Voice. Ignored by other engines.
   referenceAudio?: string;
@@ -41,7 +44,15 @@ export type TTSOutputCallback = (
   error: unknown,
 ) => void;
 
+/** getVoiceControls() payload, keyed by tts-cpp's engine names. */
+export interface NativeVoiceControls {
+  emotions: string[];
+  paces: string[];
+  engines: Record<string, { emotions: string[]; paces: string[] }>;
+}
+
 export interface TTSBinding {
+  getVoiceControls(): NativeVoiceControls;
   createInstance(
     owner: TTSInterface,
     configuration: TTSConfigurationParams,

@@ -439,8 +439,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/infer-base':
-        specifier: ^0.6.0
-        version: 0.6.1(bare-abort-controller@1.1.2)
+        specifier: ^0.6.2
+        version: 0.6.2(bare-abort-controller@1.1.2)
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -4216,9 +4216,6 @@ packages:
 
   '@qvac/infer-base@0.4.2':
     resolution: {integrity: sha512-Vm5V/3a0oMBdxjfUpZxXrV+xRMLHeXrnKjKwOJSh+y85nRi7Ux+8Iakj4QAsfbrsERWkSTxUQM34KlE9Rb4PdA==}
-
-  '@qvac/infer-base@0.6.1':
-    resolution: {integrity: sha512-6ostRCnmiWz5IM9EQHZisIuB2IAJ3K6mLHMiA2QNZqV03GnI3VsgtPDLzyNXODauJS3Q8eTch1I0khpZscGutA==}
 
   '@qvac/infer-base@0.6.2':
     resolution: {integrity: sha512-soUTI8227F0l2XYSeMHPEfwlZV1Cohe2rhZGiSYFMkm3Ak2N+JV4fufD5SBeNMFq0byrqgt8BWWlcbLSFCVqCw==}
@@ -13355,13 +13352,6 @@ snapshots:
       bare-path: 3.1.1
     optionalDependencies:
       '@qvac/diagnostics': 0.1.2
-    transitivePeerDependencies:
-      - bare-abort-controller
-
-  '@qvac/infer-base@0.6.1(bare-abort-controller@1.1.2)':
-    dependencies:
-      bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-os: 3.9.3
     transitivePeerDependencies:
       - bare-abort-controller
 
