@@ -609,8 +609,8 @@ void ChatterboxModel::unloadLocked() {
   engine_.reset();
   enhancer_.reset();
   denoiser_.reset();
-  denoiserBackendDevice_ = kBackendDeviceNone;
-  denoiserBackendId_ = kBackendIdNone;
+  denoiserBackendDevice_ = -1;
+  denoiserBackendId_ = -1;
 }
 
 void ChatterboxModel::cancel() const {
