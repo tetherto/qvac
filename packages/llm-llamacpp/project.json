@@ -103,7 +103,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/llm-llamacpp",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "scope-rewrite",
           "repoName": "llamacpp-llm",

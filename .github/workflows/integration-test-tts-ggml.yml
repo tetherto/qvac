@@ -266,7 +266,7 @@ jobs:
 
       # Deliberately NOT seeded, and deliberately not kept alive either.
       #
-      # This step already writes a COMPLETE entry: on-merge-tts-ggml.yml calls
+      # This step already writes a COMPLETE entry: on-merge-nx.yml calls
       # this workflow on a push to main (gated on a successful publish), and
       # same-repo PR lanes take cache-models' trusted-save branch too, so the
       # post-job save captures both the registry GGUFs and whatever
