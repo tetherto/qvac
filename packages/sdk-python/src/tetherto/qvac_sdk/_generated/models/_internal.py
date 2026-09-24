@@ -2405,110 +2405,6 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
     ] = None
 
 
-class BciTranscribeResponseDiagnosticsSelectedDevice(Enum):
-    cpu = "cpu"
-    gpu = "gpu"
-
-
-class BciTranscribeResponseDiagnosticsGraphicsApi(Enum):
-    vulkan = "vulkan"
-    opencl = "opencl"
-    opengl = "opengl"
-    webgpu = "webgpu"
-    metal = "metal"
-    direct3d11 = "direct3d11"
-    direct3d12 = "direct3d12"
-    cuda = "cuda"
-    level_zero = "levelZero"
-    rocm = "rocm"
-
-
-class BciTranscribeResponseDiagnosticsDriver(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    name: Annotated[str, Field(min_length=1)]
-    version: Annotated[str | None, Field(min_length=1)] = None
-
-
-class BciTranscribeResponseDiagnosticsFallbackRequestedDevice(Enum):
-    cpu = "cpu"
-    gpu = "gpu"
-
-
-class BciTranscribeResponseDiagnosticsFallback(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    requested_backend: Annotated[
-        str | None, Field(alias="requestedBackend", min_length=1)
-    ] = None
-    requested_device: Annotated[
-        BciTranscribeResponseDiagnosticsFallbackRequestedDevice | None,
-        Field(
-            alias="requestedDevice",
-            title="BciTranscribeResponseDiagnosticsFallbackRequestedDevice",
-        ),
-    ] = None
-    reason: Annotated[str, Field(min_length=1)]
-
-
-class BciTranscribeResponseDiagnosticsProbeStatus(Enum):
-    compatible = "compatible"
-    incompatible = "incompatible"
-    unknown = "unknown"
-
-
-class BciTranscribeResponseDiagnosticsProbe(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    status: Annotated[
-        BciTranscribeResponseDiagnosticsProbeStatus,
-        Field(title="BciTranscribeResponseDiagnosticsProbeStatus"),
-    ]
-    backend: Annotated[str, Field(min_length=1)]
-    reason: str | None = None
-
-
-class BciTranscribeResponseDiagnostics(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
-    selected_device: Annotated[
-        BciTranscribeResponseDiagnosticsSelectedDevice,
-        Field(
-            alias="selectedDevice",
-            title="BciTranscribeResponseDiagnosticsSelectedDevice",
-        ),
-    ]
-    graphics_api: Annotated[
-        BciTranscribeResponseDiagnosticsGraphicsApi | None,
-        Field(alias="graphicsApi", title="BciTranscribeResponseDiagnosticsGraphicsApi"),
-    ] = None
-    driver: Annotated[
-        BciTranscribeResponseDiagnosticsDriver | None,
-        Field(title="BciTranscribeResponseDiagnosticsDriver"),
-    ] = None
-    gpu_id: Annotated[
-        str | None,
-        Field(
-            alias="gpuId",
-            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
-            min_length=1,
-        ),
-    ] = None
-    fallback: Annotated[
-        BciTranscribeResponseDiagnosticsFallback | None,
-        Field(title="BciTranscribeResponseDiagnosticsFallback"),
-    ] = None
-    probe: Annotated[
-        BciTranscribeResponseDiagnosticsProbe | None,
-        Field(title="BciTranscribeResponseDiagnosticsProbe"),
-    ] = None
-
-
 class BciTranscribeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2523,13 +2419,6 @@ class BciTranscribeResponse(GeneratedBaseModel):
         BciTranscribeResponseSegment | None, Field(title="BciTranscribeResponseSegment")
     ] = None
     type: Literal["bciTranscribe"] = "bciTranscribe"
-    diagnostics: Annotated[
-        BciTranscribeResponseDiagnostics | None,
-        Field(
-            description="Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
-            title="BciTranscribeResponseDiagnostics",
-        ),
-    ] = None
 
 
 class BciTranscribeStreamRequestStreamOptsEmit(Enum):
@@ -2716,15 +2605,6 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
         Field(
             alias="startsWord",
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
-        ),
-    ] = None
-    window_start_timestep: Annotated[
-        int | None,
-        Field(
-            alias="windowStartTimestep",
-            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
-            ge=0,
-            le=9007199254740991,
         ),
     ] = None
 
@@ -5096,59 +4976,62 @@ class NativeProbeFitPlan(GeneratedBaseModel):
     ]
 
 
-class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    name: Annotated[
-        str, Field(description="Device name as the backend reports it, or `host`.")
-    ]
-    total_bytes: Annotated[
-        float,
-        Field(alias="totalBytes", description="Memory the device reports installed."),
-    ]
-    free_bytes: Annotated[
-        float,
-        Field(
-            alias="freeBytes",
-            description="Memory the device reports free, before the margin.",
-        ),
-    ]
-    margin_bytes: Annotated[
-        float,
-        Field(
-            alias="marginBytes",
-            description="Headroom the fitter withheld on this device.",
-        ),
-    ]
-    model_bytes: Annotated[
-        float,
-        Field(alias="modelBytes", description="Weights the load would place here."),
-    ]
-    context_bytes: Annotated[
-        float,
-        Field(
-            alias="contextBytes",
-            description="Context and cache the load would place here.",
-        ),
-    ]
-    compute_bytes: Annotated[
-        float,
-        Field(
-            alias="computeBytes",
-            description="Compute buffers the load would place here.",
-        ),
-    ]
-
-
 class NativeProbeFitProjection(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    devices: Annotated[
-        list[NativeProbeFitProjectionDevicesItem],
-        Field(description="Every device the load would touch."),
-    ]
+    device_name: Annotated[
+        str | None,
+        Field(
+            alias="deviceName", description="Device the projection was made against."
+        ),
+    ] = None
+    device_bytes: Annotated[
+        float | None,
+        Field(
+            alias="deviceBytes",
+            description="Peak the load would place on the device, under the workload the probe assumed.",
+        ),
+    ] = None
+    host_bytes: Annotated[
+        float | None,
+        Field(alias="hostBytes", description="Peak the load would place in host RAM."),
+    ] = None
+    weights_bytes: Annotated[
+        float | None,
+        Field(alias="weightsBytes", description="Model weights, within `deviceBytes`."),
+    ] = None
+    context_bytes: Annotated[
+        float | None,
+        Field(
+            alias="contextBytes",
+            description="Context, KV cache and decoder state, within `deviceBytes`.",
+        ),
+    ] = None
+    compute_bytes: Annotated[
+        float | None,
+        Field(
+            alias="computeBytes",
+            description="Compute buffers and graph arenas, within `deviceBytes`.",
+        ),
+    ] = None
+    device_free_bytes: Annotated[
+        float | None,
+        Field(
+            alias="deviceFreeBytes",
+            description="Device memory free when the probe ran.",
+        ),
+    ] = None
+    device_total_bytes: Annotated[
+        float | None,
+        Field(alias="deviceTotalBytes", description="Device memory installed."),
+    ] = None
+    report: Annotated[
+        str | None,
+        Field(
+            description="The engine's own per-module memory table, suitable for a log line."
+        ),
+    ] = None
 
 
 class NativeProbeFit(GeneratedBaseModel):
@@ -5158,21 +5041,27 @@ class NativeProbeFit(GeneratedBaseModel):
     verdict: Annotated[
         NativeProbeFitVerdict,
         Field(
-            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.",
             title="NativeProbeFitVerdict",
         ),
     ]
     basis: Annotated[
         Literal["native-probe"],
         Field(
-            description="Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+            description="Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
         ),
     ] = "native-probe"
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Engine package whose fitter produced this outcome. Absent when none ran."
+        ),
+    ] = None
     estimator_version: Annotated[
         str,
         Field(
             alias="estimatorVersion",
-            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve.",
+            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against what the system reports free, less the same 1024 MiB, counting device memory only where it comes out of system RAM.",
         ),
     ]
     reason: Annotated[
@@ -5187,7 +5076,7 @@ class NativeProbeFit(GeneratedBaseModel):
     plan: Annotated[
         NativeProbeFitPlan | None,
         Field(
-            description="Placement the probe projected. Present wherever the fitter resolved one.",
+            description="Placement the probe projected. Present only on a `fit` verdict.",
             title="NativeProbeFitPlan",
         ),
     ] = None
@@ -9982,7 +9871,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call."
+            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
         ),
     ] = None
     greedy_best_of: Annotated[

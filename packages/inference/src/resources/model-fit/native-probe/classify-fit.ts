@@ -38,6 +38,73 @@ function reasonFor(probe: FitProbeResult): string {
   return probe.engine === 'diffusion-cpp' ? diffusionReason(probe.result) : probe.result.reason
 }
 
+type Breakdown = Pick<NativeProbeProjection, 'weightsBytes' | 'contextBytes' | 'computeBytes'>
+
+function sumOf(...values: (number | undefined)[]): number | undefined {
+  const present = values.filter((value): value is number => value !== undefined)
+  return present.length === 0 ? undefined : present.reduce((total, value) => total + value, 0)
+}
+
+function breakdown(
+  weights: number | undefined,
+  context: number | undefined,
+  compute: number | undefined
+): Breakdown {
+  return {
+    ...(weights !== undefined && { weightsBytes: weights }),
+    ...(context !== undefined && { contextBytes: context }),
+    ...(compute !== undefined && { computeBytes: compute })
+  }
+}
+
+/**
+ * The parts of `deviceBytes` the engine separates. Audiogen reports a peak
+ * across pipeline phases and diffusion a per-module table, neither of which
+ * divides into these three, so both come back empty.
+ *
+ * The llama rows are summed over the same devices the engine's own
+ * `deviceBytes` covers, which is every row but `host`.
+ */
+function breakdownFor(probe: FitProbeResult): Breakdown {
+  if (isLlama(probe)) {
+    const devices = probe.result.devices.filter((device) => device.name !== HOST_ROW)
+    return breakdown(
+      sumOf(...devices.map((device) => device.modelBytes)),
+      sumOf(...devices.map((device) => device.contextBytes)),
+      sumOf(...devices.map((device) => device.computeBytes))
+    )
+  }
+
+  // Whisper names its parts `kvBytes` and `computeBytes`, parakeet splits
+  // compute across encoder and decoder; an engine fills one set or the other.
+  if (probe.engine === 'asr-ggml') {
+    const result = probe.result
+    // A VAD model's weights are inside `deviceBytes`, so they belong in the
+    // weights the breakdown divides it into.
+    return breakdown(
+      sumOf(result.weightsBytes, result.vadBytes),
+      sumOf(result.kvBytes, result.decoderStateBytes),
+      sumOf(result.computeBytes, result.encoderComputeBytes, result.decoderComputeBytes)
+    )
+  }
+
+  if (probe.engine === 'bci-whispercpp') {
+    const result = probe.result
+    return breakdown(result.weightsBytes, result.kvBytes, result.computeBytes)
+  }
+
+  if (probe.engine === 'tts-ggml') {
+    const result = probe.result
+    return breakdown(
+      result.weightsBytes,
+      result.stateBytes,
+      sumOf(result.lmComputeBytes, result.codecComputeBytes)
+    )
+  }
+
+  return {}
+}
+
 function llamaProjection(probe: LlamaProbe): NativeProbeProjection {
   const first = probe.result.devices.find(
     (device) => device.name !== HOST_ROW && device.name !== CPU_DEVICE
@@ -46,6 +113,7 @@ function llamaProjection(probe: LlamaProbe): NativeProbeProjection {
   return {
     deviceBytes: probe.result.deviceBytes,
     hostBytes: probe.result.hostBytes,
+    ...breakdownFor(probe),
     ...(first !== undefined && {
       deviceName: first.name,
       deviceFreeBytes: first.freeBytes,
@@ -67,7 +135,8 @@ function projectionFor(probe: FitProbeResult): NativeProbeProjection {
     hostBytes: result.hostBytes,
     deviceFreeBytes: result.deviceFreeBytes,
     deviceTotalBytes: result.deviceTotalBytes,
-    report: result.report
+    report: result.report,
+    ...breakdownFor(probe)
   }
 }
 

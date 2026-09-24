@@ -163,6 +163,54 @@ test('a speech projection carries the device the engine measured', (t) => {
     hostBytes: 128 * 1024 ** 2,
     deviceFreeBytes: 20 * 1024 ** 3,
     deviceTotalBytes: 24 * 1024 ** 3,
-    report: 'table'
+    report: 'table',
+    weightsBytes: 1024 ** 3,
+    contextBytes: 0,
+    computeBytes: 0
   })
+})
+
+test('the llama breakdown sums every device the demand is charged to', (t) => {
+  const rows = [
+    { ...device('CUDA0', 3 * 1024 ** 3), contextBytes: 1024 ** 3, computeBytes: 256 * 1024 ** 2 },
+    { ...device('CUDA1', 2 * 1024 ** 3), contextBytes: 512 * 1024 ** 2, computeBytes: 0 },
+    { ...device('host', 1024 ** 3), contextBytes: 1024 ** 3, computeBytes: 1024 ** 3 }
+  ]
+
+  const outcome = classifyFit(llama(rows), PROVENANCE)
+
+  t.is(outcome.projection?.weightsBytes, 5 * 1024 ** 3)
+  t.is(outcome.projection?.contextBytes, 1536 * 1024 ** 2)
+  t.is(outcome.projection?.computeBytes, 256 * 1024 ** 2)
+})
+
+test('an engine reporting only a total has no breakdown', (t) => {
+  const outcome = classifyFit(
+    {
+      engine: 'audiogen-ggml',
+      result: {
+        status: 'fits',
+        reason: 'fits',
+        modelName: 'ace-step',
+        isTurbo: false,
+        deviceName: 'Metal',
+        deviceIsCpu: false,
+        deviceSharesHostMemory: true,
+        deviceFreeBytes: 20 * 1024 ** 3,
+        deviceTotalBytes: 24 * 1024 ** 3,
+        deviceBytes: 3 * 1024 ** 3,
+        hostBytes: 0,
+        hostFreeBytes: 12 * 1024 ** 3,
+        hostTotalBytes: 24 * 1024 ** 3,
+        stagesResident: false,
+        report: 'table'
+      }
+    },
+    PROVENANCE
+  )
+
+  t.absent(outcome.projection?.weightsBytes)
+  t.absent(outcome.projection?.contextBytes)
+  t.absent(outcome.projection?.computeBytes)
+  t.is(outcome.projection?.deviceBytes, 3 * 1024 ** 3)
 })

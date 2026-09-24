@@ -53,6 +53,9 @@ const FIT_RESULT: FitProbeResult = {
 const FIT_PROJECTION = {
   deviceBytes: DEVICE_BYTES,
   hostBytes: HOST_BYTES,
+  weightsBytes: 4 * 1024 ** 3,
+  contextBytes: 1024 ** 3,
+  computeBytes: 0,
   deviceName: 'Metal',
   deviceFreeBytes: 20 * 1024 ** 3,
   deviceTotalBytes: 24 * 1024 ** 3
