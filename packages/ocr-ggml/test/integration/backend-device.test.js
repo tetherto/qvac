@@ -3,7 +3,7 @@
 const { OcrGgml } = require('../..')
 const test = require('brittle')
 const path = require('bare-path')
-const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('../../lib/main-gpu')
+const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('@qvac/ocr-ggml/lib/main-gpu')
 const {
   isMobile,
   platform,

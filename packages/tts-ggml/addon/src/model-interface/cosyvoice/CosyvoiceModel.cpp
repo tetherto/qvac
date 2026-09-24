@@ -20,6 +20,7 @@
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/DenoiserLoader.hpp"
 #include "model-interface/EnhancerLoader.hpp"
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/PcmConversion.hpp"
@@ -45,6 +46,9 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   opts.hift_gguf_path = cfg.hiftModelPath;
   opts.s3tok_gguf_path = cfg.s3tokModelPath;
   opts.campplus_gguf_path = cfg.campplusModelPath;
+  opts.vocab_path = cfg.vocabPath;
+  opts.merges_path = cfg.mergesPath;
+  opts.voice_gguf_path = cfg.voiceModelPath;
   opts.reference_audio = cfg.referenceAudio;
   opts.prompt_text = cfg.promptText;
   opts.voice = cfg.voice;
@@ -60,6 +64,10 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   } else if (cfg.useGpu.has_value()) {
     opts.n_gpu_layers = *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
+  if (cfg.vulkanDevice.has_value())
+    opts.vulkan_device = *cfg.vulkanDevice;
+  if (cfg.flowCutPrompt.has_value())
+    opts.flow_cut_prompt = *cfg.flowCutPrompt;
   // NOTE: output_sample_rate is documented as reserved/ignored by the tts-cpp
   // CosyVoice engine, so we do NOT forward it here — the addon resamples the
   // batch output itself (see synthesize()).
@@ -151,18 +159,6 @@ std::shared_ptr<StreamingEnhancer> makeStreamingEnhancer(
       },
       kCosyvoiceNativeSampleRate,
       finalRate);
-}
-
-std::shared_ptr<tts_cpp::lavasr::Denoiser>
-loadDenoiser(const std::string& ggufPath, const std::string& errorContext) {
-  if (ggufPath.empty())
-    return nullptr;
-  try {
-    return tts_cpp::lavasr::Denoiser::load(ggufPath);
-  } catch (const std::exception& e) {
-    throw createTTSError(
-        TTSErrorCode::InitializationFailed, errorContext + e.what());
-  }
 }
 
 // Rate-preserving. validateConfig rejects denoiser + streaming, so this only
@@ -276,6 +272,22 @@ void validateModelPaths(const CosyvoiceConfig& cfg) {
         TTSErrorCode::ModelFileNotFound,
         "cosyvoice campplus model not found: " + cfg.campplusModelPath);
   }
+  if (!cfg.vocabPath.empty() && !std::filesystem::exists(cfg.vocabPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "cosyvoice vocab not found: " + cfg.vocabPath);
+  }
+  if (!cfg.mergesPath.empty() && !std::filesystem::exists(cfg.mergesPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "cosyvoice merges not found: " + cfg.mergesPath);
+  }
+  if (!cfg.voiceModelPath.empty() &&
+      !std::filesystem::exists(cfg.voiceModelPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "cosyvoice voice model not found: " + cfg.voiceModelPath);
+  }
   if (!cfg.referenceAudio.empty() &&
       !std::filesystem::exists(cfg.referenceAudio)) {
     throw createTTSError(
@@ -299,6 +311,11 @@ void validateModelPaths(const CosyvoiceConfig& cfg) {
 void validateSynthesisRanges(const CosyvoiceConfig& cfg) {
   if (cfg.cfmSteps.has_value() && *cfg.cfmSteps < 0) {
     throw StatusError(general_error::InvalidArgument, "cfmSteps must be >= 0");
+  }
+  if (cfg.vulkanDevice.has_value() && *cfg.vulkanDevice < -1) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vulkanDevice must be >= -1 (-1 = auto-pick, 0 = first adapter)");
   }
   if (cfg.outputSampleRate.has_value() && *cfg.outputSampleRate != 0 &&
       (*cfg.outputSampleRate < 8000 || *cfg.outputSampleRate > 192000)) {
@@ -469,13 +486,19 @@ void CosyvoiceModel::loadPostProcessingLocked() {
   LoadedEnhancer loaded = loadEnhancer(
       cfg_.enhancerGgufPath,
       backendDevice_ == kBackendDeviceGpu,
-      "CosyvoiceModel::load: lavasr enhancer: ");
+      "CosyvoiceModel::load: lavasr enhancer: ",
+      cfg_.vulkanDevice.value_or(0));
   enhancer_ = std::move(loaded.enhancer);
   enhancerBackendDevice_ = loaded.backendDevice;
   enhancerBackendId_ = loaded.backendId;
 
-  denoiser_ = loadDenoiser(
-      cfg_.denoiserGgufPath, "CosyvoiceModel::load: lavasr denoiser: ");
+  LoadedDenoiser denoiser = loadDenoiser(
+      cfg_.denoiserGgufPath,
+      backendDevice_ == kBackendDeviceGpu,
+      "CosyvoiceModel::load: lavasr denoiser: ");
+  denoiser_ = std::move(denoiser.denoiser);
+  denoiserBackendDevice_ = denoiser.backendDevice;
+  denoiserBackendId_ = denoiser.backendId;
 }
 
 void CosyvoiceModel::unloadLocked() {
@@ -484,6 +507,8 @@ void CosyvoiceModel::unloadLocked() {
   denoiser_.reset();
   enhancerBackendDevice_ = -1;
   enhancerBackendId_ = -1;
+  denoiserBackendDevice_ = -1;
+  denoiserBackendId_ = -1;
 }
 
 void CosyvoiceModel::cancel() const {
@@ -556,6 +581,7 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
     applyBatchPostProcessing(cfg_, result, denoiser, enhancer);
   }
   const auto t1 = std::chrono::steady_clock::now();
+  timings_ = result.timings;
 
   const EmittedAudio emitted = resolveEmittedAudio(
       streaming,
@@ -636,6 +662,27 @@ CosyvoiceModel::runtimeStats() const {
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
+  // Engine StageTimings of the last synthesis: per-stage wall clock (ms) and
+  // the work counters that make two runs comparable.
+  stats.emplace_back("lmPrefillMs", timings_.lm_prefill_ms);
+  stats.emplace_back("lmDecodeMs", timings_.lm_decode_ms);
+  stats.emplace_back("flowFrontendMs", timings_.flow_frontend_ms);
+  stats.emplace_back("ditEulerMs", timings_.dit_euler_ms);
+  stats.emplace_back("hiftF0Ms", timings_.hift_f0_ms);
+  stats.emplace_back("hiftSourceMs", timings_.hift_source_ms);
+  stats.emplace_back("hiftStftMs", timings_.hift_stft_ms);
+  stats.emplace_back("hiftDecodeMs", timings_.hift_decode_ms);
+  stats.emplace_back("stageTotalMs", timings_.total_ms);
+  stats.emplace_back(
+      "decodeSteps", static_cast<int64_t>(timings_.n_decode_steps));
+  stats.emplace_back(
+      "speechTokens", static_cast<int64_t>(timings_.n_speech_tokens));
+  stats.emplace_back("flowFrames", static_cast<int64_t>(timings_.tm));
+  stats.emplace_back("melFrames", static_cast<int64_t>(timings_.mel_len));
+  stats.emplace_back("textIds", static_cast<int64_t>(timings_.n_text_ids));
+  stats.emplace_back(
+      "promptSpeechTokens",
+      static_cast<int64_t>(timings_.n_prompt_speech_tokens));
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
@@ -643,6 +690,10 @@ CosyvoiceModel::runtimeStats() const {
       "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
   stats.emplace_back(
       "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
+  stats.emplace_back(
+      "denoiserBackendDevice", static_cast<int64_t>(denoiserBackendDevice_));
+  stats.emplace_back(
+      "denoiserBackendId", static_cast<int64_t>(denoiserBackendId_));
   return stats;
 }
 

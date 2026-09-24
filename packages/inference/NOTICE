@@ -73,11 +73,15 @@ Third-Party Model Licenses
     https://github.com/tetherto/qvac/releases/download/bci-test-assets-v0.1.0/bci-embedder.bin
   cosyvoice3-campplus-f32
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  cosyvoice3-flow-bf16
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-flow-f32
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-hift-f32
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-llm-q8_0
+    https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  cosyvoice3-llm-q8_0-fused
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
   cosyvoice3-s3tok-f16
     https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
@@ -207,6 +211,18 @@ Third-Party Model Licenses
     https://huggingface.co/HuggingFaceVLA/smolvla_libero
   SmolVLM2-500M-Video-Instruct-GGUF
     https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF
+  TranslatePsy-AfriSLM-0.8B-Q4-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q4-GGUF
+  TranslatePsy-AfriSLM-0.8B-Q8-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-0.8B-Q8-GGUF
+  TranslatePsy-AfriSLM-2B-Q4-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-2B-Q4-GGUF
+  TranslatePsy-AfriSLM-2B-Q8-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-2B-Q8-GGUF
+  TranslatePsy-AfriSLM-4B-Q4-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-4B-Q4-GGUF
+  TranslatePsy-AfriSLM-4B-Q8-GGUF
+    https://huggingface.co/qvac/TranslatePsy-AfriSLM-4B-Q8-GGUF
   umt5-xxl-enc-q8_0
     https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged
   unlimited-ocr-gguf
@@ -318,8 +334,12 @@ Third-Party Model Licenses
 
 --- mit (MIT License) ---
 
+  acestep-5Hz-lm-0.6B-BF16
+    https://huggingface.co/ACE-Step/acestep-5Hz-lm-0.6B
   acestep-5Hz-lm-0.6B-Q8_0
     https://huggingface.co/ACE-Step/acestep-5Hz-lm-0.6B
+  acestep-v15-base-Q4_K_M
+    https://huggingface.co/ACE-Step/acestep-v15-base
   acestep-v15-sft-Q8_0
     https://huggingface.co/ACE-Step/acestep-v15-sft
   acestep-v15-turbo-Q4_K_M
@@ -608,6 +628,12 @@ Third-Party Model Licenses
     https://huggingface.co/nvidia/GR00T-N1.7-LIBERO
   groot-q8_vf16
     https://huggingface.co/nvidia/GR00T-N1.7-3B
+  nemotron-3.5-asr-streaming-0.6b.f16
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  nemotron-3.5-asr-streaming-0.6b.q4_0
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+  nemotron-3.5-asr-streaming-0.6b.q8_0
+    https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
   parakeet-unified-en-0.6b.f16
     https://huggingface.co/nvidia/parakeet-unified-en-0.6b
   parakeet-unified-en-0.6b.q4_0
@@ -663,22 +689,24 @@ JavaScript Dependencies
 
 --- apache-2.0 (Apache License 2.0) ---
 
-  @hyperswarm/secret-stream@6.9.1
+  @hyperswarm/secret-stream@6.9.2
     https://github.com/holepunchto/hyperswarm-secret-stream
   @qvac/error@0.1.1
+  @qvac/fabric@0.16.1
+    https://github.com/tetherto/qvac
   @qvac/logging@0.1.1
     https://github.com/tetherto/qvac
-  @qvac/model-fit@0.8.0
+  @qvac/model-fit@0.12.2
     https://github.com/tetherto/qvac
   @qvac/rag@0.8.1
     https://github.com/tetherto/qvac
-  @qvac/registry-client@0.6.1
+  @qvac/registry-client@0.7.0
     https://github.com/tetherto/qvac
-  @qvac/registry-schema@0.3.0
+  @qvac/registry-schema@0.4.0
     https://github.com/tetherto/qvac
   adaptive-timeout@1.0.1
     https://github.com/holepunchto/adaptive-timeout
-  b4a@1.8.1
+  b4a@1.9.0
     https://github.com/holepunchto/b4a
   bare-abort@2.0.13
     https://github.com/holepunchto/bare-abort
@@ -696,13 +724,13 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-cpu-info
   bare-crypto@1.15.3
     https://github.com/holepunchto/bare-crypto
-  bare-dns@2.2.0
+  bare-dns@2.2.1
     https://github.com/holepunchto/bare-dns
   bare-env@3.0.1
     https://github.com/holepunchto/bare-env
   bare-events@2.9.2
     https://github.com/holepunchto/bare-events
-  bare-fetch@3.2.0
+  bare-fetch@3.4.0
     https://github.com/holepunchto/bare-fetch
   bare-form-data@1.2.2
     https://github.com/holepunchto/bare-form-data
@@ -714,7 +742,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-hrtime
   bare-http-parser@2.1.4
     https://github.com/holepunchto/bare-http-parser
-  bare-http1@4.6.1
+  bare-http1@4.6.2
     https://github.com/holepunchto/bare-http1
   bare-https@3.1.0
     https://github.com/holepunchto/bare-https
@@ -740,9 +768,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-process
   bare-rpc@1.3.8
     https://github.com/holepunchto/bare-rpc
-  bare-runtime@1.31.0
+  bare-runtime@1.33.4
     https://github.com/holepunchto/bare-runtime
-  bare-runtime-darwin-arm64@1.31.0
+  bare-runtime-darwin-arm64@1.33.4
     https://github.com/holepunchto/bare-runtime
   bare-semver@1.1.0
     https://github.com/holepunchto/bare-semver
@@ -752,17 +780,17 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-stdio
   bare-stream@2.13.4
     https://github.com/holepunchto/bare-stream
-  bare-structured-clone@1.6.0
+  bare-structured-clone@2.0.1
     https://github.com/holepunchto/bare-structured-clone
-  bare-subprocess@6.1.0
+  bare-subprocess@6.2.0
     https://github.com/holepunchto/bare-subprocess
-  bare-tcp@2.5.4
+  bare-tcp@2.6.1
     https://github.com/holepunchto/bare-tcp
-  bare-tls@3.1.9
+  bare-tls@3.1.10
     https://github.com/holepunchto/bare-tls
   bare-tty@5.2.1
     https://github.com/holepunchto/bare-tty
-  bare-type@1.1.1
+  bare-type@1.4.0
     https://github.com/holepunchto/bare-type
   bare-url@2.5.4
     https://github.com/holepunchto/bare-url
@@ -770,7 +798,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/bare-zlib
   blind-relay@1.6.1
     https://github.com/holepunchto/blind-relay
-  compact-encoding@3.3.2
+  compact-encoding@3.5.0
     https://github.com/holepunchto/compact-encoding
   compact-encoding-bitfield@1.1.0
     https://github.com/compact-encoding/compact-encoding-bitfield
@@ -792,7 +820,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/hypercore-id-encoding
   hypercore-stats@2.5.1
     https://github.com/holepunchto/hypercore-stats
-  hypercore-storage@3.2.1
+  hypercore-storage@3.3.1
     https://github.com/holepunchto/hypercore-storage
   hyperdb@6.9.0
     https://github.com/holepunchto/hyperdb
@@ -802,9 +830,9 @@ JavaScript Dependencies
     https://github.com/holepunchto/hyperdht-stats
   hyperdispatch@1.6.0
     https://github.com/holepunchto/hyperdispatch
-  hyperdrive@13.3.3
+  hyperdrive@13.3.4
     https://github.com/holepunchto/hyperdrive
-  hyperschema@1.24.0
+  hyperschema@1.26.2
     https://github.com/holepunchto/hyperschema
   hyperswarm-stats@1.3.1
     https://github.com/holepunchto/hyperswarm-stats
@@ -830,11 +858,11 @@ JavaScript Dependencies
     https://github.com/holepunchto/refcounter
   require-addon@1.3.0
     https://github.com/holepunchto/require-addon
-  require-asset@1.2.2
+  require-asset@1.2.4
     https://github.com/holepunchto/require-asset
   resource-on-exit@1.0.0
     https://github.com/holepunchto/bare-teardown
-  rocksdb-native@3.17.4
+  rocksdb-native@3.18.1
     https://github.com/holepunchto/rocksdb-native
   scope-lock@1.2.4
     https://github.com/holepunchto/scope-lock
@@ -844,7 +872,7 @@ JavaScript Dependencies
     https://github.com/holepunchto/sub-encoder
   text-decoder@1.2.7
     https://github.com/holepunchto/text-decoder
-  udx-native@1.21.1
+  udx-native@1.21.3
     https://github.com/holepunchto/udx-native
   unslab@1.3.0
     https://github.com/holepunchto/unslab
@@ -876,7 +904,7 @@ JavaScript Dependencies
     https://github.com/mafintosh/bogon
   codecs@3.1.0
     https://github.com/mafintosh/codecs
-  corestore@7.12.2
+  corestore@7.12.5
     https://github.com/holepunchto/corestore
   debounceify@1.1.0
     https://github.com/mafintosh/debounceify
@@ -894,13 +922,13 @@ JavaScript Dependencies
     https://github.com/mafintosh/generate-string
   hyperbee@2.27.3
     https://github.com/holepunchto/hyperbee
-  hypercore@11.35.2
+  hypercore@11.36.1
     https://github.com/holepunchto/hypercore
   hypercore-crypto@3.7.0
     https://github.com/mafintosh/hypercore-crypto
-  hyperdht@6.33.2
+  hyperdht@6.34.0
     https://github.com/holepunchto/hyperdht
-  hyperswarm@4.17.1
+  hyperswarm@4.17.2
     https://github.com/holepunchto/hyperswarm
   is-options@1.0.2
     https://github.com/mafintosh/is-options
@@ -968,6 +996,6 @@ JavaScript Dependencies
     https://github.com/mafintosh/xache
   z32@1.1.0
     https://github.com/mafintosh/z32
-  zod@4.6.1
+  zod@4.6.5
     https://github.com/colinhacks/zod
 

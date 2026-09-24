@@ -4,7 +4,8 @@ description: |
 
   Frees up disk space (Linux runners), checks out the qvac-test-addon-mobile
   framework into ./test-framework, sets up Node.js, installs the Expo CLI,
-  resolves the addon's prebuilds (PR artifacts -> npm fallback -> committed),
+  resolves the addon's prebuilds (named run id -> PR artifacts -> npm fallback
+  -> committed),
   and prunes desktop prebuilds to keep the runner from running out of disk.
 
   Prebuild precedence: CI artifacts win by default (artifact-first). A caller
@@ -16,9 +17,12 @@ description: |
   integration-mobile-test-llm-llamacpp.yml does.
 
   The pinned-package path resolves BOTH registries: @qvac/* from npmjs.org and
-  @tetherto/<addon>-mono from GitHub Packages. The latter is the only way to put
-  an unmerged native change on a device, since a standalone dispatch has no
-  prebuild artifacts of its own to fall back to.
+  @tetherto/<addon>-mono from GitHub Packages. That is how a build from ANOTHER
+  branch, or a published release, gets onto a device.
+
+  To test YOUR OWN PR, prefer `prebuild-run-id`: it installs the prebuilds
+  artifact of a named run. It takes precedence over every other source and never
+  falls back — a run id that cannot be honoured fails the run.
 
   Pre-condition: the consumer has already checked out the addon repository
   at ./addon/. We do NOT check the addon out here so the consumer can run
@@ -100,6 +104,34 @@ inputs:
       "true" to force-enable the fallback in a PR context.
     required: false
     default: "false"
+  prebuild-run-id:
+    description: |
+      A run id whose `prebuilds-<pkg>` artifact holds the native binaries to
+      install (falls back to the legacy `prebuilds` name). The route for testing
+      your own PR on a device.
+
+      Highest precedence of every prebuild source: when set, the same-run
+      artifact downloads and the npm/GPR fallback are skipped, and resolution
+      fails closed rather than sliding back to @latest. Mutually exclusive with
+      `package-version` / `force-npm-prebuild`.
+
+      The provenance line names the head SHA and the repository the binaries came
+      from; a fork-built run warns but is not refused. `ref` and the prebuild run
+      are independent, so check the printed head SHA is the one you meant.
+
+      Needs `actions: read` on the calling job; `pat-token` carries it. Empty
+      (default) leaves every existing path unchanged.
+    required: false
+    default: ""
+
+outputs:
+  prebuild-source-run-id:
+    description: |
+      The run id the prebuilds were installed from, or empty when another source
+      was used. A caller that passed `prebuild-run-id` can assert this matches:
+      an older copy of this action silently ignores the input (GitHub only warns
+      on an unknown input), which would install @latest instead.
+    value: ${{ steps.prebuild_run.outputs.source_run_id }}
 
 runs:
   using: composite
@@ -150,8 +182,103 @@ runs:
         echo "Installing global dependencies..."
         npm install -g --force @expo/cli@latest
 
+    # Resolution happens before anything is downloaded, so a bad run id costs
+    # nothing and no branch below can rescue it into an @latest run. Node rather
+    # than `gh`, which is not guaranteed on the self-hosted runners.
+    - name: Resolve prebuilds from a run id
+      id: prebuild_run
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id != ''
+      shell: bash
+      env:
+        PREBUILD_RUN_ID: ${{ inputs.prebuild-run-id }}
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+        PLATFORM: ${{ inputs.platform }}
+        PACKAGE_VERSION: ${{ inputs.package-version }}
+        FORCE_NPM_PREBUILD: ${{ inputs.force-npm-prebuild }}
+        GITHUB_TOKEN: ${{ inputs.pat-token }}
+        REPO: ${{ github.repository }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        node "$ACTION_PATH/resolve-prebuild-run.mjs"
+        # download-artifact overwrites the files it carries but leaves the rest,
+        # so a committed prebuilds/ dir or a leftover from an earlier job on the
+        # same self-hosted runner could shadow the resolved run. Runs only after
+        # resolution succeeds, so a rejected run id deletes nothing.
+        rm -rf "addon/$ADDON_WORKDIR/prebuilds"
+
+    # No continue-on-error: the run id is an explicit instruction, so a failed
+    # download must fail the run.
+    - name: Download prebuilds (from the resolved run)
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id != ''
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        # By id, not name: a re-run can leave two live `prebuilds-<pkg>` rows
+        # under one run id. A single artifact-ids value extracts straight into
+        # `path`, exactly as `name` does.
+        artifact-ids: ${{ steps.prebuild_run.outputs.artifact_id }}
+        run-id: ${{ steps.prebuild_run.outputs.source_run_id }}
+        github-token: ${{ inputs.pat-token }}
+        path: addon/${{ inputs.addon-workdir }}/prebuilds
+
+    # A partial prebuild matrix (a cancelled leg) still publishes a bundle, just
+    # without this platform's dir — which the generic "Verify and prepare
+    # prebuilds" step below would accept, since it only checks non-emptiness.
+    - name: Verify the resolved run's prebuilds cover this platform
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id != ''
+      shell: bash
+      working-directory: addon/${{ inputs.addon-workdir }}
+      env:
+        EXPECTED_DIRS: ${{ steps.prebuild_run.outputs.expected_dirs }}
+        SOURCE_RUN_ID: ${{ steps.prebuild_run.outputs.source_run_id }}
+        SOURCE_HEAD_SHA: ${{ steps.prebuild_run.outputs.head_sha }}
+        SOURCE_ARTIFACT: ${{ steps.prebuild_run.outputs.artifact_name }}
+        PLATFORM: ${{ inputs.platform }}
+        ADDON_WORKDIR: ${{ inputs.addon-workdir }}
+      run: |
+        MISSING=""
+        for dir in $EXPECTED_DIRS; do
+          if [ ! -d "prebuilds/$dir" ] || [ -z "$(ls -A "prebuilds/$dir" 2>/dev/null)" ]; then
+            MISSING="$MISSING $dir"
+          fi
+        done
+        if [ -n "$MISSING" ]; then
+          echo "::error::Run $SOURCE_RUN_ID's '$SOURCE_ARTIFACT' artifact has no$MISSING, so it cannot build for $PLATFORM."
+          echo "That run's prebuild matrix did not produce this platform — a cancelled or"
+          echo "filtered leg publishes a bundle without it. Pick a run whose $PLATFORM"
+          echo "prebuild leg succeeded, or re-run that leg and use the new run id."
+          echo "Directories the artifact does contain:"
+          ls -A prebuilds 2>/dev/null || echo "  (none)"
+          exit 1
+        fi
+        # Identity, the equivalent of the npm route's PACKED_ADDON assertion: a
+        # bundle can only be trusted if it is a build of THIS addon. Matters most
+        # for the legacy bare `prebuilds` name, which carries no addon in it.
+        # Flag a foreign stem rather than a missing expected one, so an addon
+        # whose binary is named differently is not failed for that alone.
+        EXPECTED="qvac__$(basename "$ADDON_WORKDIR")"
+        for dir in $EXPECTED_DIRS; do
+          FOREIGN=""
+          for f in "prebuilds/$dir"/qvac__*; do
+            [ -e "$f" ] || continue
+            stem="$(basename "$f")"; stem="${stem%%.*}"
+            [ "$stem" = "$EXPECTED" ] && { FOREIGN=""; break; }
+            FOREIGN="$stem"
+          done
+          if [ -n "$FOREIGN" ]; then
+            echo "::error::Run $SOURCE_RUN_ID's '$SOURCE_ARTIFACT' contains $FOREIGN, not $EXPECTED — it is not a build of this addon."
+            echo "A bundle named plainly 'prebuilds' carries no addon identity, so a run that"
+            echo "built a different addon can resolve here. Use a run that built this addon;"
+            echo "the failure message on a missing bundle lists which addons a run did build."
+            ls -A "prebuilds/$dir"
+            exit 1
+          fi
+        done
+
+        echo "Using prebuilds from run $SOURCE_RUN_ID (head $SOURCE_HEAD_SHA), artifact '$SOURCE_ARTIFACT':"
+        ls -la prebuilds/
+
     - name: Download Android prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'Android'
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'Android'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -160,7 +287,7 @@ runs:
       continue-on-error: true
 
     - name: Download iOS prebuilds (from artifacts)
-      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'iOS'
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && inputs.force-npm-prebuild != 'true' && inputs.platform == 'iOS'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         path: addon/${{ inputs.addon-workdir }}/prebuilds
@@ -197,7 +324,7 @@ runs:
     # npm. No-op for addons / runs that never produced this artifact (e.g.
     # genuine workflow_dispatch), where the npm fallback below still applies.
     - name: Download merged prebuilds artifact (fallback when per-matrix artifacts absent)
-      if: inputs.skip-prebuilds != 'true' && inputs.force-npm-prebuild != 'true' && steps.check_prebuilds.outputs.present != 'true'
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && inputs.force-npm-prebuild != 'true' && steps.check_prebuilds.outputs.present != 'true'
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
       with:
         name: ${{ steps.check_prebuilds.outputs.merged }}
@@ -215,7 +342,7 @@ runs:
     # published package is the intended behaviour, so the fallback stays on.
     # `allow-npm-fallback: 'true'` force-enables it even in a PR context.
     - name: Download prebuilds (from npm — fallback when no artifacts found)
-      if: inputs.skip-prebuilds != 'true' && (inputs.force-npm-prebuild == 'true' || inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
+      if: inputs.skip-prebuilds != 'true' && inputs.prebuild-run-id == '' && (inputs.force-npm-prebuild == 'true' || inputs.allow-npm-fallback == 'true' || (github.event_name != 'pull_request' && github.event_name != 'pull_request_target'))
       shell: bash
       working-directory: addon/${{ inputs.addon-workdir }}
       env:

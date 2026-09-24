@@ -9,10 +9,10 @@
  * dispatches each `runJob` call to whichever engine the model was
  * constructed with.
  *
- * Sub-sentence native streaming (`streamChunkTokens`) is Chatterbox-
- * only at the C++ engine level; the constructor rejects those knobs
- * for Supertonic with a clear error.  Use this sentence-level path
- * for low-latency Supertonic streaming.
+ * Supertonic can also stream inside a sentence: `streamChunkTokens`
+ * makes the engine split the text into ~N-text-token chunks and emit
+ * each as it is synthesized.  This sentence-level path is the one that
+ * also works with the LavaSR enhancer / denoiser.
  *
  * Usage:
  *   bare examples/supertonic-sentence-stream-tts.js [voice]

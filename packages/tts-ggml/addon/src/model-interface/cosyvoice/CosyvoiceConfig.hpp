@@ -40,6 +40,13 @@ struct CosyvoiceConfig {
   // when unset).
   std::string s3tokModelPath;    // speech_tokenizer_v3 speech tokenizer
   std::string campplusModelPath; // CAM++ speaker encoder
+  // Qwen2 byte-level BPE text frontend and the baked default-voice GGUF,
+  // forwarded to EngineOptions::vocab_path / merges_path / voice_gguf_path.
+  // Empty resolves vocab.json / merges.txt / voice.gguf under modelDir;
+  // voiceModelPath is how a different baked voice is selected.
+  std::string vocabPath;
+  std::string mergesPath;
+  std::string voiceModelPath;
 
   /**
    * Zero-shot / cross-lingual voice cloning. referenceAudio: recording of
@@ -105,6 +112,19 @@ struct CosyvoiceConfig {
    * CosyvoiceModel::validateConfig.
    */
   std::optional<bool> useGpu;
+  /**
+   * Vulkan adapter index, forwarded to EngineOptions::vulkan_device and to the
+   * LavaSR enhancer: 0 (engine default) = first adapter, N = the Nth, -1 =
+   * auto-pick by free VRAM preferring a discrete adapter. Only consulted when
+   * the backend selection lands on Vulkan.
+   */
+  std::optional<int> vulkanDevice;
+  /**
+   * Treat the baked-voice prompt frames as attention-only conditioning in the
+   * flow DiT (EngineOptions::flow_cut_prompt): a faster flow with output that
+   * deviates slightly from the reference. Unset keeps the engine default (off).
+   */
+  std::optional<bool> flowCutPrompt;
   /**
    * Desired output sample rate in Hz (8000–192000), or unset/0 to keep the
    * engine's native 24 kHz. When the LavaSR enhancer is active the enhancer

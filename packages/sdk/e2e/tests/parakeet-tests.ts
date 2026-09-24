@@ -220,13 +220,13 @@ export const parakeetSortformerTwoSpeakers = createParakeetTest(
   180000
 )
 
-export const parakeetMetadataRejected: TestDefinition = {
-  testId: 'parakeet-tdt-metadata-rejected',
+// Per-segment metadata: the executor validates the segment shape and the
+// parakeet-only `isEndOfTurn` / `startsWord` flags, so the expectation here
+// is only the pass-through.
+export const parakeetTdtMetadata: TestDefinition = {
+  testId: 'parakeet-tdt-metadata',
   params: { audioFileName: 'transcription-short-wav.wav', metadata: true },
-  expectation: {
-    validation: 'throws-error',
-    errorContains: 'does not support metadata'
-  },
+  expectation: { validation: 'function', fn: () => true },
   metadata: { category: 'parakeet', dependency: 'parakeet-tdt', estimatedDurationMs: 30000 }
 }
 
@@ -238,7 +238,7 @@ export const parakeetTdtTests = [
   parakeetTdtMultiSegment,
   parakeetTdtMusic,
   parakeetTdtCorruptedWav,
-  parakeetMetadataRejected
+  parakeetTdtMetadata
 ]
 
 export const parakeetCtcTests = [

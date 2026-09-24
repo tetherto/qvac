@@ -11,7 +11,8 @@
           "hasCppLint": true,
           "hasTsChecks": true,
           "tsChecksMode": "dts",
-          "hasFabricLockstep": true
+          "hasFabricLockstep": true,
+          "cppTestsBaseline": true
         }
       }
     },
@@ -99,7 +100,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/translation-nmtcpp",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "none",
           "repoName": "translation-nmtcpp",
