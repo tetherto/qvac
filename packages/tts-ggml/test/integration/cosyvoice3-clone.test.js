@@ -8,6 +8,7 @@
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
+const proc = require('bare-process')
 const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 
@@ -21,6 +22,7 @@ const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
+const useGPU = !isMobile && proc.env.NO_GPU === 'false'
 
 function getBaseDir() {
   return isMobile && global.testDir ? global.testDir : '.'
@@ -66,7 +68,7 @@ function samplesDiffer(a, b) {
 }
 
 async function synthOnce(t, loadParams, label) {
-  const model = await loadCosyvoiceTTS({ ...loadParams, seed: CLONE_SEED })
+  const model = await loadCosyvoiceTTS({ ...loadParams, seed: CLONE_SEED, useGPU })
   try {
     const result = await runCosyvoiceTTS(
       model,
@@ -76,6 +78,11 @@ async function synthOnce(t, loadParams, label) {
     console.log(result.output)
     t.ok(result.passed, `${label} synth passes expectations`)
     t.ok(result.data.sampleCount > 0, `${label} produced audio`)
+    t.is(
+      result.data.stats?.backendDevice,
+      useGPU ? 1 : 0,
+      `${label} runs on the ${useGPU ? 'GPU' : 'CPU'} selected by the CI lane`
+    )
     return result.data
   } finally {
     try {
