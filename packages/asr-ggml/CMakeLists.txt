@@ -430,6 +430,7 @@ if(BUILD_TESTING)
   include(GoogleTest)
 
   add_executable(asr_ggml_tests
+    ${PROJECT_SOURCE_DIR}/addon/tests/backend_env.cpp
     # whisper suite
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
@@ -471,6 +472,7 @@ if(BUILD_TESTING)
   # target — see the note above the module-target define.
   target_compile_definitions(asr_ggml_tests PRIVATE
     BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
+    QVAC_ASR_TEST_BACKENDS_DIR="${VCPKG_INSTALLED_PATH}/lib"
     QVAC_ASR_GGML_TESTING)
 
   set_target_properties(asr_ggml_tests PROPERTIES
