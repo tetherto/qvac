@@ -1,9 +1,11 @@
 #include "js-interface/JSAdapter.hpp"
 
+#include <cstdio>
 #include <optional>
 #include <string>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "js-interface/NumberConversion.hpp"
 #include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml {
@@ -13,6 +15,14 @@ namespace general_error = qvac_errors::general_error;
 
 namespace {
 
+// Compact %g rendering for error messages; std::to_string would print 1e300 in
+// full fixed-point notation.
+std::string formatJsNumber(double value) {
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "%g", value);
+  return buf;
+}
+
 std::optional<int> readOptionalInt(
     js::Object obj, js_env_t* env, const char* key) {
   js_value_t* raw = obj.getProperty(env, key);
@@ -20,7 +30,14 @@ std::optional<int> readOptionalInt(
     return std::nullopt;
   }
   if (js::is<js::Number>(env, raw)) {
-    return static_cast<int>(js::Number::fromValue(raw).as<double>(env));
+    const double value = js::Number::fromValue(raw).as<double>(env);
+    if (const auto converted = intFromJsNumber(value)) {
+      return converted;
+    }
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must be a finite integer in the " +
+            "32-bit range (got " + formatJsNumber(value) + ")");
   }
   if (js::is<js::String>(env, raw)) {
     const std::string str = js::String::fromValue(raw).as<std::string>(env);
@@ -45,7 +62,15 @@ std::optional<float> readOptionalFloat(
     return std::nullopt;
   }
   if (js::is<js::Number>(env, raw)) {
-    return static_cast<float>(js::Number::fromValue(raw).as<double>(env));
+    const double value = js::Number::fromValue(raw).as<double>(env);
+    if (const auto converted = floatFromJsNumber(value)) {
+      return converted;
+    }
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key +
+            "' is outside the 32-bit float range (got " +
+            formatJsNumber(value) + ")");
   }
   if (js::is<js::String>(env, raw)) {
     const std::string str = js::String::fromValue(raw).as<std::string>(env);
