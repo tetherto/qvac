@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.54.0] - 2026-09-23
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.1` -> `^0.17.0`, carrying
+  `qvac-fabric` `10549.1.0` -> `10549.3.0`. This includes the managed RPC
+  lifecycle, faster distributed RPC model loading, MTP and fit correctness
+  fixes, Windows backend loading fixes, and CUDA FP4 optimizations. The RPC
+  client API remains part of the separate, unmerged RPC stack; this release
+  changes no public API.
+
 ## [0.53.2] - 2026-09-17
 
 This release migrates the addon off its bundled, statically-linked `qvac-fabric` vcpkg build and onto the shared `@qvac/fabric` npm runtime. It is a packaging change: the addon's own API is untouched, so consumers on the `0.53.x` line pick it up without a range change of their own. llama.cpp, ggml, mtmd and libcommon are now loaded once per process from the single `@qvac/fabric` install instead of being duplicated inside every fabric consumer, which drops the addon binary from tens of MB to ~3.2 MB.

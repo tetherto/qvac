@@ -4,7 +4,7 @@ import type { TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from '../abstract-model-executor.js'
 import {
   runParakeetStreamHappy,
-  runParakeetStreamMetadataRejected,
+  runParakeetStreamMetadata,
   runParakeetStreamEou,
   runParakeetStreamDestroyMidUtterance,
   runParakeetStreamIteratorThrow,
@@ -22,7 +22,7 @@ export class ParakeetStreamExecutor extends AbstractModelExecutor<typeof parakee
   protected handlers = {
     'parakeet-stream-happy': this.runHappy.bind(this),
     'parakeet-stream-unified-happy': this.runUnifiedHappy.bind(this),
-    'parakeet-stream-metadata-rejected': this.runMetadataRejected.bind(this),
+    'parakeet-stream-metadata': this.runMetadata.bind(this),
     'parakeet-stream-eou': this.runEou.bind(this),
     'parakeet-stream-destroy-mid-utterance': this.runDestroyMidUtterance.bind(this),
     'parakeet-stream-iterator-throw': this.runIteratorThrow.bind(this)
@@ -48,9 +48,11 @@ export class ParakeetStreamExecutor extends AbstractModelExecutor<typeof parakee
     return runParakeetStreamHappy(modelId, bytes, p)
   }
 
-  async runMetadataRejected(): Promise<TestResult> {
+  async runMetadata(params: unknown): Promise<TestResult> {
+    const p = params as BaseParams
     const modelId = await this.resources.ensureLoaded('parakeet-tdt')
-    return runParakeetStreamMetadataRejected(modelId)
+    const bytes = await this.loadAudioBytes(p.audioFileName)
+    return runParakeetStreamMetadata(modelId, bytes, p)
   }
 
   async runEou(params: unknown): Promise<TestResult> {

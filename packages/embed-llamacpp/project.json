@@ -94,7 +94,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/embed-llamacpp",
         "ci": {
-          "buildStep": "none",
           "nameTransform": "none",
           "repoName": "llamacpp-embed",
           "testGateMode": "none"

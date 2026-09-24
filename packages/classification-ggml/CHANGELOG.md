@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] - 2026-09-23
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.1` -> `^0.17.0`, carrying
+  `qvac-fabric` `10549.1.0` -> `10549.3.0`. This includes the managed RPC
+  lifecycle, distributed-load improvements, MTP and fit correctness fixes,
+  Windows backend loading fixes, and CUDA FP4 optimizations. The classifier's
+  CPU path does not directly exercise those features; the bump keeps it on the
+  current shared runtime. No API change.
+
 ## [0.26.3] - 2026-09-18
 
 ### Changed
