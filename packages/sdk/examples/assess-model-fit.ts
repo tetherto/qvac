@@ -20,8 +20,9 @@ import {
   QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL
 } from '@qvac/sdk'
 
-// `as const` so `kind` stays the `'llm'` literal the input type asks for.
-const WORKLOAD = { kind: 'llm', contextTokens: 8192 } as const
+// Sizes the assessment the way it sizes the load: the estimator reads the
+// context out of the config `loadModel` would be given.
+const CONTEXT_TOKENS = 8192
 
 // A ladder ending well past what a laptop has, so one screen shows every verdict.
 const CANDIDATES = [
@@ -44,7 +45,11 @@ function gib(bytes: number) {
 
 try {
   const result = await assessModelFit({
-    models: CANDIDATES.map((model) => ({ model, workload: WORKLOAD })),
+    models: CANDIDATES.map((model) => ({
+      modelSrc: model,
+      modelType: 'llamacpp-completion' as const,
+      modelConfig: { ctx_size: CONTEXT_TOKENS }
+    })),
     // Declared for aggregation only, not a scheduling instruction: 'sequential'
     // counts the largest operation peak, 'concurrent' counts one per model.
     execution: 'sequential',
@@ -68,7 +73,7 @@ try {
   )
   if (placement) console.log(`▸ ${placement}`)
 
-  console.log(`\n▸ At ${WORKLOAD.contextTokens} tokens of context`)
+  console.log(`\n▸ At ${CONTEXT_TOKENS} tokens of context`)
   for (const [index, model] of result.models.entries()) {
     const mark = VERDICT_MARK[model.verdict]
     const size = gib(CANDIDATES[index]!.expectedSize).padStart(9)

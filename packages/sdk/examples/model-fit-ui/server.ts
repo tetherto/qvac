@@ -126,10 +126,13 @@ function sendJson(response: ServerResponse, status: number, payload: unknown) {
 async function estimate(body: Record<string, unknown>) {
   const names = Array.isArray(body['names']) ? (body['names'] as string[]) : []
   const contextTokens = Number(body['contextTokens'] ?? 8192)
-  const workload = { kind: 'llm', contextTokens } as const
 
   return assessModelFit({
-    models: names.map((name) => ({ model: byName(name), workload })),
+    models: names.map((name) => ({
+      modelSrc: byName(name),
+      modelType: 'llamacpp-completion' as const,
+      modelConfig: { ctx_size: contextTokens }
+    })),
     // Declared for aggregation only. 'sequential' counts the largest operation
     // peak; 'concurrent' counts one per model.
     execution: 'sequential',
