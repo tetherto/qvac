@@ -95,6 +95,34 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   // option unset; a supplied value (0 = disable CFG, > 0 = override) is passed
   // straight through.
   if (cfg.cfgRate.has_value())                opts.s3gen_cfg_rate            = *cfg.cfgRate;
+  // Decode length, sentence auto-split, batch CFM steps and the streaming
+  // left-context window; unset keeps the engine defaults.
+  if (cfg.streamLeftContextTokens.has_value())
+    opts.stream_left_context_tokens = *cfg.streamLeftContextTokens;
+  if (cfg.batchCfmSteps.has_value())
+    opts.cfm_steps = *cfg.batchCfmSteps;
+  if (cfg.nPredict.has_value())
+    opts.n_predict = *cfg.nPredict;
+  if (cfg.maxSentenceChars.has_value())
+    opts.max_sentence_chars = *cfg.maxSentenceChars;
+  if (cfg.crossfadeMs.has_value())
+    opts.crossfade_ms = *cfg.crossfadeMs;
+  // T3 sampling; unset keeps the engine's reference defaults. exaggeration,
+  // cfg_weight and min_p are read only by the multilingual T3.
+  if (cfg.topK.has_value())
+    opts.top_k = *cfg.topK;
+  if (cfg.topP.has_value())
+    opts.top_p = *cfg.topP;
+  if (cfg.temperature.has_value())
+    opts.temperature = *cfg.temperature;
+  if (cfg.repeatPenalty.has_value())
+    opts.repeat_penalty = *cfg.repeatPenalty;
+  if (cfg.exaggeration.has_value())
+    opts.exaggeration = *cfg.exaggeration;
+  if (cfg.cfgWeight.has_value())
+    opts.cfg_weight = *cfg.cfgWeight;
+  if (cfg.minP.has_value())
+    opts.min_p = *cfg.minP;
 
   // Compose the actual backends-scan directory from the host-provided
   // prebuilds root plus the cmake-bare per-target subdir
@@ -152,6 +180,65 @@ bool speedActive(float speed) {
 
 constexpr float MIN_SPEED = 0.25f;
 constexpr float MAX_SPEED = 4.0f;
+
+// Range checks for the plain numeric engine knobs: reject a value the engine
+// would misread instead of forwarding it.
+void requireAtLeast(
+    const std::optional<int>& value, int min, const char* name) {
+  if (value.has_value() && *value < min) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        std::string("ChatterboxModel: ") + name + " must be >= " +
+            std::to_string(min) + ", got " + std::to_string(*value));
+  }
+}
+
+void requireFloat(
+    const std::optional<float>& value, bool (*inRange)(float), const char* name,
+    const char* rule) {
+  if (value.has_value() && (!std::isfinite(*value) || !inRange(*value))) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        std::string("ChatterboxModel: ") + name + " must be " + rule +
+            ", got " + std::to_string(*value));
+  }
+}
+
+void validateSamplingAndLength(const ChatterboxConfig& cfg) {
+  requireAtLeast(cfg.nPredict, 1, "nPredict");
+  requireAtLeast(cfg.batchCfmSteps, 0, "batchCfmSteps");
+  requireAtLeast(cfg.streamLeftContextTokens, 0, "streamLeftContextTokens");
+  requireAtLeast(cfg.maxSentenceChars, 0, "maxSentenceChars");
+  requireAtLeast(cfg.crossfadeMs, 0, "crossfadeMs");
+  requireAtLeast(cfg.topK, 0, "topK");
+  requireFloat(
+      cfg.topP,
+      [](float v) { return v > 0.0f && v <= 1.0f; },
+      "topP",
+      "in (0, 1]");
+  requireFloat(
+      cfg.temperature,
+      [](float v) { return v >= 0.0f; },
+      "temperature",
+      ">= 0 (0 = greedy)");
+  requireFloat(
+      cfg.repeatPenalty,
+      [](float v) { return v > 0.0f; },
+      "repeatPenalty",
+      "> 0 (1 = no penalty)");
+  requireFloat(
+      cfg.exaggeration, [](float) { return true; }, "exaggeration", "finite");
+  requireFloat(
+      cfg.cfgWeight,
+      [](float v) { return v >= 0.0f; },
+      "cfgWeight",
+      ">= 0 (0 = no T3 CFG)");
+  requireFloat(
+      cfg.minP,
+      [](float v) { return v >= 0.0f && v <= 1.0f; },
+      "minP",
+      "in [0, 1]");
+}
 
 // Sample rates involved once the LavaSR enhancer is active: the engine emits
 // its native rate, the enhancer upsamples to `workRate` (48 kHz), and the
@@ -404,6 +491,7 @@ void ChatterboxModel::validateConfig(const ChatterboxConfig& cfg) {
               std::to_string(r));
     }
   }
+  validateSamplingAndLength(cfg);
   // Reject unknown KV dtypes at construction instead of inheriting
   // tts-cpp's warn-and-fall-back-to-f32, which would silently change
   // the memory profile the caller asked for.
@@ -508,14 +596,21 @@ void ChatterboxModel::loadLocked() {
   enhancerBackendDevice_ = loaded.backendDevice;
   enhancerBackendId_ = loaded.backendId;
 
-  denoiser_ = loadDenoiser(
-      cfg_.denoiserGgufPath, "ChatterboxModel::load: lavasr denoiser: ");
+  LoadedDenoiser denoiser = loadDenoiser(
+      cfg_.denoiserGgufPath,
+      backendDevice_ == kBackendDeviceGpu,
+      "ChatterboxModel::load: lavasr denoiser: ");
+  denoiser_ = std::move(denoiser.denoiser);
+  denoiserBackendDevice_ = denoiser.backendDevice;
+  denoiserBackendId_ = denoiser.backendId;
 }
 
 void ChatterboxModel::unloadLocked() {
   engine_.reset();
   enhancer_.reset();
   denoiser_.reset();
+  denoiserBackendDevice_ = -1;
+  denoiserBackendId_ = -1;
 }
 
 void ChatterboxModel::cancel() const {
@@ -607,6 +702,9 @@ ChatterboxModel::SynthesizeResult ChatterboxModel::synthesize(
   const int emittedRate =
       (wasStreaming && enhancer) ? rates.streamFinalRate : result.sample_rate;
   recordSynthesisStats(outSamples, elapsedSec, emittedRate, text.size());
+  t3Ms_ = result.t3_ms;
+  s3genMs_ = result.s3gen_ms;
+  t3Tokens_ = result.t3_tokens;
 
   return {std::move(pcm), wasStreaming};
 }
@@ -681,6 +779,9 @@ qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
+  stats.emplace_back("t3Ms", t3Ms_);
+  stats.emplace_back("s3genMs", s3genMs_);
+  stats.emplace_back("t3Tokens", t3Tokens_);
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId",     static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
@@ -688,6 +789,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats ChatterboxModel::runtimeStats() const
       "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
   stats.emplace_back(
       "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
+  stats.emplace_back(
+      "denoiserBackendDevice", static_cast<int64_t>(denoiserBackendDevice_));
+  stats.emplace_back(
+      "denoiserBackendId", static_cast<int64_t>(denoiserBackendId_));
   return stats;
 }
 
