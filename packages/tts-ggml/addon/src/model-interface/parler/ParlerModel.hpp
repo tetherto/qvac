@@ -126,6 +126,9 @@ private:
   // test can tell which device actually ran the enhancement.
   int enhancerBackendDevice_ = kBackendDeviceNone;
   int enhancerBackendId_ = kBackendIdNone;
+  // LavaSR denoiser backend, same codes and sentinels as the enhancer's.
+  int denoiserBackendDevice_ = kBackendDeviceNone;
+  int denoiserBackendId_ = kBackendIdNone;
 };
 
 } // namespace qvac::ttsggml::parler

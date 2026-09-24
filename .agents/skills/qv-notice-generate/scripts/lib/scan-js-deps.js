@@ -26,6 +26,36 @@ function writeNpmrc (pkgDir) {
   return npmrcPath
 }
 
+// Walk `npm ls --json`. Skip extraneous / invalid / missing nodes so peer
+// auto-installs (React Native, Metro, Babel) never land in NOTICE.
+function collectInstalledProductionKeys (tree, into = new Set(), nameFromKey) {
+  if (!tree || typeof tree !== 'object') return into
+  if (tree.extraneous || tree.invalid === true || tree.missing) return into
+  const name = tree.name || nameFromKey
+  if (name && tree.version) into.add(`${name}@${tree.version}`)
+  const deps = tree.dependencies
+  if (deps && typeof deps === 'object') {
+    for (const [depName, child] of Object.entries(deps)) {
+      collectInstalledProductionKeys(child, into, depName)
+    }
+  }
+  return into
+}
+
+function npmLsProductionTree (pkgDir) {
+  try {
+    return JSON.parse(
+      exec('npm ls --omit=dev --omit=peer --all --json', { cwd: pkgDir })
+    )
+  } catch (err) {
+    const out = err.stdout
+    if (typeof out === 'string' && out.trim().startsWith('{')) {
+      return JSON.parse(out)
+    }
+    throw err
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Scan JS production dependencies in a package directory
 // dry-run only skips writing NOTICE files — scanning runs fully.
@@ -51,16 +81,18 @@ async function scanJsDeps (pkgDir, log) {
   const npmrcPath = writeNpmrc(pkgDir)
 
   try {
-    // Install production deps
-    console.log(`  npm install --ignore-scripts in ${path.basename(pkgDir)}...`)
+    // Fresh tree: a prior peer install leaves extraneous packages that
+    // --omit=peer will not prune, and license-checker would list them.
+    fs.rmSync(path.join(pkgDir, 'node_modules'), { recursive: true, force: true })
+
+    console.log(`  npm install --ignore-scripts --omit=dev --omit=peer in ${path.basename(pkgDir)}...`)
     try {
-      exec('npm install --ignore-scripts --production', { cwd: pkgDir, stdio: 'ignore' })
+      exec('npm install --ignore-scripts --omit=dev --omit=peer', { cwd: pkgDir, stdio: 'ignore' })
     } catch (err) {
       log.push(`[JS] npm install failed in ${pkgDir}: ${err.message}`)
       return []
     }
 
-    // Run license-checker
     let rawJson
     try {
       rawJson = exec(
@@ -72,8 +104,17 @@ async function scanJsDeps (pkgDir, log) {
       return []
     }
 
+    let productionKeys
+    try {
+      productionKeys = collectInstalledProductionKeys(npmLsProductionTree(pkgDir))
+    } catch (err) {
+      log.push(`[JS] npm ls failed in ${pkgDir}: ${err.message}`)
+      return []
+    }
+
     const data = JSON.parse(rawJson)
     const results = []
+    let dropped = 0
 
     for (const [nameVersion, info] of Object.entries(data)) {
       // license-checker keys are "name@version"
@@ -86,6 +127,11 @@ async function scanJsDeps (pkgDir, log) {
       // Skip the package itself
       if (name === pkg.name) continue
 
+      if (!productionKeys.has(nameVersion)) {
+        dropped++
+        continue
+      }
+
       const license = typeof info.licenses === 'string'
         ? info.licenses
         : Array.isArray(info.licenses)
@@ -97,6 +143,10 @@ async function scanJsDeps (pkgDir, log) {
       results.push({ name, version, license, url })
     }
 
+    if (dropped > 0) {
+      log.push(`[JS] dropped ${dropped} extraneous/peer packages from ${path.basename(pkgDir)} NOTICE`)
+    }
+
     return results.sort(sortByName)
   } finally {
     // Clean up .npmrc (it's gitignored but tidy up)
@@ -104,4 +154,4 @@ async function scanJsDeps (pkgDir, log) {
   }
 }
 
-module.exports = { scanJsDeps }
+module.exports = { scanJsDeps, collectInstalledProductionKeys }

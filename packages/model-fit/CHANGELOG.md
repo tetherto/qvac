@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.0] - 2026-09-23
 
 ### Added
 
@@ -14,6 +14,13 @@
   surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
   that reports failure as an absent projection rather than an error, is asserted
   on the same files. No API change.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.1` -> `^0.17.0`, carrying
+  `qvac-fabric` `10549.1.0` -> `10549.3.0`. The fit cleanup and parameter
+  reporting fixes preserve caller settings and complement the fit-stub support
+  documented above. No API change beyond that existing unreleased work.
 
 ## [0.12.2] - 2026-09-18
 

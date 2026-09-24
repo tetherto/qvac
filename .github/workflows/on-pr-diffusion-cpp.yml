@@ -165,6 +165,19 @@ jobs:
               )
 
               if (check?.status === 'completed') {
+                // 'skipped' means the producer's nx filter found no affected
+                // TypeScript for this package, so there is nothing to gate on.
+                // Failing on it made any PR touching this package's WORKFLOW but
+                // not its code unmergeable: this workflow triggers on
+                // `.github/workflows/*diffusion*` while the producer only
+                // triggers on `packages/**`. A skip caused by the producer
+                // erroring still shows as that job's own red check.
+                if (check.conclusion === 'skipped') {
+                  core.info(
+                    'diffusion-pr-head-ts-checks was skipped — no affected TypeScript for this package.'
+                  )
+                  return
+                }
                 if (check.conclusion !== 'success') {
                   core.setFailed(
                     `diffusion-pr-head-ts-checks completed with conclusion: ${check.conclusion}`

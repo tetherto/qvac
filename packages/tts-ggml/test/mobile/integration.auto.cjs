@@ -46,6 +46,10 @@ async function runLavasrEnhancerTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/lavasr-enhancer.test.js', options)
 }
 
+async function runMossTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/moss.test.js', options)
+}
+
 async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/multiple-runs.test.js', options)
 }
@@ -82,6 +86,10 @@ async function runSupertonic3QuantTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/supertonic3-quant.test.js', options)
 }
 
+async function runVoiceControlsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/voice-controls.test.js', options)
+}
+
 module.exports = {
   runAddonTest,
   runAudio8Test,
@@ -93,6 +101,7 @@ module.exports = {
   runCosyvoice3Test,
   runGpuSmokeTest,
   runLavasrEnhancerTest,
+  runMossTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,
   runParlerWerTest,
@@ -101,5 +110,6 @@ module.exports = {
   runStreamingBenchmarkTest,
   runSupertonicMtlTest,
   runSupertonicTest,
-  runSupertonic3QuantTest
+  runSupertonic3QuantTest,
+  runVoiceControlsTest
 }
