@@ -254,12 +254,21 @@ class BareRpcSession(
             when {
                 message.flags and (StreamFlags.DESTROY or StreamFlags.CLOSE or StreamFlags.ERROR) != 0L -> {
                     val error = message.error?.let(::BareRpcRemoteException)
-                        ?: BareRpcProtocolException("remote closed request stream")
-                    writer?.value = WriteState(failure = error)
-                    stateMutex.withLock { pendingRequestOpens.remove(message.id) }?.completeExceptionally(error)
+                        ?: (message.flags and StreamFlags.ERROR).takeIf { it != 0L }
+                            ?.let { BareRpcProtocolException("remote errored request stream") }
+                    if (error != null) {
+                        writer?.value = WriteState(failure = error)
+                        stateMutex.withLock { pendingRequestOpens.remove(message.id) }?.completeExceptionally(error)
+                    } else {
+                        // Clean destroy/close of the request direction. Stop sending
+                        // input without failing the flow, so the worker's own error or
+                        // result still arrives on the response stream.
+                        writer?.value = WriteState(stopped = true)
+                        stateMutex.withLock { pendingRequestOpens.remove(message.id) }?.complete(Unit)
+                    }
                 }
-                message.flags and StreamFlags.PAUSE != 0L && writer?.value?.failure == null -> writer?.value = WriteState(paused = true)
-                message.flags and StreamFlags.RESUME != 0L && writer?.value?.failure == null -> writer?.value = WriteState()
+                message.flags and StreamFlags.PAUSE != 0L && writer?.value?.writable == true -> writer?.value = WriteState(paused = true)
+                message.flags and StreamFlags.RESUME != 0L && writer?.value?.writable == true -> writer?.value = WriteState()
             }
         }
         if (message.flags and StreamFlags.OPEN != 0L) {
@@ -339,10 +348,19 @@ class BareRpcSession(
         check(!closed) { "bare-rpc session is closed" }
     }
 
-    private data class WriteState(val paused: Boolean = false, val failure: Throwable? = null)
+    private data class WriteState(
+        val paused: Boolean = false,
+        val failure: Throwable? = null,
+        val stopped: Boolean = false,
+    ) {
+        val writable get() = failure == null && !stopped
+    }
 
+    // Suspends until writing may proceed. A real error is thrown; a clean stop
+    // (the peer closed its request direction) never becomes writable, so the pump
+    // parks here until the response completes and the caller cancels it.
     private suspend fun MutableStateFlow<WriteState>.awaitWritable() {
-        first { !it.paused || it.failure != null }.failure?.let { throw it }
+        first { (!it.paused && !it.stopped) || it.failure != null }.failure?.let { throw it }
     }
 
     /** Never suspend the multiplexed reader on an individual slow consumer. */

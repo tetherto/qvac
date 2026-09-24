@@ -15,8 +15,6 @@ packages/**/node_modules/
 # for local tooling — slipped through and reached CI as a dangling link.
 packages/**/node_modules
 packages/**/package-lock.json
-# The Kotlin Android runtime installs with `npm ci`, so its lockfile is tracked.
-!packages/sdk-kotlin/package-lock.json
 packages/**/.npmrc
 packages/sdk/bun.lock
 NOTICE_LOG.txt
