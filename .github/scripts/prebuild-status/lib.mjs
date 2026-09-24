@@ -106,18 +106,31 @@ export function classifyState(state) {
   return 'pending'
 }
 
+// `lookupRun` returns this when the API call failed, as opposed to returning a
+// run that turns out not to be the expected producer. The two must not be
+// conflated: see evaluatePackage.
+export const LOOKUP_FAILED = Symbol('prebuild-status/lookup-failed')
+
 // Full per-package decision: 'success' | 'failed' | 'pending'.
-// `lookupRun(runId)` returns the producing run object (or null) and is injected
-// so this stays pure and testable.
+// `lookupRun(runId)` returns the producing run object, null, or LOOKUP_FAILED,
+// and is injected so this stays pure and testable.
 export function evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun) {
   // Trusted+fresh first, then newest: newest-first would let another workflow's
   // co-post mask the real producer.
   const context = `qvac/prebuild-${pkg}`
-  const trusted = (statuses ?? [])
-    .filter(
-      (s) => s && s.context === context && s.creator && s.creator.login === BOT_LOGIN,
-    )
-    .filter((s) => isRunFresh(lookupRun(parseRunId(s.target_url)), pkg, prUpdatedEpoch))
+  const candidates = (statuses ?? []).filter(
+    (s) => s && s.context === context && s.creator && s.creator.login === BOT_LOGIN,
+  )
+  const trusted = []
+  for (const s of candidates) {
+    const run = lookupRun(parseRunId(s.target_url))
+    // A lookup that failed is not evidence the producer is untrusted. Dropping
+    // it would let an older success outrank a newer failure, so the gate would
+    // pass on a 502. Go back to pending instead and let verify.mjs retry to its
+    // deadline, which is what turns persistent failure into a hard fail.
+    if (run === LOOKUP_FAILED) return 'pending'
+    if (isRunFresh(run, pkg, prUpdatedEpoch)) trusted.push(s)
+  }
   if (trusted.length === 0) return 'pending'
   const newest = trusted.reduce((best, s) =>
     Date.parse(s.updated_at) >= Date.parse(best.updated_at) ? s : best,

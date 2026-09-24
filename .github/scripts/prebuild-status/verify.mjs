@@ -8,7 +8,7 @@
 // Env: GH_TOKEN, REPO, HEAD_SHA, CHANGED_PACKAGES, PR_UPDATED_AT
 import { execFileSync } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { expectedPrebuilds, flattenPages, pollPrebuilds } from './lib.mjs'
+import { LOOKUP_FAILED, expectedPrebuilds, flattenPages, pollPrebuilds } from './lib.mjs'
 
 // Prebuilds take tens of minutes (median 9-32 min, worst ~32 min observed);
 // nothing resolves inside 2 minutes, so a longer interval costs no meaningful
@@ -35,7 +35,10 @@ function fetchRun(repo, runId) {
   try {
     return ghJson([`repos/${repo}/actions/runs/${runId}`])
   } catch {
-    return null
+    // LOOKUP_FAILED, not null: null reads as "not the expected producer" and
+    // silently drops the status, which lets an older success outrank a newer
+    // failure. evaluatePackage turns this into pending so the poll retries.
+    return LOOKUP_FAILED
   }
 }
 

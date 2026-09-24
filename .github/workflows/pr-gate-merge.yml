@@ -84,17 +84,23 @@ jobs:
             asr-ggml:
               - "packages/asr-ggml/**"
               - ".github/workflows/prebuilds-asr-ggml.yml"
+              - ".github/workflows/*asr-ggml*.yml"
             bci-whispercpp:
               - "packages/bci-whispercpp/**"
+              - ".github/workflows/*bci-whispercpp*.yml"
             classification-ggml:
               - "packages/classification-ggml/**"
               - ".github/workflows/prebuilds-classification-ggml.yml"
+              - ".github/workflows/*classification-ggml*.yml"
             decoder-audio:
               - "packages/decoder-audio/**"
+              - ".github/workflows/*decoder-audio*.yml"
             diffusion-cpp:
               - "packages/diffusion-cpp/**"
+              - ".github/workflows/*diffusion**.yml"
             embed-llamacpp:
               - "packages/embed-llamacpp/**"
+              - ".github/workflows/*embed**.yml"
             # Pure-JS/TS package (no prebuilds). Listed so its lint, typecheck,
             # declaration and generated-artifact checks run under sanity-checks
             # and reach the required qvac-merge-guard status.
@@ -102,20 +108,27 @@ jobs:
               - "packages/infer-base/**"
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
+              - ".github/workflows/*llm**.yml"
             model-fit:
               - "packages/model-fit/**"
+              - ".github/workflows/*model-fit*.yml"
             ocr-ggml:
               - "packages/ocr-ggml/**"
+              - ".github/workflows/*ocr-ggml*.yml"
             translation-nmtcpp:
               - "packages/translation-nmtcpp/**"
+              - ".github/workflows/**nmtcpp**.yml"
             tts-ggml:
               - "packages/tts-ggml/**"
+              - ".github/workflows/*tts-ggml*.yml"
             fabric:
               - "packages/fabric/**"
               - ".github/workflows/prebuilds-fabric.yml"
+              - ".github/workflows/**fabric**.yml"
             vla:
               - "packages/vla-ggml/**"
               - ".github/workflows/prebuilds-vla.yml"
+              - ".github/workflows/**vla**.yml"
 
       # Package dir names mostly match the filter/job key (packages/<key>),
       # except vla (packages/vla-ggml) - mapped explicitly here so
@@ -126,8 +139,23 @@ jobs:
         id: pkglist
         env:
           CHANGES: ${{ steps.filter.outputs.changes }}
+          # Every filter key above except pkg-any. Kept in step with that list.
+          ALL_PACKAGES: >-
+            ["asr-ggml","bci-whispercpp","classification-ggml","decoder-audio",
+             "diffusion-cpp","embed-llamacpp","infer-base","llm-llamacpp",
+             "model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","fabric","vla"]
         run: |
           CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any"))')
+
+          # pkg-any also matches the shared nx workflows, which name no package.
+          # Dropping it and stopping here left `packages=[]`, so sanity-checks
+          # skipped and the merge guard passed having verified nothing. A change
+          # to a shared producer can affect any addon, so check them all.
+          if [ "$CHANGED" = "[]" ] && echo "$CHANGES" | jq -e 'index("pkg-any")' >/dev/null; then
+            CHANGED=$(echo "$ALL_PACKAGES" | jq -c '.')
+            echo "::notice::a shared workflow changed but no package path did; checking every addon"
+          fi
+
           echo "packages=${CHANGED}" >> "$GITHUB_OUTPUT"
           echo "packages-with-path=$(echo "$CHANGED" | jq -c '
             map({package: ., path: (if . == "vla" then "packages/vla-ggml" else "packages/" + . end)})

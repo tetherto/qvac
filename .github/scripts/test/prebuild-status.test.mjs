@@ -14,6 +14,7 @@ import {
   classifyState,
   evaluatePackage,
   pollPrebuilds,
+  LOOKUP_FAILED,
 } from '../prebuild-status/lib.mjs'
 
 const iso = (s) => new Date(s).toISOString()
@@ -206,6 +207,38 @@ test('evaluatePackage: a superseded pre-label run cannot pass; the fresh labeled
     status({ updated_at: iso('2026-08-10T13:00:00Z'), target_url: 'r/actions/runs/2', state: 'failure' }),
   ]
   assert.equal(evaluatePackage(labeledFailure, 'tts-ggml', threshold, lookup), 'failed')
+})
+
+// A failed run lookup must not read as "untrusted producer". If it does, the
+// newest status is silently dropped and an older success decides, so a routine
+// 502 turns a red gate green.
+test('evaluatePackage: a failed run lookup holds the gate at pending', () => {
+  const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
+  const fresh = { path: '.github/workflows/on-pr-nx.yml', created_at: '2026-08-10T12:05:00Z' }
+
+  const olderSuccess = status({
+    updated_at: iso('2026-08-10T13:00:00Z'),
+    target_url: 'r/actions/runs/1',
+    state: 'success',
+  })
+  const newerFailure = status({
+    updated_at: iso('2026-08-10T14:00:00Z'),
+    target_url: 'r/actions/runs/2',
+    state: 'failure',
+  })
+
+  // Both runs resolvable: the newer failure decides.
+  assert.equal(
+    evaluatePackage([olderSuccess, newerFailure], 'tts-ggml', threshold, () => fresh),
+    'failed',
+  )
+
+  // The newer failure's run lookup 502s. Pending, not success.
+  const flaky = (id) => (String(id) === '2' ? LOOKUP_FAILED : fresh)
+  assert.equal(
+    evaluatePackage([olderSuccess, newerFailure], 'tts-ggml', threshold, flaky),
+    'pending',
+  )
 })
 
 test('evaluatePackage: a status whose run resolves to another workflow is rejected', () => {

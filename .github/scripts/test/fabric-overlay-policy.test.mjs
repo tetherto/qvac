@@ -186,7 +186,10 @@ const NX_WORKFLOW = '.github/workflows/on-pr-nx.yml'
 
 // on-pr-nx builds its matrix from project.json instead of naming packages, so a
 // literal `packages/<pkg>` match cannot see what it covers. Resolve that the
-// same way the workflow does: any package with an on-pr target.
+// same way the workflow does: any package with an on-pr target, minus the
+// carve-outs, which nx-project-matrix strips from the matrix and which are
+// driven by their own on-pr-<pkg>.yml. Counting a carve-out here would let that
+// file drop its detect-fabric-stack job with this test still green.
 function nxCoveredPackages () {
   return readdirSync(PACKAGE_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -194,7 +197,9 @@ function nxCoveredPackages () {
     .filter((name) => {
       const projectJson = join(PACKAGE_DIR, name, 'project.json')
       if (!existsSync(projectJson)) return false
-      return JSON.parse(readFileSync(projectJson, 'utf8')).targets?.['on-pr'] !== undefined
+      const onPr = JSON.parse(readFileSync(projectJson, 'utf8')).targets?.['on-pr']
+      if (onPr === undefined) return false
+      return onPr.options?.ci?.carveOut !== true
     })
 }
 
