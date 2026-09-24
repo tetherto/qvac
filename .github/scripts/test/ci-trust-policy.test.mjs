@@ -2527,7 +2527,15 @@ test("asr-ggml functional mobile workflow opts into dual flagship per engine sha
 // tag via create-release-tag.yml, keeping the Releases page SDK-focused. Adding
 // a caller here is a deliberate policy decision, not a drive-by edit.
 const GITHUB_RELEASE_REUSABLE = "./.github/workflows/create-github-release.yml";
-const ALLOWED_RELEASE_CALLERS = [".github/workflows/publish-sdk.yml"];
+// release-train.yml is the SDK's other release path: it publishes the whole
+// chain in one run and cuts the same sdk-v<version> release. It names no
+// package itself, so the policy is held one level up — the companion test in
+// release-trains.test.mjs asserts the catalog gives a GitHub release to
+// @qvac/sdk and to nothing else.
+const ALLOWED_RELEASE_CALLERS = [
+  ".github/workflows/publish-sdk.yml",
+  ".github/workflows/release-train.yml",
+];
 
 test("release policy: only the SDK workflow calls create-github-release.yml", () => {
   const callers = [
