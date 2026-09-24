@@ -110,6 +110,7 @@ jobs:
   prebuild-manual:
     if: inputs.platform != ''
     permissions:
+      actions: read
       contents: write
       packages: write
       pull-requests: write

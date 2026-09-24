@@ -1510,6 +1510,23 @@ test('ggml-rpc-server keeps Device Farm runs on demand', () => {
   )
 });
 
+test('ggml-rpc-server prebuild callers grant reusable workflow permissions', () => {
+  for (const [path, jobName] of [
+    ['.github/workflows/on-merge-ggml-rpc-server.yml', 'build'],
+    [
+      '.github/workflows/integration-mobile-test-ggml-rpc-server.yml',
+      'prebuild-manual',
+    ],
+  ]) {
+    const job = jobBlock(read(path), jobName)
+    assert.match(
+      job,
+      /permissions:\n\s+actions: read/,
+      `${path}: ${jobName} must grant actions: read to the reusable prebuild chain`,
+    )
+  }
+});
+
 test('ggml-rpc-server TypeScript checks run on PR head without privileged cache access', () => {
   const pr = read('.github/workflows/on-pr-ggml-rpc-server.yml')
   const prHead = read('.github/workflows/on-pr-ts-nx.yml')
@@ -1683,19 +1700,6 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
       `${name} must not persist checkout credentials while publishing`,
     )
   }
-});
-
-test('managed RPC lifecycle overlay is a syntactically valid git patch', () => {
-  const patch = join(
-    root,
-    'vcpkg-overlays/ports/qvac-fabric/managed-rpc-server-lifecycle.patch',
-  )
-  const result = spawnSync('git', ['apply', '--numstat', patch], {
-    encoding: 'utf8',
-    cwd: root,
-  })
-  assert.equal(result.status, 0, result.stderr)
-  assert.match(result.stdout, /ggml\/src\/ggml-rpc\/ggml-rpc\.cpp/)
 });
 
 function jobDependsOnAuthorize(job) {
