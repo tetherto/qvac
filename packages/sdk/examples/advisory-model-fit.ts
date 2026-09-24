@@ -1,9 +1,10 @@
 /**
  * Advisory llama.cpp fit check (QVAC-22629).
  *
- * Before a completion or embedding load, the SDK runs `@qvac/model-fit` in one
- * disposable Bare child and projects whether the exact configuration it is
- * about to load will fit in device memory.
+ * Before a load, the SDK runs the fitter belonging to the engine that would
+ * run it and projects whether the exact configuration it is about to load will
+ * fit in device memory. Desktop runs it in a disposable Bare child; mobile,
+ * which cannot spawn one, runs it on a worker thread.
  *
  * The result is ADVISORY. It never blocks a load. `does-not-fit` is logged and
  * the ordinary load path runs unchanged. Crashes, timeouts, malformed
@@ -19,9 +20,8 @@
  * What fits on this machine (Apple M4 Pro, 24 GiB unified memory)
  * ---------------------------------------------------------------------------
  *
- * Measured with `@qvac/model-fit@0.8.0` (the first release carrying the
- * qvac-fabric#214 memory-reporting fix) at the default 1024 MiB margin. The
- * fitter budgets against what the machine can actually keep resident
+ * Measured at the default 1024 MiB margin. The fitter budgets against what the
+ * machine can actually keep resident
  * (total − wired − compressor: 17.4 GiB on this machine at idle), not the raw
  * RAM figure.
  *
@@ -114,8 +114,7 @@ try {
   // Unloaded before the next phase, so the second verdict is measured on an
   // idle machine and stays comparable to the fixture tables above. Leaving it
   // loaded would shift the verdict: the check reserves resident weight bytes
-  // through the fit margin, and since model-fit 0.8.0 the fit child also sees
-  // system-wide wired memory.
+  // through the fit margin, and the fitter also sees system-wide wired memory.
   await unloadModel({ modelId: smallModelId, clearStorage: false })
   watchVerdicts()
 

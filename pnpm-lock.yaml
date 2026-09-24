@@ -872,9 +872,6 @@ importers:
       '@qvac/logging':
         specifier: ^0.1.1
         version: 0.1.1
-      '@qvac/model-fit':
-        specifier: ^0.12.0
-        version: 0.12.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
       '@qvac/rag':
         specifier: ^0.8.1
         version: link:../rag
@@ -4229,10 +4226,6 @@ packages:
 
   '@qvac/logging@0.1.1':
     resolution: {integrity: sha512-un8/b8JZBXRW/ljezFj3VGPxALhMvONeD62F/NHaU3TGs4SmdXWDcG65Aot+Bi4rIjaKQS5iY1P4WYGKU6Chew==}
-
-  '@qvac/model-fit@0.12.2':
-    resolution: {integrity: sha512-ORMMfka2VfgV/jbvwlW5KpNOHnno/c5e3NBtvRjYkaZt2npKB335kfb3isW01yl4A1MTnS6ZCZj/pnjf590tZQ==}
-    engines: {bare: '>=1.24.0'}
 
   '@qvac/ocr-ggml@0.24.3':
     resolution: {integrity: sha512-KbvDt8TfH1gGo1fnIiUsFyCjskWrekiXlp2MU7M0XLvyGZkxyQ9znzEZUgv51B9vV06RLweh8zrPeF52zu5UIA==}
@@ -13387,21 +13380,6 @@ snapshots:
   '@qvac/logging@0.1.1':
     dependencies:
       bare-env: 3.0.1
-
-  '@qvac/model-fit@0.12.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)':
-    dependencies:
-      '@qvac/fabric': 0.16.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
-      bare-path: 3.1.1
-      bare-process: 4.5.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - bare-events
-      - bare-pipe
-      - bare-url
-      - react-native-b4a
 
   '@qvac/ocr-ggml@0.24.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
     dependencies:

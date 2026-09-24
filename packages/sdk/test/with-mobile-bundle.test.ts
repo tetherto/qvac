@@ -101,8 +101,8 @@ test('resolvePlatformAddonRoots: skips an addon whose platform package is absent
   t.alike(resolvePlatformAddonRoots(fixtureDir, ['@qvac/audiogen-ggml'], 'android'), [])
 })
 
-test('MOBILE_UNSUPPORTED_MODULES: desktop-only fit subprocess stays out of mobile bundles', (t) => {
-  t.alike(MOBILE_UNSUPPORTED_MODULES, ['bare-runtime/spawn', '@qvac/model-fit/process'])
+test('MOBILE_UNSUPPORTED_MODULES: the desktop-only spawn path stays out of mobile bundles', (t) => {
+  t.alike(MOBILE_UNSUPPORTED_MODULES, ['bare-runtime/spawn'])
 })
 
 test('patchBareKitLinkers: returns paths for patched platforms', (t) => {
