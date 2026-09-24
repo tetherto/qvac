@@ -39,6 +39,7 @@ const ENGINE_SUPERTONIC = "supertonic";
 const ENGINE_COSYVOICE3 = "cosyvoice3";
 const ENGINE_PARLER = "parler";
 const ENGINE_AUDIO8 = "audio8";
+const ENGINE_MOSS = "moss";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
 const CHATTERBOX_T3_TURBO = "chatterbox-t3-turbo.gguf";
@@ -273,6 +274,12 @@ const AUDIO8_VOICE_KEYS = ["referenceAudio", "referenceText"] as const;
 type Audio8VoiceKey = (typeof AUDIO8_VOICE_KEYS)[number];
 type Audio8VoiceFieldsResolved = Partial<Record<Audio8VoiceKey, string>>;
 
+const MOSS_BACKBONE_RE = /^moss-tts-delay(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_DECODER_RE = /^moss-codec-decoder(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_NATIVE_SAMPLE_RATE = 24000;
+const MOSS_FRAMES_PER_SECOND = 12.5;
+
 /** Per-call engine fields forwarded verbatim onto the native job object. */
 type JobFields = ParlerDescFields & Audio8VoiceFieldsResolved;
 
@@ -284,7 +291,8 @@ type EngineType =
   | typeof ENGINE_SUPERTONIC
   | typeof ENGINE_COSYVOICE3
   | typeof ENGINE_PARLER
-  | typeof ENGINE_AUDIO8;
+  | typeof ENGINE_AUDIO8
+  | typeof ENGINE_MOSS;
 
 // Per-engine supported subsets, mirroring controls::supported_emotions() /
 // supported_paces(). An empty list means the engine has no such control.
@@ -296,6 +304,7 @@ const ENGINE_EMOTIONS: Record<EngineType, readonly Emotion[]> = {
   [ENGINE_SUPERTONIC]: [],
   [ENGINE_CHATTERBOX]: [],
   [ENGINE_AUDIO8]: [],
+  [ENGINE_MOSS]: [],
 };
 
 const ENGINE_PACES: Record<EngineType, readonly Pace[]> = {
@@ -304,6 +313,7 @@ const ENGINE_PACES: Record<EngineType, readonly Pace[]> = {
   [ENGINE_SUPERTONIC]: PACES, // mapped onto the duration multiplier
   [ENGINE_CHATTERBOX]: [], // time-stretch only; use `speed`
   [ENGINE_AUDIO8]: [], // no rate control at all
+  [ENGINE_MOSS]: [],
 };
 
 // Which channels an engine can change per call. Supertonic takes its pace
@@ -318,6 +328,7 @@ const ENGINE_PER_CALL_CONDITIONING: Record<
   [ENGINE_SUPERTONIC]: [],
   [ENGINE_CHATTERBOX]: [],
   [ENGINE_AUDIO8]: [],
+  [ENGINE_MOSS]: [],
 };
 
 /**
@@ -362,6 +373,18 @@ interface TTSGgmlFiles {
    */
   audio8CodecEncoder?: string;
   audio8CodecEncoderPath?: string;
+  /** MOSS Delay backbone GGUF path. Overrides `modelDir`. */
+  mossBackbone?: string;
+  mossBackbonePath?: string;
+  /** MOSS codec synthesis half (codes to 24 kHz wav). Overrides `modelDir`. */
+  mossCodecDecoder?: string;
+  mossCodecDecoderPath?: string;
+  /**
+   * MOSS codec analysis half (wav to codes). Only needed to clone a voice
+   * from `referenceAudio`; a text-only deployment can leave it out.
+   */
+  mossCodecEncoder?: string;
+  mossCodecEncoderPath?: string;
   /**
    * CosyVoice3 model directory holding the sub-model GGUFs
    * (`cosyvoice3-{llm,flow,hift}-*.gguf`) plus `voice.gguf`, `vocab.json` and
@@ -448,6 +471,8 @@ interface TTSGgmlRuntimeConfig {
    * CosyVoice3 native chunk streaming emits at 24 kHz: a different rate is
    * only accepted there when the LavaSR enhancer is active, because the
    * enhancer's overlap-reprocess window resamples without chunk seams.
+   *
+   * MOSS emits its native 24 kHz only and rejects any other rate.
    */
   outputSampleRate?: number;
   backendsDir?: string;
@@ -537,7 +562,8 @@ interface Audio8VoiceFields {
    * re-bakes the same recording (it is forwarded to the new addon instance)
    * but cannot switch to a different one, so changing voices means a new
    * instance. Audio8: the recording to clone, with `referenceText`
-   * alongside it.
+   * alongside it. MOSS: the recording to clone, sampled at 24 kHz and
+   * fixed at construction; needs `files.mossCodecEncoder`.
    */
   referenceAudio?: string;
   /** Audio8: what `referenceAudio` says. Required when cloning. */
@@ -573,6 +599,7 @@ interface TTSGgmlOptions
    * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
    * Supertonic: pass 99 to offload on GPU-capable hosts, including Android.
    * Audio8: pass 99 to use Vulkan on Linux and Windows.
+   * MOSS: any non-zero value selects the GPU backend.
    * CosyVoice3: pass 99 to offload on Metal (macOS / iOS), Vulkan (desktop
    * Linux / Windows), or OpenCL/Adreno (Android); other hosts fall back to
    * CPU by policy.
@@ -595,8 +622,8 @@ interface TTSGgmlOptions
   /** Override `std::thread::hardware_concurrency()`. */
   threads?: number;
   /**
-   * Chatterbox / CosyVoice3 speech tokens per native streaming chunk.
-   * 0 disables.
+   * Chatterbox / CosyVoice3 speech tokens per native streaming chunk; MOSS
+   * codec frames per chunk (12.5 per second). 0 disables.
    */
   streamChunkTokens?: number;
   /**
@@ -728,6 +755,9 @@ interface NormalizedFiles {
   audio8Lm?: string;
   audio8CodecDecoder?: string;
   audio8CodecEncoder?: string;
+  mossBackbone?: string;
+  mossCodecDecoder?: string;
+  mossCodecEncoder?: string;
   voicesDir?: string;
   lavasrEnhancer?: string;
   lavasrDenoiser?: string;
@@ -768,9 +798,9 @@ interface TTSOutputChunk {
   /** Signed 16-bit mono PCM audio payload. */
   outputArray: Int16Array;
   /**
-   * Output sample rate. The native engine rate (24000 for Chatterbox and
-   * CosyVoice3; 44100 for Supertonic, Parler, and Audio8), or 48000 when the
-   * LavaSR enhancer is active.
+   * Output sample rate. The native engine rate (24000 for Chatterbox,
+   * CosyVoice3 and MOSS; 44100 for Supertonic, Parler, and Audio8), or 48000
+   * when the LavaSR enhancer is active.
    */
   sampleRate?: number;
 }
@@ -797,8 +827,9 @@ interface RuntimeStats {
   /** 1 when a present GPU is unsupported by engine policy; 0 otherwise. */
   gpuUnsupported?: number;
   /**
-   * Audio8 only: codec frames generated, on a fixed 46 ms grid. This is the
-   * unit its `tokensPerSecond` counts, in batch and in streaming alike.
+   * Audio8 and MOSS only: codec frames generated (Audio8 on a fixed 46 ms
+   * grid, MOSS at 12.5 per second). This is the unit their `tokensPerSecond`
+   * counts, in batch and in streaming alike.
    */
   generatedFrames?: number;
   /**
@@ -1031,7 +1062,7 @@ function readDirSafe(modelDir?: string): string[] {
   }
 }
 
-function audio8QuantRank(name: string, pattern: RegExp): number {
+function ggufQuantRank(name: string, pattern: RegExp): number {
   const match = name.match(pattern);
   if (!match) return Number.MAX_SAFE_INTEGER;
   if (!match[1]) return 0;
@@ -1040,10 +1071,10 @@ function audio8QuantRank(name: string, pattern: RegExp): number {
 }
 
 /**
- * Find one Audio8 GGUF in `modelDir`, preferring the quant tier that reads
- * best for its size (q8_0 > f16 > q4_0 > f32).
+ * Find one Audio8 or MOSS GGUF in `modelDir`, preferring the quant tier that
+ * reads best for its size (q8_0 > f16 > q4_0 > f32).
  */
-function findAudio8InDir(
+function findQuantRankedGguf(
   modelDir: string | undefined,
   pattern: RegExp,
 ): string | undefined {
@@ -1052,7 +1083,7 @@ function findAudio8InDir(
   if (matches.length === 0) return undefined;
   matches.sort(
     (left, right) =>
-      audio8QuantRank(left, pattern) - audio8QuantRank(right, pattern),
+      ggufQuantRank(left, pattern) - ggufQuantRank(right, pattern),
   );
   return path.join(modelDir, matches[0]);
 }
@@ -1324,6 +1355,15 @@ function normalizeGgmlFiles(
       files.audio8CodecEncoder,
       files.audio8CodecEncoderPath,
     ),
+    mossBackbone: firstNonEmpty(files.mossBackbone, files.mossBackbonePath),
+    mossCodecDecoder: firstNonEmpty(
+      files.mossCodecDecoder,
+      files.mossCodecDecoderPath,
+    ),
+    mossCodecEncoder: firstNonEmpty(
+      files.mossCodecEncoder,
+      files.mossCodecEncoderPath,
+    ),
     voicesDir: firstNonEmpty(files.voicesDir),
     lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
     lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
@@ -1347,14 +1387,15 @@ function detectEngineType(
     engine === ENGINE_SUPERTONIC ||
     engine === ENGINE_COSYVOICE3 ||
     engine === ENGINE_PARLER ||
-    engine === ENGINE_AUDIO8
+    engine === ENGINE_AUDIO8 ||
+    engine === ENGINE_MOSS
   ) {
     return engine;
   }
   if (engine != null && engine !== "") {
     throw new Error(
       "tts-ggml: 'engine' option must be 'chatterbox', 'supertonic', " +
-        `'cosyvoice3', 'parler' or 'audio8' (got '${String(engine)}')`,
+        `'cosyvoice3', 'parler', 'audio8' or 'moss' (got '${String(engine)}')`,
     );
   }
   // Explicit CosyVoice3 files/dir take precedence over shared-modelDir sniffing.
@@ -1365,6 +1406,7 @@ function detectEngineType(
   if (files.supertonicModel) return ENGINE_SUPERTONIC;
   if (files.parlerModel) return ENGINE_PARLER;
   if (files.audio8Lm || files.audio8CodecDecoder) return ENGINE_AUDIO8;
+  if (files.mossBackbone || files.mossCodecDecoder) return ENGINE_MOSS;
   if (files.modelDir) {
     if (dirHasCosyvoice3(files.modelDir)) return ENGINE_COSYVOICE3;
     const hasChatterbox =
@@ -1377,7 +1419,8 @@ function detectEngineType(
     if (hasChatterbox) return ENGINE_CHATTERBOX;
     if (hasSupertonic) return ENGINE_SUPERTONIC;
     if (findParlerInDir(files.modelDir)) return ENGINE_PARLER;
-    if (findAudio8InDir(files.modelDir, AUDIO8_LM_RE)) return ENGINE_AUDIO8;
+    if (findQuantRankedGguf(files.modelDir, AUDIO8_LM_RE)) return ENGINE_AUDIO8;
+    if (findQuantRankedGguf(files.modelDir, MOSS_BACKBONE_RE)) return ENGINE_MOSS;
   }
   return ENGINE_CHATTERBOX;
 }
@@ -1657,7 +1700,7 @@ function computeSentenceStreamStats(
 
 /**
  * GGML-backed TTS via the `tts-cpp` library. Wraps the chatterbox,
- * supertonic, parler, cosyvoice3 and audio8 engines behind a single
+ * supertonic, parler, cosyvoice3, audio8 and moss engines behind a single
  * engine-agnostic JavaScript surface. Engine type is auto-detected from
  * `files` or selected explicitly with `engine`.
  *
@@ -1674,6 +1717,7 @@ class TTSGgml {
   static readonly ENGINE_COSYVOICE3 = ENGINE_COSYVOICE3;
   static readonly ENGINE_PARLER = ENGINE_PARLER;
   static readonly ENGINE_AUDIO8 = ENGINE_AUDIO8;
+  static readonly ENGINE_MOSS = ENGINE_MOSS;
 
   opts: object;
   exclusiveRun: boolean;
@@ -1728,6 +1772,9 @@ class TTSGgml {
   private _audio8LmPath?: string;
   private _audio8CodecDecoderPath?: string;
   private _audio8CodecEncoderPath?: string;
+  private _mossBackbonePath?: string;
+  private _mossCodecDecoderPath?: string;
+  private _mossCodecEncoderPath?: string;
   private _referenceText?: string;
   private _greedy?: boolean;
   private _description?: string;
@@ -1864,6 +1911,10 @@ class TTSGgml {
       this._resolveAudio8ModelPaths(files);
       return;
     }
+    if (this._engineType === ENGINE_MOSS) {
+      this._resolveMossModelPaths(files);
+      return;
+    }
     if (files.modelDir) {
       const resolved = resolveChatterboxModelDirPaths(files.modelDir);
       this._t3ModelPath = firstNonEmpty(files.t3Model, resolved.t3);
@@ -1880,15 +1931,30 @@ class TTSGgml {
   private _resolveAudio8ModelPaths(files: NormalizedFiles): void {
     this._audio8LmPath = firstNonEmpty(
       files.audio8Lm,
-      findAudio8InDir(files.modelDir, AUDIO8_LM_RE),
+      findQuantRankedGguf(files.modelDir, AUDIO8_LM_RE),
     );
     this._audio8CodecDecoderPath = firstNonEmpty(
       files.audio8CodecDecoder,
-      findAudio8InDir(files.modelDir, AUDIO8_DECODER_RE),
+      findQuantRankedGguf(files.modelDir, AUDIO8_DECODER_RE),
     );
     this._audio8CodecEncoderPath = firstNonEmpty(
       files.audio8CodecEncoder,
-      findAudio8InDir(files.modelDir, AUDIO8_ENCODER_RE),
+      findQuantRankedGguf(files.modelDir, AUDIO8_ENCODER_RE),
+    );
+  }
+
+  private _resolveMossModelPaths(files: NormalizedFiles): void {
+    this._mossBackbonePath = firstNonEmpty(
+      files.mossBackbone,
+      findQuantRankedGguf(files.modelDir, MOSS_BACKBONE_RE),
+    );
+    this._mossCodecDecoderPath = firstNonEmpty(
+      files.mossCodecDecoder,
+      findQuantRankedGguf(files.modelDir, MOSS_DECODER_RE),
+    );
+    this._mossCodecEncoderPath = firstNonEmpty(
+      files.mossCodecEncoder,
+      findQuantRankedGguf(files.modelDir, MOSS_ENCODER_RE),
     );
   }
 
@@ -1967,12 +2033,23 @@ class TTSGgml {
           "runStream() / runStreaming() / run({ streamOutput: true }).",
       );
     }
+    if (
+      this._engineType === ENGINE_MOSS &&
+      this._streamFirstChunkTokens != null
+    ) {
+      throw new Error(
+        "tts-ggml: streamFirstChunkTokens is not supported by the moss " +
+          "engine, which streams fixed-size chunks; set streamChunkTokens " +
+          `(codec frames per chunk, ${MOSS_FRAMES_PER_SECOND} per second) only.`,
+      );
+    }
     // Runs before the denoiser guard so a Parler description/template conflict
     // is reported ahead of the engine-agnostic streaming constraints.
     this._assertParlerOptionConsistency();
     this._assertCosyvoiceOptionConsistency();
     this._assertCosyvoiceCloneConsistent();
     this._assertAudio8OptionConsistency();
+    this._assertMossOptionConsistency();
     this._assertConditioningConsistency("constructor");
     if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
       throw new Error(
@@ -2080,6 +2157,39 @@ class TTSGgml {
           `(engine is ${this._engineType})`,
       );
     }
+  }
+
+  private _assertMossOptionConsistency(): void {
+    if (this._engineType !== ENGINE_MOSS) return;
+    if (this._enhancerGgufPath || this._denoiserGgufPath) {
+      throw new Error(
+        "tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+          "the moss engine. Drop lavasrEnhancer / lavasrDenoiser.",
+      );
+    }
+    this._assertMossOutputRate();
+    this._assertMossVoiceConsistent();
+  }
+
+  private _assertMossOutputRate(): void {
+    if (
+      this._outputSampleRate == null ||
+      this._outputSampleRate === MOSS_NATIVE_SAMPLE_RATE
+    ) {
+      return;
+    }
+    throw new Error(
+      `tts-ggml: the moss engine emits ${MOSS_NATIVE_SAMPLE_RATE} Hz only; ` +
+        `drop outputSampleRate (got ${this._outputSampleRate}).`,
+    );
+  }
+
+  private _assertMossVoiceConsistent(): void {
+    if (!this._referenceAudio || this._mossCodecEncoderPath) return;
+    throw new Error(
+      "tts-ggml: voice cloning with the moss engine needs the codec " +
+        "encoder GGUF (files.mossCodecEncoder)",
+    );
   }
 
   /**
@@ -2620,11 +2730,13 @@ class TTSGgml {
   }
 
   /**
-   * Audio8 reports `tokensPerSecond` as codec frames per second, so the
-   * streaming aggregate has to count frames too rather than characters.
+   * Audio8 and MOSS report `tokensPerSecond` as codec frames per second, so
+   * the streaming aggregate has to count frames too rather than characters.
    */
   private _pacesOnFrames(): boolean {
-    return this._engineType === ENGINE_AUDIO8;
+    return (
+      this._engineType === ENGINE_AUDIO8 || this._engineType === ENGINE_MOSS
+    );
   }
 
   private _runStreamOrchestrator(
@@ -2712,6 +2824,9 @@ class TTSGgml {
     }
     if (this._engineType === ENGINE_AUDIO8) {
       return this._buildAudio8Params();
+    }
+    if (this._engineType === ENGINE_MOSS) {
+      return this._buildMossParams();
     }
     return this._buildChatterboxParams();
   }
@@ -2909,6 +3024,27 @@ class TTSGgml {
     }
     if (this._greedy != null) parameters.greedy = !!this._greedy;
     this._assignSamplingParams(parameters);
+    this._assignBackendParams(parameters);
+    return parameters;
+  }
+
+  private _buildMossParams(): TTSConfigurationParams {
+    this._assertMossOutputRate();
+    const parameters: TTSConfigurationParams = {
+      engineType: ENGINE_MOSS,
+      mossBackbonePath: this._mossBackbonePath || "",
+      mossCodecDecoderPath: this._mossCodecDecoderPath || "",
+      language: this._config.language || "en",
+    };
+    if (this._mossCodecEncoderPath) {
+      parameters.mossCodecEncoderPath = this._mossCodecEncoderPath;
+    }
+    if (this._referenceAudio != null) {
+      parameters.referenceAudio = this._referenceAudio;
+    }
+    if (this._streamChunkTokens != null) {
+      parameters.streamChunkTokens = this._streamChunkTokens | 0;
+    }
     this._assignBackendParams(parameters);
     return parameters;
   }
@@ -3223,6 +3359,7 @@ class TTSGgml {
   private _applyReloadableRuntimeConfig(
     newConfig: Record<string, unknown>,
   ): void {
+    this._assertMossReloadKeepsVoice(newConfig);
     const runtimeConfig = newConfig as Partial<TTSGgmlRuntimeConfig>;
     if (runtimeConfig.language !== undefined) {
       this._config.language = runtimeConfig.language;
@@ -3236,6 +3373,15 @@ class TTSGgml {
       );
     }
     this._applyAudio8Reload(newConfig);
+  }
+
+  private _assertMossReloadKeepsVoice(newConfig: Record<string, unknown>): void {
+    if (this._engineType !== ENGINE_MOSS) return;
+    if (newConfig.referenceAudio === undefined) return;
+    throw new Error(
+      "tts-ggml: reload: the moss engine encodes referenceAudio once per " +
+        "instance; create a new instance to clone a different recording",
+    );
   }
 
   // Cross-engine conditioning is reloadable on every engine that supports it,

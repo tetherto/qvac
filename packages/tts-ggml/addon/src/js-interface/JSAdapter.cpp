@@ -88,11 +88,13 @@ EngineType JSAdapter::readEngineType(
     return EngineType::Parler;
   if (explicitType == "audio8")
     return EngineType::Audio8;
+  if (explicitType == "moss")
+    return EngineType::Moss;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', 'parler' "
-        "or 'audio8' (got '" +
+        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', "
+        "'parler', 'audio8' or 'moss' (got '" +
             explicitType + "')");
   }
 
@@ -119,6 +121,11 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "audio8LmPath");
   if (!audio8Path.empty())
     return EngineType::Audio8;
+
+  const std::string mossPath =
+      readOptionalString(configurationParams, env, "mossBackbonePath");
+  if (!mossPath.empty())
+    return EngineType::Moss;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -268,6 +275,27 @@ JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  return cfg;
+}
+
+moss::MossConfig
+JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
+  moss::MossConfig cfg;
+  cfg.backbonePath =
+      readOptionalString(configurationParams, env, "mossBackbonePath");
+  cfg.codecDecoderPath =
+      readOptionalString(configurationParams, env, "mossCodecDecoderPath");
+  cfg.codecEncoderPath =
+      readOptionalString(configurationParams, env, "mossCodecEncoderPath");
+  cfg.referenceAudio =
+      readOptionalString(configurationParams, env, "referenceAudio");
+  cfg.language = readOptionalString(configurationParams, env, "language");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.streamChunkFrames =
+      readOptionalInt(configurationParams, env, "streamChunkTokens");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
   return cfg;
 }
 

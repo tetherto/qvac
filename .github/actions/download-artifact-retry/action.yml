@@ -1,0 +1,71 @@
+name: 'Download artifact with retry'
+description: >
+  actions/download-artifact with two delayed retries. Self-hosted runners lose
+  the GitHub artifact API for minutes at a time ("Failed to ListArtifacts:
+  Unable to make request: ETIMEDOUT"), and a single failed call would otherwise
+  fail the whole job after its prebuilds were already built.
+
+inputs:
+  name:
+    description: 'Artifact name. Empty downloads every artifact of the run.'
+    required: false
+    default: ''
+  path:
+    description: 'Destination directory.'
+    required: true
+  merge-multiple:
+    description: 'Merge every downloaded artifact into path (only meaningful with an empty name).'
+    required: false
+    default: 'false'
+  retry-delay-seconds:
+    description: 'Wait before the first retry. The final retry waits twice as long.'
+    required: false
+    default: '60'
+
+runs:
+  using: composite
+  steps:
+    - name: Download artifact
+      id: first
+      continue-on-error: true
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        merge-multiple: ${{ inputs.merge-multiple }}
+
+    - name: Wait before the first retry
+      if: steps.first.outcome == 'failure'
+      shell: bash
+      env:
+        DELAY_SECONDS: ${{ inputs.retry-delay-seconds }}
+      run: |
+        echo "::warning::Artifact download failed; retrying in ${DELAY_SECONDS}s."
+        sleep "$DELAY_SECONDS"
+
+    - name: Download artifact (first retry)
+      id: second
+      if: steps.first.outcome == 'failure'
+      continue-on-error: true
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        merge-multiple: ${{ inputs.merge-multiple }}
+
+    - name: Wait before the final retry
+      if: steps.second.outcome == 'failure'
+      shell: bash
+      env:
+        DELAY_SECONDS: ${{ inputs.retry-delay-seconds }}
+      run: |
+        echo "::warning::Artifact download failed again; final retry in $((DELAY_SECONDS * 2))s."
+        sleep "$((DELAY_SECONDS * 2))"
+
+    - name: Download artifact (final retry)
+      if: steps.second.outcome == 'failure'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        merge-multiple: ${{ inputs.merge-multiple }}

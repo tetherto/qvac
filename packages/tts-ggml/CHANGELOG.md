@@ -25,9 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   codec sidecar remains attached; `codecOnCoreml` reports whether the last
   synthesis used it. Both flags survive streaming as the last reported chunk
   value, reset on unload, and ignore results from an engine replaced by reload.
+- MOSS engine (`engine: 'moss'`, OpenMOSS MOSS-TTS v1.5 Delay): 24 kHz
+  synthesis from three GGUFs (`files.mossBackbone`, `files.mossCodecDecoder`,
+  and `files.mossCodecEncoder` to clone a voice from `referenceAudio`),
+  auto-detected from `modelDir`. `streamChunkTokens > 0` streams fixed-size
+  chunks of codec frames (12.5 per second) while the backbone is still
+  generating. Desktop only: the backbone has 8B parameters.
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-23#3` for the MOSS engine above.
 - Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
   weightless fit-measure model that carries no vocabulary, which a memory-fit
   measurement never needs; loading a real model is unchanged and still
