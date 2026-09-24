@@ -125,16 +125,31 @@ git push -u origin feature-<package>-<short-desc>
 | Branch type | Pattern | Created in upstream by | Purpose | Publishes to | Notes |
 |---|---|---:|---|---|---|
 | Main | `main` | Maintainers | All active development | GitHub Packages (**dev**) | Default integration branch |
-| Release | `release-<package>-<x.y.z>` | Maintainers | Versioned release line | **NPM** | Stable releases only |
+| Release | `release-<package>-<x.y.z>` | Maintainers | Versioned release line | **NPM** | Stable releases only. `<package>` is the **directory name** under `packages/`, see below |
 | Feature | `feature-<package>-*` | Optional (maintainers) | Share a dev build for a large/isolated effort | GitHub Packages (**feature**) | Never publish to NPM. Addons: dispatch only |
 | Temp | `tmp-<package>-*` | Optional (maintainers) | Experiments / QA previews | GitHub Packages (**temp**) | Never publish to NPM. Addons: dispatch only |
 
 For native addons, any non-`release-*` build — `main` included — is started by
-running `on-merge-<addon>.yml` with `workflow_dispatch` on that branch; pushing
-to the branch does not start one. The dist-tag such a build lands on is usually `dev`
+running `on-merge-nx.yml` with `workflow_dispatch` on that branch; pushing to the
+branch does not start one. The dist-tag such a build lands on is usually `dev`
 rather than `feature`/`temp`, because most addons let the dispatch `tag` input
 override the branch-derived tag — pin the exact version rather than the tag. See
 [MOBILE-ON-DEMAND.md](ci/MOBILE-ON-DEMAND.md#testing-unmerged--unpublished-native-code).
+
+**Release branch names use the package directory name**
+
+`<package>` in `release-<package>-<x.y.z>` must be a directory under `packages/`.
+Use `release-llm-llamacpp-0.53.1`, not the short `release-llm-0.53.1` some older
+branches used. Same for `vla-ggml`, `ocr-ggml`, `embed-llamacpp`, `diffusion-cpp`,
+`classification-ggml` and `translation-nmtcpp`.
+
+The 13 native addons publish from one workflow rather than one file each, so the
+branch name is what selects which package reaches NPM. `on-merge-nx.yml` checks it
+twice, both against the directory name: `packages/<package>/project.json` must
+exist, and the package the run selected must be exactly that one. A name it cannot
+resolve fails the run rather than guessing, since a wrong guess would publish the
+wrong package. Nothing is published either way, but the release is blocked until
+the branch is recut under the right name.
 
 **Publishing semantics**
 

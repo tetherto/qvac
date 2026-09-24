@@ -59,21 +59,11 @@ const LIBRARY_PUBLISHERS = new Set([
 ])
 
 // Guards against discovery returning an empty set and passing vacuously.
+// QVAC-19792 folded the 13 per-package on-merge-<pkg> pipelines into
+// on-merge-nx; model-fit kept its own. Add a pipeline here when one appears.
 const KNOWN = [
-  'on-merge-asr-ggml.yml',
-  'on-merge-audiogen-ggml.yml',
-  'on-merge-bci-whispercpp.yml',
-  'on-merge-classification-ggml.yml',
-  'on-merge-decoder-audio.yml',
-  'on-merge-diffusion-cpp.yml',
-  'on-merge-embed-llamacpp.yml',
-  'on-merge-fabric.yml',
-  'on-merge-llm-llamacpp.yml',
   'on-merge-model-fit.yml',
-  'on-merge-ocr-ggml.yml',
-  'on-merge-translation-nmtcpp.yml',
-  'on-merge-tts-ggml.yml',
-  'on-merge-vla.yml',
+  'on-merge-nx.yml',
 ]
 
 function read(name) {

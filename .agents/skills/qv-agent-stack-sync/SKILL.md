@@ -90,7 +90,8 @@ Requires explicit user confirmation of the plan (versions + which packages).
 Then for each `needs_release` package in dependency order, follow [references/prepare-cascade.md](references/prepare-cascade.md):
 
 1. Create org `release-<slug>-<version>` from `main` if missing.
-2. Prep version bump + dep ranges + changelog (`qv-sdk-changelog --package=<slug>`) + NOTICE.
+2. Prep version bump + dep ranges, then `qv-sdk-changelog --package=<slug>`
+   (follow that skill; do not call the generator as a shortcut) + NOTICE.
 3. Open **draft** release PR → `release-<slug>-<version>`.
 4. Open **draft** backmerge PR → `main` (`[skiplog]`, cherry-pick `-x`) in the same session.
 5. Skip packages marked blocked; report them clearly.
@@ -104,8 +105,16 @@ releases chain `qv-sdk-inference-version` + docs Step 8 from `qv-sdk-changelog`.
 
 1. Confirm lower dependencies are on npm (`npm view`).
 2. Fresh-install verification (below).
-3. Mark the draft release PR ready for review (and keep backmerge draft until release merges, or ready it alongside — prefer ready both when release is ready to merge).
-4. Remind: human merges; human triggers publish; then promote the next upper package.
+3. Re-run NOTICE for this package so JS can resolve. If install still fails,
+   restore the JS block from `HEAD`.
+4. Mark the draft release PR ready for review (and keep backmerge draft until
+   release merges, or ready it alongside — prefer ready both when release is
+   ready to merge).
+5. Remind: human merges; human triggers publish; then promote the next upper
+   package.
+
+The `release-<slug>-*` line is the cut. Do not cherry-pick later `main` onto it.
+Backmerge keeps `main` in sync with the cut.
 
 ## File updates (when preparing releases)
 
@@ -179,6 +188,8 @@ Always end with:
 - [ ] OpenClaw included in the cascade
 - [ ] `@qvac/inference` released ahead of an SDK release that moves major.minor
 - [ ] Draft release **and** draft backmerge opened together per package
+- [ ] Release head is `chore/<slug>-<version>-changelog`, not `release-*`
+- [ ] `qv-sdk-changelog` completed for each hop (published-version audit included)
 - [ ] Blocked plugins (e.g. AI SDK mismatch) not force-released
 - [ ] No publish / workflow_dispatch for npm
 - [ ] Org-branch heads preferred (`tetherto/qvac`)

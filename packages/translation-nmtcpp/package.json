@@ -1,6 +1,6 @@
 {
   "name": "@qvac/translation-nmtcpp",
-  "version": "0.16.4",
+  "version": "0.17.1",
   "description": "translation addon for qvac",
   "addon": true,
   "engines": {
@@ -82,6 +82,7 @@
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",
     "bare-stream": "^2.7.0",
+    "brittle": "^3.4.0",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
@@ -95,15 +96,14 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/fabric": "^0.16.1",
+    "@qvac/fabric": "^0.17.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fs": "^4.5.1",
     "bare-os": "^3.9.3",
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.2",
-    "bare-url": "^2.1.6",
-    "brittle": "^3.4.0"
+    "bare-url": "^2.1.6"
   },
   "peerDependencies": {
     "bare-fetch": "^3.0.1"

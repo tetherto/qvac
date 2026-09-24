@@ -3,6 +3,7 @@
 #include <any>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -10,7 +11,6 @@
 
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
-
 #include "model-interface/supertonic/SupertonicConfig.hpp"
 
 namespace tts_cpp::supertonic {
@@ -30,9 +30,14 @@ class SupertonicModel
 public:
   using Input = std::string;
   using Output = std::vector<int16_t>;
+  using ChunkCallback = std::function<void(
+      std::vector<int16_t>&& pcm, int chunkIndex, bool isLast)>;
 
   struct AnyInput {
     std::string text;
+    /** Non-empty = native streaming when the config sets streamChunkTokens > 0;
+     * empty = batch. */
+    ChunkCallback chunkCallback;
   };
 
   explicit SupertonicModel(SupertonicConfig config);
@@ -67,7 +72,13 @@ public:
   int sampleRate() const { return sampleRate_; }
 
 private:
-  Output synthesize(const std::string& text);
+  struct SynthesizeResult {
+    Output pcm;
+    /** True when the chunks were already published through the callback. */
+    bool wasStreaming = false;
+  };
+  SynthesizeResult
+  synthesize(const std::string& text, const ChunkCallback& chunkCallback);
   static void validateConfig(const SupertonicConfig& cfg);
 
   void loadLocked();
@@ -117,6 +128,9 @@ private:
   // as backendIdFromName() in BackendUtils.hpp (-1 = no enhancer loaded).
   int enhancerBackendDevice_ = -1;
   int enhancerBackendId_ = -1;
+  // LavaSR denoiser backend, same codes and sentinels as the enhancer's.
+  int denoiserBackendDevice_ = -1;
+  int denoiserBackendId_ = -1;
 };
 
 }

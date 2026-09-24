@@ -151,7 +151,10 @@ function buildBciTranscribeStreamRequest(
  * @param params.modelId - The loaded BCI model to use.
  * @param params.metadata - When true, the session yields transcript segment
  *                          objects (`{ text, startMs, endMs, append, id }`)
- *                          instead of plain text.
+ *                          instead of plain text. With `emit: 'delta'`, each
+ *                          segment also carries `windowStartTimestep`: its
+ *                          timestamps are window-local, and this maps them
+ *                          onto the stream timeline.
  * @param params.windowTimesteps - Decode window size in timesteps.
  * @param params.hopTimesteps - How far the window advances between decodes.
  * @param params.emit - `'delta'` (default) yields only the newly-discovered

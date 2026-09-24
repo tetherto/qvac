@@ -11,7 +11,8 @@ const {
   ensureVADModel,
   getTestPaths,
   createAudioStream,
-  isMobile
+  isMobile,
+  WHISPER_TEST_THREADS
 } = require('./helpers.js')
 
 // Create a pushable Readable to simulate a live input source.
@@ -76,6 +77,7 @@ test(
         audio_format: 's16le',
         temperature: 0.0,
         suppress_nst: true,
+        n_threads: WHISPER_TEST_THREADS,
         // the no_context = false is important because it allows maintaining the context in live transcription
         // to provide better output quality
         no_context: false
@@ -188,7 +190,8 @@ test(
         language: 'en',
         audio_format: 's16le',
         temperature: 0.0,
-        suppress_nst: true
+        suppress_nst: true,
+        n_threads: WHISPER_TEST_THREADS
       }
     }
 
@@ -290,6 +293,7 @@ test(
         audio_format: 's16le',
         temperature: 0.0,
         suppress_nst: true,
+        n_threads: WHISPER_TEST_THREADS,
         vad_params: {
           threshold: 0.5,
           min_silence_duration_ms: 300,
