@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.24.3",
+  "version": "0.25.0",
   "description": "GGML-backed OCR addon for qvac (EasyOCR and DocTR pipelines on GGUF weights)",
   "addon": true,
   "engines": {
@@ -95,7 +95,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/fabric": "^0.16.1",
+    "@qvac/fabric": "^0.17.0",
     "@qvac/infer-base": "^0.6.2",
     "@qvac/logging": "^0.1.0",
     "bare-fetch": "^3.0.1",
@@ -116,7 +116,13 @@
       "types": "./addonLogging.d.ts",
       "default": "./addonLogging.js"
     },
-    "./addonLogging.js": "./addonLogging.js"
+    "./addonLogging.js": "./addonLogging.js",
+    "./lib/main-gpu": {
+      "types": "./lib/main-gpu.d.ts",
+      "default": "./lib/main-gpu.js"
+    },
+    "./binding": "./binding.js",
+    "./binding.js": "./binding.js"
   },
   "types": "index.d.ts"
 }
