@@ -1,7 +1,7 @@
 import { docs } from 'fumadocs-mdx:collections/server';
 import { loader, type InferPageType } from 'fumadocs-core/source';
 import { icons } from 'lucide-react';
-import { SiElectron, SiExpo } from '@icons-pack/react-simple-icons';
+import { SiElectron, SiExpo, SiPython, SiTypescript } from '@icons-pack/react-simple-icons';
 import { createElement } from 'react';
 
 /**
@@ -10,7 +10,7 @@ import { createElement } from 'react';
  * frontmatter, a `meta.json`, or a separator — and this resolver is the one
  * place that turns such a string into an element.
  */
-const brandIcons = { SiElectron, SiExpo };
+const brandIcons = { SiElectron, SiExpo, SiPython, SiTypescript };
 
 // See https://fumadocs.vercel.app/docs/headless/source-api for more info
 export const source = loader({

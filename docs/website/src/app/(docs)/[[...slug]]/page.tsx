@@ -9,8 +9,6 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/mdx-components';
 import { SmartAnchor } from '@/components/mdx-smart-card';
-import { resolveIcon } from "@/lib/resolveIcon";
-import { cloneElement, isValidElement } from "react";
 import type { AnchorHTMLAttributes } from "react";
 import { CopyPageButton, ViewOptions } from '@/components/page-actions';
 import {
@@ -46,18 +44,6 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
 
   const MDXContent = page.data.body;
 
-  const rawIcon =
-  typeof page.data.icon === "string" ? resolveIcon(page.data.icon) : page.data.icon;
-
-  const titleIcon = isValidElement(rawIcon)
-    ? cloneElement(rawIcon, {
-        size: "1.2em",       // <- slightly larger than a capital letter
-        strokeWidth: 1.25,   // <- thinner stroke
-        className: "shrink-0",
-        "aria-hidden": true,
-      })
-    : null;
-
   // Filter ToC to include H2 through H5 by default. A page can opt into a
   // shallower ToC by setting `tocMaxDepth` in its frontmatter (e.g. `2` to
   // index only H2 headings).
@@ -87,18 +73,7 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
       ))}
       <DocsPage toc={filteredToc} tableOfContent={{ style: "clerk" }} tableOfContentPopover={{ style: "clerk" }} full={page.data.full}>
       <DocsTitle>
-        <span className="inline-flex items-center gap-2 leading-none">
-          {titleIcon ? (
-            // micro-adjustment (very small). Start with 0.02em.
-            <span className="inline-flex items-center relative top-[0.02em]">
-              {titleIcon}
-            </span>
-          ) : null}
-
-          <span className="leading-none">
-            <TitleText title={page.data.title} style={page.data.titleStyle as any} />
-          </span>
-        </span>
+        <TitleText title={page.data.title} style={page.data.titleStyle as any} />
       </DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6 -mt-6">
