@@ -218,8 +218,9 @@ audio8-codec-encoder-q8_0.gguf   (~120 MB; also -f16 / -f32; cloning only)
 # MOSS (OpenMOSS MOSS-TTS v1.5 Delay; 24 kHz, 8B backbone + RVQ codec) — three
 # GGUFs; the encoder is only needed to clone a voice
 moss-tts-delay-f16.gguf          (~17 GB)
+moss-ttsd-f16.gguf               (~17 GB; MOSS-TTSD dialogue backbone, optional)
 moss-codec-decoder-f16.gguf      (~1.8 GB)
-moss-codec-encoder-f16.gguf      (~1.8 GB; cloning only)
+moss-codec-encoder-f16.gguf      (~1.8 GB; cloning and dialogue only)
 ```
 
 Download the registry-published Chatterbox, Supertonic, and Parler models into
@@ -464,7 +465,8 @@ cache stays hot across chunks.
 MOSS clones from `referenceAudio` alone, with no transcript.  The recording
 must be sampled at 24 kHz (there is no resampling; multichannel input is
 downmixed), needs `files.mossCodecEncoder`, and is fixed for the instance.
-See [MOSS](#moss).
+For a multi-speaker dialogue, pass one recording per speaker in
+`dialogueReferences` instead.  See [MOSS](#moss).
 
 ### CosyVoice3
 
@@ -924,9 +926,55 @@ generating; `streamFirstChunkTokens` is not supported.  MOSS emits 24 kHz only,
 so `config.outputSampleRate` is rejected unless it equals `24000`, and the
 LavaSR enhancer / denoiser are not supported.
 
+The speech is directable from the text itself: `[pause 2.0s]` markers insert
+a silence of roughly that length, and inline Pinyin (`ni3 hao3`) or IPA
+(`/həloʊ/`) steers pronunciation.  `durationTokens` asks for a target length
+in codec frames (12.5 per second, so `38` is about 3 s; `0` keeps the length
+free).  It is reloadable, and the engine rejects a target that does not fit in
+its generation budget.
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_MOSS,
+  files: { modelDir: './models' },
+  durationTokens: 38,
+  config: { language: 'en' }
+})
+await model.load()
+await model.run({ input: 'Hold on [pause 1.0s] here it comes.' })
+```
+
+Dialogue uses the MOSS-TTSD backbone (`moss-ttsd-*.gguf`, picked from
+`modelDir` when `dialogueReferences` is set, or named with
+`files.mossBackbone`).  `dialogueReferences` takes one 24 kHz recording per
+speaker, in the order the text tags them with `[S1]`, `[S2]`, and so on.  The
+model continues the references, so the text must open with what each
+recording says, under its speaker tag, followed by the lines to generate; only
+the new lines come out as audio.  The references need
+`files.mossCodecEncoder`, exclude `referenceAudio`, and are fixed for the
+instance.  They stay in the codec as causal history, so the first generated
+words continue the reference voices without a seam.
+
+```js
+const dialogue = new TTSGgml({
+  engine: TTSGgml.ENGINE_MOSS,
+  files: { modelDir: './models' },
+  dialogueReferences: ['./alice.wav', './bob.wav'],
+  config: { language: 'en' }
+})
+await dialogue.load()
+await dialogue.run({
+  input:
+    '[S1] What alice.wav says. [S2] What bob.wav says. ' +
+    '[S1] Did the build finish? [S2] Yes, every test passed.'
+})
+```
+
 MOSS runs on CPU by default.  `config.useGPU: true` (or a non-zero
 `nGpuLayers`) asks the engine for a GPU backend; when none is available it
-falls back to CPU and sets `response.stats.gpuUnsupported`.
+falls back to CPU and sets `response.stats.gpuUnsupported`.  `backendsDir`
+reaches MOSS like every other engine, so builds that load ggml backends at
+runtime find them.
 
 ## API overview
 
@@ -947,7 +995,7 @@ falls back to CPU and sets `response.stats.gpuUnsupported`.
 | `files.audio8Lm`          | string     | —          | Audio8 DualAR language model GGUF (overrides `modelDir`) |
 | `files.audio8CodecDecoder`| string     | —          | Audio8 codec synthesis half — codes to wav (overrides `modelDir`) |
 | `files.audio8CodecEncoder`| string     | —          | Audio8 codec analysis half — wav to codes; only needed to clone a voice |
-| `files.mossBackbone`      | string     | —          | MOSS Delay backbone GGUF (overrides `modelDir`) |
+| `files.mossBackbone`      | string     | —          | MOSS Delay backbone GGUF: MOSS-TTS or the MOSS-TTSD dialogue checkpoint (overrides `modelDir`) |
 | `files.mossCodecDecoder`  | string     | —          | MOSS codec synthesis half — codes to wav (overrides `modelDir`) |
 | `files.mossCodecEncoder`  | string     | —          | MOSS codec analysis half — wav to codes; only needed to clone a voice |
 | `files.lavasrEnhancer`    | string     | —          | LavaSR enhancer GGUF — supplying it turns on 48 kHz enhancement |
@@ -955,6 +1003,8 @@ falls back to CPU and sets `response.stats.gpuUnsupported`.
 | `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'`, `'cosyvoice3'`, `'parler'`, `'audio8'` or `'moss'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_COSYVOICE3` / `ENGINE_PARLER` / `ENGINE_AUDIO8` / `ENGINE_MOSS`); auto-detected from the GGUFs present otherwise |
 | `referenceAudio`          | string     | —          | Wav to clone (Chatterbox: mono, ≥ 5 s; CosyVoice3: 0.5-30 s, multichannel downmixed to mono, needs the s3tok + campplus GGUFs; Audio8: also needs `referenceText`; MOSS: needs `files.mossCodecEncoder`).  Audio8 accepts it per call too |
 | `referenceText`           | string     | —          | Audio8-only: what `referenceAudio` says, verbatim.  Required whenever a reference is set; accepted per call |
+| `dialogueReferences`      | string[]   | —          | MOSS-only: one 24 kHz recording per speaker (`[S1]`, `[S2]`, ...) for dialogue synthesis; the text must open with each recording's transcript under its tag; needs `files.mossCodecEncoder`, excludes `referenceAudio`, fixed per instance |
+| `durationTokens`          | number     | `0`        | MOSS-only: target length in codec frames (12.5 per second); `0` keeps the length free; reloadable |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling); MOSS defaults to its engine's 1234 |
 | `nGpuLayers`              | number     | 0          | Layers offloaded to GPU (mirrors `useGPU`; pass `99` to offload all) |
@@ -1118,6 +1168,7 @@ Runnable demos under `examples/`:
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
 | `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for the desktop GPU backend (CUDA or Vulkan on linux, Vulkan on Windows). `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 | `moss-tts.js` | MOSS batch synth, optionally cloning a reference. Set `QVAC_TTS_MOSS_STREAM_FRAMES=25` for native chunk streaming and `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-tts.js "Hello" voice.wav` |
+| `moss-dialogue-tts.js` | MOSS-TTSD multi-speaker dialogue from one 24 kHz reference per speaker; the text opens with each reference's transcript. `bare examples/moss-dialogue-tts.js "[S1] What alice.wav says. [S2] What bob.wav says. [S1] Hi. [S2] Hello." alice.wav bob.wav` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any

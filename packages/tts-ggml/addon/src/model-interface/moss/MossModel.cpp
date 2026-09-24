@@ -51,15 +51,34 @@ void validateModelPaths(const MossConfig& cfg) {
   }
 }
 
+bool clones(const MossConfig& cfg) {
+  return !cfg.referenceAudio.empty() || !cfg.dialogueReferences.empty();
+}
+
+void requireDialogueFiles(const std::vector<std::string>& paths) {
+  for (const std::string& path : paths) {
+    requireNonEmpty(path, "dialogueReferences entry");
+    requireFile(path, "moss dialogue reference");
+  }
+}
+
 void validateVoice(const MossConfig& cfg) {
-  if (cfg.referenceAudio.empty())
+  if (!clones(cfg))
     return;
+  if (!cfg.referenceAudio.empty() && !cfg.dialogueReferences.empty()) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "referenceAudio and dialogueReferences are exclusive");
+  }
   if (cfg.codecEncoderPath.empty()) {
     throw StatusError(
         general_error::InvalidArgument,
         "voice cloning needs mossCodecEncoderPath, which was not configured");
   }
-  requireFile(cfg.referenceAudio, "moss reference audio");
+  if (!cfg.referenceAudio.empty()) {
+    requireFile(cfg.referenceAudio, "moss reference audio");
+  }
+  requireDialogueFiles(cfg.dialogueReferences);
 }
 
 void validateCounts(const MossConfig& cfg) {
@@ -73,6 +92,19 @@ void validateCounts(const MossConfig& cfg) {
         general_error::InvalidArgument,
         "streamChunkTokens must be >= 0 (0 = non-streaming)");
   }
+  if (cfg.durationTokens.has_value() && *cfg.durationTokens < 0) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "durationTokens must be >= 0 (0 = free length)");
+  }
+}
+
+std::filesystem::path resolveBackendsDir(const std::string& configured) {
+  std::filesystem::path dir(configured);
+#ifdef BACKENDS_SUBDIR
+  dir = (dir / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+  return dir;
 }
 
 void validateGpuIntent(const MossConfig& cfg) {
@@ -121,6 +153,11 @@ tts_cpp::moss::EngineOptions MossModel::toEngineOptions(const MossConfig& cfg) {
   opts.decoder_path = cfg.codecDecoderPath;
   opts.encoder_path = cfg.codecEncoderPath;
   opts.reference_audio_path = cfg.referenceAudio;
+  opts.dialogue_reference_paths = cfg.dialogueReferences;
+  if (cfg.durationTokens.value_or(0) > 0)
+    opts.duration_tokens = *cfg.durationTokens;
+  if (!cfg.backendsDir.empty())
+    opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   if (!cfg.language.empty())
     opts.language = cfg.language;
   if (cfg.seed.has_value())

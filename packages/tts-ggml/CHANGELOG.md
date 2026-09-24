@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-detected from `modelDir`. `streamChunkTokens > 0` streams fixed-size
   chunks of codec frames (12.5 per second) while the backbone is still
   generating. Desktop only: the backbone has 8B parameters.
+- MOSS directable speech and dialogue: `durationTokens` sets a target length in
+  codec frames, `[pause Ns]` markers and inline Pinyin / IPA steer the speech,
+  and `dialogueReferences` (one 24 kHz recording per speaker, with the text
+  opening with their transcripts) drives MOSS-TTSD multi-speaker dialogue, with
+  the `moss-ttsd-*.gguf` backbone picked from `modelDir`. `backendsDir` now reaches MOSS, and MOSS no longer produces
+  garbage on ARM CPUs.
 - Engine options, results and library queries that tts-cpp already provided
   but the addon did not expose:
   - Chatterbox: `nPredict` (the per-call speech-token cap, previously fixed at
@@ -58,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-24` for MOSS directable speech,
+  dialogue and the ARM CPU fix above.
 - Raise the `speech-cpp` floor to `2026-09-23#3` for the MOSS engine above.
 - Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
   weightless fit-measure model that carries no vocabulary, which a memory-fit

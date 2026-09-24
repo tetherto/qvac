@@ -59,6 +59,7 @@
     "example:parler-enhanced": "bare examples/parler-enhanced.js \"Hello from enhanced Parler.\"",
     "example:audio8": "bare examples/audio8-tts.js \"Audio eight speaks on-device.\"",
     "example:moss": "bare examples/moss-tts.js \"MOSS speaks on-device.\"",
+    "example:moss-dialogue": "bare examples/moss-dialogue-tts.js",
     "lint": "npm run lint:js && npm run lint:ts && npm run test:types",
     "lint:js": "prettier --check \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\" && lunte \"test/**/*.js\" \"scripts/__tests__/package-contract.test.js\" \"scripts/__tests__/binding-loader.test.js\" \"binding.js\" \"addon-unavailable.js\"",
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
