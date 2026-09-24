@@ -50,6 +50,7 @@ void readInnerModelParams(
     js::Object& modelParamsObj, js_env_t* env, ParakeetConfig& config) {
   readInt(modelParamsObj, env, "maxThreads", config.maxThreads);
   readBool(modelParamsObj, env, "useGPU", config.useGPU);
+  readString(modelParamsObj, env, "backend", config.backend);
 }
 
 auto getPropertyNames(js_env_t* env, js::Object object) -> js::Array {
@@ -165,6 +166,7 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
   readString(jsObject, env, "path", config.modelPath);
   readInt(jsObject, env, "maxThreads", config.maxThreads);
   readBool(jsObject, env, "useGPU", config.useGPU);
+  readString(jsObject, env, "backend", config.backend);
   readInt(jsObject, env, "sampleRate", config.sampleRate);
   readInt(jsObject, env, "channels", config.channels);
   readBool(jsObject, env, "captionEnabled", config.captionEnabled);

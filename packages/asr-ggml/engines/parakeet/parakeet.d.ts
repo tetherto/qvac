@@ -7,6 +7,7 @@ export interface ParakeetConfigurationParams {
     modelPath?: string;
     maxThreads?: number;
     useGPU?: boolean;
+    backend?: "auto" | "cpu" | "opencl" | "hexagon";
     sampleRate?: number;
     channels?: number;
     captionEnabled?: boolean;

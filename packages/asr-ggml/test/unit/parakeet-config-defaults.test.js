@@ -2,7 +2,7 @@
 
 const test = require('brittle')
 const ASRGgml = require('../../index.js')
-const { MODEL_PATH, getDriver } = require('../mocks/createModel.js')
+const { MODEL_PATH, getDriver, createParakeetModel } = require('../mocks/createModel.js')
 
 function buildParams(parakeetConfig = {}) {
   const model = new ASRGgml({
@@ -59,6 +59,28 @@ test('streamingSpkCacheEnable defaults to true and coerces to a boolean', (t) =>
 test('language is forwarded when the caller sets it', (t) => {
   t.is(buildParams().language, '', 'empty string when unset')
   t.is(buildParams({ language: 'hi' }).language, 'hi')
+})
+
+test('explicit backend is forwarded independently of the legacy GPU preference', (t) => {
+  t.is(buildParams().backend, 'auto')
+  for (const backend of ['auto', 'cpu', 'opencl', 'hexagon']) {
+    t.is(buildParams({ backend, useGPU: false }).backend, backend)
+    t.is(buildParams({ backend, useGPU: true }).backend, backend)
+  }
+})
+
+test('invalid backend values fail before native model activation', (t) => {
+  for (const backend of ['', 'htp', 'Hexagon', 2, null]) {
+    t.exception(() => buildParams({ backend }), /backend must be/)
+  }
+})
+
+test('invalid backend reload preserves the existing configuration', async (t) => {
+  const { model } = createParakeetModel({ parakeetConfig: { backend: 'hexagon' } })
+  await model.load()
+  await t.exception(model.reload({ parakeetConfig: { backend: 'htp' } }), /backend must be/)
+  t.is(getDriver(model).params.backend, 'hexagon')
+  await model.destroy()
 })
 
 test('unknown parakeetConfig keys are rejected at construction', (t) => {

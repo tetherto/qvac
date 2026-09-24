@@ -56,6 +56,7 @@ export enum BackendId {
   CUDA = 2,
   Vulkan = 3,
   OpenCL = 4,
+  Hexagon = 5,
   Other = 99,
 }
 
@@ -77,6 +78,7 @@ export interface BackendInfo {
 /** Runtime-statistics fields shared by both engines. */
 export interface RuntimeStatsCore {
   backendId: number;
+  /** 0 = CPU, 1 = GPU, 2 = NPU. */
   backendDevice: number;
   totalTime: number;
   audioDurationMs: number;

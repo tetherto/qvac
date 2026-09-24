@@ -17,6 +17,7 @@ option(ENABLE_COVERAGE "Enable coverage" OFF)
 # direct CUDA linkage here (mirrors tts-ggml); nvcc's clang
 # host-compiler setup lives in vcpkg-overlays/toolchains/linux-clang.cmake.
 option(ASR_CUDA "Enable the CUDA GPU backend (requires nvcc on the build host)" OFF)
+option(ASR_HEXAGON "Enable experimental Android Hexagon backend (requires Qualcomm SDK)" OFF)
 
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
@@ -24,6 +25,10 @@ endif()
 
 if(ASR_CUDA)
   list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
+endif()
+
+if(ASR_HEXAGON)
+  list(APPEND VCPKG_MANIFEST_FEATURES "hexagon")
 endif()
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
@@ -37,6 +42,10 @@ set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/triplets;${CMAKE_C
 set(VCPKG_INSTALL_OPTIONS --clean-after-build)
 
 project(asr-ggml CXX C)
+
+if(ASR_HEXAGON AND NOT ANDROID)
+  message(FATAL_ERROR "ASR_HEXAGON requires an Android arm64 build")
+endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   add_compile_options(-stdlib=libc++)
@@ -144,6 +153,20 @@ if(((ANDROID OR UNIX) AND NOT APPLE) OR (WIN32 AND ASR_CUDA))
 endif()
 
 add_bare_module(asr-ggml EXPORTS ${BACKEND_DL_LIBS})
+
+if(ASR_HEXAGON)
+  # DSP skeletons retain their GGML names: FastRPC resolves those names on
+  # device. They are built by ggml-speech, not copied from the Qualcomm SDK.
+  file(GLOB HEXAGON_DSP_LIBS "${VCPKG_INSTALLED_PATH}/lib/libggml-htp-v*.so")
+  if(NOT HEXAGON_DSP_LIBS)
+    message(FATAL_ERROR "ASR_HEXAGON requires ggml-speech DSP skeleton libraries")
+  endif()
+  if(NOT EXISTS "${VCPKG_INSTALLED_PATH}/lib/libqvac-speech-ggml-hexagon.so")
+    message(FATAL_ERROR "ASR_HEXAGON requires the ggml-speech Hexagon backend module")
+  endif()
+  install(FILES ${HEXAGON_DSP_LIBS}
+    DESTINATION ${bare_target_value}/${module_name})
+endif()
 
 # Stage every loose MODULE backend selected above into the same
 # per-host/per-module subdir cmake-bare's INSTALL TARGET branch uses for

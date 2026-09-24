@@ -26,6 +26,7 @@ struct ParakeetConfig {
 
   int maxThreads = 4;
   bool useGPU = false;
+  std::string backend = "auto";
   int sampleRate = 16000;
   int channels = 1;
   bool captionEnabled = false;
@@ -119,7 +120,8 @@ struct ParakeetConfig {
   bool operator==(const ParakeetConfig& other) const {
     return modelPath == other.modelPath && modelType == other.modelType &&
            maxThreads == other.maxThreads && useGPU == other.useGPU &&
-           sampleRate == other.sampleRate && channels == other.channels &&
+           backend == other.backend && sampleRate == other.sampleRate &&
+           channels == other.channels &&
            captionEnabled == other.captionEnabled &&
            timestampsEnabled == other.timestampsEnabled && seed == other.seed &&
            language == other.language && streaming == other.streaming &&

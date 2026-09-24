@@ -11,6 +11,8 @@ export interface ParakeetConfig {
     maxThreads?: number;
     /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL). */
     useGPU?: boolean;
+    /** Explicit compute backend. Overrides useGPU; unavailable backends fail load. */
+    backend?: "auto" | "cpu" | "opencl" | "hexagon";
     /** Audio sample rate in Hz (default: 16000; engine assumes 16 kHz). */
     sampleRate?: number;
     /** Number of audio channels (default: 1, must be mono). */

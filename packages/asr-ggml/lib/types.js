@@ -12,5 +12,6 @@ var BackendId;
     BackendId[BackendId["CUDA"] = 2] = "CUDA";
     BackendId[BackendId["Vulkan"] = 3] = "Vulkan";
     BackendId[BackendId["OpenCL"] = 4] = "OpenCL";
+    BackendId[BackendId["Hexagon"] = 5] = "Hexagon";
     BackendId[BackendId["Other"] = 99] = "Other";
 })(BackendId || (exports.BackendId = BackendId = {}));

@@ -43,9 +43,10 @@ enum BackendId {
   BackendCuda = 2,
   BackendVulkan = 3,
   BackendOpenCl = 4,
+  BackendHexagon = 5,
   BackendOther = 99
 };
-enum BackendDeviceClass { DeviceCpu = 0, DeviceGpu = 1 };
+enum BackendDeviceClass { DeviceCpu = 0, DeviceGpu = 1, DeviceNpu = 2 };
 
 // n_gpu_layers value that offloads every layer to the GPU backend.
 constexpr int OFFLOAD_ALL_LAYERS_TO_GPU = 999;
@@ -64,6 +65,8 @@ int backendIdFromName(const std::string& name) {
     return BackendVulkan;
   if (name.rfind("OpenCL", 0) == 0)
     return BackendOpenCl;
+  if (name.rfind("HTP", 0) == 0 || name.rfind("Hexagon", 0) == 0)
+    return BackendHexagon;
   return BackendOther;
 }
 
@@ -82,6 +85,8 @@ int backendIdFromRegName(std::string regName) {
     return BackendVulkan;
   if (regName.rfind("opencl", 0) == 0)
     return BackendOpenCl;
+  if (regName.rfind("hexagon", 0) == 0 || regName.rfind("htp", 0) == 0)
+    return BackendHexagon;
   return BackendOther;
 }
 
@@ -127,6 +132,14 @@ findGpuDeviceForBackend(int backendId, ggml_backend_dev_t& firstGpuOut) {
 // "" on CPU or when no GPU is registered. Prefers the device whose backend
 // family matches the engine, else the first GPU/IGPU device.
 std::string captureBackendDescription(int backendId, int backendDevice) {
+  if (backendDevice == DeviceNpu) {
+    for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+      const auto dev = ggml_backend_dev_get(i);
+      if (dev != nullptr && std::string(ggml_backend_dev_name(dev)) == "HTP0")
+        return deviceDescriptionOrName(dev);
+    }
+    return "";
+  }
   if (backendDevice != DeviceGpu)
     return "";
   ggml_backend_dev_t firstGpu = nullptr;
@@ -246,6 +259,7 @@ buildEngineOptions(const ParakeetConfig& cfg, const fs::path& ggufPath) {
   // only when explicitly set non-zero.
   eopts.n_threads = cfg.maxThreads > 0 ? cfg.maxThreads : 0;
   eopts.n_gpu_layers = cfg.useGPU ? OFFLOAD_ALL_LAYERS_TO_GPU : 0;
+  eopts.backend = cfg.backend;
   eopts.verbose = false;
   eopts.language = cfg.language;
   // Compose the backends-scan dir from the host prebuilds root plus the
@@ -429,9 +443,10 @@ int ParakeetModel::resolveStreamingChunkMs(
 void ParakeetModel::captureBackend() {
   if (!engine_)
     return;
-  backend_device_ = engine_->backend_device() == pkt::BackendDevice::GPU
-                        ? DeviceGpu
-                        : DeviceCpu;
+  backend_device_ =
+      engine_->backend_device() == pkt::BackendDevice::NPU   ? DeviceNpu
+      : engine_->backend_device() == pkt::BackendDevice::GPU ? DeviceGpu
+                                                             : DeviceCpu;
   backend_name_ = engine_->backend_name();
   backend_id_ = backendIdFromName(backend_name_);
   backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
@@ -443,14 +458,16 @@ void ParakeetModel::captureBackend() {
   QLOG(
       logger::Priority::INFO,
       std::string("Parakeet engine loaded; model_type=") +
-          engine_->model_type() + " backend=" + backend_name_ +
-          " (device=" + (backend_device_ == DeviceGpu ? "GPU" : "CPU") +
+          engine_->model_type() + " backend=" + backend_name_ + " (device=" +
+          (backend_device_ == DeviceNpu   ? "NPU"
+           : backend_device_ == DeviceGpu ? "GPU"
+                                          : "CPU") +
           ", id=" + std::to_string(backend_id_) + ", gpu='" +
           backend_description_ + "', encoder=" + encoder_backend_ + ")");
 }
 
 void ParakeetModel::warnOnGpuFallback() const {
-  if (cfg_.useGPU && backend_device_ != DeviceGpu &&
+  if (cfg_.backend == "auto" && cfg_.useGPU && backend_device_ != DeviceGpu &&
       !backend_gpu_unsupported_) {
     QLOG(
         logger::Priority::WARNING,
@@ -1118,7 +1135,7 @@ RuntimeStats ParakeetModel::runtimeStats() const {
       "totalEncodedFrames", static_cast<int64_t>(totalEncodedFrames_));
 
   // Active backend captured at load(): backendDevice is the device class
-  // (0 = CPU, 1 = GPU); backendId identifies the GPU backend family.
+  // (0 = CPU, 1 = GPU, 2 = NPU); backendId identifies the backend family.
   stats.emplace_back("backendDevice", static_cast<int64_t>(backend_device_));
   stats.emplace_back("backendId", static_cast<int64_t>(backend_id_));
   stats.emplace_back(

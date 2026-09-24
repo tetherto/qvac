@@ -124,7 +124,7 @@ public:
 
   // Active backend identity captured at load(); surfaced to JS via the addon's
   // getBackendInfo(). getBackendId() codes: 0=CPU 1=Metal 2=CUDA 3=Vulkan
-  // 4=OpenCL 99=other. getBackendDeviceClass(): 0=CPU 1=GPU.
+  // 4=OpenCL 5=Hexagon 99=other. getBackendDeviceClass(): 0=CPU 1=GPU 2=NPU.
   int getBackendId() const { return backend_id_; }
   int getBackendDeviceClass() const { return backend_device_; }
   const std::string& getBackendName() const { return backend_name_; }

@@ -373,7 +373,12 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
     result.setProperty(
         env,
         "backendDevice",
-        js::String::create(env, std::string(deviceClass == 1 ? "GPU" : "CPU")));
+        js::String::create(
+            env,
+            std::string(
+                deviceClass == 2   ? "NPU"
+                : deviceClass == 1 ? "GPU"
+                                   : "CPU")));
     result.setProperty(
         env,
         "backendId",

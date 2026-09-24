@@ -491,7 +491,7 @@ key is documented inline there, and any key outside it throws
 
 | Group | Keys |
 | --- | --- |
-| Compute | `maxThreads`, `useGPU`, `seed` |
+| Compute | `maxThreads`, `useGPU`, `backend`, `seed` |
 | Audio | `sampleRate` (16000), `channels` (1) |
 | Output | `captionEnabled`, `timestampsEnabled` |
 | Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on monolingual CTC |
@@ -629,6 +629,81 @@ Two paths matter on Android and Linux:
 - **`openclCacheDir`** (parakeet) — persistent directory for ggml-opencl's
   compiled program-binary cache. Android-only; pass the host app's cache
   directory to avoid a cold `clBuildProgram` on every process start.
+
+### Experimental Parakeet Hexagon build
+
+Parakeet accepts `parakeetConfig.backend: 'auto' | 'cpu' | 'opencl' |
+'hexagon'`. `auto` preserves the `useGPU` behavior. An explicit backend
+overrides `useGPU` and fails model loading if it cannot initialize; it never
+silently selects another device. `hexagon` selects **HTP0**. The selected
+backend still uses the normal GGML scheduler for operations it cannot run.
+
+Hexagon is an opt-in Android arm64 build, targeting Parakeet CTC 0.6B Q8_0.
+Configure the official Qualcomm SDK through `HEXAGON_SDK_ROOT` and
+`HEXAGON_TOOLS_ROOT`, select the experimental dependency revisions, then add
+`-D ASR_HEXAGON=ON` to the Android `bare-make generate` command. This enables
+the `speech-cpp[hexagon]` / `ggml-speech[hexagon]` features. Default builds
+and published Android packages do not enable it. Installation stages both
+`libqvac-speech-ggml-hexagon.so` and the compiled `libggml-htp-v*.so` DSP
+skeletons beside the other backends. No Qualcomm SDK files are packaged.
+The device process must have the backend directory in its native library
+search path. Fabric Speech prepends that directory to `DSP_LIBRARY_PATH`
+before backend discovery, preserving existing device DSP search paths.
+
+`getBackendInfo()` reports `backendName: 'HTP0'`, `backendId: 5`, and
+`backendDevice: 'NPU'`; runtime stats use device class `2`. These values
+prove device selection, not execution of individual operators.
+
+For device validation, the standalone Android Bare entrypoint
+`test/mobile/hexagon-ctc.cjs` takes a local manifest and runs through the
+public `ASRGgml` API. Supply the frozen model/audio paths and actual reference
+transcripts (paths are relative to the manifest):
+
+```json
+{
+  "modelType": "parakeet-ctc-0.6b",
+  "quantization": "q8_0",
+  "model": "parakeet-ctc-0.6b-q8_0.gguf",
+  "modelSha256": "replace with the actual 64-character lowercase SHA256",
+  "samples": [
+    { "seconds": 30, "pcm": "30s.raw", "sha256": "replace with the actual SHA256", "reference": "reference transcript for the 30 second clip" },
+    { "seconds": 60, "pcm": "60s.raw", "sha256": "replace with the actual SHA256", "reference": "reference transcript for the 60 second clip" }
+  ]
+}
+```
+
+Run in two fresh device processes with 16 kHz mono s16le raw audio:
+
+```bash
+GGML_HEXAGON_PROFILE=0 bare test/mobile/hexagon-ctc.cjs manifest.json timing
+GGML_HEXAGON_PROFILE=1 bare test/mobile/hexagon-ctc.cjs manifest.json profile
+```
+
+The runner verifies model and audio hashes using Android's `sha256sum`.
+The timing pass requires CPU, OpenCL, and HTP0, prints transcripts, native
+encoder/decoder/inference timings, RTF and WER, and rejects Hexagon WER more
+than one percentage point above CPU. These are single-run integration smoke
+measurements, not performance benchmarks; use the native benchmark harness
+with warmup and repeated runs for performance comparisons.
+The separate profile pass requires, for each audio sample,
+nonzero-cycle DSP records for `IM2COL`, `CONV_2D_DW`, and HMX matrix
+multiplication. Missing models, unavailable devices, missing statistics, or
+missing execution evidence fail the run. Save both logs and exact source,
+model and audio hashes with the result; profiling timings must not be used
+for performance comparisons. These checks remain pending until run on the
+phone.
+
+Before this integration run, execute the GGML operator suite on the phone:
+`test-backend-ops test -b HTP0 -p speech_case`. Require all 152 selected cases
+(32 IM2COL and 120 depthwise convolution) to execute and pass, with no
+unsupported/skipped cases and a positive tested-backend count. A zero process
+exit code alone is insufficient because an absent backend can select no tests.
+
+The existing `on-pr-asr-ggml.yml` manual workflow can build a specified branch
+without a PR; mobile validation accepts a `prebuild_run_id` artifact without
+publishing a package. Its standard build matrix does not install the
+Qualcomm SDK or opt into `ASR_HEXAGON`, so it does not by itself validate this
+experimental backend.
 
 ## Staging Models
 

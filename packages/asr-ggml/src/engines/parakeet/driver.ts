@@ -38,6 +38,8 @@ export interface ParakeetConfig {
   maxThreads?: number;
   /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL). */
   useGPU?: boolean;
+  /** Explicit compute backend. Overrides useGPU; unavailable backends fail load. */
+  backend?: "auto" | "cpu" | "opencl" | "hexagon";
   /** Audio sample rate in Hz (default: 16000; engine assumes 16 kHz). */
   sampleRate?: number;
   /** Number of audio channels (default: 1, must be mono). */
@@ -120,6 +122,7 @@ export interface ParakeetReloadConfig {
 const PARAKEET_CONFIG_KEYS: readonly string[] = [
   "maxThreads",
   "useGPU",
+  "backend",
   "sampleRate",
   "channels",
   "captionEnabled",
@@ -224,6 +227,15 @@ export class ParakeetDriver implements AsrDriver {
   }
 
   validateConfig(): void {
+    if (
+      this.params.backend !== undefined &&
+      !["auto", "cpu", "opencl", "hexagon"].includes(this.params.backend)
+    ) {
+      throw new QvacErrorAddonASRGgml({
+        code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds: "backend must be auto, cpu, opencl, or hexagon",
+      });
+    }
     for (const key of Object.keys(this.params)) {
       if (!PARAKEET_CONFIG_KEYS.includes(key)) {
         throw new QvacErrorAddonASRGgml({
@@ -260,7 +272,14 @@ export class ParakeetDriver implements AsrDriver {
       overrides,
     );
     if (overrides.parakeetConfig) {
-      this.params = { ...this.params, ...overrides.parakeetConfig };
+      const previous = this.params;
+      this.params = { ...previous, ...overrides.parakeetConfig };
+      try {
+        this.validateConfig();
+      } catch (error) {
+        this.params = previous;
+        throw error;
+      }
     }
     const configurationParams = this._buildConfigurationParams();
     await this.cancelActive();
@@ -406,6 +425,7 @@ export class ParakeetDriver implements AsrDriver {
       modelPath: this._files.model || "",
       maxThreads: this.params.maxThreads ?? 4,
       useGPU: this.params.useGPU === true,
+      backend: this.params.backend ?? "auto",
       sampleRate: this.params.sampleRate || 16000,
       channels: this.params.channels || 1,
       captionEnabled: this.params.captionEnabled === true,

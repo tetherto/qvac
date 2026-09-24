@@ -24,6 +24,16 @@ ParakeetConfig makeCpuTestConfig() {
 
 } // namespace
 
+TEST(ParakeetBackendConfig, ExplicitSelectionParticipatesInReloadEquality) {
+  ParakeetConfig original;
+  EXPECT_EQ(original.backend, "auto");
+  auto changed = original;
+  changed.backend = "hexagon";
+  EXPECT_NE(original, changed);
+  original.backend = "hexagon";
+  EXPECT_EQ(original, changed);
+}
+
 TEST(ParakeetStreamingConfig, DefaultsUseNamedConstants) {
   ParakeetConfig c;
   EXPECT_EQ(c.streamingChunkMs, 0);

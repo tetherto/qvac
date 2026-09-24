@@ -8,6 +8,7 @@ const audio_1 = require("../../lib/audio");
 const PARAKEET_CONFIG_KEYS = [
     "maxThreads",
     "useGPU",
+    "backend",
     "sampleRate",
     "channels",
     "captionEnabled",
@@ -93,6 +94,13 @@ class ParakeetDriver {
         this.params = config.parakeetConfig || {};
     }
     validateConfig() {
+        if (this.params.backend !== undefined &&
+            !["auto", "cpu", "opencl", "hexagon"].includes(this.params.backend)) {
+            throw new error_1.QvacErrorAddonASRGgml({
+                code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+                adds: "backend must be auto, cpu, opencl, or hexagon",
+            });
+        }
         for (const key of Object.keys(this.params)) {
             if (!PARAKEET_CONFIG_KEYS.includes(key)) {
                 throw new error_1.QvacErrorAddonASRGgml({
@@ -120,7 +128,15 @@ class ParakeetDriver {
         const overrides = newConfig;
         this.ctx.logger.debug("Reloading addon with new configuration", overrides);
         if (overrides.parakeetConfig) {
-            this.params = { ...this.params, ...overrides.parakeetConfig };
+            const previous = this.params;
+            this.params = { ...previous, ...overrides.parakeetConfig };
+            try {
+                this.validateConfig();
+            }
+            catch (error) {
+                this.params = previous;
+                throw error;
+            }
         }
         const configurationParams = this._buildConfigurationParams();
         await this.cancelActive();
@@ -239,6 +255,7 @@ class ParakeetDriver {
             modelPath: this._files.model || "",
             maxThreads: this.params.maxThreads ?? 4,
             useGPU: this.params.useGPU === true,
+            backend: this.params.backend ?? "auto",
             sampleRate: this.params.sampleRate || 16000,
             channels: this.params.channels || 1,
             captionEnabled: this.params.captionEnabled === true,
