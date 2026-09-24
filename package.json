@@ -12,6 +12,7 @@
     "quality:typecheck": "tsc -p scripts/code-quality/tsconfig.json"
   },
   "devDependencies": {
+    "@nx/js": "23.1.0",
     "@types/node": "24.13.3",
     "@typescript-eslint/parser": "8.65.0",
     "dependency-cruiser": "18.4.0",
