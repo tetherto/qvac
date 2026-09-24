@@ -10,6 +10,7 @@
 #include "model-interface/audio8/Audio8Model.hpp"
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
+#include "model-interface/moss/MossConfig.hpp"
 #include "model-interface/parler/ParlerConfig.hpp"
 #include "model-interface/supertonic/SupertonicConfig.hpp"
 
@@ -21,6 +22,7 @@ enum class EngineType {
   Cosyvoice,
   Parler,
   Audio8,
+  Moss,
 };
 
 class JSAdapter {
@@ -48,6 +50,10 @@ public:
       js_env_t* env);
 
   audio8::Audio8Config buildAudio8Config(
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
+
+  moss::MossConfig buildMossConfig(
       qvac_lib_inference_addon_cpp::js::Object configurationParams,
       js_env_t* env);
 

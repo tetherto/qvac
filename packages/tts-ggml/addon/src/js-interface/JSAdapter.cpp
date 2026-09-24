@@ -1,9 +1,11 @@
 #include "js-interface/JSAdapter.hpp"
 
+#include <cstdio>
 #include <optional>
 #include <string>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "js-interface/NumberConversion.hpp"
 #include "model-interface/supertonic/SupertonicEngineOptions.hpp"
 
 namespace qvac::ttsggml {
@@ -13,6 +15,14 @@ namespace general_error = qvac_errors::general_error;
 
 namespace {
 
+// Compact %g rendering for error messages; std::to_string would print 1e300 in
+// full fixed-point notation.
+std::string formatJsNumber(double value) {
+  char buf[32];
+  std::snprintf(buf, sizeof(buf), "%g", value);
+  return buf;
+}
+
 std::optional<int> readOptionalInt(
     js::Object obj, js_env_t* env, const char* key) {
   js_value_t* raw = obj.getProperty(env, key);
@@ -20,7 +30,14 @@ std::optional<int> readOptionalInt(
     return std::nullopt;
   }
   if (js::is<js::Number>(env, raw)) {
-    return static_cast<int>(js::Number::fromValue(raw).as<double>(env));
+    const double value = js::Number::fromValue(raw).as<double>(env);
+    if (const auto converted = intFromJsNumber(value)) {
+      return converted;
+    }
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must be a finite integer in the " +
+            "32-bit range (got " + formatJsNumber(value) + ")");
   }
   if (js::is<js::String>(env, raw)) {
     const std::string str = js::String::fromValue(raw).as<std::string>(env);
@@ -45,7 +62,15 @@ std::optional<float> readOptionalFloat(
     return std::nullopt;
   }
   if (js::is<js::Number>(env, raw)) {
-    return static_cast<float>(js::Number::fromValue(raw).as<double>(env));
+    const double value = js::Number::fromValue(raw).as<double>(env);
+    if (const auto converted = floatFromJsNumber(value)) {
+      return converted;
+    }
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key +
+            "' is outside the 32-bit float range (got " +
+            formatJsNumber(value) + ")");
   }
   if (js::is<js::String>(env, raw)) {
     const std::string str = js::String::fromValue(raw).as<std::string>(env);
@@ -88,11 +113,13 @@ EngineType JSAdapter::readEngineType(
     return EngineType::Parler;
   if (explicitType == "audio8")
     return EngineType::Audio8;
+  if (explicitType == "moss")
+    return EngineType::Moss;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', 'parler' "
-        "or 'audio8' (got '" +
+        "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', "
+        "'parler', 'audio8' or 'moss' (got '" +
             explicitType + "')");
   }
 
@@ -119,6 +146,11 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "audio8LmPath");
   if (!audio8Path.empty())
     return EngineType::Audio8;
+
+  const std::string mossPath =
+      readOptionalString(configurationParams, env, "mossBackbonePath");
+  if (!mossPath.empty())
+    return EngineType::Moss;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -149,6 +181,23 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   cfg.streamFirstChunkTokens  = readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamCfmSteps          = readOptionalInt(configurationParams, env, "cfmSteps");
   cfg.cfgRate                 = readOptionalFloat(configurationParams, env, "cfgRate");
+  cfg.batchCfmSteps =
+      readOptionalInt(configurationParams, env, "batchCfmSteps");
+  cfg.streamLeftContextTokens =
+      readOptionalInt(configurationParams, env, "streamLeftContextTokens");
+  cfg.nPredict = readOptionalInt(configurationParams, env, "nPredict");
+  cfg.maxSentenceChars =
+      readOptionalInt(configurationParams, env, "maxSentenceChars");
+  cfg.crossfadeMs = readOptionalInt(configurationParams, env, "crossfadeMs");
+  cfg.topK = readOptionalInt(configurationParams, env, "topK");
+  cfg.topP = readOptionalFloat(configurationParams, env, "topP");
+  cfg.temperature = readOptionalFloat(configurationParams, env, "temperature");
+  cfg.repeatPenalty =
+      readOptionalFloat(configurationParams, env, "repeatPenalty");
+  cfg.exaggeration =
+      readOptionalFloat(configurationParams, env, "exaggeration");
+  cfg.cfgWeight = readOptionalFloat(configurationParams, env, "cfgWeight");
+  cfg.minP = readOptionalFloat(configurationParams, env, "minP");
   // useGPU is tri-state on the C++ side: std::nullopt means "unspecified"
   // (let the engine pick its default); true/false are explicit user
   // intent.  ChatterboxModel::validateConfig rejects useGPU/nGpuLayers
@@ -271,11 +320,34 @@ JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
   return cfg;
 }
 
+moss::MossConfig
+JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
+  moss::MossConfig cfg;
+  cfg.backbonePath =
+      readOptionalString(configurationParams, env, "mossBackbonePath");
+  cfg.codecDecoderPath =
+      readOptionalString(configurationParams, env, "mossCodecDecoderPath");
+  cfg.codecEncoderPath =
+      readOptionalString(configurationParams, env, "mossCodecEncoderPath");
+  cfg.referenceAudio =
+      readOptionalString(configurationParams, env, "referenceAudio");
+  cfg.language = readOptionalString(configurationParams, env, "language");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.streamChunkFrames =
+      readOptionalInt(configurationParams, env, "streamChunkTokens");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  return cfg;
+}
+
 supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
     js::Object configurationParams, js_env_t* env) {
   supertonic::SupertonicConfig cfg;
   cfg.modelGgufPath = readOptionalString(configurationParams, env, "supertonicModelPath");
   cfg.voice         = readOptionalString(configurationParams, env, "voice");
+  cfg.voiceJsonPath =
+      readOptionalString(configurationParams, env, "voiceJsonPath");
   {
     auto lang = readOptionalString(configurationParams, env, "language");
     if (!lang.empty()) cfg.language = std::move(lang);
@@ -293,6 +365,16 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.openclCacheDir    = readOptionalString(configurationParams, env, "openclCacheDir");
   cfg.vulkanCacheDir =
       readOptionalString(configurationParams, env, "vulkanCacheDir");
+  cfg.vulkanDevice = readOptionalInt(configurationParams, env, "vulkanDevice");
+  cfg.prewarmText = readOptionalString(configurationParams, env, "prewarmText");
+  cfg.streamChunkTokens =
+      readOptionalInt(configurationParams, env, "streamChunkTokens");
+  cfg.streamFirstChunkTokens =
+      readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
+  cfg.streamChunkTolerancePct =
+      readOptionalInt(configurationParams, env, "streamChunkTolerancePct");
+  cfg.streamMinChunkTokens =
+      readOptionalInt(configurationParams, env, "streamMinChunkTokens");
   // LavaSR neural enhancement: a non-empty GGUF path turns it on.
   cfg.enhancerGgufPath =
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
@@ -319,6 +401,12 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "cosyvoiceS3tokModelPath");
   cfg.campplusModelPath = readOptionalString(
       configurationParams, env, "cosyvoiceCampplusModelPath");
+  cfg.vocabPath =
+      readOptionalString(configurationParams, env, "cosyvoiceVocabPath");
+  cfg.mergesPath =
+      readOptionalString(configurationParams, env, "cosyvoiceMergesPath");
+  cfg.voiceModelPath =
+      readOptionalString(configurationParams, env, "cosyvoiceVoiceModelPath");
   cfg.referenceAudio =
       readOptionalString(configurationParams, env, "referenceAudio");
   cfg.promptText = readOptionalString(configurationParams, env, "promptText");
@@ -335,6 +423,9 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.vulkanDevice = readOptionalInt(configurationParams, env, "vulkanDevice");
+  cfg.flowCutPrompt =
+      readOptionalBool(configurationParams, env, "flowCutPrompt");
   cfg.outputSampleRate =
       readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.cfmSteps = readOptionalInt(configurationParams, env, "cfmSteps");

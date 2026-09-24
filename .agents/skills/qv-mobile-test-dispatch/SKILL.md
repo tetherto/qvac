@@ -70,7 +70,7 @@ take the number at the end of its URL.
 
 Do **not** filter by the addon's own workflow name. Which workflow built the
 bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
-`on-merge-<addon>.yml` for a branch build. Scope by the PR's head commit:
+`on-merge-nx.yml` for a branch build. Scope by the PR's head commit:
 
 ```bash
 PKG=llm-llamacpp   # the package directory name, i.e. packages/<PKG>
