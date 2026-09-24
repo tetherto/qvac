@@ -2670,6 +2670,9 @@ class TTSGgml {
       maxChunkScalars: normalized.maxChunkScalars,
       ...((pickParlerDescFields(normalized) ?? {}) as ParlerJobSource),
       ...(pickAudio8VoiceFields(normalized) ?? {}),
+      ...(normalized.instruct === undefined
+        ? {}
+        : { instruct: normalized.instruct }),
     });
   }
 

@@ -1484,6 +1484,9 @@ class TTSGgml {
             maxChunkScalars: normalized.maxChunkScalars,
             ...(pickParlerDescFields(normalized) ?? {}),
             ...(pickAudio8VoiceFields(normalized) ?? {}),
+            ...(normalized.instruct === undefined
+                ? {}
+                : { instruct: normalized.instruct }),
         });
     }
     /**

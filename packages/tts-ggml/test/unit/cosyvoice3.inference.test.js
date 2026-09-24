@@ -662,6 +662,46 @@ test('CosyVoice3: per-call instruct is rendered and rides on the jobData', async
   await model.unload()
 })
 
+test('CosyVoice3: runStream forwards a per-call instruct to every sentence job', async (t) => {
+  const binding = new RecordingBinding()
+  const model = createMockedCosyvoiceModel({ binding })
+  await model.load()
+
+  const r = await model.runStream('First sentence here. Second sentence here.', {
+    maxChunkScalars: 24,
+    instruct: '  Speak softly.  '
+  })
+  await r.onUpdate(() => {}).await()
+  t.ok(binding.jobs.length >= 2, `one job per sentence (got ${binding.jobs.length})`)
+  for (const [i, job] of binding.jobs.entries()) {
+    t.is(job.instruct, 'Speak softly.', `sentence job ${i} carries the rendered instruct`)
+  }
+
+  const before = binding.jobs.length
+  const plain = await model.runStream('No instruction here.')
+  await plain.onUpdate(() => {}).await()
+  t.absent(binding.jobs[before].instruct, 'no leftover instruct on a plain runStream')
+
+  await model.unload()
+})
+
+test('CosyVoice3: runStreaming forwards a per-call instruct to every flushed job', async (t) => {
+  const binding = new RecordingBinding()
+  const model = createMockedCosyvoiceModel({ binding })
+  await model.load()
+
+  const r = await model.runStreaming(['First streamed line.', 'Second streamed line.'], {
+    instruct: { dialect: 'cantonese' }
+  })
+  await r.onUpdate(() => {}).await()
+  t.is(binding.jobs.length, 2, 'one job per streamed line')
+  for (const [i, job] of binding.jobs.entries()) {
+    t.is(job.instruct, '请用广东话表达。', `streamed job ${i} carries the rendered instruct`)
+  }
+
+  await model.unload()
+})
+
 test('CosyVoice3: per-call instruct follows the one-control rule', async (t) => {
   const model = createMockedCosyvoiceModel()
   await model.load()
