@@ -371,6 +371,8 @@ const model = new TTSGgml({
 })
 ```
 
+Full runnable demo (with streaming playback): `bare examples/supertonic-chunk-stream-tts.js`
+
 ## Voice cloning
 
 ### Chatterbox
@@ -1047,6 +1049,7 @@ Runnable demos under `examples/`:
 | `supertonic-mtl-tts.js` | Multilingual Supertonic synthesis |
 | `supertonic-mtl-sweep-tts.js` | Multilingual Supertonic sweep across languages |
 | `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
+| `supertonic-chunk-stream-tts.js` | Supertonic native chunk streaming via `streamChunkTokens`, with streaming playback |
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
