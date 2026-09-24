@@ -30,6 +30,14 @@ A patch on either side is one release on its own. An SDK patch leaves its range
 alone; an engine patch is picked up by the existing range with no SDK release at
 all.
 
+**On a release train this ordering does not apply, and Step 2 must be skipped.**
+A train versions the whole chain in one pass and the build resolves siblings
+from the pnpm workspace, so the engine is not published first and the SDK's
+`@qvac/inference` range has already been written by `nx release version`.
+Running Step 2 there would set it a second time from a different source. Step 3
+(`packages/sdk-python`) is still needed and can be run on its own. See
+`qv-release-train`.
+
 ## When to use this skill
 
 **Applies to the SDK pod** (not the agent-stack cascade: cli / ai-sdk-provider /
