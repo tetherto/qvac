@@ -9,6 +9,8 @@ Per-package CI is consolidated into generic `-nx.yml` leaves. Each package decla
 
 Full reference (wiring diagram, options.ci cheat-sheet, fork-safety model): `docs/ci/nx-ci-consolidation.md`. Workspace/tooling primer (pnpm config, Nx affected graph, local commands): `docs/pnpm-nx-workspace.md`. **Read both first.**
 
+`release-train.yml` is **not** one of these leaves. It uses `nx release`, takes its package list from `.github/release-trains.json` rather than `options.ci`, and is not driven by `nx-project-matrix`. See `docs/ci/RELEASE-TRAIN.md` and the `qv-release-train` skill.
+
 ## When to use
 
 - Adding or changing a package's CI (prebuilds, cpp tests, integration, on-pr checks, benchmarks, on-merge publish).

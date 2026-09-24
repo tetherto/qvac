@@ -184,6 +184,7 @@ Read `baseRefName`, `headRefName`, `isCrossRepository`, `headRepositoryOwner` fr
 |---|---|---|
 | anything | `main` | yes |
 | anything | `release-<pkg>-<x.y.z>` | yes (must bump version + changelog) |
+| anything | `release-train-<train>-<x.y.z>` | yes (see the release-train checks below) |
 | anything | `feature-<pkg>-*` / `tmp-<pkg>-*` | yes |
 
 **Blocker patterns:**
@@ -200,6 +201,24 @@ Read `baseRefName`, `headRefName`, `isCrossRepository`, `headRepositoryOwner` fr
 - `packages/<pkg>/package.json` version must increase vs base
 - `packages/<pkg>/CHANGELOG.md` must be updated
 - Verify patch fixes already landed on main (cherry-picked commits)
+
+**Release-train extra checks (base is `release-train-<train>-<x.y.z>`):**
+
+A train carries several packages in one PR, so several versions and changelogs
+move at once and the diff is legitimately wider than a single-package release.
+See `qv-release-train` and `docs/ci/RELEASE-TRAIN.md`.
+
+- Every package the train moved has both a version bump and a changelog entry.
+  A manifest that moved without its changelog fails the branch guard.
+- The anchor group's packages are all at the branch version. For the `sdk`
+  train that is `@qvac/inference` and `@qvac/sdk`; the agent stack is on its own
+  versions and must **not** match the branch.
+- Dependency ranges were rewritten to the new versions, not left at the old
+  ones. A range that did not follow means the package should have been named in
+  the version plan.
+- `pnpm-lock.yaml` is updated.
+- The packages in the PR are exactly a train, per `.github/release-trains.json`.
+  A subset belongs on the per-package flow.
 
 ### 4. Read applicable repository instructions for the touched paths
 

@@ -35,6 +35,14 @@ In command examples below, `ORG_REMOTE` / `FORK_REMOTE` / `BRANCH` are placehold
 that was **pushed** — not the PR base. It requires
 `release-<pkg>-x.y.z` (three-part semver).
 
+A **release train** base is `release-train-<train>-<x.y.z>` instead, carrying
+every package in that train (see `qv-release-train`). It is excluded from the
+per-package guard and validated by `.github/scripts/validate-release-train.mjs`,
+which wants the anchor group at the branch version and a changelog from every
+package whose manifest moved. Rules 2 and 3 below apply unchanged; for rule 1,
+read `release-train-<train>-<x.y.z>` and prefer a head of
+`chore/<train>-train-<x.y.z>-changelog`.
+
 Consequences for release changelog / metadata PRs:
 
 1. **Base (target)** must be exactly `release-<pkg>-<x.y.z>` (e.g. `release-sdk-0.17.0`).

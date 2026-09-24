@@ -28,6 +28,26 @@ Goal: know which packages need a release, prepare draft release + backmerge PRs 
 
 Invoke: `/qv-agent-stack-sync` or `/qv-agent-stack-sync --plan`.
 
+## When the whole cascade moves: use the release train instead
+
+`--prepare-cascade` and `--promote` exist because each package builds in its own
+run and installs its dependency from npm, so a release PR cannot go green until
+the layer below it is live. That is the wait a **release train** removes: one
+branch, one release PR, one publish run, two approvals. If `--plan` says every
+package in the chain needs a release, hand over to `qv-release-train` rather
+than opening six draft PRs and promoting them one at a time.
+
+This skill keeps its job for everything else:
+
+- `--plan` is still the right first step either way — it is what tells you
+  whether this is a full cascade or a partial one.
+- A partial cascade — say the provider and the two plugins, with the engine and
+  SDK unchanged — is not a train. A train is a fixed set from
+  `.github/release-trains.json`; releasing a subset stays on the per-package
+  flow here.
+- Compatibility checking between OpenCode / OpenClaw / provider and a given SDK
+  is unaffected.
+
 ## References
 
 - `.github/teams/sdk.json` — current SDK pod scope
