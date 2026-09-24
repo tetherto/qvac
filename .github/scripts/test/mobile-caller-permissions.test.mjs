@@ -99,10 +99,15 @@ test('discovery finds the leaves and their callers', () => {
   assert.ok(found.length >= 20, `expected at least 20 caller jobs, found ${found.length}`)
 })
 
+// `actions: none` is valid YAML and grants nothing, so an absent key is not the
+// only way to fail. Require a level that actually reads.
+const READS = new Set(['read', 'write'])
+
 test('every caller of a mobile leaf grants actions: read', () => {
   const gaps = mobileCalls()
-    .filter(({ granted }) => !granted || granted.actions === undefined)
-    .map(({ caller, job, target }) => `${caller} job '${job}' calls ${target}`)
+    .filter(({ granted }) => !granted || !READS.has(granted.actions))
+    .map(({ caller, job, target, granted }) =>
+      `${caller} job '${job}' calls ${target} with actions: ${granted?.actions ?? 'unset'}`)
 
   assert.deepEqual(
     gaps,
