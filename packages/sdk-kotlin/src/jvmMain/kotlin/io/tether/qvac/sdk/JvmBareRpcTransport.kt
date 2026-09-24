@@ -118,6 +118,7 @@ class JvmBareRpcTransport internal constructor(
             installWorkerIfMissing: Boolean = false,
             homeDirectory: String = defaultHomeDirectory(),
             config: JsonObject = JsonObject(emptyMap()),
+            runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
             rpcLimits: BareRpcLimits = BareRpcLimits(),
         ): JvmBareRpcTransport {
@@ -128,7 +129,9 @@ class JvmBareRpcTransport internal constructor(
                     sdkDirectory = sdkDirectory,
                 )
             } catch (error: QvacWorkerStartException) {
-                if (!installWorkerIfMissing || workerPath != null || sdkDirectory != null) throw error
+                val explicitWorker = workerPath != null || sdkDirectory != null ||
+                    System.getenv("QVAC_WORKER_PATH") != null || System.getenv("QVAC_SDK_DIR") != null
+                if (!installWorkerIfMissing || explicitWorker) throw error
                 val installedSdk = JvmWorkerInstaller.install()
                 JvmWorkerResolver.resolve(
                     bareExecutable = bareExecutable,
@@ -139,6 +142,7 @@ class JvmBareRpcTransport internal constructor(
                 command = listOf(command.bareExecutable, command.workerPath),
                 homeDirectory = homeDirectory,
                 config = config,
+                runtimeContext = runtimeContext,
                 timeoutMs = timeoutMs,
                 rpcLimits = rpcLimits,
                 authenticated = command.authenticated,
@@ -150,14 +154,16 @@ class JvmBareRpcTransport internal constructor(
             bareExecutable: String = "bare",
             homeDirectory: String = defaultHomeDirectory(),
             config: JsonObject = JsonObject(emptyMap()),
+            runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
             rpcLimits: BareRpcLimits = BareRpcLimits(),
-            authenticated: Boolean = true,
+            authenticated: Boolean = false,
         ): JvmBareRpcTransport {
             return connect(
                 command = listOf(bareExecutable, workerPath),
                 homeDirectory = homeDirectory,
                 config = config,
+                runtimeContext = runtimeContext,
                 timeoutMs = timeoutMs,
                 rpcLimits = rpcLimits,
                 authenticated = authenticated,
@@ -168,9 +174,10 @@ class JvmBareRpcTransport internal constructor(
             command: List<String>,
             homeDirectory: String = defaultHomeDirectory(),
             config: JsonObject = JsonObject(emptyMap()),
+            runtimeContext: JsonObject? = desktopRuntimeContext(),
             timeoutMs: Int = DEFAULT_CONNECT_TIMEOUT_MS,
             rpcLimits: BareRpcLimits = BareRpcLimits(),
-            authenticated: Boolean = true,
+            authenticated: Boolean = false,
         ): JvmBareRpcTransport {
             require(command.isNotEmpty()) { "worker command must not be empty" }
             require(timeoutMs > 0) { "timeoutMs must be positive" }
@@ -200,11 +207,13 @@ class JvmBareRpcTransport internal constructor(
                 socket.soTimeout = 0
                 val connected = JvmBareRpcTransport(JvmBareRpcSession(socket, rpcLimits), process, diagnostics, rpcLimits)
                 transport = connected
-                if (config.isNotEmpty()) {
+                val effectiveRuntimeContext = runtimeContext ?: JsonObject(emptyMap())
+                if (config.isNotEmpty() || effectiveRuntimeContext.isNotEmpty()) {
                     val response = withTimeout(timeoutMs.toLong()) { connected.call(
                         buildJsonObject {
                             put("type", "__init_config")
-                            put("config", config)
+                            if (config.isNotEmpty()) put("config", config)
+                            if (effectiveRuntimeContext.isNotEmpty()) put("runtimeContext", effectiveRuntimeContext)
                         },
                     ) }
                     requireSuccessfulWorkerControlResponse("configuration", response)
@@ -222,6 +231,20 @@ class JvmBareRpcTransport internal constructor(
                 throw QvacWorkerStartException("Failed to start QVAC worker", error)
             } finally {
                 server.close()
+            }
+        }
+
+        private fun desktopRuntimeContext(): JsonObject = buildJsonObject {
+            put("runtime", "jvm")
+            put("platform", desktopPlatform())
+        }
+
+        private fun desktopPlatform(): String {
+            val osName = System.getProperty("os.name").orEmpty().lowercase()
+            return when {
+                osName.contains("mac") || osName.contains("darwin") -> "darwin"
+                osName.contains("win") -> "win32"
+                else -> "linux"
             }
         }
 

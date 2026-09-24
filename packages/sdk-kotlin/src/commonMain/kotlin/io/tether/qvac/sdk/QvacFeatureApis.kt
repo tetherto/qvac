@@ -114,7 +114,7 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
         modelId: String,
         audio: QvacDataInput,
         prompt: String? = null,
-        metadata: Boolean = true,
+        metadata: Boolean = false,
         requestId: String = qvacRequestId(),
     ): QvacTranscriptionResult {
         val text = StringBuilder()
@@ -195,7 +195,7 @@ class QvacBci internal constructor(private val client: QvacClient) {
     suspend fun transcribe(
         modelId: String,
         neuralData: QvacDataInput,
-        metadata: Boolean = true,
+        metadata: Boolean = false,
         requestId: String = qvacRequestId(),
     ): QvacTranscriptionResult {
         val text = StringBuilder()
@@ -221,7 +221,7 @@ class QvacBci internal constructor(private val client: QvacClient) {
     suspend fun transcribeStream(
         modelId: String,
         neuralChunks: Flow<ByteArray>,
-        metadata: Boolean = true,
+        metadata: Boolean = false,
         options: QvacBciStreamOptions = QvacBciStreamOptions(),
         requestId: String = qvacRequestId(),
     ): QvacTranscriptionResult {
@@ -473,7 +473,7 @@ class QvacMedia internal constructor(private val client: QvacClient) {
     fun video(
         modelId: String,
         prompt: String,
-        mode: String = "text2video",
+        mode: String = "txt2vid",
         width: Int? = null,
         height: Int? = null,
         frames: Int? = null,

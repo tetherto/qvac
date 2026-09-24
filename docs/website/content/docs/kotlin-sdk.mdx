@@ -48,9 +48,9 @@ try {
 ```
 
 The service runs in the app's private `:qvac_worker` process. Desktop JVM uses
-`JvmBareRpcTransport.connectResolved()`. Its loopback worker authenticates with
-a random per-launch `QVAC_IPC_AUTH_TOKEN` before Bare-RPC frames are accepted.
-Kotlin/Native targets are not published until they have tested worker hosts.
+`JvmBareRpcTransport.connectResolved()`, which starts the resolved `@qvac/sdk`
+worker over a loopback channel. Kotlin/Native targets are not published until
+they have tested worker hosts.
 
 ## Completion and multimodal input
 
@@ -106,12 +106,12 @@ val transcript = client.speech.transcribe(
 
 val speech = client.speech.synthesize(ttsModelId, "Hello from QVAC")
 val page = client.vision.ocr(ocrModelId, QvacDataInput.FilePath("/data/user/0/app/files/page.png"))
-val classes = client.vision.classify(classifierModelId, imageBase64)
 val vector = client.embeddings.embed(embeddingModelId, "private local AI")
 val translation = client.translation.run(nmtModelId, "hello", modelType = "nmt")
 
 val imageRun = client.media.diffusion(diffusionModelId, "a small red robot")
 val imageBase64 = imageRun.final.await().data.first()
+val classes = client.vision.classify(classifierModelId, imageBase64)
 
 val hparams = client.vla.hparams(vlaModelId).hparams
 val actions = client.vla.run(

@@ -18,9 +18,21 @@ class QvacFeatureApisTest {
         val transport = FeatureTransport()
         val client = QvacClient(transport)
 
+        // Default metadata=false: the worker streams text frames, no segments.
         transport.responses = flowOf(buildJsonObject {
             put("type", "transcribe")
             put("text", "hello")
+            put("done", true)
+        })
+        val transcript = client.speech.transcribe("asr", QvacDataInput.FilePath("/audio.wav"))
+        assertEquals("hello", transcript.text)
+        assertEquals(false, transport.lastPayload?.get("metadata")?.jsonPrimitive?.content?.toBoolean())
+        assertEquals("filePath", transport.lastPayload?.get("audioChunk")?.jsonObject
+            ?.get("type")?.jsonPrimitive?.content)
+
+        // metadata=true: the worker streams segment frames, no top-level text.
+        transport.responses = flowOf(buildJsonObject {
+            put("type", "transcribe")
             put("segment", buildJsonObject {
                 put("text", "hello")
                 put("startMs", 0)
@@ -28,11 +40,9 @@ class QvacFeatureApisTest {
             })
             put("done", true)
         })
-        val transcript = client.speech.transcribe("asr", QvacDataInput.FilePath("/audio.wav"))
-        assertEquals("hello", transcript.text)
-        assertEquals(500.0, transcript.segments.single().endMs)
-        assertEquals("filePath", transport.lastPayload?.get("audioChunk")?.jsonObject
-            ?.get("type")?.jsonPrimitive?.content)
+        val segmented = client.speech.transcribe("asr", QvacDataInput.FilePath("/audio.wav"), metadata = true)
+        assertEquals("", segmented.text)
+        assertEquals(500.0, segmented.segments.single().endMs)
 
         transport.responses = flowOf(buildJsonObject {
             put("type", "ocrStream")

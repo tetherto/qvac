@@ -10,6 +10,7 @@ import io.tether.qvac.sdk.QvacTransport
 import io.tether.qvac.sdk.QvacRuntimeProfile
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -21,6 +22,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.channels.awaitClose
@@ -43,34 +45,89 @@ class AndroidServiceTransport private constructor(
     private val json: Json,
     override val runtimeProfile: QvacRuntimeProfile,
 ) : QvacTransport {
+    // Each in-flight request registers how to fail itself. When the worker
+    // process dies, the callback stub stops delivering results, so the binder's
+    // death is the only signal that can unblock a pending call() or close a
+    // stream()/duplex() flow.
+    private val liveRequests = ConcurrentHashMap.newKeySet<(Throwable) -> Unit>()
+
+    @Volatile
+    private var deathCause: Throwable? = null
+
+    private val deathRecipient = IBinder.DeathRecipient {
+        val error = QvacWorkerRemoteException(WORKER_STOPPED_MESSAGE)
+        deathCause = error
+        val pending = liveRequests.toList()
+        liveRequests.clear()
+        pending.forEach { runCatching { it(error) } }
+    }
+
+    init {
+        runCatching { service.asBinder().linkToDeath(deathRecipient, 0) }
+            .onFailure { deathCause = QvacWorkerRemoteException(WORKER_STOPPED_MESSAGE) }
+    }
+
     override suspend fun call(payload: JsonObject): JsonObject {
+        deathCause?.let { throw asWorkerException(it) }
         return suspendCancellableCoroutine { continuation ->
-            val callback = unaryCallback(continuation)
+            val terminate: (Throwable) -> Unit = { error ->
+                if (continuation.isActive) continuation.resumeWithException(asWorkerException(error))
+            }
+            liveRequests.add(terminate)
+            continuation.invokeOnCancellation { liveRequests.remove(terminate) }
+            val callback = unaryCallback(continuation) { liveRequests.remove(terminate) }
             runCatching {
-                service.call(payload.toString(), callback)
-            }.onFailure { continuation.resumeWithException(asWorkerException(it)) }
+                val text = payload.toString()
+                if (text.length <= QvacWorkerService.MAX_BINDER_CHUNK_CHARS) {
+                    service.call(text, callback)
+                } else {
+                    val requestId = chunkRequest(text)
+                    service.callAssembled(requestId, callback)
+                }
+            }.onFailure {
+                liveRequests.remove(terminate)
+                if (continuation.isActive) continuation.resumeWithException(asWorkerException(it))
+            }
         }
     }
 
     override fun stream(payload: JsonObject): Flow<JsonObject> {
         return callbackFlow {
+            deathCause?.let { close(asWorkerException(it)); return@callbackFlow }
+            val terminate: (Throwable) -> Unit = { close(asWorkerException(it)) }
+            liveRequests.add(terminate)
             // AIDL callbacks are synchronous. Blocking the Binder callback when
             // the Flow buffer is full provides backpressure instead of silently
             // dropping a token when trySend() fails at the default capacity.
             val callback = streamCallback({ trySendBlocking(it) }, { close(it) }, { close() })
             runCatching {
-                service.stream(payload.toString(), callback)
+                val text = payload.toString()
+                if (text.length <= QvacWorkerService.MAX_BINDER_CHUNK_CHARS) {
+                    service.stream(text, callback)
+                } else {
+                    val requestId = chunkRequest(text)
+                    service.streamAssembled(requestId, callback)
+                }
             }.onFailure { close(asWorkerException(it)) }
-            awaitClose { }
+            awaitClose { liveRequests.remove(terminate) }
         }
     }
 
     override fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> {
         return callbackFlow {
+            deathCause?.let { close(asWorkerException(it)); return@callbackFlow }
             val requestId = UUID.randomUUID().toString()
+            val terminate: (Throwable) -> Unit = { close(asWorkerException(it)) }
+            liveRequests.add(terminate)
             val callback = streamCallback({ trySendBlocking(it) }, { close(it) }, { close() })
             runCatching {
-                service.duplex(requestId, payload.toString(), callback)
+                val text = payload.toString()
+                if (text.length <= QvacWorkerService.MAX_BINDER_CHUNK_CHARS) {
+                    service.duplex(requestId, text, callback)
+                } else {
+                    chunkRequest(text, requestId)
+                    service.duplexAssembled(requestId, callback)
+                }
             }.onFailure { close(asWorkerException(it)) }
 
             val inputJob = launch(Dispatchers.IO) {
@@ -90,6 +147,7 @@ class AndroidServiceTransport private constructor(
                 }
             }
             awaitClose {
+                liveRequests.remove(terminate)
                 inputJob.cancel()
                 runCatching { service.cancelDuplex(requestId) }
             }
@@ -97,19 +155,41 @@ class AndroidServiceTransport private constructor(
     }
 
     override suspend fun close() {
-        withContext(Dispatchers.IO) {
+        withContext(NonCancellable + Dispatchers.IO) {
+            runCatching { service.asBinder().unlinkToDeath(deathRecipient, 0) }
             runCatching { service.close() }
             runCatching { context.unbindService(connection) }
         }
     }
 
+    // A request JSON envelope crosses the boundary as a single AIDL String.
+    // Inline base64 (image/audio inputs) can pass Binder's ~1 MiB transaction
+    // limit, so send an oversized envelope through the same chunk channel the
+    // service uses for replies, then dispatch by requestId. For duplex the id
+    // also keys the input stream; request assembly completes before any input
+    // chunk arrives, so the two never overlap.
+    private fun chunkRequest(
+        text: String,
+        requestId: String = UUID.randomUUID().toString(),
+    ): String {
+        var offset = 0
+        while (offset < text.length) {
+            val end = (offset + QvacWorkerService.MAX_BINDER_CHUNK_CHARS).coerceAtMost(text.length)
+            service.requestChunk(requestId, text.substring(offset, end), end == text.length)
+            offset = end
+        }
+        return requestId
+    }
+
     private fun unaryCallback(
         continuation: CancellableContinuation<JsonObject>,
+        onSettle: () -> Unit,
     ): IQvacWorkerCallback {
         return object : IQvacWorkerCallback.Stub() {
             private val chunkedEnvelope = StringBuilder()
 
             override fun onNext(payload: String) {
+                onSettle()
                 if (continuation.isActive) {
                     continuation.resume(parse(payload))
                 }
@@ -121,12 +201,14 @@ class AndroidServiceTransport private constructor(
                     if (endOfEnvelope && continuation.isActive) {
                         val payload = chunkedEnvelope.toString()
                         chunkedEnvelope.clear()
+                        onSettle()
                         continuation.resume(parse(payload))
                     }
                 }
             }
 
             override fun onError(message: String) {
+                onSettle()
                 if (continuation.isActive) {
                     continuation.resumeWithException(QvacWorkerRemoteException(message))
                 }
@@ -173,15 +255,16 @@ class AndroidServiceTransport private constructor(
 
     private fun asWorkerException(error: Throwable): Throwable {
         return if (error is DeadObjectException) {
-            QvacWorkerRemoteException(
-                "QVAC worker stopped. Return to the assistant and reconnect.",
-            )
+            QvacWorkerRemoteException(WORKER_STOPPED_MESSAGE)
         } else {
             error
         }
     }
 
     companion object {
+        private const val WORKER_STOPPED_MESSAGE =
+            "QVAC worker stopped. Return to the assistant and reconnect."
+
         suspend fun connect(
             context: Context,
         ): AndroidServiceTransport {

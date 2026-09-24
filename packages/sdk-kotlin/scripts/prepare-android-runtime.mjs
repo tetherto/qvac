@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import fsSync from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -62,12 +63,9 @@ const bundle = await bundleSdk({
   quiet: true
 })
 
-// Addon prebuilds ship in per-platform packages that are NOT dependencies of
-// the meta: a build host never reports a mobile os/cpu, so they cannot be
-// os/cpu-filtered optionalDependencies. Derive each bundled addon's
-// android-arm64 platform package from its own `#host-addon` map, at the meta's
-// installed version, and install them so the bundle verifies and links. Keeps
-// versions in lockstep with the metas automatically — no hand-maintained pins.
+// Addon native prebuilds ship in per-platform packages that are not
+// dependencies of the meta, so install the ones this bundle's addons name for
+// android-arm64, at each meta's installed version.
 await ensureHostPrebuilds(bundle.manifestPath, 'android-arm64')
 
 const verification = await verifyBundle({
@@ -133,6 +131,23 @@ for await (const resource of link(
   console.log(`Linked ${resource}`)
 }
 
+// bare-link from the project root reaches only the meta packages. Split addons
+// keep their binaries in a per-platform package, so link each installed one
+// from its own `addon` directory or its .so never reaches the AAR.
+for (const platformAddon of platformAddonRoots(addons, 'android-arm64')) {
+  for await (const resource of link(
+    platformAddon.dir,
+    {
+      hosts: ['android-arm64'],
+      out: addonsDirectory
+    },
+    platformAddon.pkg
+  )) {
+    linkedResources.add(path.resolve(String(resource)))
+    console.log(`Linked ${resource}`)
+  }
+}
+
 async function sha256(filePath) {
   return createHash('sha256').update(await fs.readFile(filePath)).digest('hex')
 }
@@ -145,6 +160,19 @@ for (const resource of [...linkedResources].sort()) {
   })
 }
 
+// Record the resolved @qvac versions so a rebuild of the same profile is
+// diffable: the addon hashes alone don't reveal an npm range that drifted.
+const resolvedDependencies = {}
+for (const name of ['@qvac/sdk', '@qvac/inference', ...addons].sort()) {
+  const version = await readInstalledVersion(name)
+  if (version !== null) resolvedDependencies[name] = version
+  const platformPackage = platformPackageForInstalledMeta(name, 'android-arm64')
+  if (platformPackage !== null) {
+    const platformVersion = await readInstalledVersion(platformPackage)
+    if (platformVersion !== null) resolvedDependencies[platformPackage] = platformVersion
+  }
+}
+
 await fs.writeFile(
   path.join(assetsDirectory, 'profile.json'),
   `${JSON.stringify(
@@ -154,6 +182,7 @@ await fs.writeFile(
       capabilities,
       plugins: qvacConfig.plugins ?? [],
       workerSha256: createHash('sha256').update(workerBundle).digest('hex'),
+      resolvedDependencies,
       resources: includesClassification
         ? [
             {
@@ -180,6 +209,65 @@ async function pathExists(target) {
   }
 }
 
+/**
+ * The installed platform-package `addon` directories for the given metas, ready
+ * for a bare-link pass. Mirrors `resolvePlatformAddonRoots` in the Expo linker.
+ */
+function platformAddonRoots(addonNames, host) {
+  const roots = []
+  for (const name of addonNames) {
+    const metaPath = path.join(projectRoot, 'node_modules', ...name.split('/'), 'package.json')
+    let meta
+    try {
+      meta = JSON.parse(fsSync.readFileSync(metaPath, 'utf8'))
+    } catch {
+      continue
+    }
+    const platformPackage = platformPackageForHost(meta, host)
+    if (platformPackage === null) continue
+    const addonDir = path.join(projectRoot, 'node_modules', ...platformPackage.split('/'), 'addon')
+    let addonManifest
+    try {
+      addonManifest = JSON.parse(fsSync.readFileSync(path.join(addonDir, 'package.json'), 'utf8'))
+    } catch {
+      continue
+    }
+    if (addonManifest.addon !== true) continue
+    if (!fsSync.existsSync(path.join(addonDir, 'prebuilds'))) continue
+    roots.push({ dir: addonDir, pkg: addonManifest })
+  }
+  return roots
+}
+
+async function readInstalledVersion(packageName) {
+  try {
+    const meta = JSON.parse(
+      await fs.readFile(
+        path.join(projectRoot, 'node_modules', ...packageName.split('/'), 'package.json'),
+        'utf8'
+      )
+    )
+    return typeof meta.version === 'string' ? meta.version : null
+  } catch {
+    return null
+  }
+}
+
+/** The platform package for an installed meta, or null when the meta has no host map. */
+function platformPackageForInstalledMeta(metaName, host) {
+  try {
+    const meta = JSON.parse(
+      fsSync.readFileSync(
+        path.join(projectRoot, 'node_modules', ...metaName.split('/'), 'package.json'),
+        'utf8'
+      )
+    )
+    return platformPackageForHost(meta, host)
+  } catch {
+    return null
+  }
+}
+
 /** The platform prebuild package an addon's `#host-addon` map names for a host. */
 function platformPackageForHost(meta, host) {
   const dash = host.indexOf('-')
@@ -203,8 +291,8 @@ async function ensureHostPrebuilds(manifestPath, host) {
   const specs = []
   for (const addon of manifestAddons) {
     const addonRoot = path.join(projectRoot, 'node_modules', addon)
-    // A locally present fat `prebuilds/<host>` wins (source builds / the old
-    // layout), so only addons that migrated to per-platform packages need one.
+    // A local fat `prebuilds/<host>` already resolves; only a meta without one
+    // needs its per-platform package installed.
     if (await pathExists(path.join(addonRoot, 'prebuilds', host))) continue
     let meta
     try {

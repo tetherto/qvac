@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 export function verifyWorkerMetadata(metadata, version) {
   if (metadata.version !== version || metadata.qvacIpcAuthentication !== 'token-v1') {
-    throw new Error(`Cannot publish Kotlin ${version}: the published @qvac/sdk@${version} must support token-v1 IPC. Publish the coordinated authenticated SDK first; never reuse the tokenless 0.18.2 release.`)
+    throw new Error(`Cannot publish Kotlin ${version}: the published @qvac/sdk@${version} must declare token-v1 IPC. Publish the authenticated SDK first.`)
   }
 }
 

@@ -49,13 +49,15 @@ object JvmWorkerResolver {
         (sdkDirectory ?: environment["QVAC_SDK_DIR"])?.let { roots.add(Path.of(it)) }
         roots.addAll(discoverLocalSdkRoots(currentDirectory))
         managedSdkRoot(environment, userHome)?.let(roots::add)
-        npmGlobalSdkRoot()?.let(roots::add)
 
         for (root in roots) {
-            val worker = workerCandidates(root).firstOrNull(Files::isRegularFile) ?: continue
-            val authenticated = requireCompatibleSdk(root)
-            val bare = resolveBare(configuredBare, bareCandidates(root), environment)
-            return JvmWorkerCommand(bare.toString(), worker.toString(), authenticated)
+            commandForRoot(root, configuredBare, environment)?.let { return it }
+        }
+
+        // `npm root -g` spawns a subprocess; only reach for it once the local and
+        // managed roots have missed.
+        npmGlobalSdkRoot()?.let { root ->
+            commandForRoot(root, configuredBare, environment)?.let { return it }
         }
 
         throw QvacWorkerStartException(
@@ -63,6 +65,17 @@ object JvmWorkerResolver {
                 "@qvac/sdk@$SDK_VERSION installation, or set QVAC_WORKER_PATH and " +
                 "QVAC_BARE_PATH explicitly.",
         )
+    }
+
+    private fun commandForRoot(
+        root: Path,
+        configuredBare: String?,
+        environment: Map<String, String>,
+    ): JvmWorkerCommand? {
+        val worker = workerCandidates(root).firstOrNull(Files::isRegularFile) ?: return null
+        val authenticated = requireCompatibleSdk(root)
+        val bare = resolveBare(configuredBare, bareCandidates(root), environment)
+        return JvmWorkerCommand(bare.toString(), worker.toString(), authenticated)
     }
 
     private fun discoverLocalSdkRoots(start: Path): List<Path> {
@@ -165,11 +178,9 @@ object JvmWorkerResolver {
     }
 
     /**
-     * Verifies the resolved worker matches this client's SDK version and reports
-     * whether it advertises token-v1 IPC. Authentication is negotiated per worker:
-     * a worker that does not declare it (the published stable release) runs over an
-     * unauthenticated loopback channel rather than being rejected. Enforcement
-     * returns once a coordinated token-v1 worker release is the pinned version.
+     * Verifies the resolved worker's version matches this client and returns
+     * whether the worker declares token-v1 IPC. A worker that does not declare it
+     * runs over an unauthenticated loopback channel.
      */
     internal fun requireCompatibleSdk(root: Path): Boolean {
         val packageJson = root.resolve("package.json")

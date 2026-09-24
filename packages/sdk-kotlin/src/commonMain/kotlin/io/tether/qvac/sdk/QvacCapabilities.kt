@@ -203,10 +203,11 @@ class QvacRaw internal constructor(
 }
 
 private fun JsonElement.textValue(): String? {
-    val objectValue = this as? JsonObject
-    val text = objectValue?.get("text")?.jsonPrimitive?.contentOrNull
-    if (text != null) {
-        return text
+    val objectValue = this as? JsonObject ?: return null
+    // rawDelta and thinkingDelta events also carry a `text` field; only the
+    // answer tokens live on contentDelta.
+    if (objectValue["type"]?.jsonPrimitive?.contentOrNull != "contentDelta") {
+        return null
     }
-    return objectValue?.get("content")?.jsonPrimitive?.contentOrNull
+    return objectValue["text"]?.jsonPrimitive?.contentOrNull
 }

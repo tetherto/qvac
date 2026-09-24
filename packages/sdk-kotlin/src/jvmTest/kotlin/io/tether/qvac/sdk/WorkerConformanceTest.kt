@@ -48,6 +48,7 @@ class WorkerConformanceTest {
             temperature = gen?.get("temp")?.jsonPrimitive?.double,
             seed = gen?.get("seed")?.jsonPrimitive?.long,
             predict = gen?.get("predict")?.jsonPrimitive?.long ?: -1,
+            reasoningBudget = gen?.get("reasoning_budget")?.jsonPrimitive?.long,
         ))
         when (case.string("category")) {
             "completion" -> expectText(case, client.completion.run(modelId, history, options = options).text())

@@ -114,9 +114,12 @@ android {
 val npmCi by tasks.registering(Exec::class) {
     description = "Install pinned QVAC Android runtime dependencies"
     workingDir(runtimeRoot)
-    commandLine("npm", "install", "--ignore-scripts", "--legacy-peer-deps", "--no-package-lock")
+    // `npm ci` installs the committed lockfile exactly, so two builds of the
+    // same tag resolve the same @qvac/* versions.
+    commandLine("npm", "ci", "--ignore-scripts", "--legacy-peer-deps")
     inputs.files(
         runtimeRoot.file("package.json"),
+        runtimeRoot.file("package-lock.json"),
     )
     outputs.dir(runtimeRoot.dir("node_modules"))
 }

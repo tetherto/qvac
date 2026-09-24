@@ -33,7 +33,7 @@ class QvacCapabilitiesTest {
     }
 
     @Test
-    fun completionTextCapabilityAggregatesEventText() = runTest {
+    fun completionTextCapabilityAggregatesOnlyContentDeltas() = runTest {
         val transport = CapabilityRecordingTransport(
             streamResponses = flowOf(
                 buildJsonObject {
@@ -41,7 +41,12 @@ class QvacCapabilitiesTest {
                     put(
                         "events",
                         kotlinx.serialization.json.buildJsonArray {
-                            add(buildJsonObject { put("text", "hello") })
+                            add(buildJsonObject { put("type", "contentDelta"); put("text", "hel") })
+                            // rawDelta and thinkingDelta also carry `text`; they must not leak
+                            // into the answer stream.
+                            add(buildJsonObject { put("type", "thinkingDelta"); put("text", "REASON") })
+                            add(buildJsonObject { put("type", "rawDelta"); put("text", "RAW") })
+                            add(buildJsonObject { put("type", "contentDelta"); put("text", "lo") })
                         },
                     )
                 },

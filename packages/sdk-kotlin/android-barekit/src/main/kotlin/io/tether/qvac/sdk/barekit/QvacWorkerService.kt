@@ -57,50 +57,34 @@ class QvacWorkerService : Service() {
 
     private val duplexInputs = ConcurrentHashMap<String, DuplexInput>()
 
+    // Oversized request envelopes arrive in ordered chunks, then a *Assembled
+    // call reads and removes the completed payload.
+    private val requestAssembly = ConcurrentHashMap<String, StringBuilder>()
+
     private val binder = object : IQvacWorkerService.Stub() {
-        override fun call(payload: String, callback: IQvacWorkerCallback) {
-            serviceScope.launch {
-                runRpc(callback) {
-                    sendEnvelope(callback, worker.await().call(parse(payload)).toString())
-                }
-            }
+        override fun call(payload: String, callback: IQvacWorkerCallback) = dispatchCall(payload, callback)
+
+        override fun stream(payload: String, callback: IQvacWorkerCallback) = dispatchStream(payload, callback)
+
+        override fun requestChunk(requestId: String, chunk: String, endOfRequest: Boolean) {
+            val builder = requestAssembly.getOrPut(requestId) { StringBuilder() }
+            synchronized(builder) { builder.append(chunk) }
         }
 
-        override fun stream(payload: String, callback: IQvacWorkerCallback) {
-            serviceScope.launch {
-                runRpc(callback) {
-                    worker.await().stream(parse(payload)).collect { response ->
-                        sendEnvelope(callback, response.toString())
-                    }
-                }
-            }
-        }
+        override fun callAssembled(requestId: String, callback: IQvacWorkerCallback) =
+            dispatchCall(takeAssembledRequest(requestId), callback)
+
+        override fun streamAssembled(requestId: String, callback: IQvacWorkerCallback) =
+            dispatchStream(takeAssembledRequest(requestId), callback)
+
+        override fun duplexAssembled(requestId: String, callback: IQvacWorkerCallback) =
+            dispatchDuplex(requestId, takeAssembledRequest(requestId), callback)
 
         override fun duplex(
             requestId: String,
             payload: String,
             callback: IQvacWorkerCallback,
-        ) {
-            val input = DuplexInput()
-            input.job = serviceScope.launch(start = CoroutineStart.LAZY) {
-                try {
-                    runRpc(callback) {
-                        worker.await().duplex(parse(payload), input.channel.receiveAsFlow()).collect { response ->
-                            sendEnvelope(callback, response.toString())
-                        }
-                    }
-                } finally {
-                    input.channel.cancel()
-                    duplexInputs.remove(requestId, input)
-                }
-            }
-            // Register before returning to Binder: the caller may send immediately.
-            if (duplexInputs.putIfAbsent(requestId, input) != null) {
-                input.cancel()
-                throw IllegalArgumentException("Duplicate duplex request ID")
-            }
-            input.job.start()
-        }
+        ) = dispatchDuplex(requestId, payload, callback)
 
         override fun duplexChunk(requestId: String, chunk: ByteArray, endOfInput: Boolean) {
             val input = duplexInputs[requestId]
@@ -121,6 +105,56 @@ class QvacWorkerService : Service() {
         }
     }
 
+    private fun takeAssembledRequest(requestId: String): String {
+        val builder = requestAssembly.remove(requestId)
+            ?: throw IllegalStateException("Assembled request is not available")
+        return builder.toString()
+    }
+
+    private fun dispatchCall(payload: String, callback: IQvacWorkerCallback) {
+        serviceScope.launch {
+            runRpc(callback) {
+                sendEnvelope(callback, worker.await().call(parse(payload)).toString())
+            }
+        }
+    }
+
+    private fun dispatchStream(payload: String, callback: IQvacWorkerCallback) {
+        serviceScope.launch {
+            runRpc(callback) {
+                worker.await().stream(parse(payload)).collect { response ->
+                    sendEnvelope(callback, response.toString())
+                }
+            }
+        }
+    }
+
+    private fun dispatchDuplex(
+        requestId: String,
+        payload: String,
+        callback: IQvacWorkerCallback,
+    ) {
+        val input = DuplexInput()
+        input.job = serviceScope.launch(start = CoroutineStart.LAZY) {
+            try {
+                runRpc(callback) {
+                    worker.await().duplex(parse(payload), input.channel.receiveAsFlow()).collect { response ->
+                        sendEnvelope(callback, response.toString())
+                    }
+                }
+            } finally {
+                input.channel.cancel()
+                duplexInputs.remove(requestId, input)
+            }
+        }
+        // Register before returning to Binder: the caller may send immediately.
+        if (duplexInputs.putIfAbsent(requestId, input) != null) {
+            input.cancel()
+            throw IllegalArgumentException("Duplicate duplex request ID")
+        }
+        input.job.start()
+    }
+
     override fun onCreate() {
         super.onCreate()
         serviceScope.launch {
@@ -135,6 +169,7 @@ class QvacWorkerService : Service() {
     override fun onDestroy() {
         duplexInputs.values.forEach(DuplexInput::cancel)
         duplexInputs.clear()
+        requestAssembly.clear()
         serviceScope.launch {
             runCatching {
                 if (worker.isCompleted) worker.await().close()

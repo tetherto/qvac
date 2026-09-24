@@ -145,7 +145,7 @@ against the release's `SHA256SUMS` asset. GitHub Packages or the configured
 public Maven repository remains the recommended path for normal dependency
 resolution and upgrades.
 
-Until the next authenticated, coordinated SDK version is released, publish locally with
+To consume the artifacts without a remote repository, publish locally with
 `./gradlew publishSdkToBuildRepository` and add
 `packages/sdk-kotlin/build/maven-repository` as a Maven repository.
 
@@ -204,9 +204,8 @@ uses its dedicated deployment workflow, not a generic Maven URL:
 ```
 
 Both commands include all ten publications: KMP metadata, JVM, Android client,
-and seven Android runtimes. The maintained Vanniktech base plugin manages Central
-deployments; Dokka generates real API documentation. Existing coordinates,
-sources, signing and GitHub Packages support remain unchanged.
+and seven Android runtimes. The Vanniktech base plugin manages Central
+deployments and Dokka generates the API documentation.
 
 For CI, configure the protected `release` environment with
 `KOTLIN_CENTRAL_USERNAME`, `KOTLIN_CENTRAL_PASSWORD`, `KOTLIN_MAVEN_SIGNING_KEY`
@@ -262,12 +261,8 @@ Desktop JVM worker hosting is experimental. The client resolves the same worker
 tiers as Python: explicit paths, `QVAC_WORKER_PATH`/`QVAC_BARE_PATH`,
 `QVAC_SDK_DIR`, a local `node_modules`, the versioned managed cache, and a global
 npm installation. It requires a worker whose version matches this client and
-negotiates authentication from the worker's package metadata: a worker that
-declares `qvacIpcAuthentication: "token-v1"` runs over the authenticated loopback
-handshake; one that does not — including the published `@qvac/sdk` — runs over an
-unauthenticated loopback channel. Enforcement returns automatically once a
-coordinated token-v1 worker release is the pinned version. Android uses its
-embedded BareKit worker and is unaffected.
+runs it over a loopback channel. Android uses its embedded BareKit worker and is
+unaffected.
 
 ```kotlin
 import io.tether.qvac.sdk.JvmBareRpcTransport
@@ -290,12 +285,9 @@ fun main() = runBlocking {
 
 `installWorkerIfMissing = true` installs and caches the pinned `@qvac/sdk`
 version on first use; cached packages are re-checked. The transport launches
-`bare` and creates a loopback-only TCP endpoint. When the worker declares
-token-v1 it is given a random per-launch `QVAC_IPC_AUTH_TOKEN` and must present
-it before any Bare-RPC frame is accepted; wrong-token sockets are rejected with a
-constant-time comparison. Against a tokenless worker the token is not issued and
-the loopback channel is unauthenticated, so do not use JVM hosting across a
-hostile local-user boundary until the authenticated worker release is pinned.
+`bare` and creates a loopback-only TCP endpoint. The channel is unauthenticated,
+so any local process can connect; do not use JVM hosting across a hostile
+local-user boundary.
 
 Worker stdout/stderr are continuously drained into `transport.recentWorkerLogs`
 (a bounded 16K-character tail); `isWorkerAlive` reports the child process state.
@@ -496,22 +488,20 @@ This downloads small models and tests generation, translation, embeddings,
 load/unload, cancellation, the tool loop, and TTS. Without the opt-in variable
 this test is explicitly skipped; ordinary JVM tests still exercise a live
 JavaScript Bare-RPC process and canonical bytes from the locked upstream
-encoder. CI runs real inference on pushes to `kotlin-sdk`,
-`test-e2e-smoke`-labelled PRs, or manual dispatch. Branch pushes run only
-non-publishing checks; publishing requires a release tag, explicit dispatch,
-or the SDK release workflow.
+encoder. CI runs real inference on `test-e2e-smoke`-labelled PRs or manual
+dispatch. Publishing requires a release tag, explicit dispatch, or the SDK
+release workflow.
 
 External Maven publication is gated on an already-published, version-matched
-SDK with authenticated IPC metadata. Central destinations require an in-memory
-signing key; local Maven verification does not.
+SDK. Central destinations require an in-memory signing key; local Maven
+verification does not.
 
 ## Current boundary
 
 The supported runtime matrix is intentionally explicit:
 
 - Android `arm64-v8a`, API 29+: embedded in-process or isolated-service host.
-- Desktop JVM: experimental, authenticated workspace worker through
-  `connectResolved`. The managed npm worker is unsupported; the next coordinated
-  authenticated SDK release is required before external Kotlin publication.
+- Desktop JVM: experimental, resolves a workspace `@qvac/sdk` worker through
+  `connectResolved` over a loopback channel.
 - Kotlin/Native: not published in this phase. Each target will be added only
   with a real worker host and target-specific release evidence.

@@ -25,6 +25,21 @@ class JsonLinesDecoderTest {
     }
 
     @Test
+    fun assemblesOneLineFromManyChunks() {
+        val decoder = JsonLinesDecoder()
+        val payload = "x".repeat(200_000)
+
+        var index = 0
+        while (index < payload.length) {
+            val end = minOf(index + 4096, payload.length)
+            assertEquals(emptyList(), decoder.feed(payload.substring(index, end).encodeToByteArray()))
+            index = end
+        }
+
+        assertEquals(listOf(payload), decoder.feed("\n".encodeToByteArray()))
+    }
+
+    @Test
     fun emitsAnUnterminatedFinalLine() {
         val decoder = JsonLinesDecoder()
 

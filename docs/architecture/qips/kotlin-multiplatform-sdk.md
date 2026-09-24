@@ -2,12 +2,12 @@
 
 ## Implementation status and phase-one scope
 
-The implementation branch is release-shaped for Android arm64 and desktop JVM:
-the generated 40-method contract, idiomatic feature APIs, isolated Android host,
-authenticated JVM sidecar, all current SDK addon profiles, Maven publications,
-consumer checks, and Pixel 8a device suite are present. Kotlin/Native targets
-were removed from phase one because they had no implemented worker host; this
-QIP keeps the broader host design as a future proposal, not a shipping claim.
+Phase one covers Android arm64 and desktop JVM: the generated 40-method
+contract, idiomatic feature APIs, isolated Android host, desktop JVM sidecar,
+all current SDK addon profiles, Maven publications, consumer checks, and Pixel
+8a device suite. Kotlin/Native targets are out of scope for phase one because
+they have no implemented worker host; this QIP keeps the broader host design as
+a future proposal.
 
 The current automated registry target is GitHub Packages. Each `sdk-v*` GitHub
 Release also receives token-free, profile-specific Maven repository ZIPs and a

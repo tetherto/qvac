@@ -1,8 +1,6 @@
 name: PR Checks (SDK Kotlin)
 
 on:
-  push:
-    branches: [kotlin-sdk]
   pull_request:
     paths:
       - 'packages/sdk-kotlin/**'
@@ -37,9 +35,7 @@ jobs:
   check:
     name: Contract, tests, artifacts, consumer
     runs-on: ubuntu-latest
-    # Non-blocking while the Kotlin SDK first lands in the monorepo: the checks
-    # run and report so we can see if and how they pass, but do not gate the
-    # move PR. Made required in a follow-up (QVAC-25125) once observed green.
+    # Non-blocking until QVAC-25125 makes it required.
     continue-on-error: true
     timeout-minutes: 90
     steps:
