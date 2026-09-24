@@ -181,6 +181,46 @@ describe('sidebar-consistency', () => {
     })
   })
 
+  describe('a departure does not shadow its target', () => {
+    // A collection's sidebar is also what resolves a page's own collection:
+    // the roots are searched in declaration order and the first page node
+    // matching the pathname decides which root, and so which sidebar, the page
+    // renders under. Ecosystem is declared first and points into the SDK and
+    // the CLI, so a departure written without its trailing slash would win the
+    // match for its own target and render that page under Ecosystem's sidebar.
+    //
+    // The slash is what makes a departure unmatchable: `searchPath` normalizes
+    // the pathname it is given but not the URL it reads off the node.
+    const tree = { $id: 'root', name: 'docs', children: buildCustomTree(linePageTree()) }
+
+    // `/sdk` and `/cli` are root indexes, which this stub tree carries. The
+    // model-provider page comes from a line's `meta.json`, which the stub
+    // leaves empty, so it resolves to nothing here — and nothing is the right
+    // answer: what must never happen is that it resolves under Ecosystem.
+    const targets: Array<[string, string, boolean]> = [
+      ['/sdk', 'SDK', true],
+      ['/cli', 'CLI', true],
+      ['/cli/http-server/connection', 'CLI', false],
+    ]
+
+    it.each(targets)('%s is never captured by a departure', (url, collection, carried) => {
+      for (const pathname of [url, `${url}/`]) {
+        const path = searchPath(tree.children, pathname) ?? []
+        const roots = path.filter((node) => node.type === 'folder' && node.root)
+        if (carried) {
+          expect(roots.length, `${pathname} matches the tree under no root`).toBeGreaterThan(0)
+        }
+        const active = roots[roots.length - 1]
+        if (active) {
+          expect(
+            active.name,
+            `${pathname} resolves under the wrong collection — a departure is shadowing it`,
+          ).toBe(collection)
+        }
+      }
+    })
+  })
+
   describe('every inventory page resolves to a root', () => {
     // The sidebar beside a page is the last root folder on the path Fumadocs
     // finds by matching the pathname against the tree — page URL against page

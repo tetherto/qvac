@@ -27,7 +27,7 @@ type Page = InferPageType<typeof source>;
  * the root router links it, and the page itself is the only other place that
  * knows the path.
  */
-export const CORPUS_PROTOCOL_URL = '/resources/corpus-protocol';
+export const BUILD_WITH_AI_URL = '/resources/build-with-ai';
 
 export interface VersionedCollection {
   software: DocumentedSoftware;

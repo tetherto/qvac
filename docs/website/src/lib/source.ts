@@ -1,34 +1,15 @@
 import { docs } from 'fumadocs-mdx:collections/server';
 import { loader, type InferPageType } from 'fumadocs-core/source';
-import { icons } from 'lucide-react';
-import { SiElectron, SiExpo, SiPython, SiTypescript } from '@icons-pack/react-simple-icons';
-import { createElement } from 'react';
-
-/**
- * Brand icons the tree names, beyond Lucide's set. They are listed here
- * because an icon reaches the tree as a string — written in a page's
- * frontmatter, a `meta.json`, or a separator — and this resolver is the one
- * place that turns such a string into an element.
- */
-const brandIcons = { SiElectron, SiExpo, SiPython, SiTypescript };
+import { resolveIcon } from './resolveIcon';
 
 // See https://fumadocs.vercel.app/docs/headless/source-api for more info
 export const source = loader({
   // it assigns a URL to your pages
   baseUrl: '/',
   source: docs.toFumadocsSource(),
-  icon(icon) {
-    if (!icon) {
-      // You may set a default icon
-      return;
-    }
-    if (icon in brandIcons) {
-      return createElement(brandIcons[icon as keyof typeof brandIcons], {
-        className: 'h-4 w-4',
-      });
-    }
-    if (icon in icons) return createElement(icons[icon as keyof typeof icons]);
-  },
+  // The same resolver `custom-tree.ts` uses, so a name the site can draw in
+  // one collection it can draw in every other.
+  icon: resolveIcon,
   pageTree: {
     transformers: [
       {

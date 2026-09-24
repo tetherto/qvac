@@ -95,7 +95,7 @@ describe('leakReason', () => {
 
   it('accepts an unversioned page from any line', () => {
     expect(leakReason('/ecosystem/addons', V016, COLLECTIONS)).toBeNull();
-    expect(leakReason('/resources/corpus-protocol', V016, COLLECTIONS)).toBeNull();
+    expect(leakReason('/resources/build-with-ai', V016, COLLECTIONS)).toBeNull();
   });
 
   it('accepts another versioned collection at its current line', () => {

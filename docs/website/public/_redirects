@@ -129,9 +129,9 @@
 /runtime/logging/                               /sdk/runtime/logging/                               301
 /runtime/profiler/                              /sdk/runtime/profiler/                              301
 /system-requirements/                           /sdk/system-requirements/                           301
-/troubleshooting/                               /sdk/troubleshooting/                               301
-/tutorials/electron/                            /sdk/tutorials/electron/                            301
-/tutorials/expo/                                /sdk/tutorials/expo/                                301
+/troubleshooting/                               /resources/troubleshooting/                         301
+/tutorials/electron/                            /resources/tutorials/electron/                      301
+/tutorials/expo/                                /resources/tutorials/expo/                          301
 /index.md                                       /ecosystem.md                                       301
 /about/how-it-works.md                          /sdk/how-it-works.md                                301
 /addons.md                                      /ecosystem/addons.md                                301
@@ -198,9 +198,9 @@
 /runtime/logging.md                             /sdk/runtime/logging.md                             301
 /runtime/profiler.md                            /sdk/runtime/profiler.md                            301
 /system-requirements.md                         /sdk/system-requirements.md                         301
-/troubleshooting.md                             /sdk/troubleshooting.md                             301
-/tutorials/electron.md                          /sdk/tutorials/electron.md                          301
-/tutorials/expo.md                              /sdk/tutorials/expo.md                              301
+/troubleshooting.md                             /resources/troubleshooting.md                       301
+/tutorials/electron.md                          /resources/tutorials/electron.md                    301
+/tutorials/expo.md                              /resources/tutorials/expo.md                        301
 
 # <<< END generated
 
@@ -320,10 +320,22 @@
 # current URL, not at the intermediate one they used to target: a visitor
 # following a years-old link should take one hop, not two.
 #
-# The former `/sdk/tutorials/electron/` and `/sdk/tutorials/expo/` rules are
-# gone. Those two source paths are now the pages' own URLs, so the pages
-# answer them directly and any rule here could only redirect them to
-# themselves.
+# Tutorials and troubleshooting left the SDK for Resources: none of them
+# varies by release, so they are published once, unversioned, instead of being
+# copied into every documentation line. The pre-collections rules above were
+# retargeted at Resources rather than left to chain through `/sdk/`, so a
+# years-old link still takes one hop. These three cover the addresses the SDK
+# serves today.
+#
+# Their line-scoped forms — `/sdk/v0.18/tutorials/**` and the rest — get no
+# rule. The site has never served them: production is still on the
+# pre-collections tree, and those paths exist only on this branch.
+/sdk/troubleshooting/       /resources/troubleshooting/       301
+/sdk/tutorials/electron/    /resources/tutorials/electron/    301
+/sdk/tutorials/expo/        /resources/tutorials/expo/        301
+/sdk/troubleshooting.md     /resources/troubleshooting.md     301
+/sdk/tutorials/electron.md  /resources/tutorials/electron.md  301
+/sdk/tutorials/expo.md      /resources/tutorials/expo.md      301
 
 # Retired pages: the project's vision and its launch announcement documented
 # no distributable, so they left the published set and the writing is kept in

@@ -114,6 +114,42 @@ function inventoryVersionRoots(): Node[] {
   );
 }
 
+/**
+ * An entry that leaves the site.
+ *
+ * `external` is what makes it render as a plain anchor rather than a
+ * client-side navigation, and it is what the sidebar gate reads to skip the
+ * entry: no content file can back an address this site does not serve.
+ */
+function offSite(name: string, url: string, icon: string): Node {
+  return { type: 'page', name, url, external: true, icon: resolveIcon(icon) };
+}
+
+/**
+ * An entry that leads into another collection.
+ *
+ * The trailing slash is load-bearing. This tree is also what resolves a page's
+ * own collection: the roots are searched in declaration order and the first
+ * page node whose URL equals the normalized pathname decides which root — and
+ * so which sidebar — the page renders under. Ecosystem is declared first, so a
+ * node written `/sdk` would win the match for `/sdk` itself and render the
+ * SDK's landing page under Ecosystem's sidebar. The search normalizes the
+ * pathname it is given but not the URL it reads off the node, which is what
+ * makes the slash-carrying form unmatchable. It is also the form the CDN
+ * serves and the form Next renders, so nothing about the link degrades.
+ *
+ * `tests/sidebar-consistency.test.ts` fails if the slash is dropped.
+ */
+function intoCollection(name: string, url: `/${string}/`, icon: string): Node {
+  return { type: 'page', name, url, icon: resolveIcon(icon) };
+}
+
+/**
+ * Ecosystem maps what QVAC publishes, whether or not this site documents it.
+ * Most of its entries are therefore departures — to another collection, or to
+ * where the subject is published. Nothing is written here to stand in for a
+ * page that lives elsewhere.
+ */
 const ecosystemChildren: Node[] = [
   {
     name: 'Overview',
@@ -121,11 +157,20 @@ const ecosystemChildren: Node[] = [
     type: 'page',
     icon: resolveIcon('House'),
   },
+  offSite('Our vision', 'https://qvac.tether.io/vision', 'Telescope'),
   {
     type: 'separator',
-    name: 'Inventory',
+    name: 'Products',
   },
-  inventoryFolder,
+  intoCollection('SDK', '/sdk/', 'Code'),
+  intoCollection('CLI', '/cli/', 'Terminal'),
+  intoCollection('Model provider', '/cli/http-server/connection/', 'Server'),
+  offSite('Assistant app', 'https://qv.ac', 'MonitorPlay'),
+  {
+    type: 'separator',
+    name: 'Platform',
+  },
+  offSite('Fabric', 'https://qvac.tether.io/products/fabric', 'Layers'),
   {
     name: 'Addons',
     type: 'folder',
@@ -142,12 +187,20 @@ const ecosystemChildren: Node[] = [
       { name: 'diffusion-cpp', url: '/ecosystem/addons/diffusion-cpp', type: 'page' },
     ],
   },
+  inventoryFolder,
+  {
+    type: 'separator',
+    name: 'Research',
+  },
+  offSite('Psy family models', 'https://qvac.tether.io/products/models', 'Brain'),
+  offSite('Genesis datasets', 'https://qvac.tether.io/products/genesis', 'Database'),
 ];
 
 /**
- * Resources indexes material about using QVAC that is not the reference
- * documentation itself: what is published outside this site, and how to
- * consume this site programmatically.
+ * Resources holds what supports the products without documenting a release of
+ * one: how to consume this site programmatically, how to build on a given
+ * platform, and what to do when something will not start. None of it varies by
+ * release, which is why it sits here in one copy rather than in each line.
  */
 const resourcesChildren: Node[] = [
   {
@@ -157,11 +210,38 @@ const resourcesChildren: Node[] = [
     icon: resolveIcon('DoorOpen'),
   },
   {
-    name: 'Corpus protocol',
-    url: '/resources/corpus-protocol',
+    name: 'Build with AI',
+    url: '/resources/build-with-ai',
     type: 'page',
     icon: resolveIcon('Bot'),
   },
+  {
+    type: 'separator',
+    name: 'Tutorials',
+  },
+  {
+    name: 'Build on Electron',
+    url: '/resources/tutorials/electron',
+    type: 'page',
+    icon: resolveIcon('SiElectron'),
+  },
+  {
+    name: 'Build on Expo',
+    url: '/resources/tutorials/expo',
+    type: 'page',
+    icon: resolveIcon('SiExpo'),
+  },
+  {
+    type: 'separator',
+    name: 'Help',
+  },
+  {
+    name: 'Troubleshooting',
+    url: '/resources/troubleshooting',
+    type: 'page',
+    icon: resolveIcon('Bug'),
+  },
+  offSite('Discord', 'https://discord.com/invite/tetherdev', 'MessageCircle'),
 ];
 
 interface Collection {
