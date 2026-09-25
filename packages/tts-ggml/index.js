@@ -47,6 +47,7 @@ const tts_1 = require("./tts");
 const errorModule = __importStar(require("./lib/error"));
 const pocketConfig_1 = require("./lib/pocketConfig");
 const backends_1 = require("./lib/backends");
+const fit_1 = require("./lib/fit");
 const textChunker_1 = require("./lib/textChunker");
 const textStreamAccumulator_1 = require("./lib/textStreamAccumulator");
 const { platform } = bareOs;
@@ -2922,6 +2923,7 @@ class TTSGgml {
     TTSGgml.QvacErrorAddonTTSGgml = errorModule.QvacErrorAddonTTSGgml;
     TTSGgml.ERR_CODES = errorModule.ERR_CODES;
     TTSGgml.resolveBackendsDir = backends_1.resolveBackendsDir;
+    TTSGgml.assessFit = fit_1.assessFit;
 })(TTSGgml || (TTSGgml = {}));
 module.exports.QvacErrorAddonTTSGgml =
     errorModule.QvacErrorAddonTTSGgml;

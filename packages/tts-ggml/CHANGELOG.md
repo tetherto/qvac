@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Supertonic vocoder and the Audio8 codec. Presence-driven: a stage runs on a
   compiled `.mlmodelc` staged next to its model file and falls back to ggml
   when it is absent, so existing model directories are unaffected. On an
-  Apple M4 the Supertonic vocoder is 2.5-2.9x faster than on Metal; on
+  Apple M4 the Supertonic vocoder is 1.6-2.9x faster than on Metal; on
   workstation-class GPUs Metal still wins, so sidecars are staged per
   deployment. `q4_0` models keep the ggml vocoder.
 - **CosyVoice3 weight tiers in the README.** The model-directory layout now

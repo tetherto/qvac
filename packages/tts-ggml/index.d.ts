@@ -1,6 +1,7 @@
 import { type QvacResponse } from "@qvac/infer-base";
 import * as errorModule from "./lib/error";
 import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
+import { assessFit as assessFitImpl, type Audio8FitRequest, type MossFitRequest, type ChatterboxFitRequest, type CosyvoiceFitRequest, type ParlerFitRequest, type SupertonicFitRequest, type TtsFitEngine, type TtsFitRequest, type TtsFitResult, type TtsFitStatus } from "./lib/fit";
 import { type SentenceDelimiterPreset } from "./lib/textStreamAccumulator";
 declare const ENGINE_CHATTERBOX = "chatterbox";
 declare const ENGINE_SUPERTONIC = "supertonic";
@@ -1062,6 +1063,16 @@ type NamespaceRunInput = TTSRunInput;
 type NamespaceInferenceState = InferenceState;
 type NamespaceCosyvoiceInstruct = CosyvoiceInstruct;
 type NamespaceVoiceControlsCatalog = VoiceControlsCatalog;
+type NamespaceFitEngine = TtsFitEngine;
+type NamespaceFitRequest = TtsFitRequest;
+type NamespaceFitResult = TtsFitResult;
+type NamespaceFitStatus = TtsFitStatus;
+type NamespaceSupertonicFit = SupertonicFitRequest;
+type NamespaceParlerFit = ParlerFitRequest;
+type NamespaceChatterboxFit = ChatterboxFitRequest;
+type NamespaceAudio8Fit = Audio8FitRequest;
+type NamespaceMossFit = MossFitRequest;
+type NamespaceCosyvoiceFit = CosyvoiceFitRequest;
 declare namespace TTSGgml {
     export import QvacErrorAddonTTSGgml = errorModule.QvacErrorAddonTTSGgml;
     export import ERR_CODES = errorModule.ERR_CODES;
@@ -1080,6 +1091,17 @@ declare namespace TTSGgml {
     type InferenceState = NamespaceInferenceState;
     type CosyvoiceInstruct = NamespaceCosyvoiceInstruct;
     type VoiceControlsCatalog = NamespaceVoiceControlsCatalog;
+    type TtsFitEngine = NamespaceFitEngine;
+    type TtsFitRequest = NamespaceFitRequest;
+    type TtsFitResult = NamespaceFitResult;
+    type TtsFitStatus = NamespaceFitStatus;
+    type SupertonicFitRequest = NamespaceSupertonicFit;
+    type ParlerFitRequest = NamespaceParlerFit;
+    type ChatterboxFitRequest = NamespaceChatterboxFit;
+    type Audio8FitRequest = NamespaceAudio8Fit;
+    type MossFitRequest = NamespaceMossFit;
+    type CosyvoiceFitRequest = NamespaceCosyvoiceFit;
     const resolveBackendsDir: typeof resolveBackendsDirImpl;
+    const assessFit: typeof assessFitImpl;
 }
 export = TTSGgml;
