@@ -48,6 +48,36 @@ test('Pocket SDK resolves companion descriptors and strips download fields', asy
   t.is(params['pocketFrontendPath'], '/models/pocket/frontend.json')
   t.is(params['pocketVoicePath'], '/models/pocket/voice.gguf')
   t.is(params['seed'], 4294967295)
+  t.is(params['steps'], 1, 'omitting steps preserves the native default')
+  t.is(params['outputSampleRate'], 24000)
+})
+
+test('Pocket maps reference conditioning and the explicit four-step quality option', async (t) => {
+  const config = ttsConfigSchema.parse({
+    ...loadConfig('/models/pocket'),
+    voiceSrc: undefined,
+    referenceAudioSrc: '/models/reference.wav',
+    steps: 4
+  })
+  const result = await ttsPlugin.resolveConfig!(config, {
+    resolveModelPath: async (src) => String(src),
+    modelSrc: '/models/pocket/flow-lm.gguf',
+    modelType: 'tts-ggml'
+  })
+  t.absent('voicePath' in (result.artifacts ?? {}))
+  t.absent('referenceAudioSrc' in result.config)
+  const { model } = ttsPlugin.createModel({
+    modelId: 'pocket-reference-test',
+    modelPath: '/models/pocket/flow-lm.gguf',
+    modelConfig: result.config,
+    artifacts: result.artifacts as Record<string, string>
+  })
+  const params = (
+    model as unknown as { _buildTtsParams(): Record<string, unknown> }
+  )._buildTtsParams()
+  t.is(params['referenceAudio'], '/models/reference.wav')
+  t.is(params['pocketVoicePath'], '')
+  t.is(params['steps'], 4)
 })
 
 test(
