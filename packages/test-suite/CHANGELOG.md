@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Mobile consumer manifests no longer declare the per-platform packages of split native
+  addons (`@qvac/<addon>-android-arm64`, `@qvac/<addon>-ios`). Pass `installMissingPrebuilds`
+  to the SDK plugin in `expoPlugins` (`['@qvac/sdk/expo-plugin', { installMissingPrebuilds: true }]`)
+  to install them during `expo prebuild`, or declare them in the config directory's
+  dependencies. The option needs an `@qvac/sdk` whose Expo plugin supports it.
+
 ## [0.11.3]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/test-suite/v/0.11.3
