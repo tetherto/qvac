@@ -166,19 +166,6 @@ runs:
         echo "Setting up mobile test framework..."
         npm install
 
-    # Must sit after both npm installs (either can recreate node_modules and undo
-    # the overlay) and before the bundle is built, so the app ships the fabric the
-    # addon was compiled against rather than the released one.
-    - name: Overlay fabric prebuilds onto @qvac/fabric
-      if: ${{ inputs.fabric-prebuilds-root != '' }}
-      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
-      with:
-        workdir: addon/${{ inputs.addon-workdir }}
-        prebuilds-root: ${{ inputs.fabric-prebuilds-root }}
-        platform: ${{ inputs.platform == 'Android' && 'android' || 'ios' }}
-        arch: arm64
-        search-dirs: ${{ github.workspace }}/test-framework
-
     - name: Build test app with addon
       shell: bash
       working-directory: ./test-framework
@@ -193,6 +180,20 @@ runs:
           exit 1
         fi
         echo "Test app built successfully"
+
+    # `npm run build` installs the packed addon into the test framework, and that
+    # install pulls the RELEASED @qvac/fabric — so the overlay has to come after
+    # it. The native project generation below is what copies fabric's .so into
+    # the app, so this is the last point where the swap still reaches the device.
+    - name: Overlay fabric prebuilds onto @qvac/fabric
+      if: ${{ inputs.fabric-prebuilds-root != '' }}
+      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+      with:
+        workdir: ./test-framework
+        prebuilds-root: ${{ inputs.fabric-prebuilds-root }}
+        platform: ${{ inputs.platform == 'Android' && 'android' || 'ios' }}
+        arch: arm64
+        search-dirs: ${{ github.workspace }}/addon/${{ inputs.addon-workdir }}
 
     # Patches the freshly generated e2e/tests/app.test.js to bump the
     # per-test Mocha ceiling. Two ways to opt in:
