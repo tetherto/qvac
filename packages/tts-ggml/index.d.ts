@@ -8,6 +8,7 @@ declare const ENGINE_COSYVOICE3 = "cosyvoice3";
 declare const ENGINE_PARLER = "parler";
 declare const ENGINE_AUDIO8 = "audio8";
 declare const ENGINE_MOSS = "moss";
+declare const ENGINE_POCKET = "pocket";
 declare const COSYVOICE_DIALECTS: {
     readonly cantonese: "广东话";
     readonly northeastern: "东北话";
@@ -55,7 +56,7 @@ declare const EMOTIONS: readonly ["command", "anger", "narration", "conversation
 declare const PACES: readonly ["slow", "moderate", "fast"];
 type Emotion = (typeof EMOTIONS)[number];
 type Pace = (typeof PACES)[number];
-type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8 | typeof ENGINE_MOSS;
+type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8 | typeof ENGINE_MOSS | typeof ENGINE_POCKET;
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
  * from these fields (Chatterbox vs Supertonic) unless overridden via
@@ -63,6 +64,10 @@ type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof E
  * through to the native layer as-is.
  */
 interface TTSGgmlFiles {
+    pocketFlowModel?: string;
+    pocketMimiModel?: string;
+    pocketFrontend?: string;
+    pocketVoice?: string;
     /**
      * Bundle root. For Chatterbox, expected to contain
      * `chatterbox-t3-turbo.gguf` + `chatterbox-s3gen.gguf` (turbo) or
@@ -309,6 +314,11 @@ interface CosyvoiceJobFields {
     instruct?: string | CosyvoiceInstruct;
 }
 interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTSConditioningFields {
+    /** Pocket: generation/context controls; native sampling uses a portable RNG. */
+    maxTokens?: number;
+    noiseClamp?: number;
+    eosThreshold?: number;
+    framesAfterEos?: number;
     files?: TTSGgmlFiles;
     config?: TTSGgmlRuntimeConfig;
     logger?: object;
@@ -317,7 +327,11 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
     engine?: EngineType;
     /** Chatterbox: directory of baked voice-conditioning tensors. */
     voiceDir?: string;
-    /** RNG seed for Chatterbox CFM/SineGen or Supertonic latent generation. */
+    /**
+     * RNG seed for Chatterbox CFM/SineGen, Supertonic latent generation, or
+     * Pocket's portable sampling RNG. Pocket accepts integers from 0 to
+     * 4294967295 (inclusive).
+     */
     seed?: number;
     /**
      * Move N layers to the GPU backend. Chatterbox: pass 99 to move everything.
@@ -330,10 +344,11 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      */
     nGpuLayers?: number;
     /**
-     * Chatterbox-only cap on the T3 context length (prompt + generated speech
+     * Chatterbox: cap on the T3 context length (prompt + generated speech
      * tokens, 25 tokens ~= 1 second of audio). The KV cache is allocated up
      * front at this length, so the cap directly bounds memory. Pass 0 to use
      * the GGUF's full context; negative values are rejected.
+     * Pocket: FlowLM context capacity; accepts integers from 1 to 8192.
      */
     nCtx?: number;
     /**
@@ -477,7 +492,7 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * from the reference (engine default off).
      */
     flowCutPrompt?: boolean;
-    /** Supertonic vector-estimator CFM steps. 0 uses the GGUF default. */
+    /** Supertonic CFM steps (0 uses GGUF default); Pocket sampling steps (1–64, default 1). */
     steps?: number;
     /** Alias for `steps` for compatibility with `@qvac/tts-onnx`. */
     numInferenceSteps?: number;
@@ -526,6 +541,7 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
      * top-k 1000, top-p 0.95, where temperature 0 decodes greedily and top-k 0
      * disables the cutoff). Audio8 filters by top-k/top-p on the raw logits and
      * only then applies the temperature, following its reference.
+     * Pocket: sampling temperature; accepts finite values from 0 to 10.
      */
     temperature?: number;
     topK?: number;
@@ -549,6 +565,8 @@ interface InferenceState {
     destroyed: boolean;
 }
 interface TTSOutputChunk {
+    chunkIndex?: number;
+    isLast?: boolean;
     /** Signed 16-bit mono PCM audio payload. */
     outputArray: Int16Array;
     /**
@@ -559,6 +577,7 @@ interface TTSOutputChunk {
     sampleRate?: number;
 }
 interface RuntimeStats {
+    firstAudioMs?: number;
     totalTime: number;
     tokensPerSecond: number;
     realTimeFactor: number;
@@ -584,6 +603,22 @@ interface RuntimeStats {
      * counts, in batch and in streaming alike.
      */
     generatedFrames?: number;
+    /**
+     * Audio8 only, macOS / iOS: 1 while an Apple Core ML sidecar for the codec's
+     * synthesis stack is attached (a compiled `audio8-codec-decoder.mlmodelc`
+     * next to the decoder GGUF); 0 without one, or once a failing sidecar has
+     * been retired. Streams report the last chunk that supplied this field.
+     */
+    codecSidecarLoaded?: number;
+    /**
+     * Audio8 only: 1 when this synthesis ran the codec's synthesis stack on the
+     * Apple Core ML sidecar -- a compiled `audio8-codec-decoder.mlmodelc` next
+     * to the decoder GGUF on macOS / iOS -- 0 when it ran on the ggml backend
+     * `backendId` reports (which the language model always uses). A loaded
+     * sidecar that cannot serve a call falls back to ggml and reports 0 for it.
+     * Streams report the last chunk that supplied this field, not a sum.
+     */
+    codecOnCoreml?: number;
     /** Chatterbox only: T3 decode wall time of the last synthesis, in ms. */
     t3Ms?: number;
     /** Chatterbox only: S3Gen + HiFT wall time of the last synthesis, in ms. */
@@ -694,6 +729,7 @@ declare class TTSGgml {
     static readonly ENGINE_PARLER = "parler";
     static readonly ENGINE_AUDIO8 = "audio8";
     static readonly ENGINE_MOSS = "moss";
+    static readonly ENGINE_POCKET = "pocket";
     opts: object;
     exclusiveRun: boolean;
     logger: object;
@@ -704,6 +740,12 @@ declare class TTSGgml {
     private _ttsInferenceQueueWaiter;
     private _sentenceStreamCtx;
     private _config;
+    private _pocketJobPending;
+    private _pocketCancelPromise;
+    private _pocketLifecycleInProgress;
+    private _pocketParams;
+    private _pocketOptions;
+    private _pocketFiles;
     private _lazySessionLoading;
     private _outputSampleRate;
     private _engineType;
@@ -856,6 +898,7 @@ declare class TTSGgml {
     getApiDefinition(): string;
     getState(): InferenceState;
     load(..._args: unknown[]): Promise<void>;
+    private _loadModel;
     /**
      * Run text-to-speech. With `{ streamOutput: true }`, splits `input` into
      * chunks and emits PCM through `response.onUpdate` for each chunk.
@@ -909,6 +952,7 @@ declare class TTSGgml {
     private _assignLavasrParams;
     private _createAddon;
     unload(): Promise<void>;
+    private _unloadModel;
     destroy(): Promise<void>;
     private _runInternal;
     private _mergeSentenceStreamStats;
@@ -919,6 +963,11 @@ declare class TTSGgml {
     private _handleAddonOutput;
     private _enrichStreamChunk;
     private _handleAddonStats;
+    private _waitPocketCancel;
+    private _withPocketLifecycle;
+    private _checkPocketReload;
+    private _checkPocketRequest;
+    private _dispatchJob;
     cancel(): Promise<void>;
     private _failAndClearActiveResponse;
     /** Everything reload() may overwrite, so a rejected reload can undo itself. */
@@ -934,6 +983,7 @@ declare class TTSGgml {
      * reload is not validated against state the caller never accepted.
      */
     private _applyReloadableConfig;
+    private _reloadPocket;
     reload(newConfig?: Record<string, unknown>): Promise<void>;
     /**
      * The voice a reload lands on. Same rule as _mergeAudio8Voice and
