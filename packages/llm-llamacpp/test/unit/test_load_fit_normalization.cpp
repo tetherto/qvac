@@ -2072,7 +2072,8 @@ TEST_F(LoadFitNormalizationTest, RpcServersRejectsLocalOnlyPlacement) {
               {.type = backend_selection::GPU, .name = "none"},
               {"RPC0", "none"},
               &registrations)));
-      FAIL() << "RPC servers must not be silently ignored by explicit placement";
+      FAIL()
+          << "RPC servers must not be silently ignored by explicit placement";
     } catch (const qvac_errors::StatusError& error) {
       EXPECT_THAT(error.what(), ::testing::HasSubstr("no device registered"));
       EXPECT_THAT(error.what(), ::testing::HasSubstr("'rpc-servers'"));
@@ -2390,11 +2391,10 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodePropagatesRegistrationFailure) {
   config["split-mode"] = "layer";
   std::vector<std::string> registrations;
   bool selectionAttempted = false;
-  auto dependencies =
-      backend({.type = backend_selection::CPU, .name = "none"});
+  auto dependencies = backend({.type = backend_selection::CPU, .name = "none"});
   dependencies.registerRpcDevices =
-      [&registrations](const std::string& endpoints)
-      -> std::vector<std::string> {
+      [&registrations](
+          const std::string& endpoints) -> std::vector<std::string> {
     registrations.push_back(endpoints);
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
@@ -2410,16 +2410,18 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodePropagatesRegistrationFailure) {
           const std::optional<backend_selection::MainGpu>&,
           const ModelMetaData&,
           bool) {
-    selectionAttempted = true;
-    return lfn::SelectedBackend{.type = backend_selection::CPU, .name = "none"};
-  };
+        selectionAttempted = true;
+        return lfn::SelectedBackend{
+            .type = backend_selection::CPU, .name = "none"};
+      };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
         "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
     FAIL() << "failed RPC registration must stop before CPU fallback";
   } catch (const qvac_errors::StatusError& error) {
-    EXPECT_THAT(error.what(), ::testing::HasSubstr("could not reach RPC server"));
+    EXPECT_THAT(
+        error.what(), ::testing::HasSubstr("could not reach RPC server"));
   }
   EXPECT_THAT(registrations, ::testing::ElementsAre("127.0.0.1:50052"));
   EXPECT_FALSE(selectionAttempted);
