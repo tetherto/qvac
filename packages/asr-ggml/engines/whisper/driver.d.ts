@@ -23,6 +23,12 @@ export interface WhisperConfig extends Record<string, unknown> {
     temperature?: number;
     suppress_nst?: boolean;
     n_threads?: number;
+    /** Add per-token text, timing, and probability to each segment (`tokens`). */
+    token_timestamps?: boolean;
+    /** tinydiarize models: report `speakerTurnNext` on each segment. */
+    tdrz_enable?: boolean;
+    /** Prepend `initial_prompt` to every decode window, not only the first. */
+    carry_initial_prompt?: boolean;
 }
 /** Whisper branch of the discriminated engine-config union. */
 export interface WhisperEngineConfig {

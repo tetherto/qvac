@@ -235,6 +235,134 @@ async function runDuplexStreamingTest(t, modelType) {
   }
 }
 
+// Pushes the whole clip at once and returns every update, VAD events
+// included (feedAndCollect keeps only segments).
+async function collectAllUpdates(response, stream, audio) {
+  const updates = []
+  const updateDone = response
+    .onUpdate((out) => {
+      for (const item of Array.isArray(out) ? out : [out]) {
+        if (item) updates.push(item)
+      }
+    })
+    .await()
+  if (stream) {
+    const samplesPerChunk = Math.floor((FEED_CHUNK_MS / 1000) * SAMPLE_RATE)
+    for (let i = 0; i < audio.length; i += samplesPerChunk) {
+      stream.push(new Float32Array(audio.slice(i, i + samplesPerChunk)))
+    }
+    stream.end()
+  }
+  await updateDone
+  return updates
+}
+
+function checkEnergyVadEvents(t, updates, label) {
+  const vad = updates.filter((u) => u.type === 'vad')
+  console.log(
+    `[tdt/${label}] vad events: ` +
+      vad.map((e) => `${e.speaking ? 'speech' : 'silence'}@${e.timestamp.toFixed(2)}s`).join(' ')
+  )
+  t.ok(vad.length > 0, `${label}: energy VAD emits at least one transition`)
+  t.ok(
+    vad.every((e) => e.source === 'energy' && typeof e.score === 'number'),
+    `${label}: events are typed energy VadEvents`
+  )
+  t.ok(
+    vad.every((e, i) => i === 0 || e.timestamp >= vad[i - 1].timestamp),
+    `${label}: timestamps never go backwards`
+  )
+  t.ok(
+    vad.every((e, i) => i === 0 || e.speaking !== vad[i - 1].speaking),
+    `${label}: only state changes are reported`
+  )
+  t.ok(
+    updates.some((u) => typeof u.text === 'string' && u.text.length > 0),
+    `${label}: transcripts still arrive alongside the events`
+  )
+}
+
+function streamingTdt(modelPath, extra = {}) {
+  return new ASRGgml({
+    files: { model: modelPath },
+    config: {
+      engine: 'parakeet',
+      parakeetConfig: {
+        streaming: true,
+        streamingChunkMs: STREAM_CHUNK_MS,
+        maxThreads: 4,
+        useGPU: false,
+        ...extra
+      }
+    }
+  })
+}
+
+async function withModel(model, fn) {
+  try {
+    await model.load()
+    return await fn(model)
+  } finally {
+    try {
+      await model.unload()
+    } catch (e) {
+      /* ignore */
+    }
+  }
+}
+
+function transcriptOf(updates) {
+  return updates
+    .filter((u) => typeof u.text === 'string')
+    .map((u) => u.text)
+    .join('')
+}
+
+// Separate instances throughout: a framework run() after a duplex session
+// on the same streaming instance loses all but the last sentence.
+test(
+  'TDT energy VAD — duplex and framework streaming surface speech/silence transitions',
+  { timeout: 600000 },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'tdt')
+      if (!modelPath) return
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found - skipping')
+        return
+      }
+
+      await withModel(streamingTdt(modelPath, { prewarm: true }), async (model) => {
+        t.is(model.getBackendInfo().modelType, 'tdt', 'getBackendInfo reports the model type')
+        const stream = pushableStream()
+        const duplex = await model.runStreaming(stream, { emitEnergyVad: true })
+        checkEnergyVadEvents(t, await collectAllUpdates(duplex, stream, audio), 'duplex')
+      })
+
+      const withVad = await withModel(
+        streamingTdt(modelPath, { streamingEnergyVad: true }),
+        async (model) => collectAllUpdates(await model.run(audio), null, audio)
+      )
+      checkEnergyVadEvents(t, withVad, 'framework')
+
+      // With energy VAD on, the framework path feeds one RMS window at a
+      // time; the transcript must match a plain run.
+      const plain = await withModel(streamingTdt(modelPath), async (model) =>
+        collectAllUpdates(await model.run(audio), null, audio)
+      )
+      t.is(transcriptOf(withVad), transcriptOf(plain), 'energy VAD leaves the transcript as is')
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+)
+
 test(
   'TDT runStreaming — duplex feed surfaces transcripts incrementally and resolves cleanly',
   { timeout: 600000 },

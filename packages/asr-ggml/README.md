@@ -403,8 +403,25 @@ Constructor options:
 
 - bare `TranscriptionSegment[]` (or a single segment) for transcripts — there
   is no `{ type: 'segment' }` wrapper;
-- `{ type: 'vad', speaking, score, source }` for voice-activity events;
+- `{ type: 'vad', speaking, score, source, timestamp?, speakerId? }` for
+  voice-activity events, emitted on each speech/silence change. `source` is
+  `'silero'` (Whisper streaming), `'energy'` (Parakeet ASR energy detector;
+  `score` is the window RMS), or `'sortformer'` (Parakeet speaker activity;
+  `speakerId` names the dominant speaker when speech starts). Parakeet events
+  carry `timestamp`, in seconds from the start of the session;
 - `{ type: 'endOfTurn', source, silenceDurationMs? }` for turn boundaries.
+
+Engine-specific segment fields:
+
+- Whisper segments always carry `language` (the decoded language, the detected
+  one under `language: 'auto'`) and `noSpeechProb`. With
+  `token_timestamps: true` they add `tokens: [{ text, start, end,
+  probability }]` (special tokens left out); with `tdrz_enable: true` on a
+  tinydiarize model they add `speakerTurnNext`.
+- Parakeet Sortformer keeps the `"Speaker N: start - end"` text and adds the
+  same data in structured form: a streamed diarization segment carries
+  `speakerId`, and the offline transcript carries
+  `speakerSegments: [{ speakerId, start, end }]`, one entry per text line.
 
 ## Configuration Reference
 
@@ -461,6 +478,8 @@ Notes:
   backend libraries are found. See
   [Backends and GPU Acceleration](#backends-and-gpu-acceleration).
 - `max_seconds` is a convenience that derives `duration_ms`.
+- `carry_initial_prompt: true` prepends `initial_prompt` to every decode
+  window instead of only the first.
 
 Whisper `runStreaming(audio, opts)` options:
 
@@ -495,8 +514,10 @@ key is documented inline there, and any key outside it throws
 | Audio | `sampleRate` (16000), `channels` (1) |
 | Output | `captionEnabled`, `timestampsEnabled` |
 | Language | `language` — multilingual CTC id (e.g. `"hi"`); required for Indic Conformer GGUFs that advertise `parakeet.ctc.lang_*` ranges; ignored on monolingual CTC |
-| Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
-| Streaming (Sortformer) | `streamingHistoryMs`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
+| Streaming (ASR) | `streaming`, `streamingChunkMs`, `streamingEmitPartials`, `streamingEnergyVad`, `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, `streamingEnergyVadHangoverMs`, `streamingLeftContextMs`, `streamingRightLookaheadMs` |
+| Streaming (Sortformer) | `streamingHistoryMs`, `streamingSpeakerVad`, `streamingSpkCacheEnable`, `streamingSpkCacheLen`, `streamingFifoLen`, `streamingChunkLeftContextMs`, `streamingChunkRightContextMs`, `streamingSpkCacheUpdatePeriod` |
+| Diarization (Sortformer, offline and streaming) | `diarizationThreshold` (0.641), `diarizationMinSegmentMs` (510) |
+| Engine | `prewarm`, `prewarmAudioSeconds`, `longFormWindowFrames`, `longFormContextFrames` |
 | Backends | `backendsDir`, `openclCacheDir` |
 
 The `streamingSpkCache*` / `streamingFifoLen` /
@@ -507,9 +528,24 @@ and Sortformer v1 vs v2.1+AOSC, are all detected from the GGUF metadata.
 
 Parakeet `runStreaming(audio, opts)` options are per-call overrides of the same
 knobs without the `streaming` prefix: `chunkMs`, `historyMs`, `leftContextMs`,
-`rightLookaheadMs`, `emitPartials`, `emitEnergyVad`, `spkCacheEnable`,
+`rightLookaheadMs`, `emitPartials`, `emitEnergyVad`, `energyVadThresholdDb`,
+`energyVadWindowMs`, `energyVadHangoverMs`, `emitSpeakerVad`,
+`diarizationThreshold`, `diarizationMinSegmentMs`, `spkCacheEnable`,
 `spkCacheLen`, `fifoLen`, `chunkLeftContextMs`, `chunkRightContextMs`,
 `spkCacheUpdatePeriod`.
+
+Voice-activity events are opt-in. `streamingEnergyVad` / `emitEnergyVad` runs
+the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron sessions
+(EOU models signal turns through `<EOU>` instead); the threshold is in dBFS
+(default -35) and the hangover is how long the audio must stay below it
+before the state returns to silence (default 200 ms).
+`streamingSpeakerVad` / `emitSpeakerVad` reports Sortformer speaker activity.
+
+`prewarm` runs one synthetic encoder pass while loading so the first request
+does not pay the GPU shader or kernel compile. `longFormWindowFrames` bounds
+the offline encoder window (0 picks it from the model, a negative value
+always runs one pass), which keeps memory flat on long `run()` inputs;
+`cancel()` also takes effect between those windows.
 
 For streaming diarization, use the Sortformer v2.1 GGUF. Its metadata enables
 AOSC automatically; keep the speaker-cache defaults unless you are comparing
@@ -609,8 +645,10 @@ This selector currently applies to the Whisper engine.
 
 `getBackendInfo()` reports what actually ran — `backendName`, `backendId`
 (see the `BackendId` enum), string `backendDevice`, `backendDescription`,
-`encoderBackend`, and `encoderOnCoreml` (Apple: whether the Neural Engine
-Core ML sidecar drove the encoder). Whisper additionally reports
+`encoderBackend`, `encoderOnCoreml` (Apple: whether the Neural Engine
+Core ML sidecar drove the encoder), and `modelType` (`'whisper'`, or the
+Parakeet family detected from the GGUF: `'ctc'`, `'tdt'`, `'rnnt'`, `'eou'`,
+`'nemotron'`, `'sortformer'`). Whisper additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
