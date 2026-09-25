@@ -131,10 +131,11 @@ public:
   const std::string& getBackendDescription() const {
     return backend_description_;
   }
-  // Encoder compute backend captured at load(): "coreml" when the Apple Neural
-  // Engine (Core ML) sidecar drives the FastConformer encoder, else identical
-  // to getBackendName(). getEncoderOnCoreml() is the 0/1 mirror surfaced in
-  // runtimeStats() and getBackendInfo().
+  // Encoder compute backend captured at load(): "coreml" when an Apple Neural
+  // Engine (Core ML) encoder sidecar loaded, else identical to
+  // getBackendName(). It does not track per-call fallback to ggml.
+  // getEncoderOnCoreml() is the 0/1 mirror surfaced in runtimeStats() and
+  // getBackendInfo().
   const std::string& getEncoderBackend() const { return encoder_backend_; }
   int getEncoderOnCoreml() const { return encoder_on_coreml_; }
   int getStreamingChunkMs() const {
@@ -307,10 +308,10 @@ private:
   // Human-readable GPU device name recovered from the ggml device registry
   // at load(); empty on CPU. Surfaced to JS via getBackendInfo().
   std::string backend_description_;
-  // FastConformer encoder compute backend captured at load(). On Apple with an
-  // active Core ML sidecar this is "coreml" (encoder runs on the Neural Engine)
-  // while the TDT/CTC decoder stays on backend_name_; otherwise it mirrors
-  // backend_name_. encoder_on_coreml_ is the 0/1 form for stats.
+  // FastConformer encoder compute backend captured at load(). On Apple with a
+  // loaded Core ML sidecar this is "coreml" while the decoder stays on
+  // backend_name_; otherwise it mirrors backend_name_. encoder_on_coreml_ is
+  // the 0/1 form for stats.
   std::string encoder_backend_ = "CPU";
   int encoder_on_coreml_ = 0;
 

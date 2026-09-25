@@ -32,17 +32,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 - Raise the `speech-cpp` floor to `2026-09-18#1`, keeping the speech packages on
   one engine stack. The pinned engine adds cache-aware streaming for the
-  Unified RNN-T model, on top of the optional Apple-only Core ML sidecar for
-  the Sortformer diarization encoder that the prebuilds keep disabled.
+  Unified RNN-T model; its streaming encoder stays on ggml even when a Core ML
+  sidecar is staged.
 - Raise the `speech-cpp` floor to `2026-09-18`, keeping the speech packages on
   one engine stack. The pinned engine adds an Apple-only Core ML sidecar for the
   Parakeet Unified RNN-T encoder, presence-driven on a compiled `.mlmodelc` next
   to the model file and falling back to ggml without it, so published behavior
   is unchanged unless that file is shipped.
 - Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
-  one engine stack. The pinned engine adds an optional Apple-only Core ML
-  sidecar for the Sortformer diarization encoder; the prebuilds keep it
-  disabled, so published behavior is unchanged.
+  one engine stack. The pinned engine adds an Apple-only Core ML sidecar for
+  the Sortformer v2.1 diarization encoder (batch and AOSC), presence-driven on
+  compiled `.mlmodelc` files next to the model file, so published behavior is
+  unchanged unless those files are shipped.
 - Add Whisper `contextParams["main-gpu"]` / `contextParams.main_gpu` selection
   for raw ggml registry indices plus `dedicated` and `integrated` classes.
   The selector is mutually exclusive with `gpu_device`, does not enable GPU by

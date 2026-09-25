@@ -47,6 +47,9 @@ validated on Apple/Metal.
   `config.useGPU: true` on GPU-capable hosts — including Android, where
   `tts-cpp` selects the GPU backend per its per-vendor allowlist (see
   [Backends & GPU acceleration](#backends--gpu-acceleration)).
+- **Apple Core ML sidecars** for the Supertonic vocoder and the Audio8 codec
+  on macOS / iOS, picked up when staged next to the model (see
+  [Core ML sidecars on Apple](#core-ml-sidecars-on-apple)).
 - **Dynamic backend loading on Android** — per-arch CPU + Vulkan +
   OpenCL `.so` files ship under `prebuilds/<bare-target>/qvac__tts-ggml/`
   and are picked up at runtime via the new `backendsDir` option (see
@@ -667,15 +670,34 @@ for the Supertonic vocoder and the Audio8 codec. They are presence-driven:
 each stage runs on a compiled `.mlmodelc` found next to its model file
 (`supertonic3-q8_0.gguf` -> `supertonic3-vocoder.mlmodelc`) and falls back to
 the ggml graph when it is absent, so a model directory without sidecars
-behaves exactly as before. Sidecars are not part of the published model set
-yet; supply your own to opt in.
+behaves exactly as before. The sidecar name drops the quantization suffix, so
+one sidecar serves every tier of a model. Sidecars are not part of the
+published model set yet; supply your own to opt in.
+
+| Model | Sidecar next to the GGUF | Stage on Core ML | Runs on ggml instead | Force ggml |
+| --- | --- | --- | --- | --- |
+| Supertonic 1 / 2 / 3 | `<model>-vocoder.mlmodelc` | vocoder, in 64-latent-frame windows | GGUFs whose vocoder weights are stored below 8 bits (`q4_0`) | `SUPERTONIC_COREML_DISABLE=1` |
+| Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
+| Chatterbox, Parler, CosyVoice3, MOSS, LavaSR | none | — | always | — |
+
+Set the force-ggml variables in the process environment before `load()`.
 
 Worth it where the GPU is consumer-class: on an Apple M4 the Supertonic
-vocoder runs 2.5-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
+vocoder runs 1.6-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
 end to end). On workstation parts the GPU wins — an M3 Ultra is 0.6-0.9x —
 so do not stage a sidecar there. `q4_0` models ignore the vocoder sidecar:
 it carries full-precision weights and would substitute a different vocoder
 rather than accelerate the quantized one.
+
+Export the sidecars from the model GGUFs with
+`engines/tts/scripts/export-supertonic-coreml.py` and
+`engines/tts/scripts/export-audio8-codec-coreml.py` from the
+[`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
+tree at the ref `speech-cpp` pins. Its
+[Supertonic](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/supertonic.md#core-ml-vocoder-sidecar)
+and
+[Audio8](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar)
+guides cover export, placement, and measurements.
 
 When the addon is built with `ENABLE_CUDA` — on in the published linux-x64
 prebuilds, opt-in on linux-arm64 and win32-x64 (`npm run build:cuda` or
