@@ -266,7 +266,7 @@ async function runBlocking(
     }
 
     const { text, thinking, toolCalls, toolErrors, stats, completionTokens, finishReason } =
-      stripToolSearchCalls(total ?? drained)
+      stripToolSearchCalls(p.tools, total ?? drained)
 
     req.server.qvac.logger.info(
       `  completion done tokens=${completionTokens} finish=${finishReason}` +
@@ -364,6 +364,7 @@ async function runStreaming(
     }
 
     const { toolCalls, toolErrors, stats, completionTokens, finishReason } = stripToolSearchCalls(
+      p.tools,
       total ?? drained
     )
     const hasToolCalls = toolCalls.length > 0

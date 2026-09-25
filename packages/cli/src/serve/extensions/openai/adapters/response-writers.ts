@@ -87,6 +87,7 @@ export async function writeBlockingResponse(
     turnHistory = extended
   }
   const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+    p.tools,
     total ?? drained
   )
 
@@ -212,6 +213,7 @@ export async function writeStreamingResponse(
   }
 
   const { toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+    p.tools,
     total ?? drained
   )
   const hasToolCalls = toolCalls.length > 0

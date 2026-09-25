@@ -9,6 +9,14 @@ export const MAX_TOOL_SEARCH_ROUNDS = 4
 
 type HistoryMessage = { role: string; content: string }
 
+/**
+ * `tool_search` is ours only when something defers; otherwise a tool of that
+ * name is the client's own and its calls go back to the client.
+ */
+function defersAny(tools: Tool[] | undefined): boolean {
+  return tools?.some((tool) => tool.deferLoading === true) ?? false
+}
+
 type DrainedTurn = {
   toolCalls: ToolCall[]
   finishReason: 'stop' | 'length' | 'tool_calls'
@@ -20,7 +28,11 @@ type DrainedTurn = {
  * client has no handler for the SDK's own tool, so surfacing it would strand
  * the conversation.
  */
-export function stripToolSearchCalls<T extends DrainedTurn>(drained: T): T {
+export function stripToolSearchCalls<T extends DrainedTurn>(
+  tools: Tool[] | undefined,
+  drained: T
+): T {
+  if (!defersAny(tools)) return drained
   const toolCalls = drained.toolCalls.filter((call) => call.name !== TOOL_SEARCH_NAME)
   if (toolCalls.length === drained.toolCalls.length) return drained
   return {
@@ -50,6 +62,7 @@ export function foldToolSearch(
   toolCalls: ToolCall[],
   assistantText: string
 ): HistoryMessage[] | null {
+  if (!defersAny(tools)) return null
   const searches = toolCalls.filter((call) => call.name === TOOL_SEARCH_NAME)
   if (searches.length === 0) return null
   if (searches.length !== toolCalls.length) return null

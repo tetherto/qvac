@@ -112,7 +112,7 @@ describe('foldToolSearch', () => {
     const mixed = [call('tool_search'), { id: 'call-2', name: 'get_weather', arguments: {} }]
     assert.equal(foldToolSearch(tools, history, mixed, '<calls>'), null)
 
-    const stripped = stripToolSearchCalls({
+    const stripped = stripToolSearchCalls(tools, {
       toolCalls: mixed,
       finishReason: 'tool_calls' as const
     })
@@ -145,15 +145,16 @@ describe('tool definitions a deferred request puts in front of the model', () =>
 })
 
 describe('stripToolSearchCalls', () => {
+  const tools = openaiToolsToSdk([DEFERRED_WIRE, PLAIN_WIRE])!
   const call = (name: string): ToolCall => ({ id: `call-${name}`, name, arguments: {} })
 
   it('leaves a turn without a search untouched', () => {
     const drained = { toolCalls: [call('get_weather')], finishReason: 'tool_calls' as const }
-    assert.equal(stripToolSearchCalls(drained), drained)
+    assert.equal(stripToolSearchCalls(tools, drained), drained)
   })
 
   it('drops a search left over when the round cap ended the loop', () => {
-    const stripped = stripToolSearchCalls({
+    const stripped = stripToolSearchCalls(tools, {
       toolCalls: [call('tool_search')],
       finishReason: 'tool_calls' as const
     })
@@ -162,7 +163,7 @@ describe('stripToolSearchCalls', () => {
   })
 
   it('keeps the runnable calls when a turn mixes them', () => {
-    const stripped = stripToolSearchCalls({
+    const stripped = stripToolSearchCalls(tools, {
       toolCalls: [call('tool_search'), call('get_weather')],
       finishReason: 'tool_calls' as const
     })
@@ -171,6 +172,15 @@ describe('stripToolSearchCalls', () => {
       ['get_weather']
     )
     assert.equal(stripped.finishReason, 'tool_calls')
+  })
+
+  it('leaves a client-declared tool_search alone when nothing defers', () => {
+    const own = [
+      { type: 'function', name: 'tool_search', description: 'mine', parameters: {} }
+    ] as Tool[]
+    const drained = { toolCalls: [call('tool_search')], finishReason: 'tool_calls' as const }
+    assert.equal(stripToolSearchCalls(own, drained), drained)
+    assert.equal(foldToolSearch(own, [], drained.toolCalls, '<call>'), null)
   })
 })
 
