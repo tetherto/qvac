@@ -750,7 +750,8 @@ StepRecognizeText::StepRecognizeText(
   const auto* predictionBias = loader_->get_tensor("Prediction.bias");
   if (predictionWeight == nullptr || predictionBias == nullptr ||
       predictionWeight->ne[1] != static_cast<int64_t>(utf32Characters_.size()) ||
-      predictionBias->ne[0] != predictionWeight->ne[1]) {
+      !easyocr::ggml::prediction_bias_matches(*predictionBias,
+                                              predictionWeight->ne[1])) {
     throw std::runtime_error("StepRecognizeText: model class count differs from vocabulary");
   }
 }

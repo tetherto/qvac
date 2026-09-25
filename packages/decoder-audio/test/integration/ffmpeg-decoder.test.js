@@ -5,6 +5,132 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const { loadDecoder, runDecoder } = require('../helpers/ffmpeg-decoder-helper')
 const { isMobile, getAssetPath } = require('./utils')
+const { FFmpegDecoder } = require('../..')
+
+function sampleMp3() {
+  return isMobile
+    ? getAssetPath('sample_mp3.mp3')
+    : path.join(__dirname, '../../example/sample.mp3')
+}
+
+test('FFmpegDecoder - rejects invalid decoded byte limits', async (t) => {
+  for (const maxDecodedBytes of [0, 1.5]) {
+    const decoder = new FFmpegDecoder({ config: { maxDecodedBytes } })
+    try {
+      await decoder.load()
+      t.fail('invalid limit should be rejected')
+    } catch (error) {
+      t.ok(error instanceof RangeError, 'invalid limit rejects with RangeError')
+    }
+  }
+})
+
+test('FFmpegDecoder - streaming iterator yields PCM without retaining it', async (t) => {
+  const decoder = await loadDecoder()
+  try {
+    const response = decoder.run(fs.createReadStream(sampleMp3()), { retainOutput: false })
+    let bytes = 0
+    for await (const { outputArray } of response.iterate()) bytes += outputArray.length
+    t.ok(bytes > 0, 'iterator received decoded PCM')
+    t.alike(await response.await(), [], 'response did not retain PCM')
+  } finally {
+    await decoder.unload()
+  }
+})
+
+test('FFmpegDecoder - slow iterator bounds queued PCM', { timeout: 10000 }, async (t) => {
+  const decoder = await loadDecoder()
+  let secondChunk
+  const secondChunkReceived = new Promise((resolve) => {
+    secondChunk = resolve
+  })
+  try {
+    const response = decoder.run(fs.createReadStream(sampleMp3()), { retainOutput: false })
+    let emitted = 0
+    response.onUpdate(() => {
+      emitted++
+      if (emitted === 2) secondChunk()
+    })
+    const iterator = response.iterate()
+    const first = await iterator.next()
+    t.ok(!first.done, 'iterator received the first chunk')
+    await t.exception(() => response.iterate().next(), /Only one streaming iterator/)
+    await secondChunkReceived
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    t.is(emitted, 2, 'decoding paused with one queued chunk')
+    let consumedBytes = first.value.outputArray.length
+    for await (const { outputArray } of iterator) consumedBytes += outputArray.length
+    t.ok(emitted > 2, 'decoding resumed after the iterator consumed the queued chunk')
+    t.is(consumedBytes, response.stats.outputBytes, 'iterator consumed every emitted byte')
+    t.alike(await response.await(), [], 'response did not retain output')
+  } finally {
+    await decoder.unload()
+  }
+})
+
+test('FFmpegDecoder - cancellation interrupts a paused consumer', { timeout: 10000 }, async (t) => {
+  const decoder = await loadDecoder()
+  let firstChunk
+  const firstChunkReceived = new Promise((resolve) => {
+    firstChunk = resolve
+  })
+  try {
+    const response = decoder.run(fs.createReadStream(sampleMp3()), {
+      retainOutput: false,
+      waitForConsumer: () => new Promise(() => {})
+    })
+    response.onError(() => {})
+    response.onUpdate(firstChunk)
+    await firstChunkReceived
+    await response.cancel()
+    await t.exception(() => response.await(), /JOB_CANCELLED/)
+  } finally {
+    await decoder.unload()
+  }
+})
+
+test(
+  'FFmpegDecoder - overlapping runs keep output and stats separate',
+  { timeout: 10000 },
+  async (t) => {
+    const decoder = await loadDecoder()
+    let firstChunk
+    const firstChunkReceived = new Promise((resolve) => {
+      firstChunk = resolve
+    })
+    let releaseConsumer
+    const consumerReady = new Promise((resolve) => {
+      releaseConsumer = resolve
+    })
+    try {
+      const first = decoder.run(fs.createReadStream(sampleMp3()), {
+        retainOutput: false,
+        waitForConsumer: () => consumerReady
+      })
+      let firstBytes = 0
+      first.onError(() => {})
+      first.onUpdate(({ outputArray }) => {
+        firstBytes += outputArray.length
+        firstChunk()
+      })
+      await firstChunkReceived
+      const second = decoder.run(fs.createReadStream(sampleMp3()), { retainOutput: false })
+      releaseConsumer()
+      let secondBytes = 0
+      second.onUpdate(({ outputArray }) => {
+        secondBytes += outputArray.length
+      })
+      await t.exception(() => first.await(), /Stale job replaced by new run/)
+      await second.await()
+      t.is(firstBytes, first.stats.outputBytes, 'first stats count only first output')
+      t.is(secondBytes, second.stats.outputBytes, 'second stats count only second output')
+      t.ok(secondBytes > firstBytes, 'second run received its own decoded output')
+    } finally {
+      releaseConsumer()
+      await decoder.unload()
+    }
+  }
+)
 
 test('FFmpegDecoder - lifecycle and decoding', async (t) => {
   const decoder = await loadDecoder({

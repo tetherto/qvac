@@ -66,10 +66,9 @@ declare class FFmpegDecoder {
     isLoaded: boolean;
     samplesSkipped: number;
     totalSkipSamples: number;
-    private _cancelled;
     private readonly _job;
     private _runtimeStats;
-    private _waitForConsumer;
+    private _activeRun;
     /**
      * Creates an instance of FFmpegDecoder.
      * @param params - Configuration options. Top-level `streamIndex`, `inputBitrate`
@@ -79,6 +78,7 @@ declare class FFmpegDecoder {
     /**
      * Resets the runtime stats
      */
+    private _newStats;
     private _resetStats;
     /**
      * Get the current runtime stats

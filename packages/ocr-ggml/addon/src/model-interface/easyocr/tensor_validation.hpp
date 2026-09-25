@@ -36,4 +36,9 @@ inline bool bias_tensor_size_matches(size_t biasSize, int64_t channels) {
   return channels > 0 && biasSize == static_cast<size_t>(channels);
 }
 
+inline bool prediction_bias_matches(const ggml_tensor& bias, int64_t classes) {
+  return classes > 0 && ggml_n_dims(&bias) == 1 &&
+         bias.ne[0] == classes && ggml_nelements(&bias) == classes;
+}
+
 }

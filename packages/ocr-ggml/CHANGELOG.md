@@ -8,7 +8,7 @@ project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Reject malformed EasyOCR model tensor shapes, vocabulary indexes, and bias tensors before unsafe reads or writes.
+- Reject malformed EasyOCR model tensor shapes, vocabulary indexes, and bias tensors, including prediction biases with extra dimensions, before unsafe reads or writes.
 
 ## [0.25.0] - 2026-09-23
 

@@ -112,6 +112,8 @@ const response = await decoder.run(audioStream)
 
 Pass `{ retainOutput: false }` as the second argument to `run()` when processing chunks through `onUpdate()`. In that mode, `await()` resolves to an empty output array instead of retaining all PCM chunks.
 
+The same mode supports `for await (const chunk of response.iterate())` for live PCM consumption. The iterator holds at most one pending chunk and pauses decoding until that chunk is consumed. See the [runnable streaming example](examples/stream-decode.js), which writes each chunk to a raw PCM file. Run it from this package directory with `bare examples/stream-decode.js [input.mp3] [output.raw]`.
+
 For a stream consumer, the same options object accepts `waitForConsumer: () => Promise<void>`. The decoder waits for that promise after each chunk, allowing the consumer to pause decoding until it has buffer capacity.
 
 ### 4. Handling Response Updates
