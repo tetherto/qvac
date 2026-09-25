@@ -10,7 +10,8 @@
       "runChatterboxMtlTest"
     ],
     "supertonic": [
-      "runSupertonicTest"
+      "runSupertonicTest",
+      "runFitTest"
     ],
     "supertonic-mtl": [
       "runSupertonicMtlTest"
@@ -45,7 +46,8 @@
       "runChatterboxMtlTest"
     ],
     "supertonic": [
-      "runSupertonicTest"
+      "runSupertonicTest",
+      "runFitTest"
     ],
     "supertonic-mtl": [
       "runSupertonicMtlTest"

@@ -18,7 +18,15 @@ const MOSS_SAMPLES_PER_FRAME = 1920
 const TEST_TIMEOUT_MS = 1800000
 const SYNTHESIS_TEXT = 'The MOSS integration test checks this generated voice.'
 const MODEL_DIR_ENV = 'QVAC_TEST_MOSS_MODEL_DIR'
-const ENCODER_FILE = 'moss-codec-encoder-f16.gguf'
+const ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i
+const DIALOGUE_BACKBONE_RE = /^moss-ttsd(-[a-z0-9_]+)?\.gguf$/i
+const DIALOGUE_TEXT =
+  '[S1] And so, my fellow Americans, [S2] ask what you can do for your country. ' +
+  '[S1] Did the build finish this morning? [S2] Yes, every single test passed.'
+const SPEAKER_ONE_SECONDS = [0, 3.29]
+const SPEAKER_TWO_SECONDS = [7.6, 10.6]
+const SHORT_DURATION_TOKENS = 25
+const LONG_DURATION_TOKENS = 100
 const INT16_FULL_SCALE = 32767
 const CPU_DEVICE = 0
 const CPU_BACKEND = 0
@@ -43,12 +51,47 @@ function toInt16(samples) {
   return Array.from(samples, (sample) => Math.round(sample * INT16_FULL_SCALE))
 }
 
-function writeReferenceAtMossRate(sourcePath) {
+function resampleToMossRate(sourcePath) {
   const source = readWavAsFloat32(sourcePath)
-  const resampled = resampleLinear(source.samples, source.sampleRate, MOSS_SAMPLE_RATE)
-  const target = path.join(os.tmpdir(), `moss-reference-${Date.now()}.wav`)
-  createWav(toInt16(resampled), MOSS_SAMPLE_RATE, target)
+  return resampleLinear(source.samples, source.sampleRate, MOSS_SAMPLE_RATE)
+}
+
+function writeMossWav(samples, tag) {
+  const target = path.join(os.tmpdir(), `moss-${tag}-${Date.now()}.wav`)
+  createWav(toInt16(samples), MOSS_SAMPLE_RATE, target)
   return target
+}
+
+function writeReferenceAtMossRate(sourcePath) {
+  return writeMossWav(resampleToMossRate(sourcePath), 'reference')
+}
+
+function sliceSeconds(samples, [from, to]) {
+  return samples.slice(Math.round(from * MOSS_SAMPLE_RATE), Math.round(to * MOSS_SAMPLE_RATE))
+}
+
+function writeSpeakerReferences(sourcePath) {
+  const samples = resampleToMossRate(sourcePath)
+  return [
+    writeMossWav(sliceSeconds(samples, SPEAKER_ONE_SECONDS), 'speaker-1'),
+    writeMossWav(sliceSeconds(samples, SPEAKER_TWO_SECONDS), 'speaker-2')
+  ]
+}
+
+function removeFiles(paths) {
+  for (const file of paths) fs.unlinkSync(file)
+}
+
+function modelDirHas(pattern) {
+  return !skipWithoutModels && fs.readdirSync(modelDir).some((entry) => pattern.test(entry))
+}
+
+function hasEncoder() {
+  return modelDirHas(ENCODER_RE)
+}
+
+function hasDialogueBackbone() {
+  return modelDirHas(DIALOGUE_BACKBONE_RE)
 }
 
 function collectChunk(result, data) {
@@ -164,8 +207,8 @@ test(
   { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
   async (t) => {
     const sourceAudio = resolveRefWavPath({})
-    if (!fs.existsSync(path.join(modelDir, ENCODER_FILE))) {
-      t.comment(`skipping: ${ENCODER_FILE} is not in ${modelDir}`)
+    if (!hasEncoder()) {
+      t.comment(`skipping: no moss-codec-encoder GGUF in ${modelDir}`)
       return
     }
     if (!fs.existsSync(sourceAudio)) {
@@ -182,6 +225,58 @@ test(
       })
     } finally {
       fs.unlinkSync(referenceAudio)
+    }
+  }
+)
+
+test(
+  'MOSS TTS: durationTokens steers the length of the synthesized speech',
+  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
+  async (t) => {
+    await withLoadedModel({ durationTokens: SHORT_DURATION_TOKENS, seed: 7 }, async (model) => {
+      const short = await synthesize(model, SYNTHESIS_TEXT)
+      assertAudio(t, 'MOSS short target', short)
+      await model.reload({ durationTokens: LONG_DURATION_TOKENS })
+      const long = await synthesize(model, SYNTHESIS_TEXT)
+      assertAudio(t, 'MOSS long target', long)
+      t.ok(
+        long.samples.length > short.samples.length,
+        `a longer target yields longer speech (${short.samples.length} -> ${long.samples.length} samples)`
+      )
+    })
+  }
+)
+
+test(
+  'MOSS TTS: dialogue synthesis clones one reference per speaker',
+  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
+  async (t) => {
+    if (!hasDialogueBackbone() || !hasEncoder()) {
+      t.comment(`skipping: the TTSD backbone or the codec encoder is not in ${modelDir}`)
+      return
+    }
+    const sourceAudio = resolveRefWavPath({})
+    if (!fs.existsSync(sourceAudio)) {
+      t.fail(`MOSS reference audio is missing: ${sourceAudio}`)
+      return
+    }
+    const references = writeSpeakerReferences(sourceAudio)
+    try {
+      await withLoadedModel(
+        { dialogueReferences: references, seed: 7, files: { modelDir: path.resolve(modelDir) } },
+        async (model) => {
+          t.ok(
+            DIALOGUE_BACKBONE_RE.test(path.basename(model._mossBackbonePath)),
+            'dialogue picks the TTSD backbone'
+          )
+          const started = Date.now()
+          const result = await synthesize(model, DIALOGUE_TEXT)
+          assertAudio(t, 'MOSS dialogue', result)
+          recordMoss(t, 'moss dialogue', result, Date.now() - started)
+        }
+      )
+    } finally {
+      removeFiles(references)
     }
   }
 )
