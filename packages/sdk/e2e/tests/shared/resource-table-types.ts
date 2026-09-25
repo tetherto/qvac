@@ -35,6 +35,12 @@ export interface ResourceEntry {
    * are deliberately loaded cold by their tests.
    */
   skipPreDownload?: boolean
+  /**
+   * Platforms that skip the pre-download for this entry while still defining it. A leg that never
+   * loads the model still needs the definition -- `assessModelFit` describes a load without
+   * running it -- but must not pay for the weights.
+   */
+  skipPreDownloadOn?: string[]
 }
 
 export type ResourceTable = Record<string, ResourceEntry>
@@ -107,7 +113,11 @@ export function applyResourceTable(
 
   for (const [dep, entry] of Object.entries(table)) {
     if (entry.on && !entry.on.some((name) => name === platform || appliesHere(name))) continue
-    const { on: _on, configOn, config, ...rest } = entry
+    const { on: _on, configOn, config, skipPreDownloadOn, ...rest } = entry
+
+    if (skipPreDownloadOn?.some((name) => name === platform || appliesHere(name))) {
+      rest.skipPreDownload = true
+    }
 
     const overrides = Object.entries(configOn ?? {})
       .filter(([name]) => appliesHere(name) || name === platform)
