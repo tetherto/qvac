@@ -441,12 +441,22 @@ test('CosyVoice3: cosyvoice3-only options on other engines throw', (t) => {
   t.exception(
     () =>
       new TTSGgml({
-        engine: TTSGgml.ENGINE_CHATTERBOX,
-        files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' },
+        engine: TTSGgml.ENGINE_SUPERTONIC,
+        files: { supertonicModel: './models/supertonic.gguf' },
         streamLeftContextTokens: 8
       }),
+    /chatterbox\/cosyvoice3-only/,
+    'streamLeftContextTokens on supertonic throws'
+  )
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_CHATTERBOX,
+        files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' },
+        flowCutPrompt: true
+      }),
     /cosyvoice3-only/,
-    'streamLeftContextTokens on chatterbox throws'
+    'flowCutPrompt on chatterbox throws'
   )
 })
 
@@ -573,5 +583,155 @@ test('CosyVoice3: cancel propagates as job failure (mocked)', async (t) => {
     t.ok(String(error.message).includes('cancel'), 'cancelled cosyvoice response rejects')
   }
   t.ok(failed, 'cancelled cosyvoice response should fail')
+  await model.unload()
+})
+
+/** MockedBinding that records every runJob payload (per-call field checks). */
+class RecordingBinding extends MockedBinding {
+  constructor(opts) {
+    super(opts)
+    this.jobs = []
+  }
+
+  runJob(handle, data) {
+    this.jobs.push(data)
+    return super.runJob(handle, data)
+  }
+}
+
+test('CosyVoice3: frontend and voice files forward to ttsParams; omitted when unset', (t) => {
+  const model = createMockedCosyvoiceModel({
+    files: {
+      cosyvoiceModelDir: './models/cv3',
+      cosyvoiceVocab: './frontend/vocab.json',
+      cosyvoiceMergesPath: './frontend/merges.txt',
+      cosyvoiceVoiceModel: './voices/alt/voice.gguf'
+    }
+  })
+  const params = model._buildTtsParams()
+  t.is(params.cosyvoiceVocabPath, './frontend/vocab.json')
+  t.is(params.cosyvoiceMergesPath, './frontend/merges.txt', 'the *Path alias is accepted too')
+  t.is(params.cosyvoiceVoiceModelPath, './voices/alt/voice.gguf')
+
+  const defaults = createMockedCosyvoiceModel()._buildTtsParams()
+  t.absent(defaults.cosyvoiceVocabPath, 'vocab resolved under the model dir natively')
+  t.absent(defaults.cosyvoiceMergesPath)
+  t.absent(defaults.cosyvoiceVoiceModelPath)
+})
+
+test('CosyVoice3: vulkanDevice and flowCutPrompt forward to ttsParams', (t) => {
+  const params = createMockedCosyvoiceModel({
+    extra: { vulkanDevice: -1, flowCutPrompt: false }
+  })._buildTtsParams()
+  t.is(params.vulkanDevice, -1)
+  t.is(params.flowCutPrompt, false, 'an explicit false is forwarded, not dropped')
+
+  const defaults = createMockedCosyvoiceModel()._buildTtsParams()
+  t.absent(defaults.vulkanDevice)
+  t.absent(defaults.flowCutPrompt)
+})
+
+test('CosyVoice3: streamLeftContextTokens still forwards (reserved natively)', (t) => {
+  const params = createMockedCosyvoiceModel({
+    extra: { streamChunkTokens: 25, streamLeftContextTokens: 50 }
+  })._buildTtsParams()
+  t.is(params.streamLeftContextTokens, 50)
+})
+
+test('CosyVoice3: per-call instruct is rendered and rides on the jobData', async (t) => {
+  const binding = new RecordingBinding()
+  const model = createMockedCosyvoiceModel({ binding })
+  await model.load()
+
+  const r1 = await model.run({ input: 'Dialect call.', instruct: { dialect: 'cantonese' } })
+  await r1.await()
+  t.is(
+    binding.jobs[0].instruct,
+    '请用广东话表达。',
+    'structured instruct rendered to the trained sentence'
+  )
+
+  const r2 = await model.run({ input: 'Raw call.', instruct: '  Speak slowly.  ' })
+  await r2.await()
+  t.is(binding.jobs[1].instruct, 'Speak slowly.', 'a raw instruct is trimmed and forwarded')
+
+  const r3 = await model.run({ input: 'Plain call.' })
+  await r3.await()
+  t.absent(binding.jobs[2].instruct, 'no leftover instruct on a plain run')
+
+  await model.unload()
+})
+
+test('CosyVoice3: runStream forwards a per-call instruct to every sentence job', async (t) => {
+  const binding = new RecordingBinding()
+  const model = createMockedCosyvoiceModel({ binding })
+  await model.load()
+
+  const r = await model.runStream('First sentence here. Second sentence here.', {
+    maxChunkScalars: 24,
+    instruct: '  Speak softly.  '
+  })
+  await r.onUpdate(() => {}).await()
+  t.ok(binding.jobs.length >= 2, `one job per sentence (got ${binding.jobs.length})`)
+  for (const [i, job] of binding.jobs.entries()) {
+    t.is(job.instruct, 'Speak softly.', `sentence job ${i} carries the rendered instruct`)
+  }
+
+  const before = binding.jobs.length
+  const plain = await model.runStream('No instruction here.')
+  await plain.onUpdate(() => {}).await()
+  t.absent(binding.jobs[before].instruct, 'no leftover instruct on a plain runStream')
+
+  await model.unload()
+})
+
+test('CosyVoice3: runStreaming forwards a per-call instruct to every flushed job', async (t) => {
+  const binding = new RecordingBinding()
+  const model = createMockedCosyvoiceModel({ binding })
+  await model.load()
+
+  const r = await model.runStreaming(['First streamed line.', 'Second streamed line.'], {
+    instruct: { dialect: 'cantonese' }
+  })
+  await r.onUpdate(() => {}).await()
+  t.is(binding.jobs.length, 2, 'one job per streamed line')
+  for (const [i, job] of binding.jobs.entries()) {
+    t.is(job.instruct, '请用广东话表达。', `streamed job ${i} carries the rendered instruct`)
+  }
+
+  await model.unload()
+})
+
+test('CosyVoice3: per-call instruct follows the one-control rule', async (t) => {
+  const model = createMockedCosyvoiceModel()
+  await model.load()
+  await t.exception(
+    () => model.run({ input: 'x', emotion: 'happy', instruct: { dialect: 'cantonese' } }),
+    /conflicting conditioning controls/,
+    'per-call emotion + instruct conflicts'
+  )
+  await t.exception(
+    () => model.run({ input: 'x', instruct: { dialekt: 'cantonese' } }),
+    /Invalid CosyVoice instruct key/,
+    'a malformed per-call instruct is rejected'
+  )
+  const ok = await model.run({ input: 'x', pace: 'moderate', instruct: { volume: 'loud' } })
+  await ok.await()
+  t.pass('pace moderate disengages, so it combines with a per-call instruct')
+  await model.unload()
+})
+
+test('CosyVoice3: per-call instruct on other engines throws', async (t) => {
+  const model = new TTSGgml({
+    engine: TTSGgml.ENGINE_CHATTERBOX,
+    files: { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' }
+  })
+  model._createAddon = (configurationParams, outputCb) =>
+    new TTSInterface(new MockedBinding(), configurationParams, outputCb)
+  await model.load()
+  await t.exception(
+    () => model.run({ input: 'x', instruct: 'Speak slowly.' }),
+    /per-call instruct is cosyvoice3-only/
+  )
   await model.unload()
 })

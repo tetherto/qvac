@@ -352,6 +352,7 @@ try {
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isWindows = platform === 'win32'
+const OCR_TEST_THREADS = 4
 
 function _envInt(key, fallback) {
   let raw = ''
@@ -488,7 +489,7 @@ function getBackendDevice() {
 function createOcrGgml(params = {}, opts) {
   const { OcrGgml } = require('../..')
   const instance = new OcrGgml({
-    params: { backendDevice: getBackendDevice(), ...params },
+    params: { backendDevice: getBackendDevice(), nThreads: OCR_TEST_THREADS, ...params },
     opts
   })
   // After load() resolves the backend, record the actual GPU/backend name on
@@ -1063,7 +1064,7 @@ async function runDoctrOCR(t, params, imagePath) {
     params: {
       langList: ['en'],
       pipelineType: 'doctr',
-      nThreads: 4,
+      nThreads: OCR_TEST_THREADS,
       backendDevice: getBackendDevice(),
       ...params
     },
@@ -1351,7 +1352,7 @@ async function runDoctrWarmProfile(t, cfg) {
     params: {
       langList: ['en'],
       pipelineType: 'doctr',
-      nThreads: 4,
+      nThreads: OCR_TEST_THREADS,
       backendDevice: 'vulkan',
       ...params
     },
@@ -1439,6 +1440,7 @@ module.exports = {
   runDoctrWarmProfile,
   isWindows,
   platform,
+  OCR_TEST_THREADS,
   PERF_RUNS,
   PREBUILDS_DIR,
   findVulkanBackendLib,
