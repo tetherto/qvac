@@ -11,7 +11,7 @@
 // streams the engine's output (progress ticks + one interleaved-Int16 PCM
 // chunk) and resolves with the run stats.
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.resolveBackendsDir = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_GPU_FALLBACK_REASONS = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
+exports.RepaintMode = exports.AudioEditOperationType = exports.QvacErrorAudioGen = exports.ERR_CODES = exports.ERR_CODE_RANGE = exports.assessFit = exports.resolveBackendsDir = exports.OUTPUT_FORMATS = exports.pcmToWav = exports.encodePcm = exports.allRegistryPaths = exports.resolveDitModelPath = exports.modelSources = exports.modelManifest = exports.modelFilenames = exports.registryPath = exports.ditFilename = exports.ditVariants = exports.DEFAULT_DIT_VARIANT = exports.DIT_VARIANTS = exports.FIXED_MODELS = exports.REGISTRY_PREFIX = exports.REGISTRY_SOURCE = exports.AudioGen = exports.AudioEditSession = exports.AUDIOGEN_GPU_FALLBACK_REASONS = exports.AUDIOGEN_BACKEND_NAMES = exports.MINIMAX_DEFAULT_MAX_FRAMES = exports.MINIMAX_FRAMES_PER_SECOND = exports.ENGINE_MINIMAX = exports.ENGINE_ACESTEP = void 0;
 exports.audiogenBackendName = audiogenBackendName;
 exports.audiogenGpuFallbackReason = audiogenGpuFallbackReason;
 exports.detectEngineType = detectEngineType;
@@ -1079,6 +1079,8 @@ Object.defineProperty(exports, "pcmToWav", { enumerable: true, get: function () 
 Object.defineProperty(exports, "OUTPUT_FORMATS", { enumerable: true, get: function () { return audio_format_2.SUPPORTED_FORMATS; } });
 var backends_2 = require("./lib/backends");
 Object.defineProperty(exports, "resolveBackendsDir", { enumerable: true, get: function () { return backends_2.resolveBackendsDir; } });
+var fit_1 = require("./lib/fit");
+Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_1.assessFit; } });
 var error_2 = require("./error");
 Object.defineProperty(exports, "ERR_CODE_RANGE", { enumerable: true, get: function () { return error_2.ERR_CODE_RANGE; } });
 Object.defineProperty(exports, "ERR_CODES", { enumerable: true, get: function () { return error_2.ERR_CODES; } });
