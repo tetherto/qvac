@@ -409,8 +409,11 @@ const MANIFEST_FIELD: Record<PackageManager, string> = {
 export function formatEnginesAdvice(advice: EnginesAdvice): string[] {
   const lines = [
     `  Fix for ${advice.hosts.join(', ')}:`,
-    `    Runtime: Bare ${advice.runtime.version} (from ${formatRuntimeSource(advice.runtime)}); ` +
-      `the packages above need ${advice.requiredBare} or newer.`,
+    `    Runtime: Bare ${advice.runtime.version} (from ${formatRuntimeSource(advice.runtime)})`,
+    ...advice.overrides.map(
+      (override) =>
+        `    Requires: ${override.name}@${override.installedVersions.join(', ') || 'unknown'} needs Bare ${override.enginesBare.join(' and ')}`
+    ),
     `    Option 1: ${advice.upgradeHint}`
   ]
 

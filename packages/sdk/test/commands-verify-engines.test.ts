@@ -413,6 +413,7 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
       assert.ok(progress.some((message) => message.includes('registry.npmjs.org')))
 
       const text = formatVerifyBundleResult(result)
+      assert.match(text, /Requires: bare-type@1\.4\.0 needs Bare >=1\.32\.0/)
       assert.match(text, /Upgrade react-native-bare-kit to 0\.15\.1 or newer/)
       assert.match(text, /Option 2 \(bare-type\): pin 1\.4\.0 -> 1\.1\.1/)
       assert.match(text, /"overrides": \{ "bare-type": "1\.1\.1" \}/)
