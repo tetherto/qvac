@@ -291,7 +291,7 @@
     "expo-file-system": ">=19.0.0",
     "expo-modules-core": ">=3.0.0",
     "pear-pipe": ">=1.0.0",
-    "react-native-bare-kit": "*",
+    "react-native-bare-kit": ">=0.15.5",
     "tsx": "*"
   },
   "peerDependenciesMeta": {
