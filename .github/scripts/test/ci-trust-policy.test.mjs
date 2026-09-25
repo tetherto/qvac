@@ -608,25 +608,18 @@ test("public-pr: trusted non-PR calls do not require verified", () => {
 });
 
 test("all ci-router callers re-run when a draft becomes ready", () => {
-  const workflowDirectory = join(root, ".github/workflows");
+  // The uniform on-pr-<pkg>.yml orchestrators are consolidated into on-pr-nx.yml.
+  // The three carve-outs keep their own files and must still re-run on the
+  // draft->ready transition, so they stay listed here.
   const workflowNames = [
-    "on-pr-asr-ggml.yml",
-    "on-pr-bci-whispercpp.yml",
+    "on-pr-nx.yml",
     "on-pr-classification-ggml.yml",
-    "on-pr-decoder-audio.yml",
-    "on-pr-diffusion-cpp.yml",
-    "on-pr-embed-llamacpp.yml",
     "on-pr-fabric.yml",
-    "on-pr-llm-llamacpp.yml",
-    "on-pr-model-fit.yml",
-    "on-pr-ocr-ggml.yml",
-    "on-pr-translation-nmtcpp.yml",
-    "on-pr-tts-ggml.yml",
     "on-pr-vla.yml",
   ];
 
   for (const workflowName of workflowNames) {
-    const source = readFileSync(join(workflowDirectory, workflowName), "utf8");
+    const source = read(`.github/workflows/${workflowName}`);
     assert.match(source, /uses:\s+\.\/\.github\/actions\/ci-router/);
     assert.match(source, /ready_for_review/);
   }
@@ -1081,11 +1074,34 @@ test("verify-prebuilds binds a prebuild status to its producing on-pr run", () =
     /actions\S*runs/,
     "lib parses the producing run id from the run URL",
   );
+  // Pins the shape only; behaviour is covered in prebuild-status.test.mjs.
+  // The per-package map is the part that must not regress into a flat allowlist.
   assert.match(
     lib,
-    /on-pr-\$\{pkg\}\.yml/,
-    "lib checks the producing run is the on-pr-<pkg> workflow",
+    /run\.path !== expected/,
+    "lib binds the status to a specific expected producer path",
   );
+  assert.match(
+    lib,
+    /const expected = CARVED_OUT_PRODUCERS\[pkg\] \?\? NX_PRODUCER/,
+    'lib resolves the expected producer per package, defaulting to the nx producer',
+  )
+  assert.match(
+    lib,
+    /NX_PRODUCER = '\.github\/workflows\/on-pr-nx\.yml'/,
+    'the default producer is still the consolidated on-pr-nx.yml',
+  )
+  for (const [pkg, workflow] of [
+    ['fabric', 'on-pr-fabric.yml'],
+    ['classification-ggml', 'on-pr-classification-ggml.yml'],
+    ['vla', 'on-pr-vla.yml'],
+  ]) {
+    assert.match(
+      lib,
+      new RegExp(`'?${pkg}'?: '\\.github/workflows/${workflow.replace('.', '\\.')}'`),
+      `${pkg} is pinned to its own producer ${workflow}`,
+    )
+  }
   assert.match(
     lib,
     /createdMs \/ 1000\) >= prUpdatedEpoch/,
@@ -1457,9 +1473,12 @@ test("fork-ci: every pull_request_target verified-surface workflow has the fork-
   // silently matching nothing (which would make every assertion below vacuous).
   // Lower it deliberately when workflow families are retired or consolidated —
   // dropped from 20 when transcription-* merged into asr-ggml, then to 18 when
-  // ocr-onnx CI was retired on main.
+  // ocr-onnx CI was retired on main, and the floor dropped again when the
+  // per-package pull_request_target on-pr-<pkg> workflows were consolidated into
+  // on-pr-nx.yml. on-pr-nx carries its own fork-approval + authorize chain, so it
+  // satisfies the per-target assertions below.
   assert.ok(
-    targets.length >= 18,
+    targets.length >= 5,
     `found ${targets.length} fork-ci target workflows`,
   );
   for (const path of targets) {
@@ -2719,11 +2738,14 @@ test("cache policy: the host-cache sync step is gated on trusted events", () => 
     }
   }
   // Every cpp-tests workflow with a persistent host layer must have the step.
+  // Floor, not an exact count: it guards against the discovery globbing silently
+  // matching nothing. Dropped from 5 to 4 when cpp-tests-diffusion.yml and
+  // cpp-tests-embed.yml were consolidated into cpp-tests-nx.yml.
   assert.ok(
     eachCppTestsCacheStep({
       match: /name: Sync the host and workspace vcpkg caches/,
       includeExempt: true,
-    }).length >= 5,
+    }).length >= 4,
   );
   assert.deepEqual(offenders, []);
 });
