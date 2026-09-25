@@ -645,4 +645,61 @@ if (process.platform !== "win32") {
       fixture.cleanup();
     }
   });
+
+  test("lets a previously registered one-shot handler finish shutdown", async () => {
+    const fixture = createFakeRpcServerBinary();
+    const script = `
+      const { startRpcServer } = require(${JSON.stringify(require.resolve("../../index.js"))})
+      process.once('SIGTERM', () => {
+        setTimeout(() => process.send({ shutdownCompleted: true }), 50)
+      })
+      startRpcServer({ binaryPath: ${JSON.stringify(fixture.binaryPath)}, startTimeoutMs: 5000 })
+        .then((server) => process.send({ pid: server.pid }))
+        .catch((error) => { console.error(error); process.exitCode = 1 })
+    `;
+    const parent = spawn(process.execPath, ["-e", script], {
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
+    });
+    let serverPid;
+    try {
+      serverPid = await new Promise((resolve, reject) => {
+        parent.once("message", (message) => resolve(message.pid));
+        parent.once("exit", (code, signal) =>
+          reject(
+            new Error(
+              `parent exited before server startup (${code}, ${signal})`,
+            ),
+          ),
+        );
+      });
+      assert.ok(Number.isSafeInteger(serverPid) && serverPid > 0);
+      const completed = new Promise((resolve, reject) => {
+        parent.once("message", resolve);
+        parent.once("exit", (code, signal) =>
+          reject(
+            new Error(
+              `parent exited before shutdown completed (${code}, ${signal})`,
+            ),
+          ),
+        );
+      });
+      parent.kill("SIGTERM");
+      assert.deepEqual(await completed, { shutdownCompleted: true });
+      assert.equal(parent.exitCode, null);
+      assert.equal(parent.signalCode, null);
+      await waitForProcessGone(serverPid);
+    } finally {
+      if (parent.exitCode === null && parent.signalCode === null) {
+        parent.kill("SIGKILL");
+      }
+      if (serverPid) {
+        try {
+          process.kill(serverPid, "SIGKILL");
+        } catch (error) {
+          if (error.code !== "ESRCH") throw error;
+        }
+      }
+      fixture.cleanup();
+    }
+  });
 }
