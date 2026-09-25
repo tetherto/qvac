@@ -1,5 +1,6 @@
 // Real SDK tests
 import type { Step, TestDefinition } from '@qvac/test-suite'
+import { applyPlatformSkips } from './platform-skips.js'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
@@ -432,7 +433,7 @@ export const modelLifecycleNmt: TestDefinition = {
 }
 
 // Export all tests as array
-export const tests = [
+const catalog: TestDefinition[] = [
   // Model tests (first section)
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
@@ -582,3 +583,9 @@ export const tests = [
   // NMT model lifecycle test
   modelLifecycleNmt
 ]
+
+// Platform policy is data on the definitions, not a registration inside each
+// consumer entry -- see `platform-skips.ts` for why, and for the rules.
+applyPlatformSkips(catalog)
+
+export const tests = catalog

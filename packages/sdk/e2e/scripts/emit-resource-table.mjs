@@ -16,26 +16,42 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const out = resolve(here, '../tests/resources/resource-table.json')
 // `pathToFileURL`, not a bare path: Node's ESM loader rejects an absolute
 // Windows path because `C:\...` reads as a URL scheme it does not know, and
 // the whole `build` fails there before a single test runs.
-const { RESOURCE_TABLE } = await import(
-  pathToFileURL(resolve(here, '../dist/tests/shared/resource-table.js')).href
-)
-const rendered = `${JSON.stringify(RESOURCE_TABLE, null, 2)}\n`
+const load = (relative) => import(pathToFileURL(resolve(here, relative)).href)
 
-if (process.argv.includes('--check')) {
-  const current = existsSync(out) ? readFileSync(out, 'utf8') : ''
-  if (current !== rendered) {
-    console.error(
-      `❌ ${out} is stale.\n   Run: npm run emit:resource-table`
-    )
-    process.exit(1)
+const { RESOURCE_TABLE } = await load('../dist/tests/shared/resource-table.js')
+const { PLATFORM_POLICY } = await load('../dist/tests/shared/platform-policy.js')
+
+// Both artifacts, same rule: one typed source, one generated copy a non-JS
+// client reads.
+const artifacts = [
+  {
+    out: resolve(here, '../tests/resources/resource-table.json'),
+    source: 'tests/shared/resource-table.ts',
+    rendered: `${JSON.stringify(RESOURCE_TABLE, null, 2)}\n`,
+    describe: () => `${Object.keys(RESOURCE_TABLE).length} resource keys`
+  },
+  {
+    out: resolve(here, '../tests/resources/platform-policy.json'),
+    source: 'tests/shared/platform-policy.ts',
+    rendered: `${JSON.stringify(PLATFORM_POLICY, null, 2)}\n`,
+    describe: () => `${Object.keys(PLATFORM_POLICY).length} platform policies`
   }
-  console.log('✅ resource table JSON matches tests/shared/resource-table.ts')
-} else {
-  mkdirSync(dirname(out), { recursive: true })
-  writeFileSync(out, rendered)
-  console.log(`✅ wrote ${Object.keys(RESOURCE_TABLE).length} resource keys to ${out}`)
+]
+
+for (const artifact of artifacts) {
+  if (process.argv.includes('--check')) {
+    const current = existsSync(artifact.out) ? readFileSync(artifact.out, 'utf8') : ''
+    if (current !== artifact.rendered) {
+      console.error(`❌ ${artifact.out} is stale.\n   Run: npm run emit:resource-table`)
+      process.exit(1)
+    }
+    console.log(`✅ ${artifact.out.split('/').pop()} matches ${artifact.source}`)
+  } else {
+    mkdirSync(dirname(artifact.out), { recursive: true })
+    writeFileSync(artifact.out, artifact.rendered)
+    console.log(`✅ wrote ${artifact.describe()} to ${artifact.out}`)
+  }
 }

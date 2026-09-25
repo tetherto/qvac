@@ -3,7 +3,6 @@ import mqtt from 'mqtt'
 import {
   ConsumerBase,
   createExecutor,
-  SkipExecutor,
   loadConfig,
   loadTests,
   buildMqttConnectionConfig,
@@ -55,20 +54,19 @@ import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
 import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
 
-const isSnapConsumer = process.env['QVAC_TEST_PLATFORM'] === 'snap-linux'
-
 import * as MODEL_CONSTANTS from '@qvac/sdk'
 import { RESOURCE_TABLE } from '../shared/resource-table.js'
 import { applyResourceTable } from '../shared/resource-table-types.js'
+import { policyFor } from '../shared/platform-policy.js'
 
 /** Where the shared table's `$asset` placeholders point on this platform. */
 function resolveTableAsset(kind: string, file: string): string {
   return path.resolve(process.cwd(), `assets/${kind}`, file)
 }
 
-const resources = new ResourceManager({
-  downloadTarget: 'desktop'
-})
+// Download plan and unload settling come from the shared platform policy, not
+// from a literal here -- see tests/shared/platform-policy.ts.
+const resources = new ResourceManager(policyFor('electron'))
 
 // One table, shared with every other client, applied here.
 //
@@ -142,47 +140,17 @@ export async function runSnapRefreshProbe() {
   await executeSnapRefreshProbe(ensureElectronE2EConfig)
 }
 
-const snapStorageHandler = isSnapConsumer
-  ? new SnapStorageExecutor()
-  : new SkipExecutor(
-      /^snap-storage-/,
-      'Snap storage tests require the strict-confined Snap consumer'
-    )
+// Registered unconditionally: the catalog declares the snap-storage tests
+// skipped everywhere but the Snap leg, and the consumer decides that before it
+// dispatches to any executor, so this never runs outside Snap.
+const snapStorageHandler = new SnapStorageExecutor()
 
 export const executor = createExecutor({
   handlers: [
     snapStorageHandler,
-    // Electron keeps the stable desktop/shared surface enabled, but excludes
-    // suites that are resource-heavy or incompatible with the packaged
-    // Electron worker lifecycle.
-    new SkipExecutor(
-      /^(diffusion-|addon-logging-diffusion$)/,
-      'Electron skips diffusion tests because image generation takes too long for the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^world-/,
-      'Electron skips ABot-World: a walk session needs a dedicated GPU and the 13.3 GB model set is far beyond the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^audio-(gen|edit|understand)-/,
-      'AudioGen e2e is desktop-only: the ACE-Step stack is four GGUFs, too heavy for the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^finetune-/,
-      'Electron skips finetune tests because training operations take too long for the stable Electron pass'
-    ),
-    new SkipExecutor(
-      /^no-lingering-bare-/,
-      'Electron skips no-lingering-bare tests because they spawn and terminate standalone Bare workers outside the packaged app lifecycle'
-    ),
-    new SkipExecutor(
-      /^worker-restart-/,
-      'Electron skips the kv-cache worker-restart test because it asserts on Bare worker processes outside the packaged app lifecycle'
-    ),
-    new SkipExecutor(
-      /^vla-/,
-      'Electron skips VLA tests because VLA model execution takes too long for the stable Electron pass'
-    ),
+    // What Electron excludes -- resource-heavy suites, and anything that
+    // asserts on worker processes outside the packaged app lifecycle -- is
+    // declared in the catalog now; see tests/platform-skips.ts.
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath
