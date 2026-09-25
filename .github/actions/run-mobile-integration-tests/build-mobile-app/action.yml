@@ -24,6 +24,15 @@ inputs:
   addon-npm-name:
     description: "NPM package name (used in build summary)"
     required: true
+  fabric-prebuilds-root:
+    description: >
+      Path to a fabric prebuilds tree (include/, share/, <platform>-<arch>/) to
+      overlay onto the installed @qvac/fabric. Set it when the addon prebuild was
+      compiled against an unreleased fabric: the addon links the shared runtime,
+      so the device needs that same fabric next to it. Empty keeps whatever npm
+      installed.
+    required: false
+    default: ""
   app-bundle-id:
     description: "Mobile app bundle id"
     required: false
@@ -156,6 +165,19 @@ runs:
       run: |
         echo "Setting up mobile test framework..."
         npm install
+
+    # Must sit after both npm installs (either can recreate node_modules and undo
+    # the overlay) and before the bundle is built, so the app ships the fabric the
+    # addon was compiled against rather than the released one.
+    - name: Overlay fabric prebuilds onto @qvac/fabric
+      if: ${{ inputs.fabric-prebuilds-root != '' }}
+      uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+      with:
+        workdir: addon/${{ inputs.addon-workdir }}
+        prebuilds-root: ${{ inputs.fabric-prebuilds-root }}
+        platform: ${{ inputs.platform == 'Android' && 'android' || 'ios' }}
+        arch: arm64
+        search-dirs: ${{ github.workspace }}/test-framework
 
     - name: Build test app with addon
       shell: bash
