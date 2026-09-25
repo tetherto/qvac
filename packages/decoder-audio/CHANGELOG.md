@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-25
+
 ### Added
 
 - Limit decoded PCM output to 64 MiB by default, with a configurable `maxDecodedBytes` limit and options to stream without retaining chunks and wait for consumer capacity.
