@@ -120,8 +120,10 @@ Two approvals and a CODEOWNERS review, as for any release branch.
    group sharing a major and minor, a changelog from every package whose
    manifest moved
 3. builds every package from the pnpm workspace, so nothing waits on npm
-4. **approval 1** — `environment: npm` — `nx release publish` ships them all in
-   project-graph order
+4. **approval 1** — `environment: npm` — `release-train-publish.mjs` publishes
+   one package at a time in dependency order and stops at the first failure.
+   Each package gets `latest`, or `release-<major>.<minor>` when it is older
+   than npm's `latest` or a prerelease, unless `npm_tag` is given
 5. **approval 2** — `environment: pypi` — `tetherto-qvac-sdk`
 6. tags each package, cuts the SDK's GitHub release, attaches the fat wheels
 
@@ -133,7 +135,7 @@ As today.
 
 Re-run the workflow on the same branch. Every step is idempotent:
 
-- `nx release publish` treats an already-published version as success
+- the publish step skips a version already on npm and publishes the rest
 - the tag job leaves an existing tag alone and never moves it
 - `create-github-release` and the fat-wheel build are unchanged from the
   single-package path

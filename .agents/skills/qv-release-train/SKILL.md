@@ -145,9 +145,9 @@ As in the per-package flow.
 
 ## Recovering a failed train
 
-Re-run the workflow on the same branch. `nx release publish` treats an
-already-published version as success, and the tag job leaves existing tags
-alone, so a re-run ships only what is missing.
+Re-run the workflow on the same branch. The publish step skips versions
+already on npm, and the tag job leaves existing tags alone, so a re-run ships
+only what is missing.
 
 `workflow_dispatch` with `publish_pypi_only: true` ships PyPI alone when npm
 already succeeded.
