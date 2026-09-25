@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 import {
   checkAddonRanges,
@@ -151,5 +152,49 @@ describe('collectVersionFailures', () => {
     assert.equal(failures.length, 2)
     assert.match(failures[0], /SDK has \^1\.2\.4/)
     assert.match(failures[1], /must share a major\.minor/)
+  })
+})
+
+describe('Bare runtime compatibility', () => {
+  const inference = { ...inferenceManifest(), engines: { bare: '^1.30.3' } }
+  const sdkWithRuntime = (range: string) =>
+    sdkManifest('0.19.1', '^0.19.1', { 'bare-runtime': range })
+
+  for (const range of ['^1.30.3', '~1.30.3', '1.30.3', '^1.31.0']) {
+    it(`accepts a compatible SDK runtime range: ${range}`, () => {
+      assert.deepEqual(collectVersionFailures(inference, sdkWithRuntime(range)), [])
+    })
+  }
+
+  for (const range of ['^1.24.2', '1.28.6', '*', '^1.30.3 || 1.28.6', '^2.0.0', '>=1.30.3']) {
+    it(`rejects an SDK runtime range that admits unsupported engines: ${range}`, () => {
+      const [failure] = collectVersionFailures(inference, sdkWithRuntime(range))
+      assert.match(failure, /bare-runtime.*inference/)
+    })
+  }
+
+  it('reports a missing SDK runtime dependency', () => {
+    const [failure] = collectVersionFailures(inference, sdkManifest('0.19.1', '^0.19.1'))
+    assert.match(failure, /bare-runtime/)
+  })
+
+  it('reports malformed ranges instead of throwing', () => {
+    assert.match(
+      collectVersionFailures(inference, sdkWithRuntime('not-a-range'))[0],
+      /bare-runtime/
+    )
+    const invalid = { ...inference, engines: { bare: 'not-a-range' } }
+    assert.match(collectVersionFailures(invalid, sdkWithRuntime('^1.30.3'))[0], /engines.bare/)
+  })
+
+  it('keeps the actual SDK runtime range compatible with inference', () => {
+    const inferencePkg = JSON.parse(
+      readFileSync(new URL('../../inference/package.json', import.meta.url), 'utf8')
+    ) as Manifest
+    const sdkPkg = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+    ) as Manifest
+    assert.ok(inferencePkg.engines?.['bare'], 'inference must declare its Bare engine requirement')
+    assert.deepEqual(collectVersionFailures(inferencePkg, sdkPkg), [])
   })
 })
