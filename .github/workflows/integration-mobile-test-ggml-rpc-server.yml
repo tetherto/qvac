@@ -16,6 +16,11 @@ on:
         type: string
         required: false
         default: packages/ggml-rpc-server
+      prebuild_run_id:
+        description: Run id whose ggml-rpc-server prebuilds to install
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
     inputs:
       platform:
@@ -52,6 +57,11 @@ on:
         type: string
         required: false
         default: packages/ggml-rpc-server
+      prebuild_run_id:
+        description: "Run id whose prebuilds to install for this PR. Takes precedence over the same-run build and fails the run if its artifact is missing or expired. Mutually exclusive with building prebuilds in this dispatch."
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -81,7 +91,8 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/run-mobile-integration-tests
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -105,10 +116,10 @@ jobs:
           runner-source-path: validation-data/packages/ggml-rpc-server/test/mobile/integration.auto.cjs
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
-  # A manual run has no sibling PR prebuild job, so produce the exact branch
-  # artifacts in this run before packaging the device app.
+  # Without an explicit run id, produce this ref's artifacts in the dispatch.
+  # A pinned run must not trigger a redundant build that could shadow it.
   prebuild-manual:
-    if: inputs.platform != ''
+    if: inputs.platform != '' && inputs.prebuild_run_id == ''
     permissions:
       actions: read
       contents: write
@@ -131,6 +142,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
+      actions: read
       packages: read
       pull-requests: write
       id-token: write
@@ -142,7 +154,8 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/actions/run-mobile-integration-tests
+          sparse-checkout: |
+            .github/actions/run-mobile-integration-tests
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -157,6 +170,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up mobile test environment
+        id: setup
         uses: ./.github/actions/run-mobile-integration-tests/setup
         with:
           platform: ${{ matrix.platform }}
@@ -164,6 +178,19 @@ jobs:
           addon-npm-name: '@qvac/ggml-rpc-server'
           prebuild-artifact-prefix: prebuild-ggml-rpc-server-
           pat-token: ${{ secrets.GITHUB_TOKEN }}
+          prebuild-run-id: ${{ inputs.prebuild_run_id }}
+
+      - name: Verify the requested prebuild run was installed
+        if: always() && inputs.prebuild_run_id != ''
+        shell: bash
+        env:
+          REQUESTED: ${{ inputs.prebuild_run_id }}
+          RESOLVED: ${{ steps.setup.outputs.prebuild-source-run-id }}
+        run: |
+          if [ "$RESOLVED" != "$REQUESTED" ]; then
+            echo "::error::prebuild_run_id=$REQUESTED was requested but the prebuilds came from '$RESOLVED'."
+            exit 1
+          fi
 
       - name: Build mobile app
         id: build
