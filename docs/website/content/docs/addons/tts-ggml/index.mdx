@@ -94,15 +94,6 @@ Vulkan or CPU. Where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 inherits the host process environment, so exporting it before starting the SDK
 is enough.
 
-On macOS and iOS the prebuilds can also run the Supertonic vocoder and the
-Audio8 codec's synthesis stack on Apple Core ML (the Neural Engine). A stage
-moves there only when a compiled `.mlmodelc` sidecar is staged next to its
-GGUF; without one, or when a call fails on it, synthesis stays on the ggml
-backend. The other engines have no sidecar. Sidecars are not published with
-the models; see the
-[package README](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml#core-ml-sidecars-on-apple)
-for naming, export, and when a sidecar beats Metal.
-
 ## Quickstart
 
 <Steps>
