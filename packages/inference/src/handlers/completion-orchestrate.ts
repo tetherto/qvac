@@ -176,12 +176,14 @@ export async function* orchestrateCompletion(
     // The assistant's tool-call turn goes back verbatim so the model sees
     // its own call syntax; each result follows as a `tool` message.
     history = [...history, { role: 'assistant', content: rawFullText ?? contentText }]
+    // Without a deferred tool, a `tool_search` call is the caller's own tool.
+    const defers = request.tools?.some((tool) => tool.deferLoading === true) ?? false
     for (const call of toolCalls) {
       // `tool_search` is the SDK's own tool: it reads the registered inventory
       // and appends the matched definitions, so it never leaves the worker and
       // the client is never asked to run it. The `toolCall` event still went
       // downstream with the turn's events, so the client can see it happened.
-      if (call.name === TOOL_SEARCH_NAME) {
+      if (defers && call.name === TOOL_SEARCH_NAME) {
         history = [
           ...history,
           {

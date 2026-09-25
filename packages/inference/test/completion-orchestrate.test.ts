@@ -273,3 +273,31 @@ test('orchestrateCompletion: runs tool_search itself and never asks the client',
     'the client still sees that a search happened'
   )
 })
+
+test('orchestrateCompletion: a caller-declared tool_search goes to the client when nothing defers', async (t) => {
+  const ownSearch = {
+    type: 'function' as const,
+    name: 'tool_search',
+    description: 'Search my own index',
+    parameters: { type: 'object' as const, properties: { query: { type: 'string' as const } } }
+  }
+
+  let turn = 0
+  async function* runTurn() {
+    turn++
+    if (turn === 1) yield toolTurn('call-1', 'tool_search', { query: 'docs' })
+    else yield contentTurn('Found it.')
+  }
+
+  const frames = await collect(
+    orchestrateCompletion(
+      baseRequest({ tools: [ownSearch] }),
+      runTurn,
+      stubReader({ 'call-1': { hits: 1 } })
+    )
+  )
+
+  const callbacks = frames.filter((frame) => frame.toolCallback)
+  t.is(callbacks.length, 1, 'the call is delegated to the caller')
+  t.is(callbacks[0]?.toolCallback?.name, 'tool_search')
+})
