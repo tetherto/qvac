@@ -487,8 +487,10 @@ void ParlerModel::loadLocked() {
       cfg_.enhancerGgufPath,
       backend.device == kBackendDeviceGpu,
       "ParlerModel::load: lavasr enhancer: ");
-  auto denoiser = loadDenoiser(
-      cfg_.denoiserGgufPath, "ParlerModel::load: lavasr denoiser: ");
+  LoadedDenoiser denoiser = loadDenoiser(
+      cfg_.denoiserGgufPath,
+      backend.device == kBackendDeviceGpu,
+      "ParlerModel::load: lavasr denoiser: ");
 
   engine_ = std::move(engine);
   backendName_ = backend.name;
@@ -498,13 +500,17 @@ void ParlerModel::loadLocked() {
   enhancer_ = std::move(enhancer.enhancer);
   enhancerBackendDevice_ = enhancer.backendDevice;
   enhancerBackendId_ = enhancer.backendId;
-  denoiser_ = std::move(denoiser);
+  denoiser_ = std::move(denoiser.denoiser);
+  denoiserBackendDevice_ = denoiser.backendDevice;
+  denoiserBackendId_ = denoiser.backendId;
 }
 
 void ParlerModel::unloadLocked() {
   engine_.reset();
   enhancer_.reset();
   denoiser_.reset();
+  denoiserBackendDevice_ = kBackendDeviceNone;
+  denoiserBackendId_ = kBackendIdNone;
 }
 
 void ParlerModel::cancel() const {
@@ -678,6 +684,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats ParlerModel::runtimeStats() const {
       "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
   stats.emplace_back(
       "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
+  stats.emplace_back(
+      "denoiserBackendDevice", static_cast<int64_t>(denoiserBackendDevice_));
+  stats.emplace_back(
+      "denoiserBackendId", static_cast<int64_t>(denoiserBackendId_));
   return stats;
 }
 
