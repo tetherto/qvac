@@ -1,6 +1,6 @@
 const net = require("bare-net");
 const { startRpcServer } = require("../../mobile");
-const { probeRpcServerProtocol } = require("../rpc-protocol.cjs");
+const { probeRpcServerProtocol } = require("../mobile/rpc-protocol.cjs");
 
 async function main() {
   const server = await startRpcServer({ device: "CPU" });
@@ -11,6 +11,15 @@ async function main() {
     );
   } finally {
     await server.stop();
+  }
+
+  try {
+    await startRpcServer({ device: "__qvac_invalid_device__" });
+    throw new Error("Expected an unknown-device startup failure");
+  } catch (error) {
+    if (!/an unknown RPC server device was requested/.test(error.message)) {
+      throw error;
+    }
   }
 }
 

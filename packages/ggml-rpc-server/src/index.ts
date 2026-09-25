@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { connect, createServer, isIP } from 'node:net'
 import { arch, platform } from 'node:process'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 export const DEFAULT_RPC_SERVER_HOST: string = '127.0.0.1'
 export const DEFAULT_RPC_SERVER_START_TIMEOUT_MS: number = 10000
@@ -21,7 +21,15 @@ const SUPPORTED_PREBUILD_TARGETS = new Set([
   'win32-x64',
 ])
 const RDMA_SUPPORT_MARKER = 'RDMA auto-negotiate enabled'
+const RDMA_SUPPORT_MARKER_BYTES = Buffer.from(RDMA_SUPPORT_MARKER)
 const TRUSTED_LAN_WARNING_CODE = 'QVAC_GGML_RPC_SERVER_TRUSTED_LAN'
+const rdmaFileCache = new Map<string, {
+  size: number
+  mtimeMs: number
+  ctimeMs: number
+  ino: number
+  capable: boolean
+}>()
 
 export class RpcServerBinaryNotFoundError extends Error {
   constructor(path: string) {
@@ -128,7 +136,8 @@ export interface RpcServerProcess {
   readonly port: number
   readonly url: string
   readonly device?: string
-  readonly rdmaCapable: boolean
+  /** `null` means capability was not checked because `expectRdma` was not set. */
+  readonly rdmaCapable: boolean | null
   logs(): string
   stop(): Promise<void>
 }
@@ -240,8 +249,32 @@ export function rpcServerLogsIndicateRdmaSupport(logs: string): boolean {
 
 function fileContainsRdmaSupportMarker(path: string): boolean {
   try {
-    return readFileSync(path).includes(Buffer.from(RDMA_SUPPORT_MARKER))
+    const stats = statSync(path)
+    if (!stats.isFile()) {
+      rdmaFileCache.delete(path)
+      return false
+    }
+    const cached = rdmaFileCache.get(path)
+    if (
+      cached !== undefined &&
+      cached.size === stats.size &&
+      cached.mtimeMs === stats.mtimeMs &&
+      cached.ctimeMs === stats.ctimeMs &&
+      cached.ino === stats.ino
+    ) {
+      return cached.capable
+    }
+    const capable = readFileSync(path).includes(RDMA_SUPPORT_MARKER_BYTES)
+    rdmaFileCache.set(path, {
+      size: stats.size,
+      mtimeMs: stats.mtimeMs,
+      ctimeMs: stats.ctimeMs,
+      ino: stats.ino,
+      capable
+    })
+    return capable
   } catch {
+    rdmaFileCache.delete(path)
     return false
   }
 }
@@ -471,8 +504,30 @@ function attachExitCleanup(child: ChildProcess): () => void {
   const cleanup = (): void => {
     signalProcessTree(child, 'SIGTERM')
   }
+  const signals: NodeJS.Signals[] = platform === 'win32'
+    ? ['SIGINT', 'SIGBREAK']
+    : ['SIGINT', 'SIGTERM', 'SIGHUP']
+  const signalHandlers = signals.map((signal) => {
+    const handler = (): void => {
+      cleanup()
+      detach()
+      // A signal listener replaces Node's default exit behavior. Restore it only
+      // when no application (or other managed server) is still handling the signal.
+      if (process.listenerCount(signal) === 0) {
+        process.kill(process.pid, signal)
+      }
+    }
+    return { signal, handler }
+  })
+  const detach = (): void => {
+    process.removeListener('exit', cleanup)
+    for (const { signal, handler } of signalHandlers) {
+      process.removeListener(signal, handler)
+    }
+  }
   process.once('exit', cleanup)
-  return () => process.removeListener('exit', cleanup)
+  for (const { signal, handler } of signalHandlers) process.on(signal, handler)
+  return detach
 }
 
 export async function startRpcServer(options: StartRpcServerOptions = {}): Promise<RpcServerProcess> {
@@ -502,8 +557,8 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     await assertPortAvailable(host, port)
   }
   const device = normalizeDevice(options.device)
-  const binaryPath = options.binaryPath ?? resolveRpcServerBinaryPath()
-  const binaryRdmaCapable = rpcServerBinaryIndicatesRdmaSupport(binaryPath)
+  // Resolve before setting cwd so relative custom paths still name the same executable.
+  const binaryPath = resolve(options.binaryPath ?? resolveRpcServerBinaryPath())
   const startTimeoutMs = options.startTimeoutMs ?? DEFAULT_RPC_SERVER_START_TIMEOUT_MS
   const shutdownGraceMs = options.shutdownGraceMs ?? DEFAULT_RPC_SERVER_SHUTDOWN_GRACE_MS
   const args = rpcServerArgs({
@@ -514,6 +569,7 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     threads: options.threads
   })
   const spawnOptions: SpawnOptions = {
+    cwd: dirname(binaryPath),
     detached: true,
     env: options.env ?? process.env,
     stdio: ['ignore', 'pipe', 'pipe']
@@ -530,13 +586,18 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     throw new RpcServerSpawnError(`Failed to spawn ${binaryPath}`)
   }
 
+  let rdmaCapable: boolean | null = null
   try {
     await waitForListening({ child, host, port, timeoutMs: startTimeoutMs, getTail })
-    if (
-      options.expectRdma === true &&
-      !binaryRdmaCapable &&
-      !rpcServerLogsIndicateRdmaSupport(getTail())
-    ) {
+    // Logs are free to inspect. Only read the packaged binaries when the caller
+    // explicitly requires RDMA capability and the logs do not report it.
+    if (rpcServerLogsIndicateRdmaSupport(getTail())) {
+      rdmaCapable = true
+    } else if (options.expectRdma === true) {
+      rdmaCapable = rpcServerBinaryIndicatesRdmaSupport(binaryPath) ||
+        rpcServerLogsIndicateRdmaSupport(getTail())
+    }
+    if (options.expectRdma === true && rdmaCapable !== true) {
       throw new RpcServerRdmaUnavailableError(getTail())
     }
   } catch (err) {
@@ -546,7 +607,6 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
   }
 
   child.once('exit', detachExitCleanup)
-  const rdmaCapable = binaryRdmaCapable || rpcServerLogsIndicateRdmaSupport(getTail())
 
   return {
     runtime: 'process',

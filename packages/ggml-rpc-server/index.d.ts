@@ -60,7 +60,8 @@ export interface RpcServerProcess {
     readonly port: number;
     readonly url: string;
     readonly device?: string;
-    readonly rdmaCapable: boolean;
+    /** `null` means capability was not checked because `expectRdma` was not set. */
+    readonly rdmaCapable: boolean | null;
     logs(): string;
     stop(): Promise<void>;
 }

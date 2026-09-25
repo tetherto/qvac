@@ -1,8 +1,10 @@
 "use strict";
 
+require("./integration-runtime.cjs");
+require("./rpc-protocol.cjs");
+
 const net = require("bare-net");
 const { startRpcServer } = require("@qvac/ggml-rpc-server");
-const { probeRpcServerProtocol } = require("../rpc-protocol.cjs");
 
 // eslint-disable-next-line no-unused-vars
 async function runRpcServerLifecycle() {
@@ -14,7 +16,11 @@ async function runRpcServerLifecycle() {
   }
 
   try {
-    const probe = await probeRpcServerProtocol(net, server.host, server.port);
+    const probe = await globalThis.probeRpcServerProtocol(
+      net,
+      server.host,
+      server.port,
+    );
     if (probe.deviceCount < 1) {
       throw new Error("Expected the managed RPC server to expose a device");
     }
@@ -25,4 +31,5 @@ async function runRpcServerLifecycle() {
   }
 
   console.log(`Managed mobile RPC lifecycle passed at ${server.url}`);
+  return { summary: { total: 1, passed: 1, failed: 0 } };
 }

@@ -13,6 +13,10 @@
     }
   ],
   "features": {
+    "tests": {
+      "description": "Enable native test configuration",
+      "dependencies": []
+    },
     "rpc-rdma": {
       "description": "Build the managed ggml-rpc-server package with libibverbs/RDMA auto-negotiation support on Linux.",
       "dependencies": [

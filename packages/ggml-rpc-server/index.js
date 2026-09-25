@@ -39,7 +39,9 @@ const SUPPORTED_PREBUILD_TARGETS = new Set([
   "win32-x64",
 ]);
 const RDMA_SUPPORT_MARKER = "RDMA auto-negotiate enabled";
+const RDMA_SUPPORT_MARKER_BYTES = Buffer.from(RDMA_SUPPORT_MARKER);
 const TRUSTED_LAN_WARNING_CODE = "QVAC_GGML_RPC_SERVER_TRUSTED_LAN";
+const rdmaFileCache = new Map();
 class RpcServerBinaryNotFoundError extends Error {
   constructor(path) {
     super(`ggml-rpc-server binary was not found at ${path}`);
@@ -230,10 +232,34 @@ function rpcServerLogsIndicateRdmaSupport(logs) {
 }
 function fileContainsRdmaSupportMarker(path) {
   try {
-    return (0, node_fs_1.readFileSync)(path).includes(
-      Buffer.from(RDMA_SUPPORT_MARKER),
+    const stats = (0, node_fs_1.statSync)(path);
+    if (!stats.isFile()) {
+      rdmaFileCache.delete(path);
+      return false;
+    }
+    const cached = rdmaFileCache.get(path);
+    if (
+      cached !== undefined &&
+      cached.size === stats.size &&
+      cached.mtimeMs === stats.mtimeMs &&
+      cached.ctimeMs === stats.ctimeMs &&
+      cached.ino === stats.ino
+    ) {
+      return cached.capable;
+    }
+    const capable = (0, node_fs_1.readFileSync)(path).includes(
+      RDMA_SUPPORT_MARKER_BYTES,
     );
+    rdmaFileCache.set(path, {
+      size: stats.size,
+      mtimeMs: stats.mtimeMs,
+      ctimeMs: stats.ctimeMs,
+      ino: stats.ino,
+      capable,
+    });
+    return capable;
   } catch {
+    rdmaFileCache.delete(path);
     return false;
   }
 }
@@ -447,8 +473,31 @@ function attachExitCleanup(child) {
   const cleanup = () => {
     signalProcessTree(child, "SIGTERM");
   };
+  const signals =
+    node_process_1.platform === "win32"
+      ? ["SIGINT", "SIGBREAK"]
+      : ["SIGINT", "SIGTERM", "SIGHUP"];
+  const signalHandlers = signals.map((signal) => {
+    const handler = () => {
+      cleanup();
+      detach();
+      // A signal listener replaces Node's default exit behavior. Restore it only
+      // when no application (or other managed server) is still handling the signal.
+      if (process.listenerCount(signal) === 0) {
+        process.kill(process.pid, signal);
+      }
+    };
+    return { signal, handler };
+  });
+  const detach = () => {
+    process.removeListener("exit", cleanup);
+    for (const { signal, handler } of signalHandlers) {
+      process.removeListener(signal, handler);
+    }
+  };
   process.once("exit", cleanup);
-  return () => process.removeListener("exit", cleanup);
+  for (const { signal, handler } of signalHandlers) process.on(signal, handler);
+  return detach;
 }
 async function startRpcServer(options = {}) {
   const host = normalizeHost(options.host ?? exports.DEFAULT_RPC_SERVER_HOST);
@@ -477,8 +526,10 @@ async function startRpcServer(options = {}) {
     await assertPortAvailable(host, port);
   }
   const device = normalizeDevice(options.device);
-  const binaryPath = options.binaryPath ?? resolveRpcServerBinaryPath();
-  const binaryRdmaCapable = rpcServerBinaryIndicatesRdmaSupport(binaryPath);
+  // Resolve before setting cwd so relative custom paths still name the same executable.
+  const binaryPath = (0, node_path_1.resolve)(
+    options.binaryPath ?? resolveRpcServerBinaryPath(),
+  );
   const startTimeoutMs =
     options.startTimeoutMs ?? exports.DEFAULT_RPC_SERVER_START_TIMEOUT_MS;
   const shutdownGraceMs =
@@ -491,6 +542,7 @@ async function startRpcServer(options = {}) {
     threads: options.threads,
   });
   const spawnOptions = {
+    cwd: (0, node_path_1.dirname)(binaryPath),
     detached: true,
     env: options.env ?? process.env,
     stdio: ["ignore", "pipe", "pipe"],
@@ -504,6 +556,7 @@ async function startRpcServer(options = {}) {
     detachExitCleanup();
     throw new RpcServerSpawnError(`Failed to spawn ${binaryPath}`);
   }
+  let rdmaCapable = null;
   try {
     await waitForListening({
       child,
@@ -512,11 +565,16 @@ async function startRpcServer(options = {}) {
       timeoutMs: startTimeoutMs,
       getTail,
     });
-    if (
-      options.expectRdma === true &&
-      !binaryRdmaCapable &&
-      !rpcServerLogsIndicateRdmaSupport(getTail())
-    ) {
+    // Logs are free to inspect. Only read the packaged binaries when the caller
+    // explicitly requires RDMA capability and the logs do not report it.
+    if (rpcServerLogsIndicateRdmaSupport(getTail())) {
+      rdmaCapable = true;
+    } else if (options.expectRdma === true) {
+      rdmaCapable =
+        rpcServerBinaryIndicatesRdmaSupport(binaryPath) ||
+        rpcServerLogsIndicateRdmaSupport(getTail());
+    }
+    if (options.expectRdma === true && rdmaCapable !== true) {
       throw new RpcServerRdmaUnavailableError(getTail());
     }
   } catch (err) {
@@ -525,8 +583,6 @@ async function startRpcServer(options = {}) {
     throw err;
   }
   child.once("exit", detachExitCleanup);
-  const rdmaCapable =
-    binaryRdmaCapable || rpcServerLogsIndicateRdmaSupport(getTail());
   return {
     runtime: "process",
     child,

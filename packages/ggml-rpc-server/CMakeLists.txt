@@ -1,33 +1,17 @@
 cmake_minimum_required(VERSION 3.25)
 
-option(ANDROID_STL "Android STL linkage" c++_shared)
-
-find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
-find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
-
-set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
 
 option(RPC_RDMA "Build qvac-fabric RPC with libibverbs/RDMA auto-negotiation support" OFF)
 if(RPC_RDMA)
   list(APPEND VCPKG_MANIFEST_FEATURES "rpc-rdma")
 endif()
 
-project(ggml-rpc-server C CXX)
+qvac_addon_preproject()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  add_compile_options(-stdlib=libc++)
-  add_link_options(-stdlib=libc++ -static-libstdc++)
-endif()
+project(ggml-rpc-server LANGUAGES C CXX)
 
-if(WIN32)
-  add_definitions(-DNOMINMAX -DWIN32_MEAN_AND_LEAN -DNOGDI)
-endif()
-
-find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-format
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-format COPYONLY)
-configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
-               ${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy COPYONLY)
+qvac_addon_project_setup()
 
 find_package(OpenSSL)
 find_package(llama CONFIG REQUIRED)
@@ -39,9 +23,16 @@ set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
 message("Building ggml-rpc-server tool bundle at '${PREBUILD_DIR}'")
 
 set(BACKEND_DL_LIBS "")
-if((ANDROID OR UNIX) AND NOT APPLE)
+if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
-    list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+    if(TARGET ggml::${_backend})
+      get_target_property(_backend_type ggml::${_backend} TYPE)
+      # Dynamically loaded backends are MODULE targets on some platforms.
+      # Static archives must not be copied into the prebuild.
+      if(_backend_type STREQUAL "MODULE_LIBRARY" OR _backend_type STREQUAL "SHARED_LIBRARY")
+        list(APPEND BACKEND_DL_LIBS INSTALL TARGET ggml::${_backend})
+      endif()
+    endif()
   endforeach()
 endif()
 
@@ -52,7 +43,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/binding.cpp
 )
 target_link_libraries(${ggml-rpc-server-addon} PRIVATE llama::llama)
-target_compile_features(${ggml-rpc-server-addon} PRIVATE cxx_std_17)
+qvac_addon_static_cxx_runtime(${ggml-rpc-server-addon}_module)
 target_compile_definitions(
   ${ggml-rpc-server-addon}
   PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}"
