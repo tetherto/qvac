@@ -1,5 +1,12 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
 
+// Six of these stay on their executors. They feed the model tensors the test
+// generates -- images of a given shape, a state vector, token ids, an
+// attention mask -- and a step can name data but not compute it, so the
+// vocabulary has no way to describe "a zero-filled Float32Array of
+// chunkSize × actionDim". The four `hparams` tests, which only read the loaded
+// model's shape back, are migrated.
+//
 // SmolVLA-LIBERO inference always returns a chunkSize × actionDim Float32Array
 // of robot actions plus per-stage timings. These tests exercise the SDK's
 // `vla()` / `vlaHparams()` client functions end-to-end against a registry-
@@ -497,6 +504,112 @@ export const vlaGrootMultiSetEmbodiment = createVlaTest(
   'vla-groot-multi'
 )
 
+/**
+ * Reading a model's hyper-parameters and checking they describe a usable model.
+ *
+ * The executors checked this with a JavaScript function, which cannot cross to
+ * another client. As named assertions it is the same check everywhere.
+ *
+ * The checks are per architecture rather than shared, because the originals
+ * were: GR00T reports `tokenizerMaxLength: 0` (the prompt length follows the
+ * camera count, not a hparam) and so never had it in its positive-integer
+ * list, pi05 pins three cameras and discrete state, and the multi-embodiment
+ * GGUF asserts the selected embodiment instead of the dimensions. One shared
+ * list would have to be the intersection, which is a weaker test than any of
+ * them.
+ */
+const vlaHparamsSteps = (dependency: string, checks: Step[]): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { call: { method: 'vlaHparams', params: { modelId: '$model' }, as: 'run' } },
+  { project: { from: '$run', path: 'hparams', as: 'hparams' } },
+  ...checks
+]
+
+/** The backend the runtime actually has -- or null, meaning "not reported". */
+const backendIsKnown: Step[] = [
+  { project: { from: '$run', path: 'backendName', as: 'backend' } },
+  {
+    assert: {
+      on: '$backend',
+      named: 'valueIn',
+      with: { values: ['CPU', 'Metal', 'Vulkan', 'OpenCL'], allowNull: true }
+    }
+  }
+]
+
+const dimensionsArePositive = (fields: string[]): Step =>
+  ({ assert: { on: '$hparams', named: 'positiveIntegers', with: { fields } } }) as Step
+
+const hparamsEqual = (expected: Record<string, unknown>): Step =>
+  ({
+    assert: {
+      on: '$hparams',
+      named: 'fieldsMatch',
+      with: { fields: Object.keys(expected), expected }
+    }
+  }) as Step
+
+/** Every dimension SmolVLA and pi05 report, including the tokenizer bound. */
+const FULL_DIMENSIONS = [
+  'chunkSize',
+  'actionDim',
+  'maxActionDim',
+  'maxStateDim',
+  'tokenizerMaxLength',
+  'visionImageSize'
+]
+
+vlaHparamsShape.steps = vlaHparamsSteps('vla', [
+  dimensionsArePositive(FULL_DIMENSIONS),
+  ...backendIsKnown
+])
+
+vlaPi05HparamsShape.steps = vlaHparamsSteps('vla-pi05', [
+  dimensionsArePositive(FULL_DIMENSIONS),
+  hparamsEqual({ numCameras: 3, stateInputMode: 'discrete' }),
+  ...backendIsKnown
+])
+
+vlaGrootHparamsShape.steps = vlaHparamsSteps('vla-groot', [
+  // No `tokenizerMaxLength`: GR00T reports 0 for it, deliberately.
+  dimensionsArePositive([
+    'chunkSize',
+    'actionDim',
+    'maxActionDim',
+    'maxStateDim',
+    'visionImageSize',
+    'imagePatchElems'
+  ]),
+  hparamsEqual({ imageInputMode: 'patches', numCameras: 2, stateInputMode: 'continuous' }),
+  ...backendIsKnown
+])
+
+vlaGrootMultiHparamsShape.steps = vlaHparamsSteps('vla-groot-multi', [
+  hparamsEqual({ imageInputMode: 'patches' }),
+  { project: { from: '$hparams', path: 'selectedEmbodimentTag', as: 'tag' } },
+  { assert: { on: '$tag', named: 'nonEmptyText' } },
+  { project: { from: '$hparams', path: 'selectedEmbodimentCatId', as: 'catId' } },
+  { assert: { on: '$catId', named: 'numbersInRange', with: { min: 0, max: 31, integer: true } } }
+])
+
+/**
+ * Tests that feed the model generated tensors -- images, state, tokens, a
+ * mask -- and check the actions that come back. The vocabulary has no way to
+ * describe building those arrays, and putting a megabyte of synthetic floats
+ * in a definition would not make it data in any useful sense, so they keep
+ * their hand-written bodies.
+ */
+const VLA_SYNTHETIC_INPUTS = new Set([
+  'vla-run-synthetic-shape',
+  'vla-run-stats',
+  'vla-invalid-img-size',
+  'vla-pi05-run-synthetic-shape',
+  'vla-pi05-run-stats',
+  'vla-pi05-invalid-img-size',
+  'vla-groot-run-synthetic-shape',
+  'vla-groot-multi-set-embodiment'
+])
+
 export const vlaTests: TestDefinition[] = [
   vlaHparamsShape,
   vlaRunSyntheticShape,
@@ -511,3 +624,27 @@ export const vlaTests: TestDefinition[] = [
   vlaGrootMultiHparamsShape,
   vlaGrootMultiSetEmbodiment
 ]
+
+// The hyper-parameter bodies are assigned above, each against its own
+// architecture's checks; the tensor-fed tests keep their imperative ones.
+
+/**
+ * Not runnable on the Python client yet.
+ *
+ * A skip rather than an `incomplete`, decided deliberately: these are the
+ * definitions the step vocabulary cannot express, so they would otherwise sit
+ * in the Python column as debt with no owner and no date. The reason travels
+ * with the rule, which is what keeps the skip auditable -- and they become
+ * runnable the moment the per-client imperative bodies are written.
+ *
+ * Only definitions with no declarative body are skipped; anything already
+ * migrated runs on Python like everywhere else.
+ */
+for (const test of vlaTests) {
+  if (test.steps || test.skip) continue
+  test.skip = {
+    reason:
+      'the Python client has no body for this: it feeds the model generated tensors -- images, state, tokens, a mask -- which the step vocabulary has no way to describe, so the Python client needs a hand-written body before this can run there',
+    platforms: ['desktop-python']
+  }
+}

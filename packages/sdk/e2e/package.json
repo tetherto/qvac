@@ -7,7 +7,7 @@
   "description": "SDK tests using QVAC test framework",
   "scripts": {
     "prepare:sdk": "cd .. && (bun i && bun run build); cd e2e",
-    "build": "npm run clean && tsc",
+    "build": "npm run clean && tsc && npm run emit:resource-table",
     "bundle:sdk": "node scripts/bundle-sdk.mjs",
     "install:build": "npm install --install-links && npm run build",
     "install:build:sdk": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run reconcile:inference && npm run install:build && npm run bundle:sdk && npm run unpin:consumer-inference",
@@ -27,7 +27,10 @@
     "clean:all": "npm run clean:build && npm run clean:config && npm run clean:cache && npm run clean:dependencies",
     "clean:sdk-snapshot": "rm -rf node_modules/@qvac/sdk build/consumers/ios/node_modules/@qvac/sdk build/consumers/android/node_modules/@qvac/sdk",
     "consumer:desktop:run": "qvac-test run:consumer:desktop",
-    "consumer:electron:run": "qvac-test run:consumer:electron"
+    "consumer:electron:run": "qvac-test run:consumer:electron",
+    "sync:test-suite": "./sync-test-suite.sh",
+    "emit:resource-table": "node scripts/emit-resource-table.mjs",
+    "check:resource-table": "node scripts/emit-resource-table.mjs --check"
   },
   "dependencies": {
     "@qvac/sdk": "file:..",

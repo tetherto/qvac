@@ -1,4 +1,25 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/**
+ * One classification of the bundled sample image.
+ *
+ * `asset` is what collapses the node/mobile executor split for image tests:
+ * the definition names the image, and each client resolves it the way its
+ * platform can -- a filesystem path here, a bundled-asset URI on mobile.
+ */
+const classifySteps = (checks: Step[], topK?: string): Step[] => [
+  { useModel: { deps: ['classification'], as: 'model' } },
+  { asset: { kind: 'image', file: 'elephant.jpg', as: 'image' } },
+  {
+    call: {
+      method: 'classify',
+      params: { modelId: '$model', image: '$image', ...(topK ? { topK } : {}) },
+      as: 'response'
+    }
+  },
+  { project: { from: '$response', path: 'results', as: 'results' } },
+  ...checks
+]
 
 // The bundled MobileNetV3-Small classifier returns 3 classes
 // ("food", "report", "other") with softmax probabilities. These tests
@@ -79,6 +100,29 @@ export const classificationResultsShape = createClassificationTest(
   ['smoke']
 )
 
+classificationResultsShape.steps = classifySteps([
+  { assert: { on: '$results', named: 'lengthAtLeast', with: { length: 1 } } },
+  {
+    repeat: {
+      over: '$results',
+      as: 'item',
+      collectInto: 'labels',
+      steps: [
+        { project: { from: '$item', path: 'label', as: 'label' } },
+        { assert: { on: '$label', named: 'nonEmptyText' } }
+      ]
+    }
+  },
+  {
+    assert: {
+      on: '$results',
+      named: 'numbersInRange',
+      with: { field: 'confidence', min: 0, max: 1 }
+    }
+  },
+  { assert: { on: '$results', named: 'sortedDescendingBy', with: { field: 'confidence' } } }
+])
+
 // Softmax invariant: probabilities sum to approximately 1 when topK is not
 // applied. Allow 1e-3 slack for FP16 / accumulator noise.
 export const classificationConfidenceSum = createClassificationTest(
@@ -105,6 +149,17 @@ export const classificationConfidenceSum = createClassificationTest(
   }
 )
 
+classificationConfidenceSum.steps = classifySteps([
+  { assert: { on: '$results', named: 'lengthAtLeast', with: { length: 1 } } },
+  {
+    assert: {
+      on: '$results',
+      named: 'sumsTo',
+      with: { field: 'confidence', total: 1, tolerance: 1e-3 }
+    }
+  }
+])
+
 // `topK: 1` must truncate to exactly one result.
 export const classificationTopK = createClassificationTest(
   'classification-topk',
@@ -127,6 +182,11 @@ export const classificationTopK = createClassificationTest(
   },
   60000,
   ['smoke']
+)
+
+classificationTopK.steps = classifySteps(
+  [{ assert: { on: '$results', named: 'lengthIs', with: { length: '$params.topK' } } }],
+  '$params.topK'
 )
 
 // An invalid image buffer (too small to decode as JPEG/PNG) must reject
@@ -159,6 +219,41 @@ export const classificationInvalidImage = createClassificationTest(
     }
   }
 )
+
+/**
+ * The rejection and the recovery are one test: an addon that wedged on the
+ * error path would still pass the rejection half.
+ *
+ * The bad input is four bytes written in the catalog rather than a checked-in
+ * file, so what makes it invalid is readable.
+ */
+classificationInvalidImage.steps = [
+  { useModel: { deps: ['classification'], as: 'model' } },
+  { asset: { kind: 'bytes', file: '00010203', as: 'badImage' } },
+  {
+    callError: {
+      method: 'classify',
+      params: { modelId: '$model', image: '$badImage' },
+      as: 'err'
+    }
+  },
+  // Only that it was refused, and with something to report. The original
+  // asserted `rejected` and nothing about the error's shape, and the SDK's
+  // refusal here carries neither a `code` nor a `cause` -- demanding one would
+  // be this migration inventing a requirement the product never made.
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', named: 'nonEmptyText' } },
+  { asset: { kind: 'image', file: 'elephant.jpg', as: 'image' } },
+  {
+    call: {
+      method: 'classify',
+      params: { modelId: '$model', image: '$image' },
+      as: 'recovery'
+    }
+  },
+  { project: { from: '$recovery', path: 'results', as: 'results' } },
+  { assert: { on: '$results', named: 'lengthAtLeast', with: { length: 1 } } }
+]
 
 export const classificationTests: TestDefinition[] = [
   classificationResultsShape,

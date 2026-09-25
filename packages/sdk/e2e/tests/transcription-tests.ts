@@ -1,5 +1,57 @@
 // Transcription test definitions
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/**
+ * One transcription of one audio fixture.
+ *
+ * `asset` with `form: 'path'` is what lets this run on desktop and on mobile
+ * from one body: the two executors differed in nothing but how an audio file
+ * name became something the SDK could open.
+ */
+const transcriptionSteps = (dependency = 'whisper'): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+  {
+    call: {
+      method: 'transcribe',
+      params: { modelId: '$model', audioChunk: '$audio', prompt: '$params.prompt?' },
+      as: 'run'
+    }
+  },
+  { project: { from: '$run', path: 'text', as: 'text' } },
+  { assert: { on: '$text', use: 'expectation' } }
+]
+
+/** A transcription that must be rejected, e.g. a corrupted file. */
+const transcriptionRejects = (dependency = 'whisper'): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+  {
+    callError: {
+      method: 'transcribe',
+      params: { modelId: '$model', audioChunk: '$audio' },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', use: 'expectation' } }
+]
+
+/**
+ * Bodies that are more than one call: a queue recovering from a malformed
+ * chunk, and the two metadata tests that assert on segment structure rather
+ * than on the transcript.
+ */
+const TRANSCRIPTION_MULTI_STEP = new Set([
+  'transcription-f32le-queue-recovery',
+  'transcription-metadata-batch',
+  'transcription-metadata-streaming'
+])
+
+/** Closes whatever session the body opened, on both paths. */
+const destroySession: Step[] = [
+  { call: { method: 'transcribeStreamDestroy', params: { sessionId: '$sessionId?' } } }
+]
 
 const createTranscriptionTest = (
   testId: string,
@@ -18,6 +70,7 @@ const createTranscriptionTest = (
   params: { audioFileName, timeout: 300000 },
   expectation,
   ...(suites && { suites }),
+  steps: TRANSCRIPTION_MULTI_STEP.has(testId) ? undefined : transcriptionSteps(),
   metadata: {
     category: 'transcription',
     dependency: 'whisper',
@@ -178,6 +231,19 @@ export const transcriptionMetadataBatch: TestDefinition = {
   testId: 'transcription-metadata-batch',
   params: { audioFileName: 'transcription-short-wav.wav', metadata: true },
   expectation: { validation: 'function', fn: () => true },
+  steps: [
+    { useModel: { deps: ['whisper'], as: 'model' } },
+    { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+    {
+      call: {
+        method: 'transcribe',
+        params: { modelId: '$model', audioChunk: '$audio', metadata: true },
+        as: 'run'
+      }
+    },
+    { project: { from: '$run', path: 'segments', as: 'segments' } },
+    { assert: { on: '$segments', named: 'transcriptSegmentsShape' } }
+  ],
   metadata: {
     category: 'transcription',
     dependency: 'whisper',
@@ -193,6 +259,46 @@ export const transcriptionMetadataStreaming: TestDefinition = {
     chunkMs: 100
   },
   expectation: { validation: 'function', fn: () => true },
+  // The same segment contract as the batch case, over a live session: a
+  // streaming transcript that arrived out of audio-time order would reassemble
+  // wrong without any one segment looking wrong.
+  steps: [
+    { useModel: { deps: ['whisper'], as: 'model' } },
+    { asset: { kind: 'audio', file: '$params.audioFileName', as: 'audio' } },
+    {
+      call: {
+        method: 'transcribeStreamOpen',
+        params: { modelId: '$model', metadata: true },
+        as: 'session'
+      }
+    },
+    { project: { from: '$session', path: 'sessionId', as: 'sessionId' } },
+    {
+      call: {
+        method: 'transcribeStreamWrite',
+        params: {
+          sessionId: '$sessionId',
+          audio: '$audio',
+          sampleFormat: 'f32le',
+          pace: false,
+          chunkMs: '$params.chunkMs',
+          trailingSilenceMs: '$params.trailingSilenceMs'
+        }
+      }
+    },
+    { call: { method: 'transcribeStreamEnd', params: { sessionId: '$sessionId' } } },
+    {
+      call: {
+        method: 'transcribeStreamDrain',
+        collect: 'events',
+        params: { sessionId: '$sessionId' },
+        as: 'drained'
+      }
+    },
+    { project: { from: '$drained', path: 'events', as: 'segments' } },
+    { assert: { on: '$segments', named: 'transcriptSegmentsShape' } }
+  ],
+  finally: destroySession,
   metadata: {
     category: 'transcription',
     dependency: 'whisper',
@@ -220,3 +326,14 @@ export const transcriptionTests = [
   transcriptionMetadataBatch,
   transcriptionMetadataStreaming
 ]
+
+/**
+ * Attach a body to the definitions written as literals rather than through the
+ * factory. Same three shapes the executor dispatched on: a rejection, a
+ * prompted transcription, a plain one.
+ */
+for (const test of transcriptionTests) {
+  if (test.steps || TRANSCRIPTION_MULTI_STEP.has(test.testId)) continue
+  test.steps =
+    test.expectation.validation === 'throws-error' ? transcriptionRejects() : transcriptionSteps()
+}

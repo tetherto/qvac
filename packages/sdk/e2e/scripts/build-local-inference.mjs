@@ -133,6 +133,12 @@ try {
     ],
     E2E_DIR
   )
+  // The install above restores @qvac/test-suite from the registry, so the build
+  // that follows would type-check the catalog against the published framework
+  // rather than this checkout's. CI solves this with the `test-suite-source`
+  // input; locally this is the equivalent, and it has to land between the
+  // install and the build.
+  run('npm', ['run', 'sync:test-suite'], E2E_DIR)
   run('npm', ['run', 'build'], E2E_DIR)
   run('npm', ['run', 'bundle:sdk'], E2E_DIR)
 

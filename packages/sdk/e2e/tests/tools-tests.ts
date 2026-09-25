@@ -1,6 +1,52 @@
 // Tools/Function calling test definitions
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
 import type { ToolDialect } from '@qvac/sdk'
+
+/**
+ * One tool-enabled completion, checked either by its answer or by the call it
+ * made.
+ *
+ * `collect: 'text'` brings back both the text and the structured tool calls,
+ * because which of the two the model produced is exactly what these tests ask
+ * about -- and running the completion twice to look at them separately would
+ * be a different test.
+ */
+const toolsSteps = (
+  dependency: string,
+  declared: string[],
+  expectedToolCall?: { name: string; argKeys?: string[] }
+): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  {
+    call: {
+      method: 'completion',
+      collect: 'text',
+      params: {
+        modelId: '$model',
+        history: '$params.history',
+        tools: '$params.tools',
+        stream: '$params.stream',
+        toolDialect: '$params.toolDialect?'
+      },
+      as: 'run'
+    }
+  },
+  ...(expectedToolCall
+    ? ([
+        { project: { from: '$run', path: 'toolCalls', as: 'toolCalls' } },
+        {
+          assert: {
+            on: '$toolCalls',
+            named: 'toolCallShape',
+            with: { name: expectedToolCall.name, argKeys: expectedToolCall.argKeys ?? [], declared }
+          }
+        }
+      ] as Step[])
+    : ([
+        { project: { from: '$run', path: 'text', as: 'text' } },
+        { assert: { on: '$text', use: 'expectation' } }
+      ] as Step[]))
+]
 
 // Helper for creating tools tests
 const createToolsTest = (
@@ -46,6 +92,11 @@ const createToolsTest = (
       ...(options.expectedToolCall && { expectedToolCall: options.expectedToolCall })
     },
     expectation,
+    steps: toolsSteps(
+      dependency,
+      tools.map((tool) => tool.name),
+      options.expectedToolCall
+    ),
     ...(options.suites && { suites: options.suites }),
     metadata: {
       category: 'tools',
@@ -184,9 +235,19 @@ const toolsTestIds = [
   'tools-context-size-impact'
 ]
 
-// Generate placeholder tests for remaining tools tests
+/**
+ * Generate the remaining tools tests.
+ *
+ * Every one of these carries identical params -- the same prompt, the same
+ * single tool, the same `type: string` expectation -- so they are 42 copies of
+ * one test wearing 42 ids. That was already true before the migration; giving
+ * them a declarative body does not make it more true, but it does make it
+ * visible, because the body is now written once and shared rather than reached
+ * through a handler each of them registers.
+ */
 const additionalToolsTests: TestDefinition[] = toolsTestIds.map((testId) => ({
   testId,
+  steps: toolsSteps('tools', ['test_function']),
   params: {
     history: [{ role: 'user', content: 'Test function calling' }],
     tools: [

@@ -1,0 +1,741 @@
+{
+  "llm": {
+    "constant": {
+      "$const": "LLAMA_3_2_1B_INST_Q4_0"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 2048
+    }
+  },
+  "llm-small-ctx": {
+    "constant": {
+      "$const": "LLAMA_3_2_1B_INST_Q4_0"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 512
+    }
+  },
+  "llm-batch": {
+    "constant": {
+      "$const": "LLAMA_3_2_1B_INST_Q4_0"
+    },
+    "type": "llm",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 4096,
+      "parallel": 4
+    }
+  },
+  "tools-batch": {
+    "constant": {
+      "$const": "QWEN3_1_7B_INST_Q4"
+    },
+    "type": "llm",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true,
+      "parallel": 2
+    }
+  },
+  "finetune-llm": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "QWEN3_1_7B_INST_Q4"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 2048
+    }
+  },
+  "finetune-llm-qwen35": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q8_0"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 2048
+    }
+  },
+  "embeddings": {
+    "constant": {
+      "$const": "GTE_LARGE_FP16"
+    },
+    "type": "llamacpp-embedding"
+  },
+  "whisper": {
+    "constant": {
+      "$const": "WHISPER_TINY"
+    },
+    "type": "whispercpp-transcription",
+    "config": {
+      "vadModelSrc": {
+        "$const": "VAD_SILERO_5_1_2"
+      },
+      "audio_format": "f32le",
+      "strategy": "greedy",
+      "language": "en",
+      "translate": false,
+      "no_timestamps": false,
+      "single_segment": false,
+      "temperature": 0,
+      "suppress_blank": true,
+      "suppress_nst": true,
+      "vad_params": {
+        "threshold": 0.35,
+        "min_speech_duration_ms": 200,
+        "min_silence_duration_ms": 150,
+        "max_speech_duration_s": 30,
+        "speech_pad_ms": 600,
+        "samples_overlap": 0.3
+      }
+    }
+  },
+  "tools": {
+    "constant": {
+      "$const": "QWEN3_1_7B_INST_Q4"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true
+    }
+  },
+  "tools-qwen35": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true
+    }
+  },
+  "tools-gemma4": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "GEMMA4_2B_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true
+    }
+  },
+  "ocr": {
+    "constant": {
+      "$const": "OCR_LATIN"
+    },
+    "type": "ggml-ocr",
+    "config": {
+      "langList": [
+        "en"
+      ],
+      "detectorModelSrc": {
+        "$const": "OCR_CRAFT"
+      }
+    }
+  },
+  "doctr": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "OCR_DOCTR"
+    },
+    "type": "ggml-ocr"
+  },
+  "vla": {
+    "on": [
+      "desktop",
+      "mobile"
+    ],
+    "constant": {
+      "$const": "SMOLVLA_LIBERO_VISION_Q8"
+    },
+    "type": "ggml-vla",
+    "config": {
+      "backend": "cpu"
+    }
+  },
+  "vla-pi05": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "PI05_BASE_Q_AGGRESSIVE"
+    },
+    "type": "ggml-vla",
+    "config": {
+      "backend": "cpu"
+    }
+  },
+  "vla-groot": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "GROOT_Q5_VF16"
+    },
+    "type": "ggml-vla",
+    "config": {
+      "backend": "cpu"
+    }
+  },
+  "vla-groot-multi": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "GROOT_MULTI_Q5_VF16"
+    },
+    "type": "ggml-vla",
+    "config": {
+      "backend": "cpu"
+    }
+  },
+  "classification": {
+    "type": "ggml-classification"
+  },
+  "echo": {
+    "type": "echo",
+    "modelSrc": "",
+    "skipPreDownload": true
+  },
+  "multi-gpu-embeddings": {
+    "constant": {
+      "$const": "EMBEDDINGGEMMA_300M_Q8_0"
+    },
+    "type": "llamacpp-embedding",
+    "skipPreDownload": true
+  },
+  "sharded-embeddings": {
+    "constant": {
+      "$const": "GTE_LARGE_335M_FP16_SHARD"
+    },
+    "type": "llamacpp-embedding",
+    "skipPreDownload": true
+  },
+  "sharded-llm": {
+    "constant": {
+      "$const": "LLAMA_3_2_1B_INST_Q4_0_SHARD"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 2048
+    },
+    "skipPreDownload": true
+  },
+  "indictrans-en-hi": {
+    "constant": {
+      "$const": "MARIAN_EN_HI_INDIC_200M_Q4_0"
+    },
+    "type": "nmtcpp-translation",
+    "config": {
+      "engine": "IndicTrans",
+      "from": "eng_Latn",
+      "to": "hin_Deva"
+    }
+  },
+  "indictrans-hi-en": {
+    "constant": {
+      "$const": "MARIAN_HI_EN_INDIC_200M_Q4_0"
+    },
+    "type": "nmtcpp-translation",
+    "config": {
+      "engine": "IndicTrans",
+      "from": "hin_Deva",
+      "to": "eng_Latn"
+    }
+  },
+  "bergamot-en-fr": {
+    "constant": {
+      "$const": "BERGAMOT_EN_FR"
+    },
+    "type": "nmtcpp-translation",
+    "config": {
+      "engine": "Bergamot",
+      "from": "en",
+      "to": "fr"
+    }
+  },
+  "bergamot-fr-en": {
+    "constant": {
+      "$const": "BERGAMOT_FR_EN"
+    },
+    "type": "nmtcpp-translation",
+    "config": {
+      "engine": "Bergamot",
+      "from": "fr",
+      "to": "en"
+    },
+    "skipPreDownload": true
+  },
+  "bergamot-en-es": {
+    "constant": {
+      "$const": "BERGAMOT_EN_ES"
+    },
+    "type": "nmtcpp-translation",
+    "config": {
+      "engine": "Bergamot",
+      "from": "en",
+      "to": "es"
+    }
+  },
+  "bergamot-es-it-pivot": {
+    "constant": {
+      "$const": "BERGAMOT_ES_EN"
+    },
+    "type": "nmtcpp-translation",
+    "config": {
+      "engine": "Bergamot",
+      "from": "es",
+      "to": "it",
+      "pivotModel": {
+        "modelSrc": {
+          "$const": "BERGAMOT_EN_IT"
+        },
+        "beamsize": 4,
+        "temperature": 0.3
+      }
+    }
+  },
+  "tts-chatterbox": {
+    "constant": {
+      "$const": "TTS_T3_TURBO_EN_CHATTERBOX_Q4_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "chatterbox",
+      "language": "en",
+      "useGPU": true,
+      "s3genModelSrc": {
+        "$const": "TTS_S3GEN_EN_CHATTERBOX_Q4_0"
+      },
+      "streamChunkTokens": 25,
+      "streamFirstChunkTokens": 10,
+      "cfmSteps": 1,
+      "referenceAudioSrc": {
+        "$asset": {
+          "kind": "audio",
+          "file": "transcription-short-wav.wav"
+        }
+      }
+    }
+  },
+  "tts-parler": {
+    "constant": {
+      "$const": "TTS_MINI_V1_EN_PARLER_TTS_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "parler",
+      "useGPU": true,
+      "seed": 42,
+      "topK": 1,
+      "maxFrames": 430,
+      "streamChunkTokens": 43,
+      "streamFirstChunkTokens": 20
+    }
+  },
+  "tts-parler-indic": {
+    "constant": {
+      "$const": "TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "parler",
+      "useGPU": true,
+      "seed": 42,
+      "topK": 1,
+      "maxFrames": 430,
+      "normalizeNumbers": true
+    }
+  },
+  "tts-cosyvoice3": {
+    "constant": {
+      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "cosyvoice3",
+      "useGPU": true,
+      "seed": 42
+    }
+  },
+  "tts-cosyvoice3-native-stream": {
+    "constant": {
+      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "cosyvoice3",
+      "useGPU": true,
+      "seed": 42,
+      "streamChunkTokens": 25,
+      "streamFirstChunkTokens": 10
+    }
+  },
+  "tts-audio8": {
+    "constant": {
+      "$const": "TTS_LM_MULTILINGUAL_AUDIO8_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "audio8",
+      "audio8CodecDecoderModelSrc": {
+        "$const": "TTS_CODEC_DECODER_AUDIO8_Q8_0"
+      },
+      "greedy": true,
+      "maxFrames": 130,
+      "seed": 42
+    }
+  },
+  "tts-supertonic": {
+    "constant": {
+      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "supertonic",
+      "language": "en",
+      "voice": "F1",
+      "useGPU": true
+    }
+  },
+  "tts-supertonic-multilingual": {
+    "constant": {
+      "$const": "TTS_MULTILINGUAL_SUPERTONIC3_Q4_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "supertonic",
+      "language": "es",
+      "voice": "F1",
+      "useGPU": true
+    }
+  },
+  "tts-supertonic-8k": {
+    "constant": {
+      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "supertonic",
+      "language": "en",
+      "voice": "F1",
+      "useGPU": true,
+      "outputSampleRate": 8000
+    }
+  },
+  "tts-supertonic-enhanced": {
+    "constant": {
+      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+    },
+    "type": "tts-ggml",
+    "config": {
+      "ttsEngine": "supertonic",
+      "language": "en",
+      "voice": "F1",
+      "useGPU": true,
+      "lavasrDenoiserModelSrc": {
+        "$const": "TTS_DENOISER_LAVASR_FP16"
+      },
+      "lavasrEnhancerModelSrc": {
+        "$const": "TTS_ENHANCER_LAVASR_FP16"
+      }
+    }
+  },
+  "parakeet-tdt": {
+    "constant": {
+      "$const": "PARAKEET_TDT_0_6B_V3_Q4_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-ctc": {
+    "constant": {
+      "$const": "PARAKEET_CTC_0_6B_Q4_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-unified": {
+    "constant": {
+      "$const": "PARAKEET_UNIFIED_0_6B_Q4_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-indic-conformer": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "PARAKEET_INDIC_CONFORMER_CTC_Q4_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {
+      "language": "hi"
+    }
+  },
+  "parakeet-sortformer": {
+    "constant": {
+      "$const": "PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-eou": {
+    "constant": {
+      "$const": "PARAKEET_EOU_120M_V1_Q4_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "bci": {
+    "on": [
+      "desktop",
+      "electron"
+    ],
+    "constant": {
+      "$const": "BCI_WINDOWED"
+    },
+    "type": "bci-whispercpp-transcription",
+    "config": {
+      "whisperConfig": {
+        "language": "en",
+        "temperature": 0
+      },
+      "miscConfig": {
+        "caption_enabled": false
+      },
+      "bciConfig": {
+        "day_idx": 1
+      }
+    }
+  },
+  "vision": {
+    "constant": {
+      "$const": "VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "image_no_upscale": "on",
+      "projectionModelSrc": {
+        "$const": "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0"
+      }
+    }
+  },
+  "vision-batch": {
+    "constant": {
+      "$const": "VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 2048,
+      "parallel": 2,
+      "image_no_upscale": "on",
+      "projectionModelSrc": {
+        "$const": "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0"
+      }
+    }
+  },
+  "vision-upscale": {
+    "constant": {
+      "$const": "VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "image_no_upscale": "off",
+      "projectionModelSrc": {
+        "$const": "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0"
+      }
+    }
+  },
+  "diffusion": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "device": "gpu",
+      "threads": 4,
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      }
+    }
+  },
+  "world": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "ABOT_WORLD_0_5B_Q8_0"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "mode": "world",
+      "taehvModelSrc": {
+        "$const": "ABOT_WORLD_0_5B_LF_TAEHV_VAE"
+      },
+      "t5XxlModelSrc": {
+        "$const": "UMT5_XXL_ENC_Q8_0"
+      },
+      "vaeModelSrc": {
+        "$const": "ABOT_WORLD_0_5B_LF_WAN_VAE"
+      },
+      "world": {
+        "seed": 42,
+        "kvCache": true,
+        "frameJpegQuality": 85
+      }
+    }
+  },
+  "audiogen-turbo": {
+    "on": [
+      "desktop"
+    ],
+    "type": "audiogen-ggml",
+    "config": {
+      "textEncModelSrc": {
+        "$const": "AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0"
+      },
+      "lmModelSrc": {
+        "$const": "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0"
+      },
+      "ditModelSrc": {
+        "$const": "AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "AUDIOGEN_VAE_BF16"
+      },
+      "useGPU": true,
+      "inferenceSteps": 8
+    }
+  },
+  "diffusion-fa": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "device": "gpu",
+      "threads": 4,
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
+      "diffusion_fa": true
+    }
+  },
+  "diffusion-fa-disabled": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "device": "gpu",
+      "threads": 4,
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
+      "diffusion_fa": false
+    }
+  },
+  "diffusion-esrgan": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "SD_V2_1_1B_Q8_0"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "device": "gpu",
+      "threads": 4,
+      "prediction": "v",
+      "params_backend": "vae=cpu",
+      "upscaler": {
+        "type": "esrgan",
+        "model_src": {
+          "$const": "REALESRGAN_X4PLUS_ANIME_6B"
+        },
+        "tile_size": 128
+      }
+    }
+  },
+  "upscaler": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "REALESRGAN_X4PLUS_ANIME_6B"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "mode": "upscale",
+      "upscaler": {
+        "tile_size": 128
+      }
+    }
+  },
+  "upscaler-cpu": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "REALESRGAN_X4PLUS_ANIME_6B"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "mode": "upscale",
+      "device": "cpu",
+      "upscaler": {
+        "tile_size": 64
+      }
+    }
+  }
+}

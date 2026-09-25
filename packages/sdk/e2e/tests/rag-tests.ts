@@ -1,5 +1,48 @@
 // RAG test definitions
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/**
+ * Ingests one document and checks that chunks came back.
+ *
+ * The workspace is deleted afterwards whether the body passed or not. The
+ * executor never did this -- it disambiguated instead, suffixing the workspace
+ * with the embedding model's id so runs against different models could not mix
+ * -- but a workspace that is gone by the end cannot collide with anything, and
+ * leaving state behind is what made the suffix necessary in the first place.
+ */
+const ingestSteps = (document: string): Step[] => [
+  { useModel: { deps: ['embeddings'], as: 'model' } },
+  {
+    call: {
+      method: 'ragIngest',
+      params: {
+        modelId: '$model',
+        workspace: '$params.workspace',
+        documents: [document],
+        chunk: true,
+        chunkOpts: {
+          chunkSize: '$params.chunkSize',
+          chunkOverlap: '$params.chunkOverlap',
+          chunkStrategy: '$params.chunkStrategy?'
+        }
+      },
+      as: 'ingested'
+    }
+  },
+  { project: { from: '$ingested', path: 'processed', as: 'processed' } },
+  { assert: { on: '$processed', named: 'lengthAtLeast', with: { length: 1 } } }
+]
+
+/**
+ * Removes the workspace the body created, on both paths.
+ *
+ * Closed before deleted: ingest leaves the workspace open, and the engine
+ * refuses to delete one that is still in use.
+ */
+const deleteWorkspace: Step[] = [
+  { call: { method: 'ragCloseWorkspace', params: { workspace: '$params.workspace' } } },
+  { call: { method: 'ragDeleteWorkspace', params: { workspace: '$params.workspace' } } }
+]
 
 const createRagTest = (
   testId: string,
@@ -11,12 +54,15 @@ const createRagTest = (
     chunkOverlap: number
     chunkStrategy?: string
   },
-  suites?: string[]
+  suites?: string[],
+  steps?: Step[]
 ): TestDefinition => ({
   testId,
   params,
   expectation: { validation: 'type', expectedType: 'string' }, // Returns success message or result object
   ...(suites && { suites }),
+  steps: steps ?? ingestSteps(params.documentContent ?? ''),
+  finally: deleteWorkspace,
   metadata: {
     category: 'rag',
     dependency: 'embeddings',
@@ -54,6 +100,18 @@ export const ragEmbeddingsLarge = createRagTest('rag-embeddings-large-chunks', {
   chunkStrategy: 'paragraph'
 })
 
+/**
+ * Not migrated, and deliberately so.
+ *
+ * The other RAG tests are SDK calls; this one also writes an adapter marker
+ * into the workspace directory before ingesting and then reads the TurboVec
+ * checkpoint tree off disk to decide whether a manifest was written. Those are
+ * filesystem facts about where the engine puts its data, not calls through the
+ * client's public surface, so there is nothing here for a second client to
+ * reproduce -- a declarative body would have to invent a step for "look at
+ * this directory", which is exactly the kind of escape hatch that would let
+ * any test claim anything.
+ */
 export const ragTurboVecIngestSearch: TestDefinition = {
   testId: 'rag-turbovec-ingest-search',
   params: {
@@ -118,6 +176,33 @@ export const ragLargeDocument: TestDefinition = {
   },
   expectation: { validation: 'throws-error', errorContains: 'context overflow' },
   suites: ['smoke'],
+  // The refusal is the claim here: 32 KB of text overflows the embedding
+  // model's context, and the test exists to pin that it is reported rather
+  // than silently truncated.
+  steps: [
+    { asset: { kind: 'document', file: '$params.documentFile', form: 'text', as: 'document' } },
+    { useModel: { deps: ['embeddings'], as: 'model' } },
+    {
+      callError: {
+        method: 'ragIngest',
+        params: {
+          modelId: '$model',
+          workspace: '$params.workspace',
+          documents: ['$document'],
+          chunk: true,
+          chunkOpts: {
+            chunkSize: '$params.chunkSize',
+            chunkOverlap: '$params.chunkOverlap',
+            chunkStrategy: '$params.chunkStrategy'
+          }
+        },
+        as: 'err'
+      }
+    },
+    { project: { from: '$err', path: 'message', as: 'message' } },
+    { assert: { on: '$message', use: 'expectation' } }
+  ],
+  finally: deleteWorkspace,
   metadata: { category: 'rag', dependency: 'embeddings', estimatedDurationMs: 120000 }
 }
 
@@ -130,7 +215,11 @@ export const ragMediumDocument = createRagTest(
     chunkOverlap: 70,
     chunkStrategy: 'paragraph'
   },
-  ['smoke']
+  ['smoke'],
+  [
+    { asset: { kind: 'document', file: '$params.documentFile', form: 'text', as: 'document' } },
+    ...ingestSteps('$document')
+  ]
 )
 
 export const ragTests = [

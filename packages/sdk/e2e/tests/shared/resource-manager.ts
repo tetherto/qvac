@@ -235,6 +235,28 @@ export class ResourceManager {
     this.testCount++
   }
 
+  /**
+   * What `loadModel` would be called with for this key, without calling it.
+   *
+   * A test that drives the load path itself needs the source as data, and the
+   * source is the one thing a definition cannot write down: it is a per-client
+   * constant. This table already knows it.
+   */
+  sourceOf(dep: string): { modelSrc?: unknown; modelType?: string; modelConfig?: unknown } {
+    const def = this.definitions.get(dep)
+    if (!def) throw new Error(`Unknown dependency: ${dep}`)
+    return {
+      ...(def.constant ? { modelSrc: def.constant } : {}),
+      ...(def.modelSrc !== undefined ? { modelSrc: def.modelSrc } : {}),
+      ...(def.type ? { modelType: def.type } : {}),
+      // The config was declared in this signature but never returned, so a
+      // test driving the load path itself got a source that loads a different
+      // model than the key names -- a Bergamot pair without its
+      // engine/from/to, for instance.
+      ...(def.config !== undefined ? { modelConfig: def.config } : {})
+    }
+  }
+
   async ensureLoaded(dep: string): Promise<string> {
     const existing = this.models.get(dep)
     if (existing) {
