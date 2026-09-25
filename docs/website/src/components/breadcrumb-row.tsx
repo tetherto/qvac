@@ -19,6 +19,10 @@ type TrailItem = ReturnType<typeof getBreadcrumbItemsFromPath>[number];
  * collection index and a line index both do — so the label cannot hang off
  * the trail's own rendering. Where neither has anything to say, which is the
  * index page of a collection publishing no lines, there is no row at all.
+ *
+ * A row holding nothing but the label is shown only where the label is. The
+ * label is hidden rather than dropped (see `ReleaseLabel`), so `empty:hidden`
+ * would not catch this: the container is not empty, it holds a hidden child.
  */
 export function BreadcrumbRow() {
   const pathname = usePathname();
@@ -28,12 +32,28 @@ export function BreadcrumbRow() {
   if (trail === null && !line) return null;
 
   return (
-    <div className="flex items-center gap-4">
+    <div className={`flex items-center gap-4${trail ? '' : ` ${SIDEBAR_VIEWPORTS}`}`}>
       {trail && <Trail items={trail} />}
       {line && <ReleaseLabel line={line} current={currentLine === true} />}
     </div>
   );
 }
+
+/**
+ * Where the sidebar is rendered, and so where the label is not.
+ *
+ * The complement of the sidebar placeholder's own `max-md:hidden`, which the
+ * notebook layout applies at `@media not all and (min-width:48rem)`. The line
+ * switcher is passed into the sidebar's banner slot, so it appears and
+ * disappears with the sidebar, and above this breakpoint it already names the
+ * line a few centimetres to the left of where the label would.
+ *
+ * This is a value owned by the documentation framework, restated here because
+ * a class name cannot be computed. `check-breadcrumb-row.ts` reads the
+ * sidebar's own class out of the built page and fails the build if this stops
+ * being its complement.
+ */
+const SIDEBAR_VIEWPORTS = 'md:hidden';
 
 /**
  * The release the page documents.
@@ -44,6 +64,10 @@ export function BreadcrumbRow() {
  * text. That is what a screen reader announces, and what anything keeping
  * only the page's text is left with.
  *
+ * Hidden by a media query rather than dropped from the markup: a statically
+ * exported page cannot know the viewport it will be read at, and the text is
+ * what keeps the release in the page's text at every one of them.
+ *
  * A statement, not a control: changing line belongs to the switcher above the
  * sidebar, which also handles the case a link here would not, a page the
  * target line does not have.
@@ -51,7 +75,7 @@ export function BreadcrumbRow() {
 function ReleaseLabel({ line, current }: { line: string; current: boolean }) {
   return (
     <span
-      className={`ms-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+      className={`ms-auto shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${SIDEBAR_VIEWPORTS} ${
         current
           ? 'bg-fd-primary/10 text-fd-primary'
           : 'bg-fd-muted text-fd-muted-foreground'

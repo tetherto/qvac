@@ -47,6 +47,9 @@ const OUT = path.join(ROOT, 'out');
 const TRAIL_MARKER =
   'flex items-center gap-1.5 text-sm text-fd-muted-foreground';
 
+/** The class the row itself carries, holding the trail and the label. */
+const ROW_MARKER = 'flex items-center gap-4';
+
 /** The shape shared by both treatments of the release label. */
 const LABEL_MARKER = 'rounded-full px-2 py-0.5 text-xs font-medium';
 
@@ -62,8 +65,26 @@ const STANDING = {
   past: ', not the current release',
 };
 
-/** The sentence this change removed, as it appeared in a page's Markdown. */
+/** The sentence the release label replaced, as it appeared in a page's Markdown. */
 const INJECTED_SENTENCE = /^\*Applies to `[^`]+` v[\d.]+[^*]*\*$/m;
+
+/**
+ * The viewports the sidebar is rendered at, read off the built page.
+ *
+ * The sidebar element itself carries no responsive class; its placeholder
+ * does, as `max-<breakpoint>:hidden`. That value belongs to the documentation
+ * framework's layout, and the label's own condition has to be its exact
+ * complement — otherwise a framework change to it leaves the label wrong on
+ * one band of viewports, with the switcher gone and nothing in its place.
+ *
+ * Derived rather than held as a constant here, so that change fails the build
+ * instead of passing.
+ */
+function sidebarBreakpoint(html: string): string | null {
+  const placeholder = html.match(/data-sidebar-placeholder[^>]*class="([^"]*)"/);
+  if (!placeholder) return null;
+  return placeholder[1].match(/\bmax-(\w+):hidden\b/)?.[1] ?? null;
+}
 
 interface Entry {
   name: string;
@@ -74,6 +95,7 @@ interface Label {
   line: string;
   current: boolean;
   standing: string;
+  classes: string;
 }
 
 /**
@@ -160,7 +182,12 @@ function readLabel(html: string): Label | null {
   if (!match) return null;
 
   const [, classes, line, standing] = match;
-  return { line: line.trim(), current: classes.includes(CURRENT_TREATMENT), standing };
+  return {
+    line: line.trim(),
+    current: classes.includes(CURRENT_TREATMENT),
+    standing,
+    classes,
+  };
 }
 
 /** The `line` and `current_line` a page's Markdown twin declares. */
@@ -261,11 +288,26 @@ async function main(): Promise<void> {
           .map((entry) => entry.name)
           .join(' > ')}`,
       );
+      continue;
+    }
+
+    // A row with no trail holds nothing but the label, so it is shown only
+    // where the label is. Left unconditioned it would be an empty flex
+    // container above the heading at every viewport the sidebar is at.
+    const breakpoint = sidebarBreakpoint(html);
+    if (readLabel(html) !== null && breakpoint !== null) {
+      const region = rowRegion(html) ?? '';
+      if (!region.includes(`class="${ROW_MARKER} ${breakpoint}:hidden"`)) {
+        problems.push(
+          `${page}: its row holds only the label, so it must carry ${breakpoint}:hidden and be gone with it`,
+        );
+      }
     }
   }
 
   // The label, on every page, against the metadata that page publishes.
   const pages = await builtPages(OUT);
+  const mismatched = new Map<string, number>();
   let labelled = 0;
   let unlabelled = 0;
 
@@ -322,6 +364,24 @@ async function main(): Promise<void> {
         `${page}: states its standing as "${label.standing}", not "${standing}"`,
       );
     }
+
+    // One component emits every label, so a disagreement with the sidebar is
+    // the same disagreement on all 120 pages. Collected by its wording and
+    // reported once, with the pages counted.
+    const breakpoint = sidebarBreakpoint(html);
+    const complaint =
+      breakpoint === null
+        ? 'no sidebar placeholder carries a max-<breakpoint>:hidden class, so the label cannot be checked against the sidebar it must be the complement of'
+        : !label.classes.split(/\s+/).includes(`${breakpoint}:hidden`)
+          ? `the sidebar is hidden by max-${breakpoint}:hidden, so the label must carry ${breakpoint}:hidden and carries "${label.classes}"`
+          : null;
+    if (complaint) {
+      mismatched.set(complaint, (mismatched.get(complaint) ?? 0) + 1);
+    }
+  }
+
+  for (const [complaint, count] of mismatched) {
+    problems.push(`${complaint} — on ${count} page(s)`);
   }
 
   if (labelled === 0 || unlabelled === 0) {
