@@ -13,7 +13,6 @@ import remarkMath from 'remark-math';
 import codeImport from 'remark-code-import';
 import { SCHEMA_TYPES } from './src/lib/docs-json-ld';
 import remarkLineLinks from './src/lib/remark-line-links';
-import remarkLineNotice from './src/lib/remark-line-notice';
 
 const monorepoRoot = resolve(process.cwd(), '../..');
 
@@ -52,7 +51,6 @@ export default defineConfig({
       remarkMdxMermaid,
       [codeImport, { rootDir: monorepoRoot }],
       remarkLineLinks,
-      remarkLineNotice,
     ],
     rehypePlugins: (v) => [rehypeKatex, ...v],
   },
