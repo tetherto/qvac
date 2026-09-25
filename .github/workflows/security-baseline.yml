@@ -100,6 +100,7 @@ jobs:
           .github/scripts/test/cache-models-branches.test.mjs
           .github/scripts/test/download-artifact-retry.test.mjs
           .github/scripts/test/asr-integration-budget.test.mjs
+          .github/scripts/test/merge-guard-package-lists.test.mjs
 
       # Guards the model-cache seeding scheme: a seed writing a key no consumer
       # asks for is silent otherwise -- the seed saves, and its verify job
