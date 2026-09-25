@@ -52,6 +52,12 @@ function withTempDir(name, body) {
   }
 }
 
+async function expectEachRejected(t, model, cases) {
+  for (const [fields, pattern] of cases) {
+    await t.exception(model.run({ type: 'text', input: 'x', ...fields }), pattern)
+  }
+}
+
 async function runRecorded(fields) {
   const binding = new RecordingBinding()
   const model = createMockedSfxModel({ binding })
@@ -145,6 +151,11 @@ test('MOSS-SFX: constructor rejects what the engine cannot do', (t) => {
     /not supported by the moss-sfx engine/
   )
   t.exception(() => createMockedSfxModel({ extra: { durationTokens: 38 } }), /moss-only options/)
+  t.exception(() => createMockedSfxModel({ extra: { steps: 20 } }), /takes steps per call/)
+  t.exception(
+    () => createMockedSfxModel({ extra: { numInferenceSteps: 20 } }),
+    /takes steps per call/
+  )
 })
 
 test('MOSS-SFX: the native rate is accepted when named explicitly', (t) => {
@@ -192,9 +203,7 @@ test('MOSS-SFX: out-of-range controls are rejected before queueing', async (t) =
     [{ shift: -1 }, /shift must be in \(0, 100\]/],
     [{ negativePrompt: 7 }, /negativePrompt must be a string/]
   ]
-  for (const [fields, pattern] of cases) {
-    await t.exception(model.run({ type: 'text', input: 'x', ...fields }), pattern)
-  }
+  await expectEachRejected(t, model, cases)
   t.is(binding.jobs.length, 0, 'no job queued')
   await model.unload()
 })

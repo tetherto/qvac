@@ -1450,6 +1450,10 @@ class TTSGgml {
             throw new Error("tts-ggml: referenceAudio is not supported by the moss-sfx engine, " +
                 "which generates sound effects from a text prompt");
         }
+        if (this._steps != null) {
+            throw new Error("tts-ggml: the moss-sfx engine takes steps per call " +
+                "(run({ input, steps })), not in the constructor");
+        }
         this._assertMossSoundEffectOutputRate();
         if (!this._mossSoundEffectPath) {
             throw new Error("tts-ggml: the moss-sfx engine needs its GGUF: stage " +

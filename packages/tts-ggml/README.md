@@ -175,8 +175,9 @@ dependency, pinned to the exact `@qvac/tts-ggml` version:
 
 ## Model files
 
-Six engine families are wrapped (Chatterbox, Supertonic, Parler,
-CosyVoice3, Audio8, MOSS), each with its own GGUF layout under `models/`:
+Seven engine families are wrapped (Chatterbox, Supertonic, Parler,
+CosyVoice3, Audio8, MOSS, MOSS-SoundEffect), each with its own GGUF layout
+under `models/`:
 
 ```
 # Chatterbox turbo (English)
@@ -250,7 +251,7 @@ npm run download-models:registry -- --group chatterbox,supertonic3
 npm run download-models:registry -- --output /path/to/models
 ```
 
-CosyVoice3, Audio8 and MOSS are not currently included in that registry command.
+CosyVoice3, Audio8, MOSS and MOSS-SoundEffect are not currently included in that registry command.
 Stage their layouts shown above from local converted artifacts. CosyVoice3
 resolves each component by filename prefix and does not rank quantizations, so
 stage one file per component or name it explicitly with
@@ -696,7 +697,7 @@ published model set yet; supply your own to opt in.
 | --- | --- | --- | --- | --- |
 | Supertonic 1 / 2 / 3 | `<model>-vocoder.mlmodelc` | vocoder, in 64-latent-frame windows | GGUFs whose vocoder weights are stored below 8 bits (`q4_0`) | `SUPERTONIC_COREML_DISABLE=1` |
 | Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
-| Chatterbox, Parler, CosyVoice3, MOSS, LavaSR | none | — | always | — |
+| Chatterbox, Parler, CosyVoice3, MOSS, MOSS-SoundEffect, LavaSR | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
 Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
@@ -804,6 +805,7 @@ each engine's subset straight from the native library, without loading a model
 | Chatterbox | not supported | not supported | — | `speed` |
 | Audio8 | not supported | not supported | — | — |
 | MOSS | not supported | not supported | — | — |
+| MOSS-SoundEffect | not supported | not supported | — | — |
 
 The 12 canonical emotions (case-insensitive): `command`, `anger`, `narration`,
 `conversation`, `disgust`, `fear`, `happy`, `neutral`, `proper noun`, `news`,
@@ -1048,8 +1050,8 @@ const response = await sfx.run({
 })
 ```
 
-The generation controls are per call and moss-sfx-only; the output is exactly
-`seconds` long.  `seed` (constructor) makes a clip reproducible.  Every clip
+The generation controls are per call and moss-sfx-only (`steps` in the
+constructor is rejected); the output lasts `seconds` rounded to 0.1 s.  `seed` (constructor) makes a clip reproducible.  Every clip
 costs about the same whatever its length, because the model always denoises a
 30-second latent and crops it: about two minutes for 100 steps on an Apple M1
 Ultra GPU, and much longer on CPU, so fewer `steps` trade quality for time.
@@ -1088,7 +1090,7 @@ unset or `48000`, and the LavaSR stages and voice options are not supported.
 | `dialogueReferences`      | string[]   | —          | MOSS-only: one 24 kHz recording per speaker (`[S1]`, `[S2]`, ...) for dialogue synthesis; the text must open with each recording's transcript under its tag; needs `files.mossCodecEncoder`, excludes `referenceAudio`, fixed per instance |
 | `durationTokens`          | number     | `0`        | MOSS-only: target length in codec frames (12.5 per second); `0` keeps the length free; reloadable |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
-| `seed`                    | number     | 42         | RNG seed (CFM noise + sampling); MOSS defaults to its engine's 1234 |
+| `seed`                    | number     | 42         | RNG seed (CFM noise + sampling); MOSS defaults to its engine's 1234, MOSS-SoundEffect to 0, so an unseeded prompt gives the same clip every call |
 | `nGpuLayers`              | number     | 0          | Layers offloaded to GPU (mirrors `useGPU`; pass `99` to offload all) |
 | `nCtx`                    | number     | 4096       | Chatterbox T3 context limit for the prompt plus generated speech tokens (25 tokens ≈ 1 s of audio). The KV cache is allocated up front at this length, so the 4096-token default directly bounds memory. Pass `0` to use the GGUF metadata value |
 | `kvCacheType`             | string     | `f16`      | T3 KV-cache dtype: `f32` \| `f16` \| `q8_0`.  `f16` (~50% of f32) is the safe cross-backend default.  `q8_0` stores the cache at ~27% of f32 and decodes 20-30% faster on Metal, but only works on backends with a q8_0 CONT op (CPU, CUDA) — it hard-aborts the multilingual model on Metal, so it is opt-in.  Turbo greedy decoding is byte-identical across all three (upstream-validated).  Pass `f32` for bit-exact pre-quantisation behaviour |
@@ -1129,8 +1131,8 @@ unset or `48000`, and the LavaSR stages and voice options are not supported.
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English; MOSS takes it as a prompt hint (`en`, `zh`, ...) |
-| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / CUDA / Vulkan / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal, linux CUDA, and Android/ARM Mali Vulkan; CosyVoice3 and Audio8 offload on Apple/Metal, desktop linux CUDA/Vulkan, Windows Vulkan, and Android OpenCL/Adreno; MOSS GPU offload is validated on Apple/Metal. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
-| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, MOSS 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active; MOSS accepts only its native rate |
+| `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / CUDA / Vulkan / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal, linux CUDA, and Android/ARM Mali Vulkan; CosyVoice3 and Audio8 offload on Apple/Metal, desktop linux CUDA/Vulkan, Windows Vulkan, and Android OpenCL/Adreno; MOSS and MOSS-SoundEffect GPU offload is validated on Apple/Metal. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
+| `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, MOSS 24 kHz, MOSS-SoundEffect 48 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active; MOSS and MOSS-SoundEffect accept only their native rate |
 | `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
@@ -1175,7 +1177,7 @@ All `run*` methods return a `QvacResponse` (from `@qvac/infer-base`):
 ```js
 response.onUpdate(data => {
   data.outputArray   // Int16Array — mono PCM
-  data.sampleRate    // actual rate: Chatterbox/CosyVoice3/MOSS 24000, Supertonic/Parler/Audio8 44100, enhancer 48000
+  data.sampleRate    // actual rate: Chatterbox/CosyVoice3/MOSS 24000, Supertonic/Parler/Audio8 44100, MOSS-SoundEffect and enhancer 48000
   data.chunkIndex    // present on sentence-streaming events only
   data.sentenceChunk // present on sentence-streaming events only
 })

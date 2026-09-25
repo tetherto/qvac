@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <random>
 #include <string>
 #include <system_error>
@@ -37,6 +38,7 @@ constexpr const char* PROMPT = "Rain on a tin roof.";
 constexpr const char* NEGATIVE_PROMPT = "music";
 constexpr double REAL_GGUF_SECONDS = 0.5;
 constexpr int REAL_GGUF_STEPS = 2;
+constexpr int ALL_GPU_LAYERS = 99;
 
 std::filesystem::path createStubDir() {
   std::random_device entropy;
@@ -106,6 +108,14 @@ bool statPresent(const MossSoundEffectModel& model, const std::string& key) {
   return false;
 }
 
+void expectStatsPresent(
+    const MossSoundEffectModel& model,
+    std::initializer_list<const char*> keys) {
+  for (const char* key : keys) {
+    EXPECT_TRUE(statPresent(model, key)) << key;
+  }
+}
+
 } // namespace
 
 TEST(MossSoundEffectValidate, EmptyModelPathRejected) {
@@ -147,7 +157,7 @@ TEST(MossSoundEffectEngineOptions, MapsModelThreadsAndGpu) {
 
 TEST(MossSoundEffectEngineOptions, NGpuLayersDecidesGpuUse) {
   auto cfg = stubConfig();
-  cfg.nGpuLayers = 99;
+  cfg.nGpuLayers = ALL_GPU_LAYERS;
   EXPECT_TRUE(MossSoundEffectModel::toEngineOptions(cfg).use_gpu);
   cfg.nGpuLayers = 0;
   EXPECT_FALSE(MossSoundEffectModel::toEngineOptions(cfg).use_gpu);
@@ -225,16 +235,15 @@ TEST(MossSoundEffectModelTest, ProcessRejectsForeignInput) {
 
 TEST(MossSoundEffectModelTest, RuntimeStatsCarryTheSharedKeys) {
   MossSoundEffectModel model{stubConfig()};
-  for (const char* key :
-       {"totalTime",
-        "realTimeFactor",
-        "audioDurationMs",
-        "totalSamples",
-        "backendDevice",
-        "backendId",
-        "gpuUnsupported"}) {
-    EXPECT_TRUE(statPresent(model, key)) << key;
-  }
+  expectStatsPresent(
+      model,
+      {"totalTime",
+       "realTimeFactor",
+       "audioDurationMs",
+       "totalSamples",
+       "backendDevice",
+       "backendId",
+       "gpuUnsupported"});
 }
 
 TEST(MossSoundEffectReload, InvalidConfigKeepsThePreviousOne) {

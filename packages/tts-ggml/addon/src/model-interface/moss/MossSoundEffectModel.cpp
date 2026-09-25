@@ -24,6 +24,7 @@ using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 
 constexpr int CPU_BACKEND_ID = 0;
+constexpr double MS_PER_SECOND = 1000.0;
 
 void requireModelFile(const std::string& path) {
   if (path.empty()) {
@@ -161,10 +162,11 @@ void MossSoundEffectModel::cancel() const {
 void MossSoundEffectModel::recordStats(double seconds, int64_t samples) {
   totalTime_ = seconds;
   totalSamples_ = samples;
-  audioDurationMs_ =
-      static_cast<double>(samples) * 1000.0 / MOSS_SFX_NATIVE_SAMPLE_RATE;
-  realTimeFactor_ =
-      audioDurationMs_ > 0.0 ? (totalTime_ * 1000.0) / audioDurationMs_ : 0.0;
+  audioDurationMs_ = static_cast<double>(samples) * MS_PER_SECOND /
+                     MOSS_SFX_NATIVE_SAMPLE_RATE;
+  realTimeFactor_ = audioDurationMs_ > 0.0
+                        ? (totalTime_ * MS_PER_SECOND) / audioDurationMs_
+                        : 0.0;
 }
 
 std::shared_ptr<tts_cpp::moss::SoundEffectEngine>

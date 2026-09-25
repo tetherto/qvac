@@ -356,9 +356,10 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
     /** Chatterbox: directory of baked voice-conditioning tensors. */
     voiceDir?: string;
     /**
-     * RNG seed for Chatterbox CFM/SineGen, Supertonic latent generation, or
-     * Pocket's portable sampling RNG. Pocket accepts integers from 0 to
-     * 4294967295 (inclusive).
+     * RNG seed for Chatterbox CFM/SineGen, Supertonic latent generation,
+     * the MOSS-SoundEffect diffusion noise (0 when unset, so an unseeded prompt
+     * repeats its clip), or Pocket's portable sampling RNG. Pocket accepts
+     * integers from 0 to 4294967295 (inclusive).
      */
     seed?: number;
     /**
