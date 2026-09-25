@@ -241,12 +241,6 @@ public:
 
   [[nodiscard]] const Request* requestAt(uint32_t seqId) const noexcept;
 
-  /// Position the sequence's KV has reached. Equal to `currentPos`, except
-  /// between a decode of the last fillBatch() and the advance() that commits
-  /// it: a teardown in that window sees `currentPos` short of live KV by the
-  /// chunk just decoded.
-  [[nodiscard]] llama_pos decodedPosAt(uint32_t seqId) const noexcept;
-
 private:
   unsigned maxChunkSize_, maxTokensPerSequence_;
 
