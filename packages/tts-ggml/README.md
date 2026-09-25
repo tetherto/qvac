@@ -185,6 +185,9 @@ chatterbox-s3gen-mtl.gguf  (~1.0 GB)
 # Supertonic 3 (Supertone/supertonic-3; 31 languages) — preferred Supertonic
 # checkpoint; published per quant tier (auto-detected from modelDir)
 supertonic3-q4_0.gguf      (~80 MB; also -q8_0 ~126 MB / -f16 ~191 MB / -f32)
+supertonic3-vocoder.mlmodelc/ (optional, macOS / iOS: Apple Core ML sidecar for
+                              the vocoder, used by the 8-bit and wider tiers; see
+                              Core ML sidecars on Apple)
 
 # Legacy Supertonic (not recommended for new integrations — see Choosing a model)
 supertonic.gguf            (~263 MB) — v1 English only
@@ -685,6 +688,10 @@ published model set yet; supply your own to opt in.
 | Chatterbox, Parler, CosyVoice3, MOSS, LavaSR | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
+Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
+while the sidecar is attached and `codecOnCoreml` is 1 when that synthesis
+ran its codec on it (see [Response shape](#response-shape)). The Supertonic
+vocoder path is not reported in the stats.
 
 Worth it where the GPU is consumer-class: on an Apple M4 the Supertonic
 vocoder runs 1.6-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
@@ -745,21 +752,6 @@ registration and the addon falls back to Vulkan or CPU.
 > `openclCacheDir` to persist the compiled kernels. A GPU request on a
 > platform or in a build without one of those backends falls back to CPU
 > and sets `response.stats.gpuUnsupported`.
->
-> On macOS / iOS the Audio8 codec's synthesis stack (upsampling + DAC
-> decoder, the largest stage of a CPU synthesis) can additionally run on
-> Apple Core ML: the prebuilds are built with `speech-cpp[coreml]`, and the
-> engine picks up a compiled `audio8-codec-decoder.mlmodelc` sitting next to
-> the decoder GGUF (any quant tier) at `load()`, falling back to the ggml
-> backend when it is absent or cannot serve a call (a sidecar that fails is
-> retired, and later calls go straight to ggml). `response.stats.codecSidecarLoaded`
-> reports whether the sidecar is attached and `response.stats.codecOnCoreml`
-> where that synthesis actually ran its codec; the language model always stays
-> on `backendId`. Export the
-> sidecar from the decoder GGUF with `qvac-fabric-speech.cpp`'s
-> `engines/tts/scripts/export-audio8-codec-coreml.py` (see its
-> [Audio8 guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar)
-> for the measured numbers and the `AUDIO8_COREML_*` environment knobs).
 
 ### Android: dynamic backend loading
 
