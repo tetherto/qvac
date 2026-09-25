@@ -317,6 +317,33 @@ We welcome contributions! Feel free to open a pull request, report bugs, or shar
 
 See [CONTRIBUTING](./CONTRIBUTING.md) for details.
 
+### Deterministic code-quality audit
+
+Run `pnpm quality:audit` to analyze JavaScript and TypeScript structure, module
+dependencies, and workspace package cycles. The human-readable report is written
+to `.quality/report.md` as a snapshot of current findings. The stable machine
+report at `.quality/report.json` also classifies findings against the baseline
+as new, existing, or resolved and records measurement or severity changes to
+existing findings so agents can measure progress.
+
+Findings are advisory, while parser, resolver, and detector errors make the
+command fail so an incomplete analysis cannot appear clean. When analysis is
+incomplete, resolution calculation is explicitly withheld. Existing debt is
+tracked by stable fingerprints in `scripts/code-quality/baseline.json`. After
+reviewing an intentional baseline change, replace it with
+`pnpm quality:baseline`. Run `pnpm quality:test` and
+`pnpm quality:typecheck` when changing the audit itself. Thresholds, source
+profiles, and documented generated-import exemptions live in
+`scripts/code-quality/config.ts`.
+
+Run `pnpm quality:reporting` for the complete local reporting flow. It refreshes
+the audit, groups related findings into deterministic file hotspots and
+dependency clusters, adds 180-day Git-change evidence, and writes
+`.quality/triage.md` plus `.quality/triage.json`. The first Markdown page shows
+ten candidate remediation groups; the JSON retains every group. Use
+`pnpm quality:triage` to rebuild only the triage artifacts from an existing
+successful audit report.
+
 ## Banners and badges
 
 Built something with QVAC? Add a badge to your README to show it and help others discover QVAC:
