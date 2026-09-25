@@ -248,20 +248,29 @@ test('toolSchema: deferLoading and group are optional and preserved', (t) => {
   t.is(parsed.success && parsed.data.group, 'github')
 })
 
-test('completionClientParamsSchema: "tool_search" is a reserved tool name', (t) => {
-  const result = completionClientParamsSchema.safeParse({
-    modelId: 'm',
-    history: [{ role: 'user', content: 'hi' }],
-    stream: true,
-    tools: [
-      {
-        type: 'function',
-        name: 'tool_search',
-        description: 'mine',
-        parameters: { type: 'object', properties: {} }
-      }
-    ]
-  })
+test('completionClientParamsSchema: "tool_search" is reserved only when something defers', (t) => {
+  const own = {
+    type: 'function',
+    name: 'tool_search',
+    description: 'mine',
+    parameters: { type: 'object', properties: {} }
+  }
+  const deferred = {
+    type: 'function',
+    name: 'create_issue',
+    description: 'Open an issue',
+    deferLoading: true,
+    parameters: { type: 'object', properties: {} }
+  }
+  const base = { modelId: 'm', history: [{ role: 'user', content: 'hi' }], stream: true }
+
+  t.is(
+    completionClientParamsSchema.safeParse({ ...base, tools: [own] }).success,
+    true,
+    'a caller tool named tool_search is fine when nothing defers'
+  )
+
+  const result = completionClientParamsSchema.safeParse({ ...base, tools: [own, deferred] })
   t.is(result.success, false)
   t.ok(
     !result.success && result.error.issues.some((issue) => issue.message.includes('reserved')),

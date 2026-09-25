@@ -143,13 +143,15 @@ export function refineToolChoiceMatchesTools(
 }
 
 /**
- * `tool_search` is built in and always callable when anything defers, so a
- * caller-declared tool of that name would be shadowed without warning.
+ * `tool_search` is synthesised only when something defers, and would then
+ * shadow a caller-declared tool of that name. Requests that defer nothing
+ * keep the name free.
  */
 export function refineReservedToolNames(
-  data: { tools?: { name: string }[] | undefined },
+  data: { tools?: { name: string; deferLoading?: boolean | undefined }[] | undefined },
   ctx: z.RefinementCtx
 ): void {
+  if (!data.tools?.some((tool) => tool.deferLoading === true)) return
   const index = data.tools?.findIndex((tool) => tool.name === TOOL_SEARCH_NAME) ?? -1
   if (index >= 0) {
     ctx.addIssue({
