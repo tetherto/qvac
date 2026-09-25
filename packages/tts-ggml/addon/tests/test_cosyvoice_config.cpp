@@ -354,6 +354,50 @@ TEST(CosyvoiceEngineOptions, ExplicitNGpuLayersWinsOverUseGpu) {
   EXPECT_EQ(toEngineOptions(cfg).n_gpu_layers, 12);
 }
 
+TEST(CosyvoiceEngineOptions, FrontendVoiceAndFlowKnobsForwarded) {
+  CosyvoiceConfig cfg;
+  cfg.vocabPath = "/m/vocab.json";
+  cfg.mergesPath = "/m/merges.txt";
+  cfg.voiceModelPath = "/voices/alt/voice.gguf";
+  cfg.vulkanDevice = -1;
+  cfg.flowCutPrompt = true;
+  const auto opts = toEngineOptions(cfg);
+  EXPECT_EQ(opts.vocab_path, "/m/vocab.json");
+  EXPECT_EQ(opts.merges_path, "/m/merges.txt");
+  EXPECT_EQ(opts.voice_gguf_path, "/voices/alt/voice.gguf");
+  EXPECT_EQ(opts.vulkan_device, -1);
+  EXPECT_TRUE(opts.flow_cut_prompt);
+}
+
+TEST(CosyvoiceEngineOptions, UnsetFrontendVoiceAndFlowKnobsKeepDefaults) {
+  const tts_cpp::cosyvoice::EngineOptions defaults;
+  const auto opts = toEngineOptions(CosyvoiceConfig{});
+  EXPECT_TRUE(opts.vocab_path.empty());
+  EXPECT_TRUE(opts.merges_path.empty());
+  EXPECT_TRUE(opts.voice_gguf_path.empty());
+  EXPECT_EQ(opts.vulkan_device, defaults.vulkan_device);
+  EXPECT_EQ(opts.flow_cut_prompt, defaults.flow_cut_prompt);
+}
+
+TEST(CosyvoiceValidate, NonexistentFrontendOrVoiceFileRejected) {
+  for (auto field :
+       {&CosyvoiceConfig::vocabPath,
+        &CosyvoiceConfig::mergesPath,
+        &CosyvoiceConfig::voiceModelPath}) {
+    auto cfg = configWithExistingDir();
+    cfg.*field = (emptyModelDir() / "missing").string();
+    EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+  }
+}
+
+TEST(CosyvoiceValidate, VulkanDeviceBelowAutoRejected) {
+  auto cfg = configWithExistingDir();
+  cfg.vulkanDevice = -2;
+  EXPECT_THROW(CosyvoiceModel{cfg}, StatusError);
+  cfg.vulkanDevice = -1;
+  EXPECT_NO_THROW(CosyvoiceModel{cfg});
+}
+
 TEST(CosyvoiceValidate, ConfigDefaultsAreCpuFriendly) {
   CosyvoiceConfig cfg;
   EXPECT_EQ(cfg.language, "en");
