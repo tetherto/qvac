@@ -119,6 +119,16 @@ test(
         'plain cosyvoice reports 24 kHz native sample rate'
       )
       t.ok(plain.data.durationMs > 0, 'plain cosyvoice audio duration is > 0 ms')
+      // Engine StageTimings: each stage did work, the zero-shot baked voice
+      // prompts the LM with its speech tokens, and no denoiser is loaded.
+      const stats = plain.data.stats
+      t.ok(stats.speechTokens > 0, 'stats report the speech tokens generated')
+      t.ok(stats.decodeSteps > 0, 'stats report the LM decode steps')
+      t.ok(stats.promptSpeechTokens > 0, 'zero-shot prompts the LM with speech tokens')
+      for (const key of ['lmDecodeMs', 'ditEulerMs', 'hiftDecodeMs', 'stageTotalMs']) {
+        t.ok(stats[key] > 0, `stats report ${key}`)
+      }
+      t.is(stats.denoiserBackendDevice, -1, 'no denoiser loaded -> denoiserBackendDevice=-1')
       const neutral = await runCosyvoiceTTS(
         model,
         { text, perCallEmotion: 'neutral' },
@@ -182,6 +192,11 @@ test(
       t.ok(result.passed, 'cosyvoice instruct synth passes expectations')
       t.ok(result.data.sampleCount > 0, 'cosyvoice instruct produced audio')
       t.is(result.data.reportedSampleRate, 24000, 'cosyvoice instruct reports 24 kHz')
+      t.is(
+        result.data.stats.promptSpeechTokens,
+        0,
+        'instruct mode drops the prompt speech tokens (StageTimings)'
+      )
     } finally {
       try {
         await model.unload()

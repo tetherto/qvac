@@ -23,6 +23,8 @@ auto qvac_tts_ggml_exports(js_env_t* env, js_value_t* exports) -> js_value_t* {
   // JsAsyncTask::run-wrapped version so the deferred GGUF parse
   // (IModelAsyncLoad::waitForLoadInitialization) runs on a worker thread.
   V("activate", qvac::ttsggml::addon_js::activate)
+  V("getVoiceControls", qvac::ttsggml::addon_js::getVoiceControls)
+  V("assessFit", qvac::ttsggml::addon_js::assessFit)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)

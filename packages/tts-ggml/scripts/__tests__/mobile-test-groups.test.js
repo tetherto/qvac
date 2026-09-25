@@ -23,7 +23,7 @@ const EXPECTED_GROUPS = [
 const EXPECTED_ASSIGNMENTS = {
   chatterbox: ['runAddonTest', 'runChatterboxKvCacheGpuTest', 'runChatterboxSpeedTest'],
   'chatterbox-mtl': ['runChatterboxMtlTest'],
-  supertonic: ['runSupertonicTest'],
+  supertonic: ['runSupertonicTest', 'runFitTest'],
   'supertonic-mtl': ['runSupertonicMtlTest'],
   supertonic3: ['runSupertonic3QuantTest'],
   parler: ['runParlerTest'],
@@ -32,7 +32,8 @@ const EXPECTED_ASSIGNMENTS = {
   'cross-model-compatibility': [
     'runMultipleRunsTest',
     'runGpuSmokeTest',
-    'runOutputSampleRateTest'
+    'runOutputSampleRateTest',
+    'runVoiceControlsTest'
   ]
 }
 
@@ -42,9 +43,10 @@ const EXCLUDED_RUNNERS = [
   'runStreamingBenchmarkTest',
   // Desktop-scoped engines/features whose models are not in the mobile
   // manifest: Audio8 (surfaced when integration.auto.cjs was regenerated -
-  // the checked-in file predated audio8.test.js) and CosyVoice3 cloning
-  // (the s3tok/campplus add-on GGUFs ship for desktop only).
+  // the checked-in file predated audio8.test.js), MOSS (an 8B backbone) and
+  // CosyVoice3 cloning (the s3tok/campplus add-on GGUFs ship for desktop only).
   'runAudio8Test',
+  'runMossTest',
   'runCosyvoice3CloneTest'
 ]
 

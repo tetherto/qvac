@@ -21,11 +21,10 @@ on:
         type: choice
         required: true
         options:
-          - "Integration Tests (NMTCPP)"
+          - "On PR Trigger (nx)"
           - "Integration Tests (LLM)"
           - "Mobile Integration Tests (LLM)"
           - "Mobile Integration Tests (Parakeet)"
-          - "Integration Tests (Stable Diffusion)"
           - "Mobile Integration Tests (Diffusion CPP)"
           - "Benchmark Performance (AudioGen GGML)"
       runs:
@@ -99,10 +98,14 @@ jobs:
         run: |
           mkdir -p reports
 
+          # "On PR Trigger (nx)", not "Integration Tests (nx)": the latter runs
+          # via workflow_call, and a called run is listed under its caller, so
+          # querying it by name finds nothing. --addon still selects the right
+          # artifact, and runs without one simply contribute nothing.
           echo "=== Translation ==="
           node scripts/perf-report/aggregate.js \
             --addon nmtcpp \
-            --workflow "Integration Tests (NMTCPP)" \
+            --workflow "On PR Trigger (nx)" \
             --runs 6 \
             --output reports/nmtcpp-performance.md \
             --output-json reports/nmtcpp-performance.json \
@@ -162,7 +165,7 @@ jobs:
           echo "=== Diffusion (Desktop) ==="
           node scripts/perf-report/aggregate.js \
             --addon diffusion-cpp \
-            --workflow "Integration Tests (Stable Diffusion)" \
+            --workflow "On PR Trigger (nx)" \
             --runs 6 \
             --output reports/diffusion-cpp-performance.md \
             --output-json reports/diffusion-cpp-performance.json \
@@ -266,13 +269,13 @@ jobs:
           mkdir -p reports
           # workflow_dispatch passes `runs` as input; schedule defaults to 6.
           RUNS="${PERF_RUNS:-6}"
-          # Query the umbrella "On PR Trigger (NMTCPP)" workflow — that's
+          # Query the umbrella "On PR Trigger (nx)" workflow — that's
           # where perf-report-* artifacts are attached. The inner
-          # "Integration Tests (NMTCPP)" workflow is invoked via
+          # "Integration Tests (nx)" workflow is invoked via
           # workflow_call and its artifacts surface on the umbrella run.
           node scripts/perf-report/comet-score-nmt.js \
             --runs "$RUNS" \
-            --workflow "On PR Trigger (NMTCPP)" \
+            --workflow "On PR Trigger (nx)" \
             --output reports/nmtcpp-comet.md \
             --model Unbabel/wmt22-comet-da || true
 

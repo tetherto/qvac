@@ -8,13 +8,11 @@
 #include <string>
 #include <vector>
 
+#include <tts-cpp/audio8/engine.h>
+
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "model-interface/audio8/Audio8Config.hpp"
-
-namespace tts_cpp::audio8 {
-class Engine;
-}
 
 namespace qvac::ttsggml::audio8 {
 
@@ -53,6 +51,12 @@ public:
   std::string getName() const override { return "Audio8Model"; }
   std::any process(const std::any& input) override;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
+
+  static constexpr const char* COREML_BACKEND_PREFIX = "coreml";
+  static bool codecBackendIsCoreml(const std::string& backend);
+
+  void recordSynthesisResult(
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds);
 
   void cancel() const override;
 
@@ -101,6 +105,15 @@ public:
       const Audio8Config& current, const Audio8Config& next, int nativeRate);
 
 private:
+  friend struct Audio8ModelTestPeer;
+
+  void completeSynthesis(
+      const std::shared_ptr<tts_cpp::audio8::Engine>& engine,
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds,
+      bool sidecarLoaded);
+  void recordSynthesisResultLocked(
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds);
+
   Output synthesize(const AnyInput& input);
 
   void loadLocked();
@@ -125,11 +138,15 @@ private:
   double tokensPerSecond_ = 0.0;
   int generatedFrames_ = 0;
   int sampleRate_ = AUDIO8_NATIVE_SAMPLE_RATE;
+  // Engine per-stage wall clock of the last synthesis.
+  tts_cpp::audio8::StageTimings timings_{};
 
   int backendDevice_ = 0;
   int backendId_ = 0;
   std::string backendName_ = "CPU";
   bool gpuUnsupported_ = false;
+  bool codecSidecarLoaded_ = false;
+  bool codecOnCoreml_ = false;
 };
 
 } // namespace qvac::ttsggml::audio8

@@ -15,6 +15,7 @@
 
 const test = require('brittle')
 const fs = require('bare-fs')
+const path = require('bare-path')
 const process = require('bare-process')
 const { fitParams, FIT_STATUS } = require('../../index.js')
 const { ensureModelPath } = require('./utils')
@@ -42,13 +43,20 @@ async function ensureFixtures() {
   // what creates that directory. FIT_MODEL_PATH skips the download, so on a
   // fresh checkout the directory is not there — this file is the first to write
   // into it rather than only read from it.
-  fs.mkdirSync(fixtureDir(), { recursive: true })
+  //
+  // Take it from the model path rather than re-deriving it: on a device this
+  // file runs from the read-only app bundle, so the derived location resolves
+  // inside the bundle and mkdirSync fails.
+  const baseDir = path.dirname(fullPath)
+  fs.mkdirSync(fixtureDir(baseDir), { recursive: true })
 
   fixtures = {
     fullPath,
-    stubPath: writeFitStub(fullPath, fixturePath('fit-stub.gguf')),
-    fullSplit: writeSplit(fullPath, fixturePath('split-full'), { splitCount: SPLIT_COUNT }),
-    stubSplit: writeSplit(fullPath, fixturePath('split-stub'), {
+    stubPath: writeFitStub(fullPath, fixturePath('fit-stub.gguf', baseDir)),
+    fullSplit: writeSplit(fullPath, fixturePath('split-full', baseDir), {
+      splitCount: SPLIT_COUNT
+    }),
+    stubSplit: writeSplit(fullPath, fixturePath('split-stub', baseDir), {
       splitCount: SPLIT_COUNT,
       stub: true
     })

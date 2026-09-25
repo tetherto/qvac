@@ -260,14 +260,6 @@ export const qvacTestConfigSchema = z.object({
 
   testDir: z.string().describe('Directory containing test definitions (e.g., "./tests")'),
 
-  runIdStrategy: z
-    .union([z.literal('auto'), z.literal('manual'), z.function()])
-    .optional()
-    .default('auto')
-    .describe(
-      'Run ID generation: "auto" generates repo-branch-commit-timestamp, "manual" requires --runId flag, or custom function'
-    ),
-
   consumers: z
     .object({
       desktop: desktopConsumerSchema

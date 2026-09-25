@@ -3,7 +3,7 @@ import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
 import {
   runParakeetStreamHappy,
-  runParakeetStreamMetadataRejected,
+  runParakeetStreamMetadata,
   runParakeetStreamEou,
   runParakeetStreamDestroyMidUtterance,
   runParakeetStreamIteratorThrow,
@@ -73,8 +73,9 @@ export class MobileParakeetStreamExecutor extends ModelAssetExecutor<typeof para
 
     const modelId = await this.resources.ensureLoaded('parakeet-tdt')
 
-    if (testId === 'parakeet-stream-metadata-rejected') {
-      return runParakeetStreamMetadataRejected(modelId)
+    if (testId === 'parakeet-stream-metadata') {
+      const bytes = await this.loadAudioBytes(p.audioFileName)
+      return runParakeetStreamMetadata(modelId, bytes, p)
     }
 
     if (testId === 'parakeet-stream-destroy-mid-utterance') {

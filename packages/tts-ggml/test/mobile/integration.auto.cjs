@@ -38,12 +38,20 @@ async function runCosyvoice3Test (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/cosyvoice3.test.js', options)
 }
 
+async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit.test.js', options)
+}
+
 async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/gpu-smoke.test.js', options)
 }
 
 async function runLavasrEnhancerTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/lavasr-enhancer.test.js', options)
+}
+
+async function runMossTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/moss.test.js', options)
 }
 
 async function runMultipleRunsTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -82,6 +90,10 @@ async function runSupertonic3QuantTest (options = {}) { // eslint-disable-line n
   return runIntegrationModule('../integration/supertonic3-quant.test.js', options)
 }
 
+async function runVoiceControlsTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/voice-controls.test.js', options)
+}
+
 module.exports = {
   runAddonTest,
   runAudio8Test,
@@ -91,8 +103,10 @@ module.exports = {
   runCosyvoice3CloneTest,
   runCosyvoice3LavasrTest,
   runCosyvoice3Test,
+  runFitTest,
   runGpuSmokeTest,
   runLavasrEnhancerTest,
+  runMossTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,
   runParlerWerTest,
@@ -101,5 +115,6 @@ module.exports = {
   runStreamingBenchmarkTest,
   runSupertonicMtlTest,
   runSupertonicTest,
-  runSupertonic3QuantTest
+  runSupertonic3QuantTest,
+  runVoiceControlsTest
 }

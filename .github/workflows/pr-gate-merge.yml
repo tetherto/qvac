@@ -63,6 +63,7 @@ jobs:
     outputs:
       packages: ${{ steps.pkglist.outputs.packages }}
       packages-with-path: ${{ steps.pkglist.outputs.packages-with-path }}
+      sanity-packages: ${{ steps.pkglist.outputs.sanity-packages }}
       any: ${{ steps.filter.outputs.pkg-any }}
     steps:
       - name: Checkout repository
@@ -77,13 +78,21 @@ jobs:
           filters: |
             pkg-any:
               - "packages/**"
+            # Shared CI definitions: they affect every addon but name none, so
+            # nx-affected selects nothing and on-pr-nx posts no
+            # qvac/prebuild-<pkg> status for them. They therefore drive
+            # sanity-checks only. Requiring a prebuild status here would poll to
+            # the 180 minute deadline for a status nothing is going to post.
+            shared-ci:
+              - ".github/workflows/*-nx.yml"
               - ".github/workflows/prebuilds-*.yml"
+              - ".github/workflows/cpp-tests-*.yml"
+              - ".github/workflows/integration-test-*.yml"
             asr-ggml:
               - "packages/asr-ggml/**"
               - ".github/workflows/prebuilds-asr-ggml.yml"
             bci-whispercpp:
               - "packages/bci-whispercpp/**"
-              - ".github/workflows/prebuilds-bci-whispercpp.yml"
             classification-ggml:
               - "packages/classification-ggml/**"
               - ".github/workflows/prebuilds-classification-ggml.yml"
@@ -91,30 +100,26 @@ jobs:
               - "packages/decoder-audio/**"
             diffusion-cpp:
               - "packages/diffusion-cpp/**"
-              - ".github/workflows/prebuilds-diffusion-cpp.yml"
             embed-llamacpp:
               - "packages/embed-llamacpp/**"
-              - ".github/workflows/prebuilds-embed-llamacpp.yml"
             # Pure-JS/TS package (no prebuilds). Listed so its lint, typecheck,
             # declaration and generated-artifact checks run under sanity-checks
             # and reach the required qvac-merge-guard status.
             infer-base:
               - "packages/infer-base/**"
+            ggml-rpc-server:
+              - "packages/ggml-rpc-server/**"
+              - ".github/workflows/prebuilds-ggml-rpc-server.yml"
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
-              - ".github/workflows/prebuilds-llm-llamacpp.yml"
             model-fit:
               - "packages/model-fit/**"
-              - ".github/workflows/prebuilds-model-fit.yml"
             ocr-ggml:
               - "packages/ocr-ggml/**"
-              - ".github/workflows/prebuilds-ocr-ggml.yml"
             translation-nmtcpp:
               - "packages/translation-nmtcpp/**"
-              - ".github/workflows/prebuilds-translation-nmtcpp.yml"
             tts-ggml:
               - "packages/tts-ggml/**"
-              - ".github/workflows/prebuilds-tts-ggml.yml"
             fabric:
               - "packages/fabric/**"
               - ".github/workflows/prebuilds-fabric.yml"
@@ -131,10 +136,28 @@ jobs:
         id: pkglist
         env:
           CHANGES: ${{ steps.filter.outputs.changes }}
+          # Every package filter key above. Kept in step with that list.
+          ALL_PACKAGES: >-
+            ["asr-ggml","bci-whispercpp","classification-ggml","decoder-audio",
+             "diffusion-cpp","embed-llamacpp","infer-base","llm-llamacpp",
+             "model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","fabric","vla"]
         run: |
-          CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any"))')
+          CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
+
+          # `packages` gates verify-prebuilds, so it must only ever name packages
+          # a producer will actually post a status for.
           echo "packages=${CHANGED}" >> "$GITHUB_OUTPUT"
-          echo "packages-with-path=$(echo "$CHANGED" | jq -c '
+
+          # sanity-checks needs no posted status, so a shared-CI edit that names
+          # no package still gets checked here rather than passing the guard with
+          # nothing verified.
+          SANITY="$CHANGED"
+          if [ "$SANITY" = "[]" ] && echo "$CHANGES" | jq -e 'index("shared-ci")' >/dev/null; then
+            SANITY="$ALL_PACKAGES"
+            echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
+          fi
+          echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
+          echo "packages-with-path=$(echo "$SANITY" | jq -c '
             map({package: ., path: (if . == "vla" then "packages/vla-ggml" else "packages/" + . end)})
           ')" >> "$GITHUB_OUTPUT"
 
@@ -144,7 +167,7 @@ jobs:
     # path, there is no root package.json in this monorepo).
     # Gate on the concrete package list: a non-addon packages/** change leaves
     # packages=[], which would make this matrix zero-run and result='' downstream.
-    if: needs.authorize.outputs.allowed == 'true' && needs.changes.outputs.packages != '[]' && needs.changes.outputs.packages != ''
+    if: needs.authorize.outputs.allowed == 'true' && needs.changes.outputs.sanity-packages != '[]' && needs.changes.outputs.sanity-packages != ''
     needs: [authorize, changes, fork-approval]
     strategy:
       fail-fast: false

@@ -14,9 +14,9 @@ has merged to `main`. It applies the single-package `release` workflow to every 
 in the release set at once.
 
 It reuses the same mechanics as `/release` (cut a `release-*` branch → dispatch
-`on-merge-<package>.yml` → the on-merge workflow builds prebuilds, publishes to npm with
-the `latest` tag, and creates a git tag), but for the whole release set, and it is aware
-of the per-consumer quirks and the mandatory human approval gate.
+`on-merge-nx.yml` with the package as an input → the on-merge workflow builds prebuilds,
+publishes to npm with the `latest` tag, and creates a git tag), but for the whole release
+set, and it is aware of the per-consumer quirks and the mandatory human approval gate.
 
 **The release set** is the full consumer roster (see the table below) minus anything named
 in `--exclude`. Every step below operates on the release set, not the roster.
@@ -91,15 +91,16 @@ This table is the **full roster**. The release set is this list minus `--exclude
 
 | Package dir (`packages/`) | npm name | on-merge workflow | git-tag created |
 |---|---|---|---|
-| `embed-llamacpp` | `@qvac/embed-llamacpp` | `on-merge-embed-llamacpp.yml` | `llamacpp-embed-v<ver>` |
-| `fabric` | `@qvac/fabric` | `on-merge-fabric.yml` | `fabric-v<ver>` |
-| `llm-llamacpp` | `@qvac/llm-llamacpp` | `on-merge-llm-llamacpp.yml` | `llamacpp-llm-v<ver>` |
-| `model-fit` | `@qvac/model-fit` | `on-merge-model-fit.yml` | `model-fit-v<ver>` |
-| `ocr-ggml` | `@qvac/ocr-ggml` | `on-merge-ocr-ggml.yml` | `ocr-ggml-v<ver>` |
-| `translation-nmtcpp` | `@qvac/translation-nmtcpp` | `on-merge-translation-nmtcpp.yml` | `v<ver>` (bare) |
-| `vla-ggml` | `@qvac/vla-ggml` | **`on-merge-vla.yml`** ⚠️ | `vla-v<ver>` |
+| `embed-llamacpp` | `@qvac/embed-llamacpp` | `on-merge-nx.yml` | `llamacpp-embed-v<ver>` |
+| `fabric` | `@qvac/fabric` | `on-merge-nx.yml` | `fabric-v<ver>` |
+| `llm-llamacpp` | `@qvac/llm-llamacpp` | `on-merge-nx.yml` | `llamacpp-llm-v<ver>` |
+| `model-fit` | `@qvac/model-fit` | **`on-merge-model-fit.yml`** ⚠️ | `model-fit-v<ver>` |
+| `ocr-ggml` | `@qvac/ocr-ggml` | `on-merge-nx.yml` | `ocr-ggml-v<ver>` |
+| `translation-nmtcpp` | `@qvac/translation-nmtcpp` | `on-merge-nx.yml` | `v<ver>` (bare) |
+| `vla-ggml` | `@qvac/vla-ggml` | `on-merge-nx.yml` | `vla-v<ver>` |
 
-The workflow-name and git-tag columns are **not** uniform — see Restrictions & nuances.
+The git-tag column is **not** uniform, and `model-fit` is the one consumer still
+published by its own workflow — see Restrictions & nuances.
 
 `classification-ggml` is **not** in this list. It dropped the `qvac-fabric` vcpkg
 dependency and now consumes the published npm package `@qvac/fabric`, so it is not part
@@ -166,14 +167,19 @@ git -C <repo> diff --stat origin/<base-branch>..release-<pkg>-<ver>   # MUST be 
 git -C <repo> push origin release-<pkg>-<ver>                    # non-force, non-main
 ```
 
-### Step 3 — Dispatch the on-merge workflow (uses the workflow-name map)
+### Step 3 — Dispatch the on-merge workflow
 ```bash
-gh workflow run "<on-merge-wf>" --repo tetherto/qvac --ref release-<pkg>-<ver>
+gh workflow run on-merge-nx.yml --repo tetherto/qvac \
+  --ref release-<pkg>-<ver> -f package=<pkg>
 ```
-The workflow file for `vla-ggml` is `on-merge-vla.yml`. Pushing a fresh `release-*` branch
-usually does **not** auto-trigger (path filter sees no new commits), so the explicit
-dispatch is the trigger — but check `gh run list --branch release-<pkg>-<ver>` and, if a
-push-triggered run already exists, do NOT double-dispatch.
+`package` is a required choice input and takes the package **directory** name, the same
+string the branch carries. `model-fit` is the exception and keeps its own workflow:
+`gh workflow run on-merge-model-fit.yml --repo tetherto/qvac --ref release-model-fit-<ver>`.
+
+Pushing a fresh `release-*` branch usually does **not** auto-trigger (path filter sees no
+new commits), so the explicit dispatch is the trigger — but check
+`gh run list --branch release-<pkg>-<ver>` and, if a push-triggered run already exists, do
+NOT double-dispatch.
 
 ### Step 4 — Monitor to the approval gate (do NOT approve)
 Poll until each run pauses at `publish-npm`. Read the run URL straight from `gh` rather than
@@ -242,15 +248,20 @@ indistinguishable later from one that dropped a package by accident.
 
 ## Restrictions & nuances (hard-won)
 
-- **Workflow-name map is not uniform.** 6 consumers use `on-merge-<pkg>.yml`, but
-  **`vla-ggml` uses `on-merge-vla.yml`** (short name, no `-ggml`). This is the release
-  (on-merge) workflow — distinct from the PR-validation workflow `on-pr-vla.yml`.
+- **One workflow, one exception.** All consumers except `model-fit` publish from
+  `on-merge-nx.yml`, selected by the `package` input rather than by filename. `model-fit`
+  keeps `on-merge-model-fit.yml`. The old `on-merge-vla.yml` short-name quirk is gone:
+  both the `package` input and the `release-vla-ggml-<ver>` branch use the directory name.
+- **The release branch name is load-bearing.** `detect` parses `release-<pkg>-<x.y.z>`,
+  requires `packages/<pkg>/project.json` to exist, and refuses to publish unless the run
+  selected exactly that package. A misnamed branch fails the run rather than publishing
+  the wrong thing.
 - **git-tag naming varies per package** — do NOT assume `<pkg>-v<ver>`. Use the table:
   `llamacpp-embed-v<ver>`, `fabric-v<ver>`, `llamacpp-llm-v<ver>`, `model-fit-v<ver>`,
   `ocr-ggml-v<ver>`, bare `v<ver>` for `translation-nmtcpp`, and `vla-v<ver>`.
   The tag comes from `create-release-tag.yml`, which builds `<repo_name>-v<published_version>`
-  from the `repo_name` each `on-merge-*.yml` passes it — read that input if a new consumer
-  appears rather than guessing from the directory name.
+  from `repoName` in each package's `project.json` (`targets.on-merge.options.ci`) — read
+  that rather than guessing from the directory name if a new consumer appears.
 - **label-gate auto-authorises release dispatches.** The `label-gate`/Authorise job treats
   `push` and `workflow_dispatch` as *trusted events* (`authorised=true`) — so a
   `release-*` branch dispatch needs **no labels at all**. PR events are the contrasting

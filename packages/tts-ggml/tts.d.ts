@@ -1,5 +1,5 @@
 export interface TTSConfigurationParams {
-    [key: string]: string | number | boolean | undefined;
+    [key: string]: string | number | boolean | string[] | undefined;
 }
 export interface TTSJobData {
     type: string;
@@ -14,6 +14,7 @@ export interface TTSJobData {
     noise?: string;
     reverb?: string;
     quality?: string;
+    instruct?: string;
     referenceAudio?: string;
     referenceText?: string;
 }
@@ -23,10 +24,20 @@ export interface TTSWeightData {
     completed: boolean;
 }
 export type TTSOutputCallback = (addon: unknown, event: unknown, data: unknown, error: unknown) => void;
+/** getVoiceControls() payload, keyed by tts-cpp's engine names. */
+export interface NativeVoiceControls {
+    emotions: string[];
+    paces: string[];
+    engines: Record<string, {
+        emotions: string[];
+        paces: string[];
+    }>;
+}
 export interface TTSBinding {
+    getVoiceControls(): NativeVoiceControls;
     createInstance(owner: TTSInterface, configuration: TTSConfigurationParams, outputCallback: TTSOutputCallback | null): object;
     activate(handle: object | null): Promise<void>;
-    runJob(handle: object | null, data: TTSJobData): void;
+    runJob(handle: object | null, data: TTSJobData): boolean | void | Promise<boolean | void>;
     loadWeights(handle: object | null, weightsData: TTSWeightData): void;
     cancel(handle: object | null): Promise<void>;
     destroyInstance(handle: object): Promise<void> | void;
