@@ -43,10 +43,12 @@ const EXCLUDED_RUNNERS = [
   'runStreamingBenchmarkTest',
   // Desktop-scoped engines/features whose models are not in the mobile
   // manifest: Audio8 (surfaced when integration.auto.cjs was regenerated -
-  // the checked-in file predated audio8.test.js), MOSS (an 8B backbone) and
-  // CosyVoice3 cloning (the s3tok/campplus add-on GGUFs ship for desktop only).
+  // the checked-in file predated audio8.test.js), MOSS (an 8B backbone),
+  // MOSS-SoundEffect (a desktop diffusion model) and CosyVoice3 cloning (the
+  // s3tok/campplus add-on GGUFs ship for desktop only).
   'runAudio8Test',
   'runMossTest',
+  'runMossSfxTest',
   'runCosyvoice3CloneTest'
 ]
 

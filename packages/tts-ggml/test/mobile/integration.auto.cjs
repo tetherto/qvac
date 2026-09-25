@@ -50,6 +50,10 @@ async function runLavasrEnhancerTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/lavasr-enhancer.test.js', options)
 }
 
+async function runMossSfxTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/moss-sfx.test.js', options)
+}
+
 async function runMossTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/moss.test.js', options)
 }
@@ -106,6 +110,7 @@ module.exports = {
   runFitTest,
   runGpuSmokeTest,
   runLavasrEnhancerTest,
+  runMossSfxTest,
   runMossTest,
   runMultipleRunsTest,
   runOutputSampleRateTest,

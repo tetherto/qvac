@@ -29,6 +29,13 @@ export interface TTSJobData {
   // JSAdapter::readAudio8Voice. Ignored by other engines.
   referenceAudio?: string;
   referenceText?: string;
+  // MOSS-SoundEffect per-call generation controls (siblings of `input`), read
+  // by JSAdapter::readMossSoundEffectCall. Ignored by other engines.
+  seconds?: number;
+  negativePrompt?: string;
+  steps?: number;
+  guidance?: number;
+  shift?: number;
 }
 
 export interface TTSWeightData {
