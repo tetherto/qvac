@@ -41,6 +41,7 @@
 
 namespace parakeet {
 class Engine;
+struct EngineResult;
 } // namespace parakeet
 
 namespace qvac::asrggml::parakeet {
@@ -138,6 +139,7 @@ public:
   // getBackendInfo().
   const std::string& getEncoderBackend() const { return encoder_backend_; }
   int getEncoderOnCoreml() const { return encoder_on_coreml_; }
+  void recordTranscriptionResult(const pkt::EngineResult& result);
   int getStreamingChunkMs() const {
     return resolveStreamingChunkMs(cfg_.modelType, cfg_.streamingChunkMs);
   }
@@ -387,6 +389,8 @@ private:
   int64_t encoderMs_ = 0;
   int64_t decoderMs_ = 0;
   int64_t totalEncodedFrames_ = 0;
+  int64_t jobEncoderCalls_ = 0;
+  int64_t jobCoremlEncoderCalls_ = 0;
 
   mutable std::atomic_uint64_t nextGeneration_ = 1;
   mutable std::atomic_uint64_t activeGeneration_ = 0;

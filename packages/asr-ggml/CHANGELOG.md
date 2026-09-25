@@ -20,6 +20,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- `RuntimeStats.encoderUsedCoreml` for Parakeet: `1` when every offline ASR
+  transcription in the job ran its encoder on the Core ML sidecar, `0` when any
+  fell back to ggml. `encoderOnCoreml` keeps reporting only that a sidecar
+  loaded. The field is absent after Sortformer diarization and streaming jobs,
+  where the engine does not report per-call routing.
 - Cache-aware streaming for `parakeet-unified-en-0.6b`. The engine keeps
   per-layer attention and convolution caches across steps instead of
   re-encoding a sliding window, so `streamingChunkMs` now selects a trained

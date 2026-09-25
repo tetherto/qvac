@@ -666,7 +666,11 @@ ggml.
 `RuntimeStats.encoderOnCoreml` report that a sidecar loaded at `load()`, not
 that a given call ran on it: an EOU input of another length, a Unified
 `runStreaming()` session, or a failed prediction still runs the encoder on
-ggml with the flag set. Export sidecars with
+ggml with the flag set. For what a job actually did, read
+`RuntimeStats.encoderUsedCoreml`: `1` when every offline ASR transcription in
+the job ran its encoder on Core ML, `0` when any ran on ggml. The engine
+reports per-call routing only for offline ASR, so the field is absent after
+Sortformer diarization and streaming jobs. Export sidecars with
 `engines/parakeet/scripts/export-encoder-coreml.py`, preferably from an `f16`
 or `f32` GGUF (a quantized source works, but its rounding is baked into the
 sidecar every tier shares), from the
@@ -864,12 +868,12 @@ Three things are worth knowing before touching these lanes:
   places **zero** ops on the ANE, so it is for numerical checks only, never for
   benchmarking.
 - **A lane can never publish a mislabelled number.** `activeBackend` is derived
-  from the observed per-run `encoderOnCoreml` stat, and the benchmark refuses to
-  *write* an artifact when a Core ML lane did not load the sidecar (or when a
-  non-Core ML lane did). The stat reports the load, not each call; a loaded
-  TDT sidecar takes every input and leaves it only when a prediction fails.
-  The check runs before the artifact is written, because the artifact is
-  written before the test's own assertions run.
+  from each measured run's `encoderUsedCoreml` stat, which reports where that
+  run's encoder actually ran. The benchmark refuses to *write* an artifact when
+  a Core ML lane has any run whose encoder fell back to ggml, or when a
+  non-Core ML lane has any run on Core ML. The check runs before the artifact
+  is written, because the artifact is written before the test's own
+  assertions run.
 
 Sidecars are pinned in
 [`test/integration/parakeet-coreml.manifest.json`](test/integration/parakeet-coreml.manifest.json)
