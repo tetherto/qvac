@@ -1,7 +1,7 @@
 import { getLLMText } from '@/lib/get-llm-text';
 import { isReleaseNotesPage } from '@/lib/docs-open-graph';
 import {
-  lineCorpusUrl,
+  corpusHeader,
   pagesOfLine,
   unversionedPages,
   versionedCollections,
@@ -30,34 +30,22 @@ export const revalidate = false;
 export async function GET() {
   const collections = versionedCollections();
 
-  const header: string[] = [
-    '# QVAC Documentation — full text',
-    '',
-    'Contents of this corpus:',
-    '',
-    '- Every page of the collections that publish no versions.',
-  ];
-
   const versionedPages = [];
-  for (const { software, path, lines } of collections) {
+  for (const { lines } of collections) {
     const current = lines.find((line) => line.current);
     if (!current) continue;
-    header.push(
-      `- ${software.package} ${current.version}, the current line of ${path}. Other lines are not included here: ${lines
-        .filter((line) => !line.current)
-        .map((line) => `${line.version} → ${lineCorpusUrl(path, line)}`)
-        .join(', ')}`,
-    );
     versionedPages.push(...pagesOfLine(current));
   }
 
-  header.push('', '- Release notes are excluded; fetch a release note as its own page.', '');
+  const all = [...unversionedPages(), ...versionedPages];
+  const pages = all.filter((page) => !isReleaseNotesPage(page));
+  const texts = await Promise.all(pages.map(getLLMText));
+  const header = corpusHeader({
+    kind: 'site',
+    collections,
+    pages: pages.length,
+    withheld: all.length - pages.length,
+  });
 
-  const texts = await Promise.all(
-    [...unversionedPages(), ...versionedPages]
-      .filter((page) => !isReleaseNotesPage(page))
-      .map(getLLMText),
-  );
-
-  return new Response([header.join('\n'), ...texts].join('\n\n'));
+  return new Response([header, ...texts].join('\n\n'));
 }

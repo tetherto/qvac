@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getLLMText } from '@/lib/get-llm-text';
 import { isReleaseNotesPage } from '@/lib/docs-open-graph';
 import {
+  corpusHeader,
   pagesOfLine,
   versionedCollection,
   versionedCollections,
@@ -37,9 +38,16 @@ export async function GET(
   const line = collection?.lines.find((entry) => entry.current);
   if (!collection || !line) notFound();
 
-  const texts = await Promise.all(
-    pagesOfLine(line).filter((page) => !isReleaseNotesPage(page)).map(getLLMText),
-  );
+  const all = pagesOfLine(line);
+  const pages = all.filter((page) => !isReleaseNotesPage(page));
+  const texts = await Promise.all(pages.map(getLLMText));
+  const header = corpusHeader({
+    kind: 'line',
+    collection,
+    line,
+    pages: pages.length,
+    withheld: all.length - pages.length,
+  });
 
-  return new Response(texts.join('\n\n'));
+  return new Response([header, ...texts].join('\n\n'));
 }

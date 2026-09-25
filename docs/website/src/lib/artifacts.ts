@@ -105,6 +105,98 @@ export function currentVersionOf(software: DocumentedSoftware): string | null {
   return getCurrentLine(software)?.version ?? null;
 }
 
+/**
+ * The block every corpus opens with, naming what the corpus carries.
+ *
+ * A corpus is a single file an agent may be handed on its own, with none of
+ * the hierarchy that would have told it which release it is reading. The
+ * block is the only orientation such a reader gets: which line, which
+ * package, how many pages, and what was withheld. `versions.json` stays the
+ * machine-readable face of the line structure; this is prose for whoever
+ * arrived without it.
+ *
+ * Release notes are withheld from every corpus that has any. They are
+ * historical changelogs whose bulk inflates the token count without adding
+ * context needed to use the release (QVAC-21379). The exclusion is stated
+ * here because a corpus that drops pages silently cannot be told apart from
+ * documentation that was never written.
+ */
+export function corpusHeader(
+  scope:
+    | {
+        kind: 'site';
+        collections: VersionedCollection[];
+        pages: number;
+        withheld: number;
+      }
+    | {
+        kind: 'line';
+        collection: VersionedCollection;
+        line: Line;
+        pages: number;
+        withheld: number;
+      },
+): string {
+  const lines: string[] = [];
+
+  if (scope.kind === 'line') {
+    const { collection, line, pages } = scope;
+    const { software, path } = collection;
+    const standing = line.current
+      ? 'the current line, served at this collection’s version-less paths'
+      : 'a past line, kept as it stood for that release';
+
+    lines.push(
+      `# ${software.package} ${line.version} — full text`,
+      '',
+      `Every page below documents ${software.package} ${line.version}: ${standing}. No page of another line appears here.`,
+      '',
+      'Contents of this corpus:',
+      '',
+      scope.withheld > 0
+        ? `- ${pages} pages, the whole of this line except its release notes.`
+        : `- ${pages} pages, the whole of this line.`,
+      `- Page index for this line: ${lineIndexUrl(path, line)}`,
+      // Never another line's URL. A line-scoped artifact that named one
+      // would fail the leakage gate, which is why the line index resolves
+      // siblings through the resolver rather than listing them.
+      `- On another release? Resolve the line from ${path}/llms.txt, or ${versionsUrl(path)}`,
+    );
+  } else {
+    lines.push(
+      '# QVAC Documentation — full text',
+      '',
+      'Contents of this corpus:',
+      '',
+      `- ${scope.pages} pages.`,
+      '- Every page of the collections that publish no versions.',
+    );
+
+    for (const { software, path, lines: published } of scope.collections) {
+      const current = published.find((line) => line.current);
+      if (!current) continue;
+      const others = published.filter((line) => !line.current);
+      lines.push(
+        `- ${software.package} ${current.version}, the current line of ${path}. Other lines are not included here: ${others
+          .map((line) => `${line.version} → ${lineCorpusUrl(path, line)}`)
+          .join(', ')}`,
+      );
+    }
+  }
+
+  if (scope.withheld > 0) {
+    const whereToFind =
+      scope.kind === 'line' ? 'the index above' : 'the line index that lists it';
+    lines.push(
+      `- ${scope.withheld} release-notes ${scope.withheld === 1 ? 'page is' : 'pages are'} withheld. Fetch one as its own page, from ${whereToFind}.`,
+    );
+  }
+
+  lines.push(`- How to pick a line: ${BUILD_WITH_AI_URL}`);
+
+  return lines.join('\n');
+}
+
 /** `- [Title](/url): description`, the entry shape every index uses. */
 export function formatPageEntry(page: Page): string {
   const description = page.data.description?.trim();

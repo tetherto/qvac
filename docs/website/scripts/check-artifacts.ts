@@ -154,6 +154,21 @@ function corpusPages(text: string): string[] {
 }
 
 /**
+ * The block a corpus opens with, before its first page: everything above the
+ * first page's frontmatter. A corpus may be handed to an agent on its own,
+ * with none of the hierarchy that would say which release it covers, so the
+ * block is the only scope it carries. Six of the seven corpora shipped
+ * without one, and nothing failed.
+ *
+ * Returns null when the corpus begins straight into a page.
+ */
+function corpusHeaderOf(text: string): string | null {
+  const firstPage = text.indexOf('---\ntitle:');
+  const header = (firstPage === -1 ? text : text.slice(0, firstPage)).trim();
+  return header.length > 0 ? header : null;
+}
+
+/**
  * Routes that are not documentation pages: Next.js error pages, and the
  * standalone app routes the site serves beside the docs. Neither is written
  * in MDX, so neither has a Markdown twin or a place in the agent corpora.
@@ -318,6 +333,31 @@ async function main() {
     const text = await fs.readFile(artifact.file, 'utf-8');
 
     if (artifact.kind === 'corpus') {
+      // The scope block, and the URLs it names. A corpus skips the general
+      // URL pass below, since its body is page text rather than references,
+      // so its header is resolved and leak-checked here instead.
+      const header = corpusHeaderOf(text);
+      if (header === null) {
+        problems.push(`${artifact.url} opens on a page, declaring no scope`);
+      } else if (!header.startsWith('# ') || !header.includes('\n- ')) {
+        problems.push(
+          `${artifact.url} opens without a scope declaration: a title and a list of what it carries`,
+        );
+      } else {
+        for (const url of extractUrls(header, prefixes)) {
+          checkedUrls += 1;
+          const reason = leakReason(url, artifact.scope, collections);
+          if (reason) {
+            problems.push(`${artifact.url} references ${url} in its header, which ${reason}`);
+          }
+          if (!served.has(normalize(url)) && !intoUncutLine(url)) {
+            problems.push(
+              `${artifact.url} references ${url} in its header, which the build does not serve`,
+            );
+          }
+        }
+      }
+
       const carried = corpusPages(text);
       for (const page of carried) {
         checkedUrls += 1;
