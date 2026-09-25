@@ -22,10 +22,12 @@ public:
   void clear() noexcept { snapshot_.clear(); }
 
   void setStorage(SnapshotStorage storage) noexcept { storage_ = storage; }
+  void setScope(SnapshotScope scope) noexcept { scope_ = scope; }
 
 private:
   SequenceStateSnapshot snapshot_;
   SnapshotStorage storage_ = SnapshotStorage::Disk;
+  SnapshotScope scope_ = SnapshotScope::Full;
 };
 
 } // namespace qvac_lib_inference_addon_llama::utils

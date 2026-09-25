@@ -294,7 +294,10 @@ void LlamaModel::validateCheckpointBudget(ReloadableState& state) {
   }
   const uint32_t perSeqTokens = llama_n_ctx_seq(ctx);
   const uint64_t worstCase = utils::estimateMaxSequenceStateBytes(
-      ctx, llama_model_get_vocab(mdl), perSeqTokens);
+      ctx,
+      llama_model_get_vocab(mdl),
+      perSeqTokens,
+      utils::snapshotScopeFor(isDeepSeekV4));
   if (worstCase == 0) {
     QLOG_IF(
         Priority::WARNING,

@@ -408,6 +408,10 @@ private:
   bool prefillComplete_ = false;
   qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
   llama_token pendingResidentToken_ = LLAMA_TOKEN_NULL;
+  // Scope of every rollback snapshot and checkpoint this context takes (see
+  // `snapshotScopeFor`). Only meaningful when `needsFullStateSnapshot_`.
+  qvac_lib_inference_addon_llama::utils::SnapshotScope snapshotScope_ =
+      qvac_lib_inference_addon_llama::utils::SnapshotScope::Full;
   llama_pos pendingResidentTokenPos_ = 0;
   qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
