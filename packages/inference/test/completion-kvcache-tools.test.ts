@@ -1282,6 +1282,31 @@ test('completion: a deferred tool sends a catalog, not its schema', async (t) =>
   clearRegistry()
 })
 
+test('completion: registration-only fields stay out of the prompt when nothing defers', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-defer-strip-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'defer-strip-key')
+  await complete(
+    [user('Area of a triangle, base 10 height 5?')],
+    [{ ...makeTool('calculate_area'), deferLoading: false, group: 'geometry' } as ToolDef]
+  )
+
+  const turn = calls.filter((call) => !call.prefill).at(-1)
+  t.ok(turn)
+  const entry = turn!.messages.filter(isToolEntry).at(0) as Record<string, unknown>
+  t.is(entry['name'], 'calculate_area')
+  t.absent('deferLoading' in entry, 'deferLoading is not rendered')
+  t.absent('group' in entry, 'group is not rendered')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
 test('completion: loading a deferred tool leaves the prefix block untouched', async (t) => {
   await setIsolatedHome()
   clearRegistry()

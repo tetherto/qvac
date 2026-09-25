@@ -60,7 +60,7 @@ export function partitionTools(tools: readonly Tool[]): {
 }
 
 /** Strip the registration-only fields so what reaches the model is a plain definition. */
-function toWireTool(tool: Tool): Tool {
+export function toWireTool(tool: Tool): Tool {
   const { deferLoading: _deferLoading, group: _group, ...wire } = tool
   return wire
 }

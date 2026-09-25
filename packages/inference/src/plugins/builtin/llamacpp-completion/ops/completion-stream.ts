@@ -28,7 +28,7 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
 import type { DisposableScope } from '@/runtime/disposable-scope'
 import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integration'
-import { resolveDeferredTools } from '@/utils/tools/defer'
+import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
 import { parseToolCalls } from '@/utils/tools/index'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import { toolChoiceDemandsCall } from '@/schemas/completion-stream'
@@ -420,8 +420,8 @@ export async function* completion(
   // while the parser also accepts whatever earlier searches appended to the
   // history. `null` when nothing defers, which leaves the existing path alone.
   const deferred = resolveDeferredTools(tools, history)
-  const toolsToRender = deferred?.toolsToRender ?? tools
-  const callableTools = deferred?.callableTools ?? tools
+  const toolsToRender = deferred?.toolsToRender ?? tools?.map(toWireTool)
+  const callableTools = deferred?.callableTools ?? toolsToRender
   const toolsActive = !!toolsToRender?.length && toolsEnabled
   const dialect =
     tools && tools.length > 0 ? (params.toolDialect ?? detectToolDialect(modelId)) : undefined
