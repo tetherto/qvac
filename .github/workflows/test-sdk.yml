@@ -20,6 +20,10 @@ on:
         description: "Desktop tests"
         type: boolean
         default: true
+      python:
+        description: "Python tests"
+        type: boolean
+        default: false
       electron:
         description: "Electron tests"
         type: boolean
@@ -37,16 +41,12 @@ on:
         type: boolean
         default: true
       suite:
-        description: "Test suite (full = all tests; custom uses Custom suites)"
+        description: "Test suite (full = all tests)"
         type: choice
         options:
           - full
           - smoke
-          - custom
         default: full
-      suite-custom:
-        description: "Custom suites (comma-separated; used only when suite is custom)"
-        type: string
       exclude-suite:
         description: "Suites to exclude (comma-separated, e.g. slow,flaky)"
         type: string
@@ -93,10 +93,6 @@ on:
         description: "Desktop/Electron/Snap connection timeout (seconds)"
         type: number
         default: 60
-      device-farm-timeout:
-        description: "Device Farm run timeout (minutes)"
-        type: number
-        default: 120
       device-farm-start-timeout:
         description: "Wait for Device Farm run to start (minutes)"
         type: number
@@ -121,6 +117,10 @@ on:
         description: "Advanced: Snap runners (JSON array)"
         type: string
         default: '["qvac-ubuntu2204-x64-gpu"]'
+      python-platforms:
+        description: "Advanced: Python runners (JSON array)"
+        type: string
+        default: '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
       # One input, not a boolean plus a runner list: workflow_dispatch allows at
       # most 25 inputs and this workflow is at the ceiling. Picking a single
       # runner is what a re-run after a busy-host warning needs anyway.
@@ -228,12 +228,14 @@ jobs:
       run-desktop: ${{ steps.resolve.outputs.run-desktop }}
       run-electron: ${{ steps.resolve.outputs.run-electron }}
       run-snap: ${{ steps.resolve.outputs.run-snap }}
+      run-python: ${{ steps.resolve.outputs.run-python }}
       run-android: ${{ steps.resolve.outputs.run-android }}
       run-ios: ${{ steps.resolve.outputs.run-ios }}
       run-e2e: ${{ steps.resolve.outputs.run-e2e }}
       desktop-platforms: ${{ steps.plan.outputs.desktop-platforms }}
       electron-platforms: ${{ steps.plan.outputs.electron-platforms }}
       snap-platforms: ${{ steps.plan.outputs.snap-platforms }}
+      python-platforms: ${{ steps.plan.outputs.python-platforms }}
       filter-android: ${{ steps.plan.outputs.filter-android }}
       filter-ios: ${{ steps.plan.outputs.filter-ios }}
     steps:
@@ -244,13 +246,13 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           TARGETS: ${{ inputs.targets }}
           RUN_DESKTOP: ${{ inputs.desktop }}
+          RUN_PYTHON: ${{ inputs.python }}
           RUN_ELECTRON: ${{ inputs.electron }}
           RUN_SNAP: ${{ inputs.snap }}
           RUN_ANDROID: ${{ inputs.android }}
           RUN_IOS: ${{ inputs.ios }}
           RUN_CALIBRATION: ${{ inputs.calibration }}
           SUITE: ${{ inputs.suite }}
-          SUITE_CUSTOM: ${{ inputs.suite-custom }}
         run: |
           set -euo pipefail
 
@@ -258,13 +260,12 @@ jobs:
             RESOLVED_SUITE=
           elif [ -z "$SUITE" ]; then
             RESOLVED_SUITE=
-          elif [ "$SUITE" = "custom" ]; then
-            RESOLVED_SUITE="$SUITE_CUSTOM"
           else
             RESOLVED_SUITE="$SUITE"
           fi
 
           RESOLVED_DESKTOP=false
+          RESOLVED_PYTHON=false
           RESOLVED_ELECTRON=false
           RESOLVED_SNAP=false
           RESOLVED_ANDROID=false
@@ -272,6 +273,7 @@ jobs:
 
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             RESOLVED_DESKTOP="$RUN_DESKTOP"
+            RESOLVED_PYTHON="$RUN_PYTHON"
             RESOLVED_ELECTRON="$RUN_ELECTRON"
             RESOLVED_SNAP="$RUN_SNAP"
             RESOLVED_ANDROID="$RUN_ANDROID"
@@ -284,8 +286,8 @@ jobs:
               RESOLVED_CALIBRATION=true
             fi
 
-            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_CALIBRATION}"
-            if [ "$SELECTED" = "falsefalsefalsefalsefalsefalse" ]; then
+            SELECTED="${RESOLVED_DESKTOP}${RESOLVED_PYTHON}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_CALIBRATION}"
+            if [ "$SELECTED" = "falsefalsefalsefalsefalsefalsefalse" ]; then
               echo "::error::Select at least one platform to test, or enable calibration."
               exit 1
             fi
@@ -298,6 +300,13 @@ jobs:
                 ;;
               desktop)
                 RESOLVED_DESKTOP=true
+                ;;
+              python)
+                RESOLVED_PYTHON=true
+                ;;
+              "desktop + python")
+                RESOLVED_DESKTOP=true
+                RESOLVED_PYTHON=true
                 ;;
               electron)
                 ;;
@@ -339,6 +348,7 @@ jobs:
                   fi
                   case "$ITEM" in
                     desktop) RESOLVED_DESKTOP=true; MATCHED=true ;;
+                    python) RESOLVED_PYTHON=true; MATCHED=true ;;
                     electron) RESOLVED_ELECTRON=true; MATCHED=true ;;
                     snap) RESOLVED_SNAP=true; MATCHED=true ;;
                     android) RESOLVED_ANDROID=true; MATCHED=true ;;
@@ -362,7 +372,7 @@ jobs:
           # calibration job builds packages/inference itself and never consumes
           # a resolved inference or test-suite artifact.
           RESOLVED_E2E=true
-          if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}" = "falsefalsefalsefalsefalse" ]; then
+          if [ "${RESOLVED_DESKTOP}${RESOLVED_ELECTRON}${RESOLVED_SNAP}${RESOLVED_ANDROID}${RESOLVED_IOS}${RESOLVED_PYTHON}" = "falsefalsefalsefalsefalsefalse" ]; then
             RESOLVED_E2E=false
           fi
 
@@ -371,6 +381,7 @@ jobs:
             echo "run-desktop=$RESOLVED_DESKTOP"
             echo "run-electron=$RESOLVED_ELECTRON"
             echo "run-snap=$RESOLVED_SNAP"
+            echo "run-python=$RESOLVED_PYTHON"
             echo "run-android=$RESOLVED_ANDROID"
             echo "run-ios=$RESOLVED_IOS"
             echo "run-e2e=$RESOLVED_E2E"
@@ -384,6 +395,7 @@ jobs:
           DESKTOP_PLATFORMS: ${{ inputs.desktop-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]' }}
           ELECTRON_PLATFORMS: ${{ inputs.electron-platforms || '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu-gui"]' }}
           SNAP_PLATFORMS: ${{ inputs.snap-platforms || '["qvac-ubuntu2204-x64-gpu"]' }}
+          PYTHON_PLATFORMS: ${{ inputs.python-platforms }}
         run: |
           const fs = require('fs');
 
@@ -439,6 +451,16 @@ jobs:
             'desktop-platforms': JSON.stringify(narrow('desktop', process.env.DESKTOP_PLATFORMS)),
             'electron-platforms': JSON.stringify(narrow('electron', process.env.ELECTRON_PLATFORMS)),
             'snap-platforms': JSON.stringify(narrow('snap', process.env.SNAP_PLATFORMS)),
+            // The fallback is not dead code: `workflow_call` does not carry
+            // this input, and the rerun test drives this script with its own
+            // env. Both need a default that matches the dispatch one.
+            'python-platforms': JSON.stringify(
+              narrow(
+                'python',
+                process.env.PYTHON_PLATFORMS ||
+                  '["qvac-win25-x64-gpu", "qvac-ubuntu2204-x64-gpu", "qvac-macos26-arm64-gpu"]'
+              )
+            ),
             'filter-android': filterFor('android', 'android'),
             'filter-ios': filterFor('ios', 'ios'),
           };
@@ -624,6 +646,37 @@ jobs:
       project-directory: "packages/sdk"
       working-directory: "packages/sdk/e2e"
       platforms: ${{ needs.resolve.outputs.desktop-platforms }}
+      rerun-plan: ${{ inputs.rerun-plan }}
+      consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
+      filter: ${{ inputs.filter }}
+      suite: ${{ needs.resolve.outputs.suite }}
+      exclude-suite: ${{ inputs.exclude-suite }}
+      include: ${{ inputs.include }}
+      test-version: ${{ needs.prepare-inference.outputs.checkout-sha }}
+      inference-source: ${{ needs.prepare-inference.outputs.source }}
+      inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+      inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+      inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+      test-suite-source: ${{ needs.prepare-test-suite.outputs.source }}
+      test-suite-dependency-spec: ${{ needs.prepare-test-suite.outputs.dependency-spec }}
+      test-suite-artifact-name: ${{ needs.prepare-test-suite.outputs.artifact-name }}
+      test-suite-provenance: ${{ needs.prepare-test-suite.outputs.provenance }}
+      cache-models: ${{ inputs.cache-models }}
+    secrets: inherit
+
+  # The Python client running the same catalog the desktop leg runs. Its own
+  # leg rather than a second consumer in the desktop run: the producer hands
+  # the queue to the first registrant, so two clients in one run would split
+  # the catalog rather than both answer it.
+  python-tests:
+    needs: [resolve, prepare-inference, prepare-test-suite]
+    if: needs.resolve.outputs.run-python == 'true'
+    uses: ./.github/workflows/test-node-sdk.yml
+    with:
+      consumer: python
+      project-directory: "packages/sdk"
+      working-directory: "packages/sdk/e2e"
+      platforms: ${{ needs.resolve.outputs.python-platforms }}
       rerun-plan: ${{ inputs.rerun-plan }}
       consumer-timeout: ${{ fromJSON(inputs.desktop-consumer-timeout || '60') }}
       filter: ${{ inputs.filter }}
