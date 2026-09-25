@@ -4847,6 +4847,149 @@ class LoadedModelInfoToolDialect(Enum):
     dsml = "dsml"
 
 
+class NativeProbeFitVerdict(Enum):
+    fit = "fit"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class NativeProbeFitPlan(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    n_ctx: Annotated[
+        int,
+        Field(
+            alias="nCtx",
+            description="Context the probe resolved for this load, in tokens.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_layers: Annotated[
+        int,
+        Field(
+            alias="nGpuLayers",
+            description="Layers the probe would offload.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_devices: Annotated[
+        int,
+        Field(
+            alias="nGpuDevices",
+            description="GPU devices the offload would span.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[
+        str, Field(description="Device name as the backend reports it, or `host`.")
+    ]
+    total_bytes: Annotated[
+        float,
+        Field(alias="totalBytes", description="Memory the device reports installed."),
+    ]
+    free_bytes: Annotated[
+        float,
+        Field(
+            alias="freeBytes",
+            description="Memory the device reports free, before the margin.",
+        ),
+    ]
+    margin_bytes: Annotated[
+        float,
+        Field(
+            alias="marginBytes",
+            description="Headroom the fitter withheld on this device.",
+        ),
+    ]
+    model_bytes: Annotated[
+        float,
+        Field(alias="modelBytes", description="Weights the load would place here."),
+    ]
+    context_bytes: Annotated[
+        float,
+        Field(
+            alias="contextBytes",
+            description="Context and cache the load would place here.",
+        ),
+    ]
+    compute_bytes: Annotated[
+        float,
+        Field(
+            alias="computeBytes",
+            description="Compute buffers the load would place here.",
+        ),
+    ]
+
+
+class NativeProbeFitProjection(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    devices: Annotated[
+        list[NativeProbeFitProjectionDevicesItem],
+        Field(description="Every device the load would touch."),
+    ]
+
+
+class NativeProbeFit(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    verdict: Annotated[
+        NativeProbeFitVerdict,
+        Field(
+            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+            title="NativeProbeFitVerdict",
+        ),
+    ]
+    basis: Annotated[
+        Literal["native-probe"],
+        Field(
+            description="Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+        ),
+    ] = "native-probe"
+    estimator_version: Annotated[
+        str,
+        Field(
+            alias="estimatorVersion",
+            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve.",
+        ),
+    ]
+    reason: Annotated[
+        str,
+        Field(
+            description="Machine-readable reason for the verdict. Never parsed out of log text."
+        ),
+    ]
+    message: Annotated[
+        str | None, Field(description="Human-readable detail, when the reason has any.")
+    ] = None
+    plan: Annotated[
+        NativeProbeFitPlan | None,
+        Field(
+            description="Placement the probe projected. Present wherever the fitter resolved one.",
+            title="NativeProbeFitPlan",
+        ),
+    ] = None
+    projection: Annotated[
+        NativeProbeFitProjection | None,
+        Field(
+            description="What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
+            title="NativeProbeFitProjection",
+        ),
+    ] = None
+
+
 class LoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4862,6 +5005,14 @@ class LoadedModelInfo(GeneratedBaseModel):
     tool_dialect: Annotated[
         LoadedModelInfoToolDialect | None,
         Field(alias="toolDialect", title="LoadedModelInfoToolDialect"),
+    ] = None
+    fit_probe: Annotated[
+        NativeProbeFit | None,
+        Field(
+            alias="fitProbe",
+            description="Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.",
+            title="NativeProbeFit",
+        ),
     ] = None
 
 
