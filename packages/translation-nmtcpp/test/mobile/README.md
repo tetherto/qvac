@@ -30,5 +30,4 @@ Only these mobile test files are published with the package:
 - `integration-runtime.cjs`
 - `integration.auto.cjs`
 
-The actual test implementations (`test/integration/*.test.js`) are not included in the published package.
-
+The test implementations in `test/integration/` are included in the published package for mobile test runs. Their test-only dependencies, including Brittle, are installed by the test runner from `devDependencies`.
