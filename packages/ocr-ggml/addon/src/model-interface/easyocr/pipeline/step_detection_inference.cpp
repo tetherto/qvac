@@ -33,6 +33,7 @@
 #include "model-interface/easyocr/craft.hpp"
 #include "model-interface/easyocr/craft_weights.hpp"
 #include "model-interface/easyocr/gguf_loader.hpp"
+#include "model-interface/easyocr/tensor_validation.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,readability-identifier-naming,readability-identifier-length,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast)
 // DSP / inference inner loops use raw pointer arithmetic on cv::Mat planes
@@ -355,10 +356,10 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
   ggml_tensor* out = graphCache_.out;
   const int outH = static_cast<int>(out->ne[2]);
   const int outW = static_cast<int>(out->ne[1]);
-  assert(out->ne[0] == 2 && out->ne[3] == 1);
-
-  nhwcScratch_.resize(static_cast<size_t>(outH) * outW * 2);
-  ggml_backend_tensor_get(out, nhwcScratch_.data(), 0, ggml_nbytes(out));
+  const size_t outputBytes = ggml_nbytes(out);
+  TensorValidation::validateDetectionTensor(*out, outputBytes);
+  nhwcScratch_.resize(outputBytes / sizeof(float));
+  ggml_backend_tensor_get(out, nhwcScratch_.data(), 0, outputBytes);
   const auto tGet1 = clock::now();
   lastTimings_.tensorGetMs = msd(tGet1 - tGet0).count();
 

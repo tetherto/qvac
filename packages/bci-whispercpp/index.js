@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.computeWER = exports.BCIWhispercpp = void 0;
+exports.assessFit = exports.computeWER = exports.BCIWhispercpp = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const path = require("bare-path");
 const fs = require("bare-fs");
@@ -11,6 +11,7 @@ const bci_1 = require("./bci");
 const error_1 = require("./lib/error");
 const wer_1 = require("./lib/wer");
 Object.defineProperty(exports, "computeWER", { enumerable: true, get: function () { return wer_1.computeWER; } });
+const fit_1 = require("./lib/fit");
 const stream_1 = require("./lib/stream");
 const constants_1 = require("./lib/constants");
 // Default prebuilds folder for dynamically-loaded ggml backend `.so`
@@ -702,8 +703,11 @@ class BCIWhispercpp {
     }
 }
 exports.BCIWhispercpp = BCIWhispercpp;
+var fit_2 = require("./lib/fit");
+Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_2.assessFit; } });
 exports.default = BCIWhispercpp;
 const cjsExports = BCIWhispercpp;
 cjsExports.BCIWhispercpp = BCIWhispercpp;
 cjsExports.computeWER = wer_1.computeWER;
+cjsExports.assessFit = fit_1.assessFit;
 module.exports = cjsExports;

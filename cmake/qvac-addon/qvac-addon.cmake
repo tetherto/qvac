@@ -227,8 +227,8 @@ endfunction()
 #     narrows the module's exports to the bare C entry points),
 #   * the assertion that a fabric-linked module imports fabric's C++ runtime,
 #   * JS_LOGGER + BACKENDS_SUBDIR compile definitions,
-#   * platform-derived GGML_BACKEND_DL (Linux/Android load ggml backends as
-#     dlopen'd modules; macOS/Windows/iOS link them static into the runtime),
+#   * platform-derived GGML_BACKEND_DL (Linux/Android/Windows load ggml
+#     backends as modules; Apple platforms link them static into the runtime),
 #   * Android 16 KB page-size link flags,
 #   * Apple compiler-rt force_load for __isPlatformVersionAtLeast.
 #
@@ -303,7 +303,7 @@ function(qvac_addon_finalize addon_target)
       BACKENDS_SUBDIR="${_QAF_SUBDIR}")
   endif()
 
-  if((ANDROID OR UNIX) AND NOT APPLE)
+  if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
     target_compile_definitions(${addon_target} PRIVATE GGML_BACKEND_DL)
   endif()
 
@@ -438,7 +438,7 @@ endfunction()
 #   * GGML_BACKEND_DL / GGML_BACKEND_DIR so backend_env.cpp preloads the ggml
 #     backend modules from the test binary dir,
 #   * copy qvac__fabric@0.bare next to the test binary,
-#   * stage @qvac/fabric's dlopen'd ggml backends (Linux/Android) alongside it,
+#   * stage @qvac/fabric's dynamically loaded ggml backends alongside it,
 #   * $ORIGIN / @loader_path rpath so the copies resolve,
 #   * the Windows delay-load helper the imported module target doesn't carry,
 #   * fabric's C++ runtime on Linux, so the test binary exercises the same
@@ -448,7 +448,7 @@ endfunction()
 function(qvac_addon_stage_fabric_for_test test_target fabric_target)
   qvac_addon_import_fabric_cxx_runtime(${test_target} ${fabric_target})
 
-  if((ANDROID OR UNIX) AND NOT APPLE)
+  if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
     target_compile_definitions(${test_target} PRIVATE GGML_BACKEND_DL)
   endif()
   target_compile_definitions(${test_target} PRIVATE
@@ -466,13 +466,20 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
 
   bare_target(_qvac_host)
   file(GLOB _qvac_fabric_test_backends
-    "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${_qvac_host}/qvac__fabric/*.so")
+    "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${_qvac_host}/qvac__fabric/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
   if(_qvac_fabric_test_backends)
-    add_custom_command(TARGET ${test_target} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${_qvac_fabric_test_backends}
-        ${CMAKE_CURRENT_BINARY_DIR}/
-      COMMENT "Staging @qvac/fabric ggml backends next to ${test_target}")
+    get_property(_qvac_stage_target DIRECTORY PROPERTY QVAC_FABRIC_TEST_BACKENDS_TARGET)
+    if(NOT _qvac_stage_target)
+      string(MD5 _qvac_stage_id "${CMAKE_CURRENT_BINARY_DIR}")
+      set(_qvac_stage_target "qvac_fabric_test_backends_${_qvac_stage_id}")
+      add_custom_target(${_qvac_stage_target}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          ${_qvac_fabric_test_backends}
+          ${CMAKE_CURRENT_BINARY_DIR}/
+        COMMENT "Staging @qvac/fabric ggml backends for tests")
+      set_property(DIRECTORY PROPERTY QVAC_FABRIC_TEST_BACKENDS_TARGET "${_qvac_stage_target}")
+    endif()
+    add_dependencies(${test_target} ${_qvac_stage_target})
   endif()
 
   if(APPLE)

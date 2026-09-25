@@ -1,6 +1,6 @@
 // Global test environment: preload the ggml DL backend modules before any test.
 //
-// Under GGML_BACKEND_DL the backends are separate libqvac-ggml-*.so modules
+// Under GGML_BACKEND_DL the backends are separate shared-library modules
 // co-installed with the ggml core lib. ggml's default search only looks next to
 // the test binary and the CWD, so without this no backend (not even CPU) is
 // registered, and tests that construct a backend dereference null and abort

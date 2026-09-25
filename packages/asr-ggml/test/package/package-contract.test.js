@@ -33,6 +33,8 @@ const requiredFiles = [
   'engines/parakeet/driver.d.ts',
   'lib/error.js',
   'lib/error.d.ts',
+  'lib/fit.js',
+  'lib/fit.d.ts',
   'lib/types.d.ts',
   'binding.js',
   'addonLogging.js',
