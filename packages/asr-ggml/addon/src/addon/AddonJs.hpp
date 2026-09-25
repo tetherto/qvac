@@ -353,8 +353,8 @@ JSCATCH
 // 3090") recovered from the ggml device registry; it is the
 // nvidia-smi-independent fallback the perf reporter uses on CI runners
 // where the host probes can't see the GPU. encoderBackend is "coreml" when
-// parakeet's FastConformer encoder runs on the Apple Neural Engine sidecar,
-// else it mirrors backendName; the whisper-cpp port builds without
+// parakeet loaded an Apple Neural Engine encoder sidecar at load(), else it
+// mirrors backendName; the whisper-cpp port builds without
 // WHISPER_COREML, so its arm always reports encoderOnCoreml=false -- the
 // keys exist purely for cross-engine shape stability. Available after
 // activate(); reports CPU/"" before load.

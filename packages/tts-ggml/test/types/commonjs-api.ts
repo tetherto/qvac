@@ -32,8 +32,9 @@ const publicErrorConstructor: typeof QvacErrorAddonTTSGgml = QvacErrorAddonTTSGg
 declare const runtimeStats: RuntimeStats
 const enhancerBackendDevice: number | undefined = runtimeStats.enhancerBackendDevice
 const enhancerBackendId: number | undefined = runtimeStats.enhancerBackendId
-type HasPerCallOutputSampleRate =
-  'outputSampleRate' extends keyof TTSGgml.TTSRunInput ? false : true
+type HasPerCallOutputSampleRate = 'outputSampleRate' extends keyof TTSGgml.TTSRunInput
+  ? false
+  : true
 const excludesPerCallOutputSampleRate: HasPerCallOutputSampleRate = true
 const publicLogger: object = model.logger
 const publicOptions: object = model.opts
@@ -73,3 +74,21 @@ void [
   publicAddon,
   TTSGgml.ENGINE_SUPERTONIC
 ]
+
+const firstAudioMs: number | undefined = runtimeStats.firstAudioMs
+const pocketOutput: TTSGgml.TTSOutputChunk = {
+  outputArray: new Int16Array(0),
+  chunkIndex: 0,
+  isLast: true
+}
+async function pocketCompletionMetadata(pocket: TTSGgml): Promise<void> {
+  const response = await pocket.run({ input: 'Hello from Pocket.' })
+  for await (const chunk of response.iterate()) {
+    const chunkIndex: number | undefined = chunk.chunkIndex
+    const isLast: boolean | undefined = chunk.isLast
+    // @ts-expect-error completion metadata is boolean, not a string
+    const invalid: string = chunk.isLast
+    void [chunkIndex, isLast, invalid]
+  }
+}
+void [firstAudioMs, pocketOutput, pocketCompletionMetadata]

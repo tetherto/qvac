@@ -282,3 +282,250 @@ test('MOSS: reload refuses a non-native output rate and rolls back', async (t) =
   t.absent(model._buildTtsParams().outputSampleRate)
   await model.unload()
 })
+
+const TTSD_BACKBONE = './models/moss-ttsd-f16.gguf'
+const SPEAKER_ONE = '/abs/speaker-1.wav'
+const SPEAKER_TWO = '/abs/speaker-2.wav'
+const DURATION_TOKENS = 38
+const RELOADED_DURATION_TOKENS = 50
+const MAX_DURATION_TOKENS = 2015
+const CLONING_FILES = {
+  mossBackbone: BACKBONE,
+  mossCodecDecoder: DECODER,
+  mossCodecEncoder: ENCODER
+}
+
+function createDialogueModel(extra = {}) {
+  return createMockedMossModel({
+    files: { mossBackbone: TTSD_BACKBONE, mossCodecDecoder: DECODER, mossCodecEncoder: ENCODER },
+    extra: { dialogueReferences: [SPEAKER_ONE, SPEAKER_TWO], ...extra }
+  })
+}
+
+test('MOSS: durationTokens reaches the native params', (t) => {
+  const model = createMockedMossModel({ extra: { durationTokens: DURATION_TOKENS } })
+  t.is(model._buildTtsParams().durationTokens, DURATION_TOKENS)
+  t.absent(createMockedMossModel()._buildTtsParams().durationTokens, 'unset stays free length')
+})
+
+test('MOSS: durationTokens must be a non-negative integer', (t) => {
+  for (const bad of [-1, 1.5, Number.NaN, MAX_DURATION_TOKENS + 1]) {
+    t.exception(
+      () => createMockedMossModel({ extra: { durationTokens: bad } }),
+      /durationTokens must be an integer from 0 to 2015/,
+      `durationTokens ${bad} is rejected`
+    )
+  }
+  t.is(createMockedMossModel({ extra: { durationTokens: 0 } })._buildTtsParams().durationTokens, 0)
+})
+
+test('MOSS: durationTokens is reloadable and a refused value rolls back', async (t) => {
+  const model = createMockedMossModel({ extra: { durationTokens: DURATION_TOKENS } })
+  await model.load()
+  await model.reload({ durationTokens: RELOADED_DURATION_TOKENS })
+  t.is(
+    model._buildTtsParams().durationTokens,
+    RELOADED_DURATION_TOKENS,
+    'reload updates the target length'
+  )
+  await t.exception(
+    model.reload({ durationTokens: -3, language: 'zh' }),
+    /durationTokens must be an integer from 0 to 2015/
+  )
+  const params = model._buildTtsParams()
+  t.is(
+    params.durationTokens,
+    RELOADED_DURATION_TOKENS,
+    'the refused reload kept the previous length'
+  )
+  t.is(params.language, 'en', 'and the rest of the configuration')
+  await model.unload()
+})
+
+test('MOSS: dialogueReferences reach the native params as a copy', (t) => {
+  const references = [SPEAKER_ONE, SPEAKER_TWO]
+  const model = createDialogueModel({ dialogueReferences: references })
+  references.push('/abs/late.wav')
+  const params = model._buildTtsParams()
+  t.alike(params.dialogueReferences, [SPEAKER_ONE, SPEAKER_TWO])
+  t.is(params.mossBackbonePath, TTSD_BACKBONE)
+  t.absent(params.referenceAudio)
+})
+
+test('MOSS: dialogueReferences need the codec encoder and exclude referenceAudio', (t) => {
+  t.exception(
+    () =>
+      createMockedMossModel({
+        extra: { dialogueReferences: [SPEAKER_ONE, SPEAKER_TWO] }
+      }),
+    /dialogue synthesis with the moss engine needs the codec encoder/
+  )
+  t.exception(
+    () => createDialogueModel({ referenceAudio: '/abs/voice.wav' }),
+    /referenceAudio and dialogueReferences are exclusive/
+  )
+})
+
+test('MOSS: malformed dialogueReferences are rejected', (t) => {
+  for (const bad of [[], [SPEAKER_ONE, ''], [SPEAKER_ONE, 7], SPEAKER_ONE]) {
+    t.exception(
+      () => createDialogueModel({ dialogueReferences: bad }),
+      /dialogueReferences must be a non-empty array of WAV paths/,
+      `dialogueReferences ${JSON.stringify(bad)} is rejected`
+    )
+  }
+  const unset = createDialogueModel({ dialogueReferences: null })
+  t.absent(unset._buildTtsParams().dialogueReferences, 'null means no dialogue references')
+})
+
+test('MOSS: moss-only options on other engines throw', (t) => {
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_AUDIO8,
+        files: { audio8Lm: './models/audio8-lm-q8_0.gguf' },
+        durationTokens: DURATION_TOKENS
+      }),
+    /durationTokens are moss-only options/
+  )
+  t.exception(
+    () =>
+      new TTSGgml({
+        engine: TTSGgml.ENGINE_SUPERTONIC,
+        files: { supertonicModel: './models/supertonic.gguf' },
+        dialogueReferences: [SPEAKER_ONE]
+      }),
+    /dialogueReferences are moss-only options/
+  )
+})
+
+test('MOSS: reload refuses new dialogue references and keeps the old state', async (t) => {
+  const model = createDialogueModel()
+  await model.load()
+  await t.exception(
+    model.reload({ dialogueReferences: [SPEAKER_TWO], language: 'zh' }),
+    /encodes dialogueReferences once per instance/
+  )
+  const params = model._buildTtsParams()
+  t.alike(params.dialogueReferences, [SPEAKER_ONE, SPEAKER_TWO])
+  t.is(params.language, 'en', 'the refused reload rolled back')
+  await model.unload()
+})
+
+test('MOSS: modelDir picks the TTSD backbone for dialogue and MOSS-TTS otherwise', (t) => {
+  withTempDir('tts-ggml-moss-ttsd', (root, fs) => {
+    fs.writeFileSync(path.join(root, 'moss-tts-delay-f16.gguf'), 'tts')
+    fs.writeFileSync(path.join(root, 'moss-ttsd-f16.gguf'), 'ttsd')
+    fs.writeFileSync(path.join(root, 'moss-codec-decoder-f16.gguf'), 'decoder')
+    fs.writeFileSync(path.join(root, 'moss-codec-encoder-f16.gguf'), 'encoder')
+
+    const plain = new TTSGgml({ files: { modelDir: root } })
+    t.is(plain._mossBackbonePath, path.join(root, 'moss-tts-delay-f16.gguf'))
+
+    const dialogue = new TTSGgml({
+      engine: TTSGgml.ENGINE_MOSS,
+      files: { modelDir: root },
+      dialogueReferences: [SPEAKER_ONE, SPEAKER_TWO]
+    })
+    t.is(dialogue._mossBackbonePath, path.join(root, 'moss-ttsd-f16.gguf'))
+  })
+})
+
+test('MOSS: a modelDir holding only the TTSD backbone routes to moss', (t) => {
+  withTempDir('tts-ggml-moss-ttsd-only', (root, fs) => {
+    fs.writeFileSync(path.join(root, 'moss-ttsd-f16.gguf'), 'ttsd')
+    fs.writeFileSync(path.join(root, 'moss-codec-decoder-f16.gguf'), 'decoder')
+    const model = new TTSGgml({ files: { modelDir: root } })
+    t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS)
+    t.is(model._mossBackbonePath, path.join(root, 'moss-ttsd-f16.gguf'))
+
+    fs.writeFileSync(path.join(root, 'flow-lm.gguf'), 'pocket')
+    const sharedModel = new TTSGgml({ files: { modelDir: root } })
+    t.is(sharedModel.getEngineType(), TTSGgml.ENGINE_MOSS)
+  })
+})
+
+test('MOSS: backendsDir reaches the native params', (t) => {
+  const model = createMockedMossModel({
+    files: CLONING_FILES,
+    extra: { backendsDir: '/opt/backends' }
+  })
+  t.is(model._buildTtsParams().backendsDir, '/opt/backends')
+})
+
+test('MOSS: durationTokens accepts the largest target the engine budget fits', (t) => {
+  const model = createMockedMossModel({ extra: { durationTokens: MAX_DURATION_TOKENS } })
+  t.is(model._buildTtsParams().durationTokens, MAX_DURATION_TOKENS)
+})
+
+test('MOSS: a null durationTokens means free length', async (t) => {
+  const model = createMockedMossModel({ extra: { durationTokens: null } })
+  t.absent(model._buildTtsParams().durationTokens, 'null at construction is unset')
+  await model.load()
+  await model.reload({ durationTokens: DURATION_TOKENS })
+  await model.reload({ durationTokens: null })
+  t.absent(model._buildTtsParams().durationTokens, 'reload with null clears the target')
+  await model.unload()
+})
+
+test('MOSS: an over-budget reload is refused before the instance is rebuilt', async (t) => {
+  const model = createMockedMossModel({ extra: { durationTokens: DURATION_TOKENS } })
+  await model.load()
+  const addon = model.addon
+  await t.exception(
+    model.reload({ durationTokens: MAX_DURATION_TOKENS + 1 }),
+    /durationTokens must be an integer from 0 to 2015/
+  )
+  t.is(model.addon, addon, 'the working instance was kept')
+  t.is(model._buildTtsParams().durationTokens, DURATION_TOKENS)
+  await model.unload()
+})
+
+test('MOSS: dialogue refuses sentence streaming', async (t) => {
+  const model = createDialogueModel()
+  await model.load()
+  await t.exception(
+    model.runStream('[S1] Hi. [S2] Hello.'),
+    /MOSS dialogue cannot be split into sentences/
+  )
+  await t.exception(
+    model.run({ input: '[S1] Hi. [S2] Hello.', streamOutput: true }),
+    /MOSS dialogue cannot be split into sentences/
+  )
+  await t.exception(
+    model.runStreaming(['[S1] Hi.', '[S2] Hello.']),
+    /MOSS dialogue cannot be split into sentences/
+  )
+  await model.unload()
+})
+
+test('MOSS: dialogue with a modelDir needs the TTSD backbone', (t) => {
+  withTempDir('tts-ggml-moss-no-ttsd', (root, fs) => {
+    fs.writeFileSync(path.join(root, 'moss-tts-delay-f16.gguf'), 'tts')
+    fs.writeFileSync(path.join(root, 'moss-codec-decoder-f16.gguf'), 'decoder')
+    fs.writeFileSync(path.join(root, 'moss-codec-encoder-f16.gguf'), 'encoder')
+    t.exception(
+      () =>
+        new TTSGgml({
+          engine: TTSGgml.ENGINE_MOSS,
+          files: { modelDir: root },
+          dialogueReferences: [SPEAKER_ONE, SPEAKER_TWO]
+        }),
+      /needs the MOSS-TTSD backbone/
+    )
+  })
+})
+
+test('MOSS: reload refuses an empty referenceAudio instead of ignoring it', async (t) => {
+  const model = createMockedMossModel({
+    files: CLONING_FILES,
+    extra: { referenceAudio: '/abs/voice.wav' }
+  })
+  await model.load()
+  await t.exception(
+    model.reload({ referenceAudio: '' }),
+    /encodes referenceAudio once per instance/
+  )
+  t.is(model._buildTtsParams().referenceAudio, '/abs/voice.wav')
+  await model.unload()
+})

@@ -15,6 +15,7 @@ export const PREBUILD_KEYS = [
   'diffusion-cpp',
   'embed-llamacpp',
   'fabric',
+  'ggml-rpc-server',
   'llm-llamacpp',
   'model-fit',
   'ocr-ggml',

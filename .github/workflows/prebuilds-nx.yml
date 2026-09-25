@@ -98,6 +98,10 @@ jobs:
       repository: ${{ inputs.repository || 'tetherto/qvac' }}
       # No artifact naming passed: the reusable derives both the per-leg and merged
       # bundle names from the package, so several packages can build in one run.
+      matrix-include: ${{ matrix.matrixInclude || 'default' }}
+      desktop-smoke-command: ${{ matrix.desktopSmokeCommand }}
+      post-artifact-build-command: ${{ matrix.postArtifactBuildCommand }}
+      extra-strip-binary-name: ${{ matrix.extraStripBinaryName }}
       linux-extra-packages: ${{ matrix.linuxExtraPackages }}
       mac-brew-packages: ${{ matrix.macBrewPackages }}
       setup-python-on-windows: ${{ matrix.setupPythonOnWindows == true }}
