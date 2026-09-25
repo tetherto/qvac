@@ -33,7 +33,7 @@ namespace {
 constexpr const char* TEST_DIR_PREFIX = "qvac-tts-ggml-supertonic-tests-";
 
 class TestTempDir {
- public:
+public:
   TestTempDir() : path_(createUniqueDir()) {}
   TestTempDir(const TestTempDir&) = delete;
   TestTempDir& operator=(const TestTempDir&) = delete;
@@ -43,7 +43,7 @@ class TestTempDir {
   }
   const std::filesystem::path& path() const { return path_; }
 
- private:
+private:
   static std::filesystem::path createUniqueDir() {
     std::random_device entropy;
     auto dir = std::filesystem::temp_directory_path() /
