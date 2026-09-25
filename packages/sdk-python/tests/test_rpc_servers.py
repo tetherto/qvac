@@ -4,13 +4,15 @@ import pytest
 from pydantic import ValidationError
 from test_api import FakeTransport
 
-from tetherto.qvac_sdk import (
-    DiscoverRpcServersRequest,
-    StartRpcServerRequest,
-    StopRpcServerRequest,
+from tetherto.qvac_sdk.methods import (
     discover_rpc_servers,
     start_rpc_server,
     stop_rpc_server,
+)
+from tetherto.qvac_sdk.schemas import (
+    DiscoverRpcServersRequest,
+    StartRpcServerRequest,
+    StopRpcServerRequest,
 )
 
 
