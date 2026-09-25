@@ -159,6 +159,13 @@ async function runAndCollect(model, text) {
   return { samples, sampleRate, stats: response.stats || null }
 }
 
+// A CPU engine keeps the denoiser on its scalar core, which runtimeStats
+// reports as CPU (denoiserBackendDevice 0, denoiserBackendId 0).
+function assertDenoiserOnCpu(t, stats, label) {
+  t.is(stats.denoiserBackendDevice, 0, `${label}: useGPU:false -> denoiser on CPU`)
+  t.is(stats.denoiserBackendId, 0, `${label}: denoiser backend reported as CPU`)
+}
+
 // Every chunk that carries audio must be tagged at the enhanced 48 kHz rate
 // rather than the engine's native rate — the mislabel this feature prevents.
 function assertStreamedChunksReportEnhancedRate(t, updates) {
@@ -731,6 +738,8 @@ test(
       t.ok(r.samples > 0, 'synthesis produced audio')
       t.ok(r.stats, 'runtimeStats returned (constructed with stats:true)')
       t.is(r.stats.enhancerBackendDevice, -1, 'no enhancer loaded -> enhancerBackendDevice=-1')
+      t.is(r.stats.denoiserBackendDevice, -1, 'no denoiser loaded -> denoiserBackendDevice=-1')
+      t.is(r.stats.denoiserBackendId, -1, 'no denoiser loaded -> denoiserBackendId=-1')
     } finally {
       try {
         await model.unload()
@@ -882,6 +891,7 @@ test(
       -1,
       'denoiser alone loads no enhancer (enhancerBackendDevice=-1)'
     )
+    assertDenoiserOnCpu(t, denoisedOnly.stats, 'denoiser alone')
 
     const enh = await ensureLavaSREnhancerGguf({
       targetDir: path.join(baseDir, 'models', 'lavasr')
@@ -909,6 +919,7 @@ test(
       0,
       'useGPU:false -> enhancer on CPU (enhancerBackendDevice=0)'
     )
+    assertDenoiserOnCpu(t, denoisedAndEnhanced.stats, 'denoiser + enhancer')
   }
 )
 
@@ -956,6 +967,58 @@ test(
       t.is(r.sampleRate, 48000, 'GPU-enhanced supertonic output reports 48 kHz')
       t.ok(r.samples > 0, 'GPU-enhanced synthesis produced audio')
       assertEnhancerGpuBackend(t, r.stats)
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
+  }
+)
+
+test(
+  'Supertonic + LavaSR denoiser on GPU (useGPU:true) runs the denoiser on the engine device',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const baseDir = getBaseDir()
+    const den = await ensureLavaSRDenoiserGguf({
+      targetDir: path.join(baseDir, 'models', 'lavasr')
+    })
+    if (!den.success) {
+      t.comment('LavaSR denoiser GGUF not staged; skipping.')
+      t.pass('skipped — no denoiser GGUF')
+      return
+    }
+    const dl = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
+    if (!dl.success) {
+      t.fail('Supertonic GGUF not available — registry fetch failed.')
+      return
+    }
+
+    const model = new TTSGgml({
+      engine: TTSGgml.ENGINE_SUPERTONIC,
+      files: { supertonicModel: dl.path, lavasrDenoiser: den.path },
+      voice: 'F1',
+      config: { language: 'en', useGPU: true },
+      opts: { stats: true }
+    })
+    await model.load()
+    try {
+      const r = await runAndCollect(model, 'The denoiser follows the engine onto the GPU.')
+      t.is(r.sampleRate, 44100, 'denoising preserves the native 44.1 kHz')
+      t.ok(r.samples > 0, 'denoised synthesis produced audio')
+      const { backendDevice, backendId, denoiserBackendDevice, denoiserBackendId } = r.stats
+      console.log(
+        `[denoiser/GPU] backendDevice=${backendDevice} denoiserBackendDevice=` +
+          `${denoiserBackendDevice} denoiserBackendId=${denoiserBackendId} ` +
+          `(${backendIdToName(denoiserBackendId)})`
+      )
+      t.not(denoiserBackendDevice, -1, 'denoiser was loaded (denoiserBackendDevice != -1)')
+      t.is(denoiserBackendDevice, backendDevice, 'denoiser runs on the engine device')
+      if (backendDevice === 1) {
+        t.is(denoiserBackendId, backendId, 'GPU denoiser uses the engine backend')
+      } else {
+        t.is(denoiserBackendId, 0, 'a CPU-fallback engine keeps the denoiser on CPU')
+      }
     } finally {
       try {
         await model.unload()

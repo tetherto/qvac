@@ -123,6 +123,62 @@ struct ChatterboxConfig {
   /** CFM Euler steps for streaming chunks.  0 = library default (2). */
   std::optional<int> streamCfmSteps;
   /**
+   * CFM Euler steps for batch synthesis, forwarded to
+   * `tts_cpp::chatterbox::EngineOptions::cfm_steps`.  0 = library default
+   * (2-step meanflow on Turbo, the model's n_timesteps on multilingual).
+   * Unlike the streaming count, the engine does not floor this for the
+   * multilingual standard-CFM sampler, so low values under-integrate there.
+   */
+  std::optional<int> batchCfmSteps;
+  /**
+   * Sliding-window S3Gen for native streaming, forwarded to
+   * `tts_cpp::chatterbox::EngineOptions::stream_left_context_tokens`: keep only
+   * this many already-emitted speech tokens of left context per chunk, which
+   * bounds per-chunk cost on long utterances.  0 = cumulative prefix.
+   */
+  std::optional<int> streamLeftContextTokens;
+  /**
+   * Maximum speech tokens T3 decodes per synthesize() call, forwarded to
+   * `tts_cpp::chatterbox::EngineOptions::n_predict` (25 tokens ~= 1 s).
+   * Unset keeps the engine default (1000, ~40 s).  Longer utterances also
+   * need nCtx to cover prompt + generated tokens.
+   */
+  std::optional<int> nPredict;
+  /**
+   * Sentence-level auto-split, forwarded to
+   * `tts_cpp::chatterbox::EngineOptions::max_sentence_chars` /
+   * `crossfade_ms`.  When maxSentenceChars > 0 the engine runs T3 + S3Gen per
+   * segment of at most that many bytes, bounding each T3 sequence (and
+   * n_predict applies per segment).  crossfadeMs is the raised-cosine seam
+   * between batch segments; the streaming path stays gapless.
+   */
+  std::optional<int> maxSentenceChars;
+  std::optional<int> crossfadeMs;
+  /**
+   * T3 sampling, forwarded to `tts_cpp::chatterbox::EngineOptions`.  Unset
+   * keeps the engine defaults (top_k 1000, top_p 0.95, temperature 0.8,
+   * repeat_penalty 1.2).  topK 0 disables the cutoff, topP 1 disables
+   * nucleus filtering, temperature 0 decodes greedily, repeatPenalty 1
+   * disables the penalty.
+   */
+  std::optional<int> topK;
+  std::optional<float> topP;
+  std::optional<float> temperature;
+  std::optional<float> repeatPenalty;
+  /**
+   * Multilingual T3 only (the Turbo variant ignores them), forwarded to
+   * `tts_cpp::chatterbox::EngineOptions`:
+   *   exaggeration  prosody intensity; > 0 more expressive, < 0 flatter
+   *                 (engine default 0.5).
+   *   cfgWeight     T3 classifier-free guidance scale; 0 disables CFG
+   *                 (engine default 0.5).  Separate from cfgRate, which
+   *                 steers S3Gen.
+   *   minP          min-p sampling threshold; 0 disables (engine default).
+   */
+  std::optional<float> exaggeration;
+  std::optional<float> cfgWeight;
+  std::optional<float> minP;
+  /**
    * S3Gen classifier-free-guidance (CFG) rate override, forwarded to
    * `tts_cpp::chatterbox::EngineOptions::s3gen_cfg_rate`.
    *
