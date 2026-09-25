@@ -16,8 +16,7 @@ export const modelFitVerdictSchema = z.enum(['likely-fits', 'likely-too-large', 
  * estimator declares no kind for it assesses as `unknown`.
  */
 export type ModelFitWorkload =
-  | { kind: 'llm'; contextTokens: number }
-  | { kind: 'audio'; windowMs: number; streaming: boolean; batch?: number }
+  { kind: 'llm'; contextTokens?: number } | { kind: 'audio'; windowMs: number; streaming: boolean }
 
 /**
  * The part of a model constant an assessment reads. Pass a catalog constant

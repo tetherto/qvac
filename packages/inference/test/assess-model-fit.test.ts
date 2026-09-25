@@ -431,14 +431,14 @@ test('estimateWhisper: working memory scales from the 30 s calibration window', 
 
   const halfStreaming = estimateWhisper({
     profile: profile({ engine: 'whispercpp-transcription', artifactBytes: 77_700_000 }),
-    workload: { kind: 'audio', windowMs: 15_000, streaming: true, batch: 2 },
+    workload: { kind: 'audio', windowMs: 15_000, streaming: true },
     extraArtifactBytes: 0,
     calibration: cal,
     hasGpu: false
   })
   t.is(halfStreaming.kind, 'estimate')
   if (halfStreaming.kind !== 'estimate') return
-  t.is(halfStreaming.working.lower, 10 * MIB + 60 * MIB * 0.5 * 2 + 5 * MIB)
+  t.is(halfStreaming.working.lower, 10 * MIB + 60 * MIB * 0.5 + 5 * MIB)
   t.ok(halfStreaming.assumptions.some((a) => a.includes('streaming session')))
 })
 

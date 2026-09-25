@@ -5,6 +5,7 @@ import type { CanonicalModelType } from '@/schemas/index'
 import type { ResolveContext } from '@/schemas/plugin'
 import { getPlugin } from '@/plugins/registry'
 import { getRuntimeContext } from '@/runtime/state'
+import { formatZodError } from '@/utils/zod-error'
 import {
   fetchFitStub,
   removeStub,
@@ -84,6 +85,12 @@ export async function resolveLoadFromStubs(
     return { status: 'unsupported-load', detail: `no plugin registered for ${load.modelType}` }
   }
 
+  const parsed = plugin.loadConfigSchema.safeParse(load.modelConfig ?? {})
+  if (!parsed.success) {
+    return { status: 'unsupported-load', detail: formatZodError(parsed.error) }
+  }
+  const modelConfig = parsed.data as Record<string, unknown>
+
   const staged: string[] = []
   const release = async () => {
     for (const path of staged) await removeStub(path)
@@ -110,7 +117,7 @@ export async function resolveLoadFromStubs(
       return {
         status: 'resolved',
         modelPath,
-        modelConfig: load.modelConfig,
+        modelConfig,
         artifacts: {},
         release
       }
@@ -125,7 +132,7 @@ export async function resolveLoadFromStubs(
       })
     }
 
-    const resolved = await plugin.resolveConfig(load.modelConfig ?? {}, context)
+    const resolved = await plugin.resolveConfig(modelConfig, context)
 
     return {
       status: 'resolved',
