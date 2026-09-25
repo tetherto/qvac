@@ -6,7 +6,7 @@ on:
   workflow_call:
     inputs:
       consumer:
-        description: "Node-compatible consumer to run (desktop, electron, or snap)"
+        description: "Consumer to run (desktop, electron, snap, or python)"
         required: false
         type: string
         default: desktop
@@ -212,6 +212,7 @@ jobs:
           sparse-checkout: |
             ${{ inputs.project-directory }}
             packages/inference
+            ${{ inputs.consumer == 'python' && 'packages/sdk-python' || '' }}
             .github/actions/sdk-e2e-fail-on-failures
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
@@ -386,6 +387,33 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: bun run build
 
+      # The Python client runs from source. actions/setup-python does not work
+      # on these self-hosted runners (its toolcache path is not writable), so
+      # use the runner's own Python through a venv, exactly as
+      # on-pr-sdk-python-e2e-full.yml does.
+      - name: Set up the Python client
+        if: inputs.consumer == 'python'
+        shell: bash
+        run: |
+          set -e
+          # The checkout is sparse, so say so plainly if the client is missing
+          # rather than letting `venv` create the directory and pip report a
+          # confusing "not a Python project".
+          if [ ! -f packages/sdk-python/pyproject.toml ]; then
+            echo "::error::packages/sdk-python is not in the checkout; add it to sparse-checkout"
+            exit 1
+          fi
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" -c 'import sys; assert sys.version_info[:2] >= (3, 10), "need Python >=3.10, got " + sys.version'
+          "$PY" -m venv packages/sdk-python/.venv
+          if [ -x "packages/sdk-python/.venv/bin/python" ]; then
+            PYBIN="$PWD/packages/sdk-python/.venv/bin/python"
+          else
+            PYBIN="$PWD/packages/sdk-python/.venv/Scripts/python"
+          fi
+          "$PYBIN" -m pip install --upgrade pip
+          "$PYBIN" -m pip install -e "packages/sdk-python[dev]"
+
       - name: Remove consumer package credentials
         if: inputs.consumer == 'snap'
         working-directory: ${{ inputs.working-directory }}
@@ -394,8 +422,11 @@ jobs:
           const fs = require('fs');
           fs.rmSync('.npmrc', { force: true });
 
+      # Python too: the external consumer's config points its client at this
+      # worker entry, so both legs drive the same binary and a difference in a
+      # result can only have come from the client.
       - name: Bundle SDK worker (custom plugins)
-        if: inputs.consumer == 'desktop'
+        if: inputs.consumer == 'desktop' || inputs.consumer == 'python'
         working-directory: ${{ inputs.working-directory }}
         run: npm run bundle:sdk
 
@@ -420,13 +451,16 @@ jobs:
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
+      # The Python leg resolves the same resource table against the same
+      # registry, so it bootstraps and caches as `desktop` rather than paying
+      # for a second copy of every model.
       - name: Bootstrap (download models)
         if: inputs.consumer != 'snap' && steps.models-cache.outputs.cache-hit != 'true'
         working-directory: ${{ inputs.working-directory }}
-        run: npx qvac-test run:bootstrap:${{ inputs.consumer }} --config=.
+        run: npx qvac-test run:bootstrap:${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }} --config=.
 
       # Save right after bootstrap. On parallel runners, first to finish reserves the key;
       # others get a non-fatal "unable to reserve" warning which is expected.
@@ -435,7 +469,7 @@ jobs:
         uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: ${{ inputs.working-directory }}/.qvac-cache
-          key: qvac-models-${{ inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
+          key: qvac-models-${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
           enableCrossOsArchive: true
 
       - name: Build Electron package
@@ -688,11 +722,21 @@ jobs:
             const excludeSuiteArgs = excludeSuite ? ['--exclude-suite=' + excludeSuite] : [];
             const consumerType = '${{ inputs.consumer }}';
 
-            const consumerArgs = [
-              'qvac-test', `run:consumer:${consumerType}`,
-              '--runId=${{ steps.runid.outputs.runId }}',
-              '--config=.'
-            ];
+            // A non-JS client is not its own consumer: the framework drives it
+            // over the stdin/stdout bridge, so the command is the external
+            // consumer and the client is named in the config.
+            const consumerArgs = consumerType === 'python'
+              ? [
+                  'qvac-test', 'run:consumer:external',
+                  '--runId=${{ steps.runid.outputs.runId }}',
+                  '--config=.',
+                  '--name=python'
+                ]
+              : [
+                  'qvac-test', `run:consumer:${consumerType}`,
+                  '--runId=${{ steps.runid.outputs.runId }}',
+                  '--config=.'
+                ];
             if (consumerType === 'electron') {
               consumerArgs.push('--skip-build');
             } else if (consumerType === 'snap') {

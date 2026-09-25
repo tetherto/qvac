@@ -3,6 +3,8 @@
 # Triggers SDK e2e tests via test-sdk.yml when:
 #   - "test-e2e-smoke" label applied: runs smoke suite on desktop + mobile
 #   - "test-e2e-full" label applied: runs full suite on desktop + mobile
+#   - "test-e2e-python" label applied: runs the smoke suite on desktop + the
+#     Python client, so the two clients answer the same tests in one run
 #   - "test-e2e-rerun-failed" label applied: re-runs only the tests that failed
 #     on the last smoke/full run, on the platforms where they failed
 #   - PR opened/updated targeting release-* branch with SDK/inference changes: runs full suite
@@ -43,6 +45,7 @@ concurrency:
       || (github.event.label.name == 'test-e2e-rerun-failed' && 'rerun')
       || (github.event.label.name == 'test-e2e-smoke' && 'base')
       || (github.event.label.name == 'test-e2e-full' && 'base')
+      || (github.event.label.name == 'test-e2e-python' && 'base')
       || format('ignored-{0}', github.event.label.name) }}
   cancel-in-progress: true
 
@@ -62,6 +65,7 @@ jobs:
       should-run: ${{ steps.check.outputs.should-run }}
       suite: ${{ steps.check.outputs.suite }}
       mode: ${{ steps.check.outputs.mode }}
+      targets: ${{ steps.check.outputs.targets }}
     steps:
       - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -91,6 +95,7 @@ jobs:
           SHOULD_RUN=false
           SUITE=
           MODE=
+          TARGETS=
 
           if [ "$EVENT" = "labeled" ]; then
             case "$LABEL" in
@@ -102,6 +107,12 @@ jobs:
               test-e2e-full)
                 SHOULD_RUN=true
                 MODE=base
+                ;;
+              test-e2e-python)
+                SHOULD_RUN=true
+                SUITE=smoke
+                MODE=base
+                TARGETS="desktop + python"
                 ;;
               test-e2e-rerun-failed)
                 echo "::notice::Re-running the tests that failed on the last base run"
@@ -123,6 +134,7 @@ jobs:
             echo "should-run=$SHOULD_RUN"
             echo "suite=$SUITE"
             echo "mode=$MODE"
+            echo "targets=$TARGETS"
           } >> "$GITHUB_OUTPUT"
 
       - name: Release the rerun label
@@ -321,7 +333,7 @@ jobs:
               && needs.resolve-rerun.outputs.should-run == 'true'))
     uses: ./.github/workflows/test-sdk.yml
     with:
-      targets: ${{ needs.resolve-rerun.outputs.targets || 'desktop + mobile' }}
+      targets: ${{ needs.resolve-rerun.outputs.targets || needs.resolve-config.outputs.targets || 'desktop + mobile' }}
       suite: ${{ needs.resolve-config.outputs.suite }}
       rerun-plan: ${{ needs.resolve-rerun.outputs.rerun-plan }}
       include: ${{ needs.resolve-impacted.outputs.include }}
