@@ -109,4 +109,33 @@ export function checkReleaseTrain (ref, baseSha, io, catalog) {
   return errors
 }
 
+/**
+ * Train projects whose version differs between two commits, with the version
+ * each one moved to, so a caller can check that version's changelog section.
+ *
+ * @param {(sha: string, path: string) => string | null} readManifestAt
+ *   package.json at a commit, or null when the file does not exist there
+ */
+export function movedProjects (ref, baseSha, headSha, readManifestAt, catalog) {
+  const parsed = parseBranch(ref)
+  if (!parsed) {
+    throw new Error(`Not a release train branch: ${ref}`)
+  }
+  const moved = []
+  for (const project of trainProjects(parsed.train, catalog)) {
+    const manifestPath = `${project.dir}/package.json`
+    const head = readManifestAt(headSha, manifestPath)
+    if (head === null) {
+      throw new Error(`${manifestPath} does not exist at ${headSha}`)
+    }
+    const headVersion = JSON.parse(head).version
+    const base = readManifestAt(baseSha, manifestPath)
+    const baseVersion = base === null ? null : JSON.parse(base).version
+    if (headVersion !== baseVersion) {
+      moved.push({ slug: project.slug, version: headVersion, changelog: `${project.dir}/CHANGELOG.md` })
+    }
+  }
+  return moved
+}
+
 export { parseBranch, trainNames }
