@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Native Pocket TTS with converted FlowLM/Mimi bundles, prepared voices or
+  reference-WAV conditioning, and native audio streaming through the addon
+  run, runStream and runStreaming APIs. Supports explicit flow-sampling steps;
+  four steps are recommended for the observed one-step speech artifact.
+
 - Apple Core ML (Neural Engine) sidecars on the macOS / iOS builds, for the
   Supertonic vocoder and the Audio8 codec. Presence-driven: a stage runs on a
   compiled `.mlmodelc` staged next to its model file and falls back to ggml
@@ -66,11 +71,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-09-24` for the MOSS engine above.
-- Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
-  weightless fit-measure model that carries no vocabulary, which a memory-fit
-  measurement never needs; loading a real model is unchanged and still
-  requires one. Also the speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2),
+- Release the loaded Pocket model before activating its replacement on reload,
+  avoiding two live model allocations. Failed activation leaves the instance
+  unloaded with its last successful configuration available for `load()`.
+- Expose optional firstAudioMs stats and chunkIndex/isLast output metadata;
+  preserve first-audio latency during streaming aggregation.
+- Include the Pocket CPU planner and EOS-tail fixes from the speech dependencies.
+- Resolve Pocket CPU memory planning through the dynamically loaded backend,
+  fixing unresolved `ggml_graph_plan` imports in Linux and Android prebuilds.
+- Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to
+  `2026-09-24` for the MOSS engine above. The speech ggml now tracks upstream
+  ggml 0.20.2 (was 0.10.2),
   and its Vulkan backend no longer crashes during CosyVoice3 GPU synthesis on
   NVIDIA GPUs that report cooperative-matrix2 support. The pinned engine also
   brings the MOSS engine above, and Parler and Audio8 now accept a weightless

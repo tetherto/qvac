@@ -438,6 +438,10 @@ test('MOSS: a modelDir holding only the TTSD backbone routes to moss', (t) => {
     const model = new TTSGgml({ files: { modelDir: root } })
     t.is(model.getEngineType(), TTSGgml.ENGINE_MOSS)
     t.is(model._mossBackbonePath, path.join(root, 'moss-ttsd-f16.gguf'))
+
+    fs.writeFileSync(path.join(root, 'flow-lm.gguf'), 'pocket')
+    const sharedModel = new TTSGgml({ files: { modelDir: root } })
+    t.is(sharedModel.getEngineType(), TTSGgml.ENGINE_MOSS)
   })
 })
 
