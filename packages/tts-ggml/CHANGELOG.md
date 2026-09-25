@@ -71,11 +71,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include the Pocket CPU planner and EOS-tail fixes from the speech dependencies.
 - Resolve Pocket CPU memory planning through the dynamically loaded backend,
   fixing unresolved `ggml_graph_plan` imports in Linux and Android prebuilds.
-- Raise the `speech-cpp` floor to `2026-09-23#3` for the MOSS engine above.
-- Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
-  weightless fit-measure model that carries no vocabulary, which a memory-fit
-  measurement never needs; loading a real model is unchanged and still
-  requires one.
+- Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to
+  `2026-09-23#3`. The speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2),
+  and its Vulkan backend no longer crashes during CosyVoice3 GPU synthesis on
+  NVIDIA GPUs that report cooperative-matrix2 support. The pinned engine also
+  brings the MOSS engine above, and Parler and Audio8 now accept a weightless
+  fit-measure model that carries no vocabulary, which a memory-fit measurement
+  never needs; loading a real model is unchanged and still requires one.
+  Existing CosyVoice3 and Supertonic models are unaffected, and there is no API
+  change beyond the MOSS additions above.
 - Raise the `speech-cpp` floor to `2026-09-21`, for the Core ML sidecars above
   and for a round of CosyVoice3 optimizations that needs no model change. On
   Metal, single-token LM decode runs one flash-attention op per layer instead
