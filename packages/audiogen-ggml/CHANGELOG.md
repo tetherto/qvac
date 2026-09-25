@@ -7,13 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-25
+
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-09-23`. The ACE-Step memory-fit
-  preflight now returns a verdict instead of aborting the process: it priced
-  the VAE decode/encode windows through a graph scheduler that cannot place a
-  metadata-only model's weights, so every ACE-Step model hit a ggml assertion
-  on CPU and GPU alike. Generation itself is unchanged.
+- Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to
+  `2026-09-23#1`. The speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2),
+  and its Vulkan backend no longer crashes on NVIDIA GPUs that report
+  cooperative-matrix2 support when a matmul is asked for f32 precision. The
+  ACE-Step memory-fit preflight now returns a verdict instead of aborting the
+  process: it priced the VAE decode/encode windows through a graph scheduler
+  that cannot place a metadata-only model's weights, so every ACE-Step model
+  hit a ggml assertion on CPU and GPU alike. Generation itself is unchanged.
 - Raise the `speech-cpp` floor to `2026-09-18`. MiniMax-Music3 generates faster
   with the model files you already have: the RVQ depth decoder keeps a K/V cache
   instead of recomputing its prefix on every codebook step, and the flow default

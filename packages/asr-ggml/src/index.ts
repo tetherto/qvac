@@ -11,6 +11,14 @@ import {
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
 import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
 import {
+  assessFit as assessFitImpl,
+  type AsrFitRequest,
+  type AsrFitResult,
+  type AsrFitStatus,
+  type ParakeetFitRequest,
+  type WhisperFitRequest,
+} from "./lib/fit";
+import {
   BackendId as BackendIdEnum,
   type ASRRunOutput,
   type ASRStreamOutput,
@@ -555,6 +563,11 @@ type WhisperRuntimeStatsShape = WhisperRuntimeStats;
 type ParakeetRuntimeStatsShape = ParakeetRuntimeStats;
 type RuntimeStatsShape = RuntimeStats;
 type InferenceClientStateShape = InferenceClientState;
+type AsrFitRequestShape = AsrFitRequest;
+type AsrFitResultShape = AsrFitResult;
+type AsrFitStatusShape = AsrFitStatus;
+type ParakeetFitRequestShape = ParakeetFitRequest;
+type WhisperFitRequestShape = WhisperFitRequest;
 
 // The namespace merge preserves the package's established `export =` API and
 // namespace-qualified public types such as `ASRGgml.RuntimeStats`.
@@ -586,10 +599,16 @@ namespace ASRGgml {
   export type ParakeetRuntimeStats = ParakeetRuntimeStatsShape;
   export type RuntimeStats = RuntimeStatsShape;
   export type InferenceClientState = InferenceClientStateShape;
+  export type AsrFitRequest = AsrFitRequestShape;
+  export type AsrFitResult = AsrFitResultShape;
+  export type AsrFitStatus = AsrFitStatusShape;
+  export type ParakeetFitRequest = ParakeetFitRequestShape;
+  export type WhisperFitRequest = WhisperFitRequestShape;
 
   export import BackendId = BackendIdEnum;
 
   export const resolveBackendsDir = resolveBackendsDirImpl;
+  export const assessFit = assessFitImpl;
 }
 
 export = ASRGgml;

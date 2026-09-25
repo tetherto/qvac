@@ -2,13 +2,17 @@
 
 Per-addon mobile integration tests run on **AWS Device Farm**, which is expensive.
 To cut that cost, they **no longer run automatically on PRs**. Instead you start
-them by hand, choosing exactly one platform, the device(s) to run on, and
-(optionally) a subset of tests.
+them by hand, choosing exactly one platform, the device(s) to run on, and,
+where supported, a subset of tests.
 
-This applies to all 14 mobile addons: `asr-ggml`, `audiogen-ggml`,
+This applies to all 15 mobile addons: `asr-ggml`, `audiogen-ggml`,
 `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `diffusion-cpp`,
-`embed-llamacpp`, `inference-addon-cpp`, `llm-llamacpp`, `model-fit`, `ocr-ggml`,
-`translation-nmtcpp`, `tts-ggml`, `vla`.
+`embed-llamacpp`, `ggml-rpc-server`, `inference-addon-cpp`, `llm-llamacpp`,
+`model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `vla`.
+
+Except for its dedicated section, the guidance below applies to the other 14
+addons. `ggml-rpc-server` has different device inputs and no test filter or
+package input; use its [dispatch example](#ggml-rpc-server-dispatch) instead.
 
 ## How to run a mobile test
 
@@ -20,10 +24,37 @@ This applies to all 14 mobile addons: `asr-ggml`, `audiogen-ggml`,
 > `qv-mobile-test-dispatch` skill in `.agents/skills/` is the operating procedure
 > built on this page.
 
+### ggml-rpc-server dispatch
+
+This workflow accepts `platform`, `android_device` or `ios_device`, `ref`,
+`workdir`, and `prebuild_run_id`. It does **not** accept `device`,
+`devices_custom`, `device_model_operator`, `tests`, or `package`. A run exercises
+its complete managed RPC lifecycle probe on the selected device.
+
+To test prebuilds already produced for your PR, find the run id as described in
+the [quick start below](#quick-start--test-your-own-pr-on-a-device), then dispatch:
+
+```bash
+PR=1234 # your PR number
+gh workflow run integration-mobile-test-ggml-rpc-server.yml --repo tetherto/qvac \
+  --ref main -f ref="refs/pull/$PR/head" \
+  -f platform=Android -f android_device="Google Pixel 9" \
+  -f prebuild_run_id="${RUN_ID:?refusing to dispatch with an empty run id}"
+```
+
+The workflow runs from upstream `main`; its `ref` input checks out your PR's
+head from the upstream pull-request ref, so your branch need not exist upstream.
+For iOS, use `-f platform=iOS -f ios_device="Apple iPhone 16 Pro"` instead of
+the Android platform and device inputs. Without `prebuild_run_id`, a standalone
+dispatch builds prebuilds from the selected ref in the same run before packaging
+the device app. With a run id, it skips that build and installs the named run's
+artifact, failing if the artifact cannot be used.
+
 ### Quick start — test your own PR on a device
 
-The common case, end to end. A first run on an addon should cover every supported
-device and every test — see [Which devices to run on](#which-devices-to-run-on).
+For the other 14 addons, this is the common case end to end. A first run should
+cover every supported device and every test — see
+[Which devices to run on](#which-devices-to-run-on).
 The single-device, single-test form below is the follow-up shape: once you are
 re-running a known failure or iterating on one test, narrow it, because Device
 Farm is billed per device minute.
@@ -290,8 +321,8 @@ appears as a raw line. There is no `bare_console.log` on Android by construction
 
 ### Which build gets tested
 
-A manual run does **not** compile the native addon — it installs a **prebuilt**
-one. Sources are tried in this order:
+For the shared addon workflows, a manual run does **not** compile the native
+addon — it installs a **prebuilt** one. Sources are tried in this order:
 
 - **`prebuild_run_id=<run id>`** → install the `prebuilds` artifact **that run
   already built**. Highest precedence: when set, every source below is skipped,
@@ -303,8 +334,9 @@ one. Sources are tried in this order:
   same run**, then the published **`@qvac/<addon>@latest`** if there are none.
   A standalone dispatch builds no prebuilds of its own, so in practice **empty
   means `@latest`** — the published release, *not* your branch's native code.
-  (Artifacts only exist when the mobile workflow is invoked via `workflow_call`
-  from a run that built them, i.e. the on-merge / benchmark / weekend paths.)
+  Same-run artifacts only exist when the mobile workflow is invoked via
+  `workflow_call` from a run that built them (for example, on-merge, benchmark,
+  or weekend runs).
 - **`@qvac/<addon>@1.2.3`** → force-install that exact **published npm** version.
 - **`@tetherto/<addon>-mono@<dev-version>`** → force-install a specific **branch
   build** from GitHub Packages (GPR). Note the **`-mono`** suffix: that is the
@@ -319,12 +351,13 @@ clear one, rather than picking for you.
 
 ### Testing unmerged / unpublished native code
 
-`--ref <branch>` gives you the branch's JS harness, tests and app — but **never**
-its compiled `.bare`. If your change touches `addon/src/**`, the run otherwise
-exercises your new tests against the **published** engine and passes for the
-wrong reason. That has happened: a PR ran mobile on five addons, went green on
-all of them, and every run had `package` empty — so each one installed the
-published release instead of the ~300 lines of new C++ under review.
+For the shared addon workflows, `--ref <branch>` gives you the branch's JS
+harness, tests and app — but **never** its compiled `.bare`. If your change
+touches `addon/src/**`, the run otherwise exercises your new tests against the
+**published** engine and passes for the wrong reason. That has happened: a PR
+ran mobile on five addons, went green on all of them, and every run had
+`package` empty — so each one installed the published release instead of the
+~300 lines of new C++ under review.
 
 Two routes. Pick by **whose build you need**.
 

@@ -2,7 +2,7 @@
 
 const { OcrGgml, QvacErrorAddonOcrGgml, ERR_CODES, binding } = require('../..')
 const test = require('brittle')
-const { isMobile, ensureModelPath, getImagePath } = require('./utils')
+const { isMobile, ensureModelPath, getImagePath, OCR_TEST_THREADS } = require('./utils')
 
 const MOBILE_TIMEOUT = 600 * 1000
 const DESKTOP_TIMEOUT = 120 * 1000
@@ -26,7 +26,8 @@ async function loadOcr() {
     params: {
       pathDetector: detectorPath,
       pathRecognizer: recognizerPath,
-      langList: ['en']
+      langList: ['en'],
+      nThreads: OCR_TEST_THREADS
     }
   })
 
@@ -164,7 +165,8 @@ test(
         pathRecognizer: recognizerPath,
         langList: ['en'],
         defaultRotationAngles: [90, 180, 270],
-        contrastRetry: true
+        contrastRetry: true,
+        nThreads: OCR_TEST_THREADS
       }
     })
 

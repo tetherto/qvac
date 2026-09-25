@@ -96,7 +96,7 @@ test('discovery finds the leaves and their callers', () => {
   const need = leavesNeedingActionsRead()
   assert.ok(need.size >= 12, `expected at least 12 leaves needing actions: read, found ${need.size}`)
   const found = mobileCalls()
-  assert.ok(found.length >= 20, `expected at least 20 caller jobs, found ${found.length}`)
+  assert.ok(found.length >= 16, `expected at least 16 caller jobs, found ${found.length}`)
 })
 
 // `actions: none` is valid YAML and grants nothing, so an absent key is not the

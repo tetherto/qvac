@@ -47,6 +47,9 @@ validated on Apple/Metal.
   `config.useGPU: true` on GPU-capable hosts — including Android, where
   `tts-cpp` selects the GPU backend per its per-vendor allowlist (see
   [Backends & GPU acceleration](#backends--gpu-acceleration)).
+- **Apple Core ML sidecars** for the Supertonic vocoder and the Audio8 codec
+  on macOS / iOS, picked up when staged next to the model (see
+  [Core ML sidecars on Apple](#core-ml-sidecars-on-apple)).
 - **Dynamic backend loading on Android** — per-arch CPU + Vulkan +
   OpenCL `.so` files ship under `prebuilds/<bare-target>/qvac__tts-ggml/`
   and are picked up at runtime via the new `backendsDir` option (see
@@ -70,6 +73,7 @@ obvious for each job.
 | Multilingual + voice cloning (EU / CJK) | `chatterbox-t3-mtl.gguf` + `chatterbox-s3gen-mtl.gguf` | en/es/fr/de/pt/it/zh/ja/ko/…; same cloning + streaming surface as Turbo. |
 | Voice cloning at 44.1 kHz with nothing pre-baked | `audio8-lm-q8_0.gguf` + `audio8-codec-decoder-q8_0.gguf` (+ `audio8-codec-encoder-q8_0.gguf` to clone) | Clones from a reference wav **and its transcript**, encoded in-process — no enrolment step, no voice profile. Whole-utterance only (no native chunk streaming). |
 | Multilingual speech with native chunk streaming and cloning on a desktop | `moss-tts-delay-f16.gguf` + `moss-codec-decoder-f16.gguf` (+ `moss-codec-encoder-f16.gguf` to clone) | 8B backbone, desktop only. Clones from a reference wav encoded in-process (no transcript needed); native `streamChunkTokens` chunk streaming. Native 24 kHz. |
+| Multi-speaker dialogue that continues each speaker's reference voice | `moss-ttsd-f16.gguf` + `moss-codec-decoder-f16.gguf` + `moss-codec-encoder-f16.gguf` | 8B backbone, desktop only. One 24 kHz reference per speaker; the text opens with their transcripts. Native 24 kHz. |
 | Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
 | Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU, with opt-in GPU offload (Metal on Apple, Vulkan on Linux/Windows, OpenCL/Adreno on Android); native 24 kHz. |
 | Zero-shot / cross-lingual cloning (multilingual) | CosyVoice3 dir + `cosyvoice3-s3tok-*.gguf` + `cosyvoice3-campplus-*.gguf` | Clones from a reference wav; its transcript (`promptText`) selects zero-shot, omitting it selects cross-lingual (timbre only, any target language). Composes with `instruct`. |
@@ -93,6 +97,7 @@ here, so this guide does not go stale when backends change.
 | CosyVoice3 (`cosyvoice3/`) | Instruct-led (strong on Chinese + dialects) | ~2.3 GB dir (+ ~300 MB to clone) | 24 kHz | Reference wav (zero-shot / cross-lingual) + `instruct` (dialect / emotion / speed / volume / style) | Native chunk opts |
 | `audio8-lm-q8_0` + codec halves | Text-led (no `language` option) | ~0.7 GB (+ ~120 MB to clone) | 44.1 kHz | Reference wav + transcript, per call too | Sentence streaming |
 | `moss-tts-delay-f16` + codec halves | Multilingual (`language` hint) | ~18.8 GB (+ ~1.8 GB to clone) | 24 kHz | Reference wav, fixed per instance | Sentence + native chunk |
+| `moss-ttsd-f16` + codec halves | Multilingual (`language` hint) | ~20.5 GB | 24 kHz | One reference wav per speaker, fixed per instance | Native chunk |
 
 ### Legacy Supertonic v1 / v2
 
@@ -182,6 +187,9 @@ chatterbox-s3gen-mtl.gguf  (~1.0 GB)
 # Supertonic 3 (Supertone/supertonic-3; 31 languages) — preferred Supertonic
 # checkpoint; published per quant tier (auto-detected from modelDir)
 supertonic3-q4_0.gguf      (~80 MB; also -q8_0 ~126 MB / -f16 ~191 MB / -f32)
+supertonic3-vocoder.mlmodelc/ (optional, macOS / iOS: Apple Core ML sidecar for
+                              the vocoder, used by the 8-bit and wider tiers; see
+                              Core ML sidecars on Apple)
 
 # Legacy Supertonic (not recommended for new integrations — see Choosing a model)
 supertonic.gguf            (~263 MB) — v1 English only
@@ -214,12 +222,17 @@ cosyvoice3/
 audio8-lm-q8_0.gguf              (~0.6 GB; also -f16 / -q4_0 / -f32)
 audio8-codec-decoder-q8_0.gguf   (~110 MB; also -f16 / -f32)
 audio8-codec-encoder-q8_0.gguf   (~120 MB; also -f16 / -f32; cloning only)
+audio8-codec-decoder.mlmodelc/   (optional, macOS / iOS: Apple Core ML sidecar for
+                                  the codec synthesis stack, picked up when it sits
+                                  next to the decoder GGUF; one export serves every
+                                  quant tier)
 
-# MOSS (OpenMOSS MOSS-TTS v1.5 Delay; 24 kHz, 8B backbone + RVQ codec) — three
-# GGUFs; the encoder is only needed to clone a voice
+# MOSS (OpenMOSS MOSS-TTS v1.5 Delay; 24 kHz, 8B backbone + RVQ codec); the
+# encoder is only needed to clone a voice or run a dialogue
 moss-tts-delay-f16.gguf          (~17 GB)
+moss-ttsd-f16.gguf               (~17 GB; MOSS-TTSD dialogue backbone, optional)
 moss-codec-decoder-f16.gguf      (~1.8 GB)
-moss-codec-encoder-f16.gguf      (~1.8 GB; cloning only)
+moss-codec-encoder-f16.gguf      (~1.8 GB; cloning and dialogue only)
 ```
 
 Download the registry-published Chatterbox, Supertonic, and Parler models into
@@ -464,7 +477,8 @@ cache stays hot across chunks.
 MOSS clones from `referenceAudio` alone, with no transcript.  The recording
 must be sampled at 24 kHz (there is no resampling; multichannel input is
 downmixed), needs `files.mossCodecEncoder`, and is fixed for the instance.
-See [MOSS](#moss).
+For a multi-speaker dialogue, pass one recording per speaker in
+`dialogueReferences` instead.  See [MOSS](#moss).
 
 ### CosyVoice3
 
@@ -667,15 +681,38 @@ for the Supertonic vocoder and the Audio8 codec. They are presence-driven:
 each stage runs on a compiled `.mlmodelc` found next to its model file
 (`supertonic3-q8_0.gguf` -> `supertonic3-vocoder.mlmodelc`) and falls back to
 the ggml graph when it is absent, so a model directory without sidecars
-behaves exactly as before. Sidecars are not part of the published model set
-yet; supply your own to opt in.
+behaves exactly as before. The sidecar name drops the quantization suffix, so
+one sidecar serves every tier of a model. Sidecars are not part of the
+published model set yet; supply your own to opt in.
+
+| Model | Sidecar next to the GGUF | Stage on Core ML | Runs on ggml instead | Force ggml |
+| --- | --- | --- | --- | --- |
+| Supertonic 1 / 2 / 3 | `<model>-vocoder.mlmodelc` | vocoder, in 64-latent-frame windows | GGUFs whose vocoder weights are stored below 8 bits (`q4_0`) | `SUPERTONIC_COREML_DISABLE=1` |
+| Audio8 | `audio8-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec synthesis stack (upsampling + DAC decoder), in 64-post-frame windows; the language model stays on the ggml backend | a call that fails on the sidecar, which also retires it for every later call on that instance | `AUDIO8_COREML_DISABLE=1` |
+| Chatterbox, Parler, CosyVoice3, MOSS, LavaSR | none | — | always | — |
+
+Set the force-ggml variables in the process environment before `load()`.
+Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
+while the sidecar is attached and `codecOnCoreml` is 1 when that synthesis
+ran its codec on it (see [Response shape](#response-shape)). The Supertonic
+vocoder path is not reported in the stats.
 
 Worth it where the GPU is consumer-class: on an Apple M4 the Supertonic
-vocoder runs 2.5-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
+vocoder runs 1.6-2.9x faster on the Neural Engine than on Metal (1.06-1.13x
 end to end). On workstation parts the GPU wins — an M3 Ultra is 0.6-0.9x —
 so do not stage a sidecar there. `q4_0` models ignore the vocoder sidecar:
 it carries full-precision weights and would substitute a different vocoder
 rather than accelerate the quantized one.
+
+Export the sidecars from the model GGUFs with
+`engines/tts/scripts/export-supertonic-coreml.py` and
+`engines/tts/scripts/export-audio8-codec-coreml.py` from the
+[`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
+tree at the ref `speech-cpp` pins. Its
+[Supertonic](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/supertonic.md#core-ml-vocoder-sidecar)
+and
+[Audio8](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar)
+guides cover export, placement, and measurements.
 
 When the addon is built with `ENABLE_CUDA` — on in the published linux-x64
 prebuilds, opt-in on linux-arm64 and win32-x64 (`npm run build:cuda` or
@@ -898,9 +935,9 @@ a one-off encode when a new reference recording is supplied.
 
 MOSS Delay is an autoregressive model that predicts 32 RVQ codebooks per 80 ms
 frame on a delay pattern, and a transformer codec turns those codes back into
-24 kHz audio.  It ships as three GGUFs: the backbone and the codec's synthesis
-half run on every synthesis, the analysis half only to clone a voice, so a
-text-only deployment can omit `files.mossCodecEncoder`.  The backbone has 8B
+24 kHz audio.  The backbone and the codec's synthesis half run on every
+synthesis, the analysis half only to clone a voice or run a dialogue, so a
+text-only deployment can omit `files.mossCodecEncoder`.  The backbones have 8B
 parameters, so MOSS targets desktop hosts; mobile is not supported.
 
 ```js
@@ -924,9 +961,58 @@ generating; `streamFirstChunkTokens` is not supported.  MOSS emits 24 kHz only,
 so `config.outputSampleRate` is rejected unless it equals `24000`, and the
 LavaSR enhancer / denoiser are not supported.
 
+The speech is directable from the text itself: `[pause 2.0s]` markers insert
+a silence of roughly that length, and inline Pinyin (`ni3 hao3`) or IPA
+(`/həloʊ/`) steers pronunciation.  `durationTokens` asks for a target length
+in codec frames (12.5 per second, so `38` is about 3 s; `0` keeps the length
+free).  It is reloadable, and the engine rejects a target that does not fit in
+its generation budget.
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_MOSS,
+  files: { modelDir: './models' },
+  durationTokens: 38,
+  config: { language: 'en' }
+})
+await model.load()
+await model.run({ input: 'Hold on [pause 1.0s] here it comes.' })
+```
+
+Dialogue needs the MOSS-TTSD backbone: with `dialogueReferences` set, a
+`modelDir` must hold `moss-ttsd-*.gguf` (or name the file with
+`files.mossBackbone`).  A `modelDir` holding only the TTSD backbone also serves
+plain synthesis.  `dialogueReferences` takes one 24 kHz recording per
+speaker, in the order the text tags them with `[S1]`, `[S2]`, and so on.  The
+model continues the references, so the text must open with what each
+recording says, under its speaker tag, followed by the lines to generate; only
+the new lines come out as audio.  For the same reason a dialogue cannot be split
+into sentences: `runStream()`, `runStreaming()` and `run({ streamOutput: true })`
+are rejected; use `run()`, with `streamChunkTokens` for chunked audio.  The references need
+`files.mossCodecEncoder`, exclude `referenceAudio`, and are fixed for the
+instance.  They stay in the codec as causal history, so the first generated
+words continue the reference voices without a seam.
+
+```js
+const dialogue = new TTSGgml({
+  engine: TTSGgml.ENGINE_MOSS,
+  files: { modelDir: './models' },
+  dialogueReferences: ['./alice.wav', './bob.wav'],
+  config: { language: 'en' }
+})
+await dialogue.load()
+await dialogue.run({
+  input:
+    '[S1] What alice.wav says. [S2] What bob.wav says. ' +
+    '[S1] Did the build finish? [S2] Yes, every test passed.'
+})
+```
+
 MOSS runs on CPU by default.  `config.useGPU: true` (or a non-zero
 `nGpuLayers`) asks the engine for a GPU backend; when none is available it
-falls back to CPU and sets `response.stats.gpuUnsupported`.
+falls back to CPU and sets `response.stats.gpuUnsupported`.  `backendsDir`
+reaches MOSS like every other engine, so builds that load ggml backends at
+runtime find them.
 
 ## API overview
 
@@ -947,14 +1033,16 @@ falls back to CPU and sets `response.stats.gpuUnsupported`.
 | `files.audio8Lm`          | string     | —          | Audio8 DualAR language model GGUF (overrides `modelDir`) |
 | `files.audio8CodecDecoder`| string     | —          | Audio8 codec synthesis half — codes to wav (overrides `modelDir`) |
 | `files.audio8CodecEncoder`| string     | —          | Audio8 codec analysis half — wav to codes; only needed to clone a voice |
-| `files.mossBackbone`      | string     | —          | MOSS Delay backbone GGUF (overrides `modelDir`) |
+| `files.mossBackbone`      | string     | —          | MOSS Delay backbone GGUF: MOSS-TTS or the MOSS-TTSD dialogue checkpoint (overrides `modelDir`) |
 | `files.mossCodecDecoder`  | string     | —          | MOSS codec synthesis half — codes to wav (overrides `modelDir`) |
-| `files.mossCodecEncoder`  | string     | —          | MOSS codec analysis half — wav to codes; only needed to clone a voice |
+| `files.mossCodecEncoder`  | string     | —          | MOSS codec analysis half — wav to codes; only needed to clone a voice or for `dialogueReferences` |
 | `files.lavasrEnhancer`    | string     | —          | LavaSR enhancer GGUF — supplying it turns on 48 kHz enhancement |
 | `files.lavasrDenoiser`    | string     | —          | LavaSR denoiser GGUF — supplying it turns on denoising (batch only) |
 | `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'`, `'cosyvoice3'`, `'parler'`, `'audio8'` or `'moss'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_COSYVOICE3` / `ENGINE_PARLER` / `ENGINE_AUDIO8` / `ENGINE_MOSS`); auto-detected from the GGUFs present otherwise |
 | `referenceAudio`          | string     | —          | Wav to clone (Chatterbox: mono, ≥ 5 s; CosyVoice3: 0.5-30 s, multichannel downmixed to mono, needs the s3tok + campplus GGUFs; Audio8: also needs `referenceText`; MOSS: needs `files.mossCodecEncoder`).  Audio8 accepts it per call too |
 | `referenceText`           | string     | —          | Audio8-only: what `referenceAudio` says, verbatim.  Required whenever a reference is set; accepted per call |
+| `dialogueReferences`      | string[]   | —          | MOSS-only: one 24 kHz recording per speaker (`[S1]`, `[S2]`, ...) for dialogue synthesis; the text must open with each recording's transcript under its tag; needs `files.mossCodecEncoder`, excludes `referenceAudio`, fixed per instance |
+| `durationTokens`          | number     | `0`        | MOSS-only: target length in codec frames (12.5 per second); `0` keeps the length free; reloadable |
 | `voiceDir`                | string     | —          | Pre-baked voice profile |
 | `seed`                    | number     | 42         | RNG seed (CFM noise + sampling); MOSS defaults to its engine's 1234 |
 | `nGpuLayers`              | number     | 0          | Layers offloaded to GPU (mirrors `useGPU`; pass `99` to offload all) |
@@ -1053,12 +1141,19 @@ response.stats.audioDurationMs
 response.stats.totalSamples
 response.stats.tokensPerSecond   // Audio8 and MOSS count codec frames, the others characters
 response.stats.generatedFrames   // Audio8 and MOSS only: codec frames (Audio8 every 46 ms, MOSS every 80 ms)
+response.stats.codecSidecarLoaded // Audio8 only, macOS / iOS: 1 while the Apple Core ML codec sidecar is attached
+response.stats.codecOnCoreml     // Audio8 only: 1 when this synthesis ran the codec on that sidecar, 0 when on the ggml backend
 response.stats.backendDevice     // 0=CPU, 1=GPU
 response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other
 // present when a LavaSR enhancer is active:
 response.stats.enhancerBackendDevice // -1 none, 0 CPU, 1 GPU
 response.stats.enhancerBackendId
 ```
+
+For `runStream()` and `runStreaming()`, `codecSidecarLoaded` and
+`codecOnCoreml` retain the last chunk that reported each field, including zero
+when a sidecar is retired or synthesis falls back to ggml. They are not summed;
+if no chunk reports a field, it remains absent.
 
 ### Text helpers
 
@@ -1093,6 +1188,57 @@ const {
 | 13010 | `FAILED_TO_STOP` |
 | 13011 | `JOB_ALREADY_RUNNING` |
 
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads GGUF metadata and never weight data, so the registry's weightless copy of each file answers the same as the file itself and the projection can run before anything is downloaded. It is a module export, not an instance method: nothing is loaded to call it.
+
+A request is a `createInstance` config plus the workload, so it carries the same keys the load takes and the engine's own config builder reads it.
+
+```js
+const TTSGgml = require('@qvac/tts-ggml')
+
+const fit = TTSGgml.assessFit({
+  engineType: 'supertonic',
+  supertonicModelPath: '/models/supertonic.gguf',
+  useGPU: true,
+  textTokens: 256,
+  audioSeconds: 30
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
+fit.modelVariant // which pipeline was projected, e.g. 'chatterbox-t3-turbo'
+fit.deviceName
+fit.deviceBytes
+fit.weightsBytes
+fit.stateBytes
+fit.lmComputeBytes // 0 for a pipeline with no language-model stage, such as supertonic
+fit.codecComputeBytes // 0 for a pipeline with no separate codec stage
+fit.hostBytes
+fit.lavasrFileBytes // the LavaSR stages' size on disk, 0 when none was named
+fit.report
+```
+
+`engineType` picks the fitter, the same key a load uses, and is required: a fit request carries none of the file keys a load is inferred from. Each engine takes the load's own file keys, plus a workload the fit adds:
+
+| `engineType` | Files | Workload |
+| --- | --- | --- |
+| `supertonic` | `supertonicModelPath` | `textTokens`, `audioSeconds`, `precision`, `f16Weights` |
+| `parler` | `parlerModelPath` | `descriptionTokens`, `promptTokens`, `maxFrames` |
+| `chatterbox` | `t3ModelPath`, `s3genModelPath` | `textTokens`, `predictTokens` |
+| `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
+| `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
+
+Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
+
+`lavasrEnhancerPath` and `lavasrDenoiserPath` are reported as `lavasrFileBytes`, their size on disk. Those stages have no fitter, so the figure is a size on disk. It is counted in neither `deviceBytes` nor `hostBytes`.
+
+`deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
+
+A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS is the one voice in that state. A broken request, or a host with no native binding, throws.
+
+The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
+
 ## Examples
 
 Runnable demos under `examples/`:
@@ -1117,7 +1263,8 @@ Runnable demos under `examples/`:
 | `cosyvoice-tts.js` | CosyVoice3 batch synth with the cross-engine emotion option (24 kHz; CPU by default, `--gpu` opts into Metal / desktop Vulkan / Android GPU). `bare examples/cosyvoice-tts.js --gpu "Hello" happy` |
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
 | `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for the desktop GPU backend (CUDA or Vulkan on linux, Vulkan on Windows). `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
-| `moss-tts.js` | MOSS batch synth, optionally cloning a reference. Set `QVAC_TTS_MOSS_STREAM_FRAMES=25` for native chunk streaming and `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-tts.js "Hello" voice.wav` |
+| `moss-tts.js` | MOSS batch synth, optionally cloning a reference. Set `QVAC_TTS_MOSS_STREAM_FRAMES=25` for native chunk streaming, `QVAC_TTS_MOSS_DURATION=38` for a target length and `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-tts.js "Hello" voice.wav` |
+| `moss-dialogue-tts.js` | MOSS-TTSD multi-speaker dialogue from one 24 kHz reference per speaker; the text opens with each reference's transcript. Set `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-dialogue-tts.js "[S1] What alice.wav says. [S2] What bob.wav says. [S1] Hi. [S2] Hello." alice.wav bob.wav` |
 
 The two streaming examples feed PCM into a single long-running
 `sox play` / `ffplay` process so chunks play back-to-back without any
@@ -1222,3 +1369,7 @@ OpenCL; Xclipse and Mali use Vulkan).
 ## License
 
 Apache-2.0.  See [LICENSE](./LICENSE).
+
+## Pocket TTS
+
+See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.

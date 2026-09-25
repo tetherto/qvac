@@ -306,7 +306,8 @@ class MockedBinding {
           audioDurationMs,
           backendDevice: 0,
           backendId: 0,
-          encoderOnCoreml: 0
+          encoderOnCoreml: 0,
+          encoderUsedCoreml: 0
         },
         null
       )

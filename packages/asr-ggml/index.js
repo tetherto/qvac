@@ -6,6 +6,7 @@ const QvacLogger = require("@qvac/logging");
 const infer_base_1 = require("@qvac/infer-base");
 const error_1 = require("./lib/error");
 const backends_1 = require("./lib/backends");
+const fit_1 = require("./lib/fit");
 const types_1 = require("./lib/types");
 const driver_1 = require("./engines/whisper/driver");
 const driver_2 = require("./engines/parakeet/driver");
@@ -391,5 +392,6 @@ class ASRGgml {
 (function (ASRGgml) {
     ASRGgml.BackendId = types_1.BackendId;
     ASRGgml.resolveBackendsDir = backends_1.resolveBackendsDir;
+    ASRGgml.assessFit = fit_1.assessFit;
 })(ASRGgml || (ASRGgml = {}));
 module.exports = ASRGgml;

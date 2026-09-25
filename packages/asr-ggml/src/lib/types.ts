@@ -110,6 +110,7 @@ export interface ParakeetRuntimeStats extends RuntimeStatsCore {
   totalEncodedFrames: number;
   gpuUnsupported: number;
   encoderOnCoreml: number;
+  encoderUsedCoreml?: number;
 }
 
 export type RuntimeStats = WhisperRuntimeStats | ParakeetRuntimeStats;

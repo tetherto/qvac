@@ -12,6 +12,7 @@ const test = require('brittle')
 
 const { loadCosyvoiceTTS, runCosyvoiceTTS } = require('../utils/runCosyvoiceTTS')
 const { ensureCosyvoiceModel } = require('../utils/downloadModel')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -40,6 +41,7 @@ test(
     // Second model with outputSampleRate wired through the config surface, so the
     // whole resample path (engine → addon → reported chunk) is exercised end-to-end.
     const model = await loadCosyvoiceTTS({
+      threads: TTS_TEST_THREADS,
       cosyvoiceModelDir: download.modelDir,
       outputSampleRate: 16000
     })
@@ -83,6 +85,7 @@ test(
     // logits, and cosyvoice reseeds per synthesis, so pinning it is the
     // difference between measuring the conditioning and measuring the sampler.
     const model = await loadCosyvoiceTTS({
+      threads: TTS_TEST_THREADS,
       cosyvoiceModelDir: download.modelDir,
       seed: 42
     })
@@ -181,6 +184,7 @@ test(
     }
 
     const model = await loadCosyvoiceTTS({
+      threads: TTS_TEST_THREADS,
       cosyvoiceModelDir: download.modelDir,
       emotion: 'happy'
     })
