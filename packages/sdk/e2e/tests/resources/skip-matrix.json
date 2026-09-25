@@ -531,6 +531,11 @@
     "download-resilience-http-sharded",
     "download-resilience-http-suspend",
     "download-resilience-registry-suspend",
+    "error-invalid-response-type",
+    "error-structured-error-code",
+    "no-lingering-bare-close",
+    "no-lingering-bare-ipc-disconnect",
+    "no-lingering-bare-sigterm",
     "parakeet-stream-metadata",
     "serialize-concurrent-completion",
     "snap-storage-common-root",
@@ -541,6 +546,7 @@
     "vla-pi05-run-stats",
     "vla-pi05-run-synthetic-shape",
     "vla-run-stats",
-    "vla-run-synthetic-shape"
+    "vla-run-synthetic-shape",
+    "worker-restart-kv-cache-boundary"
   ]
 }
