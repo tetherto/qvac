@@ -69,6 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     through tts-cpp's `tts_cpp_log_set` instead of stderr. Engine diagnostics
     that tts-cpp still prints straight to stderr are unaffected.
 
+### Fixed
+
+- Keep the standalone Pocket BareKit worklet outside the shared mobile test
+  discovery directory, so its relative imports and IPC hooks are not copied
+  into every generated mobile integration runner.
+
 ### Changed
 
 - Release the loaded Pocket model before activating its replacement on reload,

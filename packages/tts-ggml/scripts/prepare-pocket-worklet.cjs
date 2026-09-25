@@ -18,7 +18,7 @@ const canonical = (url) =>
 
 async function main() {
   const bundle = await pack(
-    pathToFileURL(path.join(source, 'test/mobile/pocket-worklet.cjs')),
+    pathToFileURL(path.join(source, 'test/worklets/pocket-worklet.cjs')),
     {
       hosts,
       linked: true,
