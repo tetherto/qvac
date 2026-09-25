@@ -11,6 +11,7 @@ import { getMDXComponents } from '@/mdx-components';
 import { SmartAnchor } from '@/components/mdx-smart-card';
 import type { AnchorHTMLAttributes } from "react";
 import { CopyPageButton, ViewOptions } from '@/components/page-actions';
+import { PageBreadcrumb } from '@/components/page-breadcrumb';
 import {
   DOCS_SITE_ORIGIN,
   buildCanonicalDocsUrl,
@@ -71,7 +72,7 @@ export default async function Page(props: PageProps<'/[[...slug]]'>) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(block) }}
         />
       ))}
-      <DocsPage toc={filteredToc} tableOfContent={{ style: "clerk" }} tableOfContentPopover={{ style: "clerk" }} full={page.data.full}>
+      <DocsPage toc={filteredToc} slots={{ breadcrumb: PageBreadcrumb }} tableOfContent={{ style: "clerk" }} tableOfContentPopover={{ style: "clerk" }} full={page.data.full}>
       <DocsTitle>
         <TitleText title={page.data.title} style={page.data.titleStyle as any} />
       </DocsTitle>
