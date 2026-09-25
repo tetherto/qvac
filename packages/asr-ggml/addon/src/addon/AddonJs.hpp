@@ -9,8 +9,10 @@
 
 #include <any>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -636,8 +638,8 @@ streamingConfigFromModel(parakeet::ParakeetModel& model) {
   config.energyVadWindowMs = model.getStreamingEnergyVadWindowMs();
   config.energyVadHangoverMs = model.getStreamingEnergyVadHangoverMs();
   config.emitSpeakerVad = model.getStreamingSpeakerVad();
-  config.diarOnsetThreshold = model.getDiarizationThreshold();
-  config.diarMinSegmentMs = model.getDiarizationMinSegmentMs();
+  config.diarizationThreshold = model.getDiarizationThreshold();
+  config.diarizationMinSegmentMs = model.getDiarizationMinSegmentMs();
   config.leftContextMs = model.getStreamingLeftContextMs();
   config.rightLookaheadMs = model.getStreamingRightLookaheadMs();
   config.spkCacheEnable = model.getStreamingSpkCacheEnable();
@@ -649,22 +651,29 @@ streamingConfigFromModel(parakeet::ParakeetModel& model) {
   return config;
 }
 
+// A JS number as an int, or nullopt for NaN, +/-Infinity and values outside
+// the int range (casting those is undefined behaviour).
+inline std::optional<int>
+readIntOverride(js_env_t* env, js::Object& obj, const char* name) {
+  auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name);
+  if (!value || !std::isfinite(*value) ||
+      *value < static_cast<double>(std::numeric_limits<int>::min()) ||
+      *value > static_cast<double>(std::numeric_limits<int>::max())) {
+    return std::nullopt;
+  }
+  return static_cast<int>(*value);
+}
+
 inline void overrideIfPositive(
     js_env_t* env, js::Object& obj, const char* name, int& target) {
-  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
-    const int intValue = static_cast<int>(*value);
-    if (intValue > 0)
-      target = intValue;
-  }
+  if (auto value = readIntOverride(env, obj, name); value && *value > 0)
+    target = *value;
 }
 
 inline void overrideIfNonNegative(
     js_env_t* env, js::Object& obj, const char* name, int& target) {
-  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
-    const int intValue = static_cast<int>(*value);
-    if (intValue >= 0)
-      target = intValue;
-  }
+  if (auto value = readIntOverride(env, obj, name); value && *value >= 0)
+    target = *value;
 }
 
 inline void
@@ -708,9 +717,12 @@ inline void applyStreamingOverrides(
       env, configObj, "energyVadHangoverMs", config.energyVadHangoverMs);
   overrideBool(env, configObj, "emitSpeakerVad", config.emitSpeakerVad);
   overrideIfUnitInterval(
-      env, configObj, "diarizationThreshold", config.diarOnsetThreshold);
+      env, configObj, "diarizationThreshold", config.diarizationThreshold);
   overrideIfNonNegative(
-      env, configObj, "diarizationMinSegmentMs", config.diarMinSegmentMs);
+      env,
+      configObj,
+      "diarizationMinSegmentMs",
+      config.diarizationMinSegmentMs);
   // AOSC per-call overrides (v2.1+ Sortformer only).
   overrideBool(env, configObj, "spkCacheEnable", config.spkCacheEnable);
   overrideIfPositive(env, configObj, "spkCacheLen", config.spkCacheLen);

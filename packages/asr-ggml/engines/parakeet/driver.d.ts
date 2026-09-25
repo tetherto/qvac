@@ -86,14 +86,17 @@ export interface ParakeetConfig {
      * diarization (default: 0.641).
      */
     diarizationThreshold?: number;
-    /** Shortest Sortformer segment reported, in ms (default: 511). */
+    /** Shortest Sortformer segment reported, in ms (default: 510). */
     diarizationMinSegmentMs?: number;
     /**
      * Run one synthetic encoder pass at load so the first request does not pay
      * the GPU shader/kernel compile (default: false).
      */
     prewarm?: boolean;
-    /** Length of the prewarm pass in seconds of audio (default: 1). */
+    /**
+     * Length of the prewarm pass in seconds of audio (default: 1); must be
+     * greater than 0 when `prewarm` is on.
+     */
     prewarmAudioSeconds?: number;
     /**
      * Offline long-form encoder window in encoder frames: 0 = auto (default),

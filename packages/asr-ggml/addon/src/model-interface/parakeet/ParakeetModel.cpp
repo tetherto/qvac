@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -49,6 +50,15 @@ enum BackendDeviceClass { DeviceCpu = 0, DeviceGpu = 1 };
 
 // n_gpu_layers value that offloads every layer to the GPU backend.
 constexpr int OFFLOAD_ALL_LAYERS_TO_GPU = 999;
+
+// speech-cpp's EnergyVad clamps its RMS window to this many samples (its
+// window buffer: 1 s at 16 kHz).
+constexpr int64_t ENERGY_VAD_MAX_WINDOW_SAMPLES = 16000;
+
+void throwInvalidConfig(const std::string& message) {
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument, message);
+}
 
 // Match by prefix: ggml_backend_name() returns indexed strings like "CUDA0"
 // / "Vulkan0" / "MTL0" on multi-GPU hosts. Metal reports as "MTL0" from
@@ -241,6 +251,24 @@ std::string joinTranscriptText(
 
 } // namespace
 
+void ParakeetModel::validateConfig(const ParakeetConfig& cfg) {
+  // The energy-VAD window and hangover and the long-form frame counts are
+  // clamped inside speech-cpp, so only these need checking here.
+  if (!std::isfinite(cfg.diarizationThreshold) ||
+      cfg.diarizationThreshold > 1.0F) {
+    throwInvalidConfig(
+        "diarizationThreshold must be between 0 and 1 (negative keeps the "
+        "default)");
+  }
+  if (cfg.prewarm && (!std::isfinite(cfg.prewarmAudioSeconds) ||
+                      cfg.prewarmAudioSeconds <= 0.0F)) {
+    throwInvalidConfig("prewarmAudioSeconds must be greater than 0");
+  }
+  if (!std::isfinite(cfg.streamingEnergyVadThresholdDb)) {
+    throwInvalidConfig("streamingEnergyVadThresholdDb must be finite");
+  }
+}
+
 float ParakeetModel::resolveDiarizationThreshold(const ParakeetConfig& cfg) {
   return cfg.diarizationThreshold >= 0.0F
              ? cfg.diarizationThreshold
@@ -351,7 +379,8 @@ size_t ParakeetModel::energyVadFeedSliceSamples(
   if (!enabled)
     return 0;
   const int64_t samples = int64_t{std::max(windowMs, 1)} * sampleRate / 1000;
-  return static_cast<size_t>(std::max<int64_t>(samples, 1));
+  return static_cast<size_t>(
+      std::clamp<int64_t>(samples, 1, ENERGY_VAD_MAX_WINDOW_SAMPLES));
 }
 
 void ParakeetModel::feedInSlices(
@@ -369,13 +398,19 @@ void ParakeetModel::forwardStreamEvent(
   if (!onVadEvent_)
     return;
   auto vad = toVadEvent(event, source);
-  if (!vad || lastVadSpeaking_ == vad->speaking)
+  if (!vad)
     return;
-  lastVadSpeaking_ = vad->speaking;
+  {
+    std::lock_guard<std::mutex> lk(streaming_mutex_);
+    if (lastVadSpeaking_ == vad->speaking)
+      return;
+    lastVadSpeaking_ = vad->speaking;
+  }
   onVadEvent_(*vad);
 }
 
 ParakeetModel::ParakeetModel(const ParakeetConfig& config) : cfg_(config) {
+  validateConfig(cfg_);
   if (cfg_.sampleRate != 0) {
     sample_rate_ = cfg_.sampleRate;
   }
@@ -898,10 +933,10 @@ void ParakeetModel::openStreamingSession() {
 
   streaming_audio_seconds_ = 0.0;
   streaming_finalized_ = false;
-  lastVadSpeaking_.reset();
   {
     std::lock_guard<std::mutex> lk(streaming_mutex_);
     pending_streaming_segments_.clear();
+    lastVadSpeaking_.reset();
   }
 
   if (cfg_.modelType == ModelType::SORTFORMER) {

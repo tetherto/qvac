@@ -198,13 +198,16 @@ public:
   const std::string& getModelTypeName() const { return modelTypeName_; }
 
   // ── Configuration ──────────────────────────────────────────────────────
-  void setConfig(const ParakeetConfig& config) { cfg_ = config; }
+  void setConfig(const ParakeetConfig& config) {
+    validateConfig(config);
+    cfg_ = config;
+  }
   void setOnSegmentCallback(const OutputCallback& callback) {
     on_segment_ = callback;
   }
   // Receives the VAD transitions of the framework-path streaming session
-  // (cfg_.streaming). Called on the processing thread from inside
-  // feed_pcm_f32 / finalize.
+  // (cfg_.streaming). Called from inside feed_pcm_f32 / finalize, i.e. on
+  // the processing thread or the endOfStream() caller's.
   void setOnVadEventCallback(VadEventCallback callback) {
     onVadEvent_ = std::move(callback);
   }
@@ -264,6 +267,9 @@ public:
       const std::string& detected, ModelType fallback);
   [[nodiscard]] static int
   resolveStreamingChunkMs(ModelType modelType, int configuredChunkMs);
+  // Rejects out-of-range values speech-cpp does not clamp itself; called by
+  // the constructor and setConfig(). Throws InvalidArgument.
+  static void validateConfig(const ParakeetConfig& cfg);
   [[nodiscard]] static float
   resolveDiarizationThreshold(const ParakeetConfig& cfg);
   [[nodiscard]] static int
@@ -285,8 +291,8 @@ public:
   toVadEvent(const pkt::StreamEvent& event, VadSource source);
   // speech-cpp's energy detector reports only the last transition of each
   // feed call, so with it on audio is fed one RMS window at a time (a feed
-  // call only appends until a chunk is full). 0 = energy VAD off, feed
-  // whole buffers.
+  // call only appends until a chunk is full), capped like the engine caps
+  // the window. 0 = energy VAD off, feed whole buffers.
   [[nodiscard]] static size_t
   energyVadFeedSliceSamples(bool enabled, int windowMs, int sampleRate);
   static void feedInSlices(
@@ -427,6 +433,7 @@ private:
 
   VadEventCallback onVadEvent_;
   // Last state forwarded by the framework-path session; repeats are dropped.
+  // Guarded by streaming_mutex_ (finalize() can run on another thread).
   std::optional<bool> lastVadSpeaking_;
   // Forwards a session StreamEvent to onVadEvent_ when it is a VAD change.
   void forwardStreamEvent(const pkt::StreamEvent& event, VadSource source);

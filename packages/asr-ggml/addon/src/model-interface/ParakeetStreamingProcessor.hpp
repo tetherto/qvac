@@ -63,8 +63,9 @@ public:
         ParakeetConfig::DEFAULT_STREAMING_ENERGY_VAD_HANGOVER_MS;
     // Sortformer only: queue a VadEvent on every speaker-activity change.
     bool emitSpeakerVad = false;
-    float diarOnsetThreshold = 0.5F;
-    int diarMinSegmentMs = 200;
+    float diarizationThreshold = ParakeetConfig::DEFAULT_DIARIZATION_THRESHOLD;
+    int diarizationMinSegmentMs =
+        ParakeetConfig::DEFAULT_DIARIZATION_MIN_SEGMENT_MS;
     // ASR-only knobs (Sortformer ignores them). <0 means "leave the
     // parakeet engine default in place" (10000 / 2000 ms respectively).
     int leftContextMs = -1;

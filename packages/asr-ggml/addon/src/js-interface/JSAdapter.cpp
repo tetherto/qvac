@@ -1,6 +1,5 @@
 #include "JSAdapter.hpp"
 
-#include <cmath>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -42,28 +41,6 @@ void readFloat(
     js::Object& obj, js_env_t* env, const char* name, float& target) {
   if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
     target = static_cast<float>(*value);
-  }
-}
-
-void throwInvalidParakeetKey(const std::string& message) {
-  throw qvac_errors::StatusError(general_error::InvalidArgument, message);
-}
-
-// Range checks for the keys speech-cpp does not clamp itself (the
-// energy-VAD window and hangover are clamped inside the engine).
-void validateParakeetConfig(const ParakeetConfig& config) {
-  if (!std::isfinite(config.diarizationThreshold) ||
-      config.diarizationThreshold > 1.0F) {
-    throwInvalidParakeetKey(
-        "diarizationThreshold must be between 0 and 1 (negative keeps the "
-        "default)");
-  }
-  if (!std::isfinite(config.prewarmAudioSeconds) ||
-      config.prewarmAudioSeconds <= 0.0F) {
-    throwInvalidParakeetKey("prewarmAudioSeconds must be greater than 0");
-  }
-  if (!std::isfinite(config.streamingEnergyVadThresholdDb)) {
-    throwInvalidParakeetKey("streamingEnergyVadThresholdDb must be finite");
   }
 }
 
@@ -275,7 +252,6 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
     readInnerModelParams(innerConfigOpt.value(), env, config);
   }
 
-  validateParakeetConfig(config);
   return config;
 }
 

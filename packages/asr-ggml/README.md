@@ -413,8 +413,9 @@ Constructor options:
 
 Engine-specific segment fields:
 
-- Whisper segments always carry `language` (the decoded language, the detected
-  one under `language: 'auto'`) and `noSpeechProb`. With
+- Whisper segments carry `noSpeechProb`, and `language` whenever whisper
+  reports one (the decoded language, the detected one under
+  `language: 'auto'`). With
   `token_timestamps: true` they add `tokens: [{ text, start, end,
   probability }]` (special tokens left out); with `tdrz_enable: true` on a
   tinydiarize model they add `speakerTurnNext`.

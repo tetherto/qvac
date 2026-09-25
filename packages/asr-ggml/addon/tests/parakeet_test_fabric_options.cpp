@@ -6,11 +6,13 @@
 
 #include <any>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -133,6 +135,10 @@ TEST(ParakeetStreamingOptions, EnergyVadFeedSliceIsOneRmsWindow) {
   EXPECT_EQ(
       ParakeetModel::energyVadFeedSliceSamples(true, 0, SAMPLE_RATE_HZ), 16U)
       << "a zero window is floored at 1 ms";
+  EXPECT_EQ(
+      ParakeetModel::energyVadFeedSliceSamples(true, 5000, SAMPLE_RATE_HZ),
+      16000U)
+      << "capped at speech-cpp's 1 s RMS window, like the engine";
 }
 
 // ── Diarization options ────────────────────────────────────────────────────
@@ -238,6 +244,43 @@ TEST(ParakeetFabricConfig, EqualityCoversNewFields) {
       differs([](ParakeetConfig& c) { c.streamingEnergyVadWindowMs = 10; }));
   EXPECT_TRUE(
       differs([](ParakeetConfig& c) { c.streamingEnergyVadHangoverMs = 10; }));
+}
+
+TEST(ParakeetFabricConfig, ConstructorAndSetConfigRejectOutOfRangeValues) {
+  auto rejects = [](auto mutate) {
+    ParakeetConfig cfg;
+    mutate(cfg);
+    bool constructorThrew = false;
+    try {
+      const ParakeetModel model(cfg);
+    } catch (const std::exception&) {
+      constructorThrew = true;
+    }
+    ParakeetModel model{ParakeetConfig{}};
+    bool setConfigThrew = false;
+    try {
+      model.setConfig(cfg);
+    } catch (const std::exception&) {
+      setConfigThrew = true;
+    }
+    return constructorThrew && setConfigThrew;
+  };
+  EXPECT_TRUE(
+      rejects([](ParakeetConfig& c) { c.diarizationThreshold = 1.5F; }));
+  EXPECT_TRUE(rejects(
+      [](ParakeetConfig& c) { c.diarizationThreshold = std::nanf(""); }));
+  EXPECT_TRUE(rejects([](ParakeetConfig& c) {
+    c.prewarm = true;
+    c.prewarmAudioSeconds = 0.0F;
+  }));
+  EXPECT_TRUE(rejects([](ParakeetConfig& c) {
+    c.streamingEnergyVadThresholdDb = std::numeric_limits<float>::infinity();
+  }));
+
+  ParakeetConfig accepted;
+  accepted.diarizationThreshold = -1.0F; // keeps the default
+  accepted.prewarmAudioSeconds = 0.0F;   // inert while prewarm is off
+  EXPECT_NO_THROW(ParakeetModel{accepted});
 }
 
 TEST(ParakeetFabricConfig, TranscriptHasNoSpeakerByDefault) {

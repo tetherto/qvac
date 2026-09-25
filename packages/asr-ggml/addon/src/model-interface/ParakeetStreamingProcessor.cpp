@@ -49,8 +49,8 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     opts.sample_rate = config_.sampleRate;
     opts.chunk_ms = config_.chunkMs;
     opts.history_ms = config_.historyMs;
-    opts.threshold = config_.diarOnsetThreshold;
-    opts.min_segment_ms = config_.diarMinSegmentMs;
+    opts.threshold = config_.diarizationThreshold;
+    opts.min_segment_ms = config_.diarizationMinSegmentMs;
     opts.emit_partials = config_.emitPartials;
     // AOSC (v2.1+ Sortformer only). parakeet-cpp ignores these fields for
     // v1/v2 GGUFs (variant detected from `parakeet.model_variant` metadata
