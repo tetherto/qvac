@@ -526,7 +526,9 @@ function attachExitCleanup(child: ChildProcess): () => void {
     }
   }
   process.once('exit', cleanup)
-  for (const { signal, handler } of signalHandlers) process.on(signal, handler)
+  for (const { signal, handler } of signalHandlers) {
+    process.prependListener(signal, handler)
+  }
   return detach
 }
 
