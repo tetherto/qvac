@@ -5,8 +5,8 @@
   "private": true,
   "scripts": {
     "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/*/*.ts ../../packages/sdk/examples/*/*/*.ts",
-    "build": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links --ignore '/**/v[0-9]*' && bun run scripts/check-redirects.ts && bun run scripts/check-artifacts.ts",
-    "build:static": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links --ignore '/**/v[0-9]*' && bun run scripts/check-redirects.ts && bun run scripts/check-artifacts.ts",
+    "build": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links --ignore '/**/v[0-9]*' && bun run scripts/check-redirects.ts && bun run scripts/check-artifacts.ts && bun run scripts/check-navbar-links.ts",
+    "build:static": "npm run prebuild:examples && next build && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links --ignore '/**/v[0-9]*' && bun run scripts/check-redirects.ts && bun run scripts/check-artifacts.ts && bun run scripts/check-navbar-links.ts",
     "dev": "npm run prebuild:examples && next dev --turbo -p 3001",
     "start": "next start",
     "serve": "http-server out -p 8080 -c-1",

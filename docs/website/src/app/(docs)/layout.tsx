@@ -1,7 +1,7 @@
 import { DocsLayout } from 'fumadocs-ui/layouts/notebook';
 import { baseOptions } from '@/lib/layout.shared';
 import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
-import { FaGithub, FaDiscord, FaXTwitter } from 'react-icons/fa6';
+import { FaGithub, FaDiscord, FaGlobe, FaXTwitter } from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { KeetIcon } from '@/components/keet-icon';
 import KeetRoomModalMount from '@/components/keet-modal';
@@ -17,10 +17,28 @@ import {
 } from '@/components/ask-ai';
 
 export default function Layout({ children }: LayoutProps<'/'>) {
+  // The bar is icon-only, so an entry's `label` is the anchor's `aria-label`
+  // and the only name a reader who cannot see the glyph is given. `text` is
+  // what the bar renders where it collapses into a menu. Both are required of
+  // every entry.
+  //
+  // The product's own site leads, ahead of the places the project is found —
+  // its repository, its chat rooms, its model host, its announcements. One is
+  // what this documentation documents; the rest are where to encounter the
+  // people who make it.
   const linkItems: LinkItemType[] = [
     {
       type: 'icon',
+      url: 'https://qvac.tether.io',
+      label: 'QVAC website',
+      text: 'QVAC website',
+      icon: <FaGlobe />,
+      external: true,
+    },
+    {
+      type: 'icon',
       url: 'https://github.com/tetherto/qvac',
+      label: 'GitHub',
       icon: <FaGithub />,
       text: 'GitHub',
       external: true,
@@ -28,6 +46,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     {
       type: 'icon',
       url: 'https://discord.com/invite/tetherdev',
+      label: 'Discord',
       icon: <FaDiscord />,
       text: 'Discord',
       external: true,
