@@ -119,11 +119,19 @@ function getHandlerEntry(type: string): HandlerEntry {
 }
 
 /**
- * Fill loadModel requests with device + schema config defaults before the
- * handler runs, matching the priority user config > device defaults > schema
- * defaults. Other request types pass through untouched.
+ * Fills a request that describes a load with device and schema config
+ * defaults before the handler runs, matching the priority user config >
+ * device defaults > schema defaults.
+ *
+ * `loadModel` and every `assessModelFit` candidate describe the same load, so
+ * both are filled the same way: the fitter is asked about the settings a real
+ * load resolves, and refuses one carrying no `device` at all. Every other
+ * request type passes through untouched.
  */
 function applyDeviceDefaults<T extends Request>(request: T): T {
+  if (request.type === 'assessModelFit' && 'models' in request) {
+    return applyCandidateDeviceDefaults(request)
+  }
   if (request.type !== 'loadModel' || !('modelSrc' in request)) return request
 
   let canonicalType: CanonicalModelType
@@ -135,6 +143,25 @@ function applyDeviceDefaults<T extends Request>(request: T): T {
 
   const rawConfig = (request.modelConfig as Record<string, unknown>) ?? {}
   return { ...request, modelConfig: resolveModelConfig(canonicalType, rawConfig) }
+}
+
+function applyCandidateDeviceDefaults<T extends Request>(request: T): T {
+  const models = (request as { models?: { modelType: string; modelConfig?: unknown }[] }).models
+  if (models === undefined) return request
+
+  return {
+    ...request,
+    models: models.map((load) => {
+      let canonicalType: CanonicalModelType
+      try {
+        canonicalType = normalizeModelType(load.modelType) as CanonicalModelType
+      } catch {
+        return load
+      }
+      const rawConfig = (load.modelConfig as Record<string, unknown>) ?? {}
+      return { ...load, modelConfig: resolveModelConfig(canonicalType, rawConfig) }
+    })
+  }
 }
 
 function getProfilingMeta(request: Request): ProfilingRequestMeta | undefined {

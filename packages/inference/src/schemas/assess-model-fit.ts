@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { modelRegistryEntrySchema } from '@/schemas/registry'
+import { modelSrcInputSchema } from '@/schemas/model-src-utils'
+import { modelTypeInputSchema } from '@/schemas/model-types'
 
 /**
  * Advisory outcome of a pre-download fit assessment.
@@ -10,36 +12,11 @@ import { modelRegistryEntrySchema } from '@/schemas/registry'
 export const modelFitVerdictSchema = z.enum(['likely-fits', 'likely-too-large', 'unknown'])
 
 /**
- * Normalized workload shapes. An engine's estimator declares which kinds it
- * supports; anything else assesses as `unknown`.
- *
- * Phase 1 covers LLM context and an audio window. Further kinds (fixed-cost
- * loads, text, image, video) are additive in later phases — a kind joins the
- * union only once an estimator actually handles it.
+ * What the estimator sizes a load by, read out of its config. An engine whose
+ * estimator declares no kind for it assesses as `unknown`.
  */
-export const modelFitWorkloadSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      kind: z.literal('llm'),
-      contextTokens: z
-        .number()
-        .int()
-        .positive()
-        .describe('Context window the caller intends to use, in tokens.')
-    })
-    .describe('Token-context workload for llama.cpp completion and embedding models.'),
-  z
-    .object({
-      kind: z.literal('audio'),
-      windowMs: z
-        .number()
-        .positive()
-        .describe('Audio window handed to the engine per call, in milliseconds.'),
-      streaming: z.boolean().describe('Whether the caller streams continuously.'),
-      batch: z.number().int().positive().optional().describe('Concurrent windows per call.')
-    })
-    .describe('Audio-window workload for speech-to-text models.')
-])
+export type ModelFitWorkload =
+  { kind: 'llm'; contextTokens?: number } | { kind: 'audio'; windowMs: number; streaming: boolean }
 
 /**
  * The part of a model constant an assessment reads. Pass a catalog constant
@@ -68,21 +45,14 @@ export const modelFitModelRefSchema = modelRegistryEntrySchema
   })
 
 /**
- * One model the caller is considering, with the workload it would run.
- *
- * @property model - A catalog model constant. The generated resource profile,
- *   looked up by checksum, supplies the byte totals and transformer facts.
- * @property artifacts - Extra catalog constants a compound load needs (a VAD
- *   model, a pivot model). Their artifact bytes are added to this candidate.
+ * What the estimator is given for one candidate: the catalog facts its checksum
+ * resolves to, and the workload read out of the load's config.
  */
-export const modelFitCandidateSchema = z.object({
-  model: modelFitModelRefSchema.describe('Catalog model constant to assess.'),
-  artifacts: z
-    .array(modelFitModelRefSchema)
-    .optional()
-    .describe('Additional catalog constants this load also requires.'),
-  workload: modelFitWorkloadSchema.describe('Workload the caller intends to run.')
-})
+export interface ModelFitEstimateTarget {
+  model: ModelFitModelRef
+  workload: ModelFitWorkload
+  artifacts?: ModelFitModelRef[]
+}
 
 /**
  * How the caller intends to run the candidates. This is a **declared
@@ -95,11 +65,32 @@ export const modelFitCandidateSchema = z.object({
  */
 export const modelFitExecutionSchema = z.enum(['sequential', 'concurrent'])
 
+/**
+ * A load to assess, in `loadModel`'s own parameters. The engine's plugin
+ * resolves it, so the config and the artifact keys the fitter reads are the
+ * ones the load would run with.
+ *
+ * Each source resolves to the registry's weightless description of the
+ * artifact, or to the file itself where it is already on disk.
+ */
+export const modelFitCandidateSchema = z.object({
+  modelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'The model to assess, as `loadModel` takes it. Optional for the loads `loadModel` also takes without one, where every source is a config field.'
+    ),
+  modelType: modelTypeInputSchema.describe('Engine that would run the load.'),
+  modelConfig: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('The config `loadModel` would be given, including any companion model sources.')
+})
+
 export const assessModelFitInputSchema = z.object({
   models: z
     .array(modelFitCandidateSchema)
     .min(1)
-    .describe('Candidates to assess together under one memory budget.'),
+    .describe('Models to assess together under one memory budget.'),
   execution: modelFitExecutionSchema
     .default('sequential')
     .describe(
@@ -322,7 +313,6 @@ export type NativeProbeProjection = z.infer<typeof nativeProbeProjectionSchema>
 export type NativeProbeFit = z.infer<typeof nativeProbeFitSchema>
 export type ModelFitVerdict = z.infer<typeof modelFitVerdictSchema>
 export type ModelFitModelRef = z.infer<typeof modelFitModelRefSchema>
-export type ModelFitWorkload = z.infer<typeof modelFitWorkloadSchema>
 export type ModelFitCandidate = z.infer<typeof modelFitCandidateSchema>
 export type ModelFitExecution = z.infer<typeof modelFitExecutionSchema>
 export type ModelFitBasis = z.infer<typeof modelFitBasisSchema>
