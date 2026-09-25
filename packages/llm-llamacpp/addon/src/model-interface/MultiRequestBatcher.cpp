@@ -494,15 +494,6 @@ const Request* MultiRequestBatcher::requestAt(uint32_t seqId) const noexcept {
   return &*slots_[seqId];
 }
 
-llama_pos MultiRequestBatcher::decodedPosAt(uint32_t seqId) const noexcept {
-  const Request* req = requestAt(seqId);
-  if (req == nullptr) {
-    return 0;
-  }
-  return req->currentPos +
-         (budgetsPending_ ? static_cast<llama_pos>(chunkSizes_[seqId]) : 0);
-}
-
 bool MultiRequestBatcher::markFinished(uint32_t seqId, StopReason reason) {
   bool valid = isValid(seqId);
   if (valid) {

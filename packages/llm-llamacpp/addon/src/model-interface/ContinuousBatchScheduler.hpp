@@ -406,29 +406,31 @@ private:
   // See test_internal_peers.hpp.
   friend class ::ContinuousBatchSchedulerTestPeer;
 
-  /// RAII for the two points where a step must drop `mutex_` for a blocking
-  /// call (media-segment eval, `llama_decode`): unlocks on construction, and
-  /// on destruction reacquires the lock and applies any teardown
-  /// (`cancel(seqId)` / `clear()`) recorded while it was dropped, before the
-  /// step touches slot state again. Reconciling on every reacquisition is the
-  /// invariant that stops a concurrently-cancelled/cleared slot from being
-  /// decoded, advanced, or streamed after the unlock window. A null `lock`
-  /// (no worker driving the step) is a no-op on both ends.
+  /// RAII for the points where a step must drop `mutex_` for a blocking call
+  /// (media-segment eval, `llama_decode`, driver finalize): unlocks on
+  /// construction and reacquires on destruction. It does not apply the
+  /// teardown (`cancel(seqId)` / `clear()`) recorded while the lock was
+  /// dropped: the batcher has not yet counted the work the window just did,
+  /// so a teardown there would see a cursor behind live memory. Each call
+  /// site applies it once that bookkeeping is recorded (after `advance()` /
+  /// `completeMediaBarrier`) and before anything is sampled, streamed or fed
+  /// for the slot. A null `lock` (no worker driving the step) is a no-op on
+  /// both ends.
   class StepUnlockGuard {
   public:
     StepUnlockGuard(
         ContinuousBatchScheduler& scheduler,
         std::unique_lock<std::mutex>* lock);
-    /// `noexcept`: the deferred-teardown work it runs is `noexcept`, but
-    /// re-acquiring `mutex_` is not. The only exception that step can raise is
-    /// the `std::system_error` `std::mutex::lock()` is permitted to throw on an
-    /// unrecoverable lock failure -- i.e. the OS failing to honour its
-    /// `pthread_mutex_lock` contract for an initialised normal mutex. That is
-    /// not recoverable: the worker's sole mutex is gone and, crucially, we are
-    /// no longer holding it, so letting it escape would hand a lock-free state
-    /// to the worker's catch handler (which assumes the lock is held). The
-    /// destructor catches it, logs, and `std::abort()`s instead -- a clean stop
-    /// at the point of failure rather than UB downstream.
+    /// `noexcept`, although re-acquiring `mutex_` is not. The only exception
+    /// that step can raise is the `std::system_error` `std::mutex::lock()` is
+    /// permitted to throw on an unrecoverable lock failure -- i.e. the OS
+    /// failing to honour its `pthread_mutex_lock` contract for an initialised
+    /// normal mutex. That is not recoverable: the worker's sole mutex is gone
+    /// and, crucially, we are no longer holding it, so letting it escape would
+    /// hand a lock-free state to the worker's catch handler (which assumes the
+    /// lock is held). The destructor catches it, logs, and `std::abort()`s
+    /// instead -- a clean stop at the point of failure rather than UB
+    /// downstream.
     ~StepUnlockGuard() noexcept;
     StepUnlockGuard(const StepUnlockGuard&) = delete;
     StepUnlockGuard& operator=(const StepUnlockGuard&) = delete;
@@ -443,15 +445,16 @@ private:
   /// RAII that suspends deferred-teardown application while a step has
   /// dropped `mutex_` around work that owns a specific slot.
   ///
-  /// `StepUnlockGuard` reconciles teardown on every reacquisition, which is
-  /// exactly right for the decode and media-eval windows: they touch no slot
-  /// the teardown could pull out from under them. It is wrong for the
-  /// finalize window in `drainFinishedLocked`, which holds a reference into
-  /// `slots_` across the unlock. A cancel recorded during that window still
-  /// passes `slotOwnedByLocked` (the slot keeps its `admissionId` until
-  /// `freeSlot`, and `extractFinished` only removed it from the batcher), so
-  /// the reconcile would run `onCancel` on a driver mid-finalize and free the
-  /// slot the loop is still using.
+  /// The decode and media-eval windows apply recorded teardown right after
+  /// their bookkeeping, which is safe because they touch no slot the teardown
+  /// could pull out from under them. The finalize window in
+  /// `drainFinishedLocked` is different: it holds a reference into `slots_`
+  /// across the unlock. A cancel recorded during that window still passes
+  /// `slotOwnedByLocked` (the slot keeps its `admissionId` until `freeSlot`,
+  /// and `extractFinished` only removed it from the batcher), so applying it
+  /// before the loop finishes would run `onCancel` on a driver mid-finalize
+  /// and free the slot the loop is still using. A cross-thread `cancel()`
+  /// sees the flag and records instead of tearing down directly.
   ///
   /// Suspending leaves every record queued: `applyDeferredTeardownLocked`
   /// returns before it swaps the pending vectors out, and `clearRequested_`

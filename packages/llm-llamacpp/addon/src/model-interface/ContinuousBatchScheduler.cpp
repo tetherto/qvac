@@ -699,8 +699,7 @@ ContinuousBatchScheduler::StepUnlockGuard::StepUnlockGuard(
 
 ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept {
   if (lock_ != nullptr) {
-    // applyDeferredTeardownLocked() is noexcept, so the teardown below cannot
-    // throw. The re-acquire can: std::mutex::lock() may raise std::system_error
+    // The re-acquire can throw: std::mutex::lock() may raise std::system_error
     // on an unrecoverable lock failure (the OS failing to meet its
     // pthread_mutex_lock specification for an initialised normal mutex). If it
     // does, the scheduler's only mutex is gone and we are NOT holding it, so
@@ -724,7 +723,6 @@ ContinuousBatchScheduler::StepUnlockGuard::~StepUnlockGuard() noexcept {
       }
       std::abort();
     }
-    scheduler_.applyDeferredTeardownLocked();
   }
 }
 
@@ -780,6 +778,7 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
 
   if (error) {
     failSlotLocked(awaiting->seqId, error);
+    applyDeferredTeardownLocked();
     return;
   }
   assert(
@@ -793,6 +792,9 @@ void ContinuousBatchScheduler::serviceNextMediaSegmentLocked(
       0,
       std::chrono::duration_cast<std::chrono::nanoseconds>(evalDuration));
   batcher_.completeMediaBarrier(awaiting->seqId, newPos, prefillCompleteFn());
+  // Only now does the slot's cursor include the segment, so a teardown
+  // recorded during the eval sees the memory it actually has.
+  applyDeferredTeardownLocked();
 }
 
 void ContinuousBatchScheduler::drainFinishedLocked(
@@ -815,7 +817,7 @@ void ContinuousBatchScheduler::drainFinishedLocked(
     // that stalls every co-tenant slot and blocks a cross-thread `cancel()`.
     //
     // Unlike the decode window this one holds `slot` across the unlock, so
-    // deferred teardown must not reconcile inside it, see
+    // no teardown may run until the loop is done with it, see
     // `TeardownDeferGuard`. Declaration order matters: the unlock guard is
     // destroyed first, so it reacquires while the defer guard is still live.
     bool rollbackOk = false;
@@ -910,6 +912,12 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
       std::chrono::duration_cast<std::chrono::nanoseconds>(decodeDuration));
 
   batcher_.advance(prefillCompleteFn());
+  // A cancel or clear recorded during the decode is applied here, once
+  // `advance()` has counted the chunk into `currentPos`, and before anything
+  // is sampled or streamed for the slot. Applied earlier, a teardown would sync
+  // the driver to a cursor one chunk behind live memory, and a cancel that
+  // commits would save a cache whose metadata does not match its contents.
+  applyDeferredTeardownLocked();
 
   if (!cancelRequested_.load()) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
@@ -1118,10 +1126,10 @@ bool ContinuousBatchScheduler::cancel(uint32_t seqId, uint64_t admissionId) {
     // the worker thread, which holds mutex_ while it streams: locking it
     // here would self-deadlock (the hazard whole-model cancel dodges via
     // the non-locking requestCancelAll flag). Record only -- no ownership
-    // check, no notify. The worker is awake by definition and reconciles
-    // deferred teardown at its loop top and on every lock reacquisition
-    // before it can sleep or admit new work; the apply side validates the
-    // admission id, so a stale record no-ops there.
+    // check, no notify. The worker is awake by definition and applies
+    // deferred teardown at its loop top, after each step's bookkeeping and
+    // after the step, before it can sleep or admit new work; the apply side
+    // validates the admission id, so a stale record no-ops there.
     recordPendingSlotCancel(seqId, admissionId);
     return true;
   }
@@ -1282,12 +1290,8 @@ void ContinuousBatchScheduler::cancelSlotLocked(
       // than the KV span serialised to disk. `req == nullptr` (slot was
       // never admitted into the batcher, e.g. failed admit) falls back
       // to the driver's own cursor which is authoritative in that case.
-      //
-      // A per-job cancel is also applied when the decode window re-locks,
-      // before `advance()` commits the chunk it just decoded, so sync to
-      // what live KV actually holds rather than `currentPos`.
       if (req != nullptr) {
-        slots_[seqId]->driver->syncPosition(batcher_.decodedPosAt(seqId));
+        slots_[seqId]->driver->syncPosition(req->currentPos);
       }
       const bool rollbackOk = slots_[seqId]->driver->onCancel({});
       if (req != nullptr) {
