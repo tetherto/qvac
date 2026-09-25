@@ -11,6 +11,7 @@
 #include "model-interface/LlamaFinetuner.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
+#include "model-interface/TextLlmContext.hpp"
 
 // Friend test peers grant unit tests direct access to internals that are not
 // part of the production public API. The production classes befriend these
@@ -119,6 +120,145 @@ public:
   }
 };
 
+class MtmdLlmContextTestPeer {
+public:
+  /// Bitmaps staged for the next `mtmd_tokenize`. `tokenizeChat` drains them,
+  /// so between requests this must be 0: a non-zero count means a failed
+  /// request left its media behind, and the next multimodal request would
+  /// hand fabric more bitmaps than its prompt has markers.
+  static size_t loadedMediaCount(const MtmdLlmContext& context) {
+    return context.bitmaps_.entries.size();
+  }
+
+  /// The post-reasoning-recovery EOG-ban one-shot flag. Production code only
+  /// arms it from inside a reasoning recovery, which requires the model to emit
+  /// EOS inside `<think>` — not forceable in a black-box test, hence direct
+  /// access here.
+  static bool banArmed(const MtmdLlmContext& ctx) {
+    return ctx.banEogAfterReasoningRecovery_;
+  }
+  static void setBanArmed(MtmdLlmContext& ctx, bool armed) {
+    ctx.banEogAfterReasoningRecovery_ = armed;
+  }
+
+  /// EOG token ids precomputed at load (Qwen3 reasoning family only) — the set
+  /// the ban masks.
+  static const std::vector<llama_token>& eogTokens(const MtmdLlmContext& ctx) {
+    return ctx.eogTokens_;
+  }
+
+  /// Invoke the ban consumer directly, as `onLogitsReady` /
+  /// `specSampleAndAccept` do before sampling.
+  static void applyPendingEogBan(MtmdLlmContext& ctx, int logitIdx) {
+    ctx.applyPendingEogBan(logitIdx);
+  }
+
+  /// The live logits row the ban writes into. Requires a prior decode;
+  /// null otherwise.
+  static float* logits(MtmdLlmContext& ctx, int logitIdx) {
+    return llama_get_logits_ith(ctx.modelCtx_.lctx, logitIdx);
+  }
+
+  /// Produce one live logits row. Newer fabric releases discard prefill
+  /// outputs after processPrompt returns, so this test seam decodes one token
+  /// before exercising the EOG mask directly.
+  static bool decodeTokenForLogits(MtmdLlmContext& ctx) {
+    const auto tokens = common_tokenize(ctx.modelCtx_.lctx, "x", false, true);
+    if (tokens.empty()) {
+      return false;
+    }
+    LlamaBatch batch(1, 0, 1);
+    common_batch_add(
+        *batch.get(), tokens.front(), ctx.current_.pos, {ctx.seqId_}, true);
+    return llama_decode(ctx.modelCtx_.lctx, *batch.get()) == 0;
+  }
+
+  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
+    return context.removeThinkingFromContext_;
+  }
+
+  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
+    return context.compactor_.removeThinkingFromContext();
+  }
+
+  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
+    return context.rollbackState_.hasReasoningBoundary();
+  }
+
+  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
+    return context.rollbackState_.reasoningBoundaryNPast();
+  }
+
+  static llama_pos specCellsUsed(const MtmdLlmContext& context) {
+    return context.specCellsUsed();
+  }
+
+  /// First token of `text` under the live vocab, for picking two ids known to
+  /// differ without hard-coding vocab specifics into a test.
+  static llama_token firstTokenOf(const MtmdLlmContext& ctx, const char* text) {
+    const auto ids = common_tokenize(ctx.modelCtx_.lctx, text, false, true);
+    return ids.empty() ? LLAMA_TOKEN_NULL : ids.front();
+  }
+
+  /// Drive `specRecoverReasoning` and report the sampler's last accepted
+  /// token.
+  ///
+  /// That recovery only runs from the MTP speculative loop on a real EOS
+  /// inside `<think>`, which no black-box test can force deterministically, so
+  /// the accept contract is pinned here. `sentinel` is accepted first with
+  /// `is_generated = false`, so "the recovery did not accept" is observable as
+  /// the sentinel surviving rather than as an unspecified initial value.
+  ///
+  /// `reasoningBudgetSamplerBuilt` only requires both marker lists to be
+  /// non-empty, so their contents do not affect what is asserted.
+  static llama_token recoverReasoningAndReportLastAccepted(
+      MtmdLlmContext& ctx, llama_token closeTok, llama_token sentinel,
+      bool lazyGrammar) {
+    common_sampler_accept(ctx.smpl_.get(), sentinel, false);
+    ctx.params_.sampling.grammar_lazy = lazyGrammar;
+    ctx.params_.sampling.reasoning_budget_start = {closeTok};
+    ctx.params_.sampling.reasoning_budget_end = {{closeTok}};
+    ctx.params_.sampling.reasoning_budget_tokens = -1;
+    ctx.params_.sampling.reasoning_control = false;
+    ctx.reasoningState_.inside_reasoning = true;
+    ctx.reasoningState_.cached_close_tag_token = closeTok;
+    LlamaBatch batch(1, 0, 1);
+    ctx.specRecoverReasoning(LLAMA_TOKEN_NULL, batch, nullptr);
+    return common_sampler_last(ctx.smpl_.get());
+  }
+};
+
+class TextLlmContextTestPeer {
+public:
+  static void armPendingThinkClose(TextLlmContext& ctx) {
+    ctx.compactor_.setRemoveThinkingFromContext(true);
+    ctx.compactor_.setReasoningEnabled(true);
+    ctx.compactor_.setNeedsRecurrentSnapshot(false);
+    ctx.compactor_.snapshotAtReasoningBoundary(
+        ctx.modelCtx_.lctx, ctx.seqId_, 0, "[TextLlmTest]");
+    ctx.compactor_.setOpenSpan(0);
+    ctx.compactor_.requestCloseCapture();
+    ctx.nPast_ = 1;
+  }
+
+  static bool pendingThinkClose(const TextLlmContext& ctx) {
+    return ctx.compactor_.hasPendingCloseCapture();
+  }
+
+  static bool capturedThinkClose(const TextLlmContext& ctx) {
+    return ctx.compactor_.hasCapturedCloseSpanForTesting();
+  }
+
+  static llama_token ordinaryToken(const TextLlmContext& ctx) {
+    const auto tokens = common_tokenize(ctx.modelCtx_.lctx, "x", false, true);
+    return tokens.empty() ? LLAMA_TOKEN_NULL : tokens.front();
+  }
+
+  static void processSpecToken(TextLlmContext& ctx, llama_token token) {
+    static_cast<void>(ctx.specProcessToken(token, false, 1, {}, nullptr));
+  }
+};
+
 class ContinuousBatchSchedulerTestPeer {
 public:
   using Scheduler =
@@ -188,32 +328,5 @@ public:
       scheduler.applyDeferredTeardownLocked();
     }
     return {survivedDeferred, scheduler.hasPendingCancels()};
-  }
-};
-
-class MtmdLlmContextTestPeer {
-public:
-  /// Bitmaps staged for the next `mtmd_tokenize`. `tokenizeChat` drains them,
-  /// so between requests this must be 0: a non-zero count means a failed
-  /// request left its media behind, and the next multimodal request would
-  /// hand fabric more bitmaps than its prompt has markers.
-  static size_t loadedMediaCount(const MtmdLlmContext& context) {
-    return context.bitmaps_.entries.size();
-  }
-
-  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
-    return context.removeThinkingFromContext_;
-  }
-
-  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
-    return context.compactor_.removeThinkingFromContext();
-  }
-
-  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
-    return context.rollbackState_.hasReasoningBoundary();
-  }
-
-  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
-    return context.rollbackState_.reasoningBoundaryNPast();
   }
 };

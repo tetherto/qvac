@@ -21,6 +21,7 @@
 #include "utils/ChatTemplateUtils.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
+#include "utils/MtpCachePersistence.hpp"
 #include "utils/ReasoningSnapshotPolicy.hpp"
 #include "utils/RecurrentStateSnapshot.hpp"
 #include "utils/ScopeGuard.hpp"
@@ -40,6 +41,7 @@ bool isFileInitialized(const std::filesystem::path& path) {
   const auto size = std::filesystem::file_size(path, errorCode);
   return !errorCode && size != 0;
 }
+
 } // namespace
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -49,8 +51,18 @@ MtmdLlmContext::MtmdLlmContext(
       compactor_(rollbackState_) {
   modelCtx_.model = llamaInit_->model();
   modelCtx_.lctx = llamaInit_->context();
+  // See TextLlmContext's constructor: ~MtmdLlmContext never runs if this
+  // constructor throws, so the base-owned draft context would outlive the
+  // derived `llamaInit_` that owns its model. Chat-template and vision
+  // validation in initializeCommonState() both throw after MTP setup.
+  ScopeGuard specTeardownGuard(
+      [this]() noexcept { teardownSpeculative(); },
+      "MtmdLlmContext MTP teardown on constructor unwind");
   initializeCommonState();
+  specTeardownGuard.dismiss();
 }
+
+MtmdLlmContext::~MtmdLlmContext() { teardownSpeculative(); }
 
 MtmdLlmContext::MtmdLlmContext(
     const common_params& commonParams, const LlmModelContext& shared,
@@ -96,6 +108,37 @@ void MtmdLlmContext::initializeCommonState() {
         "[MtmdLlm] %s: failed to initialize sampling subsystem\n", __func__);
     throw qvac_errors::StatusError(
         ADDON_ID, toString(UnableToCreateSamplingSystem), errorMsg);
+  }
+
+  mtpDraftRequested_ =
+      std::find(
+          params_.speculative.types.begin(),
+          params_.speculative.types.end(),
+          COMMON_SPECULATIVE_TYPE_DRAFT_MTP) != params_.speculative.types.end();
+  // MTP self-speculation only runs on the single-prompt generateResponse path;
+  // under continuous batching (n_parallel > 1) the scheduler never calls
+  // runSpeculativeGeneration, so a per-slot draft context is pure waste. Gate
+  // on single-context and warn on the unsupported combo (mirrors
+  // TextLlmContext).
+  if (mtpDraftRequested_ && params_.n_parallel > 1) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[MtmdLlm] spec-type=draft-mtp is ignored under continuous batching "
+        "(n_parallel > 1); running non-speculatively\n");
+  }
+  // See TextLlmContext: at `n_batch == 1` both the `common_context_can_seq_rm`
+  // probe (2 tokens) and the verify batch trip
+  // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)`, which aborts rather than
+  // throwing, so no handler can recover it. Refuse the combination up front.
+  const bool mtpBatchTooSmall = mtpDraftRequested_ && params_.n_batch < 2;
+  if (mtpBatchTooSmall) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[MtmdLlm] spec-type=draft-mtp requires batch-size >= 2 (a verify "
+        "batch is id_last + >=1 draft token); running non-speculatively\n");
+  }
+  if (mtpDraftRequested_ && params_.n_parallel <= 1 && !mtpBatchTooSmall) {
+    initializeMtpDraftContext();
   }
 
   if ((llama_model_chat_template(modelCtx_.model, nullptr) == nullptr) &&
@@ -196,6 +239,41 @@ void MtmdLlmContext::initializeCommonState() {
             arch.value());
   }
   setRemoveThinkingFromContext(removeThinkingFromContext_);
+
+  // Precompute the EOG token id set used by the speculative reasoning-EOS
+  // recovery ban (see `banEogAfterReasoningRecovery_`). Only the Qwen3 family
+  // arms that ban, so the O(nVocab) scan is gated on it and done once at load,
+  // mirroring TextLlmContext.
+  if (isQwen3ReasoningFamily_) {
+    const int32_t nVocab = llama_vocab_n_tokens(modelCtx_.vocab);
+    eogTokens_.reserve(8);
+    for (llama_token t = 0; t < nVocab; ++t) {
+      if (llama_vocab_is_eog(modelCtx_.vocab, t)) {
+        eogTokens_.push_back(t);
+      }
+    }
+  }
+}
+
+void MtmdLlmContext::initializeMtpDraftContext() {
+  // The construction itself is shared with TextLlmContext -- see
+  // LlmContext::buildMtpDraftContext. What is Mtmd-only is the flag: this
+  // function is also the media-turn rebuild path, reached from resetState after
+  // an image turn set `specDisabledByMedia_`, so a successful rebuild is what
+  // clears it.
+  //
+  // A failed build leaves the flag set, preserving the pre-refactor behaviour
+  // exactly. Note that this is not free: resetState's rebuild is gated on the
+  // flag being set, so a persistently failing init retries a full
+  // llama_context allocation on every resetState, unbounded. That is a
+  // separate open finding, not something this extraction changes.
+  if (buildMtpDraftContext("MtmdLlm")) {
+    specDisabledByMedia_ = false;
+    specDisabledByCache_ = false;
+    specBuildFailed_ = false;
+  } else {
+    specBuildFailed_ = true;
+  }
 }
 
 void MtmdLlmContext::initVisionContext() {
@@ -571,6 +649,21 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     throw qvac_errors::StatusError(ADDON_ID, toString(EncoderFailed), errorMsg);
   }
 
+  bool hasMediaChunk = false;
+  for (size_t i = 0; i < nChunks; ++i) {
+    const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
+    if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
+      hasMediaChunk = true;
+      break;
+    }
+  }
+  if (hasMediaChunk && spec_) {
+    teardownSpeculative();
+    specDisabledByMedia_ = true;
+  } else if (!hasMediaChunk && specDisabledByMedia_ && !specBuildFailed_) {
+    initializeMtpDraftContext();
+  }
+
   // Snapshot the sequence state at prefill entry on recurrent / hybrid
   // memory so a mid-prefill cancellation can roll back to the exact
   // pre-prefill cache. Captures both attention KV and the recurrent
@@ -596,6 +689,23 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
 
   llama_pos nPastLocal = current_.pos;
 
+  // Hoisted out of the per-chunk loop: on the MTP spec path a prompt with
+  // interleaved media produces several text chunks, so building a fresh
+  // llama_batch per text chunk is needless per-prefill heap churn. Allocate
+  // once (sized to the sub-batch cap) and reuse via common_batch_clear,
+  // matching the hoisting pattern in TextLlmContext::evalMessageWithTools and
+  // runSpeculativeGeneration. Left empty (unallocated) when MTP is inactive.
+  LlamaBatch specTextBatch;
+  if (spec_) {
+    // Size from the context's validated batch size, not the raw (untrusted)
+    // params_.n_batch: the pre-hoist per-chunk sizing was incidentally bounded
+    // by nTextTokens, and a negative/huge n_batch would wrap to a bad
+    // llama_batch_init size. llama_n_batch() is the effective, validated value.
+    const int nBatchCap = static_cast<int>(llama_n_batch(getCtx()));
+    specTextBatch = LlamaBatch((nBatchCap > 0 ? nBatchCap : 1) + 1, 0, 1);
+  }
+
+  startSpecPromptEvaluation();
   for (size_t i = 0; i < nChunks; i++) {
     bool chunkLogitsLast = (i == nChunks - 1 && !prefill);
     const auto* chunk = mtmd_input_chunks_get(chunksPtr, i);
@@ -651,6 +761,13 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
     }
     int32_t res;
     if (mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE) {
+      // The vision decode bypasses the MTP draft context, leaving it
+      // misaligned: suspend speculation for this request. resetState()
+      // recreates the draft context once the target KV has been cleared, so a
+      // later text-only turn on the same loaded mtmd model can draft again.
+      spec_.reset();
+      ctxDraft_.reset();
+      specDisabledByMedia_ = true;
       // Inlined copy of the IMAGE branch of qvac-fabric's
       // mtmd_helper_eval_chunk_single (tools/mtmd/mtmd-helper.cpp): encode ->
       // get_output_embd -> decode_image_chunk, called with the SAME args the
@@ -686,6 +803,36 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
             /*callback=*/nullptr,
             /*user_data=*/nullptr);
       }
+    } else if (spec_) {
+      // Decode through decodeAndSpecProcess instead of the mtmd helper so the
+      // MTP draft context tracks the prefill and stays aligned.
+      size_t nTextTokens = 0;
+      const llama_token* textTokens =
+          mtmd_input_chunk_get_tokens_text(chunk, &nTextTokens);
+      res = 0;
+      // Step by the batch's OWN capacity, not the raw params_.n_batch: llama
+      // may clamp the effective batch below params_.n_batch, so specTextBatch
+      // (sized from the validated llama_n_batch) can be smaller — stepping by
+      // params_.n_batch would then add more tokens than fit and overflow
+      // common_batch_add. Deriving the step from capacity keeps
+      // tokens-per-iteration <= capacity by construction.
+      const auto nBatch = static_cast<size_t>(specTextBatch.capacity() - 1);
+      for (size_t off = 0; off < nTextTokens && res == 0; off += nBatch) {
+        const size_t end = std::min(off + nBatch, nTextTokens);
+        common_batch_clear(*specTextBatch);
+        for (size_t k = off; k < end; ++k) {
+          const bool isFinalPrefillToken =
+              chunkLogitsLast && (k + 1 == nTextTokens);
+          common_batch_add(
+              *specTextBatch,
+              textTokens[k],
+              nPastLocal + static_cast<llama_pos>(k),
+              {seqId_},
+              isFinalPrefillToken);
+        }
+        res = decodeAndSpecProcess(*specTextBatch);
+      }
+      nPastLocal += static_cast<llama_pos>(nTextTokens);
     } else {
       res = mtmd_helper_eval_chunk_single(
           visionContext(),
@@ -774,6 +921,8 @@ bool MtmdLlmContext::cancelGenerationCleanup(
           },
   });
 
+  rollbackDraftContext();
+
   rollbackState_.clearPrefillEntry();
   rollbackState_.clearReasoningBoundary();
   rollbackState_.clearPostReasoning();
@@ -801,6 +950,10 @@ void MtmdLlmContext::refreshCurrentCacheTokensFromMemory() {
 LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
     const std::function<void(const std::string&)>& outputCallback) {
 
+  if (spec_) {
+    return runSpeculativeGeneration(outputCallback);
+  }
+
   int nRemain = params_.n_predict;
   LlamaBatch batch(1, 0, 1); // batch for next token generation
 
@@ -816,6 +969,10 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
   reasoningState_.recent_output_buffer.clear();
   compactor_.reset();
   generationStopReason_ = GenerationStopReason::None;
+  // Defensive symmetry with TextLlmContext + specBeginGeneration: never carry a
+  // reasoning-recovery EOG ban into a generation (armed + consumed within one
+  // speculative generation; only ever set on the spec path today).
+  banEogAfterReasoningRecovery_ = false;
 
   if (thinkingForcedOpen_) {
     if (outputCallback) {
@@ -1046,6 +1203,206 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
   const bool rollbackOk =
       onGenerationFinished(outputCallback, generationStopReason_);
   return {.rollbackOk = rollbackOk};
+}
+
+void MtmdLlmContext::specBeginGeneration(
+    const std::function<void(const std::string&)>& outputCallback) {
+  reasoningState_.inside_reasoning = false;
+  reasoningState_.recent_output_buffer.clear();
+  compactor_.reset();
+  generationStopReason_ = GenerationStopReason::None;
+  // Never carry a reasoning-recovery EOG ban across generations (armed +
+  // consumed within one generation on the spec path).
+  banEogAfterReasoningRecovery_ = false;
+
+  if (thinkingForcedOpen_) {
+    if (outputCallback) {
+      outputCallback(thinkingForcedOpenText_);
+    }
+    if (reasoningEnabled_) {
+      setOpenThinkSpan(
+          current_.pos -
+          static_cast<llama_pos>(reasoningState_.forcedOpenTokenCount));
+      reasoningState_.inside_reasoning = true;
+    }
+  }
+}
+
+// Per-token processing for the speculative loop.
+SequenceStepResult MtmdLlmContext::specProcessToken(
+    llama_token tokenId, bool sampled, unsigned generated,
+    const std::function<void(const std::string&)>& outputCallback,
+    LlamaBatch* inlineDecodeBatch) {
+  return processToken(
+      tokenId, sampled, generated, outputCallback, inlineDecodeBatch);
+}
+
+SequenceStepResult MtmdLlmContext::processToken(
+    llama_token tokenId, bool sampled, unsigned generated,
+    const std::function<void(const std::string&)>& outputCallback,
+    LlamaBatch* inlineDecodeBatch) {
+  capturePendingThinkClose();
+  const std::string tokenStr =
+      common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+  const std::string completeChars = utf8Buffer_.addToken(tokenStr);
+  if (!completeChars.empty() && outputCallback) {
+    outputCallback(completeChars);
+  }
+  recordPostReasoningTokenIfActive(tokenId);
+
+  if (reasoningEnabled_) {
+    const bool wasInside = reasoningState_.inside_reasoning;
+    if (!wasInside) {
+      compactor_.recordPreReasoningToken(tokenId);
+    }
+    qvac_lib_inference_addon_llama::utils::updateReasoningBuffer(
+        tokenStr, reasoningState_);
+    const bool nowInside = reasoningState_.inside_reasoning;
+    if (!wasInside && nowInside) {
+      setOpenThinkSpan(
+          current_.pos -
+          static_cast<llama_pos>(reasoningState_.openTokenCount - 1));
+    }
+    if (wasInside && !nowInside) {
+      compactor_.recordCloseMarkerForReplay(
+          reasoningState_.cached_close_tag_tokens);
+      compactor_.requestCloseCapture();
+    }
+  }
+
+  const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
+  if (sampled && isEos && isQwen3ReasoningFamily_ &&
+      reasoningState_.inside_reasoning &&
+      reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
+    tokenId = reasoningState_.cached_close_tag_token;
+    const std::string closeStr =
+        common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
+    // See TextLlmContext::onLogitsReady: the substituted close tag has to
+    // reach fabric's reasoning-budget matcher, or it stays in COUNTING and
+    // a lazy tool grammar is disarmed for the rest of the request. Lazy
+    // *and* budget-sampler-built, which together are what make feeding the
+    // grammar sampler impossible here.
+    if (params_.sampling.grammar_lazy &&
+        reasoningBudgetSamplerBuilt(params_.sampling)) {
+      common_sampler_accept(smpl_.get(), tokenId, true);
+    }
+    reasoningState_.inside_reasoning = false;
+    compactor_.recordCloseMarkerForReplay(
+        reasoningState_.cached_close_tag_tokens);
+    compactor_.requestCloseCapture();
+    if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
+      forcedTokens_.push_back(reasoningState_.cached_newline_token);
+      forcedTokens_.push_back(reasoningState_.cached_newline_token);
+    }
+    banEogAfterReasoningRecovery_ = true;
+    const std::string closeChars = utf8Buffer_.addToken(closeStr);
+    if (!closeChars.empty() && outputCallback) {
+      outputCallback(closeChars);
+    }
+    return {.token = tokenId, .finished = false};
+  }
+  if (isEos && isHarmonyModel_ && params_.use_jinja &&
+      tokenId == harmonyCallToken_) {
+    if (outputCallback) {
+      const std::string callMarker =
+          common_token_to_piece(modelCtx_.lctx, tokenId, true);
+      if (!callMarker.empty()) {
+        outputCallback(callMarker);
+      }
+    }
+    flushPendingUtf8ToCallback(outputCallback);
+    generationStopReason_ = GenerationStopReason::Eos;
+    return {
+        .token = tokenId,
+        .finished = true,
+        .stopReason = GenerationStopReason::Eos};
+  }
+
+  GenerationStopReason stopReason = GenerationStopReason::None;
+  const bool reachedBudget =
+      inlineDecodeBatch == nullptr && params_.n_predict > 0 &&
+      generated >= static_cast<unsigned>(params_.n_predict);
+  if (isEos) {
+    stopReason = GenerationStopReason::Eos;
+  } else if (reachedBudget) {
+    stopReason = GenerationStopReason::PredictionLimit;
+  } else if (checkAntiprompt()) {
+    stopReason = GenerationStopReason::Antiprompt;
+  }
+  const bool finished = stopReason != GenerationStopReason::None;
+  if (finished) {
+    generationStopReason_ = stopReason;
+    flushPendingUtf8ToCallback(outputCallback);
+  }
+  return {.token = tokenId, .finished = finished, .stopReason = stopReason};
+}
+
+void MtmdLlmContext::applyPendingEogBan(int logitIdx) {
+  if (!banEogAfterReasoningRecovery_) {
+    return;
+  }
+  float* logits = llama_get_logits_ith(modelCtx_.lctx, logitIdx);
+  if (logits == nullptr) {
+    // Stay armed and defer to the next sample rather than dropping the ban (see
+    // TextLlmContext::applyPendingEogBan).
+    return;
+  }
+  banEogAfterReasoningRecovery_ = false;
+  // `eogTokens_` is precomputed in initializeCommonState().
+  for (const llama_token t : eogTokens_) {
+    logits[t] = -INFINITY;
+  }
+}
+
+// Substitute the cached close marker and decode it so the span-end position
+// is recorded.
+void MtmdLlmContext::specRecoverReasoning(
+    llama_token /*tok*/, LlamaBatch& batch,
+    const std::function<void(const std::string&)>& outputCallback) {
+  const llama_token closeTok = reasoningState_.cached_close_tag_token;
+  const std::string closeStr =
+      common_token_to_piece(modelCtx_.lctx, closeTok, params_.special);
+  reasoningState_.inside_reasoning = false;
+  compactor_.requestCloseCapture();
+  compactor_.recordCloseMarkerForReplay(closeTok);
+  if (outputCallback) {
+    const std::string completeChars = utf8Buffer_.addToken(closeStr);
+    if (!completeChars.empty()) {
+      outputCallback(completeChars);
+    }
+  }
+  // Mirrors TextLlmContext::handleReasoningEOS: the substituted close tag has
+  // to reach fabric's reasoning-budget matcher, or it stays in COUNTING and
+  // `grammar_should_apply` keeps a lazy tool grammar disarmed for the rest of
+  // the request. Lazy *and* budget-sampler-built, which is what makes the
+  // grammar sampler provably not fed this token.
+  //
+  // Deliberately BEFORE the decode below, which throws on failure: the close
+  // tag has already been streamed to the caller by then, so on that path the
+  // caller would otherwise see a closed reasoning block while the matcher
+  // still believed it was inside one. The accept needs nothing from the
+  // decode.
+  if (params_.sampling.grammar_lazy &&
+      reasoningBudgetSamplerBuilt(params_.sampling)) {
+    common_sampler_accept(smpl_.get(), closeTok, true);
+  }
+  common_batch_clear(*batch);
+  common_batch_add(*batch, closeTok, current_.pos, {seqId_}, true);
+  if (decodeAndSpecProcess(*batch) != 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(FailedToDecode),
+        "[MtmdLlm] failed to decode substituted reasoning close tag\n");
+  }
+  ++current_.pos;
+  ++current_.cacheTokens;
+  ++lastGeneratedTokenCount_;
+  // Arm the one-shot EOG ban so the next speculative sample
+  // (specSampleAndAccept) is forced to produce a content token instead of
+  // immediately re-emitting EOS after the reasoning block was force-closed.
+  // Consumed once, then disarmed.
+  banEogAfterReasoningRecovery_ = true;
+  capturePendingThinkClose();
 }
 
 std::function<void()>
@@ -1321,10 +1678,16 @@ void MtmdLlmContext::compactThinkSpan() {
               [this](const ReasoningBlockCompactor::Outcome& result) {
                 current_.pos = result.newPos;
                 refreshCurrentCacheTokensFromMemory();
+                // Full clear, not a mirror at `newPos` -- see the matching
+                // comment in TextLlmContext::compactThinkSpan. The compactor
+                // rewrites [snapshotPos, newPos) in place, so those are
+                // precisely the draft cells a `newPos` mirror would keep.
+                rollbackDraftContext();
               },
           .onFailedKvWiped =
               [this]() {
                 current_ = {};
+                rollbackDraftContext();
                 rollbackState_.reset();
                 compactor_.reset();
               },
@@ -1435,6 +1798,14 @@ void MtmdLlmContext::resetState(bool resetStats) {
   // Finish queued backend work before mutating KV/recurrent memory.
   llama_synchronize(modelCtx_.lctx);
   clearSequenceMemory(modelCtx_.lctx);
+  // Keep the MTP draft context aligned with the target on reset (else its KV
+  // outlives the cleared target and the next generation drafts against a stale
+  // cache). No-op when MTP is inactive.
+  rollbackDraftContext();
+  // Never carry a reasoning-recovery EOG ban across a state reset — a reused
+  // continuous-batching slot must not ban EOG on the next sequence's first
+  // sampled token (parity with generateResponse / specBeginGeneration).
+  banEogAfterReasoningRecovery_ = false;
 
   // Reset the performance metrics
   if (resetStats) {
@@ -1443,6 +1814,17 @@ void MtmdLlmContext::resetState(bool resetStats) {
 
   // Reset sampler if available
   common_sampler_reset(smpl_.get());
+
+  // `params_.n_batch >= 2` repeats the construction-time gate: this path
+  // re-creates the draft context after a media turn disabled it, and a verify
+  // batch is `id_last` + >=1 draft token, which trips
+  // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` at n_batch == 1. (The
+  // 2-token `common_context_can_seq_rm` probe is no longer a concern here --
+  // `probeTargetSeqRmTypeOnce` runs it only on the first draft-context build.)
+  if (specDisabledByCache_) {
+    specDisabledByCache_ = false;
+    specDisabledByMedia_ = true;
+  }
 }
 
 void MtmdLlmContext::resetMedia() { bitmaps_.entries.clear(); }
@@ -1470,6 +1852,10 @@ llama_pos MtmdLlmContext::removeLastNTokens(llama_pos count) {
   }
 
   clearSequenceMemory(modelCtx_.lctx, current_.pos - tokensToRemove, -1);
+  // Mirror the tail removal onto the MTP draft context (pre-decrement cursor)
+  // so it drops the same tokens the target just did. No-op when MTP is
+  // inactive.
+  rollbackDraftContext(current_.pos - tokensToRemove);
 
   current_.pos -= tokensToRemove;
   refreshCurrentCacheTokensFromMemory();
@@ -1688,10 +2074,6 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
-  // Finalise the previous scheduler iteration's deferred close-position
-  // capture; the close-marker token has been committed by now.
-  capturePendingThinkClose();
-
   if (stopGeneration_.load()) {
     // Leave `stopGeneration_` set so the post-loop `cancelGenerationCleanup`
     // in `generateResponse` runs; do NOT emit EOT since the rollback drops
@@ -1724,6 +2106,11 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
   const bool sampledToken = forcedTokens_.empty();
   llama_token tokenId = LLAMA_TOKEN_NULL;
   if (sampledToken) {
+    // Consume a pending post-reasoning-recovery EOG ban (parity with
+    // TextLlmContext::sampleToken and the speculative path). Only real samples
+    // consume it; the forced recovery newlines below pass through untouched, so
+    // the ban lands on the first content token after </think>.
+    applyPendingEogBan(logitIdx);
     tokenId = common_sampler_sample(smpl_.get(), modelCtx_.lctx, logitIdx);
     // Test-only substitution; twin of the one in `generateResponse` above.
     if (forcedNextSampledTokenForTesting_ != LLAMA_TOKEN_NULL &&
@@ -1742,112 +2129,12 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     common_sampler_accept(smpl_.get(), tokenId, false);
   }
 
-  std::string tokenStr =
-      common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
-  const std::string completeChars = utf8Buffer_.addToken(tokenStr);
-  if (!completeChars.empty() && outputCallback) {
-    outputCallback(completeChars);
-  }
-
-  // Record post-reasoning tokens for the replay. Capture starts after
-  // the close marker is committed, so the first token after the close lands
-  // here on the next scheduler iteration.
-  recordPostReasoningTokenIfActive(tokenId);
-
-  if (reasoningEnabled_) {
-    const bool wasInside = reasoningState_.inside_reasoning;
-    // Seed pre-reasoning tokens for the replay path, see the earlier
-    // MtmdLlmContext detection site and TextLlmContext::onLogitsReady
-    // for the full rationale.
-    if (!wasInside) {
-      compactor_.recordPreReasoningToken(tokenId);
-    }
-    qvac_lib_inference_addon_llama::utils::updateReasoningBuffer(
-        tokenStr, reasoningState_);
-    const bool nowInside = reasoningState_.inside_reasoning;
-    if (!wasInside && nowInside) {
-      setOpenThinkSpan(
-          current_.pos -
-          static_cast<llama_pos>(reasoningState_.openTokenCount - 1));
-    }
-    if (wasInside && !nowInside) {
-      compactor_.recordCloseMarkerForReplay(
-          reasoningState_.cached_close_tag_tokens);
-      compactor_.requestCloseCapture();
-    }
-  }
-
-  const bool isEos = llama_vocab_is_eog(modelCtx_.vocab, tokenId);
-  if (sampledToken && isEos && isQwen3ReasoningFamily_ &&
-      reasoningState_.inside_reasoning &&
-      reasoningState_.cached_close_tag_token != LLAMA_TOKEN_NULL) {
-    tokenId = reasoningState_.cached_close_tag_token;
-    tokenStr = common_token_to_piece(modelCtx_.lctx, tokenId, params_.special);
-    // See TextLlmContext::onLogitsReady for why the substituted close tag
-    // must reach the reasoning-budget matcher, and why the lazy flag has to
-    // be paired with the budget sampler actually being built.
-    if (params_.sampling.grammar_lazy &&
-        reasoningBudgetSamplerBuilt(params_.sampling)) {
-      common_sampler_accept(smpl_.get(), tokenId, true);
-    }
-    reasoningState_.inside_reasoning = false;
-    // EOS substitution skips the `updateReasoningBuffer` handshake, so the
-    // substituted close never reaches the capture site on its own. Seed it
-    // first, as the six sibling close sites do, or the replay restores an
-    // end-of-prefill prefix that opens a `<think>` nothing closes.
-    compactor_.recordCloseMarkerForReplay(tokenId);
-    compactor_.requestCloseCapture();
-    if (reasoningState_.cached_newline_token != LLAMA_TOKEN_NULL) {
-      forcedTokens_.push_back(reasoningState_.cached_newline_token);
-      forcedTokens_.push_back(reasoningState_.cached_newline_token);
-    }
-    const std::string closeChars = utf8Buffer_.addToken(tokenStr);
-    if (!closeChars.empty() && outputCallback) {
-      outputCallback(closeChars);
-    }
-    return {.token = tokenId, .finished = false};
-  }
-
-  if (isEos && isHarmonyModel_ && params_.use_jinja &&
-      tokenId == harmonyCallToken_) {
-    QLOG_IF(
-        Priority::DEBUG,
-        string_format(
-            "[MtmdLlm] Harmony <|call|> stop: tokenId=%d\n", tokenId));
-    if (outputCallback) {
-      const std::string callMarker =
-          common_token_to_piece(modelCtx_.lctx, tokenId, true);
-      if (!callMarker.empty()) {
-        outputCallback(callMarker);
-      }
-    }
-    flushPendingUtf8ToCallback(outputCallback);
-    generationStopReason_ = GenerationStopReason::Eos;
-    return {
-        .token = tokenId,
-        .finished = true,
-        .stopReason = GenerationStopReason::Eos};
-  }
-
-  // Batch path only: scheduler stops solely on `finished` (see
-  // TextLlmContext::onLogitsReady for the single-prompt rationale).
-  const bool reachedBudget =
-      inlineDecodeBatch == nullptr && params_.n_predict > 0 &&
-      generatedAfterAccept >= static_cast<unsigned>(params_.n_predict);
-  GenerationStopReason stopReason = GenerationStopReason::None;
-  if (isEos) {
-    stopReason = GenerationStopReason::Eos;
-  } else if (reachedBudget) {
-    stopReason = GenerationStopReason::PredictionLimit;
-  } else if (checkAntiprompt()) {
-    stopReason = GenerationStopReason::Antiprompt;
-  }
-  const bool finished = stopReason != GenerationStopReason::None;
-  if (finished) {
-    generationStopReason_ = stopReason;
-    flushPendingUtf8ToCallback(outputCallback);
-  }
-  return {.token = tokenId, .finished = finished, .stopReason = stopReason};
+  return processToken(
+      tokenId,
+      sampledToken,
+      generatedAfterAccept,
+      outputCallback,
+      inlineDecodeBatch);
 }
 
 void MtmdLlmContext::onSequenceEnd(
@@ -1897,7 +2184,8 @@ bool MtmdLlmContext::onCancel(
 
 /// Prompt caching on the multimodal batch path round-trips the full four-field
 /// session-metadata contract (`SessionMetadataField` in LlmContext.hpp),
-/// exactly as `CacheManager` does. `cacheTokens` matters on its own here: for
+/// exactly as `CacheManager` does. MTP caches may append a two-word generation
+/// ID. `cacheTokens` matters on its own here: for
 /// M-RoPE media the KV-cell count diverges from the positional span
 /// (`current_.pos` vs `current_.cacheTokens`). Slots 1 and 3 are retired, and
 /// `SessionMetadata::capture` mirrors the live cursors into them rather than
@@ -1924,7 +2212,7 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
       cacheKey.c_str(),
       seqId_,
       metadata.data(),
-      metadata.size(),
+      metadata.capacity(),
       &tokenCount);
   if (loadedBytes == 0) {
     throw qvac_errors::StatusError(
@@ -1947,6 +2235,8 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
           Priority::ERROR,
           "[MtmdLlm] failed to clear sequence after invalid cache load\n");
     }
+    // Mirror the target-clear onto the MTP draft context (non-throwing).
+    rollbackDraftContext();
     current_ = {};
   });
 
@@ -1960,7 +2250,7 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
         toString(UnableToLoadSessionFile),
         "MtmdLlmContext::loadCache: cache '" + cacheKey +
             "' has incomplete session metadata (" + std::to_string(tokenCount) +
-            " of " + std::to_string(SESSION_METADATA_FIELD_COUNT) + " fields)");
+            " fields; expected 4 or 6)");
   }
 
   metadata.applyTo(*this);
@@ -2011,6 +2301,56 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   }
 
   llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
+  if (ctxDraft_) {
+    const std::string draftPath = mtpDraftCachePath(cacheKey);
+    const std::string statePath = mtpDriverStateCachePath(cacheKey);
+    const auto targetGeneration = metadata.mtpGeneration(tokenCount);
+    const auto driverState = readMtpDriverStateFile(statePath);
+    bool draftRestored = false;
+    if (targetGeneration && driverState &&
+        driverState->generation == *targetGeneration &&
+        isFileInitialized(draftPath)) {
+      spec_.reset();
+      size_t draftTokenCount = 0;
+      SessionMetadata draftMetadata;
+      const auto draftBytes = llama_state_seq_load_file(
+          ctxDraft_.get(),
+          draftPath.c_str(),
+          seqId_,
+          draftMetadata.data(),
+          draftMetadata.capacity(),
+          &draftTokenCount);
+      auto* draftMem = llama_get_memory(ctxDraft_.get());
+      const auto draftGeneration = draftMetadata.mtpGeneration(draftTokenCount);
+      draftRestored =
+          draftBytes != 0 && mtmdSessionMetadataIsComplete(draftTokenCount) &&
+          draftGeneration && *draftGeneration == *targetGeneration &&
+          draftMetadata.nPast() == getNPast() &&
+          draftMetadata.cacheTokens() == getCacheTokens() &&
+          draftMem != nullptr &&
+          llama_memory_seq_pos_max(draftMem, seqId_) + 1 == getNPast() &&
+          static_cast<llama_pos>(llama_memory_seq_token_count(
+              draftMem, seqId_)) == getCacheTokens() &&
+          rebuildMtpSpeculator("MtmdLlm");
+      if (draftRestored) {
+        common_speculative_set_state(spec_.get(), seqId_, driverState->state);
+        std::vector<uint8_t> restoredDriverState;
+        draftRestored = common_speculative_get_state(
+                            spec_.get(), seqId_, restoredDriverState) &&
+                        restoredDriverState == driverState->state;
+      }
+    }
+    if (!draftRestored) {
+      teardownSpeculative();
+      specDisabledByCache_ = true;
+      QLOG_IF(
+          Priority::WARNING,
+          "[MtmdLlm] persisted cache has no matching MTP draft state; "
+          "using non-speculative decoding for this cache session\n");
+    } else {
+      specDisabledByCache_ = false;
+    }
+  }
   restoredKvGuard.dismiss();
   return true;
 }
@@ -2022,23 +2362,80 @@ void MtmdLlmContext::saveCache(const std::string& cacheKey) const {
 
   // Persist all four metadata slots in SessionMetadataField order so the
   // physical KV-cell count that diverges under M-RoPE survives restore.
-  const SessionMetadata metadata = SessionMetadata::capture(*this);
+  SessionMetadata metadata = SessionMetadata::capture(*this);
   const std::string tmpCacheKey = cacheKey + ".tmp";
+  const std::string draftCacheKey = mtpDraftCachePath(cacheKey);
+  const std::string tmpDraftCacheKey = draftCacheKey + ".tmp";
+  const std::string stateCacheKey = mtpDriverStateCachePath(cacheKey);
+  const std::string tmpStateCacheKey = stateCacheKey + ".tmp";
+  bool saveMtpState = ctxDraft_ && spec_;
+  std::vector<uint8_t> driverState;
+  uint64_t generation = 0;
+  if (saveMtpState) {
+    if (!common_speculative_get_state(spec_.get(), seqId_, driverState)) {
+      saveMtpState = false;
+      QLOG_IF(
+          Priority::WARNING,
+          "[MtmdLlm] MTP driver state is unavailable; saving target-only "
+          "cache\n");
+    } else {
+      generation = makeMtpCacheGeneration();
+      metadata.setMtpGeneration(generation);
+    }
+  }
+  ScopeGuard tmpFileGuard([&]() noexcept {
+    std::error_code ec;
+    std::filesystem::remove(tmpCacheKey, ec);
+    ec.clear();
+    std::filesystem::remove(tmpDraftCacheKey, ec);
+    ec.clear();
+    std::filesystem::remove(tmpStateCacheKey, ec);
+  });
   const auto savedBytes = llama_state_seq_save_file(
       modelCtx_.lctx,
       tmpCacheKey.c_str(),
       seqId_,
       metadata.data(),
-      metadata.size());
+      saveMtpState ? metadata.capacity() : metadata.size());
   if (savedBytes == 0) {
-    std::error_code ec;
-    std::filesystem::remove(tmpCacheKey, ec);
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),
-        "MtmdLlmContext::saveCache: failed to save cache '" + cacheKey + "'");
+        "MtmdLlmContext::saveCache: failed to save session file '" + cacheKey +
+            "'");
+  }
+  if (saveMtpState) {
+    llama_synchronize(ctxDraft_.get());
+    const auto draftBytes = llama_state_seq_save_file(
+        ctxDraft_.get(),
+        tmpDraftCacheKey.c_str(),
+        seqId_,
+        metadata.data(),
+        metadata.capacity());
+    if (draftBytes == 0) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToSaveSessionFile),
+          "MtmdLlmContext::saveCache: failed to save MTP draft cache '" +
+              draftCacheKey + "'");
+    }
+    if (!writeMtpDriverStateFile(tmpStateCacheKey, generation, driverState)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToSaveSessionFile),
+          "MtmdLlmContext::saveCache: failed to save MTP driver state '" +
+              stateCacheKey + "'");
+    }
+    CacheManager::atomicPromoteFile(tmpStateCacheKey, stateCacheKey);
+    CacheManager::atomicPromoteFile(tmpDraftCacheKey, draftCacheKey);
+  } else {
+    std::error_code ec;
+    std::filesystem::remove(draftCacheKey, ec);
+    ec.clear();
+    std::filesystem::remove(stateCacheKey, ec);
   }
   CacheManager::atomicPromoteFile(tmpCacheKey, cacheKey);
+  tmpFileGuard.dismiss();
 }
 
 void MtmdLlmContext::snapshotPreRequestCursor() { preRequestUsage_ = current_; }
