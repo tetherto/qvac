@@ -29,3 +29,20 @@ Keep event-stream termination and aggregate-promise outcomes compatible, includi
 partial results. Update the plugin declaration, handler, schemas, public surface,
 and focused registry/cancellation tests together. Current source and tests are
 authoritative for supported request kinds and admission lanes.
+
+## Managed RPC servers and discovery
+
+Start and discovery handlers own registry contexts. Their signals cancel TCP
+probes and bounded lookups during engine close. Start retains the native handle
+immediately, probes readiness for up to ten seconds, then begins advertising if
+requested. A failure unwinds the start scope and stops the native handle. If
+cleanup fails, the engine retains ownership so shutdown can retry.
+
+Successful start transfers ownership from the request scope to the server
+manager. Stop withdraws the advertisement before invoking native stop. It
+removes the handle only after cleanup succeeds and retains it after a stop
+failure. Concurrent stops share one promise. Shutdown attempts all owned stops,
+even if one fails or remains pending. Bare native stop has no imposed deadline.
+Discovery swarms register with the existing suspend/resume coordinator; native
+TCP traffic does not pass through Hyperswarm. A model has a separate lifetime
+from every server and announcement.

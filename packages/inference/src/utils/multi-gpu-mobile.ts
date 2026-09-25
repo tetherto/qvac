@@ -5,7 +5,17 @@ type MultiGpuKey = (typeof MULTI_GPU_KEYS)[number]
 // keys. Mutation is intentional: callers strip before the config reaches the
 // model constructor. gpu_layers (single-GPU layer offload) is intentionally
 // absent from MULTI_GPU_KEYS.
-export function stripMultiGpuKeys(config: Record<string, unknown>): readonly MultiGpuKey[] {
+export function stripMultiGpuKeys(
+  config: Record<string, unknown>,
+  preserveRpcSplits = false
+): readonly MultiGpuKey[] {
+  if (
+    preserveRpcSplits &&
+    typeof config['rpc-servers'] === 'string' &&
+    config['rpc-servers'].trim()
+  ) {
+    return []
+  }
   const stripped = MULTI_GPU_KEYS.filter((k) => k in config)
   stripped.forEach((k) => delete config[k])
   return stripped

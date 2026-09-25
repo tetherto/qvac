@@ -31,6 +31,9 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  startRpcServer,
+  stopRpcServer,
+  discoverRpcServers,
   getSystemResources,
   assessModelFit,
   loggingStream,
@@ -387,3 +390,12 @@ export type {
   ProfilerGPUResourceGauge,
   ProfilerResourceGauge
 } from '@qvac/inference/surface'
+
+export type {
+  StartRpcServerOptions,
+  StopRpcServerOptions,
+  DiscoverRpcServersOptions,
+  RpcServerInfo,
+  RpcServerCandidate
+} from '@qvac/inference/surface'
+export { RpcServerOperationError } from './utils/errors-server'

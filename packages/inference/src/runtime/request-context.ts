@@ -32,6 +32,8 @@ export type RequestKind =
   | 'loadModel'
   | 'downloadAsset'
   | 'rag'
+  | 'rpcServer'
+  | 'rpcDiscovery'
 
 /**
  * Lifecycle states a request transitions through. A new context starts in

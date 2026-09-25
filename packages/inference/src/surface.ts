@@ -174,6 +174,7 @@ export { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 // and on the synchronous throws of `plugins()` / `registerPlugin` (the plugin
 // group below).
 export {
+  RpcServerOperationError,
   InferenceCancelledError,
   ContextOverflowError,
   type ContextOverflowErrorSizes,

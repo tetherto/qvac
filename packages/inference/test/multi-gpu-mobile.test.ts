@@ -52,3 +52,17 @@ test('stripMultiGpuKeys: strips only the keys that are present', (t) => {
   t.absent('main-gpu' in config)
   t.absent('split-mode' in config)
 })
+
+test('LLM mobile RPC loads retain explicit split placement', (t) => {
+  const config: Record<string, unknown> = {
+    'rpc-servers': '10.0.0.2:50052',
+    devices: 'RPC0',
+    'split-mode': 'tensor',
+    'tensor-split': '1'
+  }
+  t.alike(stripMultiGpuKeys(config, true), [])
+  t.is(config['split-mode'], 'tensor')
+  t.is(config['devices'], 'RPC0')
+  const local: Record<string, unknown> = { 'split-mode': 'layer', 'tensor-split': '1,1' }
+  t.alike(stripMultiGpuKeys(local, true), ['split-mode', 'tensor-split'])
+})

@@ -47,6 +47,9 @@
           "$ref": "#/$defs/diffusionStream.request"
         },
         {
+          "$ref": "#/$defs/discoverRpcServers.request"
+        },
+        {
           "$ref": "#/$defs/downloadAsset.request"
         },
         {
@@ -98,7 +101,13 @@
           "$ref": "#/$defs/resume.request"
         },
         {
+          "$ref": "#/$defs/startRpcServer.request"
+        },
+        {
           "$ref": "#/$defs/state.request"
+        },
+        {
+          "$ref": "#/$defs/stopRpcServer.request"
         },
         {
           "$ref": "#/$defs/suspend.request"
@@ -182,6 +191,9 @@
           "$ref": "#/$defs/diffusionStream.response"
         },
         {
+          "$ref": "#/$defs/discoverRpcServers.response"
+        },
+        {
           "$ref": "#/$defs/downloadAsset.response"
         },
         {
@@ -245,7 +257,13 @@
           "$ref": "#/$defs/resume.response"
         },
         {
+          "$ref": "#/$defs/startRpcServer.response"
+        },
+        {
           "$ref": "#/$defs/state.response"
+        },
+        {
+          "$ref": "#/$defs/stopRpcServer.response"
         },
         {
           "$ref": "#/$defs/suspend.response"
@@ -3038,6 +3056,8 @@
                 "finetune",
                 "loadModel",
                 "downloadAsset",
+                "rpcServer",
+                "rpcDiscovery",
                 "rag"
               ],
               "description": "Optional kind narrowing for the broad cancel. Omitting it cancels every in-flight request on the model.",
@@ -5025,6 +5045,56 @@
         }
       },
       "required": ["type"],
+      "additionalProperties": false
+    },
+    "discoverRpcServers.request": {
+      "title": "DiscoverRpcServersRequest",
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Shared discovery topic. Only use with trusted private-network participants."
+        },
+        "timeoutMs": {
+          "description": "Search budget in milliseconds, including TCP probes. Defaults to 5000, at most 30000.",
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 30000
+        },
+        "type": {
+          "type": "string",
+          "const": "discoverRpcServers"
+        }
+      },
+      "required": ["topic", "type"]
+    },
+    "discoverRpcServers.response": {
+      "title": "DiscoverRpcServersResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "discoverRpcServers"
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["url"],
+            "additionalProperties": false,
+            "title": "DiscoverRpcServersResponseServersItem"
+          }
+        }
+      },
+      "required": ["type", "servers"],
       "additionalProperties": false
     },
     "downloadAsset.request": {
@@ -10024,8 +10094,18 @@
                         }
                       ]
                     },
+                    "rpc-servers": {
+                      "description": "Comma-separated native RPC host:port endpoints in device registration order. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "devices": {
+                      "description": "Explicit ordered native device names, for example RPC0,RPC1. RPC indices follow rpc-servers order; tensor-split weights follow this device order.",
+                      "type": "string",
+                      "minLength": 1
+                    },
                     "split-mode": {
-                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+                      "description": "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
                       "type": "string",
                       "enum": ["none", "layer", "tensor"],
                       "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode"
@@ -19151,6 +19231,93 @@
       "required": ["type"],
       "additionalProperties": false
     },
+    "startRpcServer.request": {
+      "title": "StartRpcServerRequest",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "IPv4 bind address. Defaults to 127.0.0.1.",
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "description": "TCP port. Omit to allocate a free port.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "device": {
+          "description": "Native server devices, in caller order.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ]
+        },
+        "cache": {
+          "description": "Enable the native RPC tensor cache.",
+          "type": "boolean"
+        },
+        "threads": {
+          "description": "Native server thread count.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "allowNonLoopbackHost": {
+          "description": "Explicitly allow a non-loopback bind on a trusted private network. This does not authenticate clients.",
+          "type": "boolean"
+        },
+        "discoveryTopic": {
+          "description": "Opt in to advertising a ready private IPv4 endpoint under this shared topic. The topic does not authenticate peers.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "type": {
+          "type": "string",
+          "const": "startRpcServer"
+        }
+      },
+      "required": ["type"]
+    },
+    "startRpcServer.response": {
+      "title": "StartRpcServerResponse",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtime": {
+          "type": "string",
+          "const": "in-process"
+        },
+        "rdmaCapable": {
+          "type": "boolean",
+          "const": false
+        },
+        "type": {
+          "type": "string",
+          "const": "startRpcServer"
+        }
+      },
+      "required": ["serverId", "url", "runtime", "rdmaCapable", "type"],
+      "additionalProperties": false
+    },
     "state.request": {
       "title": "StateRequest",
       "type": "object",
@@ -19177,6 +19344,33 @@
         }
       },
       "required": ["type", "state"],
+      "additionalProperties": false
+    },
+    "stopRpcServer.request": {
+      "title": "StopRpcServerRequest",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "stopRpcServer"
+        }
+      },
+      "required": ["serverId", "type"]
+    },
+    "stopRpcServer.response": {
+      "title": "StopRpcServerResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "stopRpcServer"
+        }
+      },
+      "required": ["type"],
       "additionalProperties": false
     },
     "suspend.request": {

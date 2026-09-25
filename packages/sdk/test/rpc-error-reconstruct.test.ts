@@ -7,6 +7,7 @@ import { reconstructError, RPCError } from '@/client/rpc/rpc-error'
 // Constructing the originals from @qvac/inference's classes exercises that real
 // cross-process path.
 import {
+  RpcServerOperationError,
   createErrorResponse,
   ContextOverflowError as InferenceContextOverflowError,
   RequestIdConflictError as InferenceRequestIdConflictError,
@@ -228,4 +229,20 @@ test('reconstructError: TranslationFailedError round-trips', (t) => {
     reconstructed.message.includes('could not detect source language'),
     'message survives the envelope'
   )
+})
+
+test('reconstructError: native RPC errors preserve details and cause', (t) => {
+  const original = new RpcServerOperationError(
+    'stopRpcServer',
+    'native stop failed',
+    new Error('native cause')
+  )
+  const result = reconstructError(JSON.parse(JSON.stringify(createErrorResponse(original))))
+  t.ok(result instanceof RpcServerOperationError)
+  const rpcError = result as RpcServerOperationError
+  t.is(rpcError.operation, 'stopRpcServer')
+  t.is(rpcError.details, 'native stop failed')
+  t.is(rpcError.code, 52423)
+  t.ok(rpcError.cause)
+  t.ok(rpcError.cause?.message.includes('native cause'))
 })

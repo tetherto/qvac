@@ -1,5 +1,6 @@
 import type { ErrorResponse } from '@qvac/inference/surface'
 import {
+  RpcServerOperationError,
   ContextOverflowError,
   RequestIdConflictError,
   RequestNotFoundError,
@@ -128,6 +129,12 @@ type ErrorReconstructor = (response: ErrorResponse) => Error
  * to throw the same class name.
  */
 const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
+  RPC_SERVER_OPERATION_FAILED: (response) =>
+    new RpcServerOperationError(
+      readStringField(response.typedFields, 'operation', 'rpcServer'),
+      readStringField(response.typedFields, 'details', response.message),
+      response.cause
+    ),
   REQUEST_ID_CONFLICT: (response) => {
     return new RequestIdConflictError(
       readStringField(response.typedFields, 'requestId', ''),

@@ -44,6 +44,7 @@ export const ERROR_CODES = {
   LEGACY_TTS_MODEL_DEPRECATED: 52211,
 
   // Model operations (52,400-52,799)
+  RPC_SERVER_OPERATION_FAILED: 52423,
   MODEL_UNLOAD_FAILED: 52400,
   EMBED_FAILED: 52401,
   EMBED_NO_EMBEDDINGS: 52402,
@@ -238,6 +239,11 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'UNKNOWN_MODEL_TYPE',
     message: (modelType: string) =>
       `Unknown model type: ${modelType}. Register the plugin for "${modelType}" in code with \`registerPlugin\` / \`plugins([...])\` before this call.`
+  },
+
+  [ERROR_CODES.RPC_SERVER_OPERATION_FAILED]: {
+    name: 'RPC_SERVER_OPERATION_FAILED',
+    message: (operation: string, details: string) => `${operation}: ${details}`
   },
 
   // Model loading

@@ -21,6 +21,8 @@ const ALL_REQUEST_KINDS: Record<RequestKind, true> = {
   loadModel: true,
   downloadAsset: true,
   rag: true,
+  rpcServer: true,
+  rpcDiscovery: true,
   world: true
 }
 

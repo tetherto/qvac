@@ -1,6 +1,6 @@
 # @qvac/inference
 
-The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare runtime](https://bare.pears.com) in a single process — no RPC, no worker, no subprocess. You register the inference engines you need and call the same API surface as `@qvac/sdk`, in-process.
+The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare runtime](https://bare.pears.com) in a single process without a worker or subprocess. Native GGML RPC is available as an opt-in distributed GPU path. You register the inference engines you need and call the same API surface as `@qvac/sdk`, in-process.
 
 > _Part of the **QVAC** ecosystem_
 >
@@ -13,7 +13,7 @@ The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare ru
 
 `@qvac/inference` is the pure-Bare layer of the SDK, written in TypeScript: the client API, the request engine, and the plugin system, all running in one Bare process. `@qvac/sdk` builds on top of it to reach Node, Electron, Expo, and Pear by launching this engine as a worker; on Bare you use it directly. It replaces the deprecated `@qvac/bare-sdk` package (last release 0.18.2).
 
-`@qvac/inference` ships no plugins by default and no addon dependencies. You install only the addon packages your app registers, so the resulting binary scales with the engines you actually assemble.
+`@qvac/inference` ships no inference plugins by default. It includes the managed GGML RPC server dependency, which loads only when a server is requested. You install only the addon packages your app registers, so the resulting binary scales with the engines you actually assemble.
 
 ## Requirements
 
@@ -114,6 +114,19 @@ await close() // release the swarm, registry client, storage-root lock, and regi
 ```
 
 `close()` also clears the plugin registry, so if you keep using the API afterward you must `registerPlugin` / `plugins([...])` again first — otherwise the next call throws `PluginsNotRegisteredError`.
+
+## Distributed GPU inference
+
+`startRpcServer`, `stopRpcServer`, and `discoverRpcServers` also work directly in
+Bare after plugin registration. They use the same request schemas as the SDK.
+See the [SDK workflow](../sdk/README.md#distributed-gpu-inference) for serving,
+discovery, explicit device ordering, and private-network requirements.
+
+`close()` withdraws announcements, cancels active discovery and readiness probes,
+and attempts to stop every owned server. Failed stops remain owned for a retry
+and cause `close()` to reject. Native stop can wait indefinitely; the engine does
+not report a stalled stop as successful. Model unload does not stop serving
+instances.
 
 ## Custom plugins
 

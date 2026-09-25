@@ -2690,6 +2690,8 @@ class CancelRequestBroadKind(Enum):
     finetune = "finetune"
     load_model = "loadModel"
     download_asset = "downloadAsset"
+    rpc_server = "rpcServer"
+    rpc_discovery = "rpcDiscovery"
     rag = "rag"
 
 
@@ -4373,6 +4375,42 @@ class DiffusionStreamResponse(GeneratedBaseModel):
     stats: Annotated[
         DiffusionStreamResponseStats | None, Field(title="DiffusionStreamResponseStats")
     ] = None
+
+
+class DiscoverRpcServersRequest(GeneratedBaseModel):
+    topic: Annotated[
+        str,
+        Field(
+            description="Shared discovery topic. Only use with trusted private-network participants.",
+            max_length=256,
+            min_length=1,
+        ),
+    ]
+    timeout_ms: Annotated[
+        int | None,
+        Field(
+            alias="timeoutMs",
+            description="Search budget in milliseconds, including TCP probes. Defaults to 5000, at most 30000.",
+            ge=100,
+            le=30000,
+        ),
+    ] = None
+    type: Literal["discoverRpcServers"] = "discoverRpcServers"
+
+
+class DiscoverRpcServersResponseServersItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    url: Annotated[str, Field(min_length=1)]
+
+
+class DiscoverRpcServersResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["discoverRpcServers"] = "discoverRpcServers"
+    servers: list[DiscoverRpcServersResponseServersItem]
 
 
 class DownloadAssetRequest(GeneratedBaseModel):
@@ -8760,11 +8798,26 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             description="GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
         ),
     ] = None
+    rpc_servers: Annotated[
+        str | None,
+        Field(
+            alias="rpc-servers",
+            description="Comma-separated native RPC host:port endpoints in device registration order. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.",
+            min_length=1,
+        ),
+    ] = None
+    devices: Annotated[
+        str | None,
+        Field(
+            description="Explicit ordered native device names, for example RPC0,RPC1. RPC indices follow rpc-servers order; tensor-split weights follow this device order.",
+            min_length=1,
+        ),
+    ] = None
     split_mode: Annotated[
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
         ),
     ] = None
@@ -19094,6 +19147,73 @@ class ResumeResponse(GeneratedBaseModel):
     type: Literal["resume"] = "resume"
 
 
+class Device(RootModel[str]):
+    root: Annotated[
+        str, Field(description="Native server devices, in caller order.", min_length=1)
+    ]
+
+
+class Device1Item(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class Device1(RootModel[list[Device1Item]]):
+    root: Annotated[
+        list[Device1Item],
+        Field(description="Native server devices, in caller order.", min_length=1),
+    ]
+
+
+class StartRpcServerRequest(GeneratedBaseModel):
+    host: Annotated[
+        str | None,
+        Field(description="IPv4 bind address. Defaults to 127.0.0.1.", min_length=1),
+    ] = None
+    port: Annotated[
+        int | None,
+        Field(description="TCP port. Omit to allocate a free port.", ge=1, le=65535),
+    ] = None
+    device: Annotated[
+        Device | Device1 | None,
+        Field(description="Native server devices, in caller order."),
+    ] = None
+    cache: Annotated[
+        bool | None, Field(description="Enable the native RPC tensor cache.")
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(description="Native server thread count.", gt=0, le=9007199254740991),
+    ] = None
+    allow_non_loopback_host: Annotated[
+        bool | None,
+        Field(
+            alias="allowNonLoopbackHost",
+            description="Explicitly allow a non-loopback bind on a trusted private network. This does not authenticate clients.",
+        ),
+    ] = None
+    discovery_topic: Annotated[
+        str | None,
+        Field(
+            alias="discoveryTopic",
+            description="Opt in to advertising a ready private IPv4 endpoint under this shared topic. The topic does not authenticate peers.",
+            max_length=256,
+            min_length=1,
+        ),
+    ] = None
+    type: Literal["startRpcServer"] = "startRpcServer"
+
+
+class StartRpcServerResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    server_id: Annotated[str, Field(alias="serverId", min_length=1)]
+    url: Annotated[str, Field(min_length=1)]
+    runtime: Literal["in-process"] = "in-process"
+    rdma_capable: Annotated[Literal[False], Field(alias="rdmaCapable")] = False
+    type: Literal["startRpcServer"] = "startRpcServer"
+
+
 class StateRequest(GeneratedBaseModel):
     type: Literal["state"] = "state"
 
@@ -19111,6 +19231,18 @@ class StateResponse(GeneratedBaseModel):
     )
     type: Literal["state"] = "state"
     state: Annotated[StateResponseState, Field(title="StateResponseState")]
+
+
+class StopRpcServerRequest(GeneratedBaseModel):
+    server_id: Annotated[str, Field(alias="serverId", min_length=1)]
+    type: Literal["stopRpcServer"] = "stopRpcServer"
+
+
+class StopRpcServerResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["stopRpcServer"] = "stopRpcServer"
 
 
 class SuspendRequest(GeneratedBaseModel):
@@ -21610,6 +21742,7 @@ class Request(
         | CompletionStreamRequest
         | Request_2
         | DiffusionStreamRequest
+        | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | EmbedRequest
         | Request_3
@@ -21627,7 +21760,9 @@ class Request(
         | PluginInvokeStreamRequest
         | Request_5
         | ResumeRequest
+        | StartRpcServerRequest
         | StateRequest
+        | StopRpcServerRequest
         | SuspendRequest
         | TextToSpeechRequest
         | TextToSpeechStreamRequest
@@ -21656,6 +21791,7 @@ class Request(
         | CompletionStreamRequest
         | Request_2
         | DiffusionStreamRequest
+        | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | EmbedRequest
         | Request_3
@@ -21673,7 +21809,9 @@ class Request(
         | PluginInvokeStreamRequest
         | Request_5
         | ResumeRequest
+        | StartRpcServerRequest
         | StateRequest
+        | StopRpcServerRequest
         | SuspendRequest
         | TextToSpeechRequest
         | TextToSpeechStreamRequest
@@ -21733,6 +21871,7 @@ class Response(
         | CompletionStreamResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
+        | DiscoverRpcServersResponse
         | DownloadAssetResponse
         | EmbedResponse
         | ErrorResponse
@@ -21754,7 +21893,9 @@ class Response(
         | Response_1
         | RagProgressResponse
         | ResumeResponse
+        | StartRpcServerResponse
         | StateResponse
+        | StopRpcServerResponse
         | SuspendResponse
         | TextToSpeechResponse
         | TextToSpeechStreamResponse
@@ -21783,6 +21924,7 @@ class Response(
         | CompletionStreamResponse
         | DeleteCacheResponse
         | DiffusionStreamResponse
+        | DiscoverRpcServersResponse
         | DownloadAssetResponse
         | EmbedResponse
         | ErrorResponse
@@ -21804,7 +21946,9 @@ class Response(
         | Response_1
         | RagProgressResponse
         | ResumeResponse
+        | StartRpcServerResponse
         | StateResponse
+        | StopRpcServerResponse
         | SuspendResponse
         | TextToSpeechResponse
         | TextToSpeechStreamResponse
