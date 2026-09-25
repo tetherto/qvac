@@ -732,8 +732,12 @@ js_value_t* startServer(js_env_t* env, js_callback_info_t* info) try {
     return nullptr;
   }
   return startServerAsync(
-      env, std::move(endpoint), std::move(devicesValue),
-      std::move(backendsDir), threads, cache);
+      env,
+      std::move(endpoint),
+      std::move(devicesValue),
+      std::move(backendsDir),
+      threads,
+      cache);
 } catch (const std::bad_alloc&) {
   js_throw_error(env, "OutOfMemory", "failed to allocate RPC server state");
   return nullptr;
