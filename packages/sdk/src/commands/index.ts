@@ -9,5 +9,15 @@ export {
 export type {
   VerifyBundleOptions,
   VerifyBundleResult,
-  VerifyBundleIssue
+  VerifyBundleIssue,
+  RuntimeGroup
 } from '@/commands/verify/index'
+export { formatRuntimeSource } from '@/commands/verify/abi'
+export type { BareRuntime, BareRuntimeResolution } from '@/commands/verify/abi'
+export { isMobileHost, isReactNativeBareKitInstalled } from '@/commands/verify/bare-kit-runtime'
+export { formatEnginesAdvice } from '@/commands/verify/engines-advice'
+export type {
+  EnginesAdvice,
+  EnginesOverride,
+  EnginesUpgrade
+} from '@/commands/verify/engines-advice'

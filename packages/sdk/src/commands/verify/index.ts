@@ -23,8 +23,23 @@ import {
   normalizeVersion,
   resolveBareRuntime,
   type AbiIssue,
-  type BareRuntimeResolution
+  type BareRuntimeResolution,
+  type EnginesPackage
 } from '@/commands/verify/abi'
+import {
+  isMobileHost,
+  isReactNativeBareKitInstalled,
+  resolveMobileBareRuntime,
+  type FetchText,
+  type ProgressFn
+} from '@/commands/verify/bare-kit-runtime'
+import {
+  buildEnginesAdvice,
+  formatEnginesAdvice,
+  type EnginesAdvice,
+  type FetchPackument
+} from '@/commands/verify/engines-advice'
+import type { PackageRecord } from '@/commands/verify/addon-source'
 
 export interface VerifyBundleOptions {
   projectRoot: string
@@ -32,6 +47,22 @@ export interface VerifyBundleOptions {
   hosts: string[]
   bareRuntimeVersion?: string
   configPath?: string
+  /**
+   * Allow GitHub and npm registry requests: GitHub for a react-native-bare-kit
+   * release newer than the built-in table, the registry only after a mismatch
+   * is found, to suggest an override. Defaults to true.
+   */
+  network?: boolean
+  /** Called before any step that waits on the network. */
+  onProgress?: ProgressFn
+  /** Test seams for the network lookups. */
+  fetchText?: FetchText
+  fetchPackument?: FetchPackument
+}
+
+export interface RuntimeGroup {
+  hosts: string[]
+  resolution: BareRuntimeResolution
 }
 
 export interface InvalidSourceIssue {
@@ -87,9 +118,14 @@ export interface VerifyBundleResult {
   resolvedAddonsSource: string
   sourceKind: AddonSourceKind | null
   hosts: string[]
+  /** Runtime of the first entry in `runtimes`: the mobile one when any host is mobile. */
   runtime: BareRuntimeResolution | null
+  /** Mobile and desktop hosts run different Bare builds, so each is resolved separately. */
+  runtimes?: RuntimeGroup[]
   addons: NativeAddon[]
   issues: VerifyBundleIssue[]
+  /** How to fix each runtime that fails an engines.bare range. */
+  advice?: EnginesAdvice[]
 }
 
 export async function verifyBundle(options: VerifyBundleOptions): Promise<VerifyBundleResult> {
@@ -216,6 +252,9 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
   }
 
   const diagnostics = createCollectDiagnostics()
+  if (sourceKind === 'node-modules') {
+    options.onProgress?.(`Scanning ${resolvedAddonsSource} for native addons and engines.bare...`)
+  }
   let addons: NativeAddon[]
   try {
     addons =
@@ -278,20 +317,65 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
   }
 
   let runtime: BareRuntimeResolution | null = null
+  let runtimes: RuntimeGroup[] | undefined
+  const advice: EnginesAdvice[] = []
   if (invalidRuntimeVersion === null) {
-    const runtimeOptions: Parameters<typeof resolveBareRuntime>[0] = { projectRoot }
-    if (bareRuntimeVersion !== undefined) {
-      runtimeOptions.explicitVersion = bareRuntimeVersion
-      runtimeOptions.explicitSource = 'flag'
-    } else if (configRuntimeVersion !== undefined) {
-      runtimeOptions.explicitVersion = configRuntimeVersion
-      runtimeOptions.explicitSource = 'config'
+    const explicit =
+      bareRuntimeVersion !== undefined
+        ? { version: bareRuntimeVersion, source: 'flag' as const }
+        : configRuntimeVersion !== undefined
+          ? { version: configRuntimeVersion, source: 'config' as const }
+          : null
+    runtimes = await resolveRuntimeGroups({
+      projectRoot,
+      hosts,
+      explicit,
+      network: options.network,
+      onProgress: options.onProgress,
+      fetchText: options.fetchText
+    })
+    runtime = runtimes[0]?.resolution ?? null
+
+    const packages = enginesPackages(diagnostics.packages)
+    const seen = new Set<string>()
+    for (const group of runtimes) {
+      const groupIssues = checkAbi({ addons, runtime: group.resolution, packages }).filter(
+        (issue) => {
+          if (seen.has(issue.message)) return false
+          seen.add(issue.message)
+          return true
+        }
+      )
+      issues.push(...groupIssues)
+
+      const failures = groupIssues.flatMap((issue) =>
+        issue.code === 'abi-mismatch' || issue.code === 'engines-mismatch'
+          ? [
+              failureOf(
+                issue.code === 'abi-mismatch' ? issue.addon : issue.package,
+                issue.enginesBare
+              )
+            ]
+          : []
+      )
+      if (failures.length > 0 && group.resolution.resolved) {
+        advice.push(
+          await buildEnginesAdvice({
+            projectRoot,
+            hosts: group.hosts,
+            runtime: group.resolution.runtime,
+            failures,
+            packages: diagnostics.packages,
+            network: options.network,
+            onProgress: options.onProgress,
+            fetchPackument: options.fetchPackument
+          })
+        )
+      }
     }
-    runtime = await resolveBareRuntime(runtimeOptions)
-    issues.push(...checkAbi({ addons, runtime }))
   }
 
-  return {
+  const result: VerifyBundleResult = {
     addonsSource,
     resolvedAddonsSource,
     sourceKind,
@@ -300,6 +384,88 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
     addons,
     issues
   }
+  if (runtimes !== undefined) result.runtimes = runtimes
+  if (advice.length > 0) result.advice = advice
+  return result
+}
+
+/** `name@version` ids as built by `formatAddonId`; scoped names keep their leading `@`. */
+function failureOf(id: string, enginesBare: string) {
+  const at = id.lastIndexOf('@')
+  if (at <= 0) return { name: id, enginesBare }
+  const version = id.slice(at + 1)
+  return version === 'unknown'
+    ? { name: id.slice(0, at), enginesBare }
+    : { name: id.slice(0, at), version, enginesBare }
+}
+
+function enginesPackages(records: PackageRecord[]): EnginesPackage[] {
+  const byId = new Map<string, EnginesPackage>()
+  for (const record of records) {
+    if (record.isAddon || record.enginesBare === undefined) continue
+    const id = `${record.name}@${record.version ?? 'unknown'}`
+    if (byId.has(id)) continue
+    const pkg: EnginesPackage = { name: record.name, enginesBare: record.enginesBare }
+    if (record.version !== undefined) pkg.version = record.version
+    byId.set(id, pkg)
+  }
+  return [...byId.values()]
+}
+
+interface ResolveRuntimeGroupsOptions {
+  projectRoot: string
+  hosts: string[]
+  explicit: { version: string; source: 'flag' | 'config' } | null
+  network?: boolean | undefined
+  onProgress?: ProgressFn | undefined
+  fetchText?: FetchText | undefined
+}
+
+/**
+ * Mobile hosts run the Bare build inside react-native-bare-kit; desktop hosts
+ * run `bare-runtime` (or `bare`). An explicit version applies to every host.
+ * Without react-native-bare-kit installed, mobile hosts fall back to the
+ * desktop detection so projects that only bundle for mobile keep a runtime.
+ */
+async function resolveRuntimeGroups(options: ResolveRuntimeGroupsOptions): Promise<RuntimeGroup[]> {
+  const { projectRoot, hosts, explicit } = options
+
+  if (explicit !== null) {
+    return [
+      {
+        hosts,
+        resolution: await resolveBareRuntime({
+          projectRoot,
+          explicitVersion: explicit.version,
+          explicitSource: explicit.source
+        })
+      }
+    ]
+  }
+
+  const mobileHosts = hosts.filter(isMobileHost)
+  const desktopHosts = hosts.filter((host) => !isMobileHost(host))
+  const groups: RuntimeGroup[] = []
+
+  if (mobileHosts.length > 0) {
+    groups.push({
+      hosts: mobileHosts,
+      resolution: isReactNativeBareKitInstalled(projectRoot)
+        ? await resolveMobileBareRuntime({
+            projectRoot,
+            network: options.network,
+            onProgress: options.onProgress,
+            fetchText: options.fetchText
+          })
+        : await resolveBareRuntime({ projectRoot })
+    })
+  }
+
+  if (desktopHosts.length > 0) {
+    groups.push({ hosts: desktopHosts, resolution: await resolveBareRuntime({ projectRoot }) })
+  }
+
+  return groups
 }
 
 function buildInvalidPackageJsonIssues(
@@ -370,6 +536,8 @@ export function formatVerifyBundleResult(result: VerifyBundleResult): string {
 
   sections.push(...formatMissingPrebuilds(result.issues))
   sections.push(...formatAbiMismatches(result.issues))
+  sections.push(...formatEnginesMismatches(result.issues))
+  for (const advice of result.advice ?? []) sections.push(...formatEnginesAdvice(advice))
   sections.push(...formatInvalidRuntimeVersions(result.issues))
   sections.push(...formatMalformedEnginesBare(result.issues))
   sections.push(...formatConfigLoadFailed(result.issues))
@@ -416,6 +584,23 @@ function formatAbiMismatches(issues: VerifyBundleIssue[]): string[] {
   for (const issue of matches) {
     lines.push(
       `    - ${issue.addon} requires bare ${issue.enginesBare}, ` +
+        `runtime is ${issue.runtimeVersion}`
+    )
+  }
+  lines.push('')
+  return lines
+}
+
+function formatEnginesMismatches(issues: VerifyBundleIssue[]): string[] {
+  const matches = issues.filter(
+    (issue): issue is Extract<AbiIssue, { code: 'engines-mismatch' }> =>
+      issue.code === 'engines-mismatch'
+  )
+  if (matches.length === 0) return []
+  const lines = ['  engines.bare mismatch:']
+  for (const issue of matches) {
+    lines.push(
+      `    - ${issue.package} requires bare ${issue.enginesBare}, ` +
         `runtime is ${issue.runtimeVersion}`
     )
   }
