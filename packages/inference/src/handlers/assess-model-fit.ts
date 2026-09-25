@@ -86,20 +86,29 @@ function companionRefs(config: Record<string, unknown>): ModelFitModelRef[] {
   const refs: ModelFitModelRef[] = []
   const seen = new Set<string>()
 
-  const walk = (value: unknown): void => {
-    if (value === null || typeof value !== 'object') return
-    const ref = modelRefOf(value)
-    if (ref !== undefined) {
-      if (!seen.has(ref.sha256Checksum)) {
-        seen.add(ref.sha256Checksum)
-        refs.push(ref)
-      }
-      return
-    }
-    for (const inner of Object.values(value as Record<string, unknown>)) walk(inner)
+  const add = (ref: ModelFitModelRef): void => {
+    if (seen.has(ref.sha256Checksum)) return
+    seen.add(ref.sha256Checksum)
+    refs.push(ref)
   }
 
-  for (const value of Object.values(config)) walk(value)
+  const walk = (key: string, value: unknown): void => {
+    const ref = modelRefOf(value)
+    if (ref !== undefined) {
+      add(ref)
+      return
+    }
+    if (key.endsWith('ModelSrc')) {
+      add({ name: typeof value === 'string' ? value : key, sha256Checksum: '' })
+      return
+    }
+    if (value === null || typeof value !== 'object') return
+    for (const [inner, nested] of Object.entries(value as Record<string, unknown>)) {
+      walk(inner, nested)
+    }
+  }
+
+  for (const [key, value] of Object.entries(config)) walk(key, value)
   return refs
 }
 
@@ -139,7 +148,7 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
         }
       : {
           kind: 'llm',
-          contextTokens: typeof contextTokens === 'number' && contextTokens > 0 ? contextTokens : 1
+          ...(typeof contextTokens === 'number' && contextTokens > 0 && { contextTokens })
         }
   }
 }
