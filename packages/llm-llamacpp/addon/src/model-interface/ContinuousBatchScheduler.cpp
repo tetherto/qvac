@@ -498,8 +498,17 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   }
 
   StreamCallbacks streamsLocal = std::move(request.streams);
+  // A prefill-only request whose prompt is already resident (cache reuse
+  // covered all of it) has nothing to feed. It is admitted empty and finished
+  // below, so the regular drain still runs its teardown and cache save.
+  const bool alreadyPrefilled =
+      request.prefill && plan.tokens.empty() && plan.mediaBarriers.empty();
   if (auto status = batcher_.addRequestAt(
-          seqId, std::move(plan), driver->getNPast(), driver->getKvCellsUsed());
+          seqId,
+          std::move(plan),
+          driver->getNPast(),
+          driver->getKvCellsUsed(),
+          alreadyPrefilled);
       status != MultiRequestBatcher::AddStatus::Ok) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -530,6 +539,14 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .enqueuedAt = request.enqueuedAt,
           .admissionId = admissionId});
   cacheGuard.dismiss();
+  if (alreadyPrefilled) {
+    try {
+      prefillCompleteFn()(seqId, slots_[seqId]->driver->getNPast(), 0);
+    } catch (...) {
+      failSlotLocked(seqId, std::current_exception());
+      return seqId;
+    }
+  }
   // A true return means the caller already holds a cancel for this request:
   // tear the slot down before it ever decodes.
   if (slots_[seqId]->streams.onAdmitted &&
@@ -1265,8 +1282,12 @@ void ContinuousBatchScheduler::cancelSlotLocked(
       // than the KV span serialised to disk. `req == nullptr` (slot was
       // never admitted into the batcher, e.g. failed admit) falls back
       // to the driver's own cursor which is authoritative in that case.
+      //
+      // A per-job cancel is also applied when the decode window re-locks,
+      // before `advance()` commits the chunk it just decoded, so sync to
+      // what live KV actually holds rather than `currentPos`.
       if (req != nullptr) {
-        slots_[seqId]->driver->syncPosition(req->currentPos);
+        slots_[seqId]->driver->syncPosition(batcher_.decodedPosAt(seqId));
       }
       const bool rollbackOk = slots_[seqId]->driver->onCancel({});
       if (req != nullptr) {

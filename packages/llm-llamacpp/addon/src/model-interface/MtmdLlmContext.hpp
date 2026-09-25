@@ -351,6 +351,19 @@ private:
   void commitCacheRequest();
   bool restorePreRequestCacheState();
   void appendResidentToken(llama_token token);
+  /// Batch-path ledger bookkeeping. The scheduler decodes a sample only after
+  /// `onLogitsReady` returns it, and reports the decode through
+  /// `syncPosition`. A sample is held here until a synced position shows it
+  /// was decoded, so the ledger only ever describes decoded memory. A sample
+  /// that is never decoded (a terminal token, a cancel before the next step)
+  /// is discarded when the request commits or rolls back.
+  void holdPendingResidentToken(llama_token token, llama_pos sampledAt);
+  void confirmPendingResidentToken(llama_pos decodedPos);
+  void discardPendingResidentToken();
+  SequenceStepResult sampleFromLogits(
+      int logitIdx, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch);
 
   // Cancel-during-generation cleanup. On recurrent / hybrid memory, restores
   // the request-entry snapshot; pure-attention memory removes the decoded
@@ -457,6 +470,8 @@ private:
   // cancel after it keeps the prompt and streamed tokens, cached or not.
   bool prefillComplete_ = false;
   qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
+  llama_token pendingResidentToken_ = LLAMA_TOKEN_NULL;
+  llama_pos pendingResidentTokenPos_ = 0;
   qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
   qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
   ContextUsage preRequestCacheUsage_;

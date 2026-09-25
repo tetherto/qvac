@@ -1343,3 +1343,84 @@ TEST_F(CacheManagementTest, SinglePromptCacheUsesSeqStateFormat) {
       << "); CacheManager still uses the whole-session GGSN format instead of "
          "the per-sequence GGSQ format shared with the batch path.";
 }
+
+namespace {
+
+std::unique_ptr<LlamaModel>
+loadSlidingWindowModel(const test_common::TestModelPath& modelPath) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["n_predict"] = "24";
+  config["temp"] = "0";
+  config["seed"] = "7";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+std::string slidingWindowBrief(int editedFact) {
+  std::string text = "Read this brief carefully. ";
+  for (int i = 0; i < 220; ++i) {
+    text +=
+        i == editedFact
+            ? "Fact " + std::to_string(i) + " was corrected: the lamp is red. "
+            : "Fact " + std::to_string(i) + " says the harbor lamp stays " +
+                  "lit until dawn. ";
+  }
+  return R"([{"role":"user","content":")" + text +
+         R"( What colour is the lamp?"}])";
+}
+
+} // namespace
+
+// Sliding-window layers keep only the last `n_swa` positions resident (the
+// default `swa_full=false`). A cached turn that diverges far behind the KV
+// head cannot be served by a tail trim: the window in front of the divergence
+// was evicted, so the suffix would attend to a truncated window. It must be
+// reprocessed, which makes it exactly the same computation as a cold run.
+TEST(CacheSlidingWindowTest, DivergenceBehindTheWindowMatchesAColdRun) {
+  const test_common::TestModelPath modelPath(
+      "gemma-3-270m-it-Q8_0.gguf",
+      "GEMMA3_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/ggml-org/gemma-3-270m-it-GGUF");
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const fs::path cacheFile = "sliding_window_cache.bin";
+  fs::remove(cacheFile);
+
+  // ~2.5k tokens, so the 512-position window has evicted most of the prompt;
+  // the edit lands near the middle, far behind the window.
+  auto cached = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(cached->isLoaded());
+  LlamaModel::Prompt primer;
+  primer.input = slidingWindowBrief(-1);
+  primer.prefill = true;
+  primer.cacheKey = cacheFile.string();
+  primer.saveCacheToDisk = true;
+  EXPECT_TRUE(cached->processPrompt(primer).empty());
+
+  LlamaModel::Prompt edited;
+  edited.input = slidingWindowBrief(110);
+  edited.cacheKey = cacheFile.string();
+  const std::string fromCache = cached->processPrompt(edited);
+
+  auto cold = loadSlidingWindowModel(modelPath);
+  ASSERT_TRUE(cold->isLoaded());
+  LlamaModel::Prompt fresh;
+  fresh.input = edited.input;
+  const std::string fromScratch = cold->processPrompt(fresh);
+
+  ASSERT_FALSE(fromScratch.empty());
+  EXPECT_EQ(fromCache, fromScratch)
+      << "a cached turn diverging behind the sliding window must be "
+         "reprocessed, not trimmed onto an evicted window";
+
+  fs::remove(cacheFile);
+}

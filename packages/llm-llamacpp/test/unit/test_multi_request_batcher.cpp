@@ -783,6 +783,24 @@ TEST_F(MultiRequestBatcherTest, ExtractFinishedDropsChunkBudget) {
   EXPECT_EQ(batcher.chunkSizeFor(seqId), 0u);
 }
 
+TEST_F(MultiRequestBatcherTest, AdmitsEmptyPlanOnlyWhenAllowed) {
+  MultiRequestBatcher batcher(2, 5, 4);
+
+  EXPECT_EQ(
+      batcher.addRequestAt(0, PrefillPlan{}, 3, 3),
+      MultiRequestBatcher::AddStatus::ErrEmptyTokens);
+  ASSERT_EQ(
+      batcher.addRequestAt(0, PrefillPlan{}, 3, 3, /*allowEmptyPlan=*/true),
+      MultiRequestBatcher::AddStatus::Ok);
+  ASSERT_TRUE(batcher.markFinished(0));
+
+  const auto finished = batcher.extractFinished();
+  ASSERT_EQ(finished.size(), 1u);
+  EXPECT_EQ(finished[0].currentPos, 3);
+  EXPECT_EQ(finished[0].prefillTokenCount, 0u);
+  EXPECT_TRUE(finished[0].generatedTokens.empty());
+}
+
 TEST_F(MultiRequestBatcherTest, RejectsOversizedRequests) {
   MultiRequestBatcher batcher(2, 5, 4);
 

@@ -146,8 +146,8 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos,
-    llama_pos initialKvCells) {
-  if (plan.tokens.empty() && plan.mediaBarriers.empty()) {
+    llama_pos initialKvCells, bool allowEmptyPlan) {
+  if (!allowEmptyPlan && plan.tokens.empty() && plan.mediaBarriers.empty()) {
     return AddStatus::ErrEmptyTokens;
   }
   const bool barriersValid =
@@ -492,6 +492,15 @@ const Request* MultiRequestBatcher::requestAt(uint32_t seqId) const noexcept {
     return nullptr;
   }
   return &*slots_[seqId];
+}
+
+llama_pos MultiRequestBatcher::decodedPosAt(uint32_t seqId) const noexcept {
+  const Request* req = requestAt(seqId);
+  if (req == nullptr) {
+    return 0;
+  }
+  return req->currentPos +
+         (budgetsPending_ ? static_cast<llama_pos>(chunkSizes_[seqId]) : 0);
 }
 
 bool MultiRequestBatcher::markFinished(uint32_t seqId, StopReason reason) {

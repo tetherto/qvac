@@ -229,6 +229,27 @@ TEST_F(ConcurrentPrefillTest, TwoAsyncPrefillJobsOverlapOnScheduler) {
   fs::remove(cachePathB);
 }
 
+/// A second prefill of a prompt the cache already holds has nothing left to
+/// decode. It must still complete (and keep the cache loadable) instead of
+/// being refused by the batcher as an empty request.
+TEST_F(ConcurrentPrefillTest, RepeatedPrefillOfResidentPromptCompletes) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const fs::path cachePath = tempCachePath("repeat");
+
+  const auto prefill = makeLongPrefillPrompt(cachePath.string(), "harbor");
+  EXPECT_TRUE(runJob(*model, prefill, JobId{61}).empty());
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  EXPECT_NO_THROW(EXPECT_TRUE(runJob(*model, prefill, JobId{62}).empty()));
+
+  auto followup = makePrompt("Say cached follow up.");
+  followup.cacheKey = cachePath.string();
+  EXPECT_FALSE(runJob(*model, followup, JobId{63}).empty());
+
+  fs::remove(cachePath);
+}
+
 /// Round-trip parity: the cache file a tagged prefill job writes must be
 /// loadable by a later tagged generation job under the same key.
 TEST_F(ConcurrentPrefillTest, PrefillJobCacheRoundTripsToGenerationJob) {
