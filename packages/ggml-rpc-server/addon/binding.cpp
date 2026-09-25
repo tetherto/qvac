@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <bare.h>
@@ -23,6 +24,11 @@ namespace {
 
 constexpr uint64_t SERVER_MAGIC = UINT64_C(0x5156525043535256);
 constexpr size_t MAX_OPTION_STRING_LENGTH = 4096;
+
+std::mutex& startMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
 
 struct RpcServerApi {
   using CreateFn = ggml_backend_rpc_server_t (*)(
@@ -71,6 +77,40 @@ struct ServerHandle {
 };
 
 using ServerHandleRef = std::shared_ptr<ServerHandle>;
+
+class StartError : public std::runtime_error {
+public:
+  StartError(std::string errorCode, const char* message)
+      : std::runtime_error(message), code(std::move(errorCode)) {}
+
+  std::string code;
+};
+
+struct StartTask {
+  StartTask(
+      js_env_t* taskEnv, js_deferred_t* taskDeferred,
+      uv_async_t* taskAsyncHandle, std::string taskEndpoint,
+      std::string taskDevices, std::string taskBackendsDir, int taskThreads,
+      bool taskCache)
+      : env(taskEnv), deferred(taskDeferred), asyncHandle(taskAsyncHandle),
+        endpoint(std::move(taskEndpoint)), devices(std::move(taskDevices)),
+        backendsDir(std::move(taskBackendsDir)), threads(taskThreads),
+        cache(taskCache) {}
+
+  js_env_t* env;
+  js_deferred_t* deferred;
+  uv_async_t* asyncHandle;
+  std::string endpoint;
+  std::string devices;
+  std::string backendsDir;
+  int threads;
+  bool cache;
+  ServerHandleRef holder;
+  std::exception_ptr error;
+  js_deferred_teardown_t* teardown = nullptr;
+  bool envAlive = true;
+  bool cleanupStarted = false;
+};
 
 struct StopTask {
   StopTask(
@@ -413,6 +453,246 @@ ServerHandleRef* unwrapServer(js_env_t* env, js_value_t* value) {
   return handle;
 }
 
+ServerHandleRef createServerOnWorker(const StartTask& task) {
+  // GGML's backend registry is process-global. Preserve the old serialized
+  // startup behavior when multiple callers start servers concurrently.
+  std::scoped_lock lock(startMutex());
+  std::filesystem::path backendPath = task.backendsDir;
+#ifdef BACKENDS_SUBDIR
+  backendPath /= BACKENDS_SUBDIR;
+#endif
+  ggml_backend_load_all_from_path(backendPath.string().c_str());
+  const RpcServerApi rpcApi = resolveRpcServerApi();
+
+  std::vector<ggml_backend_dev_t> devices = selectDevices(task.devices);
+  if (devices.empty()) {
+    throw StartError(
+        "RpcServerDeviceError",
+        task.devices.empty() ? "no RPC server devices are available"
+                             : "an unknown RPC server device was requested");
+  }
+
+  std::string cacheDirectory;
+  const char* cachePath = nullptr;
+  if (task.cache) {
+    cacheDirectory = defaultCacheDirectory();
+    if (cacheDirectory.empty()) {
+      throw StartError(
+          "RpcServerCacheError",
+          "cannot determine the RPC server cache directory");
+    }
+    std::error_code error;
+    std::filesystem::create_directories(cacheDirectory, error);
+    if (error) {
+      throw StartError(
+          "RpcServerCacheError",
+          "failed to create the RPC server cache directory");
+    }
+    cachePath = cacheDirectory.c_str();
+  }
+
+  ggml_backend_rpc_server_t server = rpcApi.create(
+      task.endpoint.c_str(),
+      cachePath,
+      static_cast<size_t>(task.threads),
+      devices.size(),
+      devices.data());
+  if (server == nullptr) {
+    throw StartError(
+        "RpcServerStartError",
+        "failed to initialize or bind the in-process RPC server");
+  }
+
+  try {
+    return std::make_shared<ServerHandle>(server, rpcApi);
+  } catch (...) {
+    rpcApi.free(server);
+    throw;
+  }
+}
+
+void onStartEnvTeardown(js_deferred_teardown_t* /*unused*/, void* data) {
+  static_cast<StartTask*>(data)->envAlive = false;
+}
+
+void closeStartTask(uv_handle_t* handle) {
+  // libuv embeds uv_handle_t as the first member of every concrete handle.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  auto* asyncHandle = reinterpret_cast<uv_async_t*>(handle);
+  std::unique_ptr<uv_async_t> asyncHandleOwner(asyncHandle);
+  std::unique_ptr<StartTask> task(static_cast<StartTask*>(asyncHandle->data));
+  if (task->teardown != nullptr) {
+    js_finish_deferred_teardown_callback(task->teardown);
+  }
+}
+
+void rejectStartTask(
+    StartTask* task, const std::string& code, const char* message) {
+  js_value_t* errorCode = nullptr;
+  js_value_t* errorMessage = nullptr;
+  js_value_t* error = nullptr;
+  // utf8_t is the JS ABI's byte type.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  const auto* codeBytes = reinterpret_cast<const utf8_t*>(code.c_str());
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  const auto* messageBytes = reinterpret_cast<const utf8_t*>(message);
+  if (js_create_string_utf8(task->env, codeBytes, -1, &errorCode) == 0 &&
+      js_create_string_utf8(task->env, messageBytes, -1, &errorMessage) == 0 &&
+      js_create_error(task->env, errorCode, errorMessage, &error) == 0) {
+    js_reject_deferred(task->env, task->deferred, error);
+  }
+}
+
+void reportStartError(StartTask* task) {
+  try {
+    std::rethrow_exception(task->error);
+  } catch (const StartError& error) {
+    rejectStartTask(task, error.code, error.what());
+  } catch (const std::bad_alloc&) {
+    rejectStartTask(task, "OutOfMemory", "failed to allocate RPC server state");
+  } catch (const std::exception& error) {
+    rejectStartTask(task, "RpcServerStartError", error.what());
+  } catch (...) {
+    rejectStartTask(task, "RpcServerStartError", "unknown native error");
+  }
+}
+
+void resolveStartTask(StartTask* task) {
+  std::unique_ptr<ServerHandleRef> externalHolder(
+      new (std::nothrow) ServerHandleRef(task->holder));
+  js_value_t* external = nullptr;
+  if (externalHolder == nullptr || js_create_external(
+                                       task->env,
+                                       externalHolder.get(),
+                                       finalizeServer,
+                                       nullptr,
+                                       &external) != 0) {
+    rejectStartTask(
+        task, "InternalError", "failed to create RPC server handle");
+    return;
+  }
+  // The JS external now owns this shared reference until finalizeServer runs.
+  [[maybe_unused]] auto* jsOwnedHolder = externalHolder.release();
+  if (js_resolve_deferred(task->env, task->deferred, external) == 0) {
+    task->holder.reset();
+  }
+}
+
+bool stopAbandonedStart(StartTask* task) {
+  if (task->holder == nullptr) {
+    return false;
+  }
+  // A result that cannot reach JS must be stopped off the JS thread. Keep
+  // teardown deferred until that stop finishes.
+  task->cleanupStarted = true;
+  try {
+    std::thread([task] {
+      try {
+        task->holder->stop();
+      } catch (...) {
+        task->error = std::current_exception();
+      }
+      uv_async_send(task->asyncHandle);
+    }).detach();
+    return true;
+  } catch (...) {
+    // Thread creation failed; reclaim the server before closing the task.
+    try {
+      task->holder->stop();
+    } catch (...) {
+      task->error = std::current_exception();
+    }
+    task->holder.reset();
+    return false;
+  }
+}
+
+void completeStartTask(uv_async_t* asyncHandle) {
+  auto* task = static_cast<StartTask*>(asyncHandle->data);
+  if (task->cleanupStarted) {
+    task->holder.reset();
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    uv_close(reinterpret_cast<uv_handle_t*>(asyncHandle), closeStartTask);
+    return;
+  }
+
+  if (task->envAlive) {
+    js_handle_scope_t* scope = nullptr;
+    if (js_open_handle_scope(task->env, &scope) == 0) {
+      if (task->error != nullptr) {
+        reportStartError(task);
+      } else {
+        resolveStartTask(task);
+      }
+      js_close_handle_scope(task->env, scope);
+    }
+  }
+
+  if (stopAbandonedStart(task)) {
+    return;
+  }
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  uv_close(reinterpret_cast<uv_handle_t*>(asyncHandle), closeStartTask);
+}
+
+js_value_t* startServerAsync(
+    js_env_t* env, std::string endpoint, std::string devices,
+    std::string backendsDir, int threads, bool cache) {
+  js_deferred_t* deferred = nullptr;
+  js_value_t* promise = nullptr;
+  if (js_create_promise(env, &deferred, &promise) != 0) {
+    throw std::runtime_error("failed to create RPC server start promise");
+  }
+
+  uv_loop_t* loop = nullptr;
+  if (js_get_env_loop(env, &loop) != 0) {
+    throw std::runtime_error("failed to access the Bare event loop");
+  }
+
+  auto asyncHandleOwner = std::make_unique<uv_async_t>();
+  auto* asyncHandle = asyncHandleOwner.get();
+  auto taskOwner = std::make_unique<StartTask>(
+      env,
+      deferred,
+      asyncHandle,
+      std::move(endpoint),
+      std::move(devices),
+      std::move(backendsDir),
+      threads,
+      cache);
+  auto* task = taskOwner.get();
+  asyncHandle->data = task;
+  if (uv_async_init(loop, asyncHandle, completeStartTask) != 0) {
+    throw std::runtime_error("failed to initialize RPC server start task");
+  }
+  task = taskOwner.release();
+  asyncHandle = asyncHandleOwner.release();
+
+  if (js_add_deferred_teardown_callback(
+          env, onStartEnvTeardown, task, &task->teardown) != 0) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    uv_close(reinterpret_cast<uv_handle_t*>(asyncHandle), closeStartTask);
+    throw std::runtime_error("failed to register RPC server start task");
+  }
+
+  try {
+    std::thread([task] {
+      try {
+        task->holder = createServerOnWorker(*task);
+      } catch (...) {
+        task->error = std::current_exception();
+      }
+      uv_async_send(task->asyncHandle);
+    }).detach();
+  } catch (...) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    uv_close(reinterpret_cast<uv_handle_t*>(asyncHandle), closeStartTask);
+    throw;
+  }
+
+  return promise;
+}
+
 js_value_t* startServer(js_env_t* env, js_callback_info_t* info) try {
   size_t argc = 1;
   std::array<js_value_t*, 1> argv{nullptr};
@@ -443,89 +723,17 @@ js_value_t* startServer(js_env_t* env, js_callback_info_t* info) try {
     return nullptr;
   }
 
-  std::filesystem::path backendPath = backendsDir;
-  std::error_code backendError;
-  if (!backendPath.is_absolute() ||
-      !std::filesystem::is_directory(backendPath, backendError) ||
-      backendError) {
+  const std::filesystem::path backendPath = backendsDir;
+  // Mobile prebuilds are bundled under a virtual app path, not a filesystem
+  // directory. ggml loads Android backends by name when that path is absent.
+  if (!backendPath.is_absolute()) {
     js_throw_error(
-        env,
-        "RpcServerBackendError",
-        "backendsDir must be an existing absolute directory");
+        env, "RpcServerBackendError", "backendsDir must be an absolute path");
     return nullptr;
   }
-#ifdef BACKENDS_SUBDIR
-  backendPath /= BACKENDS_SUBDIR;
-#endif
-  ggml_backend_load_all_from_path(backendPath.string().c_str());
-  const RpcServerApi rpcApi = resolveRpcServerApi();
-
-  std::vector<ggml_backend_dev_t> devices = selectDevices(devicesValue);
-  if (devices.empty()) {
-    js_throw_error(
-        env,
-        "RpcServerDeviceError",
-        devicesValue.empty() ? "no RPC server devices are available"
-                             : "an unknown RPC server device was requested");
-    return nullptr;
-  }
-
-  std::string cacheDirectory;
-  const char* cachePath = nullptr;
-  if (cache) {
-    cacheDirectory = defaultCacheDirectory();
-    if (cacheDirectory.empty()) {
-      js_throw_error(
-          env,
-          "RpcServerCacheError",
-          "cannot determine the RPC server cache directory");
-      return nullptr;
-    }
-    std::error_code error;
-    std::filesystem::create_directories(cacheDirectory, error);
-    if (error) {
-      js_throw_error(
-          env,
-          "RpcServerCacheError",
-          "failed to create the RPC server cache directory");
-      return nullptr;
-    }
-    cachePath = cacheDirectory.c_str();
-  }
-
-  ggml_backend_rpc_server_t server = rpcApi.create(
-      endpoint.c_str(),
-      cachePath,
-      static_cast<size_t>(threads),
-      devices.size(),
-      devices.data());
-  if (server == nullptr) {
-    js_throw_error(
-        env,
-        "RpcServerStartError",
-        "failed to initialize or bind the in-process RPC server");
-    return nullptr;
-  }
-
-  ServerHandleRef holder;
-  try {
-    holder = std::make_shared<ServerHandle>(server, rpcApi);
-  } catch (const std::exception& error) {
-    rpcApi.free(server);
-    js_throw_error(env, "RpcServerStartError", error.what());
-    return nullptr;
-  }
-
-  auto externalHolder = std::make_unique<ServerHandleRef>(std::move(holder));
-  auto* externalHolderRaw = externalHolder.release();
-  js_value_t* external = nullptr;
-  if (js_create_external(
-          env, externalHolderRaw, finalizeServer, nullptr, &external) != 0) {
-    externalHolder.reset(externalHolderRaw);
-    js_throw_error(env, "InternalError", "failed to create RPC server handle");
-    return nullptr;
-  }
-  return external;
+  return startServerAsync(
+      env, std::move(endpoint), std::move(devicesValue),
+      std::move(backendsDir), threads, cache);
 } catch (const std::bad_alloc&) {
   js_throw_error(env, "OutOfMemory", "failed to allocate RPC server state");
   return nullptr;

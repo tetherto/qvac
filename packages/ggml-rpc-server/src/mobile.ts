@@ -9,6 +9,9 @@ export const DEFAULT_RPC_SERVER_HOST: string = '127.0.0.1'
 
 const TRUSTED_LAN_WARNING_CODE = 'QVAC_GGML_RPC_SERVER_TRUSTED_LAN'
 const PACKAGED_BACKENDS_DIR = path.join(__dirname, 'prebuilds')
+// Keep native handles alive until an explicit stop finishes. Otherwise their
+// finalizer can synchronously stop and join a live server during garbage collection.
+const activeServerHandles = new Set<object>()
 
 interface RpcServerBinding {
   startServer(options: {
@@ -17,7 +20,7 @@ interface RpcServerBinding {
     readonly cache: boolean
     readonly threads?: number
     readonly backendsDir: string
-  }): object
+  }): Promise<object>
   stopServer(handle: object): Promise<void>
 }
 
@@ -172,13 +175,14 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     }))
   validatePort(port)
   const device = normalizeDevice(options.device)
-  const handle = binding.startServer({
+  const handle = await binding.startServer({
     endpoint: `${host}:${port}`,
     device,
     cache: options.cache ?? false,
     threads: options.threads,
     backendsDir: PACKAGED_BACKENDS_DIR
   })
+  activeServerHandles.add(handle)
   let stopPromise: Promise<void> | undefined
 
   return {
@@ -190,7 +194,16 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     rdmaCapable: false,
     logs: () => '',
     stop: () => {
-      stopPromise ??= binding.stopServer(handle)
+      stopPromise ??= binding.stopServer(handle).then(
+        () => {
+          activeServerHandles.delete(handle)
+        },
+        (error: unknown) => {
+          // Keep the handle pinned so the caller can retry a failed stop.
+          stopPromise = undefined
+          throw error
+        }
+      )
       return stopPromise
     }
   }

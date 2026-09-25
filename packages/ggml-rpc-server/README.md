@@ -29,10 +29,14 @@ try {
 ```
 
 The listener accepts IPv4 addresses; `localhost` is normalized to `127.0.0.1`.
-The default host is `127.0.0.1`. Non-loopback hosts are rejected unless
-`allowNonLoopbackHost: true` is passed because the underlying RPC listener does
-not provide authentication. Only use non-loopback hosts on a trusted/private
-network with external access controls.
+The default host is `127.0.0.1`, but loopback is not private to the host
+application: other local processes (including apps with local TCP access on
+Android and iOS) can connect. The underlying RPC listener has no authentication
+and serves one client at a time, so another local client can occupy the server
+and block the intended client. Start it only when needed, stop it after use,
+and do not treat loopback binding as an access-control boundary. Non-loopback
+hosts are rejected unless `allowNonLoopbackHost: true` is passed; use them only
+on a trusted/private network with external access controls.
 
 On Android and iOS, native server output is written to the host application's
 platform log; `logs()` returns an empty string because there is no child-process
@@ -60,3 +64,9 @@ const server = await startRpcServer({
 
 console.log(server.rdmaCapable)
 ```
+
+Without `expectRdma`, startup does not scan the server binary or backend
+libraries. `rdmaCapable` is `true` when startup logs report support and `null`
+when capability was not checked; `null` does not mean RDMA is unavailable.
+Pass `expectRdma: true` to check the packaged binary when the logs do not
+report support, or reject startup if RDMA is unavailable.
