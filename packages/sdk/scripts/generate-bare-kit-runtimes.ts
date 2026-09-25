@@ -26,10 +26,10 @@ const OUTPUT_PATH = path.resolve(
 )
 
 async function listPublishedVersions() {
-  const packument = JSON.parse(
+  const metadata = JSON.parse(
     await fetchText(`https://registry.npmjs.org/${REACT_NATIVE_BARE_KIT}`)
   ) as { versions: Record<string, unknown> }
-  return Object.keys(packument.versions)
+  return Object.keys(metadata.versions)
 }
 
 async function listBareKitTags() {

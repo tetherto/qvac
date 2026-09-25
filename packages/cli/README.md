@@ -382,7 +382,7 @@ The table is regenerated with `bun run bare-kit-runtimes:generate` in
 
 **Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
 names the oldest `react-native-bare-kit` release whose Bare satisfies every
-range, and for each failing package fetches its abbreviated packument from
+range, and for each failing package fetches its abbreviated package metadata from
 `registry.npmjs.org` (one request per package, 5 s timeout, skipped with
 `--offline`) to find the newest release that runs on the current Bare and that
 its dependents accept. The override is printed in the syntax of the detected

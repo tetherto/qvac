@@ -37,7 +37,7 @@ import {
   buildEnginesAdvice,
   formatEnginesAdvice,
   type EnginesAdvice,
-  type FetchPackument
+  type FetchPackageMetadata
 } from '@/commands/verify/engines-advice'
 import type { PackageRecord } from '@/commands/verify/addon-source'
 
@@ -57,7 +57,7 @@ export interface VerifyBundleOptions {
   onProgress?: ProgressFn
   /** Test seams for the network lookups. */
   fetchText?: FetchText
-  fetchPackument?: FetchPackument
+  fetchPackageMetadata?: FetchPackageMetadata
 }
 
 export interface RuntimeGroup {
@@ -368,7 +368,7 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
             packages: diagnostics.packages,
             network: options.network,
             onProgress: options.onProgress,
-            fetchPackument: options.fetchPackument
+            fetchPackageMetadata: options.fetchPackageMetadata
           })
         )
       }

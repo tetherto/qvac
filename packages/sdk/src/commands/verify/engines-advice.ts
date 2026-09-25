@@ -13,8 +13,8 @@ import { REACT_NATIVE_BARE_KIT_RUNTIMES } from '@/commands/verify/bare-kit-runti
 
 const REGISTRY_URL = 'https://registry.npmjs.org'
 
-/** Abbreviated packuments list `engines` per version at a fraction of the full size. */
-const ABBREVIATED_PACKUMENT = 'application/vnd.npm.install-v1+json'
+/** The registry's abbreviated metadata lists `engines` per version at a fraction of the full size. */
+const ABBREVIATED_METADATA_TYPE = 'application/vnd.npm.install-v1+json'
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun'
 
@@ -61,9 +61,9 @@ export interface EnginesAdvice {
   packageManager: PackageManager | null
 }
 
-export type FetchPackument = (name: string) => Promise<Packument>
+export type FetchPackageMetadata = (name: string) => Promise<PackageMetadata>
 
-export interface Packument {
+export interface PackageMetadata {
   versions: Record<string, { engines?: { bare?: unknown } }>
 }
 
@@ -75,17 +75,17 @@ export interface BuildEnginesAdviceOptions {
   packages: PackageRecord[]
   network?: boolean | undefined
   onProgress?: ProgressFn | undefined
-  fetchPackument?: FetchPackument | undefined
+  fetchPackageMetadata?: FetchPackageMetadata | undefined
 }
 
-export async function fetchPackument(name: string): Promise<Packument> {
+export async function fetchPackageMetadata(name: string): Promise<PackageMetadata> {
   const url = `${REGISTRY_URL}/${encodeURIComponent(name)}`
   const response = await fetch(url, {
-    headers: { accept: ABBREVIATED_PACKUMENT },
+    headers: { accept: ABBREVIATED_METADATA_TYPE },
     signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS)
   })
   if (!response.ok) throw new Error(`GET ${url} returned HTTP ${response.status}`)
-  return (await response.json()) as Packument
+  return (await response.json()) as PackageMetadata
 }
 
 const LOCKFILES: Array<[string, PackageManager]> = [
@@ -216,12 +216,12 @@ function runsOn(runtimeVersion: string, engines: { bare?: unknown } | undefined)
  * suggested then.
  */
 export function pickOverrideVersion(
-  packument: Packument,
+  metadata: PackageMetadata,
   runtimeVersion: string,
   installedVersions: string[],
   parentRanges: string[]
 ) {
-  const compatible = Object.entries(packument.versions)
+  const compatible = Object.entries(metadata.versions)
     .filter(([version, manifest]) => {
       if (semver.valid(version) === null || semver.prerelease(version) !== null) return false
       return runsOn(runtimeVersion, manifest.engines)
@@ -326,7 +326,7 @@ export async function buildEnginesAdvice(
     packages,
     network = true,
     onProgress,
-    fetchPackument: fetchOne = fetchPackument
+    fetchPackageMetadata: fetchOne = fetchPackageMetadata
   } = options
 
   const grouped = groupFailures(failures)
@@ -360,9 +360,9 @@ export async function buildEnginesAdvice(
         return override
       }
       try {
-        const packument = await fetchOne(name)
+        const metadata = await fetchOne(name)
         override.version = pickOverrideVersion(
-          packument,
+          metadata,
           runtime.version,
           installedVersions,
           parents.map((parent) => parent.range)

@@ -15,7 +15,7 @@ import {
   detectPackageManager,
   formatOverrideSnippet,
   pickOverrideVersion,
-  type Packument
+  type PackageMetadata
 } from '@/commands/verify/engines-advice'
 import { formatVerifyBundleResult, hasErrors, verifyBundle } from '@/commands/verify/index'
 
@@ -63,7 +63,7 @@ function failingFetch(): (url: string) => Promise<string> {
   return () => Promise.reject(new Error('unexpected network request'))
 }
 
-const BARE_TYPE_PACKUMENT: Packument = {
+const BARE_TYPE_METADATA: PackageMetadata = {
   versions: {
     '1.0.8': { engines: { bare: '>=1.2.0' } },
     '1.1.0': { engines: { bare: '>=1.2.0' } },
@@ -257,37 +257,37 @@ describe('findReactNativeBareKitUpgrade', () => {
 
 describe('pickOverrideVersion', () => {
   it('picks the newest release that runs on the runtime and satisfies every parent', () => {
-    assert.equal(pickOverrideVersion(BARE_TYPE_PACKUMENT, '1.29.4', ['1.4.0'], ['^1.0.0']), '1.1.1')
+    assert.equal(pickOverrideVersion(BARE_TYPE_METADATA, '1.29.4', ['1.4.0'], ['^1.0.0']), '1.1.1')
   })
 
   it('falls back to the installed major when a parent range cannot be met', () => {
     assert.equal(
-      pickOverrideVersion(BARE_TYPE_PACKUMENT, '1.29.4', ['1.4.0'], ['^1.0.0', '^1.3.0']),
+      pickOverrideVersion(BARE_TYPE_METADATA, '1.29.4', ['1.4.0'], ['^1.0.0', '^1.3.0']),
       '1.1.1'
     )
   })
 
   it('returns null when no release runs on the runtime', () => {
-    assert.equal(pickOverrideVersion(BARE_TYPE_PACKUMENT, '1.1.0', ['1.4.0'], []), null)
+    assert.equal(pickOverrideVersion(BARE_TYPE_METADATA, '1.1.0', ['1.4.0'], []), null)
   })
 
   it('returns null when no compatible release is accepted by any parent', () => {
-    const packument: Packument = {
+    const metadata: PackageMetadata = {
       versions: {
         '0.0.0': {},
         '0.19.0': { engines: { bare: '^1.28.0' } },
         '0.20.0': { engines: { bare: '^1.30.3' } }
       }
     }
-    assert.equal(pickOverrideVersion(packument, '1.29.4', ['0.20.0'], ['^0.20.0']), null)
+    assert.equal(pickOverrideVersion(metadata, '1.29.4', ['0.20.0'], ['^0.20.0']), null)
   })
 
   it('stays on the installed release line when no parent is known', () => {
-    assert.equal(pickOverrideVersion(BARE_TYPE_PACKUMENT, '1.29.4', ['1.4.0'], []), '1.1.1')
-    const packument: Packument = {
+    assert.equal(pickOverrideVersion(BARE_TYPE_METADATA, '1.29.4', ['1.4.0'], []), '1.1.1')
+    const metadata: PackageMetadata = {
       versions: { '0.19.0': {}, '0.20.0': { engines: { bare: '^1.30.3' } } }
     }
-    assert.equal(pickOverrideVersion(packument, '1.29.4', ['0.20.0'], []), null)
+    assert.equal(pickOverrideVersion(metadata, '1.29.4', ['0.20.0'], []), null)
   })
 })
 
@@ -375,9 +375,9 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
         hosts: ['android-arm64', 'darwin-arm64'],
         onProgress: (message) => progress.push(message),
         fetchText: failingFetch(),
-        fetchPackument: (name) => {
+        fetchPackageMetadata: (name) => {
           fetched.push(name)
-          return Promise.resolve(BARE_TYPE_PACKUMENT)
+          return Promise.resolve(BARE_TYPE_METADATA)
         }
       })
 
@@ -433,7 +433,7 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
         addonsSource: path.join(dir, 'node_modules'),
         hosts: ['android-arm64'],
         fetchText: failingFetch(),
-        fetchPackument: () => Promise.resolve(BARE_TYPE_PACKUMENT)
+        fetchPackageMetadata: () => Promise.resolve(BARE_TYPE_METADATA)
       })
       const override = result.advice?.[0]?.overrides[0]
       assert.equal(override?.version, '1.1.1')
@@ -455,7 +455,7 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
         addonsSource: path.join(dir, 'node_modules'),
         hosts: ['android-arm64'],
         fetchText: failingFetch(),
-        fetchPackument: () => Promise.reject(new Error('unexpected registry request'))
+        fetchPackageMetadata: () => Promise.reject(new Error('unexpected registry request'))
       })
       assert.equal(hasErrors(result), false)
       assert.equal(result.advice, undefined)
@@ -496,7 +496,7 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
         network: false,
         onProgress: (message) => progress.push(message),
         fetchText: failingFetch(),
-        fetchPackument: () => Promise.reject(new Error('unexpected registry request'))
+        fetchPackageMetadata: () => Promise.reject(new Error('unexpected registry request'))
       })
       assert.ok(hasErrors(result))
       assert.equal(result.advice?.[0]?.overrides[0]?.version, null)
