@@ -24,7 +24,7 @@ const os = require('bare-os')
 const path = require('bare-path')
 const test = require('brittle')
 const BCIWhispercpp = require('../../index')
-const { getTestPaths, getModelPath, detectPlatform } = require('./helpers')
+const { getTestPaths, getModelPath, detectPlatform, BCI_TEST_THREADS } = require('./helpers')
 const { flattenSegments } = require('@qvac/bci-whispercpp/util')
 
 const { platform } = detectPlatform()
@@ -152,7 +152,7 @@ async function runBci(useGpu, samplePath, sample) {
       opts: { stats: true }
     },
     {
-      whisperConfig: { language: 'en', temperature: 0.0 },
+      whisperConfig: { language: 'en', temperature: 0.0, n_threads: BCI_TEST_THREADS },
       miscConfig: { caption_enabled: false },
       contextParams: { use_gpu: useGpu },
       ...(typeof sample?.day_idx === 'number' ? { bciConfig: { day_idx: sample.day_idx } } : {})

@@ -10,6 +10,7 @@ const TTSGgml = require('@qvac/tts-ggml')
 const { recordTtsStats } = require('../utils/perf-helper')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { readWavAsFloat32, createWav, resampleLinear } = require('../utils/wav-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const MOSS_SAMPLE_RATE = 24000
 const MOSS_STREAM_FRAMES = 10
@@ -29,6 +30,7 @@ const noGpu = proc.env && proc.env.NO_GPU === 'true'
 
 function createMossModel(extra = {}, useGPU = false) {
   return new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_MOSS,
     files: { modelDir: path.resolve(modelDir) },
     config: { language: 'en', useGPU },

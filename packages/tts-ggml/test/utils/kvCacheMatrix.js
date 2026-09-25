@@ -35,6 +35,7 @@ const TTSGgml = require('@qvac/tts-ggml')
 const { runTTS } = require('./runTTS')
 const { resolveRefWavPath } = require('./runChatterboxTTS')
 const { ensureChatterboxModels, ensureChatterboxMtlModels } = require('./downloadModel')
+const { TTS_TEST_THREADS } = require('./testThreads')
 
 const CHATTERBOX_SAMPLE_RATE = 24000
 
@@ -155,6 +156,7 @@ async function loadChatterbox({ variant, modelDir, refWavPath, language, useGPU,
   const options = {
     files: chatterboxFiles(variant, modelDir),
     referenceAudio: refWavPath,
+    threads: TTS_TEST_THREADS,
     config: {
       language: language || (variant === 'mtl' ? 'es' : 'en'),
       useGPU: !!useGPU

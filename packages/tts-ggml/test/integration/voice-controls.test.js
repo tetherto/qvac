@@ -7,6 +7,7 @@
 
 const test = require('brittle')
 const TTSGgml = require('../../index.js')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const ENGINE_FILES = {
   [TTSGgml.ENGINE_CHATTERBOX]: { t3Model: './t3.gguf', s3genModel: './s3gen.gguf' },
@@ -19,7 +20,12 @@ const ENGINE_FILES = {
 function acceptedBy(engine, key, values) {
   return values.filter((value) => {
     try {
-      const model = new TTSGgml({ engine, files: ENGINE_FILES[engine], [key]: value })
+      const model = new TTSGgml({
+        threads: TTS_TEST_THREADS,
+        engine,
+        files: ENGINE_FILES[engine],
+        [key]: value
+      })
       return model.getEngineType() === engine
     } catch (_err) {
       return false
