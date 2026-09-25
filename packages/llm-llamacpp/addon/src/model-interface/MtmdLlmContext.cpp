@@ -1142,6 +1142,7 @@ void MtmdLlmContext::advanceTextSpan(llama_pos newPos) {
 // M-RoPE slot (cacheTokens > pos) can generate past its KV-cell budget.
 void MtmdLlmContext::syncPosition(llama_pos currentPos) {
   advanceTextSpan(currentPos);
+  confirmPendingResidentToken(currentPos);
 }
 
 llama_pos MtmdLlmContext::getCacheTokens() const {
@@ -1388,6 +1389,7 @@ MtmdLlmContext::ledgerFromChunks(const mtmd::input_chunks& chunks) const {
 }
 
 void MtmdLlmContext::beginCacheRequest() {
+  discardPendingResidentToken();
   cacheRequestActive_ = true;
   cacheRequestRolledBack_ = false;
   preRequestUsage_ = current_;
@@ -1477,7 +1479,15 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
   } else if (!needsFullStateSnapshot_ && reuseTarget < cachedLength) {
     // The rollback target moves to the divergence point (see the same branch
     // in TextLlmContext::reconcilePrompt); no snapshot is written.
-    const llama_pos reusePos = residentLedger_.positions(reuseTarget);
+    llama_pos reusePos = residentLedger_.positions(reuseTarget);
+    if (!canTrimSequenceTo(modelCtx_.lctx, reusePos)) {
+      // Sliding-window cells before the divergence are gone (see
+      // TextLlmContext::reconcilePrompt).
+      reuseTarget = 0;
+      reuse = 0;
+      reusePos = 0;
+      checkpoint = "cold";
+    }
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
     residentLedger_.truncate(reuseTarget);
     current_.pos = reusePos;
@@ -1536,6 +1546,7 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
 }
 
 void MtmdLlmContext::commitCacheRequest() {
+  discardPendingResidentToken();
   if (!cacheRequestActive_) {
     return;
   }
@@ -1557,6 +1568,7 @@ void MtmdLlmContext::commitCacheRequest() {
 
 bool MtmdLlmContext::restorePreRequestCacheState() {
   bool ok = true;
+  discardPendingResidentToken();
   if (!preRequestCacheSnapshot_.empty()) {
     ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
   } else if (current_.pos > preRequestCacheUsage_.pos) {
@@ -1590,6 +1602,24 @@ void MtmdLlmContext::appendResidentToken(llama_token token) {
   if (cacheRequestActive_ && token != LLAMA_TOKEN_NULL) {
     residentLedger_.appendToken(token);
   }
+}
+
+void MtmdLlmContext::holdPendingResidentToken(
+    llama_token token, llama_pos sampledAt) {
+  pendingResidentToken_ = token;
+  pendingResidentTokenPos_ = sampledAt;
+}
+
+void MtmdLlmContext::confirmPendingResidentToken(llama_pos decodedPos) {
+  if (pendingResidentToken_ != LLAMA_TOKEN_NULL &&
+      decodedPos > pendingResidentTokenPos_) {
+    appendResidentToken(pendingResidentToken_);
+    discardPendingResidentToken();
+  }
+}
+
+void MtmdLlmContext::discardPendingResidentToken() {
+  pendingResidentToken_ = LLAMA_TOKEN_NULL;
 }
 
 PrefillPlan MtmdLlmContext::preparePrefill(
@@ -1794,6 +1824,19 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
+  const SequenceStepResult result = sampleFromLogits(
+      logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
+  // See TextLlmContext::onLogitsReady: the scheduler decodes the sample later.
+  if (inlineDecodeBatch == nullptr) {
+    holdPendingResidentToken(result.token, current_.pos);
+  }
+  return result;
+}
+
+SequenceStepResult MtmdLlmContext::sampleFromLogits(
+    int logitIdx, unsigned generatedAfterAccept,
+    const std::function<void(const std::string&)>& outputCallback,
+    LlamaBatch* inlineDecodeBatch) {
   if (stopGeneration_.load()) {
     // Leave `stopGeneration_` set so the post-loop `handleUserCancel` in
     // `generateResponse` runs; do NOT emit EOT, the cancel path settles the
@@ -1877,7 +1920,6 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
     if (!closeChars.empty() && outputCallback) {
       outputCallback(closeChars);
     }
-    appendResidentToken(tokenId);
     return {.token = tokenId, .finished = false};
   }
 
@@ -1919,9 +1961,6 @@ SequenceStepResult MtmdLlmContext::onLogitsReady(
   if (finished) {
     generationStopReason_ = stopReason;
     flushPendingUtf8ToCallback(outputCallback);
-  }
-  if (!finished && inlineDecodeBatch == nullptr) {
-    appendResidentToken(tokenId);
   }
   return {.token = tokenId, .finished = finished, .stopReason = stopReason};
 }

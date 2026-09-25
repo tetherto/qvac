@@ -18,6 +18,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "model-interface/CacheLedger.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
 #include "model-interface/TextLlmContext.hpp"
@@ -540,6 +541,70 @@ TEST_F(TextLlmContextCancelTest, OnCancelAfterPrefillKeepsPromptOnHybrid) {
          "the pre-request cursor";
   EXPECT_EQ(seqPosMax(*model), posAfterPrefill - 1)
       << "live memory must still hold exactly the prefilled prompt";
+}
+
+// The scheduler decodes a sample only on the step after `onLogitsReady`
+// returned it. A cancel between the two must leave that sample out of the
+// ledger, or the committed cache describes one token more than live memory
+// and the saved file fails to load. Driven by hand so the cancel lands in
+// exactly that gap.
+TEST_F(
+    TextLlmContextCancelTest,
+    BatchSampleCancelledBeforeDecodeStaysOutOfLedger) {
+  auto model = loadTextModel(qwen3PureAttentionModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
+  }
+
+  LlmModelContext shared = makeShared(*model);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, /*seqId=*/0);
+  driver.setCacheReconciliationEnabled(true);
+
+  const PrefillPlan plan = driver.preparePrefill(
+      {makeMsg("user", "Hi")},
+      /*tools=*/{},
+      /*media=*/{},
+      /*mediaPlan=*/{},
+      /*isCacheLoaded=*/false,
+      /*isPrefillOnlyRequest=*/false);
+  ASSERT_FALSE(plan.tokens.empty());
+  const auto promptSize = static_cast<llama_pos>(plan.tokens.size());
+
+  llama_batch batch = llama_batch_init(promptSize, 0, 1);
+  for (llama_pos i = 0; i < promptSize; ++i) {
+    common_batch_add(batch, plan.tokens[i], i, {0}, i == promptSize - 1);
+  }
+  ASSERT_EQ(llama_decode(shared.lctx, batch), 0);
+  driver.onPrefillComplete(promptSize, plan.tokens.size());
+
+  // One sample the scheduler decodes on the next step, which confirms it...
+  driver.syncPosition(promptSize);
+  const SequenceStepResult first =
+      driver.onLogitsReady(promptSize - 1, 1, [](const std::string&) {});
+  ASSERT_FALSE(first.finished);
+  common_batch_clear(batch);
+  common_batch_add(batch, first.token, promptSize, {0}, true);
+  ASSERT_EQ(llama_decode(shared.lctx, batch), 0);
+  driver.syncPosition(promptSize + 1);
+
+  // ...and one the cancel lands on before it is ever fed.
+  const SequenceStepResult second =
+      driver.onLogitsReady(0, 2, [](const std::string&) {});
+  ASSERT_FALSE(second.finished);
+  llama_batch_free(batch);
+  ASSERT_TRUE(driver.onCancel([](const std::string&) {}));
+
+  const std::vector<llama_token> words = driver.cacheStateTokens();
+  qvac_lib_inference_addon_llama::cache::DecodedLedger saved;
+  ASSERT_NO_THROW(
+      saved = qvac_lib_inference_addon_llama::cache::deserialize(
+          words.data(), words.size()))
+      << "the committed ledger does not match the cache it describes";
+  EXPECT_EQ(saved.nPast, promptSize + 1);
+  EXPECT_EQ(saved.ledger.positions(), promptSize + 1)
+      << "the unfed sample reached the ledger";
+  EXPECT_EQ(seqPosMax(*model) + 1, promptSize + 1);
 }
 
 // Pure-attention counterpart: `onCancel` after a completed prefill keeps the

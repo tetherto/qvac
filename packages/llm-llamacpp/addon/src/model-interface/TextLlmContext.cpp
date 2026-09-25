@@ -729,7 +729,10 @@ PrefillPlan TextLlmContext::preparePrefill(
   return PrefillPlan{.tokens = std::move(inputTokens)};
 }
 
-void TextLlmContext::syncPosition(llama_pos currentPos) { nPast_ = currentPos; }
+void TextLlmContext::syncPosition(llama_pos currentPos) {
+  nPast_ = currentPos;
+  confirmPendingResidentToken(currentPos);
+}
 
 void TextLlmContext::onPrefillComplete(
     llama_pos currentPos, size_t prefillTokenCount) {
@@ -873,6 +876,21 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
 }
 
 SequenceStepResult TextLlmContext::onLogitsReady(
+    int logitIdx, unsigned generatedAfterAccept,
+    const std::function<void(const std::string&)>& outputCallback,
+    LlamaBatch* inlineDecodeBatch) {
+  const SequenceStepResult result = sampleFromLogits(
+      logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
+  // The single-prompt loop records a token itself once it decoded it; on the
+  // batch path the scheduler decodes it later (see
+  // `holdPendingResidentToken`).
+  if (inlineDecodeBatch == nullptr) {
+    holdPendingResidentToken(result.token, nPast_);
+  }
+  return result;
+}
+
+SequenceStepResult TextLlmContext::sampleFromLogits(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
@@ -1071,13 +1089,6 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     flushPendingUtf8ToCallback(outputCallback);
   }
 
-  // The scheduler decodes this non-terminal token on its next step. Record it
-  // provisionally now; any decode/cancel failure restores the pre-request
-  // ledger and state transactionally.
-  if (!finished && inlineDecodeBatch == nullptr) {
-    appendResidentToken(tokenId);
-  }
-
   return {.token = tokenId, .finished = finished, .stopReason = stopReason};
 }
 
@@ -1267,6 +1278,7 @@ bool TextLlmContext::rollbackFailedRequest() {
 }
 
 void TextLlmContext::beginCacheRequest() {
+  discardPendingResidentToken();
   cacheRequestActive_ = true;
   cacheRequestRolledBack_ = false;
   preRequestNPast_ = nPast_;
@@ -1355,7 +1367,15 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
     // a retry of this prompt shares exactly this prefix with the cache, and
     // restoring the old tail would only have it trimmed again. No snapshot
     // is ever written for pure-attention memory.
-    const llama_pos reusePos = residentLedger_.positions(reuseTarget);
+    llama_pos reusePos = residentLedger_.positions(reuseTarget);
+    if (!canTrimSequenceTo(modelCtx_.lctx, reusePos)) {
+      // Sliding-window cells before the divergence are gone; only a full
+      // reprocess rebuilds that window.
+      reuseTarget = 0;
+      reuse = 0;
+      reusePos = 0;
+      checkpoint = "cold";
+    }
     clearSequenceMemory(modelCtx_.lctx, reusePos, -1);
     residentLedger_.truncate(reuseTarget);
     nPast_ = reusePos;
@@ -1393,6 +1413,7 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
 }
 
 void TextLlmContext::commitCacheRequest() {
+  discardPendingResidentToken();
   if (!cacheRequestActive_) {
     return;
   }
@@ -1413,6 +1434,7 @@ void TextLlmContext::commitCacheRequest() {
 
 bool TextLlmContext::restorePreRequestCacheState() {
   bool ok = true;
+  discardPendingResidentToken();
   if (!preRequestCacheSnapshot_.empty()) {
     ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
   } else if (nPast_ > preRequestNPast_) {
@@ -1446,6 +1468,24 @@ void TextLlmContext::appendResidentToken(llama_token token) {
   if (cacheRequestActive_ && token != LLAMA_TOKEN_NULL) {
     residentLedger_.appendToken(token);
   }
+}
+
+void TextLlmContext::holdPendingResidentToken(
+    llama_token token, llama_pos sampledAt) {
+  pendingResidentToken_ = token;
+  pendingResidentTokenPos_ = sampledAt;
+}
+
+void TextLlmContext::confirmPendingResidentToken(llama_pos decodedPos) {
+  if (pendingResidentToken_ != LLAMA_TOKEN_NULL &&
+      decodedPos > pendingResidentTokenPos_) {
+    appendResidentToken(pendingResidentToken_);
+    discardPendingResidentToken();
+  }
+}
+
+void TextLlmContext::discardPendingResidentToken() {
+  pendingResidentToken_ = LLAMA_TOKEN_NULL;
 }
 
 bool TextLlmContext::loadCache(const std::string& cacheKey) {

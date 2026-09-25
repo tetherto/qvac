@@ -466,6 +466,25 @@ protected:
     }
   }
 
+  /// Whether trimming this sequence back to `pos` leaves the attention
+  /// window in front of it intact. Sliding-window layers (without
+  /// `swa_full`) evict cells older than `n_swa` positions as decoding moves
+  /// on, and a tail trim cannot bring them back. Same test llama-server
+  /// applies before reusing a cached prefix.
+  [[nodiscard]] bool
+  canTrimSequenceTo(llama_context* lctx, llama_pos pos) const {
+    const int32_t nSwa = llama_model_n_swa(llama_get_model(lctx));
+    if (nSwa <= 0) {
+      return true;
+    }
+    auto* mem = llama_get_memory(lctx);
+    if (mem == nullptr) {
+      return false;
+    }
+    return llama_memory_seq_pos_min(mem, seqId_) <=
+           std::max<llama_pos>(0, pos - nSwa);
+  }
+
   /// llama-side sequence id this context owns. Stamped onto every
   /// token added to a `llama_batch` and used as the `seq_id` argument
   /// to `llama_memory_seq_*` calls. Defaults to 0 so the legacy

@@ -130,9 +130,13 @@ public:
   /// which is correct for text where cells and positions coincide; for a
   /// cache-loaded M-RoPE sequence the cells exceed the positions, so the
   /// KV-cap check must use this value rather than `initialPos`.
+  ///
+  /// `allowEmptyPlan` admits a plan with nothing to feed (a prefill-only
+  /// request whose prompt is already resident). Such a slot is idle until the
+  /// caller marks it finished, which it must do before the next fillBatch().
   [[nodiscard]] AddStatus addRequestAt(
       uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos = 0,
-      llama_pos initialKvCells = -1);
+      llama_pos initialKvCells = -1, bool allowEmptyPlan = false);
 
   [[nodiscard]] std::optional<uint32_t> firstFreeSeqId() const;
 
@@ -236,6 +240,12 @@ public:
   [[nodiscard]] bool isValid(uint32_t seqId) const noexcept;
 
   [[nodiscard]] const Request* requestAt(uint32_t seqId) const noexcept;
+
+  /// Position the sequence's KV has reached. Equal to `currentPos`, except
+  /// between a decode of the last fillBatch() and the advance() that commits
+  /// it: a teardown in that window sees `currentPos` short of live KV by the
+  /// chunk just decoded.
+  [[nodiscard]] llama_pos decodedPosAt(uint32_t seqId) const noexcept;
 
 private:
   unsigned maxChunkSize_, maxTokensPerSequence_;

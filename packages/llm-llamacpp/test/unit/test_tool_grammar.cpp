@@ -1,6 +1,8 @@
 // Model-backed coverage for the chat template's tool grammar reaching the
 // sampler, and for it not leaking across requests. All tests GTEST_SKIP when
 // the Qwen3 unit-test model is absent (`npm run test:cpp:models`).
+#include <any>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -8,6 +10,7 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -913,6 +916,121 @@ TEST_F(
       << "the call must name the one declared tool: " << call;
   EXPECT_NE(call.find("\"city\""), std::string::npos)
       << "the grammar admits only the declared argument shape: " << call;
+}
+
+// The scheduler decodes the substituted close tag like any sample, so the
+// cache ledger must record it too. A ledger one token short of the KV cursor
+// writes a cache file that fails to load on the next turn.
+TEST_F(ToolGrammarModelTest, BatchReasoningEOSRecoveryKeepsCacheLoadable) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["parallel"] = "2";
+  config_["reasoning-budget"] = "64";
+  config_["n_predict"] = "48";
+  auto model = createModel();
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr) << "parallel=2 must build the scheduler";
+
+  const llama_token eos = llama_vocab_eos(llama_model_get_vocab(
+      LlamaModelTestPeer::llmContext(*model)->getModel()));
+  ASSERT_NE(eos, LLAMA_TOKEN_NULL);
+  bool armed = false;
+  qvac_lib_inference_addon_llama::batching::DriverFactory original =
+      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDriverFactory(
+      *scheduler,
+      [original, eos, &armed](
+          const common_params& params, uint32_t seqId, llama_pos ceiling) {
+        std::unique_ptr<SequenceDriver> driver =
+            original(params, seqId, ceiling);
+        auto* text = dynamic_cast<TextLlmContext*>(driver.get());
+        if (text != nullptr && !armed) {
+          armed = true;
+          text->forceNextSampledTokenInsideReasoningForTesting(eos);
+        }
+        return driver;
+      });
+
+  const fs::path cacheDir = "batch_reasoning_recovery_cache";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  std::string streamed;
+  LlamaModel::Prompt recovered = makePrompt(THINKING_TOOL_PROMPT);
+  recovered.cacheKey = cacheKey;
+  recovered.saveCacheToDisk = true;
+  recovered.outputCallback = [&](const std::string& piece) {
+    streamed += piece;
+  };
+  ASSERT_NO_THROW((void)model->processPromptBatch({recovered}));
+  ASSERT_TRUE(armed) << "no slot driver was built";
+  ASSERT_NE(streamed.find(THINK_CLOSE_TAG), std::string::npos)
+      << "the forced EOS must be replaced by the close tag: " << streamed;
+  ASSERT_TRUE(fs::exists(cacheKey));
+
+  LlamaModel::Prompt followup = makePrompt(THINKING_TOOL_FOLLOWUP_PROMPT);
+  followup.cacheKey = cacheKey;
+  followup.saveCacheToDisk = true;
+  EXPECT_NO_THROW((void)model->processPromptBatch({followup}))
+      << "the cache saved after the recovery must load on the next turn";
+
+  fs::remove_all(cacheDir);
+}
+
+// A per-job cancel lands between scheduler steps, when the slot holds one
+// sample recorded but not yet fed. The committed ledger must drop it, or the
+// saved cache (nPast one short of the ledger) fails to load on the next turn.
+// Whole-model cancel does not reach this: the step skips sampling once it is
+// flagged.
+TEST_F(ToolGrammarModelTest, BatchCancelMidGenerationKeepsCacheLoadable) {
+  if (!hasQwen3Model()) {
+    GTEST_SKIP() << qwen3Model_.missingMessage();
+  }
+  config_["parallel"] = "2";
+  config_["n_predict"] = "256";
+  auto model = createModel();
+  ASSERT_NE(LlamaModelTestPeer::scheduler(*model), nullptr);
+
+  const fs::path cacheDir = "batch_cancel_cache";
+  fs::remove_all(cacheDir);
+  fs::create_directories(cacheDir);
+  const std::string cacheKey = (cacheDir / "session.bin").string();
+
+  constexpr int kPiecesBeforeCancel = 8;
+  std::atomic<int> pieces{0};
+  LlamaModel::Prompt cancelled = makePrompt(THINKING_PLAIN_PROMPT);
+  cancelled.cacheKey = cacheKey;
+  cancelled.saveCacheToDisk = true;
+  cancelled.outputCallback = [&](const std::string&) { pieces.fetch_add(1); };
+
+  std::thread canceller([&] {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    while (pieces.load() < kPiecesBeforeCancel &&
+           std::chrono::steady_clock::now() < deadline) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    model->cancelById(qvac_lib_inference_addon_cpp::JobId{71});
+  });
+  try {
+    (void)model->process(
+        std::any(cancelled), qvac_lib_inference_addon_cpp::JobId{71});
+  } catch (const qvac_errors::StatusError&) {
+    // A lone cancelled request may settle either way; the cache is the point.
+  }
+  canceller.join();
+  ASSERT_GE(pieces.load(), kPiecesBeforeCancel)
+      << "generation never reached the cancel point";
+  ASSERT_TRUE(fs::exists(cacheKey)) << "the cancelled turn saved no cache";
+
+  LlamaModel::Prompt followup = makePrompt(PLAIN_PROMPT);
+  followup.cacheKey = cacheKey;
+  EXPECT_NO_THROW((void)model->processPromptBatch({followup}))
+      << "the cache saved after a mid-generation cancel must load";
+
+  fs::remove_all(cacheDir);
 }
 
 // `BatchToolGrammarIsPerRequest` above proves a tool grammar does not cross
