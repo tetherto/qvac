@@ -97,6 +97,27 @@ describe('serve: speech validation', () => {
     })
     assertStatusAndError(res, 404, 'model_not_found')
   })
+
+  it('routes a custom voice reference by its id', async () => {
+    const res = await server().inject({
+      method: 'POST',
+      url: '/v1/audio/speech',
+      payload: { model: 'nonexistent', input: 'hi', voice: { id: 'voice_1234' } }
+    })
+    assertStatusAndError(res, 404, 'model_not_found')
+    assert.match(res.json().error.message, /voice "voice_1234"/)
+  })
+
+  for (const voice of [{ id: '' }, { name: 'alloy' }, 42]) {
+    it(`rejects voice=${JSON.stringify(voice)} as missing_voice`, async () => {
+      const res = await server().inject({
+        method: 'POST',
+        url: '/v1/audio/speech',
+        payload: { model: 'test', input: 'hi', voice }
+      })
+      assertStatusAndError(res, 400, 'missing_voice')
+    })
+  }
 })
 
 describe('serve: speech auth', () => {
