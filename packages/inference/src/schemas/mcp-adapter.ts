@@ -47,4 +47,8 @@ export type McpClient = {
 export type McpClientInput = {
   client: McpClient
   includeResources?: boolean
+  /** Defer every tool this client exposes; see `Tool.deferLoading`. */
+  deferLoading?: boolean
+  /** Catalog heading for this client's deferred tools. */
+  group?: string
 }

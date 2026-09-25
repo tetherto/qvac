@@ -11,6 +11,8 @@ import {
   resolveDeferredTools,
   searchDeferredTools
 } from '@/utils/tools/defer'
+import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
+import type { McpClient } from '@/schemas/mcp-adapter'
 
 function tool(name: string, description: string, extra: Partial<Tool> = {}): Tool {
   return {
@@ -251,4 +253,24 @@ test('the same search on the same inventory is byte-identical', (t) => {
     executeToolSearch(INVENTORY, { query: 'repository' }, []),
     'a repeated search cannot move the divergence point'
   )
+})
+
+test('an MCP client entry can defer every tool it exposes', async (t) => {
+  const client = {
+    listTools: async () => ({
+      tools: [
+        { name: 'create_issue', description: 'Open an issue', inputSchema: { type: 'object' } },
+        { name: 'list_prs', description: 'List pull requests', inputSchema: { type: 'object' } }
+      ]
+    }),
+    callTool: async () => ({})
+  } as unknown as McpClient
+
+  const { tools: deferred } = await getMcpToolsWithHandlers([
+    { client, deferLoading: true, group: 'github' }
+  ])
+  t.ok(deferred.every((entry) => entry.deferLoading === true && entry.group === 'github'))
+
+  const { tools: plain } = await getMcpToolsWithHandlers([{ client }])
+  t.ok(plain.every((entry) => !('deferLoading' in entry) && !('group' in entry)))
 })

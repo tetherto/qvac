@@ -195,6 +195,8 @@ Notes:
 * `tool_search` is a reserved name and is added only when something defers.
 * `group` is the heading a tool is listed under in the catalog — a skill or an
   MCP server name.
+* To defer an MCP server's tools, set it on the client entry:
+  `mcp: [{ client, deferLoading: true, group: 'github' }]`.
 * Loading a definition twice appends nothing; the search result says the tool is
   already available.
 * `completion()` stays stateless. The loaded set is read back from the

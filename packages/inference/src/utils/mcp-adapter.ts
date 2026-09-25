@@ -63,7 +63,8 @@ export async function getMcpToolsWithHandlers(clients: McpClientInput[]): Promis
   const allTools: Tool[] = []
   const handlers: ToolHandlerMap = new Map()
 
-  for (const { client, includeResources } of clients) {
+  for (const { client, includeResources, deferLoading, group } of clients) {
+    const start = allTools.length
     const { tools: mcpTools } = await client.listTools()
 
     for (const mcpTool of mcpTools) {
@@ -117,6 +118,12 @@ export async function getMcpToolsWithHandlers(clients: McpClientInput[]): Promis
           })
           return result.contents[0]
         })
+      }
+    }
+
+    if (deferLoading === true) {
+      for (let i = start; i < allTools.length; i++) {
+        allTools[i] = { ...allTools[i]!, deferLoading: true, ...(group !== undefined && { group }) }
       }
     }
   }
