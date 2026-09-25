@@ -2331,6 +2331,110 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
     ] = None
 
 
+class BciTranscribeResponseDiagnosticsSelectedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class BciTranscribeResponseDiagnosticsGraphicsApi(Enum):
+    vulkan = "vulkan"
+    opencl = "opencl"
+    opengl = "opengl"
+    webgpu = "webgpu"
+    metal = "metal"
+    direct3d11 = "direct3d11"
+    direct3d12 = "direct3d12"
+    cuda = "cuda"
+    level_zero = "levelZero"
+    rocm = "rocm"
+
+
+class BciTranscribeResponseDiagnosticsDriver(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(min_length=1)]
+    version: Annotated[str | None, Field(min_length=1)] = None
+
+
+class BciTranscribeResponseDiagnosticsFallbackRequestedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class BciTranscribeResponseDiagnosticsFallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    requested_backend: Annotated[
+        str | None, Field(alias="requestedBackend", min_length=1)
+    ] = None
+    requested_device: Annotated[
+        BciTranscribeResponseDiagnosticsFallbackRequestedDevice | None,
+        Field(
+            alias="requestedDevice",
+            title="BciTranscribeResponseDiagnosticsFallbackRequestedDevice",
+        ),
+    ] = None
+    reason: Annotated[str, Field(min_length=1)]
+
+
+class BciTranscribeResponseDiagnosticsProbeStatus(Enum):
+    compatible = "compatible"
+    incompatible = "incompatible"
+    unknown = "unknown"
+
+
+class BciTranscribeResponseDiagnosticsProbe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        BciTranscribeResponseDiagnosticsProbeStatus,
+        Field(title="BciTranscribeResponseDiagnosticsProbeStatus"),
+    ]
+    backend: Annotated[str, Field(min_length=1)]
+    reason: str | None = None
+
+
+class BciTranscribeResponseDiagnostics(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
+    selected_device: Annotated[
+        BciTranscribeResponseDiagnosticsSelectedDevice,
+        Field(
+            alias="selectedDevice",
+            title="BciTranscribeResponseDiagnosticsSelectedDevice",
+        ),
+    ]
+    graphics_api: Annotated[
+        BciTranscribeResponseDiagnosticsGraphicsApi | None,
+        Field(alias="graphicsApi", title="BciTranscribeResponseDiagnosticsGraphicsApi"),
+    ] = None
+    driver: Annotated[
+        BciTranscribeResponseDiagnosticsDriver | None,
+        Field(title="BciTranscribeResponseDiagnosticsDriver"),
+    ] = None
+    gpu_id: Annotated[
+        str | None,
+        Field(
+            alias="gpuId",
+            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+            min_length=1,
+        ),
+    ] = None
+    fallback: Annotated[
+        BciTranscribeResponseDiagnosticsFallback | None,
+        Field(title="BciTranscribeResponseDiagnosticsFallback"),
+    ] = None
+    probe: Annotated[
+        BciTranscribeResponseDiagnosticsProbe | None,
+        Field(title="BciTranscribeResponseDiagnosticsProbe"),
+    ] = None
+
+
 class BciTranscribeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2345,6 +2449,13 @@ class BciTranscribeResponse(GeneratedBaseModel):
         BciTranscribeResponseSegment | None, Field(title="BciTranscribeResponseSegment")
     ] = None
     type: Literal["bciTranscribe"] = "bciTranscribe"
+    diagnostics: Annotated[
+        BciTranscribeResponseDiagnostics | None,
+        Field(
+            description="Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+            title="BciTranscribeResponseDiagnostics",
+        ),
+    ] = None
 
 
 class BciTranscribeStreamRequestStreamOptsEmit(Enum):
@@ -2524,6 +2635,15 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
         Field(
             alias="startsWord",
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+        ),
+    ] = None
+    window_start_timestep: Annotated[
+        int | None,
+        Field(
+            alias="windowStartTimestep",
+            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
+            ge=0,
+            le=9007199254740991,
         ),
     ] = None
 
@@ -9525,7 +9645,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+            description="Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call."
         ),
     ] = None
     greedy_best_of: Annotated[

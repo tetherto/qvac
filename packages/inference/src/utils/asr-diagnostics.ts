@@ -15,8 +15,9 @@ function asrBackendName(backendId: number | undefined): string | undefined {
 }
 
 /**
- * Map the ASR engines' backend stats onto the shared diagnostics shape, the
- * same way the audiogen op does. `backendDevice` is the addon's own verdict:
+ * Map the whisper.cpp-family backend stats onto the shared diagnostics shape,
+ * the same way the audiogen op does. Shared by the `@qvac/asr-ggml` engines
+ * and `@qvac/bci-whispercpp`. `backendDevice` is the addon's own verdict:
  * `1` means it ran on the GPU, anything else means CPU.
  *
  * The engines report no fallback reason, so `fallback` is never populated —
