@@ -34,6 +34,7 @@ _CODES = {**SERVER_ERROR_CODES, **CLIENT_ERROR_CODES, **REGISTRY_ERROR_CODES}
 
 _CODE_CANCEL_FAILED = _CODES["CANCEL_FAILED"]
 _CODE_MODEL_LOAD_FAILED = _CODES["MODEL_LOAD_FAILED"]
+_CODE_REQUEST_VALIDATION_FAILED = _CODES["REQUEST_VALIDATION_FAILED"]
 _CODE_TRANSLATION_FAILED = _CODES["TRANSLATION_FAILED"]
 _CODE_TRANSCRIPTION_FAILED = _CODES["TRANSCRIPTION_FAILED"]
 _CODE_TEXT_TO_SPEECH_STREAM_FAILED = _CODES["TEXT_TO_SPEECH_STREAM_FAILED"]
@@ -322,6 +323,25 @@ class StreamEndedError(QvacError):
         )
 
 
+class RequestValidationError(QvacError):
+    """A request refused before it reaches the worker.
+
+    JS validates client parameters against a strict schema, so an unknown key
+    -- a config field that was removed, or one misspelled -- is refused with
+    REQUEST_VALIDATION_FAILED rather than silently dropped. Pydantic ignores
+    unknown keys by default, so without this the same call loads a model whose
+    configuration is not what the caller asked for.
+    """
+
+    def __init__(self, message: str, *, cause: Any = None) -> None:
+        super().__init__(
+            message,
+            name="REQUEST_VALIDATION_FAILED",
+            code=_CODE_REQUEST_VALIDATION_FAILED,
+            cause=cause,
+        )
+
+
 class InvalidResponseError(QvacError):
     def __init__(self, expected: str, *, cause: Any = None) -> None:
         self.expected = expected
@@ -537,6 +557,7 @@ __all__ = [
     "InferenceCancelledError",
     "StreamEndedError",
     "InvalidResponseError",
+    "RequestValidationError",
     "ModelUnloadFailedError",
     "ModelRegistryQueryFailedError",
     "InvalidDeleteCacheParamsError",

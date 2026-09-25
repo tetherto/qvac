@@ -12,7 +12,7 @@ Model constants live in `tetherto.qvac_sdk.models`. Every generated request/resp
 and enum is re-exported here (and available in full from `tetherto.qvac_sdk.schemas`); the
 raw generated method stubs live in `tetherto.qvac_sdk.methods`. The ergonomic wrappers below
 shadow the few generated methods that have one (load_model, cancel, translate,
-unload_model, delete_cache, model_registry_*).
+unload_model, delete_cache, model_registry_*, text_to_speech, audio_understand).
 """
 
 # ruff: noqa: I001
@@ -62,6 +62,7 @@ from .sessions import (  # noqa: F401
 from ._api import (  # noqa: F401
     TranslateRun,
     cancel,
+    classify,
     delete_cache,
     generate_client_request_id,
     invoke_plugin,
@@ -81,6 +82,31 @@ from ._completion import (  # noqa: F401
     normalize_assistant_cache_content,
 )
 
+from ._streams import (  # noqa: F401
+    AudioRun,
+    FinetuneRun,
+    AudioUnderstandRun,
+    BatchCompletionRun,
+    ImagesRun,
+    OcrRun,
+    StreamRun,
+    TtsRun,
+    WorldSceneRun,
+    WorldStepRun,
+    audio_edit,
+    audio_gen,
+    audio_understand,
+    batch_completion,
+    finetune_run,
+    diffusion,
+    ocr,
+    text_to_speech,
+    transcribe_stream_run,
+    upscale,
+    world_create_scene,
+    world_step,
+)
+
 # `completion_orchestrate` (worker-run tool loop) is intentionally NOT part of
 # the flat public API: the JS SDK has no client wrapper for it -- JS does tool
 # calling client-side via `completion(tools=...)`, which Python mirrors -- so it
@@ -97,6 +123,7 @@ _ERGONOMIC = [
     "load_model",
     "unload_model",
     "cancel",
+    "classify",
     "delete_cache",
     "translate",
     "TranslateRun",
@@ -129,6 +156,31 @@ _ERGONOMIC = [
     "EndOfTurnEvent",
     "TextEvent",
     "SegmentEvent",
+    # Run handles for the streaming methods. The generated `*_stream` stubs
+    # yield the wire envelope; these fold it the way the JS client does, so a
+    # caller -- and the shared e2e catalog -- means the same thing on both.
+    "StreamRun",
+    "ocr",
+    "OcrRun",
+    "diffusion",
+    "upscale",
+    "ImagesRun",
+    "text_to_speech",
+    "TtsRun",
+    "audio_gen",
+    "audio_edit",
+    "AudioRun",
+    "audio_understand",
+    "AudioUnderstandRun",
+    "world_step",
+    "WorldStepRun",
+    "world_create_scene",
+    "WorldSceneRun",
+    "batch_completion",
+    "finetune_run",
+    "FinetuneRun",
+    "BatchCompletionRun",
+    "transcribe_stream_run",
 ]
 
 __all__ = sorted(
