@@ -1,0 +1,6 @@
+interface:
+  display_name: "QVAC Quality Reporting"
+  short_description: "Triage quality debt into approved tickets"
+  default_prompt: "Use $qv-quality-reporting to run the quality audit and prepare the next approval-gated triage batch."
+policy:
+  allow_implicit_invocation: false
