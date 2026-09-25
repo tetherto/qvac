@@ -53,25 +53,27 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${ggml-rpc-server-addon}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
 
-if(WIN32)
-  set(RPC_SERVER_TOOL_NAME "ggml-rpc-server.exe")
-else()
-  set(RPC_SERVER_TOOL_NAME "ggml-rpc-server")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  if(WIN32)
+    set(RPC_SERVER_TOOL_NAME "ggml-rpc-server.exe")
+  else()
+    set(RPC_SERVER_TOOL_NAME "ggml-rpc-server")
+  endif()
+
+  find_program(
+    GGML_RPC_SERVER_TOOL
+    NAMES ${RPC_SERVER_TOOL_NAME}
+    PATHS "${CMAKE_BINARY_DIR}/_vcpkg/${VCPKG_TARGET_TRIPLET}/tools/qvac-fabric"
+    REQUIRED
+    NO_DEFAULT_PATH
+  )
+
+  add_custom_target(
+    ggml-rpc-server-tool ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${PREBUILD_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${GGML_RPC_SERVER_TOOL}"
+            "${PREBUILD_DIR}/${RPC_SERVER_TOOL_NAME}"
+    COMMENT "Copying ggml-rpc-server to prebuild directory"
+  )
 endif()
-
-find_program(
-  GGML_RPC_SERVER_TOOL
-  NAMES ${RPC_SERVER_TOOL_NAME}
-  PATHS "${CMAKE_BINARY_DIR}/_vcpkg/${VCPKG_TARGET_TRIPLET}/tools/qvac-fabric"
-  REQUIRED
-  NO_DEFAULT_PATH
-)
-
-add_custom_target(
-  ggml-rpc-server-tool ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${PREBUILD_DIR}"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          "${GGML_RPC_SERVER_TOOL}"
-          "${PREBUILD_DIR}/${RPC_SERVER_TOOL_NAME}"
-  COMMENT "Copying ggml-rpc-server to prebuild directory"
-)
