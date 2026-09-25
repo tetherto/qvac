@@ -1,6 +1,8 @@
 # @qvac/ocr-ggml
 
 GGML-backed OCR addon for [QVAC](https://github.com/tetherto/qvac).
+
+EasyOCR model loading rejects detector output shapes, recognizer class counts, malformed prediction bias vectors, and convolution bias sizes that do not match the expected tensors.
 Provides two inference pipelines on **`ggml` / `.gguf`** — no Python, no
 PyTorch, and no ONNX Runtime at runtime:
 

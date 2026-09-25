@@ -13,6 +13,7 @@
 #include "ggml.h"
 #include "gguf_loader.hpp"
 #include "kernel_precision.hpp"
+#include "tensor_validation.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // BatchNorm fold loops iterate over raw tensor byte buffers with pointer
@@ -126,6 +127,10 @@ std::string upload_weights(
     const std::vector<float> w_src_f32 = to_f32_vector(w_src);
     const std::vector<float> b_src_f32 =
         b_src != nullptr ? to_f32_vector(b_src) : std::vector<float>{};
+    if (b_src != nullptr &&
+        !TensorValidation::biasTensorSizeMatches(b_src_f32.size(), oc)) {
+      return "bias tensor size mismatch for " + d.conv_path;
+    }
     const float* W = w_src_f32.data();
     const float* B = b_src_f32.empty() ? nullptr : b_src_f32.data();
 

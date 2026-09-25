@@ -9,7 +9,8 @@ async function loadDecoder(params = {}) {
     audioFormat: params.audioFormat || 's16le',
     sampleRate: params.sampleRate || 16000,
     streamIndex: params.streamIndex || 0,
-    inputBitrate: params.inputBitrate || 192000
+    inputBitrate: params.inputBitrate || 192000,
+    maxDecodedBytes: params.maxDecodedBytes
   }
 
   const decoder = new FFmpegDecoder({ config })
@@ -22,7 +23,7 @@ async function runDecoder(decoder, audioFilePath, expectation = {}, params = {})
   const defaultRawPath = path.join(__dirname, '../../../example/output_ffmpeg.raw')
   const defaultAudioFormat = params.audioFormat || decoder.config?.audioFormat || 's16le'
 
-  return runDecoderBase(
+  return await runDecoderBase(
     decoder,
     audioFilePath,
     expectation,

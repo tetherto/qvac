@@ -4,6 +4,7 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 #include "ggml-alloc.h"
@@ -11,6 +12,7 @@
 #include "ggml.h"
 #include "gguf_loader.hpp"
 #include "kernel_precision.hpp"
+#include "tensor_validation.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,readability-identifier-naming,readability-identifier-length)
 // BatchNorm fold loops iterate over raw tensor byte buffers with pointer
@@ -23,6 +25,8 @@ namespace {
 
 // PyTorch's nn.BatchNorm2d default (`eps=1e-5`).
 constexpr float kBnEps = 1e-5F;
+constexpr int64_t kDetectionOutputChannels = 2;
+constexpr std::string_view kDetectionOutputConv = "conv_cls.8";
 
 // Static inventory of all conv layers in CRAFT, in source order.  For each
 // row, `bn` is the dotted state-dict path of the immediately following
@@ -178,6 +182,10 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     const int64_t kh = w_src->ne[1];
     const int64_t ic = w_src->ne[2];
     const int64_t oc = w_src->ne[3];
+    if (d.conv == kDetectionOutputConv && oc != kDetectionOutputChannels) {
+      err_ = "invalid detection output channel count";
+      return;
+    }
 
     auto* w_dst = ggml_new_tensor_4d(ctx_, kernel_type, kw, kh, ic, oc);
     ggml_set_name(w_dst, (std::string(d.conv) + ".W").c_str());
@@ -231,6 +239,10 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     const std::vector<float> w_src_f32 = to_f32_vector(w_src);
     const std::vector<float> b_src_f32 =
         b_src != nullptr ? to_f32_vector(b_src) : std::vector<float>{};
+    if (!TensorValidation::biasTensorSizeMatches(b_src_f32.size(), oc)) {
+      err_ = "bias tensor size mismatch for " + conv_path;
+      return;
+    }
     const float* W = w_src_f32.data();
     const float* B = b_src_f32.empty() ? nullptr : b_src_f32.data();
 
