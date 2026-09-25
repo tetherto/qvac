@@ -23,6 +23,10 @@ export interface ParakeetConfigurationParams {
     streamingHistoryMs?: number;
     streamingEmitPartials?: boolean;
     streamingEnergyVad?: boolean;
+    streamingEnergyVadThresholdDb?: number;
+    streamingEnergyVadWindowMs?: number;
+    streamingEnergyVadHangoverMs?: number;
+    streamingSpeakerVad?: boolean;
     streamingLeftContextMs?: number;
     streamingRightLookaheadMs?: number;
     streamingSpkCacheEnable?: boolean;
@@ -31,6 +35,12 @@ export interface ParakeetConfigurationParams {
     streamingChunkLeftContextMs?: number;
     streamingChunkRightContextMs?: number;
     streamingSpkCacheUpdatePeriod?: number;
+    diarizationThreshold?: number;
+    diarizationMinSegmentMs?: number;
+    prewarm?: boolean;
+    prewarmAudioSeconds?: number;
+    longFormWindowFrames?: number;
+    longFormContextFrames?: number;
     backendsDir?: string;
     openclCacheDir?: string;
 }
@@ -41,6 +51,12 @@ export interface StreamingConfig {
     rightLookaheadMs?: number;
     emitPartials?: boolean;
     emitEnergyVad?: boolean;
+    energyVadThresholdDb?: number;
+    energyVadWindowMs?: number;
+    energyVadHangoverMs?: number;
+    emitSpeakerVad?: boolean;
+    diarizationThreshold?: number;
+    diarizationMinSegmentMs?: number;
     spkCacheEnable?: boolean;
     spkCacheLen?: number;
     fifoLen?: number;
@@ -110,6 +126,7 @@ export declare class ParakeetInterface {
     private _applyDefaults;
     private _setState;
     private _createNativeInstance;
+    private _looksLikeVadEvent;
     private _looksLikeStats;
     private _looksLikeTranscript;
     private _mapAddonEvent;

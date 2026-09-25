@@ -110,6 +110,9 @@ public:
   bool isStreamEnded() const { return stream_ended_; }
   bool isLoaded() const { return is_loaded_; }
   bool isCaptionModeEnabled() const;
+  // Read from whisperConfig; gate the optional per-segment output fields.
+  bool isTokenTimestampsEnabled() const;
+  bool isTdrzEnabled() const;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
 
   // Active backend identity captured by captureActiveBackendInfo() at load();

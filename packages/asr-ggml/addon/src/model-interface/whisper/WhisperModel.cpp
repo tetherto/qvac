@@ -83,6 +83,52 @@ bool WhisperModel::isCaptionModeEnabled() const {
   return std::get<bool>(miscConfigIt->second);
 }
 
+namespace {
+bool readBoolFlag(
+    const std::map<std::string, JSValueVariant>& cfg, const char* key) {
+  const auto it = cfg.find(key);
+  if (it == cfg.end()) {
+    return false;
+  }
+  const bool* value = std::get_if<bool>(&it->second);
+  return value != nullptr && *value;
+}
+
+// Text tokens of one segment with their timing and probability. Ids at or
+// above EOT are special (EOT, SOT, language, task, timestamp) and skipped.
+std::vector<TokenData>
+collectSegmentTokens(whisper_context* ctx, whisper_state* state, int segment) {
+  std::vector<TokenData> tokens;
+  const whisper_token eot = whisper_token_eot(ctx);
+  const int nTokens = whisper_full_n_tokens_from_state(state, segment);
+  tokens.reserve(static_cast<size_t>(std::max(0, nTokens)));
+  for (int j = 0; j < nTokens; ++j) {
+    const whisper_token_data data =
+        whisper_full_get_token_data_from_state(state, segment, j);
+    if (data.id >= eot) {
+      continue;
+    }
+    TokenData token;
+    const char* text =
+        whisper_full_get_token_text_from_state(ctx, state, segment, j);
+    token.text = text != nullptr ? text : "";
+    token.start = static_cast<float>(data.t0) * K_SEGMENT_TIMESTAMP_SCALE;
+    token.end = static_cast<float>(data.t1) * K_SEGMENT_TIMESTAMP_SCALE;
+    token.probability = data.p;
+    tokens.push_back(std::move(token));
+  }
+  return tokens;
+}
+} // namespace
+
+bool WhisperModel::isTokenTimestampsEnabled() const {
+  return readBoolFlag(cfg_.whisperMainCfg, "token_timestamps");
+}
+
+bool WhisperModel::isTdrzEnabled() const {
+  return readBoolFlag(cfg_.whisperMainCfg, "tdrz_enable");
+}
+
 auto WhisperModel::formatCaptionOutput(Transcript& transcript) -> void {
   transcript.text = "<|" + std::to_string(static_cast<int>(transcript.start)) +
                     "|>" + transcript.text + "<|" +
@@ -625,8 +671,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats WhisperModel::runtimeStats() const {
 }
 
 static void onNewSegment(
-    [[maybe_unused]] whisper_context* ctx, whisper_state* state, int nNew,
-    void* userData) {
+    whisper_context* ctx, whisper_state* state, int nNew, void* userData) {
 
   auto* whisper = static_cast<WhisperModel*>(userData);
   if (whisper == nullptr || state == nullptr) {
@@ -638,6 +683,10 @@ static void onNewSegment(
     return;
   }
   const int startIndex = std::max(0, nSegments - nNew);
+  const int langId = whisper_full_lang_id_from_state(state);
+  const char* language = langId >= 0 ? whisper_lang_str(langId) : nullptr;
+  const bool withTokens = whisper->isTokenTimestampsEnabled();
+  const bool withSpeakerTurns = whisper->isTdrzEnabled();
 
   QLOG(
       qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,
@@ -654,6 +703,16 @@ static void onNewSegment(
         static_cast<float>(whisper_full_get_segment_t1_from_state(state, i)) *
         K_SEGMENT_TIMESTAMP_SCALE;
     transcript.id = i;
+    transcript.language = language != nullptr ? language : "";
+    transcript.noSpeechProb =
+        whisper_full_get_segment_no_speech_prob_from_state(state, i);
+    if (withSpeakerTurns) {
+      transcript.speakerTurnNext =
+          whisper_full_get_segment_speaker_turn_next_from_state(state, i);
+    }
+    if (withTokens) {
+      transcript.tokens = collectSegmentTokens(ctx, state, i);
+    }
 
     QLOG(
         qvac_lib_inference_addon_cpp::logger::Priority::DEBUG,

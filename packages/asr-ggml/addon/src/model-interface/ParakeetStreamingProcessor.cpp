@@ -61,6 +61,11 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     opts.chunk_left_context_ms = config_.chunkLeftContextMs;
     opts.chunk_right_context_ms = config_.chunkRightContextMs;
     opts.spkcache_update_period = config_.spkCacheUpdatePeriod;
+    if (config_.emitSpeakerVad) {
+      opts.on_event = [this](const pkt::StreamEvent& event) {
+        onStreamEvent(event, VadSource::Sortformer);
+      };
+    }
 
     diar_session_ = model_.createDuplexDiarizationSession(
         opts, [this](const pkt::StreamingDiarizationSegment& seg) {
@@ -78,6 +83,17 @@ ParakeetStreamingProcessor::ParakeetStreamingProcessor(
     }
     opts.emit_partials = config_.emitPartials;
     opts.enable_energy_vad = config_.emitEnergyVad;
+    opts.energy_vad_threshold_db = config_.energyVadThresholdDb;
+    opts.energy_vad_window_ms = config_.energyVadWindowMs;
+    opts.energy_vad_hangover_ms = config_.energyVadHangoverMs;
+    // speech-cpp only runs the energy detector when on_event is set.
+    if (config_.emitEnergyVad) {
+      opts.on_event = [this](const pkt::StreamEvent& event) {
+        onStreamEvent(event, VadSource::Energy);
+      };
+    }
+    feedSliceSamples_ = ParakeetModel::energyVadFeedSliceSamples(
+        config_.emitEnergyVad, config_.energyVadWindowMs, config_.sampleRate);
 
     asr_session_ = model_.createDuplexAsrSession(
         opts, [this](const pkt::StreamingSegment& seg) { onAsrSegment(seg); });
@@ -175,7 +191,26 @@ void ParakeetStreamingProcessor::onDiarSegment(
   t.start = static_cast<float>(seg.start_s);
   t.end = static_cast<float>(seg.end_s);
   t.toAppend = true;
+  t.speakerId = seg.speaker_id;
   seg_buffer_.push_back(std::move(t));
+}
+
+void ParakeetStreamingProcessor::onStreamEvent(
+    const pkt::StreamEvent& event, VadSource source) {
+  auto vad = ParakeetModel::toVadEvent(event, source);
+  if (!vad || lastVadSpeaking_ == vad->speaking)
+    return;
+  lastVadSpeaking_ = vad->speaking;
+  // Queued immediately; the segments of the same feed follow when
+  // emitPending() flushes seg_buffer_.
+  try {
+    output_queue_->queueResult(std::any(*vad));
+  } catch (const std::exception& e) {
+    QLOG(
+        logger::Priority::WARNING,
+        std::string("ParakeetStreamingProcessor: VAD queueResult failed: ") +
+            e.what());
+  }
 }
 
 void ParakeetStreamingProcessor::queueTerminalStats() {
@@ -186,6 +221,10 @@ void ParakeetStreamingProcessor::queueTerminalStats() {
       "totalSamples",
       static_cast<int64_t>(std::llround(
           audio_seconds_ * static_cast<double>(config_.sampleRate))));
+  if (diar_session_) {
+    terminal.emplace_back(
+        "aoscActive", static_cast<int64_t>(diar_session_->aosc_active()));
+  }
   try {
     output_queue_->queueResult(std::any(std::move(terminal)));
   } catch (const std::exception& e) {
@@ -236,8 +275,8 @@ void ParakeetStreamingProcessor::processLoop() {
     if (!work.empty()) {
       try {
         if (asr_session_) {
-          asr_session_->feed_pcm_f32(
-              work.data(), static_cast<int>(work.size()));
+          ParakeetModel::feedInSlices(
+              *asr_session_, work.data(), work.size(), feedSliceSamples_);
         } else if (diar_session_) {
           diar_session_->feed_pcm_f32(
               work.data(), static_cast<int>(work.size()));

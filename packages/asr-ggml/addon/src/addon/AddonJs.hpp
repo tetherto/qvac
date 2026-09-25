@@ -24,6 +24,7 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <js.h>
+#include <parakeet/log.h>
 #include <whisper.h>
 
 #include "addon/AsrErrors.hpp"
@@ -45,8 +46,11 @@ using qvac_lib_inference_addon_cpp::OutputQueue;
 // ── Native log forwarding ────────────────────────────────────────────────
 //
 // One process-wide install, shared by both engines. Hook choice:
-//   - ggml_log_set(forwardGgmlLog) covers parakeet-only processes (the
-//     parakeet engine logs exclusively through ggml's callback).
+//   - ggml_log_set(forwardGgmlLog) covers ggml-origin lines in
+//     parakeet-only processes.
+//   - parakeet_log_set(forwardGgmlLog) routes speech-cpp's own parakeet
+//     lines ("[parakeet] ..." warnings, prewarm diagnostics), which otherwise
+//     go to stderr. It also re-applies the callback to ggml.
 //   - whisper_log_set(forwardGgmlLog) stores the callback in whisper's
 //     g_state.log_callback AND re-applies it to ggml -- both immediately and
 //     again inside whisper_backend_init_gpu() (src/whisper.cpp). A raw
@@ -60,11 +64,50 @@ inline void installNativeLogForwarderOnce() {
   static std::once_flag once;
   std::call_once(once, [] {
     ggml_log_set(&forwardGgmlLog, nullptr);
+    parakeet_log_set(&forwardGgmlLog, nullptr);
     whisper_log_set(&forwardGgmlLog, nullptr);
   });
 }
 
-// ── Whisper output handlers (payload shapes byte-for-byte pre-merge) ─────
+// ── Whisper output handlers ──────────────────────────────────────────────
+//
+// text / toAppend / start / end / id keep their pre-merge shape. language
+// and noSpeechProb are always set; speakerTurnNext (tdrz_enable) and tokens
+// (token_timestamps) only when the matching whisperConfig flag is on.
+
+inline js::Object
+whisperTranscriptToJsObject(js_env_t* env, const whisper::Transcript& t) {
+  auto obj = js::Object::create(env);
+  obj.setProperty(env, "text", js::String::create(env, t.text));
+  obj.setProperty(env, "toAppend", js::Boolean::create(env, t.toAppend));
+  obj.setProperty(env, "start", js::Number::create(env, t.start));
+  obj.setProperty(env, "end", js::Number::create(env, t.end));
+  obj.setProperty(
+      env, "id", js::Number::create(env, static_cast<uint64_t>(t.id)));
+  if (!t.language.empty()) {
+    obj.setProperty(env, "language", js::String::create(env, t.language));
+  }
+  obj.setProperty(env, "noSpeechProb", js::Number::create(env, t.noSpeechProb));
+  if (t.speakerTurnNext.has_value()) {
+    obj.setProperty(
+        env, "speakerTurnNext", js::Boolean::create(env, *t.speakerTurnNext));
+  }
+  if (t.tokens.has_value()) {
+    auto tokens = js::Array::create(env);
+    for (size_t i = 0; i < t.tokens->size(); ++i) {
+      const auto& token = (*t.tokens)[i];
+      auto jsToken = js::Object::create(env);
+      jsToken.setProperty(env, "text", js::String::create(env, token.text));
+      jsToken.setProperty(env, "start", js::Number::create(env, token.start));
+      jsToken.setProperty(env, "end", js::Number::create(env, token.end));
+      jsToken.setProperty(
+          env, "probability", js::Number::create(env, token.probability));
+      tokens.set(env, i, jsToken);
+    }
+    obj.setProperty(env, "tokens", tokens);
+  }
+  return obj;
+}
 
 struct JsWhisperTranscriptHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
@@ -73,29 +116,7 @@ struct JsWhisperTranscriptHandler
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             whisper::Transcript>(
             [this](const whisper::Transcript& output) -> js_value_t* {
-              auto jsTranscript = js::Object::create(this->env_);
-              jsTranscript.setProperty(
-                  this->env_,
-                  "text",
-                  js::String::create(this->env_, output.text));
-              jsTranscript.setProperty(
-                  this->env_,
-                  "toAppend",
-                  js::Boolean::create(this->env_, output.toAppend));
-              jsTranscript.setProperty(
-                  this->env_,
-                  "start",
-                  js::Number::create(this->env_, output.start));
-              jsTranscript.setProperty(
-                  this->env_,
-                  "end",
-                  js::Number::create(this->env_, output.end));
-              jsTranscript.setProperty(
-                  this->env_,
-                  "id",
-                  js::Number::create(
-                      this->env_, static_cast<uint64_t>(output.id)));
-              return jsTranscript;
+              return whisperTranscriptToJsObject(this->env_, output);
             }) {}
 };
 
@@ -109,29 +130,10 @@ struct JsWhisperTranscriptArrayHandler
                 const std::vector<whisper::Transcript>& output) -> js_value_t* {
               auto jsOutput = js::Array::create(this->env_);
               for (size_t i = 0; i < output.size(); ++i) {
-                auto jsTranscript = js::Object::create(this->env_);
-                jsTranscript.setProperty(
+                jsOutput.set(
                     this->env_,
-                    "text",
-                    js::String::create(this->env_, output[i].text));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "toAppend",
-                    js::Boolean::create(this->env_, output[i].toAppend));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "start",
-                    js::Number::create(this->env_, output[i].start));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "end",
-                    js::Number::create(this->env_, output[i].end));
-                jsTranscript.setProperty(
-                    this->env_,
-                    "id",
-                    js::Number::create(
-                        this->env_, static_cast<uint64_t>(output[i].id)));
-                jsOutput.set(this->env_, i, jsTranscript);
+                    i,
+                    whisperTranscriptToJsObject(this->env_, output[i]));
               }
               return jsOutput;
             }) {}
@@ -192,6 +194,23 @@ transcriptToJsObject(js_env_t* env, const parakeet::Transcript& t) {
       env, "id", js::Number::create(env, static_cast<uint64_t>(t.id)));
   obj.setProperty(env, "isEndOfTurn", js::Boolean::create(env, t.isEndOfTurn));
   obj.setProperty(env, "startsWord", js::Boolean::create(env, t.startsWord));
+  // Sortformer only; ASR segments keep their existing shape.
+  if (t.speakerId >= 0) {
+    obj.setProperty(env, "speakerId", js::Number::create(env, t.speakerId));
+  }
+  if (!t.speakerSegments.empty()) {
+    auto segments = js::Array::create(env);
+    for (size_t i = 0; i < t.speakerSegments.size(); ++i) {
+      const auto& seg = t.speakerSegments[i];
+      auto jsSeg = js::Object::create(env);
+      jsSeg.setProperty(
+          env, "speakerId", js::Number::create(env, seg.speakerId));
+      jsSeg.setProperty(env, "start", js::Number::create(env, seg.start));
+      jsSeg.setProperty(env, "end", js::Number::create(env, seg.end));
+      segments.set(env, i, jsSeg);
+    }
+    obj.setProperty(env, "speakerSegments", segments);
+  }
   return obj;
 }
 
@@ -216,6 +235,49 @@ struct JsParakeetTranscriptArrayHandler
             }) {}
 };
 
+// Parakeet streaming VAD transition: `{ type: "vad", speaking, score,
+// timestamp, source, speakerId? }`. source is "energy" or "sortformer";
+// speakerId is present only when a Sortformer speaker enters speech.
+struct JsParakeetVadEventHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          parakeet::VadEvent> {
+  JsParakeetVadEventHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            parakeet::VadEvent>(
+            [this](const parakeet::VadEvent& event) -> js_value_t* {
+              auto obj = js::Object::create(this->env_);
+              obj.setProperty(
+                  this->env_, "type", js::String::create(this->env_, "vad"));
+              obj.setProperty(
+                  this->env_,
+                  "speaking",
+                  js::Boolean::create(this->env_, event.speaking));
+              obj.setProperty(
+                  this->env_,
+                  "score",
+                  js::Number::create(this->env_, event.score));
+              obj.setProperty(
+                  this->env_,
+                  "timestamp",
+                  js::Number::create(this->env_, event.timestamp));
+              obj.setProperty(
+                  this->env_,
+                  "source",
+                  js::String::create(
+                      this->env_,
+                      event.source == parakeet::VadSource::Sortformer
+                          ? "sortformer"
+                          : "energy"));
+              if (event.speakerId >= 0) {
+                obj.setProperty(
+                    this->env_,
+                    "speakerId",
+                    js::Number::create(this->env_, event.speakerId));
+              }
+              return obj;
+            }) {}
+};
+
 // ── createInstance ───────────────────────────────────────────────────────
 
 inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
@@ -232,11 +294,15 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       adapter.readEngineType(configurationParams, env);
 
   unique_ptr<model::IModel> model;
+  parakeet::ParakeetModel* parakeetModel = nullptr;
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outputHandlers;
   if (engineType == EngineType::Parakeet) {
-    model = make_unique<parakeet::ParakeetModel>(
+    auto ownedModel = make_unique<parakeet::ParakeetModel>(
         adapter.buildParakeetConfig(configurationParams, env));
+    parakeetModel = ownedModel.get();
+    model = std::move(ownedModel);
     outputHandlers.add(make_shared<JsParakeetTranscriptArrayHandler>());
+    outputHandlers.add(make_shared<JsParakeetVadEventHandler>());
   } else {
     model = make_unique<whisper::WhisperModel>(
         adapter.buildWhisperConfig(configurationParams, env));
@@ -253,6 +319,14 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
       std::move(outputHandlers));
 
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
+  if (parakeetModel != nullptr) {
+    // Framework-path streaming (cfg.streaming) VAD transitions share the
+    // job output queue; the duplex path queues its own.
+    parakeetModel->setOnVadEventCallback([queue = addon->addonCpp->outputQueue](
+                                             const parakeet::VadEvent& event) {
+      queue->queueResult(std::any(event));
+    });
+  }
   return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
@@ -394,6 +468,10 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
         env,
         "encoderOnCoreml",
         js::Boolean::create(env, parakeetModel->getEncoderOnCoreml() != 0));
+    result.setProperty(
+        env,
+        "modelType",
+        js::String::create(env, parakeetModel->getModelTypeName()));
     return result;
   }
 
@@ -423,6 +501,7 @@ inline js_value_t* getBackendInfo(js_env_t* env, js_callback_info_t* info) try {
       "encoderBackend",
       js::String::create(env, whisperModel.getBackendName()));
   result.setProperty(env, "encoderOnCoreml", js::Boolean::create(env, false));
+  result.setProperty(env, "modelType", js::String::create(env, "whisper"));
   // Whisper-only extras: device-memory snapshot at load().
   result.setProperty(
       env,
@@ -553,9 +632,12 @@ streamingConfigFromModel(parakeet::ParakeetModel& model) {
   config.historyMs = model.getStreamingHistoryMs();
   config.emitPartials = model.getStreamingEmitPartials();
   config.emitEnergyVad = model.getStreamingEnergyVad();
-  config.diarOnsetThreshold = model.getDiarOnsetThreshold();
-  config.diarMinSegmentMs =
-      static_cast<int>(model.getDiarMinDurationOn() * 1000.0F);
+  config.energyVadThresholdDb = model.getStreamingEnergyVadThresholdDb();
+  config.energyVadWindowMs = model.getStreamingEnergyVadWindowMs();
+  config.energyVadHangoverMs = model.getStreamingEnergyVadHangoverMs();
+  config.emitSpeakerVad = model.getStreamingSpeakerVad();
+  config.diarOnsetThreshold = model.getDiarizationThreshold();
+  config.diarMinSegmentMs = model.getDiarizationMinSegmentMs();
   config.leftContextMs = model.getStreamingLeftContextMs();
   config.rightLookaheadMs = model.getStreamingRightLookaheadMs();
   config.spkCacheEnable = model.getStreamingSpkCacheEnable();
@@ -592,6 +674,22 @@ overrideBool(js_env_t* env, js::Object& obj, const char* name, bool& target) {
   }
 }
 
+inline void overrideIfFinite(
+    js_env_t* env, js::Object& obj, const char* name, float& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    if (std::isfinite(*value))
+      target = static_cast<float>(*value);
+  }
+}
+
+inline void overrideIfUnitInterval(
+    js_env_t* env, js::Object& obj, const char* name, float& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    if (*value >= 0.0 && *value <= 1.0)
+      target = static_cast<float>(*value);
+  }
+}
+
 inline void applyStreamingOverrides(
     js_env_t* env, js::Object& configObj,
     parakeet::ParakeetStreamingProcessor::Config& config) {
@@ -602,6 +700,17 @@ inline void applyStreamingOverrides(
       env, configObj, "rightLookaheadMs", config.rightLookaheadMs);
   overrideBool(env, configObj, "emitPartials", config.emitPartials);
   overrideBool(env, configObj, "emitEnergyVad", config.emitEnergyVad);
+  overrideIfFinite(
+      env, configObj, "energyVadThresholdDb", config.energyVadThresholdDb);
+  overrideIfPositive(
+      env, configObj, "energyVadWindowMs", config.energyVadWindowMs);
+  overrideIfNonNegative(
+      env, configObj, "energyVadHangoverMs", config.energyVadHangoverMs);
+  overrideBool(env, configObj, "emitSpeakerVad", config.emitSpeakerVad);
+  overrideIfUnitInterval(
+      env, configObj, "diarizationThreshold", config.diarOnsetThreshold);
+  overrideIfNonNegative(
+      env, configObj, "diarizationMinSegmentMs", config.diarMinSegmentMs);
   // AOSC per-call overrides (v2.1+ Sortformer only).
   overrideBool(env, configObj, "spkCacheEnable", config.spkCacheEnable);
   overrideIfPositive(env, configObj, "spkCacheLen", config.spkCacheLen);

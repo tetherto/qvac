@@ -25,13 +25,16 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <streambuf>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <parakeet/diarization.h>
+#include <parakeet/engine.h>
 #include <parakeet/streaming.h>
 
 #include "ParakeetConfig.hpp"
@@ -56,6 +59,7 @@ class ParakeetModel
       public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
   using OutputCallback = std::function<void(const Transcript&)>;
+  using VadEventCallback = std::function<void(const VadEvent&)>;
   using ValueType = float;
   using Input = std::vector<ValueType>;
   using InputView = std::span<const ValueType>;
@@ -153,6 +157,16 @@ public:
   }
   bool getStreamingEmitPartials() const { return cfg_.streamingEmitPartials; }
   bool getStreamingEnergyVad() const { return cfg_.streamingEnergyVad; }
+  float getStreamingEnergyVadThresholdDb() const {
+    return cfg_.streamingEnergyVadThresholdDb;
+  }
+  int getStreamingEnergyVadWindowMs() const {
+    return cfg_.streamingEnergyVadWindowMs;
+  }
+  int getStreamingEnergyVadHangoverMs() const {
+    return cfg_.streamingEnergyVadHangoverMs;
+  }
+  bool getStreamingSpeakerVad() const { return cfg_.streamingSpeakerVad; }
   // AOSC accessors (v2.1+ Sortformer only). Forwarded verbatim from
   // ParakeetConfig; parakeet-cpp ignores them for non-Sortformer engines
   // and for v1/v2 Sortformer GGUFs.
@@ -172,13 +186,27 @@ public:
   }
   bool isSortformer() const { return cfg_.modelType == ModelType::SORTFORMER; }
   bool isNemotron() const { return cfg_.modelType == ModelType::NEMOTRON; }
-  float getDiarOnsetThreshold() const { return diarConfig_.onset; }
-  float getDiarMinDurationOn() const { return diarConfig_.minDurationOn; }
+  // Sortformer segmentation knobs with the addon defaults applied.
+  float getDiarizationThreshold() const {
+    return resolveDiarizationThreshold(cfg_);
+  }
+  int getDiarizationMinSegmentMs() const {
+    return resolveDiarizationMinSegmentMs(cfg_);
+  }
+  // speech-cpp's `parakeet.model.type` string ("ctc", "tdt", "rnnt", "eou",
+  // "nemotron", "sortformer"); empty before load().
+  const std::string& getModelTypeName() const { return modelTypeName_; }
 
   // ── Configuration ──────────────────────────────────────────────────────
   void setConfig(const ParakeetConfig& config) { cfg_ = config; }
   void setOnSegmentCallback(const OutputCallback& callback) {
     on_segment_ = callback;
+  }
+  // Receives the VAD transitions of the framework-path streaming session
+  // (cfg_.streaming). Called on the processing thread from inside
+  // feed_pcm_f32 / finalize.
+  void setOnVadEventCallback(VadEventCallback callback) {
+    onVadEvent_ = std::move(callback);
   }
   // TEST-ONLY hook: directly append a Transcript to output_ so unit
   // tests can exercise the framework's drainage path without driving a
@@ -236,6 +264,34 @@ public:
       const std::string& detected, ModelType fallback);
   [[nodiscard]] static int
   resolveStreamingChunkMs(ModelType modelType, int configuredChunkMs);
+  [[nodiscard]] static float
+  resolveDiarizationThreshold(const ParakeetConfig& cfg);
+  [[nodiscard]] static int
+  resolveDiarizationMinSegmentMs(const ParakeetConfig& cfg);
+
+  // ParakeetConfig -> speech-cpp option structs. Public so the forwarding
+  // of every key can be unit-tested without a model.
+  [[nodiscard]] static pkt::EngineOptions buildEngineOptions(
+      const ParakeetConfig& cfg, const std::filesystem::path& ggufPath);
+  [[nodiscard]] static pkt::StreamingOptions
+  buildAsrStreamingOptions(const ParakeetConfig& cfg, int sampleRate);
+  [[nodiscard]] static pkt::SortformerStreamingOptions
+  buildSortformerStreamingOptions(const ParakeetConfig& cfg, int sampleRate);
+  [[nodiscard]] static pkt::DiarizationOptions
+  buildDiarizationOptions(const ParakeetConfig& cfg);
+  // A VadStateChanged event with a known state becomes a VadEvent; every
+  // other event (EndOfTurn, Unknown state) yields nullopt.
+  [[nodiscard]] static std::optional<VadEvent>
+  toVadEvent(const pkt::StreamEvent& event, VadSource source);
+  // speech-cpp's energy detector reports only the last transition of each
+  // feed call, so with it on audio is fed one RMS window at a time (a feed
+  // call only appends until a chunk is full). 0 = energy VAD off, feed
+  // whole buffers.
+  [[nodiscard]] static size_t
+  energyVadFeedSliceSamples(bool enabled, int windowMs, int sampleRate);
+  static void feedInSlices(
+      pkt::StreamSession& session, const float* samples, size_t count,
+      size_t sliceSamples);
 
 private:
   void throwIfCancelled() const;
@@ -339,10 +395,11 @@ private:
   static constexpr int HOP_LENGTH = 160;
   static constexpr float SAMPLE_RATE = 16000.0f;
 
-  DiarizationConfig diarConfig_;
-
   // ── Sortformer head dispatch ───────────────────────────────────────────
-  std::string runSortformerProcess(const Input& input);
+  // Returns the "Speaker N: ..." text and fills segmentsOut with the same
+  // segments in structured form.
+  std::string runSortformerProcess(
+      const Input& input, std::vector<SpeakerSegment>& segmentsOut);
 
   // ── ASR head dispatch ──────────────────────────────────────────────────
   std::string runAsrProcess(const Input& input);
@@ -368,6 +425,12 @@ private:
   std::mutex streaming_mutex_;
   std::vector<Transcript> pending_streaming_segments_;
 
+  VadEventCallback onVadEvent_;
+  // Last state forwarded by the framework-path session; repeats are dropped.
+  std::optional<bool> lastVadSpeaking_;
+  // Forwards a session StreamEvent to onVadEvent_ when it is a VAD change.
+  void forwardStreamEvent(const pkt::StreamEvent& event, VadSource source);
+
   // Feeds a cfg_.streaming chunk and returns the concatenated text of the
   // segments fired during the call. Sentinel strings are applied when the
   // session emitted nothing so the Transcript-shaped JS contract holds.
@@ -386,6 +449,11 @@ private:
   int64_t encoderMs_ = 0;
   int64_t decoderMs_ = 0;
   int64_t totalEncodedFrames_ = 0;
+  // Sortformer streaming: 1 once the v2.1 AOSC speaker cache drove a
+  // session, 0 for the v1 sliding window.
+  int64_t aoscActive_ = 0;
+
+  std::string modelTypeName_;
 
   mutable std::atomic_uint64_t nextGeneration_ = 1;
   mutable std::atomic_uint64_t activeGeneration_ = 0;

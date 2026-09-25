@@ -1,5 +1,6 @@
 #include "JSAdapter.hpp"
 
+#include <cmath>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -34,6 +35,35 @@ void readInt(js::Object& obj, js_env_t* env, const char* name, int& target) {
 void readBool(js::Object& obj, js_env_t* env, const char* name, bool& target) {
   if (auto value = obj.getOptionalPropertyAs<js::Boolean, bool>(env, name)) {
     target = *value;
+  }
+}
+
+void readFloat(
+    js::Object& obj, js_env_t* env, const char* name, float& target) {
+  if (auto value = obj.getOptionalPropertyAs<js::Number, double>(env, name)) {
+    target = static_cast<float>(*value);
+  }
+}
+
+void throwInvalidParakeetKey(const std::string& message) {
+  throw qvac_errors::StatusError(general_error::InvalidArgument, message);
+}
+
+// Range checks for the keys speech-cpp does not clamp itself (the
+// energy-VAD window and hangover are clamped inside the engine).
+void validateParakeetConfig(const ParakeetConfig& config) {
+  if (!std::isfinite(config.diarizationThreshold) ||
+      config.diarizationThreshold > 1.0F) {
+    throwInvalidParakeetKey(
+        "diarizationThreshold must be between 0 and 1 (negative keeps the "
+        "default)");
+  }
+  if (!std::isfinite(config.prewarmAudioSeconds) ||
+      config.prewarmAudioSeconds <= 0.0F) {
+    throwInvalidParakeetKey("prewarmAudioSeconds must be greater than 0");
+  }
+  if (!std::isfinite(config.streamingEnergyVadThresholdDb)) {
+    throwInvalidParakeetKey("streamingEnergyVadThresholdDb must be finite");
   }
 }
 
@@ -179,6 +209,22 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
   readBool(
       jsObject, env, "streamingEmitPartials", config.streamingEmitPartials);
   readBool(jsObject, env, "streamingEnergyVad", config.streamingEnergyVad);
+  readFloat(
+      jsObject,
+      env,
+      "streamingEnergyVadThresholdDb",
+      config.streamingEnergyVadThresholdDb);
+  readInt(
+      jsObject,
+      env,
+      "streamingEnergyVadWindowMs",
+      config.streamingEnergyVadWindowMs);
+  readInt(
+      jsObject,
+      env,
+      "streamingEnergyVadHangoverMs",
+      config.streamingEnergyVadHangoverMs);
+  readBool(jsObject, env, "streamingSpeakerVad", config.streamingSpeakerVad);
   readInt(
       jsObject, env, "streamingLeftContextMs", config.streamingLeftContextMs);
   readInt(
@@ -208,6 +254,18 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
       "streamingSpkCacheUpdatePeriod",
       config.streamingSpkCacheUpdatePeriod);
 
+  // Sortformer segmentation (offline and streaming); negative keeps the
+  // addon defaults.
+  readFloat(jsObject, env, "diarizationThreshold", config.diarizationThreshold);
+  readInt(
+      jsObject, env, "diarizationMinSegmentMs", config.diarizationMinSegmentMs);
+
+  // Engine construction: first-call prewarm and long-form windowing.
+  readBool(jsObject, env, "prewarm", config.prewarm);
+  readFloat(jsObject, env, "prewarmAudioSeconds", config.prewarmAudioSeconds);
+  readInt(jsObject, env, "longFormWindowFrames", config.longFormWindowFrames);
+  readInt(jsObject, env, "longFormContextFrames", config.longFormContextFrames);
+
   // Dynamic-backend loading; empty -> leave the existing setting alone.
   readString(jsObject, env, "backendsDir", config.backendsDir);
   readString(jsObject, env, "openclCacheDir", config.openclCacheDir);
@@ -217,6 +275,7 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
     readInnerModelParams(innerConfigOpt.value(), env, config);
   }
 
+  validateParakeetConfig(config);
   return config;
 }
 

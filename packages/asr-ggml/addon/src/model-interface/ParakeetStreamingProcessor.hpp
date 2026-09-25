@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -54,6 +55,14 @@ public:
     int historyMs = ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS;
     bool emitPartials = true;
     bool emitEnergyVad = false;
+    float energyVadThresholdDb =
+        ParakeetConfig::DEFAULT_STREAMING_ENERGY_VAD_THRESHOLD_DB;
+    int energyVadWindowMs =
+        ParakeetConfig::DEFAULT_STREAMING_ENERGY_VAD_WINDOW_MS;
+    int energyVadHangoverMs =
+        ParakeetConfig::DEFAULT_STREAMING_ENERGY_VAD_HANGOVER_MS;
+    // Sortformer only: queue a VadEvent on every speaker-activity change.
+    bool emitSpeakerVad = false;
     float diarOnsetThreshold = 0.5F;
     int diarMinSegmentMs = 200;
     // ASR-only knobs (Sortformer ignores them). <0 means "leave the
@@ -110,6 +119,7 @@ private:
   void processLoop();
   void onAsrSegment(const pkt::StreamingSegment& seg);
   void onDiarSegment(const pkt::StreamingDiarizationSegment& seg);
+  void onStreamEvent(const pkt::StreamEvent& event, VadSource source);
   void emitPending();
   // Terminal RuntimeStats queued FIFO behind the drained segments; the JS
   // driver waits for it before marking the streaming job finished.
@@ -140,6 +150,11 @@ private:
 
   // Joins the worker exactly once across racing end()/cancel()/dtor calls.
   std::once_flag teardown_once_;
+
+  // Energy-VAD feed slicing (ParakeetModel::energyVadFeedSliceSamples) and
+  // the last forwarded VAD state, so repeats are dropped.
+  size_t feedSliceSamples_ = 0;
+  std::optional<bool> lastVadSpeaking_;
 
   // Wall-clock seconds of audio fed so far; mirrors what the legacy
   // process() path tracked, used to translate per-session relative

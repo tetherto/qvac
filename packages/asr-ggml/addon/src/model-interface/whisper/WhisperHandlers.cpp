@@ -236,6 +236,11 @@ const std::unordered_map<std::string, HandlerFunction<whisper_full_params>>
            params.initial_prompt = std::get<std::string>(value).c_str();
          }},
 
+        {"carry_initial_prompt",
+         [](whisper_full_params& params, const JSValueVariant& value) {
+           params.carry_initial_prompt = std::get<bool>(value);
+         }},
+
         {"language",
          [](whisper_full_params& params, const JSValueVariant& value) {
            const auto& language = std::get<std::string>(value);
