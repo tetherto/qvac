@@ -93,6 +93,12 @@ def _normalize_tools(
         handler = entry.pop("handler", None)
         if handler is not None:
             handlers[entry["name"]] = handler
+        # `defer_loading` is the alias the generated model exposes, so it is
+        # what a Python caller reaches for first. The worker drops unknown keys
+        # silently, so an unmapped alias would turn a deferred tool into an
+        # always-loaded one.
+        if "defer_loading" in entry:
+            entry["deferLoading"] = entry.pop("defer_loading")
         if entry.get("type") != "function":
             wrapped = {
                 "type": "function",
@@ -102,17 +108,10 @@ def _normalize_tools(
                     "parameters", {"type": "object", "properties": {}}
                 ),
             }
-            # Opt-in fields the simplified form may also carry. Dropping them
-            # here would quietly turn a deferred tool into an always-loaded one.
-            # `defer_loading` is accepted too: that is the alias the generated
-            # model exposes, so it is what a Python caller reaches for first.
-            for key, wire in (
-                ("deferLoading", "deferLoading"),
-                ("defer_loading", "deferLoading"),
-                ("group", "group"),
-            ):
+            # Opt-in fields the simplified form may also carry.
+            for key in ("deferLoading", "group"):
                 if key in entry:
-                    wrapped[wire] = entry[key]
+                    wrapped[key] = entry[key]
             entry = wrapped
         wire_tools.append(entry)
     return wire_tools, handlers
