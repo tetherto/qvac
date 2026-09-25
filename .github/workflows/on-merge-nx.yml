@@ -80,14 +80,14 @@ jobs:
     steps:
       # fetch-depth: 0 is load-bearing: shallow, dorny cannot resolve
       # github.event.before and reports every file as added, selecting all 13.
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
 
       - name: Filter changed packages
         id: filter
         if: github.event_name == 'push'
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # 4.0.1
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # 4.0.3
         with:
           # base == this branch so dorny diffs the push delta, not against main
           # (where these project.json don't exist yet, so all 14 would match).
@@ -244,7 +244,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.detect.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           fetch-depth: 0
       - uses: ./.github/actions/release-merge-guard
@@ -390,7 +390,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Not left in .git/config while the publish steps run, as on main.
@@ -493,7 +493,7 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Not left in .git/config while the publish steps run, as on main.
@@ -556,7 +556,7 @@ jobs:
 
       - name: Set up Node.js for platform package publish
         if: matrix.slicePlatformPackages
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: "24.14.1"
           registry-url: https://registry.npmjs.org/

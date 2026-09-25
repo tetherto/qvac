@@ -83,7 +83,7 @@ jobs:
       any: ${{ steps.compute.outputs.any }}
       carveouts: ${{ steps.compute.outputs.carveouts }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
       - id: compute
         uses: ./.github/actions/nx-project-matrix
         with:
@@ -133,7 +133,7 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           repository: ${{ inputs.repository || github.repository }}
           ref: ${{ inputs.ref || github.ref }}
@@ -147,7 +147,7 @@ jobs:
 
       - name: Setup AWS + Windows CLI
         if: matrix.mode == 'standard'
-        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
+        uses: tetherto/qvac/.github/actions/setup-aws-prebuild@a7699c5099fac4364f50978de107b913166225fb
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
 
@@ -163,7 +163,7 @@ jobs:
 
       - name: Setup vcpkg (composite)
         if: matrix.mode == 'standard'
-        uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
+        uses: tetherto/qvac/.github/actions/setup-vcpkg@a7699c5099fac4364f50978de107b913166225fb
         env:
           MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         with:
@@ -219,7 +219,7 @@ jobs:
       - name: Get vcpkg cache (restore)
         if: matrix.mode == 'standard'
         id: vcpkg-cache
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           # The ports glob below is the PACKAGE-local overlay (one file today, in
           # embed-llamacpp). The workspace-root 'vcpkg/ports/**' is deliberately
@@ -247,7 +247,7 @@ jobs:
 
       - name: Get ccache cache
         if: matrix.hasCcache
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           key: ccache-cpp-${{ matrix.package }}-${{ hashFiles(format('{0}/vcpkg.json', matrix.workdir)) }}
           path: ~/.cache/ccache
@@ -255,13 +255,13 @@ jobs:
 
       - name: Setup Node.js
         if: matrix.mode == 'coverage'
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: lts/*
 
       - name: Setup Bare tooling (composite)
         if: matrix.mode == 'standard'
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@a7699c5099fac4364f50978de107b913166225fb
         with:
           shell_type: ${{ (matrix.platform == 'win32' || matrix.platform == 'windows') && 'powershell' || 'bash' }}
 
@@ -405,7 +405,7 @@ jobs:
       # --- asr-ggml: parakeet GGUF from S3 via AWS OIDC (cached) ---
       - name: Configure AWS credentials via OIDC
         if: matrix.needsParakeetS3Gguf
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # 6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
@@ -413,7 +413,7 @@ jobs:
       - name: Cache Parakeet sortformer q4 GGUF
         if: matrix.needsParakeetS3Gguf
         id: cache-parakeet-models
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           path: ${{ matrix.workdir }}/models/sortformer-4spk-v1.q4_0.gguf
           key: ${{ matrix.package }}-cpp-q4-sortformer-v1-${{ hashFiles('.github/workflows/cpp-tests-nx.yml') }}
@@ -445,7 +445,7 @@ jobs:
       - name: Cache TTS venv + q4 GGUFs
         if: matrix.needsTtsVenvModels
         id: cache-tts-models
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           path: |
             ${{ matrix.workdir }}/venv
@@ -538,7 +538,7 @@ jobs:
           matrix.mode == 'standard' &&
           (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'merge_group' || github.event_name == 'schedule') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && (inputs.ref == '' || inputs.ref == github.ref_name) && (inputs.repository == '' || inputs.repository == github.repository) &&
           hashFiles(format('{0}/vcpkg/cache/**', matrix.workdir)) != ''
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # 6.1.0
         with:
           key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
           path: ${{ matrix.workdir }}/vcpkg/cache
@@ -596,7 +596,7 @@ jobs:
 
       - name: Archive Coverage Results
         if: matrix.mode == 'coverage'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: coverage-report-${{ matrix.package }}
           path: |

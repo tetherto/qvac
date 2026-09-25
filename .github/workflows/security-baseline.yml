@@ -33,7 +33,7 @@ jobs:
   baseline:
     # Pinned to the 0.1.0 tag's immutable commit SHA per the org freeze-and-pin
     # convention for reusable workflows (never `@main`).
-    uses: tetherto/qvac-actions/.github/workflows/public-reusable-security.yml@bbb0740e2a16b94371c7439e0e06945c5b68e759 # 0.3.0
+    uses: tetherto/qvac-actions/.github/workflows/public-reusable-security.yml@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
     permissions:
       contents: read
       security-events: write
@@ -74,13 +74,13 @@ jobs:
       pull-requests: read
     steps:
       - name: Checkout PR code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           # Default shallow fetch: the changed-file list comes from the PR files
           # API below, so this job needs no history beyond the checked-out tree.
           persist-credentials: false
       - name: Set up Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: 20
       - name: Run trust-policy tests
