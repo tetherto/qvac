@@ -216,6 +216,10 @@ cosyvoice3/
 audio8-lm-q8_0.gguf              (~0.6 GB; also -f16 / -q4_0 / -f32)
 audio8-codec-decoder-q8_0.gguf   (~110 MB; also -f16 / -f32)
 audio8-codec-encoder-q8_0.gguf   (~120 MB; also -f16 / -f32; cloning only)
+audio8-codec-decoder.mlmodelc/   (optional, macOS / iOS: Apple Core ML sidecar for
+                                  the codec synthesis stack, picked up when it sits
+                                  next to the decoder GGUF; one export serves every
+                                  quant tier)
 
 # MOSS (OpenMOSS MOSS-TTS v1.5 Delay; 24 kHz, 8B backbone + RVQ codec); the
 # encoder is only needed to clone a voice or run a dialogue
@@ -723,6 +727,21 @@ registration and the addon falls back to Vulkan or CPU.
 > `openclCacheDir` to persist the compiled kernels. A GPU request on a
 > platform or in a build without one of those backends falls back to CPU
 > and sets `response.stats.gpuUnsupported`.
+>
+> On macOS / iOS the Audio8 codec's synthesis stack (upsampling + DAC
+> decoder, the largest stage of a CPU synthesis) can additionally run on
+> Apple Core ML: the prebuilds are built with `speech-cpp[coreml]`, and the
+> engine picks up a compiled `audio8-codec-decoder.mlmodelc` sitting next to
+> the decoder GGUF (any quant tier) at `load()`, falling back to the ggml
+> backend when it is absent or cannot serve a call (a sidecar that fails is
+> retired, and later calls go straight to ggml). `response.stats.codecSidecarLoaded`
+> reports whether the sidecar is attached and `response.stats.codecOnCoreml`
+> where that synthesis actually ran its codec; the language model always stays
+> on `backendId`. Export the
+> sidecar from the decoder GGUF with `qvac-fabric-speech.cpp`'s
+> `engines/tts/scripts/export-audio8-codec-coreml.py` (see its
+> [Audio8 guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar)
+> for the measured numbers and the `AUDIO8_COREML_*` environment knobs).
 
 ### Android: dynamic backend loading
 
@@ -1108,12 +1127,19 @@ response.stats.audioDurationMs
 response.stats.totalSamples
 response.stats.tokensPerSecond   // Audio8 and MOSS count codec frames, the others characters
 response.stats.generatedFrames   // Audio8 and MOSS only: codec frames (Audio8 every 46 ms, MOSS every 80 ms)
+response.stats.codecSidecarLoaded // Audio8 only, macOS / iOS: 1 while the Apple Core ML codec sidecar is attached
+response.stats.codecOnCoreml     // Audio8 only: 1 when this synthesis ran the codec on that sidecar, 0 when on the ggml backend
 response.stats.backendDevice     // 0=CPU, 1=GPU
 response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other
 // present when a LavaSR enhancer is active:
 response.stats.enhancerBackendDevice // -1 none, 0 CPU, 1 GPU
 response.stats.enhancerBackendId
 ```
+
+For `runStream()` and `runStreaming()`, `codecSidecarLoaded` and
+`codecOnCoreml` retain the last chunk that reported each field, including zero
+when a sidecar is retired or synthesis falls back to ggml. They are not summed;
+if no chunk reports a field, it remains absent.
 
 ### Text helpers
 

@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engine accepts beside `f32`, and which one is fastest on each backend.
   Component resolution goes by filename prefix and does not rank
   quantizations, so stage one file per component or name it explicitly.
+- **Audio8 Core ML runtime stats.** `codecSidecarLoaded` reports whether the
+  codec sidecar remains attached; `codecOnCoreml` reports whether the last
+  synthesis used it. Both flags survive streaming as the last reported chunk
+  value, reset on unload, and ignore results from an engine replaced by reload.
 - MOSS engine (`engine: 'moss'`, OpenMOSS MOSS-TTS v1.5 Delay): 24 kHz
   synthesis from a backbone and the two codec halves (`files.mossBackbone`,
   `files.mossCodecDecoder`, and `files.mossCodecEncoder` to clone a voice from
@@ -66,7 +70,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
   weightless fit-measure model that carries no vocabulary, which a memory-fit
   measurement never needs; loading a real model is unchanged and still
-  requires one.
+  requires one. Also the speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2),
+  and its Vulkan backend no longer crashes during CosyVoice3 GPU synthesis on
+  NVIDIA GPUs that report cooperative-matrix2 support. The pinned engine also
+  brings the MOSS engine above, and Parler and Audio8 now accept a weightless
+  fit-measure model that carries no vocabulary, which a memory-fit measurement
+  never needs; loading a real model is unchanged and still requires one.
+  Existing CosyVoice3 and Supertonic models are unaffected, and there is no API
+  change beyond the MOSS additions above.
 - Raise the `speech-cpp` floor to `2026-09-21`, for the Core ML sidecars above
   and for a round of CosyVoice3 optimizations that needs no model change. On
   Metal, single-token LM decode runs one flash-attention op per layer instead
