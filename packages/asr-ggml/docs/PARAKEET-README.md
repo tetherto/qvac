@@ -429,7 +429,7 @@ const info = model.getBackendInfo()
 
 It returns `null` before `load()` / after `unload()`. `backendId` follows the `BackendId` enum (`0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other; see `index.d.ts`).
 
-`encoderBackend` and `encoderOnCoreml` report where the FastConformer encoder ran. On Apple hardware, when a Core ML (Apple Neural Engine) encoder sidecar is present and initialises, the encoder runs on the Neural Engine while the TDT/CTC decoder stays on the ggml backend, so `encoderBackend` is `'coreml'` and `encoderOnCoreml` is `true`. Otherwise -- off Apple, or when the sidecar is absent or fails to load (ggml fallback) -- `encoderBackend` mirrors `backendName` and `encoderOnCoreml` is `false`.
+`encoderBackend` and `encoderOnCoreml` report whether a Core ML (Apple Neural Engine) encoder sidecar loaded. On Apple hardware, when a sidecar for a TDT, Unified, EOU, or Sortformer v2.1 GGUF is present and initialises, `encoderBackend` is `'coreml'` and `encoderOnCoreml` is `true`; the decoder or speaker head stays on the ggml backend, and a call the sidecar cannot take (an EOU input of another length, Unified streaming, a failed prediction) still runs the encoder on ggml. Otherwise -- off Apple, for CTC and Sortformer v1, or when the sidecar is absent or fails to load -- `encoderBackend` mirrors `backendName` and `encoderOnCoreml` is `false`. See [Core ML encoder sidecars](../README.md#core-ml-encoder-sidecars-apple) for the per-model contract.
 
 Once a `run()` / `runStreaming()` job settles, `response.stats` carries a `RuntimeStats` object -- pipeline timings plus the post-fallback backend truth:
 
@@ -441,8 +441,11 @@ await response.onUpdate(() => {}).await()
 // response.stats.gpuUnsupported  // 1 when a GPU was present but the engine ran
 //                                //   on CPU anyway (e.g. Mali Vulkan mis-compute,
 //                                //   or a vendor/tier declined by policy)
-// response.stats.encoderOnCoreml // 1 when the FastConformer encoder ran on the
-//                                //   Apple Neural Engine (Core ML sidecar); else 0
+// response.stats.encoderOnCoreml // 1 when a Core ML encoder sidecar loaded at
+//                                //   load(); else 0
+// response.stats.encoderUsedCoreml // offline ASR only: 1 when every
+//                                  //   transcription in the job ran its
+//                                  //   encoder on Core ML, 0 when any ran on ggml
 // response.stats.audioDurationMs, encoderMs, decoderMs, melSpecMs, totalEncodedFrames, ...
 ```
 

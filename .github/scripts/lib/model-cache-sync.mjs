@@ -236,7 +236,11 @@ const versionOf = (f) => [f.package, f['cache-version'], f.group, f.paths].join(
  * workflow that mentions the action must yield at least one parsed site, and
  * the totals must not fall below what the repo is known to have.
  */
-export const FLOOR = { seeds: 12, consumers: 100, nxConsumers: 10 }
+// consumers dropped from 100 to 55 when the per-package integration-test-<pkg>
+// workflows were consolidated into integration-test-nx.yml, which reads its
+// cache blocks from each package's project.json instead. The nxConsumers floor
+// is what guards that path, so a blind parser still cannot slip through.
+export const FLOOR = { seeds: 12, consumers: 55, nxConsumers: 10 }
 
 export function findParserGaps(files = listWorkflows()) {
   const gaps = []
