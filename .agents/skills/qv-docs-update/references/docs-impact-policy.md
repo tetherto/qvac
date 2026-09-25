@@ -20,9 +20,9 @@ Terminology: the reader of these docs is a **user**. Reserve "consumer" for soft
 | New parameter needed to use a feature | See "Parameters" below. This is the most common misclassification. |
 | Observable behaviour change: defaults, ordering, limits, error conditions, emitted events | Pages state these in prose. A stale statement is worse than a missing one. |
 | New or changed model family, model type, or `modelSrc` layout | `## Models` sections enumerate these. |
-| New or changed configuration key, or its accepted values or default | `configuration/index.mdx` documents keys in a table, so an omission shows as an incomplete enumeration. |
+| New or changed configuration key, or its accepted values or default | `sdk/<line>/configuration/index.mdx` documents keys in a table, so an omission shows as an incomplete enumeration. |
 | New, changed, or deleted example file | Pages reference examples by literal path and introduce them with a sentence describing what the script does. |
-| New CLI command, subcommand, or flag, or a change to visible output | Each command has its own heading in `cli/index.mdx`. |
+| New CLI command, subcommand, or flag, or a change to visible output | Each command has its own heading in `cli/<line>/index.mdx`. |
 | A deprecation | Users need to know before removal, not at removal. |
 
 ## Does not count as impact
@@ -56,7 +56,7 @@ A new parameter is rarely `GENERATED_DOCS_ONLY`. The generated API summary says 
 
 So the summary shows that the parameter exists, in the signature. It never says what the parameter means or when to reach for it.
 
-If a user cannot use the feature without knowing the parameter, then it belongs on the capability page. That is the pattern `ai-capabilities/text-generation.mdx` already follows for its generation controls. If the parameter is a tuning knob whose name and type say everything, then the summary is enough.
+If a user cannot use the feature without knowing the parameter, then it belongs on the capability page. That is the pattern `sdk/<line>/ai-capabilities/text-generation.mdx` already follows for its generation controls. If the parameter is a tuning knob whose name and type say everything, then the summary is enough.
 
 ## `GENERATED_DOCS_ONLY` — narrow by design
 

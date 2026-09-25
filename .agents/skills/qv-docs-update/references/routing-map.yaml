@@ -1,12 +1,19 @@
 # Area routing map — the R3 fallback of qv-docs-update.
 #
 # R1 (examples, by literal `file=` directive), R2 (symbols, by
-# `/reference/api#<symbol>` anchor) and R4 (CLI commands, by heading) are exact
-# lookups against bindings that already exist in the content. R3 runs per file:
-# it is consulted for each source path the exact routers could not resolve.
+# `/sdk/reference/api#<symbol>` anchor) and R4 (CLI commands, by heading) are
+# exact lookups against bindings that already exist in the content. R3 runs per
+# file: it is consulted for each source path the exact routers could not
+# resolve.
 #
 # `source` is a glob relative to the monorepo root.
 # `pages` are globs relative to `docs/website/content/docs/`.
+#
+# `<line>` stands for the collection's current documentation line — the folder
+# written in parentheses, `sdk/(v0.20)` and `cli/(v0.14)`. The router expands it
+# per collection, so an entry never has to be touched when a line is cut. It is
+# written rather than globbed because a bare `*` would match the cut lines too,
+# and this skill writes only to the current one (see references/docs-scope.md).
 #
 # `pages: []` is a positive declaration: this path is intentionally not
 # documented. It is not an empty stub. It stops the skill from raising
@@ -22,22 +29,28 @@
 # ---------------------------------------------------------------------------
 
 - source: packages/sdk/src/logging/**
-  pages: [runtime/logging.mdx]
+  pages: [sdk/<line>/runtime/logging.mdx]
 
 - source: packages/sdk/src/client/config-loader/**
-  pages: [configuration/index.mdx]
+  pages: [sdk/<line>/configuration/index.mdx]
 
+# `sdk/<line>/index.mdx` is the SDK collection overview — the page the old
+# `introduction.mdx` became. Its `## Models` section is what the model pages
+# point back at.
 - source: packages/sdk/src/models/**
-  pages: [models/**, introduction.mdx]
+  pages: [sdk/<line>/models/**, sdk/<line>/index.mdx]
 
+# The HTTP server ships in the SDK and is documented in the CLI collection,
+# under `qvac serve`. The two collections are versioned independently, so this
+# entry crosses into the CLI's own current line.
 - source: packages/sdk/src/server/**
-  pages: [cli/http-server/**]
+  pages: [cli/<line>/http-server/**]
 
 - source: packages/sdk/src/worker/**
-  pages: [runtime/lifecycle.mdx, runtime/cancellation.mdx]
+  pages: [sdk/<line>/runtime/lifecycle.mdx, sdk/<line>/runtime/cancellation.mdx]
 
 - source: packages/sdk/src/client/rpc/**
-  pages: [p2p-capabilities/**]
+  pages: [sdk/<line>/p2p-capabilities/**]
 
 # Error schemas, listed BEFORE the general schema entry so they win the match.
 # The generated API summary documents the error contract at `#errors`, not
@@ -50,17 +63,18 @@
 # usually a shape several capabilities share, but scoped to ai-capabilities.
 # The Phase 4 candidate filter narrows it.
 - source: packages/sdk/src/types/**
-  pages: [ai-capabilities/**, configuration/index.mdx]
+  pages: [sdk/<line>/ai-capabilities/**, sdk/<line>/configuration/index.mdx]
 
 - source: packages/sdk/src/schemas/**
-  pages: [ai-capabilities/**, configuration/index.mdx]
+  pages: [sdk/<line>/ai-capabilities/**, sdk/<line>/configuration/index.mdx]
 
-# Packaging integrations. The tutorials cover these, and tutorials are on the
-# docs-scope denylist, so there is no writable target.
+# Packaging integrations. The tutorials cover these. They left the SDK for the
+# Resources collection, which is unversioned and on the docs-scope denylist, so
+# there is still no writable target.
 - source: packages/sdk/src/expo/**
-  pages: []          # covered by tutorials/expo.mdx — denylisted, read-only
+  pages: []          # covered by resources/tutorials/expo.mdx — denylisted, read-only
 - source: packages/sdk/src/electron-forge/**
-  pages: []          # covered by tutorials/electron.mdx — denylisted, read-only
+  pages: []          # covered by resources/tutorials/electron.mdx — denylisted, read-only
 - source: packages/sdk/src/pear/**
   pages: []          # Pear runtime integration is not documented on the site
 
@@ -80,8 +94,9 @@
 - source: packages/cli/src/errors.ts
   pages: []          # error class plumbing; user-visible message changes route via the command's own heading
 
+# One key can be documented in both collections, each at its own current line.
 - source: packages/cli/src/config.ts
-  pages: [configuration/index.mdx, cli/index.mdx]
+  pages: [sdk/<line>/configuration/index.mdx, cli/<line>/index.mdx]
 
 # DECIDED: `qvac verify` is intentionally undocumented on the site.
 # `verify deps` diffs native addon changes between two lockfile refs, and
@@ -100,10 +115,10 @@
 # ---------------------------------------------------------------------------
 
 - source: packages/sdk-python/src/**
-  pages: [python-sdk.mdx]
+  pages: [sdk/<line>/python-sdk.mdx]
 
 - source: packages/sdk-python/**
-  pages: [python-sdk.mdx]
+  pages: [sdk/<line>/python-sdk.mdx]
 
 # ---------------------------------------------------------------------------
 # Never routed, in any package
