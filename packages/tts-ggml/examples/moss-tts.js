@@ -22,6 +22,7 @@
  *   bare examples/moss-tts.js "Cloned speech." voice.wav
  *   QVAC_TTS_MOSS_STREAM_FRAMES=25 bare examples/moss-tts.js "Streamed speech."
  *   QVAC_TTS_MOSS_GPU=1 bare examples/moss-tts.js "GPU synthesis."
+ *   QVAC_TTS_MOSS_DURATION=38 bare examples/moss-tts.js "About three seconds [pause 0.5s] long."
  *
  * Expects the MOSS GGUFs (moss-tts-delay-f16.gguf,
  * moss-codec-decoder-f16.gguf, and, to clone, moss-codec-encoder-f16.gguf)
@@ -46,6 +47,7 @@ const argv = global.Bare ? global.Bare.argv : process.argv
 const textArg = argv[2]
 const referenceAudioArg = argv[3]
 const streamFrames = Number(proc.env.QVAC_TTS_MOSS_STREAM_FRAMES || 0)
+const durationTokens = Number(proc.env.QVAC_TTS_MOSS_DURATION || 0)
 
 function fail(message) {
   console.error(message)
@@ -63,11 +65,13 @@ const modelDir = path.join(pkgRoot, 'models')
 function buildModel() {
   const voice = referenceAudioArg ? { referenceAudio: path.resolve(referenceAudioArg) } : {}
   const streaming = streamFrames > 0 ? { streamChunkTokens: streamFrames } : {}
+  const duration = durationTokens > 0 ? { durationTokens } : {}
   return new TTSGgml({
     engine: TTSGgml.ENGINE_MOSS,
     files: { modelDir },
     ...voice,
     ...streaming,
+    ...duration,
     config: {
       language: DEFAULT_LANGUAGE,
       useGPU: proc.env.QVAC_TTS_MOSS_GPU === '1'
