@@ -21,6 +21,12 @@ inline constexpr char VULKAN_PREWARM_TEXT[] = "The quick brown fox.";
 void applyVulkanPipelineCache(
     tts_cpp::supertonic::EngineOptions& opts, const SupertonicConfig& cfg);
 
+// Test-only view of the SupertonicConfig -> tts_cpp EngineOptions mapping. The
+// mapping itself lives in an anonymous namespace inside SupertonicModel.cpp;
+// production callers go through SupertonicModel.
+tts_cpp::supertonic::EngineOptions
+engineOptionsForTests(const SupertonicConfig& cfg);
+
 // Conditioning reaches supertonic through EngineOptions at construction, and
 // tts_cpp::supertonic::Engine::synthesize() takes text only. Reject a per-call
 // value instead of accepting one the engine will never see.
