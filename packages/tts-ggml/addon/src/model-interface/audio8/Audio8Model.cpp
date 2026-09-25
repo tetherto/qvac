@@ -45,14 +45,6 @@ void requireFinite(float value, const char* what) {
   }
 }
 
-std::filesystem::path resolveBackendsDir(const std::string& configured) {
-  std::filesystem::path dir(configured);
-#ifdef BACKENDS_SUBDIR
-  dir = (dir / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-  return dir;
-}
-
 tts_cpp::audio8::EngineOptions toEngineOptions(const Audio8Config& cfg) {
   tts_cpp::audio8::EngineOptions opts;
   opts.lm_gguf_path = cfg.lmModelPath;
