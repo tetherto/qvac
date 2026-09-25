@@ -37,7 +37,7 @@ export const vectorStoreAttachBody = z
   })
   .passthrough()
 
-// ─── Parsed shapes (source of truth; the store imports these) ─────────
+// ─── Parsed shapes ─────────────────────────────────────────────────────
 
 export class InvalidExpiresAfterError extends Error {
   constructor(message: string) {
