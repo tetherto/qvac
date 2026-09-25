@@ -603,11 +603,14 @@ Populated on `response.stats` when the model was constructed with
 > Pivot translations may emit keys prefixed with the model name
 > (e.g. `"BERGAMOT : ->TPS"`); the table above models the non-pivot shape.
 
-`totalTokens`, `totalTime`, `decodeTime` and `encodeTime` accumulate over the
-life of the loaded model rather than describing the run that returned them,
-and `TPS` divides those totals. They restart at zero on `unload()`/`load()`.
-For per-run figures, difference consecutive readings — jobs are serialized,
-so nothing lands between them.
+`totalTime`, `decodeTime`, `encodeTime` and `TTFT` accumulate over the life
+of the loaded model rather than describing the run that returned them.
+`totalTokens` accumulates on Bergamot and on GGML greedy decoding
+(`beamsize: 1`), but GGML beam search reports the run's own count. `TPS`
+divides these readings as they stand. The counters restart at zero on
+`unload()`/`load()` and on `cancel()`. For per-run figures, difference
+consecutive readings — jobs are serialized, so nothing lands between them —
+and read a reading lower than the last as that run's own figure.
 
 ### Errors
 

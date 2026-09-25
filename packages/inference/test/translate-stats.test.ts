@@ -122,7 +122,7 @@ test('NMT stats: the single request after a batch omits the cumulative fields', 
   t.absent(afterBatch.totalTokens, 'tokens cannot be separated from the batch')
   t.absent(afterBatch.decodeTime, 'decodeTime cannot be separated from the batch')
   t.absent(afterBatch.tokensPerSecond, 'no rate without a per-request figure')
-  t.is(afterBatch.timeToFirstToken, 12, 'per-job fields still pass through')
+  t.absent(afterBatch.timeToFirstToken, 'TTFT cannot be separated from the batch')
   t.is(next.totalTokens, 10, 'the post-batch reading becomes the next baseline')
   t.ok(Math.abs(next.totalTime! - 100) < 1e-9, 'the following request is differenced again')
 })
@@ -138,4 +138,46 @@ test('NMT stats: a counter first reported on a later request is read as its own 
 
   t.ok(Math.abs(second.encodeTime! - 400) < 1e-9, 'no baseline means the reading stands')
   t.is(second.totalTokens, 10, 'other counters are still differenced')
+})
+
+test('NMT stats: TTFT is differenced like the encode time it derives from', (t) => {
+  const nmt = model()
+  const ggml = { engine: 'IndicTrans', beamsize: 4 }
+
+  buildNmtTranslationStats(
+    { totalTime: 0.067, encodeTime: 0.0085, TTFT: 8.5, totalTokens: 6 },
+    nmt,
+    ggml
+  )
+  const second = buildNmtTranslationStats(
+    { totalTime: 0.125, encodeTime: 0.0112, TTFT: 11.2, totalTokens: 6 },
+    nmt,
+    ggml
+  )
+
+  t.ok(Math.abs(second.timeToFirstToken! - 2.7) < 1e-9, 'TTFT is this request only')
+  t.ok(Math.abs(second.encodeTime! - 2.7) < 1e-9, 'and agrees with encodeTime')
+})
+
+test('NMT stats: GGML beam search tokens are per-job and pass through', (t) => {
+  const nmt = model()
+  const ggml = { engine: 'IndicTrans', beamsize: 4 }
+
+  buildNmtTranslationStats({ totalTime: 0.067, totalTokens: 6 }, nmt, ggml)
+  const repeat = buildNmtTranslationStats({ totalTime: 0.125, totalTokens: 6 }, nmt, ggml)
+  const longer = buildNmtTranslationStats({ totalTime: 0.2, totalTokens: 8 }, nmt, ggml)
+
+  t.is(repeat.totalTokens, 6, 'a repeat request is not reported as zero tokens')
+  t.ok(Math.abs(repeat.tokensPerSecond! - 6 / 0.058) < 1e-6, 'the rate uses the per-job count')
+  t.is(longer.totalTokens, 8, 'not the difference between two runs')
+})
+
+test('NMT stats: GGML greedy decoding accumulates tokens and is differenced', (t) => {
+  const nmt = model()
+  const greedy = { engine: 'IndicTrans', beamsize: 1 }
+
+  buildNmtTranslationStats({ totalTime: 1, totalTokens: 6 }, nmt, greedy)
+  const second = buildNmtTranslationStats({ totalTime: 2, totalTokens: 12 }, nmt, greedy)
+
+  t.is(second.totalTokens, 6)
 })

@@ -314,7 +314,7 @@ export async function* translate(
   // consumer has drained the tokens, so a peer request on the same model that
   // ends in between cannot move the baseline first.
   const statsAtEnd = nmtResponse.await().then(
-    () => buildNmtTranslationStats(nmtResponse.stats, model),
+    () => buildNmtTranslationStats(nmtResponse.stats, model, entry.local.config),
     () => undefined
   )
   for await (const token of nmtResponse.iterate()) {
