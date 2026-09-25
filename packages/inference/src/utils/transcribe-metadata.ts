@@ -2,9 +2,10 @@ import { ModelType, type TranscribeSegment } from '@/schemas/index'
 import { TranscriptionFailedError } from '@/errors/index'
 
 /**
- * A native ASR segment, as emitted by either engine of `@qvac/asr-ggml`.
- * `text` plus the timing fields are shared; `isEndOfTurn` and `startsWord`
- * are parakeet-only and absent on whisper output.
+ * A native transcript segment, as emitted by either engine of
+ * `@qvac/asr-ggml` and by `@qvac/bci-whispercpp`. `text` plus the timing
+ * fields are shared; `isEndOfTurn` and `startsWord` are parakeet-only, and
+ * `windowStartTimestep` is BCI delta-streaming-only.
  */
 export interface AsrAddonSegment {
   text: string
@@ -16,16 +17,20 @@ export interface AsrAddonSegment {
   isEndOfTurn?: boolean
   /** Parakeet: the segment begins a new SentencePiece word. */
   startsWord?: boolean
+  /** BCI delta streaming: absolute timestep at which the owning window began. */
+  windowStartTimestep?: number
 }
 
 /**
- * Normalize a native ASR segment to the engine-level `TranscribeSegment`
- * shape exposed to callers: seconds → milliseconds, `toAppend` → `append`,
- * and defaults for optional fields. The two parakeet-only flags are carried
- * through only when the engine sent them, so whisper segments do not gain
- * fields whose value would be meaningless.
+ * Normalize a native transcript segment to the engine-level
+ * `TranscribeSegment` shape exposed to callers: seconds → milliseconds,
+ * `toAppend` → `append`, and defaults for optional fields. The
+ * engine-specific fields are carried through only when the engine sent them,
+ * so a segment does not gain fields whose value would be meaningless.
  */
-export function toTranscribeSegment(chunk: AsrAddonSegment): TranscribeSegment {
+export function toTranscribeSegment(
+  chunk: AsrAddonSegment
+): TranscribeSegment & { windowStartTimestep?: number } {
   return {
     text: chunk.text,
     startMs: (chunk.start ?? 0) * 1000,
@@ -33,7 +38,10 @@ export function toTranscribeSegment(chunk: AsrAddonSegment): TranscribeSegment {
     append: chunk.toAppend ?? false,
     id: chunk.id ?? 0,
     ...(chunk.isEndOfTurn !== undefined && { isEndOfTurn: chunk.isEndOfTurn }),
-    ...(chunk.startsWord !== undefined && { startsWord: chunk.startsWord })
+    ...(chunk.startsWord !== undefined && { startsWord: chunk.startsWord }),
+    ...(chunk.windowStartTimestep !== undefined && {
+      windowStartTimestep: chunk.windowStartTimestep
+    })
   }
 }
 

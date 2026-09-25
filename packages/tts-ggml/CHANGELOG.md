@@ -21,13 +21,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engine accepts beside `f32`, and which one is fastest on each backend.
   Component resolution goes by filename prefix and does not rank
   quantizations, so stage one file per component or name it explicitly.
+- MOSS engine (`engine: 'moss'`, OpenMOSS MOSS-TTS v1.5 Delay): 24 kHz
+  synthesis from three GGUFs (`files.mossBackbone`, `files.mossCodecDecoder`,
+  and `files.mossCodecEncoder` to clone a voice from `referenceAudio`),
+  auto-detected from `modelDir`. `streamChunkTokens > 0` streams fixed-size
+  chunks of codec frames (12.5 per second) while the backbone is still
+  generating. Desktop only: the backbone has 8B parameters.
+- Engine options, results and library queries that tts-cpp already provided
+  but the addon did not expose:
+  - Chatterbox: `nPredict` (the per-call speech-token cap, previously fixed at
+    1000 tokens, about 40 s), `maxSentenceChars` / `crossfadeMs` sentence
+    auto-split, `batchCfmSteps` for batch synthesis (`cfmSteps` keeps driving
+    native streaming), `streamLeftContextTokens` for bounded per-chunk cost on
+    long streams, `temperature` / `topK` / `topP` / `repeatPenalty` sampling, and
+    the multilingual `exaggeration` / `cfgWeight` / `minP` controls. Stats gain
+    `t3Ms`, `s3genMs` and `t3Tokens`.
+  - Supertonic: native chunk streaming (`streamChunkTokens`,
+    `streamFirstChunkTokens`, `streamChunkTolerancePct`, `streamMinChunkTokens`),
+    which the constructor used to reject; external voices through
+    `voiceJsonPath`; `prewarmText`; and `vulkanDevice`. Native streaming is
+    rejected together with the LavaSR enhancer or denoiser.
+  - CosyVoice3: per-call `instruct` on `run()` / `runStream()` /
+    `runStreaming()`; `files.cosyvoiceVocab` / `cosyvoiceMerges` /
+    `cosyvoiceVoiceModel` to point at the text frontend and a baked voice outside
+    the model dir; `vulkanDevice`; `flowCutPrompt`; and the engine's per-stage
+    timings and work counters in the stats.
+  - Audio8: the engine's per-stage timings in the stats.
+  - LavaSR denoiser: runs on the GPU when the engine does (it was always on the
+    scalar CPU core), and reports `denoiserBackendDevice` / `denoiserBackendId`.
+    The enhancer follows `vulkanDevice` on Supertonic and CosyVoice3.
+  - `TTSGgml.getVoiceControls()`: tts-cpp's emotion / pace vocabulary and each
+    engine's supported subset, without loading a model.
+  - ggml log lines (backend selection, device enumeration) reach the JS logger
+    through tts-cpp's `tts_cpp_log_set` instead of stderr. Engine diagnostics
+    that tts-cpp still prints straight to stderr are unaffected.
 
 ### Changed
 
-- Raise the `speech-cpp` floor to `2026-09-23`. Parler and Audio8 now accept a
-  weightless fit-measure model that carries no vocabulary, which a memory-fit
-  measurement never needs; loading a real model is unchanged and still
-  requires one.
+- Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to
+  `2026-09-23#3`. The speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2),
+  and its Vulkan backend no longer crashes during CosyVoice3 GPU synthesis on
+  NVIDIA GPUs that report cooperative-matrix2 support. The pinned engine also
+  brings the MOSS engine above, and Parler and Audio8 now accept a weightless
+  fit-measure model that carries no vocabulary, which a memory-fit measurement
+  never needs; loading a real model is unchanged and still requires one.
+  Existing CosyVoice3 and Supertonic models are unaffected, and there is no API
+  change beyond the MOSS additions above.
 - Raise the `speech-cpp` floor to `2026-09-21`, for the Core ML sidecars above
   and for a round of CosyVoice3 optimizations that needs no model change. On
   Metal, single-token LM decode runs one flash-attention op per layer instead

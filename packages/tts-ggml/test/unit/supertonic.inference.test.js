@@ -180,26 +180,88 @@ test('Supertonic: invalid engine option rejects at constructor time', (t) => {
   t.ok(threw, 'invalid engine should throw')
 })
 
-test('Supertonic: streamChunkTokens / streamFirstChunkTokens rejected at constructor', (t) => {
-  for (const knob of ['streamChunkTokens', 'streamFirstChunkTokens']) {
-    let threw = false
-    try {
-      /* eslint no-new: 0 */
-      new TTSGgml({
-        engine: TTSGgml.ENGINE_SUPERTONIC,
-        files: { supertonicModel: './models/supertonic.gguf' },
-        [knob]: 25
-      })
-    } catch (e) {
-      threw = true
-      t.ok(/Chatterbox-only/.test(e.message), `${knob} error mentions Chatterbox-only`)
-      t.ok(
-        /runStream\(\) \/ runStreaming\(\)/.test(e.message),
-        `${knob} error points at sentence-level streaming alternative`
-      )
-    }
-    t.ok(threw, `passing ${knob} on supertonic should throw`)
+test('Supertonic: native streaming knobs forward to ttsParams; omitted when unset', (t) => {
+  const knobs = {
+    streamChunkTokens: 50,
+    streamFirstChunkTokens: 20,
+    streamChunkTolerancePct: 10,
+    streamMinChunkTokens: 25
   }
+  const streaming = createMockedSupertonicModel({ extra: knobs })
+  const params = streaming._buildTtsParams()
+  for (const [knob, value] of Object.entries(knobs)) {
+    t.is(params[knob], value, `${knob} forwarded to the addon`)
+  }
+
+  const batch = createMockedSupertonicModel()._buildTtsParams()
+  for (const knob of Object.keys(knobs)) {
+    t.absent(batch[knob], `${knob} omitted when unset (engine default)`)
+  }
+})
+
+test('Supertonic: native streaming with the LavaSR enhancer or denoiser is rejected', (t) => {
+  t.exception(
+    () =>
+      createMockedSupertonicModel({
+        files: { supertonicModel: './models/supertonic.gguf', lavasrEnhancer: './e.gguf' },
+        extra: { streamChunkTokens: 50 }
+      }),
+    /enhancer\/denoiser are not supported with supertonic native chunk streaming/
+  )
+  t.exception(
+    () =>
+      createMockedSupertonicModel({
+        files: { supertonicModel: './models/supertonic.gguf', lavasrDenoiser: './d.gguf' },
+        extra: { streamChunkTokens: 50 }
+      }),
+    /enhancer\/denoiser are not supported with supertonic native chunk streaming/
+  )
+  const batch = createMockedSupertonicModel({
+    files: { supertonicModel: './models/supertonic.gguf', lavasrEnhancer: './e.gguf' },
+    extra: { streamChunkTokens: 0 }
+  })
+  t.is(batch._buildTtsParams().lavasrEnhancerPath, './e.gguf', 'streamChunkTokens 0 is batch')
+})
+
+test('Supertonic: voiceJsonPath, prewarmText and vulkanDevice forward to ttsParams', (t) => {
+  const params = createMockedSupertonicModel({
+    extra: {
+      voiceJsonPath: './voices/cloned.json',
+      prewarmText: 'A representative sentence.',
+      vulkanDevice: -1
+    }
+  })._buildTtsParams()
+  t.is(params.voiceJsonPath, './voices/cloned.json')
+  t.is(params.prewarmText, 'A representative sentence.')
+  t.is(params.vulkanDevice, -1, 'vulkanDevice -1 (auto-pick) forwarded as-is')
+
+  const defaults = createMockedSupertonicModel()._buildTtsParams()
+  t.absent(defaults.voiceJsonPath)
+  t.absent(defaults.prewarmText)
+  t.absent(defaults.vulkanDevice)
+})
+
+test('Supertonic: supertonic-only options are rejected on other engines', (t) => {
+  const chatterboxFiles = { t3Model: './models/t3.gguf', s3genModel: './models/s3gen.gguf' }
+  for (const [knob, value] of [
+    ['voiceJsonPath', './v.json'],
+    ['prewarmText', 'hi'],
+    ['streamChunkTolerancePct', 10],
+    ['streamMinChunkTokens', 25]
+  ]) {
+    t.exception(
+      () =>
+        new TTSGgml({ engine: TTSGgml.ENGINE_CHATTERBOX, files: chatterboxFiles, [knob]: value }),
+      /supertonic-only/,
+      `${knob} on chatterbox throws`
+    )
+  }
+  t.exception(
+    () =>
+      new TTSGgml({ engine: TTSGgml.ENGINE_CHATTERBOX, files: chatterboxFiles, vulkanDevice: 1 }),
+    /supertonic\/cosyvoice3-only/,
+    'vulkanDevice on chatterbox throws'
+  )
 })
 
 test('Supertonic: runStream emits per-sentence chunks with chunkIndex + isLast (mocked)', async (t) => {
