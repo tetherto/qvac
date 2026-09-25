@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "inference-addon-cpp/Errors.hpp"
 #include "js-interface/NumberConversion.hpp"
@@ -100,6 +101,42 @@ std::optional<bool> readOptionalBool(
   return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
 }
 
+std::string readArrayString(
+    js::Array array, js_env_t* env, uint32_t index, const char* key) {
+  js_value_t* raw = nullptr;
+  if (js_get_element(env, array, index, &raw) != 0 ||
+      !js::is<js::String>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must contain only strings");
+  }
+  return js::String::fromValue(raw).as<std::string>(env);
+}
+
+std::vector<std::string>
+readStringElements(js::Array array, js_env_t* env, const char* key) {
+  const uint32_t count = array.size(env);
+  std::vector<std::string> values;
+  values.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    values.push_back(readArrayString(array, env, i, key));
+  }
+  return values;
+}
+
+std::vector<std::string>
+readOptionalStringArray(js::Object obj, js_env_t* env, const char* key) {
+  js_value_t* raw = obj.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return {};
+  }
+  if (!js::is<js::Array>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must be an array of strings");
+  }
+  return readStringElements(js::Array::fromValue(raw), env, key);
+}
 }
 
 EngineType JSAdapter::readEngineType(
@@ -334,13 +371,18 @@ JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "mossCodecEncoderPath");
   cfg.referenceAudio =
       readOptionalString(configurationParams, env, "referenceAudio");
+  cfg.dialogueReferences =
+      readOptionalStringArray(configurationParams, env, "dialogueReferences");
   cfg.language = readOptionalString(configurationParams, env, "language");
+  cfg.durationTokens =
+      readOptionalInt(configurationParams, env, "durationTokens");
   cfg.seed = readOptionalInt(configurationParams, env, "seed");
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.streamChunkFrames =
       readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
 

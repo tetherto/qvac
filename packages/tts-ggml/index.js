@@ -245,10 +245,16 @@ const AUDIO8_ENCODER_RE = /^audio8-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
 const AUDIO8_QUANT_ORDER = ["q8_0", "f16", "q4_0", "f32"];
 const AUDIO8_VOICE_KEYS = ["referenceAudio", "referenceText"];
 const MOSS_BACKBONE_RE = /^moss-tts-delay(-[a-z0-9_]+)?\.gguf$/i;
+const MOSS_DIALOGUE_BACKBONE_RE = /^moss-ttsd(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_DECODER_RE = /^moss-codec-decoder(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_ENCODER_RE = /^moss-codec-encoder(-[a-z0-9_]+)?\.gguf$/i;
 const MOSS_NATIVE_SAMPLE_RATE = 24000;
 const MOSS_FRAMES_PER_SECOND = 12.5;
+const MOSS_MAX_NEW_TOKENS = 2048;
+const MOSS_MAX_CHANNELS = 32;
+const MOSS_TERMINATION_ROWS = 2;
+const MOSS_MAX_DURATION_TOKENS = MOSS_MAX_NEW_TOKENS - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
+const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"];
 /** Engines that draw tokens, and so accept temperature / topK / topP / maxFrames. */
 const SAMPLING_ENGINES = [ENGINE_PARLER, ENGINE_AUDIO8];
 // Per-engine supported subsets, mirroring controls::supported_emotions() /
@@ -669,6 +675,9 @@ function detectEngineType(engine, files) {
             return ENGINE_AUDIO8;
         if (findQuantRankedGguf(files.modelDir, MOSS_BACKBONE_RE))
             return ENGINE_MOSS;
+        if (findQuantRankedGguf(files.modelDir, MOSS_DIALOGUE_BACKBONE_RE)) {
+            return ENGINE_MOSS;
+        }
         if (fileExistsSafe(path.join(files.modelDir, "flow-lm.gguf")))
             return ENGINE_POCKET;
     }
@@ -793,6 +802,34 @@ function assertAudio8SamplingFinite(sampling, where) {
             continue;
         throw new Error(`tts-ggml: ${where}: ${field} must be a finite number`);
     }
+}
+function isValidDurationTokens(value) {
+    return Number.isInteger(value) && value >= 0 && value <= MOSS_MAX_DURATION_TOKENS;
+}
+function assertMossDurationTokens(value, where) {
+    if (value == null || isValidDurationTokens(value))
+        return;
+    throw new Error(`tts-ggml: ${where}: durationTokens must be an integer from 0 to ` +
+        `${MOSS_MAX_DURATION_TOKENS} (0 = free length)`);
+}
+function copyDialogueReferences(references) {
+    if (references == null)
+        return undefined;
+    return Array.isArray(references)
+        ? [...references]
+        : references;
+}
+function isNonEmptyString(value) {
+    return typeof value === "string" && value !== "";
+}
+function assertDialogueReferenceList(references) {
+    if (Array.isArray(references) &&
+        references.length > 0 &&
+        references.every(isNonEmptyString)) {
+        return;
+    }
+    throw new Error("tts-ggml: dialogueReferences must be a non-empty array of WAV paths, " +
+        "one per speaker");
 }
 function assertNotNegative(value, name, zeroMeans, where) {
     if (value === undefined || value >= 0)
@@ -963,6 +1000,8 @@ class TTSGgml {
     _mossBackbonePath;
     _mossCodecDecoderPath;
     _mossCodecEncoderPath;
+    _dialogueReferences;
+    _durationTokens;
     _referenceText;
     _greedy;
     _description;
@@ -1004,6 +1043,7 @@ class TTSGgml {
         this._lazySessionLoading = resolveDefaultLazySessionLoading(options.lazySessionLoading);
         this._outputSampleRate = validateOutputSampleRate(this._config.outputSampleRate);
         this._engineType = detectEngineType(options.engine, normalizedFiles);
+        this._assignMossVoiceOptions(options);
         if (this._engineType === ENGINE_POCKET) {
             if (normalizedFiles.lavasrEnhancer || normalizedFiles.lavasrDenoiser) {
                 throw new Error("Pocket does not support LavaSR enhancement or denoising");
@@ -1080,10 +1120,22 @@ class TTSGgml {
         this._audio8CodecDecoderPath = firstNonEmpty(files.audio8CodecDecoder, findQuantRankedGguf(files.modelDir, AUDIO8_DECODER_RE));
         this._audio8CodecEncoderPath = firstNonEmpty(files.audio8CodecEncoder, findQuantRankedGguf(files.modelDir, AUDIO8_ENCODER_RE));
     }
+    _mossBackbonePatterns() {
+        return this._dialogueReferences
+            ? [MOSS_DIALOGUE_BACKBONE_RE]
+            : [MOSS_BACKBONE_RE, MOSS_DIALOGUE_BACKBONE_RE];
+    }
+    _findMossBackbone(modelDir) {
+        return firstNonEmpty(...this._mossBackbonePatterns().map((pattern) => findQuantRankedGguf(modelDir, pattern)));
+    }
     _resolveMossModelPaths(files) {
-        this._mossBackbonePath = firstNonEmpty(files.mossBackbone, findQuantRankedGguf(files.modelDir, MOSS_BACKBONE_RE));
+        this._mossBackbonePath = firstNonEmpty(files.mossBackbone, this._findMossBackbone(files.modelDir));
         this._mossCodecDecoderPath = firstNonEmpty(files.mossCodecDecoder, findQuantRankedGguf(files.modelDir, MOSS_DECODER_RE));
         this._mossCodecEncoderPath = firstNonEmpty(files.mossCodecEncoder, findQuantRankedGguf(files.modelDir, MOSS_ENCODER_RE));
+    }
+    _assignMossVoiceOptions(options) {
+        this._dialogueReferences = copyDialogueReferences(options.dialogueReferences);
+        this._durationTokens = options.durationTokens ?? undefined;
     }
     _assignSynthesisOptions(options) {
         this._referenceAudio = options.referenceAudio;
@@ -1317,14 +1369,52 @@ class TTSGgml {
         }
     }
     _assertMossOptionConsistency() {
-        if (this._engineType !== ENGINE_MOSS)
+        if (this._engineType !== ENGINE_MOSS) {
+            this._assertNoMossOnlyOptions();
             return;
+        }
         if (this._enhancerGgufPath || this._denoiserGgufPath) {
             throw new Error("tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
                 "the moss engine. Drop lavasrEnhancer / lavasrDenoiser.");
         }
         this._assertMossOutputRate();
         this._assertMossVoiceConsistent();
+        assertMossDurationTokens(this._durationTokens, "constructor");
+        this._assertMossDialogueReferences();
+    }
+    _assertNoMossOnlyOptions() {
+        const mossOnly = setOptionNames({
+            durationTokens: this._durationTokens,
+            dialogueReferences: this._dialogueReferences !== undefined || undefined,
+        });
+        if (mossOnly.length === 0)
+            return;
+        throw new Error(`tts-ggml: ${mossOnly.join(", ")} are moss-only options ` +
+            `(engine is ${this._engineType})`);
+    }
+    _assertMossDialogueReferences() {
+        if (this._dialogueReferences === undefined)
+            return;
+        assertDialogueReferenceList(this._dialogueReferences);
+        if (this._referenceAudio) {
+            throw new Error("tts-ggml: referenceAudio and dialogueReferences are exclusive; " +
+                "pass one recording per speaker in dialogueReferences");
+        }
+        if (!this._mossCodecEncoderPath) {
+            throw new Error("tts-ggml: dialogue synthesis with the moss engine needs the codec " +
+                "encoder GGUF (files.mossCodecEncoder)");
+        }
+        if (!this._mossBackbonePath) {
+            throw new Error("tts-ggml: dialogue synthesis with the moss engine needs the MOSS-TTSD " +
+                "backbone: stage moss-ttsd-*.gguf in modelDir or set files.mossBackbone");
+        }
+    }
+    _assertSentenceStreamingAllowed(where) {
+        if (this._dialogueReferences === undefined)
+            return;
+        throw new Error(`tts-ggml: ${where}: MOSS dialogue cannot be split into sentences, ` +
+            "because every job must open with the reference transcripts; use " +
+            "run() or native streaming (streamChunkTokens)");
     }
     _assertMossOutputRate() {
         if (this._outputSampleRate == null ||
@@ -1554,6 +1644,7 @@ class TTSGgml {
         await this._waitPocketCancel();
         this._checkPocketReload();
         if (input?.streamOutput === true && this._engineType !== ENGINE_POCKET) {
+            this._assertSentenceStreamingAllowed("run with streamOutput");
             if (typeof input.input !== "string" ||
                 input.input.trim().length === 0) {
                 throw new QvacErrorAddonTTSGgml({
@@ -1606,6 +1697,7 @@ class TTSGgml {
     async runStreaming(textStream, options = {}) {
         await this._waitPocketCancel();
         this._checkPocketReload();
+        this._assertSentenceStreamingAllowed("runStreaming");
         const jobFields = this._resolveJobFields(options, "runStreaming");
         const streamOptions = this._resolveRunStreamingOptions(textStream, options);
         let normalized = this._normalizeTextStream(textStream);
@@ -2149,6 +2241,12 @@ class TTSGgml {
         if (this._referenceAudio != null) {
             parameters.referenceAudio = this._referenceAudio;
         }
+        if (this._dialogueReferences) {
+            parameters.dialogueReferences = [...this._dialogueReferences];
+        }
+        if (this._durationTokens != null) {
+            parameters.durationTokens = this._durationTokens | 0;
+        }
         if (this._streamChunkTokens != null) {
             parameters.streamChunkTokens = this._streamChunkTokens | 0;
         }
@@ -2513,6 +2611,7 @@ class TTSGgml {
             minNewTokens: this._minNewTokens,
             normalizeNumbers: this._normalizeNumbers,
             seed: this._seed,
+            durationTokens: this._durationTokens,
         };
     }
     _restoreReloadableState(state) {
@@ -2535,6 +2634,7 @@ class TTSGgml {
         this._minNewTokens = state.minNewTokens;
         this._normalizeNumbers = state.normalizeNumbers;
         this._seed = state.seed;
+        this._durationTokens = state.durationTokens;
     }
     _applyReloadableRuntimeConfig(newConfig) {
         this._assertMossReloadKeepsVoice(newConfig);
@@ -2549,14 +2649,26 @@ class TTSGgml {
             this._outputSampleRate = validateOutputSampleRate(runtimeConfig.outputSampleRate);
         }
         this._applyAudio8Reload(newConfig);
+        this._applyMossReload(newConfig);
     }
     _assertMossReloadKeepsVoice(newConfig) {
         if (this._engineType !== ENGINE_MOSS)
             return;
-        if (newConfig.referenceAudio === undefined)
+        const voiceKeys = MOSS_INSTANCE_VOICE_KEYS.filter((key) => newConfig[key] !== undefined);
+        if (voiceKeys.length === 0)
             return;
-        throw new Error("tts-ggml: reload: the moss engine encodes referenceAudio once per " +
-            "instance; create a new instance to clone a different recording");
+        throw new Error(`tts-ggml: reload: the moss engine encodes ${voiceKeys.join(", ")} ` +
+            "once per instance; create a new instance to clone different recordings");
+    }
+    _applyMossReload(newConfig) {
+        if (this._engineType !== ENGINE_MOSS)
+            return;
+        const durationTokens = newConfig
+            .durationTokens;
+        if (durationTokens === undefined)
+            return;
+        assertMossDurationTokens(durationTokens, "reload");
+        this._durationTokens = durationTokens ?? undefined;
     }
     // Cross-engine conditioning is reloadable on every engine that supports it,
     // so both families change emotion the same way.

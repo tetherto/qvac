@@ -31,11 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   synthesis used it. Both flags survive streaming as the last reported chunk
   value, reset on unload, and ignore results from an engine replaced by reload.
 - MOSS engine (`engine: 'moss'`, OpenMOSS MOSS-TTS v1.5 Delay): 24 kHz
-  synthesis from three GGUFs (`files.mossBackbone`, `files.mossCodecDecoder`,
-  and `files.mossCodecEncoder` to clone a voice from `referenceAudio`),
-  auto-detected from `modelDir`. `streamChunkTokens > 0` streams fixed-size
-  chunks of codec frames (12.5 per second) while the backbone is still
-  generating. Desktop only: the backbone has 8B parameters.
+  synthesis from a backbone and the two codec halves (`files.mossBackbone`,
+  `files.mossCodecDecoder`, and `files.mossCodecEncoder` to clone a voice from
+  `referenceAudio`), auto-detected from `modelDir`. `streamChunkTokens > 0`
+  streams fixed-size chunks of codec frames (12.5 per second) while the
+  backbone is still generating. `durationTokens` sets a target length,
+  `[pause Ns]` markers and inline Pinyin / IPA steer the speech, and
+  `dialogueReferences` (one 24 kHz recording per speaker, with the text opening
+  with their transcripts) drives MOSS-TTSD multi-speaker dialogue on the
+  `moss-ttsd-*.gguf` backbone. Desktop only: the backbones have 8B parameters.
 - Engine options, results and library queries that tts-cpp already provided
   but the addon did not expose:
   - Chatterbox: `nPredict` (the per-call speech-token cap, previously fixed at
@@ -76,7 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resolve Pocket CPU memory planning through the dynamically loaded backend,
   fixing unresolved `ggml_graph_plan` imports in Linux and Android prebuilds.
 - Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to
-  `2026-09-23#3`. The speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2),
+  `2026-09-24` for the MOSS engine above. The speech ggml now tracks upstream
+  ggml 0.20.2 (was 0.10.2),
   and its Vulkan backend no longer crashes during CosyVoice3 GPU synthesis on
   NVIDIA GPUs that report cooperative-matrix2 support. The pinned engine also
   brings the MOSS engine above, and Parler and Audio8 now accept a weightless

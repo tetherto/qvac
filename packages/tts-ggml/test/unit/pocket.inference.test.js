@@ -4,6 +4,7 @@ const TTSGgml = require('../../index')
 const { TTSInterface } = require('../../tts')
 const MockedBinding = require('../mock/MockedBinding')
 const process = require('bare-process')
+const path = require('bare-path')
 global.process = process
 const files = { modelDir: '/models/pocket' }
 const make = (options = {}) => new TTSGgml({ engine: 'pocket', files, ...options })
@@ -21,10 +22,10 @@ test('Pocket bundle resolution and unsigned seed are preserved', (t) => {
   t.is(m.getEngineType(), TTSGgml.ENGINE_POCKET)
   t.alike(m._buildTtsParams(), {
     engineType: 'pocket',
-    pocketFlowModelPath: '/models/pocket/flow-lm.gguf',
-    pocketMimiModelPath: '/models/pocket/mimi.gguf',
-    pocketFrontendPath: '/models/pocket/frontend.json',
-    pocketVoicePath: '/models/pocket/voice.gguf',
+    pocketFlowModelPath: path.join(files.modelDir, 'flow-lm.gguf'),
+    pocketMimiModelPath: path.join(files.modelDir, 'mimi.gguf'),
+    pocketFrontendPath: path.join(files.modelDir, 'frontend.json'),
+    pocketVoicePath: path.join(files.modelDir, 'voice.gguf'),
     referenceAudio: '',
     language: 'en',
     useGPU: false,

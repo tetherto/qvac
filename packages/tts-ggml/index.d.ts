@@ -103,7 +103,10 @@ interface TTSGgmlFiles {
      */
     audio8CodecEncoder?: string;
     audio8CodecEncoderPath?: string;
-    /** MOSS Delay backbone GGUF path. Overrides `modelDir`. */
+    /**
+     * MOSS Delay backbone GGUF path: MOSS-TTS (`moss-tts-delay-*.gguf`) or the
+     * MOSS-TTSD dialogue checkpoint (`moss-ttsd-*.gguf`). Overrides `modelDir`.
+     */
     mossBackbone?: string;
     mossBackbonePath?: string;
     /** MOSS codec synthesis half (codes to 24 kHz wav). Overrides `modelDir`. */
@@ -111,7 +114,8 @@ interface TTSGgmlFiles {
     mossCodecDecoderPath?: string;
     /**
      * MOSS codec analysis half (wav to codes). Only needed to clone a voice
-     * from `referenceAudio`; a text-only deployment can leave it out.
+     * from `referenceAudio` or for `dialogueReferences`; a text-only deployment
+     * can leave it out.
      */
     mossCodecEncoder?: string;
     mossCodecEncoderPath?: string;
@@ -553,6 +557,22 @@ interface TTSGgmlOptions extends ParlerDescriptionFields, Audio8VoiceFields, TTS
     maxFrames?: number;
     /** Audio8: take the argmax instead of sampling. */
     greedy?: boolean;
+    /**
+     * MOSS: target length in codec frames (12.5 per second), from 0 to 2015
+     * (about 161 s); 0 or unset keeps the length free. Set at construction or
+     * with `reload()`, not per call.
+     */
+    durationTokens?: number;
+    /**
+     * MOSS-TTSD dialogue: one 24 kHz reference recording per speaker, in the
+     * order the text tags them (`[S1]`, `[S2]`, ...). The model continues the
+     * references, so the input text must open with each reference's transcript
+     * under its tag, followed by the lines to generate; sentence streaming is
+     * therefore rejected (use `run()` or `streamChunkTokens`). Needs
+     * `files.mossCodecEncoder`, excludes `referenceAudio`, and is fixed for the
+     * instance. With a `modelDir`, requires a `moss-ttsd-*.gguf` backbone.
+     */
+    dialogueReferences?: string[];
     minNewTokens?: number;
     /** Parler prompt digit expansion (engine default: enabled). */
     normalizeNumbers?: boolean;
@@ -808,6 +828,8 @@ declare class TTSGgml {
     private _mossBackbonePath?;
     private _mossCodecDecoderPath?;
     private _mossCodecEncoderPath?;
+    private _dialogueReferences?;
+    private _durationTokens?;
     private _referenceText?;
     private _greedy?;
     private _description?;
@@ -827,7 +849,10 @@ declare class TTSGgml {
     constructor(options?: TTSGgmlOptions);
     private _resolveEngineAndModelPaths;
     private _resolveAudio8ModelPaths;
+    private _mossBackbonePatterns;
+    private _findMossBackbone;
     private _resolveMossModelPaths;
+    private _assignMossVoiceOptions;
     private _assignSynthesisOptions;
     private _assertEngineStreamingSupport;
     private _requestsChunkStreaming;
@@ -840,6 +865,9 @@ declare class TTSGgml {
     private _assertEngineScopedOptions;
     private _assertAudio8OptionConsistency;
     private _assertMossOptionConsistency;
+    private _assertNoMossOnlyOptions;
+    private _assertMossDialogueReferences;
+    private _assertSentenceStreamingAllowed;
     private _assertMossOutputRate;
     private _assertMossVoiceConsistent;
     /**
@@ -975,6 +1003,7 @@ declare class TTSGgml {
     private _restoreReloadableState;
     private _applyReloadableRuntimeConfig;
     private _assertMossReloadKeepsVoice;
+    private _applyMossReload;
     private _applyReloadableConditioning;
     private _applyReloadableParlerConfig;
     /**
