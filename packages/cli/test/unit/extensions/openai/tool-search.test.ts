@@ -7,6 +7,10 @@ import {
   InvalidToolChoiceError
 } from '@/serve/extensions/openai/schemas/common'
 import { foldToolSearch, stripToolSearchCalls } from '@/serve/lib/tool-search'
+import {
+  accumulateUsage,
+  type DrainedCompletion
+} from '@/serve/extensions/openai/adapters/completion-result'
 
 const DEFERRED_WIRE = {
   type: 'function',
@@ -167,5 +171,42 @@ describe('stripToolSearchCalls', () => {
       ['get_weather']
     )
     assert.equal(stripped.finishReason, 'tool_calls')
+  })
+})
+
+describe('accumulateUsage', () => {
+  function turn(
+    completionTokens: number,
+    stats: DrainedCompletion['stats'],
+    text = ''
+  ): DrainedCompletion {
+    return {
+      text,
+      thinking: '',
+      toolCalls: [],
+      toolErrors: [],
+      stats,
+      stopReason: 'eos',
+      completionTokens,
+      finishReason: 'stop',
+      rawFullText: undefined
+    }
+  }
+
+  it('sums token counts across rounds and keeps the last turn otherwise', () => {
+    const search = turn(12, { promptTokens: 100, cacheTokens: 0, tokensPerSecond: 40 })
+    const answer = turn(30, { promptTokens: 60, cacheTokens: 90, tokensPerSecond: 50 }, 'done')
+
+    const total = accumulateUsage(accumulateUsage(undefined, search), answer)
+    assert.equal(total.completionTokens, 42)
+    assert.equal(total.stats?.promptTokens, 160)
+    assert.equal(total.stats?.cacheTokens, 90)
+    assert.equal(total.stats?.tokensPerSecond, 50)
+    assert.equal(total.text, 'done')
+  })
+
+  it('returns a single round unchanged', () => {
+    const only = turn(5, { promptTokens: 10 })
+    assert.equal(accumulateUsage(undefined, only), only)
   })
 })

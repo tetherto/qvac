@@ -5,8 +5,10 @@ import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import {
+  accumulateUsage,
   drainCompletion,
   formatToolErrors,
+  type DrainedCompletion,
   type OpenAiFinishReason
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { requireModel } from '@/serve/core/plugins/require-model'
@@ -232,6 +234,7 @@ async function runBlocking(
     // declare no deferred tools leave the loop on the first pass.
     let turnHistory = history
     let drained
+    let total: DrainedCompletion | undefined
     for (let round = 0; ; round++) {
       const result = completionFn({
         modelId: p.sdkModelId,
@@ -249,6 +252,7 @@ async function runBlocking(
       })
       req.bindCancel(result.requestId)
       drained = await drainCompletion(result)
+      total = accumulateUsage(total, drained)
 
       if (round >= MAX_TOOL_SEARCH_ROUNDS) break
       const extended = foldToolSearch(
@@ -262,7 +266,7 @@ async function runBlocking(
     }
 
     const { text, thinking, toolCalls, toolErrors, stats, completionTokens, finishReason } =
-      stripToolSearchCalls(drained)
+      stripToolSearchCalls(total ?? drained)
 
     req.server.qvac.logger.info(
       `  completion done tokens=${completionTokens} finish=${finishReason}` +
@@ -321,6 +325,7 @@ async function runStreaming(
     // is fine to show. Only the SSE stream is held open across a search round.
     let turnHistory = history
     let drained
+    let total: DrainedCompletion | undefined
     for (let round = 0; ; round++) {
       const emit = (delta: ChatCompletionDelta) => sendSSE(raw, chunk(delta, null))
 
@@ -342,6 +347,7 @@ async function runStreaming(
         (token) => emit({ content: token }),
         (token) => emit({ reasoning_content: token })
       )
+      total = accumulateUsage(total, drained)
 
       const extended =
         round >= MAX_TOOL_SEARCH_ROUNDS
@@ -357,8 +363,9 @@ async function runStreaming(
       turnHistory = extended
     }
 
-    const { toolCalls, toolErrors, stats, completionTokens, finishReason } =
-      stripToolSearchCalls(drained)
+    const { toolCalls, toolErrors, stats, completionTokens, finishReason } = stripToolSearchCalls(
+      total ?? drained
+    )
     const hasToolCalls = toolCalls.length > 0
 
     req.server.qvac.logger.info(

@@ -2,8 +2,10 @@ import type { ServerResponse } from 'node:http'
 import type { CompletionRun, Tool } from '@qvac/sdk'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
 import {
+  accumulateUsage,
   drainCompletion,
-  formatToolErrors
+  formatToolErrors,
+  type DrainedCompletion
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
 import {
@@ -70,8 +72,10 @@ export async function writeBlockingResponse(
   // deferred tools leave the loop on the first pass.
   let turnHistory = p.history
   let drained
+  let total: DrainedCompletion | undefined
   for (let round = 0; ; round++) {
     drained = await drainCompletion(runTurn(turnHistory))
+    total = accumulateUsage(total, drained)
     if (round >= MAX_TOOL_SEARCH_ROUNDS) break
     const extended = foldToolSearch(
       p.tools,
@@ -82,8 +86,9 @@ export async function writeBlockingResponse(
     if (!extended) break
     turnHistory = extended
   }
-  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } =
-    stripToolSearchCalls(drained)
+  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+    total ?? drained
+  )
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -181,6 +186,7 @@ export async function writeStreamingResponse(
 
   let turnHistory = p.history
   let drained
+  let total: DrainedCompletion | undefined
   for (let round = 0; ; round++) {
     // Only the answering turn's text belongs in the final response object; a
     // search turn's preamble was streamed but is not part of the answer.
@@ -189,6 +195,7 @@ export async function writeStreamingResponse(
       fullText += token
       sendDelta(token)
     })
+    total = accumulateUsage(total, drained)
 
     const extended =
       round >= MAX_TOOL_SEARCH_ROUNDS
@@ -204,8 +211,9 @@ export async function writeStreamingResponse(
     turnHistory = extended
   }
 
-  const { toolCalls, toolErrors, stats, stopReason, completionTokens } =
-    stripToolSearchCalls(drained)
+  const { toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+    total ?? drained
+  )
   const hasToolCalls = toolCalls.length > 0
 
   sendSSE(res, {

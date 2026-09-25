@@ -111,6 +111,44 @@ export async function drainCompletion(
   }
 }
 
+const SUMMED_STAT_KEYS = [
+  'promptTokens',
+  'cacheTokens',
+  'generatedTokens',
+  'emittedTokens'
+] as const
+
+function sumStat(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined) return b
+  if (b === undefined) return a
+  return a + b
+}
+
+/**
+ * Fold one turn of a multi-round request into the running total, so `usage`
+ * covers every round the request ran, not only the last. Token counts are
+ * summed; rates and timings are the latest turn's.
+ */
+export function accumulateUsage<T extends DrainedCompletion>(
+  previous: DrainedCompletion | undefined,
+  next: T
+): T {
+  if (!previous) return next
+  let stats = next.stats
+  if (previous.stats || next.stats) {
+    stats = { ...previous.stats, ...next.stats }
+    for (const key of SUMMED_STAT_KEYS) {
+      const total = sumStat(previous.stats?.[key], next.stats?.[key])
+      if (total !== undefined) stats[key] = total
+    }
+  }
+  return {
+    ...next,
+    stats,
+    completionTokens: previous.completionTokens + next.completionTokens
+  }
+}
+
 /**
  * Render drained tool-call failures for the request log: a count plus each
  * distinct error code, e.g. ` toolerrors=2 (PARSE_ERROR)`. Empty string when

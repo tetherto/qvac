@@ -164,6 +164,7 @@ Consequences worth knowing:
 - A turn that asks for a search _and_ calls a tool you can run is returned as it
   stands with the search dropped — the call is yours to answer, and the model
   searches again on your next request.
+- `usage` counts every round the request ran, search rounds included.
 - `tool_choice` naming a deferred tool is rejected with `400`
   `invalid_tool_choice` — its schema is not in the prompt, so the call cannot be
   forced. Name `tool_search` instead.
