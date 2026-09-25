@@ -12,6 +12,10 @@ const createNoLingeringBareTest = (
   testId,
   params: {},
   expectation: { validation: 'type', expectedType: 'string' },
+  // Spawns and terminates standalone Bare workers and inspects the process
+  // table afterwards. A body like this cannot become data, and it is exactly
+  // where language runtimes differ — so each client writes its own.
+  suites: ['imperative'],
   metadata: {
     category: 'lifecycle',
     dependency: 'none',

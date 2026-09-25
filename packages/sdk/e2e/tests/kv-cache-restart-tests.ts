@@ -3,6 +3,15 @@ import type { TestDefinition } from '@qvac/test-suite'
 // Its own id prefix: the executor is node-only because it inspects the worker
 // process, so neither the shared kv-cache executor nor the lifecycle one can
 // claim it.
+//
+// Not migrated, and it cannot be. The claim is that the named cache's
+// saved-message boundary outlives the worker *process*: the body reads the
+// process table before, during and after a restart and asserts the child count
+// each time, rather than assuming the restart happened. A step vocabulary that
+// could express "count this client's child processes" would be describing one
+// runtime's process model, which is the opposite of what the catalog is for --
+// the same reason the `no-lingering-bare-*` tests carry the `imperative` suite
+// tag and each client writes its own.
 export const kvCacheWorkerRestart: TestDefinition = {
   testId: 'worker-restart-kv-cache-boundary',
   params: {

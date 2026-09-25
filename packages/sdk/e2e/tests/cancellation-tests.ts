@@ -1,3 +1,20 @@
+// Cancellation, and why this whole file stays on its executors.
+//
+// Every test here issues the cancel in a retry loop bounded by whether the
+// operation has settled: a cancel that beats the request's registration
+// matches nothing, so one well-timed attempt is a coin flip and the executors
+// re-issue until the op settles or a deadline passes. Two things make that
+// inexpressible as steps -- a loop whose condition is "has this promise
+// settled yet", and the request id of a call that is still in flight, which
+// `start` binds as an opaque handle rather than as data a step can name.
+//
+// `world-cancel-then-reload` is migrated and looks similar, but it is not: one
+// broad cancel against a warm session is enough there, so it needs no loop and
+// no id.
+//
+// These carry the `imperative` suite tag, like the `no-lingering-bare-*`
+// tests: each client writes its own body, and the catalog says which tests
+// those are.
 import type { TestDefinition } from '@qvac/test-suite'
 
 export const cancelMidStreamCompletion: TestDefinition = {
@@ -7,6 +24,7 @@ export const cancelMidStreamCompletion: TestDefinition = {
     cancelAfterTokens: 3
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'completion',
     dependency: 'llm',
@@ -20,6 +38,7 @@ export const cancelBeforeBeginCompletion: TestDefinition = {
     prompt: 'Write a paragraph about the history of cryptography.'
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'completion',
     dependency: 'llm',
@@ -37,6 +56,7 @@ export const cancelThenResumeKvCache: TestDefinition = {
     cancelAfterTokens: 3
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'completion',
     dependency: 'llm',
@@ -57,6 +77,7 @@ export const cancelBroadEmbeddings: TestDefinition = {
     settleTimeoutMs: 45000
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'embeddings',
@@ -76,6 +97,7 @@ export const cancelBroadTranslateLlm: TestDefinition = {
     maxTokensAfterCancel: 30
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'llm',
@@ -89,7 +111,10 @@ export const serializeConcurrentCompletion: TestDefinition = {
     prompt: 'Reply with one short sentence naming your favourite colour.'
   },
   expectation: { validation: 'function', fn: () => true },
-  suites: ['smoke'],
+  // Imperative for the same reason as its cancel-* neighbours: it issues
+  // several completions at once and asserts how they are ordered, which is
+  // where language runtimes differ and which the step vocabulary cannot say.
+  suites: ['smoke', 'imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'llm',
@@ -107,6 +132,7 @@ export const cancelIsolatesConcurrentBatches: TestDefinition = {
     survivorPredict: 256
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'llm-batch',
@@ -122,6 +148,7 @@ export const cancelQueuedNativeBatch: TestDefinition = {
     predict: 256
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'llm-batch',
@@ -142,6 +169,7 @@ export const cancelByRequestIdEmbed: TestDefinition = {
     settleTimeoutMs: 45000
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'embeddings',
@@ -155,6 +183,7 @@ export const cancelByRequestIdTranscribe: TestDefinition = {
     audioFileName: 'transcription-short-wav.wav'
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'whisper',
@@ -174,6 +203,7 @@ export const cancelByRequestIdRagIngest: TestDefinition = {
     registryBeginGraceMs: 200
   },
   expectation: { validation: 'function', fn: () => true },
+  suites: ['imperative'],
   metadata: {
     category: 'cancellation',
     dependency: 'embeddings',
@@ -194,3 +224,24 @@ export const cancellationTests = [
   cancelByRequestIdTranscribe,
   cancelByRequestIdRagIngest
 ]
+
+/**
+ * Not runnable on the Python client yet.
+ *
+ * A skip rather than an `incomplete`, decided deliberately: these are the
+ * definitions the step vocabulary cannot express, so they would otherwise sit
+ * in the Python column as debt with no owner and no date. The reason travels
+ * with the rule, which is what keeps the skip auditable -- and they become
+ * runnable the moment the per-client imperative bodies are written.
+ *
+ * Only definitions with no declarative body are skipped; anything already
+ * migrated runs on Python like everywhere else.
+ */
+for (const test of cancellationTests) {
+  if (test.steps || test.skip) continue
+  test.skip = {
+    reason:
+      'the Python client has no body for this: it cancels a generation mid-flight, and the vocabulary has no way to start a call without awaiting it, so the Python client needs a hand-written body before this can run there',
+    platforms: ['desktop-python']
+  }
+}

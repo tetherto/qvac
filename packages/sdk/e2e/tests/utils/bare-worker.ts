@@ -85,11 +85,21 @@ function findBareChildrenWin32(parentPid: number): number[] {
   return bare
 }
 
-/** Polls until the worker set matches `want`, or the timeout expires. */
+/**
+ * Polls until the worker set matches `want`, or the timeout expires.
+ *
+ * The bound is 60s, not 15s. A worker that has loaded and unloaded dozens of
+ * models over a full run takes measurably longer to exit than one started for
+ * a single test: `worker-restart-kv-cache-boundary` passes in 2.7s on its own
+ * and was observed finishing at 15371ms and 15320ms in two full runs -- both
+ * just past the old bound, on a wait that had already succeeded. Raising it
+ * does not weaken the assertion, which is still that the worker exits; it
+ * stops a process teardown's timing from deciding the result.
+ */
 export async function waitForBareChildren(
   parentPid: number,
   want: (pids: number[]) => boolean,
-  timeoutMs = 15_000
+  timeoutMs = 60_000
 ): Promise<number[]> {
   const deadline = Date.now() + timeoutMs
   let pids = findBareChildren(parentPid)

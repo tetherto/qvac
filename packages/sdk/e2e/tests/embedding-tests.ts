@@ -1,5 +1,25 @@
 // Embedding test definitions
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/**
+ * The declarative body shared by every single-text embedding test.
+ *
+ * This is the shape most of the catalog already has by hand: load the model
+ * the test declares, make one call, pull a field out of the result, check it
+ * against the expectation. Expressed as data, any client can run it.
+ */
+const embedTextSteps: Step[] = [
+  { useModel: { deps: ['embeddings'], as: 'model' } },
+  {
+    call: {
+      method: 'embed',
+      params: { modelId: '$model', text: '$params.text' },
+      as: 'response'
+    }
+  },
+  { project: { from: '$response', path: 'embedding', as: 'embedding' } },
+  { assert: { on: '$embedding', use: 'expectation' } }
+]
 
 const createEmbeddingTest = (
   testId: string,
@@ -11,6 +31,7 @@ const createEmbeddingTest = (
   params,
   expectation: { validation: 'type', expectedType: 'array' },
   ...(suites && { suites }),
+  steps: embedTextSteps,
   metadata: {
     category: 'embedding',
     dependency: 'embeddings',
@@ -71,6 +92,27 @@ export const embedBatch: TestDefinition = {
   },
   expectation: { validation: 'type', expectedType: 'array' },
   suites: ['smoke'],
+  steps: [
+    { useModel: { deps: ['embeddings'], as: 'model' } },
+    {
+      repeat: {
+        over: '$params.texts',
+        as: 'text',
+        collectInto: 'embeddings',
+        steps: [
+          {
+            call: {
+              method: 'embed',
+              params: { modelId: '$model', text: '$text' },
+              as: 'response'
+            }
+          },
+          { project: { from: '$response', path: 'embedding', as: 'embedding' } }
+        ]
+      }
+    },
+    { assert: { on: '$embeddings', use: 'expectation' } }
+  ],
   metadata: {
     category: 'embedding',
     dependency: 'embeddings',
@@ -84,6 +126,7 @@ export const embedSimilarity: TestDefinition = {
     text: 'The cat sits on the mat.'
   },
   expectation: { validation: 'type', expectedType: 'array' },
+  steps: embedTextSteps,
   metadata: {
     category: 'embedding',
     dependency: 'embeddings',
@@ -97,6 +140,7 @@ export const embedSemanticSimilarity: TestDefinition = {
     text: 'Semantic similarity test text'
   },
   expectation: { validation: 'type', expectedType: 'array' },
+  steps: embedTextSteps,
   metadata: {
     category: 'embedding',
     dependency: 'embeddings',

@@ -1,4 +1,54 @@
-import type { TestDefinition } from '@qvac/test-suite'
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+/**
+ * One OCR run, checked the way the test asks for.
+ *
+ * `asset` with `form: 'path'` is what collapses this category's two executors
+ * into one: `node/` and `mobile/` differed in nothing but how they turned a
+ * file name into something the SDK could open.
+ *
+ * `collect: 'text'` folds the blocks into the joined string the expectations
+ * are written against; `collect: 'blocks'` keeps them structured for the tests
+ * that assert on shape rather than content.
+ */
+const ocrSteps = (
+  dependency: string,
+  wants: { wantsBlocks: boolean; checksStats: boolean; checksStructure: boolean }
+): Step[] => {
+  const fold = wants.wantsBlocks || wants.checksStructure ? 'blocks' : 'text'
+  const steps: Step[] = [
+    { useModel: { deps: [dependency], as: 'model' } },
+    { asset: { kind: 'image', file: '$params.imageFileName', form: 'path', as: 'image' } },
+    {
+      call: {
+        method: 'ocr',
+        collect: fold,
+        params: {
+          modelId: '$model',
+          image: '$image',
+          stream: '$params.streaming?',
+          options: '$params.ocrOptions?'
+        },
+        as: 'run'
+      }
+    },
+    { project: { from: '$run', path: fold, as: fold === 'blocks' ? 'blocks' : 'text' } }
+  ]
+
+  if (wants.checksStructure) {
+    steps.push({ assert: { on: '$blocks', named: 'textBlockShape' } })
+  }
+  steps.push({
+    assert: { on: fold === 'blocks' ? '$blocks' : '$text', use: 'expectation' }
+  })
+  if (wants.checksStats) {
+    steps.push({ project: { from: '$run', path: 'stats', as: 'stats' } })
+    steps.push({
+      assert: { on: '$stats', named: 'timingStatsPresent', with: { field: 'totalTime' } }
+    })
+  }
+  return steps
+}
 
 const createOcrTest = (
   testId: string,
@@ -9,13 +59,29 @@ const createOcrTest = (
   options?: { streaming?: boolean; paragraph?: boolean; resource?: string },
   estimatedDurationMs: number = 30000,
   suites?: string[]
-): TestDefinition => ({
-  testId,
-  params: { imageFileName, timeout: 300000, ...options },
-  expectation,
-  ...(suites && { suites }),
-  metadata: { category: 'ocr', dependency: options?.resource ?? 'ocr', estimatedDurationMs }
-})
+): TestDefinition => {
+  const dependency = options?.resource ?? 'ocr'
+  const wantsBlocks = expectation.validation === 'type'
+  const checksStats = testId.endsWith('-stats')
+  const checksStructure = testId.includes('block-structure')
+
+  return {
+    testId,
+    params: {
+      imageFileName,
+      timeout: 300000,
+      ...options,
+      // The executor turned `paragraph` into the SDK's options object; as data
+      // the object is the param, so the step passes it straight through and
+      // omits it entirely when the test does not ask for it.
+      ...(options?.paragraph ? { ocrOptions: { paragraph: true } } : {})
+    },
+    expectation,
+    ...(suites && { suites }),
+    steps: ocrSteps(dependency, { wantsBlocks, checksStats, checksStructure }),
+    metadata: { category: 'ocr', dependency, estimatedDurationMs }
+  }
+}
 
 export const ocrBasicPng = createOcrTest(
   'ocr-basic-png',

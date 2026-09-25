@@ -1,43 +1,7 @@
 import { Platform } from 'react-native'
 import { createExecutor, SkipExecutor } from '@qvac/test-suite/mobile'
 import type { TestDefinition } from '@qvac/test-suite'
-import {
-  profiler,
-  LLAMA_3_2_1B_INST_Q4_0,
-  LLAMA_3_2_1B_INST_Q4_0_SHARD,
-  GTE_LARGE_FP16,
-  GTE_LARGE_335M_FP16_SHARD,
-  WHISPER_TINY,
-  VAD_SILERO_5_1_2,
-  QWEN3_1_7B_INST_Q4,
-  OCR_CRAFT,
-  OCR_LATIN,
-  BERGAMOT_EN_FR,
-  BERGAMOT_EN_ES,
-  BERGAMOT_ES_EN,
-  BERGAMOT_EN_IT,
-  MARIAN_EN_HI_INDIC_200M_Q4_0,
-  MARIAN_HI_EN_INDIC_200M_Q4_0,
-  TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
-  TTS_S3GEN_EN_CHATTERBOX_Q4_0,
-  TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
-  TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
-  TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
-  TTS_CODEC_DECODER_AUDIO8_Q8_0,
-  TTS_EN_SUPERTONIC_Q8_0,
-  TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
-  TTS_ENHANCER_LAVASR_FP16,
-  TTS_DENOISER_LAVASR_FP16,
-  PARAKEET_TDT_0_6B_V3_Q4_0,
-  PARAKEET_CTC_0_6B_Q4_0,
-  PARAKEET_UNIFIED_0_6B_Q4_0,
-  PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
-  PARAKEET_EOU_120M_V1_Q4_0,
-  VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
-  SMOLVLA_LIBERO_VISION_Q8
-} from '@qvac/sdk'
+import { profiler } from '@qvac/sdk'
 import { ResourceManager } from '../shared/resource-manager.js'
 import { collectTestDeps } from '../shared/collect-test-deps.js'
 import { resolveBundledAssetUri } from './asset-uri.js'
@@ -75,6 +39,15 @@ import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { MobileCancellationExecutor } from './executors/cancellation-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 
+import * as MODEL_CONSTANTS from '@qvac/sdk'
+import { RESOURCE_TABLE } from '../shared/resource-table.js'
+import { applyResourceTable } from '../shared/resource-table-types.js'
+
+/** Where the shared table's `$asset` placeholders point on this platform. */
+function resolveTableAsset(kind: string, file: string): string {
+  return `assets/${kind}/${file}`
+}
+
 const resources = new ResourceManager({
   downloadTarget: 'mobile',
   // Mobile (iOS + Android) needs a tick after each unloadModel for the
@@ -86,383 +59,21 @@ const resources = new ResourceManager({
   unloadSettleMs: 200
 })
 
-resources.define('llm', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048 }
-})
-
-resources.define('llm-small-ctx', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 512 }
-})
-
-resources.define('llm-batch', {
-  constant: LLAMA_3_2_1B_INST_Q4_0,
-  type: 'llm',
-  config: { verbosity: 0, ctx_size: 4096, parallel: 4 }
-})
-
-resources.define('tools-batch', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llm',
-  config: { ctx_size: 4096, tools: true, parallel: 2 }
-})
-
-resources.define('embeddings', {
-  constant: GTE_LARGE_FP16,
-  type: 'llamacpp-embedding'
-})
-
-resources.define('whisper', {
-  constant: WHISPER_TINY,
-  type: 'whispercpp-transcription',
-  config: {
-    vadModelSrc: VAD_SILERO_5_1_2,
-    audio_format: 'f32le',
-    strategy: 'greedy',
-    language: 'en',
-    translate: false,
-    no_timestamps: false,
-    single_segment: false,
-    temperature: 0.0,
-    suppress_blank: true,
-    suppress_nst: true,
-    vad_params: {
-      threshold: 0.35,
-      min_speech_duration_ms: 200,
-      min_silence_duration_ms: 150,
-      max_speech_duration_s: 30.0,
-      speech_pad_ms: 600,
-      samples_overlap: 0.3
-    }
-  }
-})
-
-resources.define('tools', {
-  constant: QWEN3_1_7B_INST_Q4,
-  type: 'llamacpp-completion',
-  config: { ctx_size: 4096, tools: true }
-})
-
-resources.define('ocr', {
-  constant: OCR_LATIN,
-  type: 'ggml-ocr',
-  // Pre-cache the CRAFT detector too (it's otherwise derived at loadModel time
-  // and downloaded on-device, making the first OCR test cold-start time out on
-  // mobile). Mirrors the whisper VAD companion-download pattern.
-  // canvasSize caps CRAFT's detection canvas to bound peak memory on
-  // high-resolution pages (e.g. the 4K ocr-large-image), which otherwise OOMs
-  // the device. 1280 is the ocr-ggml-recommended cap for mobile targets.
-  config: { langList: ['en'], detectorModelSrc: OCR_CRAFT, canvasSize: 1280 }
-})
-
-async function resolveClassificationWeightsPath() {
-  // @ts-ignore - Metro turns the bundled GGUF file into an asset module.
-  // This path is relative to dist/tests/mobile/consumer.js after tsc.
-  const assetModule = require('../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf')
-  return await resolveBundledAssetUri(assetModule)
-}
-
-// Classification ships bundled weights inside @qvac/classification-ggml,
-// so no registry constant / pre-download is required. On mobile the weight
-// file must still be resolved as a Metro asset and passed explicitly because
-// the Bare worker bundle does not expose package data files at __dirname.
-resources.define('classification', {
-  type: 'ggml-classification',
-  config: async () => ({
-    modelPath: await resolveClassificationWeightsPath()
-  })
-})
-
-resources.define('echo', {
-  type: 'echo',
-  modelSrc: '',
-  skipPreDownload: true
-})
-
-resources.define('sharded-embeddings', {
-  constant: GTE_LARGE_335M_FP16_SHARD,
-  type: 'llamacpp-embedding',
-  skipPreDownload: true
-})
-
-resources.define('sharded-llm', {
-  constant: LLAMA_3_2_1B_INST_Q4_0_SHARD,
-  type: 'llamacpp-completion',
-  config: { verbosity: 0, ctx_size: 2048 },
-  skipPreDownload: true
-})
-
-resources.define('indictrans-en-hi', {
-  constant: MARIAN_EN_HI_INDIC_200M_Q4_0,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'IndicTrans',
-    from: 'eng_Latn',
-    to: 'hin_Deva'
-  }
-})
-
-resources.define('indictrans-hi-en', {
-  constant: MARIAN_HI_EN_INDIC_200M_Q4_0,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'IndicTrans',
-    from: 'hin_Deva',
-    to: 'eng_Latn'
-  }
-})
-
-resources.define('bergamot-en-fr', {
-  constant: BERGAMOT_EN_FR,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'en',
-    to: 'fr'
-  }
-})
-
-resources.define('bergamot-en-es', {
-  constant: BERGAMOT_EN_ES,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'en',
-    to: 'es'
-  }
-})
-
-resources.define('bergamot-es-it-pivot', {
-  constant: BERGAMOT_ES_EN,
-  type: 'nmtcpp-translation',
-  config: {
-    engine: 'Bergamot',
-    from: 'es',
-    to: 'it',
-    pivotModel: {
-      modelSrc: BERGAMOT_EN_IT,
-      beamsize: 4,
-      temperature: 0.3
-    }
-  }
-})
-
-/** Look up a bundled audio file by name and resolve it to a POSIX path. */
-async function resolveBundledAudioUri(filename: string): Promise<string | undefined> {
-  // @ts-ignore - assets.ts generated at consumer build time (consumer root, 3 levels up from dist/tests/mobile/)
-  const assets = await import('../../../assets')
-  const assetModule = assets.audio?.[filename]
-  if (!assetModule) {
-    console.warn(`[tts-chatterbox] reference audio not in registry: ${filename}`)
-    return undefined
-  }
-  try {
-    return await resolveBundledAssetUri(assetModule)
-  } catch (err) {
-    console.warn(`[tts-chatterbox] failed to resolve ${filename}:`, err)
-    return undefined
-  }
-}
-
-resources.define('tts-chatterbox', {
-  constant: TTS_T3_TURBO_EN_CHATTERBOX_Q4_0,
-  type: 'tts-ggml',
-  config: async () => ({
-    ttsEngine: 'chatterbox',
-    language: 'en',
-    useGPU: true,
-    s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX_Q4_0,
-    streamChunkTokens: 25,
-    streamFirstChunkTokens: 10,
-    cfmSteps: 1,
-    referenceAudioSrc: await resolveBundledAudioUri('transcription-short-wav.wav')
-  })
-})
-
-resources.define('tts-parler', {
-  constant: TTS_MINI_V1_EN_PARLER_TTS_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'parler',
-    useGPU: true,
-    seed: 42,
-    topK: 1,
-    maxFrames: 430,
-    streamChunkTokens: 43,
-    streamFirstChunkTokens: 20
-  }
-})
-
-resources.define('tts-parler-indic', {
-  constant: TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'parler',
-    useGPU: true,
-    seed: 42,
-    topK: 1,
-    maxFrames: 430,
-    normalizeNumbers: true
-  }
-})
-
-resources.define('tts-cosyvoice3', {
-  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'cosyvoice3',
-    useGPU: true,
-    seed: 42
-  }
-})
-
-// Same model with native chunk streaming engaged, so the streaming e2e can
-// exercise the native 24 kHz chunk path rather than generic SDK streaming.
-resources.define('tts-cosyvoice3-native-stream', {
-  constant: TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'cosyvoice3',
-    useGPU: true,
-    seed: 42,
-    streamChunkTokens: 25,
-    streamFirstChunkTokens: 10
-  }
-})
-
-resources.define('tts-audio8', {
-  constant: TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'audio8',
-    audio8CodecDecoderModelSrc: TTS_CODEC_DECODER_AUDIO8_Q8_0,
-    greedy: true,
-    maxFrames: 130,
-    seed: 42
-  }
-})
-
-resources.define('tts-supertonic', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true
-  }
-})
-
-resources.define('tts-supertonic-multilingual', {
-  constant: TTS_MULTILINGUAL_SUPERTONIC3_Q4_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'es',
-    voice: 'F1',
-    useGPU: true
-  }
-})
-
-// Supertonic resampled to 8 kHz via `outputSampleRate`; paired with the
-// native-rate `tts-supertonic` resource by the outputSampleRate ratio test.
-resources.define('tts-supertonic-8k', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true,
-    outputSampleRate: 8000
-  }
-})
-
-// Supertonic with the LavaSR denoiser (runs first, rate-preserving) + enhancer
-// (bandwidth-extends to 48 kHz). The LavaSR GGUFs are registry constants, so the
-// resource manager's config walk pre-downloads them automatically.
-resources.define('tts-supertonic-enhanced', {
-  constant: TTS_EN_SUPERTONIC_Q8_0,
-  type: 'tts-ggml',
-  config: {
-    ttsEngine: 'supertonic',
-    language: 'en',
-    voice: 'F1',
-    useGPU: true,
-    lavasrDenoiserModelSrc: TTS_DENOISER_LAVASR_FP16,
-    lavasrEnhancerModelSrc: TTS_ENHANCER_LAVASR_FP16
-  }
-})
-
-resources.define('parakeet-tdt', {
-  constant: PARAKEET_TDT_0_6B_V3_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-ctc', {
-  constant: PARAKEET_CTC_0_6B_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-unified', {
-  constant: PARAKEET_UNIFIED_0_6B_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-sortformer', {
-  constant: PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('parakeet-eou', {
-  constant: PARAKEET_EOU_120M_V1_Q4_0,
-  type: 'parakeet-transcription',
-  config: {}
-})
-
-resources.define('vision', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 4096,
-    image_no_upscale: 'on',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
-
-resources.define('vision-batch', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 2048,
-    parallel: 2,
-    image_no_upscale: 'on',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
-
-resources.define('vision-upscale', {
-  constant: VISIONPSY_NANO_460M_MULTIMODAL_Q4_K_M,
-  type: 'llamacpp-completion',
-  config: {
-    ctx_size: 4096,
-    image_no_upscale: 'off',
-    projectionModelSrc: MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0
-  }
-})
-
-resources.define('vla', {
-  constant: SMOLVLA_LIBERO_VISION_Q8,
-  type: 'ggml-vla',
-  config: { backend: 'cpu' }
-})
+// One table, shared with every other client, applied here.
+//
+// Which model `llm` or `tts-supertonic` means used to be written out once per
+// consumer entry and nowhere a client in another language could read it. A
+// definition that says `useModel: { deps: ['whisper'] }` only means the same
+// thing on two clients if both resolve the key the same way, so the table is
+// data now and this is the part that cannot be: the descriptor behind a model
+// constant, and where a bundled fixture lives on this platform.
+applyResourceTable(
+  RESOURCE_TABLE,
+  'mobile',
+  (dep, definition) => resources.define(dep, definition as never),
+  (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],
+  (kind, file) => resolveTableAsset(kind, file)
+)
 // NOTE: no "vla-pi05" resource on mobile by design — the pi05 q_aggressive
 // GGUF is 3.9 GB, which exceeds the iOS jetsam per-process limit (~3 GB →
 // OOM kill) and is deferred on Android Device Farm until a CDN-fronted
