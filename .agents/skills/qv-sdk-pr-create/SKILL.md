@@ -250,12 +250,12 @@ the release PR alongside the changelog.
 
 ## Release Target Dual-PR Flow
 
-**Trigger:** the just-created PR's base is `release-<pkg>-<x.y.z>` for any SDK pod package.
+**Trigger:** the just-created PR's base is `release-<pkg>-<x.y.z>` for any SDK pod package, or a release train branch `release-train-<train>-<x.y.z>`. A train gets one backmerge for the whole train (`backmerge/release-train-<train>-<x.y.z>`), not one per package.
 
 When triggered, automatically chain into the `sdk-backmerge` skill so a follow-up PR is also opened against `main` with the same version-bump + changelog metadata. This applies the gitflow.md "Keep main aligned" rule at PR-creation time so nobody has to remember a follow-up step after the release PR merges.
 
 **Preflight before opening the release PR:** confirm base matches
-`^release-<pkg>-\d+\.\d+\.\d+$` and the org head is **not** `release-*`
+`^release-<pkg>-\d+\.\d+\.\d+$` (or `^release-train-<train>-\d+\.\d+\.\d+$`) and the org head is **not** `release-*`
 (see **Release PR branch naming**). Do not open / chain the dual-PR flow against
 a short-named cut if publish is expected on merge.
 
@@ -263,7 +263,7 @@ a short-named cut if publish is expected on merge.
 
 1. Capture context for the backmerge:
    - Just-created release PR number and URL
-   - Release branch name (`release-<pkg>-<x.y.z>`) and parsed `<pkg>` / `<x.y.z>`
+   - Release branch name (`release-<pkg>-<x.y.z>` or `release-train-<train>-<x.y.z>`) and parsed `<pkg>` or `<train>` / `<x.y.z>`
    - Source head branch, org-remote-qualified when possible (e.g. `ORG_REMOTE/<branch>`, or the release PR `headRefOid` if the remote tip is missing)
    - Ticket number from the title
 2. Invoke the `sdk-backmerge` workflow inline with these inputs (read `.agents/skills/qv-sdk-backmerge/SKILL.md` and follow it).
@@ -295,7 +295,7 @@ Before outputting the PR description, verify:
 - [ ] If the diff is a user-facing SDK capability, CLI was updated in this PR, the body says library-only, or the skip reminder was emitted
 - [ ] If diff touches sdk's `version` / `@qvac/inference` range (or sdk's deps), `qv-sdk-inference-version` ran (or `--no-sync` was set with a reminder emitted), and the version checks plus sdk-python checks pass
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
-- [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
+- [ ] If base is `release-<pkg>-<x.y.z>` or `release-train-<train>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
 - [ ] Release changelog PRs: title is `chore:` (no `[bc]`); body API / Models / Breaking match `changelog/<this version>/`
 - [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `fork-ci` re-approval called out)
