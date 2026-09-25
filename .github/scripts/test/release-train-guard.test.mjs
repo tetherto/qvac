@@ -4,7 +4,7 @@
 // real one — adding a package to a train must not need a test edit.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { checkReleaseTrain } from '../lib/release-train-guard.mjs'
+import { checkReleaseTrain, movedProjects } from '../lib/release-train-guard.mjs'
 import { parseBranch } from '../lib/release-trains.mjs'
 
 const CATALOG = {
@@ -118,4 +118,37 @@ test('asks no changelog of a package the release did not touch', () => {
 test('skips the changelog check on the initial branch push', () => {
   const zero = '0000000000000000000000000000000000000000'
   assert.deepEqual(check('release-train-sdk-0.21.0', zero, io(AT_0_21_0, [])), [])
+})
+
+function manifestsAt (bySha) {
+  return (sha, path) => {
+    const version = bySha[sha][path]
+    return version === undefined ? null : JSON.stringify({ version })
+  }
+}
+
+test('lists the packages whose version moved, with the version they moved to', () => {
+  const read = manifestsAt({
+    base: { ...AT_0_21_0, 'packages/inference/package.json': '0.20.3', 'packages/sdk/package.json': '0.20.3' },
+    head: AT_0_21_0,
+  })
+  assert.deepEqual(movedProjects('release-train-sdk-0.21.0', 'base', 'head', read, CATALOG), [
+    { slug: 'inference', version: '0.21.0', changelog: 'packages/inference/CHANGELOG.md' },
+    { slug: 'sdk', version: '0.21.0', changelog: 'packages/sdk/CHANGELOG.md' },
+  ])
+})
+
+test('counts a package new to the branch as moved, and refuses one missing at head', () => {
+  const { 'packages/cli/package.json': _, ...withoutCli } = AT_0_21_0
+  const added = manifestsAt({ base: withoutCli, head: AT_0_21_0 })
+  assert.deepEqual(
+    movedProjects('release-train-sdk-0.21.0', 'base', 'head', added, CATALOG).map((p) => p.slug),
+    ['cli']
+  )
+
+  const removed = manifestsAt({ base: AT_0_21_0, head: withoutCli })
+  assert.throws(
+    () => movedProjects('release-train-sdk-0.21.0', 'base', 'head', removed, CATALOG),
+    /packages\/cli\/package\.json does not exist at head/
+  )
 })
