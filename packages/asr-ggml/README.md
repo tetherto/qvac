@@ -80,6 +80,11 @@ GGUF metadata** — there is no `modelType` to pass.
 | **Sortformer v1** (`sortformer-4spk-v1`) | n/a | Diarization head (sliding history) | ~141 MiB | 4-speaker. Default for **offline** diarization |
 | **Sortformer v2.1 + AOSC** (`diar_streaming_sortformer_4spk-v2.1`) | n/a | Diarization head + speaker cache | ~141 MiB | 4-speaker. Default for **streaming** diarization; AOSC anchors speaker slots across silence, auto-detected from GGUF metadata |
 
+On macOS and iOS, TDT, Unified, EOU, and Sortformer v2.1 can also run their
+encoder on an optional Core ML sidecar; CTC and Indic Conformer CTC cannot
+with the pinned engine, and Sortformer v1 has no sidecar. See
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple).
+
 Upstream `.nemo` checkpoints are NVIDIA's; see the
 [Parakeet model cards](https://huggingface.co/collections/nvidia/parakeet-asr-models-66b50d5a37b9580ee4ba93c2)
 for the per-checkpoint NVIDIA Open Model License terms.
@@ -547,7 +552,8 @@ GPU backends are selected per platform via `vcpkg.json` features; no
 
 - **Linux / Windows** — Vulkan (needs the [Vulkan SDK](https://vulkan.lunarg.com/) on the build host); the linux-x64 prebuild additionally bundles CUDA, see below
 - **Android** — Vulkan + OpenCL (Adreno) as dynamically-loaded `.so` backends shipped beside the prebuild
-- **macOS / iOS** — Metal, statically linked
+- **macOS / iOS** — Metal, statically linked, plus the optional Parakeet
+  [Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)
 
 **CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
 gated behind the `ASR_CUDA` CMake option — supported on linux-x64,
@@ -609,8 +615,9 @@ This selector currently applies to the Whisper engine.
 
 `getBackendInfo()` reports what actually ran — `backendName`, `backendId`
 (see the `BackendId` enum), string `backendDevice`, `backendDescription`,
-`encoderBackend`, and `encoderOnCoreml` (Apple: whether the Neural Engine
-Core ML sidecar drove the encoder). Whisper additionally reports
+`encoderBackend`, and `encoderOnCoreml` (Apple: whether a Parakeet Core ML
+encoder sidecar loaded; see
+[Core ML encoder sidecars](#core-ml-encoder-sidecars-apple)). Whisper additionally reports
 `gpuMemTotalMb` / `gpuMemFreeMb`. This differs from
 `RuntimeStats.backendDevice`, which is the native numeric device-class code.
 
@@ -629,6 +636,50 @@ Two paths matter on Android and Linux:
 - **`openclCacheDir`** (parakeet) — persistent directory for ggml-opencl's
   compiled program-binary cache. Android-only; pass the host app's cache
   directory to avoid a cold `clBuildProgram` on every process start.
+
+### Core ML encoder sidecars (Apple)
+
+The macOS and iOS prebuilds are built with the `speech-cpp` `coreml` feature,
+so a Parakeet model can run its FastConformer encoder on Apple Core ML (the
+Neural Engine) while mel preprocessing and the decoder or speaker head stay on
+the ggml backend. It is opt-in by presence: at `load()` the engine looks for a
+compiled `<stem>-encoder.mlmodelc` next to the GGUF, where `<stem>` is the GGUF
+name with its quantization suffix stripped, so one sidecar serves every tier
+(`parakeet-tdt-0.6b-v3.q8_0.gguf` and `.f16.gguf` both resolve to
+`parakeet-tdt-0.6b-v3-encoder.mlmodelc`). The published models ship without
+sidecars, so a model directory behaves as before until you stage one. A
+missing sidecar, an input shape it does not take, or a failed prediction falls
+back to ggml, and `PARAKEET_COREML_DISABLE=1` in the process environment forces
+ggml.
+
+| Model | Sidecar | Inputs it takes | Runs on ggml instead |
+| --- | --- | --- | --- |
+| TDT (`parakeet-tdt-0.6b-v3`) | `<stem>-encoder.mlmodelc` | any length: shorter inputs are zero-padded to the compiled shape, longer offline inputs are split into overlapping windows | only on fallback |
+| Unified (`parakeet-unified-en-0.6b`) | `<stem>-encoder.mlmodelc` | `run()`, padded or windowed like TDT | `runStreaming()`, which uses the cache-aware encoder |
+| EOU (`parakeet-eou-120m-v1`) | `<stem>-encoder.mlmodelc` | inputs of exactly the compiled mel length | every other length, including streaming windows of a different length |
+| Sortformer v2.1 + AOSC | `<stem>-encoder.mlmodelc` (batch), `<stem>-encoder-bypass-pre-encode.mlmodelc` (AOSC) | batch: exactly the compiled length; AOSC: slabs up to the masked capacity (410 encoder frames for the default geometry) | other batch lengths, larger AOSC slabs; the speaker head always |
+| CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
+| Sortformer v1 | none | — | always |
+| Whisper | none: the `whisper` feature builds without `WHISPER_COREML` | — | always |
+
+`getBackendInfo().encoderOnCoreml` (with `encoderBackend: 'coreml'`) and
+`RuntimeStats.encoderOnCoreml` report that a sidecar loaded at `load()`, not
+that a given call ran on it: an EOU input of another length, a Unified
+`runStreaming()` session, or a failed prediction still runs the encoder on
+ggml with the flag set. For what a job actually did, read
+`RuntimeStats.encoderUsedCoreml`: `1` when every offline ASR transcription in
+the job ran its encoder on Core ML, `0` when any ran on ggml. The engine
+reports per-call routing only for offline ASR, so the field is absent after
+Sortformer diarization and streaming jobs. Export sidecars with
+`engines/parakeet/scripts/export-encoder-coreml.py`, preferably from an `f16`
+or `f32` GGUF (a quantized source works, but its rounding is baked into the
+sidecar every tier shares), from the
+[`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
+tree at the ref `speech-cpp` pins; its
+[Parakeet backends guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/parakeet/docs/backends.md#core-ml-encoder-sidecar)
+has the per-model export commands. The
+[Core ML RTF lanes](#core-ml-apple-neural-engine-rtf-lanes) record what the
+TDT sidecar gains over Metal.
 
 ## Staging Models
 
@@ -806,18 +857,23 @@ Three things are worth knowing before touching these lanes:
   therefore cannot live in `models/` — every CPU and Metal lane would silently
   start measuring the ANE. Core ML entries run against an isolated
   `models/coreml/` copy instead, staged by the matrix runner.
-- **The export is traced at one mel length.** The sidecar accelerates only
-  utterances whose mel length matches the traced length; anything else falls
-  back to ggml. It is therefore bound to the benchmark's own sample —
+- **The export is traced at one mel length.** That length is the TDT
+  sidecar's fixed capacity: shorter utterances are zero-padded up to it and
+  longer ones are split into overlapping windows, so every length runs on the
+  ANE, but only a matching one runs as a single unpadded pass. The lanes'
+  sidecar is therefore sized to the benchmark's own sample —
   `examples/samples/sample.raw` (20.13 s ⇒ `1 + 322137/160` = **2014** mel
-  frames). Changing that sample invalidates the sidecar. A variable-length
-  (`--flexible`) export exists but places **zero** ops on the ANE, so it is for
-  numerical checks only, never for benchmarking.
+  frames). Changing that sample means re-exporting, or the lane measures
+  padding or windowing. A variable-length (`--flexible`) export exists but
+  places **zero** ops on the ANE, so it is for numerical checks only, never for
+  benchmarking.
 - **A lane can never publish a mislabelled number.** `activeBackend` is derived
-  from the observed per-run `encoderOnCoreml` stat, and the benchmark refuses to
-  *write* an artifact when a Core ML lane did not actually reach the ANE (or
-  when a non-Core ML lane did). The check runs before the artifact is written,
-  because the artifact is written before the test's own assertions run.
+  from each measured run's `encoderUsedCoreml` stat, which reports where that
+  run's encoder actually ran. The benchmark refuses to *write* an artifact when
+  a Core ML lane has any run whose encoder fell back to ggml, or when a
+  non-Core ML lane has any run on Core ML. The check runs before the artifact
+  is written, because the artifact is written before the test's own
+  assertions run.
 
 Sidecars are pinned in
 [`test/integration/parakeet-coreml.manifest.json`](test/integration/parakeet-coreml.manifest.json)
@@ -827,7 +883,7 @@ matrix is unaffected.
 
 To produce a sidecar, use `export-encoder-coreml.py` from the `speech-cpp`
 source tree at the ref pinned in `vcpkg.json`, seeded with an **f16 or f32**
-GGUF (the reference encoder cannot read quantised tensors):
+GGUF so the sidecar every quant tier shares carries unrounded weights:
 
 ```bash
 python scripts/export-encoder-coreml.py \

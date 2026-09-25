@@ -23,6 +23,11 @@ namespace qvac::ttsggml::moss {
 
 inline constexpr int MOSS_NATIVE_SAMPLE_RATE = 24000;
 inline constexpr int MOSS_SAMPLES_PER_FRAME = 1920;
+inline constexpr int MOSS_MAX_NEW_TOKENS = 2048;
+inline constexpr int MOSS_MAX_CHANNELS = 32;
+inline constexpr int MOSS_TERMINATION_ROWS = 2;
+inline constexpr int MOSS_MAX_DURATION_TOKENS =
+    MOSS_MAX_NEW_TOKENS - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
 
 class MossModel : public qvac_lib_inference_addon_cpp::model::IModel,
                   public qvac_lib_inference_addon_cpp::model::IModelCancel,

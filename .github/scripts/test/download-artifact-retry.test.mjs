@@ -13,9 +13,7 @@ const PINNED_RETRY_USES = /uses: tetherto\/qvac\/\.github\/actions\/download-art
 const STEP_SEPARATOR = '\n    - name: '
 const WORKFLOW_STEP_SEPARATOR = '\n      - name: '
 const WORKFLOW_DOWNLOADS = [
-  ['.github/workflows/integration-test-tts-ggml.yml', 'Download prebuilds from artifact'],
   ['.github/workflows/integration-test-audiogen-ggml.yml', 'Download prebuilds from artifact'],
-  ['.github/workflows/integration-test-bci-whispercpp.yml', 'Download prebuilds from artifact'],
   ['.github/workflows/integration-test-nx.yml', 'Download fabric-prebuilds for overlay']
 ]
 
