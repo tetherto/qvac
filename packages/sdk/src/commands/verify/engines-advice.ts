@@ -79,7 +79,7 @@ export interface BuildEnginesAdviceOptions {
 }
 
 export async function fetchPackument(name: string): Promise<Packument> {
-  const url = `${REGISTRY_URL}/${name.replace('/', '%2f')}`
+  const url = `${REGISTRY_URL}/${encodeURIComponent(name)}`
   const response = await fetch(url, {
     headers: { accept: ABBREVIATED_PACKUMENT },
     signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS)

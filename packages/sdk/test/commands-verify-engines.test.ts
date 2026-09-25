@@ -410,7 +410,7 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
       ])
 
       assert.ok(progress.some((message) => message.startsWith('Scanning ')))
-      assert.ok(progress.some((message) => message.includes('registry.npmjs.org')))
+      assert.ok(progress.some((message) => message.startsWith('Looking up releases of bare-type')))
 
       const text = formatVerifyBundleResult(result)
       assert.match(text, /Requires: bare-type@1\.4\.0 needs Bare >=1\.32\.0/)
@@ -501,7 +501,7 @@ describe('verifyBundle engines.bare against the mobile runtime', () => {
       assert.ok(hasErrors(result))
       assert.equal(result.advice?.[0]?.overrides[0]?.version, null)
       assert.equal(result.advice?.[0]?.upgrade?.to, '0.15.1')
-      assert.ok(progress.every((message) => !message.includes('registry.npmjs.org')))
+      assert.ok(progress.every((message) => !message.startsWith('Looking up releases of')))
     })
   })
 
