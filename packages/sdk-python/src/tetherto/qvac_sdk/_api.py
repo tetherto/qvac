@@ -18,10 +18,13 @@ and intentionally not ported here.
 from __future__ import annotations
 
 import asyncio
+import base64
 import uuid
 import warnings
 from collections.abc import AsyncIterator, Callable
 from typing import Any
+
+from pydantic import ValidationError
 
 from ._generated import methods as _methods
 from ._generated.models import (
@@ -42,6 +45,7 @@ from .errors import (  # noqa: F401
     ModelRegistryQueryFailedError,
     ModelTypeRequiredError,
     ModelUnloadFailedError,
+    RequestValidationError,
     StreamEndedError,
 )
 from .logging_streams import (
@@ -58,6 +62,7 @@ from .model_types import (
 from .schemas import (
     CancelRequest,
     CancelResponse,
+    ClassifyRequest,
     DeleteCacheRequest,
     DeleteCacheResponse,
     LoadModelRequest,
@@ -103,6 +108,69 @@ def _start_model_logging(transport: Transport, model_id: str, logger: Any) -> No
         )
 
 
+def _config_srcs_to_wire(value: Any) -> Any:
+    """Reduce every model descriptor inside a config to its `src` string.
+
+    A config carries companion models -- Bergamot's `pivotModel.modelSrc`, a
+    TTS vocoder's `s3genModelSrc` -- and the wire wants a string there, the
+    same as the top-level `modelSrc` this client already reduces. A
+    ModelConstant left in place serialises as its own Python field names, which
+    the worker does not recognise as a descriptor: it reports
+    `modelSrc.startsWith is not a function` and the load fails.
+    """
+    if isinstance(value, list):
+        return [_config_srcs_to_wire(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _config_srcs_to_wire(item) for key, item in value.items()}
+    return model_src_to_wire(value)
+
+
+def _first_validation_problem(error: ValidationError) -> str:
+    """One line describing why a load request was refused.
+
+    A request union reports every arm it failed, which for `loadModel` is
+    dozens of lines about model types the caller never named. The arm that
+    matches the caller's own `modelType` is the informative one; failing that,
+    the first problem reported.
+    """
+    problems = error.errors()
+    if not problems:
+        return "loadModel request failed validation"
+    problem = problems[0]
+    where = ".".join(str(part) for part in problem.get("loc", ()))
+    return f"loadModel request failed validation: {where}: {problem.get('msg')}"
+
+
+def _reject_unknown_config_keys(payload: dict[str, Any], request: Any) -> None:
+    """Refuse a `modelConfig` key the model type does not define.
+
+    JS validates load parameters against a strict client schema, so a removed
+    or misspelled config field is refused with REQUEST_VALIDATION_FAILED before
+    anything reaches the addon -- that is the whole point of
+    `model-load-llm-legacy-no-mmap-rejected`. The wire schema is deliberately
+    lenient and pydantic drops unknown keys, so without this check the same
+    call loads a model configured differently from what the caller asked for,
+    silently.
+
+    The legal keys come from the generated model that just accepted the
+    request, not from a list kept here: a second copy of the field names would
+    drift from the contract the moment a config gains a field.
+    """
+    sent = payload.get("modelConfig")
+    if not isinstance(sent, dict) or not sent:
+        return
+    accepted = request.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    kept = accepted.get("modelConfig")
+    if not isinstance(kept, dict):
+        return
+    unknown = sorted(set(sent) - set(kept))
+    if unknown:
+        named = ", ".join(repr(key) for key in unknown)
+        raise RequestValidationError(
+            f"modelConfig has no {named} for modelType " f"{payload.get('modelType')!r}"
+        )
+
+
 async def load_model(
     transport: Transport,
     *,
@@ -141,9 +209,9 @@ async def load_model(
 
     resolved_type = model_type
     if not is_reload_config:
-        if resolved_type is not None:
+        if resolved_type is not None and model_src is not None:
             assert_model_src_matches_model_type(model_src, resolved_type)
-        else:
+        elif resolved_type is None:
             resolved_type = infer_model_type_from_model_src(model_src)
             if not resolved_type:
                 raise ModelTypeRequiredError()
@@ -164,7 +232,15 @@ async def load_model(
         if model_type is not None:
             payload["modelType"] = model_type
     else:
-        payload["modelSrc"] = model_src_to_wire(model_src)
+        # An addon that ships its own weights is loaded by type alone --
+        # `ggml-classification`, `audiogen-ggml`. The caller omits `model_src`,
+        # but the wire still carries the field: JS's request transform emits
+        # `modelSrc: ''` for exactly these arms, and every arm of the wire union
+        # requires it. Omitting the key here matched no arm at all, which is why
+        # a bundled classifier could not be loaded from Python.
+        payload["modelSrc"] = (
+            model_src_to_wire(model_src) if model_src is not None else ""
+        )
         payload["modelType"] = resolved_type
         payload["requestId"] = (
             request_id if request_id is not None else generate_client_request_id()
@@ -174,9 +250,18 @@ async def load_model(
         if seed is not None:
             payload["seed"] = seed
     if model_config is not None:
-        payload["modelConfig"] = model_config
+        payload["modelConfig"] = _config_srcs_to_wire(model_config)
 
-    request = LoadModelRequest.model_validate(payload)
+    try:
+        request = LoadModelRequest.model_validate(payload)
+    except ValidationError as error:
+        # JS validates load parameters against its own schema and refuses with
+        # REQUEST_VALIDATION_FAILED, so the caller gets an SDK error carrying a
+        # code. Letting pydantic's own error out instead gives a refusal with
+        # no code and no cause, which is a different contract for the same
+        # rejected call.
+        raise RequestValidationError(_first_validation_problem(error)) from error
+    _reject_unknown_config_keys(payload, request)
 
     if on_progress is not None:
         async for event in _methods.load_model_with_progress(transport, request):
@@ -203,7 +288,8 @@ async def load_model(
 class TranslateRun:
     """Handles for one translate() call, mirroring the JS return shape:
     `token_stream` (live tokens; empty in non-stream mode), `text` (awaitable
-    full text; resolves to "" in stream mode), and `stats` (awaitable,
+    full text; resolves to "" in stream mode), `translations` (one entry per
+    input when `text` was a list, one entry otherwise), and `stats` (awaitable,
     resolved when the terminal done chunk arrives -- in stream mode that
     means once `token_stream` has been consumed to the end). `request_id` is the
     client-generated id threaded on the wire, exposed for `cancel(request_id=...)`,
@@ -215,11 +301,17 @@ class TranslateRun:
         text: asyncio.Future[str],
         stats: asyncio.Future[Any],
         request_id: str,
+        translations: asyncio.Future[list[str]] | None = None,
     ) -> None:
         self.token_stream = token_stream
         self.text = text
         self.stats = stats
         self.request_id = request_id
+        if translations is None:
+            loop = asyncio.get_running_loop()
+            translations = loop.create_future()
+            translations.set_result([])
+        self.translations = translations
 
 
 def translate(
@@ -298,24 +390,95 @@ def translate(
         return
         yield  # pragma: no cover -- makes this an (empty) async generator
 
-    async def collect_text() -> str:
-        buffer = ""
+    # A batch sends a list and gets one token per input back; a single input
+    # gets its text in pieces. JS splits on exactly this and returns
+    # `translations` either way, with `text` as their newline join -- without
+    # the same split here a batch would come back as one run-together string.
+    batched = isinstance(text, list)
+
+    async def collect_translations() -> list[str]:
+        collected: list[str] = [] if batched else [""]
         async for chunk in transport.call_stream(wire):
             if chunk.get("type") != "translate":
                 continue
             response = TranslateResponse.model_validate(chunk)
-            buffer += response.token
             if response.done:
                 _finish_stats(response)
-        return buffer
+            elif batched:
+                collected.append(response.token)
+            else:
+                collected[0] += response.token
+        return collected
 
     # Eager task, matching the JS promise: the wire call starts now, not
     # when `text` is first awaited.
+    translations_task = loop.create_task(collect_translations())
+
+    async def joined() -> str:
+        return "\n".join(await translations_task)
+
     return TranslateRun(
         empty_stream(),
-        loop.create_task(collect_text()),
+        loop.create_task(joined()),
         stats_future,
         resolved_request_id,
+        translations_task,
+    )
+
+
+async def classify(
+    transport: Transport,
+    *,
+    model_id: str,
+    image: Any,
+    top_k: int | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    channels: int | None = None,
+    request_id: str | None = None,
+) -> list[Any]:
+    """Classify an image. Mirrors JS's `classify()`.
+
+    `image` is a JPEG or PNG buffer, or raw RGB bytes with `width`, `height`
+    and `channels`. The wire takes base64, and JS encodes it inside its own
+    client API -- without the same wrapper here a caller holding bytes, which
+    is what reading a file gives, is refused by the request model before the
+    call goes out.
+
+    The wire streams; the results arrive on the frame that sets `done`, which
+    is the frame JS returns and every other frame it ignores.
+    """
+    payload: dict[str, Any] = {
+        "type": "classify",
+        "modelId": model_id,
+        "image": _base64_image(image),
+    }
+    if top_k is not None:
+        payload["topK"] = top_k
+    if width is not None:
+        payload["width"] = width
+    if height is not None:
+        payload["height"] = height
+    if channels is not None:
+        payload["channels"] = channels
+    if request_id is not None:
+        payload["requestId"] = request_id
+
+    request = ClassifyRequest.model_validate(payload)
+    async for response in _methods.classify(transport, request):
+        if response.done:
+            return [_dump(item) for item in response.results]
+    return []
+
+
+def _base64_image(value: Any) -> str:
+    """Encode image bytes for the wire, the way JS's `encodeBase64` does."""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return base64.b64encode(bytes(value)).decode()
+    if isinstance(value, str):
+        return value
+    raise TypeError(
+        f"image must be bytes or a base64 string, got {type(value).__name__}"
     )
 
 

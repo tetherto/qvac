@@ -1,0 +1,3 @@
+# Bytecode from running the client; nothing here belongs in the repo.
+__pycache__/
+*.py[cod]
