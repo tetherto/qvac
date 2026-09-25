@@ -14,6 +14,10 @@ inputs:
   workdir:
     description: Directory containing the prebuilds/ folder
     required: true
+  extra-names:
+    description: Optional newline-separated extensionless executable basenames to strip and verify
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -22,24 +26,46 @@ runs:
       name: Strip (Apple)
       shell: bash
       working-directory: ${{ inputs.workdir }}
+      env:
+        EXTRA_NAMES: ${{ inputs.extra-names }}
       run: |
         set -euo pipefail
         find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
           -exec strip -S {} \;
+        while IFS= read -r name; do
+          [ -z "$name" ] && continue
+          if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Invalid executable basename: $name"
+            exit 1
+          fi
+          find prebuilds -type f -name "$name" -exec strip -S {} \;
+        done <<< "$EXTRA_NAMES"
 
     - if: ${{ inputs.platform == 'linux' }}
       name: Strip (Linux)
       shell: bash
       working-directory: ${{ inputs.workdir }}
+      env:
+        EXTRA_NAMES: ${{ inputs.extra-names }}
       run: |
         set -euo pipefail
         find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
           -exec strip --strip-debug {} \;
+        while IFS= read -r name; do
+          [ -z "$name" ] && continue
+          if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Invalid executable basename: $name"
+            exit 1
+          fi
+          find prebuilds -type f -name "$name" -exec strip --strip-debug {} \;
+        done <<< "$EXTRA_NAMES"
 
     - if: ${{ inputs.platform == 'android' }}
       name: Strip (Android)
       shell: bash
       working-directory: ${{ inputs.workdir }}
+      env:
+        EXTRA_NAMES: ${{ inputs.extra-names }}
       run: |
         set -euo pipefail
         TOOLCHAIN="${ANDROID_TOOLCHAIN_ROOT:-${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64}"
@@ -50,17 +76,32 @@ runs:
         fi
         find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
           -exec "$LLVM_STRIP" --strip-debug {} \;
+        while IFS= read -r name; do
+          [ -z "$name" ] && continue
+          if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Invalid executable basename: $name"
+            exit 1
+          fi
+          find prebuilds -type f -name "$name" -exec "$LLVM_STRIP" --strip-debug {} \;
+        done <<< "$EXTRA_NAMES"
 
     - if: ${{ inputs.platform == 'darwin' || inputs.platform == 'ios' || inputs.platform == 'linux' }}
       name: Verify strip (native)
       shell: bash
       working-directory: ${{ inputs.workdir }}
+      env:
+        EXTRA_NAMES: ${{ inputs.extra-names }}
       run: |
         set -euo pipefail
         echo "Checking for binaries that still contain debug info..."
         WITH_DEBUG=$(
           find prebuilds \( -name '*.bare' -o -name '*.so' -o -name '*.dylib' \) \
             -exec sh -c 'file "$1" | grep -q "with debug_info" && echo "$1"' _ {} \;
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            find prebuilds -type f -name "$name" \
+              -exec sh -c 'file "$1" | grep -q "with debug_info" && echo "$1"' _ {} \;
+          done <<< "$EXTRA_NAMES"
         )
         if [ -n "$WITH_DEBUG" ]; then
           echo "::error::The following binaries still contain debug info:"
@@ -73,6 +114,8 @@ runs:
       name: Verify strip (Android)
       shell: bash
       working-directory: ${{ inputs.workdir }}
+      env:
+        EXTRA_NAMES: ${{ inputs.extra-names }}
       run: |
         set -euo pipefail
         TOOLCHAIN="${ANDROID_TOOLCHAIN_ROOT:-${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64}"
@@ -86,6 +129,12 @@ runs:
             -exec sh -c '
               "$0" -S "$1" 2>/dev/null | grep -Eq "\.debug_|\.zdebug_" && echo "$1"
             ' "$READELF" {} \;
+          while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            find prebuilds -type f -name "$name" -exec sh -c '
+              "$0" -S "$1" 2>/dev/null | grep -Eq "\.debug_|\.zdebug_" && echo "$1"
+            ' "$READELF" {} \;
+          done <<< "$EXTRA_NAMES"
         )
         if [ -n "$WITH_DEBUG" ]; then
           echo "::error::The following binaries still contain debug sections:"

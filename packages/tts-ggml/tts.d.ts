@@ -1,5 +1,5 @@
 export interface TTSConfigurationParams {
-    [key: string]: string | number | boolean | undefined;
+    [key: string]: string | number | boolean | string[] | undefined;
 }
 export interface TTSJobData {
     type: string;
@@ -37,7 +37,7 @@ export interface TTSBinding {
     getVoiceControls(): NativeVoiceControls;
     createInstance(owner: TTSInterface, configuration: TTSConfigurationParams, outputCallback: TTSOutputCallback | null): object;
     activate(handle: object | null): Promise<void>;
-    runJob(handle: object | null, data: TTSJobData): void;
+    runJob(handle: object | null, data: TTSJobData): boolean | void | Promise<boolean | void>;
     loadWeights(handle: object | null, weightsData: TTSWeightData): void;
     cancel(handle: object | null): Promise<void>;
     destroyInstance(handle: object): Promise<void> | void;

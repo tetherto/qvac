@@ -100,6 +100,9 @@ jobs:
             # and reach the required qvac-merge-guard status.
             infer-base:
               - "packages/infer-base/**"
+            ggml-rpc-server:
+              - "packages/ggml-rpc-server/**"
+              - ".github/workflows/prebuilds-ggml-rpc-server.yml"
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
               - ".github/workflows/prebuilds-llm-llamacpp.yml"
