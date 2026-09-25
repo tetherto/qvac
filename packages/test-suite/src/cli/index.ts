@@ -5,18 +5,22 @@ import { runProducer } from './commands/run-producer.js'
 import { runConsumerDesktop } from './commands/run-consumer-desktop.js'
 import { runConsumerElectron } from './commands/run-consumer-electron.js'
 import { runConsumerSnap } from './commands/run-consumer-snap.js'
+import { runConsumerExternal } from './commands/run-consumer-external.js'
 import { runBootstrap } from './commands/run-bootstrap.js'
 import { buildConsumerMobile } from './commands/build-consumer-mobile.js'
 import { buildConsumerElectron } from './commands/build-consumer-electron.js'
 import { buildConsumerSnap } from './commands/build-consumer-snap.js'
 import { reportCompare } from './commands/report-compare.js'
 import { reportFormat } from './commands/report-format.js'
+import { catalogValidate } from './commands/catalog-validate.js'
+import { reportMatrix } from './commands/report-matrix.js'
 import {
   runLocalDesktop,
   runLocalAndroid,
   runLocalIos,
   runLocalElectron,
-  runLocalSnap
+  runLocalSnap,
+  runLocalExternal
 } from './commands/run-local.js'
 
 const packageJson = JSON.parse(
@@ -108,6 +112,15 @@ program
   .action(runConsumerSnap)
 
 program
+  .command('run:consumer:external')
+  .description('Run a non-JS consumer over the stdin/stdout bridge (e.g., the Python runner)')
+  .requiredOption('--runId <id>', 'Unique run identifier (must match producer)')
+  .requiredOption('--name <name>', 'Name of the external consumer in consumers.external')
+  .option('--mqtt-broker <url>', 'MQTT broker URL (overrides config)')
+  .option('--config <path>', 'Path to config directory', process.cwd())
+  .action(runConsumerExternal)
+
+program
   .command('run:bootstrap:desktop')
   .description(
     'Run bootstrap from desktop consumer entry (e.g., pre-download models for CI caching)'
@@ -191,6 +204,32 @@ program
   .option('--output <file>', 'Output file (optional, prints to stdout if not specified)')
   .action(reportFormat)
 
+program
+  .command('report:matrix')
+  .description('Fold per-client run reports into a testId x client release-claim matrix')
+  .requiredOption(
+    '--report <label=path...>',
+    'Per-client report, e.g. --report desktop=reports/a/results-x.json --report python=...',
+    (value: string, previous: string[] = []) => previous.concat(value),
+    [] as string[]
+  )
+  .option('--output <file>', 'Write the matrix as JSON')
+  .option(
+    '--fail-on-drift',
+    'Exit non-zero if clients pass with different asserted values. Only meaningful over ' +
+      'tests that sample deterministically: a completion left to sample freely produces ' +
+      'different text on every run, which this reports as drift because it cannot tell ' +
+      'that apart from a client divergence'
+  )
+  .action(reportMatrix)
+
+program
+  .command('catalog:validate')
+  .description('Validate every test definition before a run (cheap; meant for CI)')
+  .option('--config <path>', 'Path to config directory', process.cwd())
+  .option('--check-schema-parity', 'Also print the operations the JSON Schema declares')
+  .action(catalogValidate)
+
 // ---------------------------------------------------------------------------
 // run:local:* — one-liner local development commands
 // ---------------------------------------------------------------------------
@@ -211,6 +250,16 @@ const addLocalOpts = (cmd: Command) =>
 addLocalOpts(program.command('run:local:desktop'))
   .description('Run producer + desktop consumer locally (one command)')
   .action(runLocalDesktop)
+
+addLocalOpts(program.command('run:local:external'))
+  .description('Run producer + a configured external (non-JS) consumer locally')
+  .requiredOption('--name <name>', 'Name of the external consumer in consumers.external')
+  .action(runLocalExternal)
+
+addLocalOpts(program.command('run:local:python'))
+  .description('Run producer + the Python consumer locally (alias of run:local:external)')
+  .option('--name <name>', 'External consumer name', 'python')
+  .action(runLocalExternal)
 
 addLocalOpts(program.command('run:local:electron'))
   .description('Package Electron consumer app + run producer locally')

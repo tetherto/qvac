@@ -47,7 +47,7 @@ export interface MemorySample {
   limitKb: number | null
   metric: string
   unit: MemoryUnit
-  platform: 'android' | 'ios' | 'desktop'
+  platform: string
 }
 
 export interface TimelineEvent {
@@ -100,7 +100,7 @@ export interface RollingPoint {
 export interface MemorySummary {
   metric: string
   unit: MemoryUnit
-  platform: 'android' | 'ios' | 'desktop'
+  platform: string
   limitKb: number | null
   startTs: number
   endTs: number

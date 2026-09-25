@@ -20,6 +20,22 @@ export async function loadTests(
     throw new Error(`Test directory not found: ${testDir}`)
   }
 
+  // A catalog directory is the data-first shape: every .json file in it is a
+  // slice of the catalog, which is what lets a client in another language read
+  // the same tests without a TypeScript toolchain. It takes precedence when
+  // present; otherwise the TypeScript/JavaScript module is loaded exactly as
+  // before, so nothing changes for a consumer that has not migrated.
+  const catalogDir = path.join(testDir, 'catalog')
+  if (fs.existsSync(catalogDir)) {
+    const fromCatalog = loadCatalogDir(catalogDir)
+    if (fromCatalog.length > 0) return fromCatalog
+  }
+
+  const jsonPath = path.join(testDir, 'test-definitions.json')
+  if (fs.existsSync(jsonPath)) {
+    return readDefinitionsJson(jsonPath)
+  }
+
   // Look for test-definitions.ts or test-definitions.js
   const tsPath = path.join(testDir, 'test-definitions.ts')
   const jsPath = path.join(testDir, 'test-definitions.js')
@@ -34,7 +50,8 @@ export async function loadTests(
     needsTranspile = true
   } else {
     throw new Error(
-      `Test definitions not found in ${testDir} (looking for test-definitions.ts or .js)`
+      `Test definitions not found in ${testDir} ` +
+        `(looking for catalog/*.json, test-definitions.json, .ts or .js)`
     )
   }
 
@@ -106,4 +123,54 @@ export async function loadTests(
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new Error(`Failed to load test definitions from ${definitionsPath}: ${errorMessage}`)
   }
+}
+
+/**
+ * Read one JSON file of definitions.
+ *
+ * Accepts either a bare array or `{ tests: [...] }`, matching what the module
+ * form exports, so a file can be moved between the two shapes without being
+ * rewritten.
+ */
+function readDefinitionsJson(file: string): TestDefinition[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, 'utf-8'))
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to parse ${file}: ${message}`)
+  }
+
+  const tests = Array.isArray(parsed) ? parsed : (parsed as { tests?: unknown }).tests
+  if (!Array.isArray(tests)) {
+    throw new Error(`${file} must contain an array of definitions or { "tests": [...] }`)
+  }
+  return tests as TestDefinition[]
+}
+
+/** Load every .json file in a catalog directory, sorted for a stable order. */
+function loadCatalogDir(dir: string): TestDefinition[] {
+  const files = fs
+    .readdirSync(dir)
+    .filter((name) => name.endsWith('.json'))
+    .sort()
+
+  const all: TestDefinition[] = []
+  const seen = new Map<string, string>()
+
+  for (const name of files) {
+    for (const test of readDefinitionsJson(path.join(dir, name))) {
+      // A duplicate testId across two files would make the run
+      // order-dependent and the report ambiguous, so it is an error here
+      // rather than a surprise later.
+      const previous = seen.get(test.testId)
+      if (previous) {
+        throw new Error(`Duplicate testId "${test.testId}" in ${name} and ${previous}`)
+      }
+      seen.set(test.testId, name)
+      all.push(test)
+    }
+  }
+
+  return all
 }

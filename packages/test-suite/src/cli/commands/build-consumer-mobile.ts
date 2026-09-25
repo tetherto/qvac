@@ -276,6 +276,8 @@ export async function buildConsumerMobile(options: MobileBuildOptions) {
     console.log('📥 Installing dependencies (with --install-links)...')
     execSync('npm install --install-links=true', { cwd: outputDir, stdio: 'inherit' })
 
+    adoptHostFramework(outputDir, configDir)
+
     patchPerformanceToolkitIosMemoryBuffer(outputDir, options.platform)
 
     // Pre-bundle the /proc memory sampling worklet with bare-pack. Must happen
@@ -503,6 +505,52 @@ const FRAMEWORK_PACKAGE_NAMES = [
   '@tetherto/qvac-test-suite'
 ] as const
 const FRAMEWORK_SPECIFIER_RE = /@(?:qvac|tetherto)\/(?:qvac-)?test-suite(?:-mono)?/g
+
+/**
+ * Make the generated app run the same framework the host checkout runs.
+ *
+ * The app's manifest pins the framework by published range, so its own
+ * `npm install` fetches the registry build regardless of what the host is
+ * testing. CI does not notice because it rewrites the host manifest to a local
+ * tarball and the app inherits that; a local run has no such rewrite, so the
+ * bundle silently ran the last release while every other check used the branch.
+ *
+ * That is not a cosmetic difference. A framework that predates a change to the
+ * definition shape does not reject what it does not understand -- it quietly
+ * does less with it, which is how an entire platform skip policy went missing
+ * on an iOS run and 91 tests executed that should not have.
+ *
+ * Copying the host's resolved copy over the app's makes the two the same by
+ * construction, whether the host is on a published version, a synced local
+ * build, or a CI tarball.
+ */
+function adoptHostFramework(outputDir: string, configDir?: string): void {
+  if (!configDir) return
+  const name = resolveFrameworkPackageName(configDir)
+  const host = path.join(configDir, 'node_modules', ...name.split('/'))
+  const app = path.join(outputDir, 'node_modules', ...name.split('/'))
+  if (!fs.existsSync(path.join(host, 'package.json')) || !fs.existsSync(app)) return
+
+  // Copied unconditionally, even when the versions match: a local sync keeps
+  // the version and replaces `dist`, so equal versions are not equal builds.
+  const hostVersion = readPackageVersion(host)
+  for (const part of ['dist', 'schema']) {
+    const from = path.join(host, part)
+    if (!fs.existsSync(from)) continue
+    fs.rmSync(path.join(app, part), { recursive: true, force: true })
+    fs.cpSync(from, path.join(app, part), { recursive: true })
+  }
+  fs.copyFileSync(path.join(host, 'package.json'), path.join(app, 'package.json'))
+  console.log(`   ⚙️  ${name} taken from the host checkout (${hostVersion ?? 'unknown'})`)
+}
+
+function readPackageVersion(packageRoot: string): string | undefined {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf-8')).version
+  } catch {
+    return undefined
+  }
+}
 
 function resolveFrameworkPackageName(configDir?: string): string {
   if (configDir) {

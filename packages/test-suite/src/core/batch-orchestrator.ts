@@ -501,7 +501,14 @@ export class BatchOrchestrator {
       phase: 'end'
     })
 
-    const statusIcon = outcome === 'skipped' ? '⏭️' : outcome === 'success' ? '✅' : '❌'
+    const statusIcon =
+      outcome === 'incomplete'
+        ? '🚧'
+        : outcome === 'skipped'
+          ? '⏭️'
+          : outcome === 'success'
+            ? '✅'
+            : '❌'
     console.log(
       `${statusIcon} Test ${assignment.testCase.testId} ${outcome} (${duration}ms) - ${consumerId}`
     )
@@ -746,6 +753,7 @@ export class BatchOrchestrator {
     const results = Array.from(this.completedTests.values())
     const successCount = results.filter((r) => r.outcome === 'success').length
     const skippedCount = results.filter((r) => r.outcome === 'skipped').length
+    const incompleteCount = results.filter((r) => r.outcome === 'incomplete').length
     const failureCount = results.filter((r) => r.outcome === 'failure').length
 
     console.log(`\n${'='.repeat(80)}`)
@@ -755,9 +763,18 @@ export class BatchOrchestrator {
     console.log(`📝 Total Tests: ${totalTests}`)
     console.log(`✅ Passed: ${successCount}`)
     console.log(`⏭️  Skipped: ${skippedCount}`)
+    if (incompleteCount > 0) {
+      console.log(`🚧 Incomplete: ${incompleteCount} (applies here, this client cannot run it)`)
+    }
     console.log(`❌ Failed: ${failureCount}`)
+    // Neither a skip nor an incomplete is a pass, and neither counts against
+    // the rate: one is a statement about the platform, the other about the
+    // client's coverage.
     console.log(
-      `📈 Success Rate: ${((successCount / Math.max(totalTests - skippedCount, 1)) * 100).toFixed(1)}%`
+      `📈 Success Rate: ${(
+        (successCount / Math.max(totalTests - skippedCount - incompleteCount, 1)) *
+        100
+      ).toFixed(1)}%`
     )
     console.log('\n👥 Consumer Stats:')
 
@@ -908,7 +925,10 @@ export class BatchOrchestrator {
   }
 
   private displayResultsByCategory() {
-    const categories = new Map<string, { passed: number; failed: number; skipped: number }>()
+    const categories = new Map<
+      string,
+      { passed: number; failed: number; skipped: number; incomplete: number }
+    >()
 
     for (const result of this.completedTests.values()) {
       // Prefer the test's declared metadata.category over deriving from
@@ -919,7 +939,7 @@ export class BatchOrchestrator {
         (result.testId.includes('-') ? result.testId.split('-')[0] : result.testId)
 
       if (!categories.has(category)) {
-        categories.set(category, { passed: 0, failed: 0, skipped: 0 })
+        categories.set(category, { passed: 0, failed: 0, skipped: 0, incomplete: 0 })
       }
 
       const stats = categories.get(category)!
@@ -927,23 +947,32 @@ export class BatchOrchestrator {
         stats.passed++
       } else if (result.outcome === 'skipped') {
         stats.skipped++
+      } else if (result.outcome === 'incomplete') {
+        stats.incomplete++
       } else {
         stats.failed++
       }
     }
 
     for (const [category, stats] of categories) {
-      const total = stats.passed + stats.failed + stats.skipped
-      const rate = ((stats.passed / Math.max(total - stats.skipped, 1)) * 100).toFixed(0)
+      const total = stats.passed + stats.failed + stats.skipped + stats.incomplete
+      const notRun = stats.skipped + stats.incomplete
+      const rate = ((stats.passed / Math.max(total - notRun, 1)) * 100).toFixed(0)
       const skipStr = stats.skipped > 0 ? `, ${stats.skipped} skipped` : ''
-      console.log(`   ${category.padEnd(20)} ${stats.passed}/${total} (${rate}%${skipStr})`)
+      const incStr = stats.incomplete > 0 ? `, ${stats.incomplete} incomplete` : ''
+      console.log(
+        `   ${category.padEnd(20)} ${stats.passed}/${total} (${rate}%${skipStr}${incStr})`
+      )
     }
   }
 
   private displayResultsBySuite() {
     if (this.testSuites.size === 0) return
 
-    const suites = new Map<string, { passed: number; failed: number; skipped: number }>()
+    const suites = new Map<
+      string,
+      { passed: number; failed: number; skipped: number; incomplete: number }
+    >()
 
     for (const [, result] of this.completedTests) {
       const testSuiteList = this.testSuites.get(result.testId)
@@ -951,13 +980,15 @@ export class BatchOrchestrator {
 
       for (const suite of testSuiteList) {
         if (!suites.has(suite)) {
-          suites.set(suite, { passed: 0, failed: 0, skipped: 0 })
+          suites.set(suite, { passed: 0, failed: 0, skipped: 0, incomplete: 0 })
         }
         const stats = suites.get(suite)!
         if (result.outcome === 'success') {
           stats.passed++
         } else if (result.outcome === 'skipped') {
           stats.skipped++
+        } else if (result.outcome === 'incomplete') {
+          stats.incomplete++
         } else {
           stats.failed++
         }
@@ -968,10 +999,12 @@ export class BatchOrchestrator {
 
     console.log('\n📋 Test Results by Suite:\n')
     for (const [suite, stats] of suites) {
-      const total = stats.passed + stats.failed + stats.skipped
-      const rate = ((stats.passed / Math.max(total - stats.skipped, 1)) * 100).toFixed(0)
+      const total = stats.passed + stats.failed + stats.skipped + stats.incomplete
+      const notRun = stats.skipped + stats.incomplete
+      const rate = ((stats.passed / Math.max(total - notRun, 1)) * 100).toFixed(0)
       const skipStr = stats.skipped > 0 ? `, ${stats.skipped} skipped` : ''
-      console.log(`   ${suite.padEnd(20)} ${stats.passed}/${total} (${rate}%${skipStr})`)
+      const incStr = stats.incomplete > 0 ? `, ${stats.incomplete} incomplete` : ''
+      console.log(`   ${suite.padEnd(20)} ${stats.passed}/${total} (${rate}%${skipStr}${incStr})`)
     }
   }
 
