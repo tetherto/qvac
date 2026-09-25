@@ -1512,16 +1512,18 @@ test('ggml-rpc-server keeps Device Farm runs on demand', () => {
 
 test('ggml-rpc-server prebuild callers grant reusable workflow permissions', () => {
   for (const [path, jobName] of [
-    ['.github/workflows/on-merge-ggml-rpc-server.yml', 'build'],
+    ['.github/workflows/on-merge-nx.yml', 'prebuild'],
     [
       '.github/workflows/integration-mobile-test-ggml-rpc-server.yml',
       'prebuild-manual',
     ],
   ]) {
     const job = jobBlock(read(path), jobName)
+    // Not anchored to the first permissions line: on-merge-nx's prebuild job
+    // grants four scopes and orders actions: read last.
     assert.match(
       job,
-      /permissions:\n\s+actions: read/,
+      /permissions:[\s\S]*?\n\s+actions: read/,
       `${path}: ${jobName} must grant actions: read to the reusable prebuild chain`,
     )
   }
@@ -1567,7 +1569,7 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
 
 test('ggml-rpc-server overlay triggers activate with the server package layer', () => {
   const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml');
-  const rpcMerge = read('.github/workflows/on-merge-ggml-rpc-server.yml');
+  const rpcMerge = read('.github/workflows/on-merge-nx.yml');
   const tsProducer = read('.github/workflows/on-pr-ts-nx.yml');
   const mergeGate = read('.github/workflows/pr-gate-merge.yml');
   const rpcProject = JSON.parse(
@@ -1700,21 +1702,47 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
     /prebuild-artifact-prefix:\s*prebuild-ggml-rpc-server-/,
   )
 
-  const release = read('.github/workflows/on-merge-ggml-rpc-server.yml')
-  assert.equal(
-    [...release.matchAll(/name:\s*prebuilds-ggml-rpc-server/g)].length,
-    2,
-    'both RPC release publishers download the package-derived merged artifact',
+  const release = read('.github/workflows/on-merge-nx.yml')
+  const materialize = read(
+    '.github/actions/prebuild-artifact-materialize/action.yml',
+  )
+  assert.match(
+    materialize,
+    /artifact=prebuilds-\$pkg/,
+    'the merged bundle name stays derived from the package, not spelled per caller',
   )
   for (const name of ['publish-gpr', 'publish-npm']) {
     const publishJob = eachJob(release).find((job) => job.name === name)
     assert.ok(publishJob, `${name} job exists`)
     assert.match(
       publishJob.text,
-      /name:\s*Checkout repository[\s\S]*?persist-credentials:\s*false/,
+      /uses:\s*\.\/\.github\/actions\/prebuild-artifact-materialize/,
+      `${name} must download the merged artifact through the shared action`,
+    )
+    assert.match(
+      publishJob.text,
+      /persist-credentials:\s*false/,
       `${name} must not persist checkout credentials while publishing`,
     )
+    // The exec bit is the one thing a zip round-trip drops silently, and npm
+    // pack would ship the 0644 without complaint.
+    assert.match(
+      publishJob.text,
+      /executable-names:\s*\$\{\{ matrix\.prebuildExecutables/,
+      `${name} must restore the exec bit on shipped binaries`,
+    )
   }
+  assert.match(
+    materialize,
+    /no file named '\$\{name\}' under/,
+    'an executable-names sweep that matches nothing must fail, not chmod blind',
+  )
+  const rpcProject = JSON.parse(read('packages/ggml-rpc-server/project.json'))
+  assert.deepEqual(
+    rpcProject.targets['on-merge'].options.ci.prebuildExecutables,
+    ['ggml-rpc-server'],
+    'the RPC server binary must be declared executable for the publish jobs',
+  )
 });
 
 function jobDependsOnAuthorize(job) {

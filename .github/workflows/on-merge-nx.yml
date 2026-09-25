@@ -1,5 +1,5 @@
 name: General CI/CD (native addons, nx)
-# Consolidates the 13 on-merge-<pkg>.yml publish workflows (dorny selects the
+# Consolidates the 14 on-merge-<pkg>.yml publish workflows (dorny selects the
 # changed package, matrix publishes it, no nx-affected). Excludes model-fit.
 
 on:
@@ -18,11 +18,15 @@ on:
       - "packages/diffusion-cpp/**"
       - "packages/embed-llamacpp/**"
       - "packages/fabric/**"
+      - "packages/ggml-rpc-server/**"
       - "packages/llm-llamacpp/**"
       - "packages/ocr-ggml/**"
       - "packages/translation-nmtcpp/**"
       - "packages/tts-ggml/**"
       - "packages/vla-ggml/**"
+      # ggml-rpc-server links the fabric vcpkg overlay; the dorny filter below
+      # routes an overlay-only change to that package alone.
+      - "vcpkg-overlays/ports/qvac-fabric/**"
   workflow_dispatch:
     inputs:
       package:
@@ -38,6 +42,7 @@ on:
           - diffusion-cpp
           - embed-llamacpp
           - fabric
+          - ggml-rpc-server
           - llm-llamacpp
           - ocr-ggml
           - translation-nmtcpp
@@ -101,6 +106,11 @@ jobs:
             diffusion-cpp: packages/diffusion-cpp/**
             embed-llamacpp: packages/embed-llamacpp/**
             fabric: packages/fabric/**
+            # The only package that links the fabric vcpkg overlay, so an
+            # overlay-only change must still rebuild and republish it.
+            ggml-rpc-server:
+              - packages/ggml-rpc-server/**
+              - vcpkg-overlays/ports/qvac-fabric/**
             llm-llamacpp: packages/llm-llamacpp/**
             ocr-ggml: packages/ocr-ggml/**
             translation-nmtcpp: packages/translation-nmtcpp/**
@@ -365,7 +375,7 @@ jobs:
     # verify-generated and mobile-gate-decoder-audio are enforced here, aggregate
     # and all. verify-generated requires success, its only permitted absence being
     # an empty row set; the mobile gate takes != failure because it is skipped for
-    # the twelve packages that are not decoder-audio.
+    # the thirteen packages that are not decoder-audio.
     if: >-
       needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled' &&
       (needs.detect.result == 'success' && needs.detect.outputs.matrix != '[]' &&
@@ -376,7 +386,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: release
-    # Per package, not per workflow: one group for all 13 lets an unrelated
+    # Per package, not per workflow: one group for all 14 lets an unrelated
     # package's merge cancel a queued publish, since GitHub keeps only one
     # pending run per group even with cancel-in-progress: false.
     concurrency:
@@ -420,6 +430,9 @@ jobs:
           package: ${{ matrix.package }}
           # fabric ships its C++ SDK under prebuilds/include and prebuilds/share.
           extra-dirs: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
+          # ggml-rpc-server ships a real executable; the artifact zip drops its
+          # exec bit and npm pack would preserve the 0644.
+          executable-names: ${{ matrix.prebuildExecutables && join(matrix.prebuildExecutables, ' ') || '' }}
 
       - name: Rename prebuild files from qvac_ to tetherto_ prefix
         if: matrix.nameTransform == 'rename-prefix'
@@ -522,6 +535,9 @@ jobs:
           package: ${{ matrix.package }}
           # fabric ships its C++ SDK under prebuilds/include and prebuilds/share.
           extra-dirs: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
+          # ggml-rpc-server ships a real executable; the artifact zip drops its
+          # exec bit and npm pack would preserve the 0644.
+          executable-names: ${{ matrix.prebuildExecutables && join(matrix.prebuildExecutables, ' ') || '' }}
 
       # 12 of the 13 deleted workflows validated this before it reached the
       # external action, and qvac-actions does not check the charset itself.
