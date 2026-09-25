@@ -201,6 +201,27 @@ const RULES: Rule[] = [
     }
   },
 
+  // ── the Python client ────────────────────────────────────────────────────
+  // Not "not written yet". These assert on something that is a property of the
+  // JS client rather than of the SDK, so a Python body would be a different
+  // test wearing the same name.
+  {
+    match: /^(no-lingering-bare-|worker-restart-)/,
+    skip: {
+      reason:
+        'Asserts on the Bare worker processes the JS client spawns, by reading this process\'s own child table. The Python client spawns its own worker with its own lifecycle, so a body here would be testing a different thing under the same name; the JS leg is where this claim lives',
+      platforms: ['desktop-python']
+    }
+  },
+  {
+    match: ['error-invalid-response-type', 'error-structured-error-code'],
+    skip: {
+      reason:
+        "Reads the JS package's exported error-code tables, which are a property of one client's module surface rather than of the shared contract. The equivalent claim for Python is covered by its own unit tests",
+      platforms: ['desktop-python']
+    }
+  },
+
   // ── one mobile OS only ───────────────────────────────────────────────────
   {
     match: ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
