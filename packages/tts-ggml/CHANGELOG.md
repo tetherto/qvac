@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engine accepts beside `f32`, and which one is fastest on each backend.
   Component resolution goes by filename prefix and does not rank
   quantizations, so stage one file per component or name it explicitly.
+- **Audio8 Core ML runtime stats.** `codecSidecarLoaded` reports whether the
+  codec sidecar remains attached; `codecOnCoreml` reports whether the last
+  synthesis used it. Both flags survive streaming as the last reported chunk
+  value, reset on unload, and ignore results from an engine replaced by reload.
 - MOSS engine (`engine: 'moss'`, OpenMOSS MOSS-TTS v1.5 Delay): 24 kHz
   synthesis from three GGUFs (`files.mossBackbone`, `files.mossCodecDecoder`,
   and `files.mossCodecEncoder` to clone a voice from `referenceAudio`),
