@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1714,6 +1722,58 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
       /name:\s*Checkout repository[\s\S]*?persist-credentials:\s*false/,
       `${name} must not persist checkout credentials while publishing`,
     )
+  }
+});
+
+test('RPC RDMA validation checks the packaged Linux backend and server executable', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'qvac-rdma-validation-'))
+  const packageDirectory = join(directory, 'ggml-rpc-server')
+  const binDirectory = join(directory, 'bin')
+  mkdirSync(packageDirectory)
+  mkdirSync(binDirectory)
+  const bareMake = join(binDirectory, 'bare-make')
+  writeFileSync(bareMake, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" != "install" ]]; then exit 0; fi
+mkdir -p build/_vcpkg/test/share/qvac-fabric prebuilds/linux-arm64/qvac__ggml-rpc-server
+printf 'features core,rpc-rdma,rpc-server\\n' > build/_vcpkg/test/share/qvac-fabric/vcpkg_abi_info.txt
+if [[ "\${RPC_TEST_SERVER_PRESENT}" == "yes" ]]; then
+  printf 'server without marker\\n' > prebuilds/linux-arm64/qvac__ggml-rpc-server/ggml-rpc-server
+fi
+if [[ "\${RPC_TEST_BACKEND_MARKER}" == "yes" ]]; then
+  printf 'RDMA auto-negotiate enabled\\n' > prebuilds/linux-arm64/qvac__ggml-rpc-server/libqvac-ggml-rpc.so
+else
+  printf 'backend without marker\\n' > prebuilds/linux-arm64/qvac__ggml-rpc-server/libqvac-ggml-rpc.so
+fi
+`)
+  chmodSync(bareMake, 0o755)
+
+  function validate(serverPresent, backendMarker) {
+    return spawnSync('bash', [join(root, '.github/scripts/validate-rpc-rdma-build.sh')], {
+      cwd: packageDirectory,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${binDirectory}:${process.env.PATH}`,
+        BUILD_PLATFORM: 'linux',
+        BUILD_ARCH: 'arm64',
+        RPC_TEST_SERVER_PRESENT: serverPresent ? 'yes' : 'no',
+        RPC_TEST_BACKEND_MARKER: backendMarker ? 'yes' : 'no',
+      },
+    })
+  }
+
+  try {
+    const valid = validate(true, true)
+    assert.equal(valid.status, 0, valid.stderr)
+    const missingMarker = validate(true, false)
+    assert.notEqual(missingMarker.status, 0)
+    assert.match(missingMarker.stderr, /RPC backend does not contain the RDMA capability marker/)
+    const missingServer = validate(false, true)
+    assert.notEqual(missingServer.status, 0)
+    assert.match(missingServer.stderr, /ggml-rpc-server executable is missing/)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
   }
 });
 
