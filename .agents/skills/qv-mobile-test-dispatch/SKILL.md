@@ -207,12 +207,12 @@ line counts its own suite rather than your runners.
 ## Step 6 — attach the run to the PR
 
 A run is only evidence if a reviewer can open it. After a re-run, the link belongs
-on the PR — as a **comment** when it answers a review question, or in the
-**description** when it is part of the case that the change works.
+on the PR as a **comment**. Prefer a comment always: it appends, so nothing can be
+lost, and it never has to read what is already there.
 
-**This writes to a public repository, so never post without explicit approval.**
-Draft the line, show it, and post only when the human says to — the same shape
-`qv-pr-review` uses for its own writes. Show the exact command before running it.
+**Never post without explicit approval.** This writes to a public repository.
+Draft the line, show it, show the exact command, and run it only when the human
+says to.
 
 Name the test and the device, so the line reads without opening anything:
 
@@ -221,11 +221,23 @@ Re-ran runChatterboxSpeedTest on Samsung Galaxy S26 Ultra after 4e1f2a9:
 https://github.com/tetherto/qvac/actions/runs/<id> — total=1 passed=1
 ```
 
-Prefer `gh pr comment`: it adds, so nothing can be lost. **`gh pr edit --body`
-replaces the WHOLE description** — appending a line blind will silently drop the
-author's write-up, recoverable only from GitHub's edit history. If the
-description really is the right place, read the current body first, show the
-merged result in full, and write only once that has been approved.
+### Never put a PR body, log line or run output in a shell argument
+
+Write the text to a file and pass the file:
+
+```bash
+# compose the note in /tmp/pr-<num>-note.md with the Write tool, then:
+gh pr comment <num> --repo tetherto/qvac --body-file /tmp/pr-<num>-note.md
+```
+
+Backticks and `$(...)` inside a double-quoted argument run before `gh` does, and
+PR bodies and run artifacts on a fork PR are written by third parties. An
+approval gate does not help: the human approves the rendered line, not the shell
+quoting.
+
+For the description: read it to a file, append there with the Write tool, show
+the merged result, then `gh pr edit <num> --body-file <file>`, which replaces the
+whole body.
 
 Quote the counts from `test-results.json`. Never report a pass you have not read
 out of that file — say what actually ran, including when the answer is that a
