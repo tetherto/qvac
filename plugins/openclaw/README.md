@@ -232,6 +232,19 @@ the launcher rather than being used.
 
 ## Upgrading
 
+### OpenClaw 2026.9.6
+
+OpenClaw runs plugin code from a temporary copy and, from 2026.9.6, deletes that
+copy when the process exits. Earlier plugin releases wrote the copy's launcher
+path into `localService.args`, so the next agent run fails with
+`qvac local service exited before readiness` and `Cannot find module`. The
+plugin now writes its install path instead. After upgrading the plugin,
+re-onboard once so `openclaw.json` picks up the new path:
+
+```bash
+openclaw onboard --auth-choice provider-plugin:qvac
+```
+
 ### OpenClaw 2026.8.1
 
 Three command-line changes land in this release. Nothing in the plugin changes,
@@ -279,8 +292,8 @@ its directory to mode `0700` and the file to mode `0600`. A key path that is not
 a regular file — a symlink or directory — is rejected instead of overwritten;
 remove it yourself and rerun onboarding.
 
-If the local service fails with `--api-key-file requires a value`, see
-[Upgrading](#upgrading).
+If the local service fails with `--api-key-file requires a value`, or exits
+with `Cannot find module` before readiness, see [Upgrading](#upgrading).
 
 ## What It Registers
 
