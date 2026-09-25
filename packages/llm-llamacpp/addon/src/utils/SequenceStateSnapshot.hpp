@@ -39,7 +39,19 @@ namespace utils {
 // transfer ownership and leave the source in an empty state.
 //
 // `nPast` records the next-position-to-write at snapshot time.
+//
+// Two scopes:
+//   * Full: the whole sequence, attention KV included. Restore replaces it.
+//   * Partial: only the parts of the memory a tail trim cannot rewind
+//     (`LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`: the recurrent state of a hybrid
+//     or recurrent model, the window of a sliding-window cache). Its size
+//     does not grow with the context. Restore puts that part back and trims
+//     the attention KV to `nPast`, so it is only valid while the attention KV
+//     still holds the sequence's first `nPast` positions unchanged, as it
+//     does for a rollback or for a checkpoint whose ledger is a prefix of the
+//     resident one.
 enum class SnapshotStorage { Disk, Memory };
+enum class SnapshotScope { Full, Partial };
 
 class SequenceStateSnapshot {
 public:
@@ -80,6 +92,8 @@ public:
   [[nodiscard]] const std::vector<uint8_t>& buffer() const noexcept {
     return buffer_;
   }
+  [[nodiscard]] SnapshotScope scope() const noexcept { return scope_; }
+  void setScope(SnapshotScope scope) noexcept { scope_ = scope; }
 
   // Best-effort cleanup. Removes the underlying file (if any) and
   // resets `nPast` / `captured_`. Safe to call multiple times, safe on
@@ -122,13 +136,14 @@ private:
   std::vector<uint8_t> buffer_;
   uint64_t bytes_ = 0;
   bool captured_ = false;
+  SnapshotScope scope_ = SnapshotScope::Full;
 };
 
-// Captures the full state of `seqId` into `out`, recording `nPastAt`
-// alongside it. With `SnapshotStorage::Disk` the state is written to a fresh
-// per-process unique temp file via `llama_state_seq_save_file`; with
-// `SnapshotStorage::Memory` it is copied into a host buffer via
-// `llama_state_seq_get_data` and the disk is never touched.
+// Captures the state of `seqId` into `out`, recording `nPastAt` alongside it.
+// With `SnapshotStorage::Disk` the state is written to a fresh per-process
+// unique temp file; with `SnapshotStorage::Memory` it is copied into a host
+// buffer and the disk is never touched. `scope` picks the full sequence or
+// only its non-trimmable part (see `SnapshotScope`).
 //
 // Returns true on success. Returns false when llama.cpp reports a 0-byte
 // write/copy — `out` is cleared (and any partial file removed) so a later
@@ -140,8 +155,8 @@ private:
 // will clear the sequence memory to match.
 bool snapshotSequenceState(
     ::llama_context* lctx, llama_seq_id seqId, llama_pos nPastAt,
-    SequenceStateSnapshot& out,
-    SnapshotStorage storage = SnapshotStorage::Disk);
+    SequenceStateSnapshot& out, SnapshotStorage storage = SnapshotStorage::Disk,
+    SnapshotScope scope = SnapshotScope::Full);
 
 // Upper bound, in bytes, of one snapshot of `seqId`-style state once a
 // sequence holds `perSeqTokens` tokens. Measured, not modelled: decodes two
@@ -150,19 +165,24 @@ bool snapshotSequenceState(
 // per-token part (KV cells), then clears sequence 0 again and resets the
 // perf counters. Works for any memory layout. Returns 0 when the probe cannot
 // run (null context, decode failure); callers then skip budget validation.
-// Must only be called while no request is in flight.
+// Must only be called while no request is in flight. With
+// `SnapshotScope::Partial` the per-token part is zero on hybrid and recurrent
+// memory, so the bound is the fixed recurrent state.
 [[nodiscard]] uint64_t estimateMaxSequenceStateBytes(
-    ::llama_context* lctx, const ::llama_vocab* vocab, uint32_t perSeqTokens);
+    ::llama_context* lctx, const ::llama_vocab* vocab, uint32_t perSeqTokens,
+    SnapshotScope scope = SnapshotScope::Full);
 
 // Process-wide count of snapshot files actually written by
 // `snapshotSequenceState` (empty-sequence captures write nothing and are not
 // counted). Test seam: lets a test prove a code path never touched the disk.
 [[nodiscard]] uint64_t sequenceStateSnapshotFilesWritten() noexcept;
 
-// Restores `snapshot` into `seqId`. For snapshots backed by a file,
-// calls `llama_state_seq_load_file`; for memory-backed ones,
-// `llama_state_seq_set_data`. Either fully replaces the sequence's
-// attention KV and recurrent state. For captured-but-empty snapshots
+// Restores `snapshot` into `seqId`. A full snapshot backed by a file goes
+// through `llama_state_seq_load_file`, a memory-backed one through
+// `llama_state_seq_set_data`; either fully replaces the sequence's attention
+// KV and recurrent state. A partial snapshot restores its part through
+// `llama_state_seq_set_data_ext` and then trims the attention KV to
+// `snapshot.nPast`. For captured-but-empty snapshots
 // (no payload, `nPast <= 0`), clears the sequence via
 // `llama_memory_seq_rm` so the recurrent / hybrid memory rewinds to a
 // truly empty state — the same end state the in-memory variant

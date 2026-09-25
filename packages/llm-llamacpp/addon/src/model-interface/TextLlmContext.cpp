@@ -111,6 +111,9 @@ void TextLlmContext::initializeCommonState() {
           llama_model_is_recurrent(model),
           llama_model_is_hybrid(model),
           isDeepSeekV4);
+  snapshotScope_ =
+      qvac_lib_inference_addon_llama::utils::snapshotScopeFor(isDeepSeekV4);
+  requestRollback_.setScope(snapshotScope_);
   // EOS-inside-reasoning recovery (close-marker substitution +
   // trailing newlines) is a Qwen3-specific workaround. Gate it on the
   // explicit Qwen3-family predicate so the policy is documented at the
@@ -1302,7 +1305,8 @@ void TextLlmContext::capturePreRequestCacheSnapshot() {
           seqId_,
           nPast_,
           preRequestCacheSnapshot_,
-          cacheCheckpointPolicy_.storage)) {
+          cacheCheckpointPolicy_.storage,
+          snapshotScope_)) {
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToSaveSessionFile),

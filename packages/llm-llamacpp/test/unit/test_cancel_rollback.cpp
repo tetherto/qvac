@@ -3,6 +3,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -14,6 +15,7 @@
 #include <vector>
 
 #include <common/chat.h>
+#include <common/common.h>
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
@@ -233,6 +235,139 @@ TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripQwen35Hybrid) {
 // Same roundtrip with the memory backend: the bytes come from
 // `llama_state_seq_get_data`, go back through `llama_state_seq_set_data`,
 // and no file is written at any point.
+namespace {
+
+// Decodes `tokens[begin, end)` at their own positions on seq 0, asking for
+// logits on the last one when `wantLogits`.
+bool decodeRange(
+    llama_context* ctx, const std::vector<llama_token>& tokens, size_t begin,
+    size_t end, bool wantLogits) {
+  llama_batch batch = llama_batch_init(static_cast<int32_t>(end - begin), 0, 1);
+  for (size_t i = begin; i < end; ++i) {
+    common_batch_add(
+        batch,
+        tokens[i],
+        static_cast<llama_pos>(i),
+        {0},
+        wantLogits && i + 1 == end);
+  }
+  const bool ok = llama_decode(ctx, batch) == 0;
+  llama_batch_free(batch);
+  return ok;
+}
+
+// Greedy continuation of `count` tokens after a prefill that ended at `pos`.
+std::vector<llama_token> greedyTail(
+    llama_context* ctx, const llama_vocab* vocab, llama_pos pos, int count) {
+  std::vector<llama_token> out;
+  const int nVocab = llama_vocab_n_tokens(vocab);
+  for (int i = 0; i < count; ++i) {
+    const float* logits = llama_get_logits_ith(ctx, -1);
+    llama_token best = 0;
+    for (int t = 1; t < nVocab; ++t) {
+      if (logits[t] > logits[best]) {
+        best = t;
+      }
+    }
+    out.push_back(best);
+    llama_batch batch = llama_batch_init(1, 0, 1);
+    common_batch_add(batch, best, pos + i, {0}, true);
+    const bool ok = llama_decode(ctx, batch) == 0;
+    llama_batch_free(batch);
+    if (!ok) {
+      break;
+    }
+  }
+  return out;
+}
+
+} // namespace
+
+// The partial checkpoint contract on hybrid memory: a PARTIAL_ONLY state
+// holds only the recurrent part, and restoring it followed by trimming the
+// attention cache back to the same position must be indistinguishable from
+// restoring a full copy of the sequence.
+TEST_F(
+    CancelRollbackPrimitiveTest,
+    PartialRestorePlusTrimMatchesFullRestoreOnHybrid) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  llama_context* ctx = model->getContext();
+  const llama_vocab* vocab = llama_model_get_vocab(model->getModel());
+  auto* mem = llama_get_memory(ctx);
+  ASSERT_NE(mem, nullptr);
+  ASSERT_TRUE(llama_memory_seq_rm(mem, 0, -1, -1));
+
+  std::string text;
+  for (int i = 0; i < 40; ++i) {
+    text += "Line " + std::to_string(i) + " of a long shared history. ";
+  }
+  const std::vector<llama_token> tokens =
+      common_tokenize(ctx, text, true, true);
+  const size_t checkpointAt = tokens.size() / 2;
+  ASSERT_GT(checkpointAt, 16u);
+
+  ASSERT_TRUE(decodeRange(ctx, tokens, 0, checkpointAt, false));
+  llama_synchronize(ctx);
+  const size_t fullSize = llama_state_seq_get_size(ctx, 0);
+  std::vector<uint8_t> full(fullSize);
+  ASSERT_EQ(
+      llama_state_seq_get_data(ctx, full.data(), full.size(), 0), fullSize);
+  const size_t partialSize =
+      llama_state_seq_get_size_ext(ctx, 0, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+  std::vector<uint8_t> partial(partialSize);
+  ASSERT_EQ(
+      llama_state_seq_get_data_ext(
+          ctx,
+          partial.data(),
+          partial.size(),
+          0,
+          LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY),
+      partialSize);
+  EXPECT_LT(partialSize, fullSize);
+
+  // Run on past the checkpoint so both restores have something to undo.
+  ASSERT_TRUE(decodeRange(ctx, tokens, checkpointAt, tokens.size(), false));
+  llama_synchronize(ctx);
+  const size_t partialLater =
+      llama_state_seq_get_size_ext(ctx, 0, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+  EXPECT_EQ(partialLater, partialSize)
+      << "the recurrent state must not grow with the context";
+  EXPECT_GT(llama_state_seq_get_size(ctx, 0), fullSize);
+
+  constexpr int kTail = 12;
+  ASSERT_NE(llama_state_seq_set_data(ctx, full.data(), full.size(), 0), 0u);
+  ASSERT_TRUE(decodeRange(ctx, tokens, checkpointAt, tokens.size(), true));
+  const std::vector<llama_token> viaFull =
+      greedyTail(ctx, vocab, static_cast<llama_pos>(tokens.size()), kTail);
+
+  ASSERT_NE(
+      llama_state_seq_set_data_ext(
+          ctx,
+          partial.data(),
+          partial.size(),
+          0,
+          LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY),
+      0u);
+  ASSERT_TRUE(
+      llama_memory_seq_rm(mem, 0, static_cast<llama_pos>(checkpointAt), -1))
+      << "trimming attention back to the partial checkpoint was refused";
+  EXPECT_EQ(
+      llama_memory_seq_pos_max(mem, 0) + 1,
+      static_cast<llama_pos>(checkpointAt));
+  ASSERT_TRUE(decodeRange(ctx, tokens, checkpointAt, tokens.size(), true));
+  const std::vector<llama_token> viaPartial =
+      greedyTail(ctx, vocab, static_cast<llama_pos>(tokens.size()), kTail);
+
+  EXPECT_EQ(viaPartial, viaFull);
+  std::cerr << "[partial-snapshot] tokens=" << tokens.size() << " full@"
+            << checkpointAt << "=" << fullSize << " partial=" << partialSize
+            << "\n";
+  llama_memory_seq_rm(mem, 0, -1, -1);
+}
+
 TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripInMemoryHybrid) {
   auto model = loadTextModel(qwen35HybridModelPath());
   if (!model) {
