@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 from tetherto.qvac_sdk import (
-    SDK_LOG_ID,
     BciTranscribeRequest,
     DownloadAssetRequest,
     EmbedRequest,
@@ -196,7 +195,13 @@ def _logging_state(stream_id: str) -> dict[str, Any]:
 
 async def _logging_stream_open(transport: Any, params: dict[str, Any]) -> Any:
     global _LOGGING_STREAM_SEQ
-    target_id = params.get("id") or SDK_LOG_ID
+    if not params.get("id"):
+        raise StepError(
+            "SDK-server log entries come from the client capturing the worker's stderr, "
+            "which this client does not do",
+            incomplete=True,
+        )
+    target_id = params["id"]
     _LOGGING_STREAM_SEQ += 1
     stream_id = f"logs-{_LOGGING_STREAM_SEQ}"
     state: dict[str, Any] = {"collected": [], "cutoffMs": 0, "done": False}
@@ -710,6 +715,16 @@ def _load_model(transport: Any, params: dict[str, Any]) -> Any:
     return run()
 
 
+async def _streamed_text(run: Any) -> str:
+    return "".join(
+        [
+            event.text
+            async for event in run.events
+            if getattr(event, "type", None) == "contentDelta"
+        ]
+    )
+
+
 async def _completion_stream(
     transport: Any, params: dict[str, Any], collect: str
 ) -> Any:
@@ -732,10 +747,14 @@ async def _completion_stream(
         # `tool_calls` rides along with the text because a tools test needs both: the
         # model either answered or called a tool, and which one it did is the question.
         # Two folds would mean two completions.
+        # A streaming run's text is read off the events, so a stream that yields nothing fails.
+        streamed = (
+            asyncio.ensure_future(_streamed_text(run)) if params.get("stream") else None
+        )
         calls = await run.tool_calls()
         final = await run.final
         return {
-            "text": await run.text(),
+            "text": await streamed if streamed else await run.text(),
             "toolCalls": [
                 {"name": call.name, "arguments": call.arguments} for call in calls
             ],

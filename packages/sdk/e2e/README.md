@@ -289,6 +289,29 @@ in the form.
 - **Definitions** live in [`tests/<feature>-tests.ts`](./tests), aggregated in
   [`tests/test-definitions.ts`](./tests/test-definitions.ts). Each entry is a `TestDefinition` with `testId`,
   `params`, `expectation`, optional `suites`, and `metadata`.
+- **Prefer a declarative body.** A definition with `steps` is run by the shared
+  step interpreter, so it runs on every client rather than only the JS ones. The
+  operations and what a client must do with them are specified in
+  [`@qvac/test-suite`'s conformance spec](../../test-suite/docs/conformance.md);
+  the per-platform naming is in [`tests/platform-vocabulary.md`](./tests/platform-vocabulary.md)
+  and the suite tags in [`tests/suite-tags.md`](./tests/suite-tags.md). An
+  executor stays the right answer only for bodies that cannot be data.
+- **Which model a key means** is in [`tests/shared/resource-table.ts`](./tests/shared/resource-table.ts),
+  not in the consumer entries. Regenerate the JSON copy with `npm run emit:resource-table`.
+- **Before pushing**, run the cheap gates:
+
+  ```bash
+  npm run build
+  npm run check:resource-table
+  npm run check:step-dependencies
+  npx qvac-test catalog:validate --config=.
+  ```
+
+- **Working on the framework too?** `package.json` pins `@qvac/test-suite` to a
+  published range, so a plain install leaves `node_modules` holding the release
+  build. `npm run sync:test-suite` points this checkout at
+  `packages/test-suite` instead — including the copies inside already-packaged
+  consumer bundles.
 - **Executors — pick one of three locations based on runtime requirements:**
   - [`tests/shared/executors/`](./tests/shared/executors) — **default**. Pure SDK API calls, no Node stdlib,
     no RN APIs. Runs on both desktop and mobile. Example:
