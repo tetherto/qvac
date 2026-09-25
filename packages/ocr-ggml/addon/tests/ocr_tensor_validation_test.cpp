@@ -31,8 +31,9 @@ TEST(OcrTensorValidation, RejectsDetectionCopyLargerThanBuffer) {
 }
 
 TEST(OcrTensorValidation, RejectsVocabularyOverread) {
-  EXPECT_THROW(easyocr::ggml::TensorValidation::validateVocabIndex(35, 34),
-               std::runtime_error);
+  EXPECT_THROW(
+      easyocr::ggml::TensorValidation::validateVocabIndex(35, 34),
+      std::runtime_error);
   EXPECT_NO_THROW(easyocr::ggml::TensorValidation::validateVocabIndex(33, 34));
 }
 

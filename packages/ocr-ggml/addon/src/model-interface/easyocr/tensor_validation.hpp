@@ -12,7 +12,7 @@ struct TensorValidation;
 }
 
 struct easyocr::ggml::TensorValidation {
-  static void validateDetectionTensor(const ggml_tensor &tensor, size_t bytes) {
+  static void validateDetectionTensor(const ggml_tensor& tensor, size_t bytes) {
     constexpr size_t channels = 2;
     constexpr size_t bytesPerPixel = channels * sizeof(float);
     if (tensor.type != GGML_TYPE_F32 || tensor.ne[0] != channels ||
@@ -39,7 +39,7 @@ struct easyocr::ggml::TensorValidation {
     return channels > 0 && biasSize == static_cast<size_t>(channels);
   }
 
-  static bool predictionBiasMatches(const ggml_tensor &bias, int64_t classes) {
+  static bool predictionBiasMatches(const ggml_tensor& bias, int64_t classes) {
     return classes > 0 && ggml_n_dims(&bias) == 1 && bias.ne[0] == classes &&
            ggml_nelements(&bias) == classes;
   }

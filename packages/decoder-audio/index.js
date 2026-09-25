@@ -226,14 +226,20 @@ class FFmpegDecoder {
         void this._processStream(audioStream, run)
             .then(() => {
             response.updateStats({ ...run.stats });
+            this._clearRun(run);
             response.ended();
         })
             .catch((err) => {
             this.logger.error("Error processing audio stream:", err);
             response.updateStats({ ...run.stats });
+            this._clearRun(run);
             response.failed(err);
         });
         return response;
+    }
+    _clearRun(run) {
+        if (this._activeRun === run)
+            this._activeRun = null;
     }
     _cancelCurrent() {
         const run = this._activeRun;

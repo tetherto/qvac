@@ -99,6 +99,7 @@ declare class FFmpegDecoder {
      * @returns Response with decoded audio
      */
     run(audioStream: AsyncIterable<Buffer>, options?: FFmpegDecoderRunOptions): QvacResponse<DecoderOutput>;
+    private _clearRun;
     private _cancelCurrent;
     private _getBufferSize;
     private _emitDecodedChunk;

@@ -102,6 +102,14 @@ test(
     const consumerReady = new Promise((resolve) => {
       releaseConsumer = resolve
     })
+    let releaseSecondConsumer
+    const secondConsumerReady = new Promise((resolve) => {
+      releaseSecondConsumer = resolve
+    })
+    let secondChunk
+    const secondChunkReceived = new Promise((resolve) => {
+      secondChunk = resolve
+    })
     try {
       const first = decoder.run(fs.createReadStream(sampleMp3()), {
         retainOutput: false,
@@ -114,19 +122,28 @@ test(
         firstChunk()
       })
       await firstChunkReceived
-      const second = decoder.run(fs.createReadStream(sampleMp3()), { retainOutput: false })
+      const second = decoder.run(fs.createReadStream(sampleMp3()), {
+        retainOutput: false,
+        waitForConsumer: () => secondConsumerReady
+      })
       releaseConsumer()
       let secondBytes = 0
       second.onUpdate(({ outputArray }) => {
         secondBytes += outputArray.length
+        secondChunk()
       })
       await t.exception(() => first.await(), /Stale job replaced by new run/)
+      await secondChunkReceived
+      t.is(decoder._activeRun?.response, second, 'older run did not clear the active run')
+      releaseSecondConsumer()
       await second.await()
+      t.is(decoder._activeRun, null, 'completed run was released')
       t.is(firstBytes, first.stats.outputBytes, 'first stats count only first output')
       t.is(secondBytes, second.stats.outputBytes, 'second stats count only second output')
       t.ok(secondBytes > firstBytes, 'second run received its own decoded output')
     } finally {
       releaseConsumer()
+      releaseSecondConsumer()
       await decoder.unload()
     }
   }
@@ -182,6 +199,7 @@ test('FFmpegDecoder - rejects decoded audio beyond the configured limit', async 
       /Decoded audio exceeds the configured byte limit/
     )
     t.ok(response.stats.outputBytes <= 1024, 'the decoder stopped within the limit')
+    t.is(decoder._activeRun, null, 'failed run was released')
   } finally {
     await decoder.unload()
   }
@@ -202,6 +220,19 @@ test('FFmpegDecoder - streaming response does not retain PCM chunks', async (t) 
     const result = await response.await()
     t.ok(outputBytes > 0, 'PCM chunks were emitted')
     t.alike(result, [], 'PCM chunks were not retained in the response')
+    t.is(decoder._activeRun, null, 'completed streaming run was released')
+  } finally {
+    await decoder.unload()
+  }
+})
+
+test('FFmpegDecoder - releases a completed retained response', async (t) => {
+  const decoder = await loadDecoder()
+  try {
+    const response = decoder.run(fs.createReadStream(sampleMp3()))
+    const output = await response.await()
+    t.ok(output.length > 0, 'default response retained PCM chunks')
+    t.is(decoder._activeRun, null, 'completed run was released')
   } finally {
     await decoder.unload()
   }

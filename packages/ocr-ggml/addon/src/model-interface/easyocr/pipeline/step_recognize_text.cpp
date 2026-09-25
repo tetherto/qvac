@@ -746,8 +746,8 @@ StepRecognizeText::StepRecognizeText(
     // GGUF didn't carry crnn.vocab — fall back to the Lang table.
     utf32Characters_ = langChars;
   }
-  const auto *predictionWeight = loader_->get_tensor("Prediction.weight");
-  const auto *predictionBias = loader_->get_tensor("Prediction.bias");
+  const auto* predictionWeight = loader_->get_tensor("Prediction.weight");
+  const auto* predictionBias = loader_->get_tensor("Prediction.bias");
   if (predictionWeight == nullptr || predictionBias == nullptr ||
       predictionWeight->ne[1] !=
           static_cast<int64_t>(utf32Characters_.size()) ||
