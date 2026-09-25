@@ -1,4 +1,4 @@
-import { createExecutor, SkipExecutor, type TestDefinition } from '@qvac/test-suite'
+import { createExecutor, type TestDefinition } from '@qvac/test-suite'
 import { createStepBindings } from '../shared/step-bindings.js'
 import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
@@ -51,15 +51,16 @@ import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 import * as MODEL_CONSTANTS from '@qvac/sdk'
 import { RESOURCE_TABLE } from '../shared/resource-table.js'
 import { applyResourceTable } from '../shared/resource-table-types.js'
+import { policyFor } from '../shared/platform-policy.js'
 
 /** Where the shared table's `$asset` placeholders point on this platform. */
 function resolveTableAsset(kind: string, file: string): string {
   return path.resolve(process.cwd(), `assets/${kind}`, file)
 }
 
-const resources = new ResourceManager({
-  downloadTarget: 'desktop'
-})
+// Download plan and unload settling come from the shared platform policy, not
+// from a literal here -- see tests/shared/platform-policy.ts.
+const resources = new ResourceManager(policyFor('desktop'))
 
 // One table, shared with every other client, applied here.
 //
@@ -131,10 +132,6 @@ const stepBindings = createStepBindings(resources)
 
 export const executor = createExecutor({
   handlers: [
-    new SkipExecutor(
-      /^snap-storage-/,
-      'Snap storage tests require the strict-confined Snap consumer'
-    ),
     new ModelLoadingExecutor(resources),
     new BatchCompletionExecutor(resources, {
       resolveAttachmentPath: resolveBatchAttachmentPath

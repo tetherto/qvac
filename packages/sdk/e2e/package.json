@@ -30,7 +30,8 @@
     "consumer:electron:run": "qvac-test run:consumer:electron",
     "sync:test-suite": "./sync-test-suite.sh",
     "emit:resource-table": "node scripts/emit-resource-table.mjs",
-    "check:resource-table": "node scripts/emit-resource-table.mjs --check"
+    "check:resource-table": "node scripts/emit-resource-table.mjs --check",
+    "check:skip-matrix": "node scripts/check-skip-matrix.mjs"
   },
   "dependencies": {
     "@qvac/sdk": "file:..",

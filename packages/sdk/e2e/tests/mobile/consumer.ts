@@ -1,5 +1,5 @@
 import { Platform } from 'react-native'
-import { createExecutor, SkipExecutor } from '@qvac/test-suite/mobile'
+import { createExecutor } from '@qvac/test-suite/mobile'
 import type { TestDefinition } from '@qvac/test-suite'
 import { profiler } from '@qvac/sdk'
 import { ResourceManager } from '../shared/resource-manager.js'
@@ -42,22 +42,16 @@ import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 import * as MODEL_CONSTANTS from '@qvac/sdk'
 import { RESOURCE_TABLE } from '../shared/resource-table.js'
 import { applyResourceTable } from '../shared/resource-table-types.js'
+import { policyFor } from '../shared/platform-policy.js'
 
 /** Where the shared table's `$asset` placeholders point on this platform. */
 function resolveTableAsset(kind: string, file: string): string {
   return `assets/${kind}/${file}`
 }
 
-const resources = new ResourceManager({
-  downloadTarget: 'mobile',
-  // Mobile (iOS + Android) needs a tick after each unloadModel for the
-  // kernel to actually release pages / reclaim mmap regions — without
-  // it, the next test's load arrives while the previous model's RSS is
-  // still resident and either the GGML allocator crashes (iOS) or
-  // Scudo's mmap fails with "internal map failure" (Android). Empirically
-  // 200ms is enough; desktop doesn't need it.
-  unloadSettleMs: 200
-})
+// Download plan and the unload settling mobile needs -- and why it needs it --
+// come from the shared platform policy; see tests/shared/platform-policy.ts.
+const resources = new ResourceManager(policyFor('mobile'))
 
 // One table, shared with every other client, applied here.
 //
@@ -80,10 +74,6 @@ applyResourceTable(
 // mirror exists. The pi05 e2e tests are skipped on mobile (see below);
 // defining the resource here would make `downloadAllOnce` pre-fetch the
 // 3.9 GB model even though the tests never run. Desktop covers pi05.
-
-function skipTests(testIds: string[], reason: string) {
-  return new SkipExecutor(new RegExp(`^(${testIds.join('|')})$`), reason)
-}
 
 // The download-resilience HTTP test reaches flaky-lan-server.mjs on the desktop,
 // which is the same machine as the MQTT broker. consumer-config.ts is generated
@@ -185,97 +175,10 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
-    // Mobile platform skips (before real executors -- first match wins)
-    new SkipExecutor(
-      /^snap-storage-/,
-      'Snap storage tests require the strict-confined Snap consumer'
-    ),
-    new SkipExecutor(/^http-(?:sharded|archive)-embed-/, 'HTTP test disabled on mobile (OOM)'),
-    new SkipExecutor(/^finetune-/, 'Finetune tests disabled on mobile'),
-    new SkipExecutor(
-      /^world-/,
-      'ABot-World disabled on mobile: a walk session needs a dedicated GPU with GBs of free VRAM, and world operations have no delegated route'
-    ),
-    new SkipExecutor(
-      /^multi-gpu-/,
-      'Multi-GPU tests disabled on mobile (not supported on single-GPU devices)'
-    ),
-    new SkipExecutor(
-      /^tools-(?!simple-function$|no-function-match$)/,
-      'Tools test disabled on mobile'
-    ),
-    new SkipExecutor(
-      /^(diffusion-|addon-logging-diffusion$)/,
-      'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
-    ),
-    new SkipExecutor(
-      /^audio-(gen|edit|understand)-/,
-      'ACE-Step AudioGen loads four large GGUFs and is covered by desktop e2e'
-    ),
-    new SkipExecutor(
-      /^vla-pi05-/,
-      'π₀.₅ q_aggressive GGUF (3.9 GB) exceeds the iOS jetsam ~3 GB per-process limit (OOM) and is deferred on Android Device Farm until a CDN-fronted mirror exists; SmolVLA covers mobile VLA, desktop covers pi05'
-    ),
-    new SkipExecutor(
-      /^translation-bergamot-.+-cache-reload$/,
-      'Server-side Bare code path, identical across platforms — desktop coverage is source of truth'
-    ),
-    new SkipExecutor(/^bci-/, 'BCI addon tests are desktop-only until mobile support is enabled'),
-    new SkipExecutor(
-      /^parakeet-indic-conformer-/,
-      'Indic Conformer e2e is desktop-only; the parakeet-indic-conformer resource is not defined on mobile'
-    ),
-    new SkipExecutor(
-      /^vla-groot-/,
-      'GR00T e2e is desktop-only; the vla-groot resource is not defined on mobile'
-    ),
-    new SkipExecutor(
-      /^(ocr-doctr-|model-load-ocr-doctr$)/,
-      'DocTR OCR e2e is desktop-only; the pipeline/detector auto-derivation under test (QVAC-22514) is server-side Bare code identical across platforms, and the doctr resource is not defined on mobile'
-    ),
-    skipTests(
-      [
-        'tts-cosyvoice3-emotion-conditioning',
-        'tts-cosyvoice3-streaming',
-        'tts-cosyvoice3-native-streaming',
-        'tts-cosyvoice3-sentence-streaming',
-        'tts-cosyvoice3-duplex-streaming'
-      ],
-      'Redundant CosyVoice3 e2e coverage overlapping other TTS tests, and slow on Device Farm; only tts-cosyvoice3-default and tts-cosyvoice3-invalid-emotion are kept on mobile'
-    ),
-    ...(Platform.OS === 'android'
-      ? [
-          skipTests(
-            ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
-            'Parakeet streaming EOU/iterator recovery is flaky on Android'
-          )
-        ]
-      : []),
-    ...(Platform.OS === 'ios'
-      ? [
-          // QVAC-19557: Chatterbox TTS variants OOM on iOS Device Farm under the current memory budget.
-          // new SkipExecutor(/^tts-chatterbox-/, "Chatterbox TTS is flaky on iOS under Device Farm memory pressure (OOM)"),
-          skipTests(
-            [
-              'ocr-sign-image',
-              'ocr-chart-image',
-              'ocr-no-text-image',
-              'ocr-large-image',
-              'ocr-low-quality',
-              'ocr-mixed-language',
-              'ocr-single-language',
-              'ocr-blurry-text',
-              'ocr-horizontally-inverted',
-              'ocr-vertically-inverted',
-              'ocr-misaligned-text',
-              'ocr-multi-sized-text',
-              'ocr-multiple-fonts',
-              'addon-logging-ocr'
-            ],
-            'OCR disabled on iOS (ONNX/CoreML OOM)'
-          )
-        ]
-      : []),
+    // Mobile platform policy -- which suites are off, and on which OS -- is
+    // declared in the catalog now; see tests/platform-skips.ts. It used to be
+    // sixteen registrations here plus two `Platform.OS` branches, none of it
+    // visible to a client in another language.
 
     // Real executors
     new ModelLoadingExecutor(resources),
