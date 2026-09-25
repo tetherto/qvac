@@ -404,7 +404,7 @@ export const completionWithWhitespace = createCompletionTest(
     history: [
       {
         role: 'user',
-        content: '   What is 12 + 12?   Answer with just the number.   '
+        content: '   Add 12 and 12.   Reply with only the number.   '
       }
     ],
     stream: false,
