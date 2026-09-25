@@ -85,6 +85,7 @@ describe('configure: param-schemas', () => {
 
     assert.equal(model.discriminator, 'ttsEngine')
     const values = model.variants.map((v) => v.value)
+    assert.ok(values.includes('pocket'), 'Pocket configuration is available')
     assert.ok(values.includes('cosyvoice3'), `expected cosyvoice3 in ${values.join(', ')}`)
 
     for (const variant of model.variants) {
