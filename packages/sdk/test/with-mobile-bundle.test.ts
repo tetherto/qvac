@@ -11,10 +11,18 @@ import {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
   MOBILE_UNSUPPORTED_MODULES,
+  buildMobileBundle,
   mobileHostsForPlatform,
   patchBareKitLinkers,
   runIOSAddonLinker
 } from '@/expo/plugins/withMobileBundle'
+import { BundleVerificationFailedError } from '@/utils/errors-client'
+import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
+import {
+  SPLIT_ADDON_ANDROID_PACKAGE,
+  SPLIT_ADDON_VERSION,
+  createSplitAddonProject
+} from './fixtures/split-addon-project'
 
 test('mobileHostsForPlatform: each build target bundles and verifies only its own hosts', (t) => {
   t.alike(mobileHostsForPlatform('android'), ['android-arm64'])
@@ -196,6 +204,95 @@ test('runIOSAddonLinker: rejects when the linker fails', async (t) => {
   t.ok(error?.message.includes('code 7'), 'reports the child exit code')
   t.ok(error?.message.includes('fixture failure'), 'reports linker diagnostics')
 })
+
+function androidPrebuildMod(projectRoot: string) {
+  return {
+    modRequest: { projectRoot, platform: 'android' }
+  } as unknown as Parameters<typeof buildMobileBundle>[0]
+}
+
+const posixOnly = { skip: process.platform === 'win32' }
+
+test(
+  'buildMobileBundle: fails prebuild and names the missing platform package by default',
+  posixOnly,
+  async (t) => {
+    const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'))
+    t.teardown(project.cleanup)
+    const pm = installFakePackageManager(project.projectRoot, 'pnpm')
+
+    let error: unknown
+    try {
+      await withPath(pm.binDir, () =>
+        buildMobileBundle(androidPrebuildMod(project.projectRoot), {})
+      )
+    } catch (cause) {
+      error = cause
+    }
+
+    t.ok(error instanceof BundleVerificationFailedError, 'verification fails')
+    const details = String((error as Error | undefined)?.cause)
+    t.ok(
+      details.includes(`"${SPLIT_ADDON_ANDROID_PACKAGE}": "${SPLIT_ADDON_VERSION}"`),
+      'the failure names the exact pin to add'
+    )
+    t.alike(pm.calls(), [], 'nothing is installed without the option')
+  }
+)
+
+test(
+  'buildMobileBundle: installMissingPrebuilds installs the current target package',
+  posixOnly,
+  async (t) => {
+    const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'))
+    t.teardown(project.cleanup)
+    const pm = installFakePackageManager(project.projectRoot, 'pnpm')
+
+    await withPath(pm.binDir, () =>
+      buildMobileBundle(androidPrebuildMod(project.projectRoot), { installMissingPrebuilds: true })
+    )
+
+    t.alike(
+      pm.calls(),
+      [
+        {
+          cwd: project.projectRoot,
+          args: ['add', '--save-exact', `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`]
+        }
+      ],
+      'installs only the Android package for an Android prebuild, with the app package manager'
+    )
+    t.ok(
+      existsSync(join(project.sdkPath, 'dist', 'worker.mobile.bundle.js')),
+      'the verified bundle is copied into the SDK'
+    )
+  }
+)
+
+test(
+  'buildMobileBundle: installMissingPrebuilds finds the SDK addon in a pnpm store',
+  posixOnly,
+  async (t) => {
+    const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'), 'pnpm')
+    t.teardown(project.cleanup)
+    t.absent(
+      existsSync(join(project.projectRoot, 'node_modules', '@qvac', 'fake-ggml')),
+      'the addon is not in the top-level node_modules'
+    )
+    const pm = installFakePackageManager(project.projectRoot, 'pnpm')
+
+    await withPath(pm.binDir, () =>
+      buildMobileBundle(androidPrebuildMod(project.projectRoot), { installMissingPrebuilds: true })
+    )
+
+    t.alike(pm.calls(), [
+      {
+        cwd: project.projectRoot,
+        args: ['add', '--save-exact', `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`]
+      }
+    ])
+  }
+)
 
 function hostAddonMap(metaName: string) {
   return {
