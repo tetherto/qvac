@@ -239,7 +239,7 @@ void CraftWeights::build_(const GgufLoader& loader, ggml_backend_t backend) {
     const std::vector<float> w_src_f32 = to_f32_vector(w_src);
     const std::vector<float> b_src_f32 =
         b_src != nullptr ? to_f32_vector(b_src) : std::vector<float>{};
-    if (!bias_tensor_size_matches(b_src_f32.size(), oc)) {
+    if (!TensorValidation::biasTensorSizeMatches(b_src_f32.size(), oc)) {
       err_ = "bias tensor size mismatch for " + conv_path;
       return;
     }

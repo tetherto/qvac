@@ -357,7 +357,7 @@ StepDetectionInference::runInference(const cv::Mat& inputBlob) {
   const int outH = static_cast<int>(out->ne[2]);
   const int outW = static_cast<int>(out->ne[1]);
   const size_t outputBytes = ggml_nbytes(out);
-  validate_detection_tensor(*out, outputBytes);
+  TensorValidation::validateDetectionTensor(*out, outputBytes);
   nhwcScratch_.resize(outputBytes / sizeof(float));
   ggml_backend_tensor_get(out, nhwcScratch_.data(), 0, outputBytes);
   const auto tGet1 = clock::now();

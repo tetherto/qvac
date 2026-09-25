@@ -127,7 +127,8 @@ std::string upload_weights(
     const std::vector<float> w_src_f32 = to_f32_vector(w_src);
     const std::vector<float> b_src_f32 =
         b_src != nullptr ? to_f32_vector(b_src) : std::vector<float>{};
-    if (b_src != nullptr && !bias_tensor_size_matches(b_src_f32.size(), oc)) {
+    if (b_src != nullptr &&
+        !TensorValidation::biasTensorSizeMatches(b_src_f32.size(), oc)) {
       return "bias tensor size mismatch for " + d.conv_path;
     }
     const float* W = w_src_f32.data();

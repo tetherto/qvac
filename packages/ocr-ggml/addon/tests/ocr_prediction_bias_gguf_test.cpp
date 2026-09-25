@@ -8,17 +8,15 @@
 #include "model-interface/easyocr/gguf_loader.hpp"
 #include "model-interface/easyocr/tensor_validation.hpp"
 
-namespace {
+constexpr int64_t CLASS_COUNT = 32;
 
-constexpr int64_t kClassCount = 32;
-
-void writePredictionBias(const std::string &path, bool malformed) {
+static void writePredictionBias(const std::string &path, bool malformed) {
   ggml_init_params params{
       .mem_size = 1024 * 1024, .mem_buffer = nullptr, .no_alloc = false};
   auto *context = ggml_init(params);
   auto *bias = malformed
-                   ? ggml_new_tensor_2d(context, GGML_TYPE_F32, kClassCount, 2)
-                   : ggml_new_tensor_1d(context, GGML_TYPE_F32, kClassCount);
+                   ? ggml_new_tensor_2d(context, GGML_TYPE_F32, CLASS_COUNT, 2)
+                   : ggml_new_tensor_1d(context, GGML_TYPE_F32, CLASS_COUNT);
   ggml_set_name(bias, "Prediction.bias");
   auto *gguf = gguf_init_empty();
   gguf_add_tensor(gguf, bias);
@@ -36,7 +34,8 @@ TEST(OcrPredictionBiasGguf, RejectsExtraBiasDimension) {
     ASSERT_TRUE(loader.ok());
     const auto *bias = loader.get_tensor("Prediction.bias");
     ASSERT_NE(bias, nullptr);
-    EXPECT_FALSE(easyocr::ggml::prediction_bias_matches(*bias, kClassCount));
+    EXPECT_FALSE(easyocr::ggml::TensorValidation::predictionBiasMatches(
+        *bias, CLASS_COUNT));
   }
   std::filesystem::remove(path);
 }
@@ -50,9 +49,8 @@ TEST(OcrPredictionBiasGguf, AcceptsVectorBias) {
     ASSERT_TRUE(loader.ok());
     const auto *bias = loader.get_tensor("Prediction.bias");
     ASSERT_NE(bias, nullptr);
-    EXPECT_TRUE(easyocr::ggml::prediction_bias_matches(*bias, kClassCount));
+    EXPECT_TRUE(easyocr::ggml::TensorValidation::predictionBiasMatches(
+        *bias, CLASS_COUNT));
   }
   std::filesystem::remove(path);
-}
-
 }
