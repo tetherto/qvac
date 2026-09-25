@@ -53,6 +53,22 @@ test('consumer manifest installs the package and every peer', () => {
 test('consumer manifest works without peers', () => {
   const manifest = buildConsumerManifest({ name: '@qvac/x' }, '1.0.0')
   assert.deepEqual(manifest.dependencies, { '@qvac/x': '1.0.0' })
+  assert.equal(manifest.overrides, undefined)
+})
+
+test('consumer manifest skips peers outside @qvac', () => {
+  const pkg = JSON.parse(readFileSync(resolve(repoRoot, 'packages/sdk/package.json'), 'utf8'))
+  const manifest = buildConsumerManifest(pkg, 'file:./package.tgz')
+
+  assert.ok(Object.keys(pkg.peerDependencies).length > 0)
+  assert.deepEqual(manifest.dependencies, { '@qvac/sdk': 'file:./package.tgz' })
+})
+
+test('consumer manifest carries local overrides', () => {
+  const manifest = buildConsumerManifest({ name: '@qvac/sdk' }, 'file:./package.tgz', {
+    '@qvac/inference': 'file:./local-0.tgz',
+  })
+  assert.deepEqual(manifest.overrides, { '@qvac/inference': 'file:./local-0.tgz' })
 })
 
 test('one copy of each lib passes', () => {

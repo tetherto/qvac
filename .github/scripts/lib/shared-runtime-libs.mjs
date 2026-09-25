@@ -7,18 +7,24 @@ export const SHARED_RUNTIME_LIBS = [
   '@qvac/error',
 ]
 
-// A consumer that installs the package together with every peer, optional or
-// not, at the ranges the package declares.
-export function buildConsumerManifest(pkg, packageSpec) {
-  return {
+// A consumer that installs the package together with every @qvac peer,
+// optional or not, at the ranges the package declares. Other peers cannot
+// bring in a shared lib. `overrides` maps package names to local specs.
+export function buildConsumerManifest(pkg, packageSpec, overrides = {}) {
+  const qvacPeers = Object.entries(pkg.peerDependencies ?? {}).filter(([name]) =>
+    name.startsWith('@qvac/'),
+  )
+  const manifest = {
     name: 'shared-runtime-libs-check',
     version: '0.0.0',
     private: true,
     dependencies: {
-      ...(pkg.peerDependencies ?? {}),
+      ...Object.fromEntries(qvacPeers),
       [pkg.name]: packageSpec,
     },
   }
+  if (Object.keys(overrides).length > 0) manifest.overrides = overrides
+  return manifest
 }
 
 function packageNameFromPath(path) {

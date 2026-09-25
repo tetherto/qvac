@@ -1,8 +1,9 @@
-name: On PR Trigger (Inference Shared Runtime Libs)
+name: On PR Trigger (Shared Runtime Libs)
 
-# Installs @qvac/inference with all of its optional peers and fails if
-# @qvac/infer-base, @qvac/logging, or @qvac/error resolves to more than one
-# version. publish-inference.yml runs the same check before npm publish.
+# Fails if @qvac/infer-base, @qvac/logging, or @qvac/error resolves to more
+# than one version when installing @qvac/inference with all of its optional
+# peers, or @qvac/sdk with its addon dependencies. publish-inference.yml and
+# publish-sdk.yml run the same check before npm publish.
 
 on:
   pull_request:
@@ -10,7 +11,8 @@ on:
     branches: [main, release-*, feature-*, tmp-*]
     paths:
       - "packages/inference/**"
-      - ".github/workflows/on-pr-inference-shared-runtime-libs.yml"
+      - "packages/sdk/package.json"
+      - ".github/workflows/on-pr-shared-runtime-libs.yml"
       - ".github/scripts/check-shared-runtime-libs.mjs"
       - ".github/scripts/lib/shared-runtime-libs.mjs"
       - ".github/scripts/test/shared-runtime-libs.test.mjs"
@@ -42,3 +44,8 @@ jobs:
 
       - name: Check @qvac/inference with all optional peers
         run: node .github/scripts/check-shared-runtime-libs.mjs packages/inference
+
+      # The in-repo engine can be ahead of npm on a PR, so it replaces the
+      # published @qvac/inference in the SDK's tree.
+      - name: Check @qvac/sdk
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference

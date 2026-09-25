@@ -86,7 +86,7 @@ jobs:
           package-json-path: packages/inference/package.json
           changelog-path: packages/inference/CHANGELOG.md
 
-  # Same check as on-pr-inference-shared-runtime-libs.yml, re-run against the
+  # Same check as on-pr-shared-runtime-libs.yml, re-run against the
   # peers on npm at publish time.
   shared-runtime-libs:
     name: Shared runtime libs resolve once
