@@ -8,6 +8,7 @@ declare const ENGINE_COSYVOICE3 = "cosyvoice3";
 declare const ENGINE_PARLER = "parler";
 declare const ENGINE_AUDIO8 = "audio8";
 declare const ENGINE_MOSS = "moss";
+declare const ENGINE_MOSS_SFX = "moss-sfx";
 declare const ENGINE_POCKET = "pocket";
 declare const COSYVOICE_DIALECTS: {
     readonly cantonese: "广东话";
@@ -56,7 +57,7 @@ declare const EMOTIONS: readonly ["command", "anger", "narration", "conversation
 declare const PACES: readonly ["slow", "moderate", "fast"];
 type Emotion = (typeof EMOTIONS)[number];
 type Pace = (typeof PACES)[number];
-type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8 | typeof ENGINE_MOSS | typeof ENGINE_POCKET;
+type EngineType = typeof ENGINE_CHATTERBOX | typeof ENGINE_SUPERTONIC | typeof ENGINE_COSYVOICE3 | typeof ENGINE_PARLER | typeof ENGINE_AUDIO8 | typeof ENGINE_MOSS | typeof ENGINE_MOSS_SFX | typeof ENGINE_POCKET;
 /**
  * Model file paths for the GGML TTS backend. Engine is auto-detected
  * from these fields (Chatterbox vs Supertonic) unless overridden via
@@ -119,6 +120,12 @@ interface TTSGgmlFiles {
      */
     mossCodecEncoder?: string;
     mossCodecEncoderPath?: string;
+    /**
+     * MOSS-SoundEffect GGUF (`moss-sfx-*.gguf`): text encoder, DiT and VAE in
+     * one file. Routes to the `moss-sfx` engine. Overrides `modelDir`.
+     */
+    mossSoundEffect?: string;
+    mossSoundEffectPath?: string;
     /**
      * CosyVoice3 model directory holding the sub-model GGUFs
      * (`cosyvoice3-{llm,flow,hift}-*.gguf`) plus `voice.gguf`, `vocab.json` and
@@ -308,6 +315,23 @@ interface Audio8VoiceFields {
     referenceAudio?: string;
     /** Audio8: what `referenceAudio` says. Required when cloning. */
     referenceText?: string;
+}
+/**
+ * MOSS-SoundEffect per-call generation controls (moss-sfx only). Each one is
+ * optional; unset `steps` / `guidance` / `shift` use the defaults stored in the
+ * model file (100 steps, guidance 4, shift 5).
+ */
+interface MossSoundEffectFields {
+    /** Length of the sound effect, in (0, 30] seconds, rounded to 0.1 s. Defaults to 10. */
+    seconds?: number;
+    /** What the sound effect should avoid (classifier-free guidance negative). */
+    negativePrompt?: string;
+    /** Diffusion steps, 1..1000. More steps cost proportionally more time. */
+    steps?: number;
+    /** Classifier-free guidance scale, 1..50; 1 skips the negative branch. */
+    guidance?: number;
+    /** Flow-matching schedule shift, (0, 100]. */
+    shift?: number;
 }
 /**
  * CosyVoice3 per-call instruction. Same values as the constructor's
@@ -717,7 +741,7 @@ interface RunStreamingOptions extends ParlerDescriptionFields, Audio8VoiceFields
 }
 /** Input accepted by `runStreaming`. */
 type TextStreamInput = string | string[] | Iterable<string> | AsyncIterable<string>;
-interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields, TTSConditioningFields, CosyvoiceJobFields {
+interface TTSRunInput extends ParlerDescriptionFields, Audio8VoiceFields, TTSConditioningFields, CosyvoiceJobFields, MossSoundEffectFields {
     type?: string;
     input: string;
     streamOutput?: boolean;
@@ -749,6 +773,7 @@ declare class TTSGgml {
     static readonly ENGINE_PARLER = "parler";
     static readonly ENGINE_AUDIO8 = "audio8";
     static readonly ENGINE_MOSS = "moss";
+    static readonly ENGINE_MOSS_SFX = "moss-sfx";
     static readonly ENGINE_POCKET = "pocket";
     opts: object;
     exclusiveRun: boolean;
@@ -828,6 +853,7 @@ declare class TTSGgml {
     private _mossBackbonePath?;
     private _mossCodecDecoderPath?;
     private _mossCodecEncoderPath?;
+    private _mossSoundEffectPath?;
     private _dialogueReferences?;
     private _durationTokens?;
     private _referenceText?;
@@ -864,6 +890,8 @@ declare class TTSGgml {
      */
     private _assertEngineScopedOptions;
     private _assertAudio8OptionConsistency;
+    private _assertMossSoundEffectOptionConsistency;
+    private _assertMossSoundEffectOutputRate;
     private _assertMossOptionConsistency;
     private _assertNoMossOnlyOptions;
     private _assertMossDialogueReferences;
@@ -917,6 +945,11 @@ declare class TTSGgml {
      */
     private _resolveAudio8JobFields;
     /**
+     * Extract + validate the per-call MOSS-SoundEffect controls from a run
+     * input. Returns undefined when none are present.
+     */
+    private _resolveSoundEffectJobFields;
+    /**
      * The per-call fields of whichever engine is loaded, if any are set. Parler
      * takes the full description/template surface, Audio8 its voice override,
      * and every engine the cross-engine conditioning it supports.
@@ -968,6 +1001,7 @@ declare class TTSGgml {
     private _buildParlerParams;
     private _buildAudio8Params;
     private _buildMossParams;
+    private _buildMossSoundEffectParams;
     /** The knobs every engine in SAMPLING_ENGINES reads. */
     private _assignSamplingParams;
     /**

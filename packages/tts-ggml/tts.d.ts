@@ -17,6 +17,11 @@ export interface TTSJobData {
     instruct?: string;
     referenceAudio?: string;
     referenceText?: string;
+    seconds?: number;
+    negativePrompt?: string;
+    steps?: number;
+    guidance?: number;
+    shift?: number;
 }
 export interface TTSWeightData {
     filename: string;

@@ -10,6 +10,7 @@ Metal on Apple, CUDA/Vulkan on Linux, Vulkan on Windows, and OpenCL/Adreno
 GPU offload on Android), **Audio8**
 (DualAR + neural codec, in-process voice cloning, desktop GPU), and **MOSS**
 (MOSS-TTS Delay, 24 kHz, in-process voice cloning, native chunk streaming,
+desktop), and **MOSS-SoundEffect** (text-to-sound-effects, 48 kHz, up to 30 s,
 desktop), plus optional
 LavaSR neural denoise + 48 kHz bandwidth-extension enhancement.  Unsure
 which checkpoint to stage? Start with [Choosing a model](#choosing-a-model).
@@ -74,6 +75,7 @@ obvious for each job.
 | Voice cloning at 44.1 kHz with nothing pre-baked | `audio8-lm-q8_0.gguf` + `audio8-codec-decoder-q8_0.gguf` (+ `audio8-codec-encoder-q8_0.gguf` to clone) | Clones from a reference wav **and its transcript**, encoded in-process — no enrolment step, no voice profile. Whole-utterance only (no native chunk streaming). |
 | Multilingual speech with native chunk streaming and cloning on a desktop | `moss-tts-delay-f16.gguf` + `moss-codec-decoder-f16.gguf` (+ `moss-codec-encoder-f16.gguf` to clone) | 8B backbone, desktop only. Clones from a reference wav encoded in-process (no transcript needed); native `streamChunkTokens` chunk streaming. Native 24 kHz. |
 | Multi-speaker dialogue that continues each speaker's reference voice | `moss-ttsd-f16.gguf` + `moss-codec-decoder-f16.gguf` + `moss-codec-encoder-f16.gguf` | 8B backbone, desktop only. One 24 kHz reference per speaker; the text opens with their transcripts. Native 24 kHz. |
+| Sound effects from a text description (not speech) | `moss-sfx-v2-q8_0.gguf` (or `moss-sfx-v2-f16.gguf`) | Diffusion model, desktop GPU recommended. Up to 30 s per clip, `seconds` per call; no streaming. Native 48 kHz. |
 | Indic languages | `parler-indic-q8_0.gguf` | 21 Indic languages; voice / emotion templates. Emotion is officially tested on 10 languages — see [Parler descriptions & emotions](#parler-descriptions--emotions) (or the upstream model card). Native 44.1 kHz. |
 | Chinese dialects (Cantonese, Sichuan, Shanghai, …) | CosyVoice3 dir (`cosyvoice3-llm-*.gguf` + flow / hift / `voice.gguf`) | Instruct-conditioned; 17 dialects via `instruct: { dialect: '…' }`. CPU, with opt-in GPU offload (Metal on Apple, Vulkan on Linux/Windows, OpenCL/Adreno on Android); native 24 kHz. |
 | Zero-shot / cross-lingual cloning (multilingual) | CosyVoice3 dir + `cosyvoice3-s3tok-*.gguf` + `cosyvoice3-campplus-*.gguf` | Clones from a reference wav; its transcript (`promptText`) selects zero-shot, omitting it selects cross-lingual (timbre only, any target language). Composes with `instruct`. |
@@ -98,6 +100,7 @@ here, so this guide does not go stale when backends change.
 | `audio8-lm-q8_0` + codec halves | Text-led (no `language` option) | ~0.7 GB (+ ~120 MB to clone) | 44.1 kHz | Reference wav + transcript, per call too | Sentence streaming |
 | `moss-tts-delay-f16` + codec halves | Multilingual (`language` hint) | ~18.8 GB (+ ~1.8 GB to clone) | 24 kHz | Reference wav, fixed per instance | Sentence + native chunk |
 | `moss-ttsd-f16` + codec halves | Multilingual (`language` hint) | ~20.5 GB | 24 kHz | One reference wav per speaker, fixed per instance | Native chunk |
+| `moss-sfx-v2-q8_0` (or `-f16`) | Sound effects from a text prompt | ~3.5 GB (`q8_0`) / ~6.4 GB (`f16`) | 48 kHz | — | None |
 
 ### Legacy Supertonic v1 / v2
 
@@ -233,6 +236,9 @@ moss-tts-delay-f16.gguf          (~17 GB)
 moss-ttsd-f16.gguf               (~17 GB; MOSS-TTSD dialogue backbone, optional)
 moss-codec-decoder-f16.gguf      (~1.8 GB)
 moss-codec-encoder-f16.gguf      (~1.8 GB; cloning and dialogue only)
+
+# MOSS-SoundEffect (OpenMOSS MOSS-SoundEffect-v2; 48 kHz text-to-sound-effects)
+moss-sfx-v2-q8_0.gguf            (~3.5 GB; or moss-sfx-v2-f16.gguf, ~6.4 GB)
 ```
 
 Download the registry-published Chatterbox, Supertonic, and Parler models into
@@ -270,7 +276,7 @@ qvac-fabric-speech.cpp (`engines/tts/scripts/convert-audio8-lm-to-gguf.py`
 and `convert-audio8-codec-to-gguf.py`) until they are published to the model
 registry alongside the other engines. The MOSS GGUFs come from
 `convert-moss-delay-to-gguf.py` and `convert-moss-codec-to-gguf.py` in the same
-directory.
+directory, and the MOSS-SoundEffect GGUF from `convert-moss-sfx-to-gguf.py`.
 
 Point the addon at a custom location via `files.modelDir` (engine
 auto-detected from the gguf filenames present), or pass explicit
@@ -281,7 +287,8 @@ auto-detected from the gguf filenames present), or pass explicit
 `files.audio8Lm` + `files.audio8CodecDecoder` (+ `files.audio8CodecEncoder`
 to clone) (Audio8) /
 `files.mossBackbone` + `files.mossCodecDecoder` (+ `files.mossCodecEncoder`
-to clone) (MOSS).
+to clone) (MOSS) /
+`files.mossSoundEffect` (MOSS-SoundEffect).
 
 ## Quick start
 
@@ -1014,6 +1021,42 @@ falls back to CPU and sets `response.stats.gpuUnsupported`.  `backendsDir`
 reaches MOSS like every other engine, so builds that load ggml backends at
 runtime find them.
 
+## MOSS-SoundEffect
+
+MOSS-SoundEffect-v2 generates a sound effect from a text description: a Qwen3
+text encoder reads the prompt, a DiT denoises a latent over a number of
+flow-matching steps, and a DAC decoder turns it into 48 kHz mono audio of up
+to 30 seconds.  It is not a speech model, and it ships as one GGUF.  Select it
+with `engine: TTSGgml.ENGINE_MOSS_SFX` or by staging `moss-sfx-*.gguf` in the
+`modelDir`.
+
+```js
+const sfx = new TTSGgml({
+  engine: TTSGgml.ENGINE_MOSS_SFX,
+  files: { modelDir: './models' },
+  config: { useGPU: true },
+  opts: { stats: true }
+})
+await sfx.load()
+const response = await sfx.run({
+  input: 'Heavy rain falling on a tin roof with distant thunder.',
+  seconds: 10,              // (0, 30], rounded to 0.1 s; defaults to 10
+  negativePrompt: 'music',  // optional
+  steps: 100,               // optional; model default 100
+  guidance: 4,              // optional; model default 4, 1 skips the negative branch
+  shift: 5                  // optional; model default 5
+})
+```
+
+The generation controls are per call and moss-sfx-only; the output is exactly
+`seconds` long.  `seed` (constructor) makes a clip reproducible.  Every clip
+costs about the same whatever its length, because the model always denoises a
+30-second latent and crops it: about two minutes for 100 steps on an Apple M1
+Ultra GPU, and much longer on CPU, so fewer `steps` trade quality for time.
+There is no streaming (`runStream()`, `runStreaming()` and
+`run({ streamOutput: true })` are rejected), `config.outputSampleRate` must be
+unset or `48000`, and the LavaSR stages and voice options are not supported.
+
 ## API overview
 
 ### Constructor — `new TTSGgml(options)`
@@ -1036,9 +1079,10 @@ runtime find them.
 | `files.mossBackbone`      | string     | —          | MOSS Delay backbone GGUF: MOSS-TTS or the MOSS-TTSD dialogue checkpoint (overrides `modelDir`) |
 | `files.mossCodecDecoder`  | string     | —          | MOSS codec synthesis half — codes to wav (overrides `modelDir`) |
 | `files.mossCodecEncoder`  | string     | —          | MOSS codec analysis half — wav to codes; only needed to clone a voice or for `dialogueReferences` |
+| `files.mossSoundEffect`   | string     | —          | MOSS-SoundEffect GGUF (`moss-sfx-*.gguf`); routes to the `moss-sfx` engine |
 | `files.lavasrEnhancer`    | string     | —          | LavaSR enhancer GGUF — supplying it turns on 48 kHz enhancement |
 | `files.lavasrDenoiser`    | string     | —          | LavaSR denoiser GGUF — supplying it turns on denoising (batch only) |
-| `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'`, `'cosyvoice3'`, `'parler'`, `'audio8'` or `'moss'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_COSYVOICE3` / `ENGINE_PARLER` / `ENGINE_AUDIO8` / `ENGINE_MOSS`); auto-detected from the GGUFs present otherwise |
+| `engine`                  | string     | auto       | Force `'chatterbox'`, `'supertonic'`, `'cosyvoice3'`, `'parler'`, `'audio8'`, `'moss'` or `'moss-sfx'` (`TTSGgml.ENGINE_CHATTERBOX` / `ENGINE_SUPERTONIC` / `ENGINE_COSYVOICE3` / `ENGINE_PARLER` / `ENGINE_AUDIO8` / `ENGINE_MOSS` / `ENGINE_MOSS_SFX`); auto-detected from the GGUFs present otherwise |
 | `referenceAudio`          | string     | —          | Wav to clone (Chatterbox: mono, ≥ 5 s; CosyVoice3: 0.5-30 s, multichannel downmixed to mono, needs the s3tok + campplus GGUFs; Audio8: also needs `referenceText`; MOSS: needs `files.mossCodecEncoder`).  Audio8 accepts it per call too |
 | `referenceText`           | string     | —          | Audio8-only: what `referenceAudio` says, verbatim.  Required whenever a reference is set; accepted per call |
 | `dialogueReferences`      | string[]   | —          | MOSS-only: one 24 kHz recording per speaker (`[S1]`, `[S2]`, ...) for dialogue synthesis; the text must open with each recording's transcript under its tag; needs `files.mossCodecEncoder`, excludes `referenceAudio`, fixed per instance |
@@ -1103,6 +1147,9 @@ runtime find them.
 - `TTSGgml.getVoiceControls()` — static: tts-cpp's emotion / pace vocabulary
   and each engine's supported subset (see [Emotion & pace](#emotion--pace-cross-engine)).
 - `model.run({ input, type: 'text' })` → `QvacResponse`.
+- `model.run({ input, seconds, negativePrompt, steps, guidance, shift })` →
+  moss-sfx: one sound effect of `seconds` length; the controls are optional
+  and moss-sfx-only (see [MOSS-SoundEffect](#moss-soundeffect)).
 - `model.run({ input, streamOutput: true })` → sentence-chunked
   synthesis driven by the JS-side sentence splitter (see
   `lib/textChunker.js`).  Equivalent to `runStream(input)`.
@@ -1213,6 +1260,7 @@ Runnable demos under `examples/`:
 | `cosyvoice-enhanced.js` | CosyVoice3 + LavaSR 48 kHz enhancement (add `--denoise` for the denoiser). `bare examples/cosyvoice-enhanced.js "Hello"` |
 | `audio8-tts.js` | Audio8 batch synth, optionally cloning a reference. Set `QVAC_TTS_AUDIO8_GPU=1` for the desktop GPU backend (CUDA or Vulkan on linux, Vulkan on Windows). `bare examples/audio8-tts.js "Hello" voice.wav "What it says."` |
 | `moss-tts.js` | MOSS batch synth, optionally cloning a reference. Set `QVAC_TTS_MOSS_STREAM_FRAMES=25` for native chunk streaming, `QVAC_TTS_MOSS_DURATION=38` for a target length and `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-tts.js "Hello" voice.wav` |
+| `moss-sound-effect.js` | MOSS-SoundEffect text-to-sound-effects at 48 kHz. Set `QVAC_TTS_MOSS_SFX_GPU=1` for the GPU backend and `QVAC_TTS_MOSS_SFX_STEPS` to trade quality for time. `bare examples/moss-sound-effect.js "Rain on a tin roof." 5` |
 | `moss-dialogue-tts.js` | MOSS-TTSD multi-speaker dialogue from one 24 kHz reference per speaker; the text opens with each reference's transcript. Set `QVAC_TTS_MOSS_GPU=1` for the GPU backend. `bare examples/moss-dialogue-tts.js "[S1] What alice.wav says. [S2] What bob.wav says. [S1] Hi. [S2] Hello." alice.wav bob.wav` |
 
 The two streaming examples feed PCM into a single long-running
@@ -1250,7 +1298,10 @@ files are absent.  They cover, across the engines:
 The MOSS integration test (`moss.test.js`) does not download its GGUFs:
 set `QVAC_TEST_MOSS_MODEL_DIR` to a directory holding them, otherwise it is
 skipped.  The C++ suite runs its MOSS synthesis cases when
-`QVAC_TEST_MOSS_BACKBONE_GGUF` and `QVAC_TEST_MOSS_DECODER_GGUF` are set.
+`QVAC_TEST_MOSS_BACKBONE_GGUF` and `QVAC_TEST_MOSS_DECODER_GGUF` are set.  The
+MOSS-SoundEffect integration test (`moss-sfx.test.js`) likewise needs
+`QVAC_TEST_MOSS_SFX_MODEL_DIR`, and the C++ suite generates a short clip when
+`QVAC_TEST_MOSS_SFX_GGUF` is set.
 
 To stress-test long inputs, set `INPUT_SENTENCES=medium` (or `long`)
 and re-run the integration suite — `addon.test.js` reads the env var to

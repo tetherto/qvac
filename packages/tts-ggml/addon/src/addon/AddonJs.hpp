@@ -26,6 +26,7 @@
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
 #include "model-interface/moss/MossModel.hpp"
+#include "model-interface/moss/MossSoundEffectModel.hpp"
 #include "model-interface/parler/ParlerModel.hpp"
 #include "model-interface/pocket/PocketModel.hpp"
 #include "model-interface/supertonic/SupertonicModel.hpp"
@@ -38,6 +39,7 @@ using audio8::Audio8Model;
 using chatterbox::ChatterboxModel;
 using cosyvoice::CosyvoiceModel;
 using moss::MossModel;
+using moss::MossSoundEffectModel;
 using parler::ParlerModel;
 using pocket::PocketModel;
 using supertonic::SupertonicModel;
@@ -166,6 +168,11 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     auto mtm = make_unique<MossModel>(std::move(cfg));
     sampleRate = mtm->sampleRate();
     model = std::move(mtm);
+  } else if (engineType == EngineType::MossSoundEffect) {
+    auto cfg = adapter.buildMossSoundEffectConfig(configurationParams, env);
+    auto sfx = make_unique<MossSoundEffectModel>(std::move(cfg));
+    sampleRate = sfx->sampleRate();
+    model = std::move(sfx);
   } else {
     auto cfg = adapter.buildChatterboxConfig(configurationParams, env);
     const bool enhanced = !cfg.enhancerGgufPath.empty();
@@ -278,6 +285,15 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
           StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
           outputQueue->queueResult(std::any(std::move(chunk)));
         };
+    return instance.runJob(std::any(std::move(modelInput)));
+  }
+
+  if (dynamic_cast<MossSoundEffectModel*>(&instance.addonCpp->model.get())) {
+    MossSoundEffectModel::AnyInput modelInput;
+    modelInput.text = js::String(env, jsInput).as<std::string>(env);
+    JSAdapter adapter;
+    modelInput.call =
+        adapter.readMossSoundEffectCall(args.getJsObject(1, "inputObj"), env);
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
@@ -440,6 +456,22 @@ inline js_value_t* reload(js_env_t* env, js_callback_info_t* info) try {
                 "reload: model is not a MossModel");
           }
           mtm->reloadWith(std::move(newCfg));
+        });
+  }
+
+  if (dynamic_cast<MossSoundEffectModel*>(&instance.addonCpp->model.get())) {
+    auto newCfg = adapter.buildMossSoundEffectConfig(configurationParams, env);
+    return js::JsAsyncTask::run(
+        env,
+        [addonCpp = instance.addonCpp, newCfg = std::move(newCfg)]() mutable {
+          auto* sfx =
+              dynamic_cast<MossSoundEffectModel*>(&addonCpp->model.get());
+          if (sfx == nullptr) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InternalError,
+                "reload: model is not a MossSoundEffectModel");
+          }
+          sfx->reloadWith(std::move(newCfg));
         });
   }
 

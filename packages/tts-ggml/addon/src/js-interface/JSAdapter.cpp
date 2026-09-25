@@ -90,6 +90,27 @@ std::optional<float> readOptionalFloat(
       std::string("Property '") + key + "' must be a number or numeric string");
 }
 
+std::optional<double>
+readOptionalFiniteDouble(js::Object obj, js_env_t* env, const char* key) {
+  js_value_t* raw = obj.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return std::nullopt;
+  }
+  if (js::is<js::Number>(env, raw)) {
+    const double value = js::Number::fromValue(raw).as<double>(env);
+    if (std::isfinite(value)) {
+      return value;
+    }
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("Property '") + key + "' must be a finite number (got " +
+            formatJsNumber(value) + ")");
+  }
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key + "' must be a number");
+}
+
 std::string readOptionalString(
     js::Object obj, js_env_t* env, const char* key) {
   auto v = obj.getOptionalPropertyAs<js::String, std::string>(env, key);
@@ -155,11 +176,13 @@ EngineType JSAdapter::readEngineType(
     return EngineType::Audio8;
   if (explicitType == "moss")
     return EngineType::Moss;
+  if (explicitType == "moss-sfx")
+    return EngineType::MossSoundEffect;
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
         "engineType must be 'chatterbox', 'supertonic', 'cosyvoice3', "
-        "'parler', 'audio8', 'moss' or 'pocket' (got '" +
+        "'parler', 'audio8', 'moss', 'moss-sfx' or 'pocket' (got '" +
             explicitType + "')");
   }
 
@@ -191,6 +214,11 @@ EngineType JSAdapter::readEngineType(
       readOptionalString(configurationParams, env, "mossBackbonePath");
   if (!mossPath.empty())
     return EngineType::Moss;
+
+  const std::string mossSoundEffectPath =
+      readOptionalString(configurationParams, env, "mossSoundEffectPath");
+  if (!mossSoundEffectPath.empty())
+    return EngineType::MossSoundEffect;
 
   const std::string t3Path =
       readOptionalString(configurationParams, env, "t3ModelPath");
@@ -384,6 +412,30 @@ JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
+}
+
+moss::MossSoundEffectConfig JSAdapter::buildMossSoundEffectConfig(
+    js::Object configurationParams, js_env_t* env) {
+  moss::MossSoundEffectConfig cfg;
+  cfg.modelPath =
+      readOptionalString(configurationParams, env, "mossSoundEffectPath");
+  cfg.seed = readOptionalInt(configurationParams, env, "seed");
+  cfg.threads = readOptionalInt(configurationParams, env, "threads");
+  cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
+  cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
+  return cfg;
+}
+
+moss::MossSoundEffectCall
+JSAdapter::readMossSoundEffectCall(js::Object job, js_env_t* env) {
+  moss::MossSoundEffectCall call;
+  call.seconds = readOptionalFiniteDouble(job, env, "seconds");
+  call.steps = readOptionalInt(job, env, "steps");
+  call.guidance = readOptionalFloat(job, env, "guidance");
+  call.shift = readOptionalFloat(job, env, "shift");
+  call.negativePrompt = readOptionalString(job, env, "negativePrompt");
+  return call;
 }
 
 supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(

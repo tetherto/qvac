@@ -50,6 +50,7 @@ const ENGINE_COSYVOICE3 = "cosyvoice3";
 const ENGINE_PARLER = "parler";
 const ENGINE_AUDIO8 = "audio8";
 const ENGINE_MOSS = "moss";
+const ENGINE_MOSS_SFX = "moss-sfx";
 const ENGINE_POCKET = "pocket";
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
@@ -297,10 +298,24 @@ const MOSS_TERMINATION_ROWS = 2;
 const MOSS_MAX_DURATION_TOKENS =
   MOSS_MAX_NEW_TOKENS - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
 const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"] as const;
+const MOSS_SFX_RE = /^moss-sfx(-[a-z0-9_]+)*\.gguf$/i;
+const MOSS_SFX_NATIVE_SAMPLE_RATE = 48000;
+const MOSS_SFX_MAX_SECONDS = 30;
+const MOSS_SFX_MAX_STEPS = 1000;
+const MOSS_SFX_MAX_GUIDANCE = 50;
+const MOSS_SFX_MAX_SHIFT = 100;
+const MOSS_SFX_CALL_KEYS = [
+  "seconds",
+  "negativePrompt",
+  "steps",
+  "guidance",
+  "shift",
+] as const;
 
 /** Per-call engine fields forwarded verbatim onto the native job object. */
 type JobFields = ParlerDescFields &
-  Audio8VoiceFieldsResolved & { instruct?: string };
+  Audio8VoiceFieldsResolved &
+  MossSoundEffectFields & { instruct?: string };
 
 /** Engines that draw tokens, and so accept temperature / topK / topP / maxFrames. */
 const SAMPLING_ENGINES: readonly string[] = [ENGINE_PARLER, ENGINE_AUDIO8];
@@ -312,6 +327,7 @@ type EngineType =
   | typeof ENGINE_PARLER
   | typeof ENGINE_AUDIO8
   | typeof ENGINE_MOSS
+  | typeof ENGINE_MOSS_SFX
   | typeof ENGINE_POCKET;
 
 // Per-engine supported subsets, mirroring controls::supported_emotions() /
@@ -326,6 +342,7 @@ const ENGINE_EMOTIONS: Record<EngineType, readonly Emotion[]> = {
   [ENGINE_POCKET]: [],
   [ENGINE_AUDIO8]: [],
   [ENGINE_MOSS]: [],
+  [ENGINE_MOSS_SFX]: [],
 };
 
 const ENGINE_PACES: Record<EngineType, readonly Pace[]> = {
@@ -336,6 +353,7 @@ const ENGINE_PACES: Record<EngineType, readonly Pace[]> = {
   [ENGINE_POCKET]: [],
   [ENGINE_AUDIO8]: [], // no rate control at all
   [ENGINE_MOSS]: [],
+  [ENGINE_MOSS_SFX]: [],
 };
 
 // Which channels an engine can change per call. Supertonic takes its pace
@@ -358,6 +376,7 @@ const ENGINE_PER_CALL_CONDITIONING: Record<
   [ENGINE_POCKET]: [],
   [ENGINE_AUDIO8]: [],
   [ENGINE_MOSS]: [],
+  [ENGINE_MOSS_SFX]: [],
 };
 
 /**
@@ -422,6 +441,12 @@ interface TTSGgmlFiles {
    */
   mossCodecEncoder?: string;
   mossCodecEncoderPath?: string;
+  /**
+   * MOSS-SoundEffect GGUF (`moss-sfx-*.gguf`): text encoder, DiT and VAE in
+   * one file. Routes to the `moss-sfx` engine. Overrides `modelDir`.
+   */
+  mossSoundEffect?: string;
+  mossSoundEffectPath?: string;
   /**
    * CosyVoice3 model directory holding the sub-model GGUFs
    * (`cosyvoice3-{llm,flow,hift}-*.gguf`) plus `voice.gguf`, `vocab.json` and
@@ -617,6 +642,24 @@ interface Audio8VoiceFields {
   referenceAudio?: string;
   /** Audio8: what `referenceAudio` says. Required when cloning. */
   referenceText?: string;
+}
+
+/**
+ * MOSS-SoundEffect per-call generation controls (moss-sfx only). Each one is
+ * optional; unset `steps` / `guidance` / `shift` use the defaults stored in the
+ * model file (100 steps, guidance 4, shift 5).
+ */
+interface MossSoundEffectFields {
+  /** Length of the sound effect, in (0, 30] seconds, rounded to 0.1 s. Defaults to 10. */
+  seconds?: number;
+  /** What the sound effect should avoid (classifier-free guidance negative). */
+  negativePrompt?: string;
+  /** Diffusion steps, 1..1000. More steps cost proportionally more time. */
+  steps?: number;
+  /** Classifier-free guidance scale, 1..50; 1 skips the negative branch. */
+  guidance?: number;
+  /** Flow-matching schedule shift, (0, 100]. */
+  shift?: number;
 }
 
 /**
@@ -930,6 +973,7 @@ interface NormalizedFiles {
   mossBackbone?: string;
   mossCodecDecoder?: string;
   mossCodecEncoder?: string;
+  mossSoundEffect?: string;
   voicesDir?: string;
   lavasrEnhancer?: string;
   lavasrDenoiser?: string;
@@ -1134,7 +1178,8 @@ interface TTSRunInput
   extends ParlerDescriptionFields,
     Audio8VoiceFields,
     TTSConditioningFields,
-    CosyvoiceJobFields {
+    CosyvoiceJobFields,
+    MossSoundEffectFields {
   type?: string;
   input: string;
   streamOutput?: boolean;
@@ -1323,6 +1368,51 @@ function findQuantRankedGguf(
       ggufQuantRank(left, pattern) - ggufQuantRank(right, pattern),
   );
   return path.join(modelDir, matches[0]);
+}
+
+function assertSoundEffectRange(
+  name: string,
+  value: unknown,
+  accepts: (n: number) => boolean,
+  range: string,
+): void {
+  if (typeof value === "number" && Number.isFinite(value) && accepts(value)) return;
+  throw new Error(`tts-ggml: moss-sfx ${name} must be ${range} (got ${String(value)})`);
+}
+
+function assertSoundEffectFields(fields: MossSoundEffectFields): void {
+  if (fields.seconds !== undefined) {
+    assertSoundEffectRange("seconds", fields.seconds, (n) => n > 0 && n <= MOSS_SFX_MAX_SECONDS,
+      `in (0, ${MOSS_SFX_MAX_SECONDS}]`);
+  }
+  if (fields.steps !== undefined) {
+    assertSoundEffectRange("steps", fields.steps,
+      (n) => Number.isInteger(n) && n >= 1 && n <= MOSS_SFX_MAX_STEPS, `an integer in [1, ${MOSS_SFX_MAX_STEPS}]`);
+  }
+  if (fields.guidance !== undefined) {
+    assertSoundEffectRange("guidance", fields.guidance, (n) => n >= 1 && n <= MOSS_SFX_MAX_GUIDANCE,
+      `in [1, ${MOSS_SFX_MAX_GUIDANCE}]`);
+  }
+  if (fields.shift !== undefined) {
+    assertSoundEffectRange("shift", fields.shift, (n) => n > 0 && n <= MOSS_SFX_MAX_SHIFT,
+      `in (0, ${MOSS_SFX_MAX_SHIFT}]`);
+  }
+  if (fields.negativePrompt !== undefined && typeof fields.negativePrompt !== "string") {
+    throw new Error("tts-ggml: moss-sfx negativePrompt must be a string");
+  }
+}
+
+/**
+ * Collect the MOSS-SoundEffect generation controls present on `source`.
+ * Returns undefined when none are set.
+ */
+function pickSoundEffectFields(
+  source: MossSoundEffectFields | null | undefined,
+): MossSoundEffectFields | undefined {
+  if (source == null || typeof source !== "object") return undefined;
+  const present = MOSS_SFX_CALL_KEYS.filter((key) => source[key] !== undefined);
+  if (present.length === 0) return undefined;
+  return Object.fromEntries(present.map((key) => [key, source[key]]));
 }
 
 /**
@@ -1617,6 +1707,10 @@ function normalizeGgmlFiles(
       files.mossCodecEncoder,
       files.mossCodecEncoderPath,
     ),
+    mossSoundEffect: firstNonEmpty(
+      files.mossSoundEffect,
+      files.mossSoundEffectPath,
+    ),
     voicesDir: firstNonEmpty(files.voicesDir),
     lavasrEnhancer: firstNonEmpty(files.lavasrEnhancer),
     lavasrDenoiser: firstNonEmpty(files.lavasrDenoiser),
@@ -1642,6 +1736,7 @@ function detectEngineType(
     engine === ENGINE_PARLER ||
     engine === ENGINE_AUDIO8 ||
     engine === ENGINE_MOSS ||
+    engine === ENGINE_MOSS_SFX ||
     engine === ENGINE_POCKET
   ) {
     return engine;
@@ -1649,7 +1744,7 @@ function detectEngineType(
   if (engine != null && engine !== "") {
     throw new Error(
       "tts-ggml: 'engine' option must be 'chatterbox', 'supertonic', " +
-        `'cosyvoice3', 'parler', 'audio8', 'moss' or 'pocket' (got '${String(engine)}')`,
+        `'cosyvoice3', 'parler', 'audio8', 'moss', 'moss-sfx' or 'pocket' (got '${String(engine)}')`,
     );
   }
   if (files.pocketFlowModel || files.pocketMimiModel) return ENGINE_POCKET;
@@ -1662,6 +1757,7 @@ function detectEngineType(
   if (files.parlerModel) return ENGINE_PARLER;
   if (files.audio8Lm || files.audio8CodecDecoder) return ENGINE_AUDIO8;
   if (files.mossBackbone || files.mossCodecDecoder) return ENGINE_MOSS;
+  if (files.mossSoundEffect) return ENGINE_MOSS_SFX;
   if (files.modelDir) {
     if (dirHasCosyvoice3(files.modelDir)) return ENGINE_COSYVOICE3;
     const hasChatterbox =
@@ -1679,6 +1775,7 @@ function detectEngineType(
     if (findQuantRankedGguf(files.modelDir, MOSS_DIALOGUE_BACKBONE_RE)) {
       return ENGINE_MOSS;
     }
+    if (findQuantRankedGguf(files.modelDir, MOSS_SFX_RE)) return ENGINE_MOSS_SFX;
     if (fileExistsSafe(path.join(files.modelDir, "flow-lm.gguf"))) return ENGINE_POCKET;
   }
   return ENGINE_CHATTERBOX;
@@ -2014,6 +2111,7 @@ class TTSGgml {
   static readonly ENGINE_PARLER = ENGINE_PARLER;
   static readonly ENGINE_AUDIO8 = ENGINE_AUDIO8;
   static readonly ENGINE_MOSS = ENGINE_MOSS;
+  static readonly ENGINE_MOSS_SFX = ENGINE_MOSS_SFX;
   static readonly ENGINE_POCKET = ENGINE_POCKET;
 
   opts: object;
@@ -2095,6 +2193,7 @@ class TTSGgml {
   private _mossBackbonePath?: string;
   private _mossCodecDecoderPath?: string;
   private _mossCodecEncoderPath?: string;
+  private _mossSoundEffectPath?: string;
   private _dialogueReferences?: string[];
   private _durationTokens?: number;
   private _referenceText?: string;
@@ -2250,6 +2349,13 @@ class TTSGgml {
       this._resolveMossModelPaths(files);
       return;
     }
+    if (this._engineType === ENGINE_MOSS_SFX) {
+      this._mossSoundEffectPath = firstNonEmpty(
+        files.mossSoundEffect,
+        findQuantRankedGguf(files.modelDir, MOSS_SFX_RE),
+      );
+      return;
+    }
     if (files.modelDir) {
       const resolved = resolveChatterboxModelDirPaths(files.modelDir);
       this._t3ModelPath = firstNonEmpty(files.t3Model, resolved.t3);
@@ -2403,6 +2509,17 @@ class TTSGgml {
       );
     }
     if (
+      this._engineType === ENGINE_MOSS_SFX &&
+      (this._streamChunkTokens != null ||
+        this._streamFirstChunkTokens != null)
+    ) {
+      throw new Error(
+        "tts-ggml: streamChunkTokens / streamFirstChunkTokens are not " +
+          "supported by the moss-sfx engine, which generates a whole sound " +
+          "effect at a time. Use run().",
+      );
+    }
+    if (
       this._engineType === ENGINE_MOSS &&
       this._streamFirstChunkTokens != null
     ) {
@@ -2420,6 +2537,7 @@ class TTSGgml {
     this._assertCosyvoiceCloneConsistent();
     this._assertAudio8OptionConsistency();
     this._assertMossOptionConsistency();
+    this._assertMossSoundEffectOptionConsistency();
     this._assertConditioningConsistency("constructor");
     if (this._denoiserGgufPath && this._requestsChunkStreaming()) {
       throw new Error(
@@ -2590,6 +2708,42 @@ class TTSGgml {
     }
   }
 
+  private _assertMossSoundEffectOptionConsistency(): void {
+    if (this._engineType !== ENGINE_MOSS_SFX) return;
+    if (this._enhancerGgufPath || this._denoiserGgufPath) {
+      throw new Error(
+        "tts-ggml: the LavaSR enhancer/denoiser are not supported with " +
+          "the moss-sfx engine. Drop lavasrEnhancer / lavasrDenoiser.",
+      );
+    }
+    if (this._referenceAudio) {
+      throw new Error(
+        "tts-ggml: referenceAudio is not supported by the moss-sfx engine, " +
+          "which generates sound effects from a text prompt",
+      );
+    }
+    this._assertMossSoundEffectOutputRate();
+    if (!this._mossSoundEffectPath) {
+      throw new Error(
+        "tts-ggml: the moss-sfx engine needs its GGUF: stage " +
+          "moss-sfx-*.gguf in modelDir or set files.mossSoundEffect",
+      );
+    }
+  }
+
+  private _assertMossSoundEffectOutputRate(): void {
+    if (
+      this._outputSampleRate == null ||
+      this._outputSampleRate === MOSS_SFX_NATIVE_SAMPLE_RATE
+    ) {
+      return;
+    }
+    throw new Error(
+      `tts-ggml: the moss-sfx engine outputs ${MOSS_SFX_NATIVE_SAMPLE_RATE} Hz ` +
+        `audio and cannot resample (outputSampleRate=${this._outputSampleRate})`,
+    );
+  }
+
   private _assertMossOptionConsistency(): void {
     if (this._engineType !== ENGINE_MOSS) {
       this._assertNoMossOnlyOptions();
@@ -2643,6 +2797,12 @@ class TTSGgml {
   }
 
   private _assertSentenceStreamingAllowed(where: string): void {
+    if (this._engineType === ENGINE_MOSS_SFX) {
+      throw new Error(
+        `tts-ggml: ${where}: the moss-sfx engine generates a whole sound ` +
+          "effect from one prompt and does not stream; use run()",
+      );
+    }
     if (this._dialogueReferences === undefined) return;
     throw new Error(
       `tts-ggml: ${where}: MOSS dialogue cannot be split into sentences, ` +
@@ -2879,13 +3039,36 @@ class TTSGgml {
   }
 
   /**
+   * Extract + validate the per-call MOSS-SoundEffect controls from a run
+   * input. Returns undefined when none are present.
+   */
+  private _resolveSoundEffectJobFields(
+    source: MossSoundEffectFields | null | undefined,
+    where: string,
+  ): MossSoundEffectFields | undefined {
+    const fields = pickSoundEffectFields(source);
+    if (!fields) return undefined;
+    if (this._engineType !== ENGINE_MOSS_SFX) {
+      throw new Error(
+        `tts-ggml: ${where}: ${Object.keys(fields).join(", ")} are ` +
+          `moss-sfx-only options (engine is ${this._engineType})`,
+      );
+    }
+    assertSoundEffectFields(fields);
+    return fields;
+  }
+
+  /**
    * The per-call fields of whichever engine is loaded, if any are set. Parler
    * takes the full description/template surface, Audio8 its voice override,
    * and every engine the cross-engine conditioning it supports.
    */
   private _resolveJobFields(
     source:
-      | (ParlerJobSource & Audio8VoiceFields & CosyvoiceJobFields)
+      | (ParlerJobSource &
+          Audio8VoiceFields &
+          CosyvoiceJobFields &
+          MossSoundEffectFields)
       | null
       | undefined,
     where: string,
@@ -2896,10 +3079,14 @@ class TTSGgml {
         ? this._resolveParlerJobFields(source, where)
         : this._resolveConditioningJobFields(source, where, instruct);
     const audio8 = this._resolveAudio8JobFields(source, where);
-    if (!engineFields && !audio8 && instruct === undefined) return undefined;
+    const soundEffect = this._resolveSoundEffectJobFields(source, where);
+    if (!engineFields && !audio8 && !soundEffect && instruct === undefined) {
+      return undefined;
+    }
     return {
       ...(engineFields ?? {}),
       ...(audio8 ?? {}),
+      ...(soundEffect ?? {}),
       ...(instruct === undefined ? {} : { instruct }),
     };
   }
@@ -3371,6 +3558,9 @@ class TTSGgml {
     if (this._engineType === ENGINE_MOSS) {
       return this._buildMossParams();
     }
+    if (this._engineType === ENGINE_MOSS_SFX) {
+      return this._buildMossSoundEffectParams();
+    }
     return this._buildChatterboxParams();
   }
 
@@ -3650,6 +3840,16 @@ class TTSGgml {
     if (this._streamChunkTokens != null) {
       parameters.streamChunkTokens = this._streamChunkTokens | 0;
     }
+    this._assignBackendParams(parameters);
+    return parameters;
+  }
+
+  private _buildMossSoundEffectParams(): TTSConfigurationParams {
+    this._assertMossSoundEffectOutputRate();
+    const parameters: TTSConfigurationParams = {
+      engineType: ENGINE_MOSS_SFX,
+      mossSoundEffectPath: this._mossSoundEffectPath || "",
+    };
     this._assignBackendParams(parameters);
     return parameters;
   }

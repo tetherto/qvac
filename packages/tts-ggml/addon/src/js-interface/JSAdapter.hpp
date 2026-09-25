@@ -11,6 +11,7 @@
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/cosyvoice/CosyvoiceConfig.hpp"
 #include "model-interface/moss/MossConfig.hpp"
+#include "model-interface/moss/MossSoundEffectConfig.hpp"
 #include "model-interface/parler/ParlerConfig.hpp"
 #include "model-interface/pocket/PocketConfig.hpp"
 #include "model-interface/supertonic/SupertonicConfig.hpp"
@@ -24,6 +25,7 @@ enum class EngineType {
   Parler,
   Audio8,
   Moss,
+  MossSoundEffect,
   Pocket,
 };
 
@@ -61,6 +63,13 @@ public:
   moss::MossConfig buildMossConfig(
       qvac_lib_inference_addon_cpp::js::Object configurationParams,
       js_env_t* env);
+
+  moss::MossSoundEffectConfig buildMossSoundEffectConfig(
+      qvac_lib_inference_addon_cpp::js::Object configurationParams,
+      js_env_t* env);
+
+  moss::MossSoundEffectCall readMossSoundEffectCall(
+      qvac_lib_inference_addon_cpp::js::Object job, js_env_t* env);
 
   // Shared by buildParlerConfig and the per-call runJob path (the same
   // description/template properties are legal on both objects).
