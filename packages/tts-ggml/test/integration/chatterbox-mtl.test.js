@@ -25,6 +25,7 @@ const {
   ensureCangjieTsv
 } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -61,6 +62,7 @@ async function loadChatterboxMtlTTS(params) {
   }
 
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     files: {
       modelDir: params.modelDir,
       t3Model: params.t3ModelPath,

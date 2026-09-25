@@ -15,6 +15,7 @@ const {
 const { ensureChatterboxModels, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -83,6 +84,7 @@ test(
       `\n=== English synthesis (${englishSentences.length} sentences, tier: ${INPUT_SENTENCES}, modelDir: ${resolvedModelDir}) ===`
     )
     const model = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
       modelDir: resolvedModelDir,
       language: 'en'
     })
@@ -250,6 +252,7 @@ test(
     // empty/undefined value flows through to the engine cleanly.
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       files: { modelDir: download.targetDir },
       config: { language: 'en', ...(forceNoGpu ? { useGPU: false } : {}) },
       opts: { stats: true }
@@ -309,6 +312,7 @@ test(
     // resolve to (the latter is not readable from native code on iOS).
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       files: { modelDir: download.targetDir },
       referenceAudio: resolveRefWavPath({}),
       config: { language: 'en', outputSampleRate: 16000, ...(forceNoGpu ? { useGPU: false } : {}) },
@@ -361,6 +365,7 @@ test(
     // rationale).
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       files: { modelDir: download.targetDir },
       referenceAudio: resolveRefWavPath({}),
       streamChunkTokens: 25,

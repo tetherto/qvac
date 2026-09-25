@@ -10,7 +10,13 @@ const os = require('bare-os')
 const path = require('bare-path')
 const test = require('brittle')
 const BCIWhispercpp = require('../../index')
-const { getTestPaths, getModelPath, computeWER, detectPlatform } = require('./helpers')
+const {
+  getTestPaths,
+  getModelPath,
+  computeWER,
+  detectPlatform,
+  BCI_TEST_THREADS
+} = require('./helpers')
 const { flattenSegments } = require('@qvac/bci-whispercpp/util')
 
 const { platform, label } = detectPlatform()
@@ -71,7 +77,7 @@ async function transcribeSampleOnGpu(sample) {
       opts: { stats: true }
     },
     {
-      whisperConfig: { language: 'en', temperature: 0.0 },
+      whisperConfig: { language: 'en', temperature: 0.0, n_threads: BCI_TEST_THREADS },
       miscConfig: { caption_enabled: false },
       contextParams: { use_gpu: true },
       bciConfig: dayIdx >= 0 ? { day_idx: dayIdx } : undefined
@@ -115,7 +121,7 @@ test(
           opts: { stats: true }
         },
         {
-          whisperConfig: { language: 'en', temperature: 0.0 },
+          whisperConfig: { language: 'en', temperature: 0.0, n_threads: BCI_TEST_THREADS },
           miscConfig: { caption_enabled: false },
           contextParams: { use_gpu: true },
           bciConfig: day >= 0 ? { day_idx: day } : undefined
