@@ -2,6 +2,7 @@ import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { QvacErrorAddonASRGgml } from "./lib/error";
 import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
+import { assessFit as assessFitImpl, type AsrFitRequest, type AsrFitResult, type AsrFitStatus, type ParakeetFitRequest, type WhisperFitRequest } from "./lib/fit";
 import { BackendId as BackendIdEnum, type ASRRunOutput, type ASRStreamOutput, type AudioChunk, type AudioInput, type BackendInfo, type EndOfTurnEvent, type InferenceClientState, type ParakeetRuntimeStats, type RuntimeStats, type RuntimeStatsCore, type TranscriptionSegment, type VadEvent, type WhisperRuntimeStats } from "./lib/types";
 import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, AsrNativeInterface, EngineType } from "./engines/types";
 import { type VadParams, type WhisperConfig, type WhisperEngineConfig, type WhisperStreamingOptions } from "./engines/whisper/driver";
@@ -139,6 +140,11 @@ type WhisperRuntimeStatsShape = WhisperRuntimeStats;
 type ParakeetRuntimeStatsShape = ParakeetRuntimeStats;
 type RuntimeStatsShape = RuntimeStats;
 type InferenceClientStateShape = InferenceClientState;
+type AsrFitRequestShape = AsrFitRequest;
+type AsrFitResultShape = AsrFitResult;
+type AsrFitStatusShape = AsrFitStatus;
+type ParakeetFitRequestShape = ParakeetFitRequest;
+type WhisperFitRequestShape = WhisperFitRequest;
 declare namespace ASRGgml {
     type EngineType = EngineTypeShape;
     type ASRGgmlOptions = ASRGgmlOptionsShape;
@@ -166,7 +172,13 @@ declare namespace ASRGgml {
     type ParakeetRuntimeStats = ParakeetRuntimeStatsShape;
     type RuntimeStats = RuntimeStatsShape;
     type InferenceClientState = InferenceClientStateShape;
+    type AsrFitRequest = AsrFitRequestShape;
+    type AsrFitResult = AsrFitResultShape;
+    type AsrFitStatus = AsrFitStatusShape;
+    type ParakeetFitRequest = ParakeetFitRequestShape;
+    type WhisperFitRequest = WhisperFitRequestShape;
     export import BackendId = BackendIdEnum;
     const resolveBackendsDir: typeof resolveBackendsDirImpl;
+    const assessFit: typeof assessFitImpl;
 }
 export = ASRGgml;
