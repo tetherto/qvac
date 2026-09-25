@@ -2576,6 +2576,28 @@ test("release policy: no workflow cuts a GitHub Release outside the SDK surface"
   assert.deepEqual(offenders, []);
 });
 
+// `nx release publish` without a filter, or with an empty `--projects=`,
+// publishes every release group plus every workspace package the train depends
+// on, through `^nx-release-publish`. .github/scripts/release-train-publish.mjs
+// names one package per nx call, so no workflow or action calls nx's publish
+// itself.
+test("release policy: no workflow or action calls nx's publish directly", () => {
+  const actionFiles = filesUnder(join(root, ".github/actions"))
+    .filter((path) => /\/action\.ya?ml$/.test(path))
+    .map((path) => path.slice(root.length + 1));
+  const offenders = [];
+  for (const path of [...workflowPaths(), ...actionFiles]) {
+    const code = withoutComments(read(path));
+    if (/nx-release-publish/.test(code)) {
+      offenders.push(`${path}: runs the nx-release-publish target`);
+    }
+    if (/\bnx\s+release\b(?!\s+(?:version|plan|changelog)\b)/.test(code)) {
+      offenders.push(`${path}: calls 'nx release' other than version, plan or changelog`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
 // A cpp-tests workflow runs PR-head code and is reachable from a fork PR once
 // fork-ci is approved, so a cache WRITE (actions/cache/save) must be gated on
 // trusted events only. Easy to undo by accident, so pin it here.

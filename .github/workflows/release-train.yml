@@ -17,9 +17,10 @@ name: Release Train (nx)
 #
 # Here `nx release version` has already written every version and dependency
 # range in the release PR, and the build resolves siblings from the pnpm
-# workspace, so nothing waits for a registry round-trip. `nx release publish`
-# then ships them in project-graph order from a single job, which is a single
-# deployment to `environment: npm` and therefore a single approval. A sidecar
+# workspace, so nothing waits for a registry round-trip.
+# .github/scripts/release-train-publish.mjs then publishes them one package at
+# a time, in dependency order, from a single job, which is a single deployment
+# to `environment: npm` and therefore a single approval. A sidecar
 # that is not an npm package gets its own job on its own environment — today
 # that is tetherto-qvac-sdk on `pypi`.
 #
@@ -39,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       npm_tag:
-        description: "NPM dist-tag (default: latest). e.g. release-1.x"
+        description: "npm dist-tag for every package, e.g. release-1.x. Empty or latest: latest, or release-<major>.<minor> for a package older than npm's latest or a prerelease."
         required: false
         default: ""
         type: string
@@ -139,9 +140,15 @@ jobs:
           if [ -n "$DIR" ]; then
             VERSION=$(jq -r .version "$DIR/package.json")
           fi
+          # nx reads an empty --projects= as every project.
+          PROJECTS=$(node .github/scripts/release-train-projects.mjs "$TRAIN" --projects)
+          if [ -z "$PROJECTS" ]; then
+            echo "::error::Train '$TRAIN' resolved to no projects"
+            exit 1
+          fi
           {
             echo "name=$TRAIN"
-            echo "projects=$(node .github/scripts/release-train-projects.mjs "$TRAIN" --projects)"
+            echo "projects=$PROJECTS"
             echo "release_slug=$SLUG"
             echo "release_dir=$DIR"
             echo "release_version=$VERSION"
@@ -190,7 +197,22 @@ jobs:
         shell: bash
         env:
           TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
-        run: pnpm exec nx run-many -t build --projects="$TRAIN_PROJECTS"
+        run: |
+          set -euo pipefail
+          # nx reads an empty --projects= as every project.
+          if [ -z "$TRAIN_PROJECTS" ]; then
+            echo "::error::No train projects to build"
+            exit 1
+          fi
+          pnpm exec nx run-many -t build --projects="$TRAIN_PROJECTS"
+
+      # The publish job turns lifecycle scripts off, so a package's own
+      # prepublishOnly check (cli's check-publish-ready.cjs) runs here instead.
+      - name: Run prepublishOnly checks
+        shell: bash
+        env:
+          TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
+        run: pnpm exec nx run-many -t prepublishOnly --projects="$TRAIN_PROJECTS"
 
       - name: Upload train dist artifacts
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
@@ -319,22 +341,22 @@ jobs:
         with:
           name: dist-${{ needs.train.outputs.name }}
 
-      # One job, so one deployment and one approval. Order comes from
-      # `dependsOn: ["^nx-release-publish"]` on each project's publish target,
-      # not from a list here. The executor treats an already-published version
-      # as success, so a half-shipped run can be re-run.
+      # One job, so one deployment and one approval. The script publishes one
+      # package per nx call, in dependency order, and stops at the first
+      # failure. An already-published version is skipped, so a half-shipped run
+      # can be re-run.
+      #
+      # pnpm 11 reads its settings from PNPM_CONFIG_* and ignores NPM_CONFIG_*.
+      # Lifecycle scripts stay off so inference's `prepare` does not rebuild
+      # over the downloaded dist.
       - name: Publish the train
         env:
-          NPM_CONFIG_PROVENANCE: "true"
+          PNPM_CONFIG_IGNORE_SCRIPTS: "true"
+          PNPM_CONFIG_PROVENANCE: "true"
+          TRAIN: ${{ needs.train.outputs.name }}
           NPM_TAG_INPUT: ${{ inputs.npm_tag }}
         shell: bash
-        run: |
-          set -euo pipefail
-          if [ -n "$NPM_TAG_INPUT" ]; then
-            pnpm exec nx release publish --tag "$NPM_TAG_INPUT"
-          else
-            pnpm exec nx release publish
-          fi
+        run: node .github/scripts/release-train-publish.mjs "$TRAIN" --tag="$NPM_TAG_INPUT"
 
   publish-pypi:
     name: Publish tetherto-qvac-sdk to PyPI
