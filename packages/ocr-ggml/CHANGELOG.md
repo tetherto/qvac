@@ -4,6 +4,12 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Reject malformed EasyOCR model tensor shapes, vocabulary indexes, and bias tensors before unsafe reads or writes.
+
 ## [0.25.0] - 2026-09-23
 
 ### Added

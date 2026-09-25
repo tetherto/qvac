@@ -42,6 +42,86 @@ test('FFmpegDecoder - lifecycle and decoding', async (t) => {
   }
 })
 
+test('FFmpegDecoder - rejects decoded audio beyond the configured limit', async (t) => {
+  const decoder = await loadDecoder({ maxDecodedBytes: 1024 })
+  const sampleFile = isMobile
+    ? getAssetPath('sample_mp3.mp3')
+    : path.join(__dirname, '../../example/sample.mp3')
+
+  try {
+    const response = decoder.run(fs.createReadStream(sampleFile), { retainOutput: false })
+    response.onError(() => {})
+    await t.exception(
+      async () => await response.await(),
+      /Decoded audio exceeds the configured byte limit/
+    )
+    t.ok(response.stats.outputBytes <= 1024, 'the decoder stopped within the limit')
+  } finally {
+    await decoder.unload()
+  }
+})
+
+test('FFmpegDecoder - streaming response does not retain PCM chunks', async (t) => {
+  const decoder = await loadDecoder()
+  const sampleFile = isMobile
+    ? getAssetPath('sample_mp3.mp3')
+    : path.join(__dirname, '../../example/sample.mp3')
+
+  try {
+    const response = decoder.run(fs.createReadStream(sampleFile), { retainOutput: false })
+    let outputBytes = 0
+    response.onUpdate(({ outputArray }) => {
+      outputBytes += outputArray.length
+    })
+    const result = await response.await()
+    t.ok(outputBytes > 0, 'PCM chunks were emitted')
+    t.alike(result, [], 'PCM chunks were not retained in the response')
+  } finally {
+    await decoder.unload()
+  }
+})
+
+test('FFmpegDecoder - waits for a streaming consumer before decoding more frames', async (t) => {
+  const decoder = await loadDecoder()
+  const sampleFile = isMobile
+    ? getAssetPath('sample_mp3.mp3')
+    : path.join(__dirname, '../../example/sample.mp3')
+  let releaseConsumer
+  const consumerReady = new Promise((resolve) => {
+    releaseConsumer = resolve
+  })
+  let firstChunk
+  const firstChunkReceived = new Promise((resolve) => {
+    firstChunk = resolve
+  })
+  let received = 0
+  let firstWait = true
+
+  try {
+    const response = decoder.run(fs.createReadStream(sampleFile), {
+      retainOutput: false,
+      waitForConsumer: () => {
+        if (!firstWait) return Promise.resolve()
+        firstWait = false
+        return consumerReady
+      }
+    })
+    response.onUpdate(() => {
+      received++
+      firstChunk()
+    })
+    await firstChunkReceived
+    await Promise.resolve()
+    t.is(received, 1, 'decoding paused after the first chunk')
+    releaseConsumer()
+    await response.await()
+    t.ok(received > 1, 'decoding resumed after the consumer became ready')
+  } finally {
+    releaseConsumer()
+    await decoder.unload()
+  }
+})
+
 test('FFmpegDecoder - decodes multiple audio formats', async (t) => {
   // On mobile, test formats available in testAssets (ogg not supported by Expo's asset pipeline)
   // On desktop, test all formats including ogg

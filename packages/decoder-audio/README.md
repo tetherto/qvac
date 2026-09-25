@@ -84,6 +84,8 @@ The `config` object accepts the following parameters:
 * **`sampleRate`**: Sample rate of the output audio in Hertz (Hz).
   Default: `16000` (16 kHz), commonly used for speech processing.
 
+* **`maxDecodedBytes`**: Maximum PCM output per run. Default: 64 MiB. Decoding rejects input that exceeds this limit.
+
 ### 2. Loading the Decoder
 
 Initializes and activates the decoder with the provided or default configuration. This method must be called before decoding any audio input.
@@ -108,6 +110,10 @@ const audioStream = fs.createReadStream(audioFilePath)
 const response = await decoder.run(audioStream)
 ```
 
+Pass `{ retainOutput: false }` as the second argument to `run()` when processing chunks through `onUpdate()`. In that mode, `await()` resolves to an empty output array instead of retaining all PCM chunks.
+
+For a stream consumer, the same options object accepts `waitForConsumer: () => Promise<void>`. The decoder waits for that promise after each chunk, allowing the consumer to pause decoding until it has buffer capacity.
+
 ### 4. Handling Response Updates
 
 The response supports real-time updates via `.onUpdate()`. Each update delivers a chunk of decoded audio data, which can be processed or saved as needed:
@@ -115,7 +121,7 @@ The response supports real-time updates via `.onUpdate()`. Each update delivers 
 ```javascript
 await response
   .onUpdate(output => {
-    // `output.outputArray` is a Uint8Array
+    // `output.outputArray` is a Buffer
     console.log('Decoded chunk:', new Uint8Array(output.outputArray))
   })
   .await() // wait for the stream to finish

@@ -26,6 +26,7 @@ export const ERR_CODES = Object.freeze({
   DECODER_NOT_LOADED: 11010,
   STREAM_INDEX_OUT_OF_BOUNDS: 11011,
   JOB_CANCELLED: 11012,
+  DECODED_AUDIO_LIMIT_EXCEEDED: 11013,
 });
 
 addCodes(
@@ -78,6 +79,10 @@ addCodes(
     [ERR_CODES.JOB_CANCELLED]: {
       name: "JOB_CANCELLED",
       message: "Decoder job cancelled",
+    },
+    [ERR_CODES.DECODED_AUDIO_LIMIT_EXCEEDED]: {
+      name: "DECODED_AUDIO_LIMIT_EXCEEDED",
+      message: "Decoded audio exceeds the configured byte limit",
     },
   },
   { name, version },

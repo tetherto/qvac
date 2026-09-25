@@ -4,8 +4,8 @@ import ffmpeg = require("bare-ffmpeg");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   createJobHandler,
+  QvacResponse,
   type JobHandler,
-  type QvacResponse,
 } from "@qvac/infer-base";
 
 import { ERR_CODES, QvacErrorDecoderAudio } from "./utils/error";
@@ -33,6 +33,20 @@ export interface FFmpegDecoderConfig {
   audioFormat?: AudioFormatName;
   /** Output sample rate (default: 16000) */
   sampleRate?: number;
+  maxDecodedBytes?: number;
+}
+
+export interface FFmpegDecoderRunOptions {
+  retainOutput?: boolean;
+  waitForConsumer?: () => Promise<void>;
+}
+
+const DEFAULT_MAX_DECODED_BYTES = 64 * 1024 * 1024;
+
+class StreamingDecoderResponse extends QvacResponse<DecoderOutput> {
+  override updateOutput(output: DecoderOutput): void {
+    this.emit("output", output);
+  }
 }
 
 export interface FFmpegDecoderConstructorParams {
@@ -65,6 +79,7 @@ interface ResolvedConfig {
   inputBitrate: number;
   audioFormat: AudioFormatName;
   sampleRate: number;
+  maxDecodedBytes: number;
 }
 
 /** Output constants resolved from `ffmpeg.constants` once `load()` has run. */
@@ -100,6 +115,7 @@ class FFmpegDecoder {
   private _cancelled: boolean;
   private readonly _job: JobHandler;
   private _runtimeStats!: RuntimeStats;
+  private _waitForConsumer: () => Promise<void> = () => Promise.resolve();
 
   /**
    * Creates an instance of FFmpegDecoder.
@@ -118,6 +134,7 @@ class FFmpegDecoder {
       inputBitrate: config.inputBitrate || inputBitrate,
       audioFormat: config.audioFormat || audioFormat,
       sampleRate: config.sampleRate || 16000,
+      maxDecodedBytes: config.maxDecodedBytes ?? DEFAULT_MAX_DECODED_BYTES,
     };
 
     this.logger = new QvacLogger(logger ?? undefined);
@@ -167,6 +184,10 @@ class FFmpegDecoder {
       return;
     }
 
+    if (!Number.isSafeInteger(this.config.maxDecodedBytes) || this.config.maxDecodedBytes <= 0) {
+      throw new RangeError("maxDecodedBytes must be a positive safe integer");
+    }
+
     this.logger.info("Loading FFmpegDecoder with config:", this.config);
 
     // Initialize format constants
@@ -208,7 +229,10 @@ class FFmpegDecoder {
    * @param audioStream - Input audio stream
    * @returns Response with decoded audio
    */
-  run(audioStream: AsyncIterable<Buffer>): QvacResponse<DecoderOutput> {
+  run(
+    audioStream: AsyncIterable<Buffer>,
+    options: FFmpegDecoderRunOptions = {},
+  ): QvacResponse<DecoderOutput> {
     if (!this.isLoaded) {
       throw new QvacErrorDecoderAudio({ code: ERR_CODES.DECODER_NOT_LOADED });
     }
@@ -216,7 +240,10 @@ class FFmpegDecoder {
     this.logger.info("Starting new audio stream processing");
 
     this._cancelled = false;
-    const response = this._job.start() as QvacResponse<DecoderOutput>;
+    this._waitForConsumer = options.waitForConsumer ?? (() => Promise.resolve());
+    const response = options.retainOutput === false
+      ? this._job.startWith(new StreamingDecoderResponse({ cancelHandler: () => this._cancelCurrent() })) as QvacResponse<DecoderOutput>
+      : this._job.start() as QvacResponse<DecoderOutput>;
 
     void this._processStream(audioStream)
       .then(() => {
@@ -242,6 +269,19 @@ class FFmpegDecoder {
     return Math.min((inputBitrate / 8) * 4, maxBufferSize);
   }
 
+  private async _emitDecodedChunk(chunk: Buffer, sampleCount: number): Promise<void> {
+    if (this._cancelled) {
+      throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED });
+    }
+    if (chunk.length > this.config.maxDecodedBytes - this._runtimeStats.outputBytes) {
+      throw new QvacErrorDecoderAudio({ code: ERR_CODES.DECODED_AUDIO_LIMIT_EXCEEDED });
+    }
+    this._runtimeStats.samplesDecoded += sampleCount;
+    this._runtimeStats.outputBytes += chunk.length;
+    this._job.output({ outputArray: chunk });
+    await this._waitForConsumer();
+  }
+
   /**
    * Resolves the output constants populated by `load()`. Unreachable before
    * `load()` succeeds, since every caller sits behind the `isLoaded` guard.
@@ -260,11 +300,11 @@ class FFmpegDecoder {
     };
   }
 
-  private _processFrame(
+  private async _processFrame(
     decoder: ffmpeg.CodecContext,
     raw: ffmpeg.Frame,
     resampler: ffmpeg.Resampler,
-  ): void {
+  ): Promise<void> {
     const {
       format: OUTPUT_FORMAT,
       byteLength: OUTPUT_FORMAT_BYTE_LENGTH,
@@ -296,42 +336,36 @@ class FFmpegDecoder {
         const length =
           OUTPUT_FORMAT_BYTE_LENGTH * (count - samplesToSkip) * output.channelLayout.nbChannels;
         const chunk = Buffer.from(samples.data.subarray(skipBytes, skipBytes + length));
-        this._job.output({ outputArray: chunk });
-
-        // Track stats for partial frame
-        this._runtimeStats.samplesDecoded += count - samplesToSkip;
-        this._runtimeStats.outputBytes += length;
+        await this._emitDecodedChunk(chunk, count - samplesToSkip);
       } else {
         const length = OUTPUT_FORMAT_BYTE_LENGTH * count * output.channelLayout.nbChannels;
         const chunk = Buffer.from(samples.data.subarray(0, length));
-        this._job.output({ outputArray: chunk });
-
-        // Track stats
-        this._runtimeStats.samplesDecoded += count;
-        this._runtimeStats.outputBytes += length;
+        await this._emitDecodedChunk(chunk, count);
       }
     }
   }
 
-  private _processPacket(
+  private async _processPacket(
     format: ffmpeg.InputFormatContext,
     packet: ffmpeg.Packet,
     raw: ffmpeg.Frame,
     decoder: ffmpeg.CodecContext,
     resampler: ffmpeg.Resampler,
-  ): void {
+  ): Promise<void> {
     while (format.readFrame(packet)) {
-      if (this._cancelled) {
+      try {
+        if (this._cancelled) {
+          throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED });
+        }
+        decoder.sendPacket(packet);
+        await this._processFrame(decoder, raw, resampler);
+      } finally {
         packet.unref();
-        throw new QvacErrorDecoderAudio({ code: ERR_CODES.JOB_CANCELLED });
       }
-      decoder.sendPacket(packet);
-      this._processFrame(decoder, raw, resampler);
-      packet.unref();
     }
   }
 
-  private _processFFmpegStream(format: ffmpeg.InputFormatContext, stream: ffmpeg.Stream): void {
+  private async _processFFmpegStream(format: ffmpeg.InputFormatContext, stream: ffmpeg.Stream): Promise<void> {
     const {
       format: OUTPUT_FORMAT,
       byteLength: OUTPUT_FORMAT_BYTE_LENGTH,
@@ -379,31 +413,28 @@ class FFmpegDecoder {
       );
     }
 
-    this._processPacket(format, packet, raw, decoder, resampler);
+    try {
+      await this._processPacket(format, packet, raw, decoder, resampler);
 
-    // Flush resampler
-    const output = new ffmpeg.Frame();
-    output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
-    output.format = OUTPUT_FORMAT;
-    output.sampleRate = OUTPUT_SAMPLE_RATE;
-    output.nbSamples = 1024;
+      const output = new ffmpeg.Frame();
+      output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
+      output.format = OUTPUT_FORMAT;
+      output.sampleRate = OUTPUT_SAMPLE_RATE;
+      output.nbSamples = 1024;
 
-    const samples = new ffmpeg.Samples();
-    samples.fill(output);
+      const samples = new ffmpeg.Samples();
+      samples.fill(output);
 
-    let flushCount;
-    while ((flushCount = resampler.flush(output)) > 0) {
-      const actualLength =
-        OUTPUT_FORMAT_BYTE_LENGTH * flushCount * output.channelLayout.nbChannels;
-      const chunk = Buffer.from(samples.data.subarray(0, actualLength));
-      this._job.output({ outputArray: chunk });
-
-      // Track stats for flushed samples
-      this._runtimeStats.samplesDecoded += flushCount;
-      this._runtimeStats.outputBytes += actualLength;
+      let flushCount;
+      while ((flushCount = resampler.flush(output)) > 0) {
+        const actualLength =
+          OUTPUT_FORMAT_BYTE_LENGTH * flushCount * output.channelLayout.nbChannels;
+        const chunk = Buffer.from(samples.data.subarray(0, actualLength));
+        await this._emitDecodedChunk(chunk, flushCount);
+      }
+    } finally {
+      decoder.destroy();
     }
-
-    decoder.destroy();
   }
 
   private async _collectStreamData(audioStream: AsyncIterable<Buffer>): Promise<Buffer> {
@@ -507,7 +538,7 @@ class FFmpegDecoder {
     }
 
     // Process the stream and generate decoded output
-    this._processFFmpegStream(format, stream);
+    await this._processFFmpegStream(format, stream);
 
     // Calculate final decode time
     this._runtimeStats.decodeTimeMs = Date.now() - startTime;

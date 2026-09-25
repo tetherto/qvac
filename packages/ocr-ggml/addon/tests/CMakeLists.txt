@@ -4,6 +4,7 @@ find_package(GTest CONFIG REQUIRED)
 # or physical GPUs are needed; GGML calls are supplied by the test fixture.
 add_executable(addon-test
   ocr_backend_selection_test.cpp
+  ocr_tensor_validation_test.cpp
   ../src/model-interface/OcrBackendSelection.cpp
 )
 target_compile_features(addon-test PRIVATE cxx_std_20)

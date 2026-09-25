@@ -48,6 +48,7 @@
 #include "ggml-cpu.h"
 #include "ggml.h"
 #include "lang.hpp"
+#include "model-interface/easyocr/tensor_validation.hpp"
 #include "model-interface/easyocr/crnn.hpp"
 #include "model-interface/easyocr/crnn_weights.hpp"
 #include "model-interface/easyocr/gguf_loader.hpp"
@@ -744,6 +745,13 @@ StepRecognizeText::StepRecognizeText(
   } else {
     // GGUF didn't carry crnn.vocab — fall back to the Lang table.
     utf32Characters_ = langChars;
+  }
+  const auto* predictionWeight = loader_->get_tensor("Prediction.weight");
+  const auto* predictionBias = loader_->get_tensor("Prediction.bias");
+  if (predictionWeight == nullptr || predictionBias == nullptr ||
+      predictionWeight->ne[1] != static_cast<int64_t>(utf32Characters_.size()) ||
+      predictionBias->ne[0] != predictionWeight->ne[1]) {
+    throw std::runtime_error("StepRecognizeText: model class count differs from vocabulary");
   }
 }
 
@@ -1587,7 +1595,7 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
   if (!textIndex.empty()) {
     size_t first = textIndex[0];
     if (first != 0) {
-      assert(first < utf32Characters_.size());
+      easyocr::ggml::validate_vocab_index(first, utf32Characters_.size());
       text.push_back(utf32Characters_[first]);
     }
 
@@ -1595,7 +1603,7 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
       size_t prev = textIndex[i - 1];
       size_t curr = textIndex[i];
       if (curr != prev && curr != 0) {
-        assert(curr < utf32Characters_.size());
+        easyocr::ggml::validate_vocab_index(curr, utf32Characters_.size());
         text.push_back(utf32Characters_[curr]);
       }
     }
