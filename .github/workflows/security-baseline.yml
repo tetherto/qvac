@@ -108,6 +108,15 @@ jobs:
       - name: Validate model cache seed/consumer sync
         run: node .github/scripts/validate-model-cache-sync.mjs
 
+      # release-train.yml runs only on a release-train-* push, so this is the
+      # only place its catalog, merge guard and publish order run before merge.
+      - name: Run release train tests
+        run: >-
+          node --test
+          .github/scripts/test/release-trains.test.mjs
+          .github/scripts/test/release-train-guard.test.mjs
+          .github/scripts/test/release-train-publish.test.mjs
+
       # Pins which registry the mobile prebuild fallback resolves. The
       # @tetherto/<addon>-mono path is how an unmerged NATIVE change reaches a
       # device; when it regresses, mobile runs quietly test the published

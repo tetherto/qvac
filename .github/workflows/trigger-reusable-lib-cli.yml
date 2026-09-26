@@ -5,6 +5,11 @@ on:
     branches:
       - main
       - release-*
+      # The release train versions all six chained packages at once and
+      # publishes them from release-train.yml. This workflow's merge guard
+      # compares one package.json against one branch version, so it cannot
+      # describe that branch.
+      - "!release-train-*"
       - feature-*
       - tmp-*
     paths:
@@ -201,10 +206,11 @@ jobs:
       - name: Validate npm_tag input
         if: inputs.npm_tag != ''
         shell: bash
+        env:
+          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
         run: |
-          tag="${{ inputs.npm_tag }}"
-          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+          if ! echo "$NPM_TAG_INPUT" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$NPM_TAG_INPUT'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
             exit 1
           fi
 

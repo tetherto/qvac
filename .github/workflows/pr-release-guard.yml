@@ -6,6 +6,11 @@ name: PR Release Guard (SDK Pod)
 # (release-merge-guard on push) and after npm publish (create-github-release) —
 # brought forward so a broken release fails on the PR.
 #
+# A release train PR (base release-train-<train>-x.y.z) gets the checks
+# release-train.yml runs on push — validate-release-trains.mjs and
+# validate-release-train.mjs — plus the "## [x.y.z]" section check for every
+# train package whose version moved.
+#
 # Uses pull_request (not pull_request_target): the job needs no secrets or write
 # token, only reads PR git content, so it must not run with elevated privilege.
 #
@@ -35,6 +40,9 @@ jobs:
     name: Release Guard (changelog/version)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      is_train: ${{ steps.pkg.outputs.is_train }}
+      train_moved: ${{ steps.train.outputs.moved }}
     steps:
       - name: Derive package from release slug
         id: pkg
@@ -42,6 +50,13 @@ jobs:
         run: |
           set -euo pipefail
           base_ref="${{ github.base_ref }}"
+          if [[ "$base_ref" == release-train-* ]]; then
+            {
+              echo "is_train=true"
+              echo "is_sdk_pod_package=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           pods=" sdk inference cli rag logging error ai-sdk-provider test-suite "
           if [[ ! "$base_ref" =~ ^release-(.+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
             echo "::notice::Base '$base_ref' is not release-<slug>-x.y.z — skipping SDK-pod release guard"
@@ -70,10 +85,28 @@ jobs:
       # so any branch running this job also has them; backporting this workflow
       # without them would fail loudly here.
       - name: Checkout
-        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true' || steps.pkg.outputs.is_train == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
+
+      - name: Validate the release train
+        if: steps.pkg.outputs.is_train == 'true'
+        id: train
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/validate-release-trains.mjs
+          # From the merge base, so commits added to the train branch after this
+          # PR branched off are not read as changes this PR makes.
+          MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          node .github/scripts/validate-release-train.mjs "$BASE_REF" "$MERGE_BASE" "$HEAD_SHA"
+          MOVED=$(node .github/scripts/release-train-moved.mjs "$BASE_REF" "$MERGE_BASE" "$HEAD_SHA")
+          echo "moved=$MOVED" >> "$GITHUB_OUTPUT"
 
       - name: Validate release branch, version bump and changelog
         if: steps.pkg.outputs.is_sdk_pod_package == 'true'
@@ -112,3 +145,41 @@ jobs:
         with:
           changelog-path: ${{ steps.head_changelog.outputs.path }}
           version: ${{ steps.pkg.outputs.version }}
+
+  # One leg per train package whose version moved; `uses:` cannot loop.
+  train-changelog:
+    name: Release train changelog (${{ matrix.project.slug }})
+    needs: release-guard
+    if: needs.release-guard.outputs.is_train == 'true' && needs.release-guard.outputs.train_moved != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.release-guard.outputs.train_moved) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Materialize PR-head CHANGELOG
+        id: head_changelog
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGELOG: ${{ matrix.project.changelog }}
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/changelog-head.md"
+          if ! git show "${HEAD_SHA}:${CHANGELOG}" > "${out}" 2>/dev/null; then
+            echo "::error::CHANGELOG not found at PR head: ${CHANGELOG}"
+            exit 1
+          fi
+          echo "path=${out}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify CHANGELOG has release notes for this version
+        uses: ./.github/actions/verify-changelog-notes
+        with:
+          changelog-path: ${{ steps.head_changelog.outputs.path }}
+          version: ${{ matrix.project.version }}

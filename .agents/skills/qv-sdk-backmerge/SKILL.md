@@ -21,6 +21,16 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 
 `@qvac/inference` and `@qvac/sdk` release separately, so a new major.minor produces two release branches and two backmerges: `release-inference-<x.y.z>` (engine version + changelog) and then `release-sdk-<x.y.z>` (SDK version + its `@qvac/inference` range + changelog + docs). Run this skill once per release branch.
 
+**On a release train, run it once for the whole train.** A train is one branch,
+`release-train-<train>-<x.y.z>`, carrying every package's version bump,
+rewritten dependency ranges and changelogs in one commit (see
+`qv-release-train`). Substitute that branch wherever this skill says
+`release-<pkg>-<x.y.z>`; the backmerge branch is
+`backmerge/release-train-<train>-<x.y.z>`. There is one backmerge, not one per
+package, and its diff is correspondingly wider — several `package.json` files,
+several changelogs, `pnpm-lock.yaml` — which Step 3's sanity check should
+expect rather than treat as unrelated work.
+
 ## Inputs (resolve in priority order)
 
 1. **Active release-PR context** (when chained from `sdk-pr-create`): release PR number/URL, release branch, source head branch, ticket

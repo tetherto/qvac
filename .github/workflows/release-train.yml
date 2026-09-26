@@ -1,0 +1,473 @@
+name: Release Train (nx)
+
+# Publishes a release train from one branch, in one run.
+#
+# A train is a set of packages that release together because they depend on
+# each other in a line. Which trains exist, and what each contains, is
+# .github/release-trains.json — this workflow names no package. A train is not
+# a team's package roster: the SDK pod (.github/teams/sdk.json) also owns
+# registry-server, rag, logging, error and test-suite, which release on their
+# own and are in no train.
+#
+# The per-package release workflows stay as they are and still own a
+# single-package release. What they cannot do is a coordinated one: each builds
+# in its own run and installs its sibling from the registry, so the next
+# package cannot build until the one below it is live on npm. That is the wait
+# this replaces.
+#
+# Here `nx release version` has already written every version and dependency
+# range in the release PR, and the build resolves siblings from the pnpm
+# workspace, so nothing waits for a registry round-trip.
+# .github/scripts/release-train-publish.mjs then publishes them one package at
+# a time, in dependency order, from a single job, which is a single deployment
+# to `environment: npm` and therefore a single approval. A sidecar
+# that is not an npm package gets its own job on its own environment — today
+# that is tetherto-qvac-sdk on `pypi`.
+#
+# Branch shape is release-train-<train>-<x.y.z>, where the version is the
+# train's `anchorGroup` — a fixed group, so its members release in lockstep and
+# that one number describes the train. Other groups move on their own versions
+# underneath it. The per-package merge guard compares one branch version
+# against one package.json, which cannot describe that, so this branch is
+# excluded from those workflows and guarded by
+# .github/scripts/validate-release-train.mjs instead.
+
+on:
+  push:
+    branches:
+      - release-train-*
+
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "npm dist-tag for every package, e.g. release-1.x. Empty or latest: latest, or release-<major>.<minor> for a package older than npm's latest or a prerelease."
+        required: false
+        default: ""
+        type: string
+      publish_pypi_only:
+        description: "Skip npm and publish tetherto-qvac-sdk only (npm already shipped)."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fork-approval:
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+
+  authorize:
+    needs: [fork-approval]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout authorize-pr (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  # Which train this branch is, and what it contains, both come from
+  # .github/release-trains.json. Nothing downstream names a package.
+  train:
+    name: Resolve the train
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      name: ${{ steps.resolve.outputs.name }}
+      projects: ${{ steps.resolve.outputs.projects }}
+      dist_paths: ${{ steps.resolve.outputs.dist_paths }}
+      release_slug: ${{ steps.resolve.outputs.release_slug }}
+      release_display_name: ${{ steps.resolve.outputs.release_display_name }}
+      release_dir: ${{ steps.resolve.outputs.release_dir }}
+      release_version: ${{ steps.resolve.outputs.release_version }}
+      release_assets: ${{ steps.resolve.outputs.release_assets }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # The catalog is the contract between this workflow and nx.json, so a
+      # stale nx.json must stop the release rather than publish a train that
+      # nx would version differently.
+      - name: Check nx.json matches the catalog
+        run: node .github/scripts/validate-release-trains.mjs
+
+      - name: Validate the release train branch
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: node .github/scripts/validate-release-train.mjs "$REF_NAME" "$BEFORE_SHA" "$HEAD_SHA"
+
+      - name: Resolve the train's contents
+        id: resolve
+        shell: bash
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          TRAIN=$(node .github/scripts/release-train-name.mjs "$REF_NAME")
+          RELEASE=$(node .github/scripts/release-train-projects.mjs "$TRAIN" --github-release)
+          # Empty strings when the train declares no GitHub release, which the
+          # github-release job tests on.
+          SLUG=$(printf '%s' "$RELEASE" | jq -r '.slug // ""')
+          DIR=$(printf '%s' "$RELEASE" | jq -r '.dir // ""')
+          VERSION=""
+          if [ -n "$DIR" ]; then
+            VERSION=$(jq -r .version "$DIR/package.json")
+          fi
+          # nx reads an empty --projects= as every project.
+          PROJECTS=$(node .github/scripts/release-train-projects.mjs "$TRAIN" --projects)
+          if [ -z "$PROJECTS" ]; then
+            echo "::error::Train '$TRAIN' resolved to no projects"
+            exit 1
+          fi
+          {
+            echo "name=$TRAIN"
+            echo "projects=$PROJECTS"
+            echo "release_slug=$SLUG"
+            echo "release_dir=$DIR"
+            echo "release_version=$VERSION"
+            echo "release_display_name=$(printf '%s' "$RELEASE" | jq -r '.displayName // ""')"
+            echo "release_assets=$(printf '%s' "$RELEASE" | jq -c '.assets // []')"
+            echo "dist_paths<<DIST_PATHS_EOF"
+            node .github/scripts/release-train-projects.mjs "$TRAIN" --dist-paths
+            echo "DIST_PATHS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build the train
+    needs:
+      - fork-approval
+      - authorize
+      - train
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "24.14.1"
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
+
+      # linkWorkspacePackages resolves every @qvac sibling from the workspace,
+      # so no hop waits for the one below it to reach npm. That is the whole
+      # point of releasing the train in one pass.
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        shell: bash
+        env:
+          TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
+        run: |
+          set -euo pipefail
+          # nx reads an empty --projects= as every project.
+          if [ -z "$TRAIN_PROJECTS" ]; then
+            echo "::error::No train projects to build"
+            exit 1
+          fi
+          pnpm exec nx run-many -t build --projects="$TRAIN_PROJECTS"
+
+      # The publish job turns lifecycle scripts off, so a package's own
+      # prepublishOnly check (cli's check-publish-ready.cjs) runs here instead.
+      - name: Run prepublishOnly checks
+        shell: bash
+        env:
+          TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
+        run: pnpm exec nx run-many -t prepublishOnly --projects="$TRAIN_PROJECTS"
+
+      - name: Upload train dist artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: dist-${{ needs.train.outputs.name }}
+          path: ${{ needs.train.outputs.dist_paths }}
+          if-no-files-found: error
+          retention-days: 30
+
+  build-sdk-python:
+    name: Build tetherto-qvac-sdk (Python)
+    needs:
+      - fork-approval
+      - authorize
+      - train
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: packages/sdk-python
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+
+      - name: Install build tooling
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet -U pip
+          .venv/bin/pip install --quiet build twine
+          .venv/bin/pip install --quiet -e ".[gen]"
+
+      - name: Contract check
+        run: .venv/bin/python3 scripts/generate.py --check
+
+      - name: Build
+        run: .venv/bin/python3 -m build --sdist --wheel --outdir dist/
+
+      - name: Verify python version matches @qvac/sdk
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_VER=$(git show "${GITHUB_SHA}":packages/sdk/package.json | jq -r .version)
+          PY_VER=$(git show "${GITHUB_SHA}":packages/sdk-python/src/tetherto/qvac_sdk/_generated/sdk_version.py | sed -n 's/^SDK_VERSION = "\(.*\)"/\1/p')
+          if [ -z "$PY_VER" ]; then
+            echo "::error title=Version mismatch::Could not parse SDK_VERSION from sdk_version.py at ${GITHUB_SHA}"
+            exit 1
+          fi
+          if [ "$PY_VER" != "$SDK_VER" ]; then
+            echo "::error title=Version mismatch::tetherto-qvac-sdk@$PY_VER vs @qvac/sdk@$SDK_VER at ${GITHUB_SHA}. Run packages/sdk-python/scripts/generate.py before release."
+            exit 1
+          fi
+          echo "OK: tetherto-qvac-sdk and @qvac/sdk both at $SDK_VER"
+
+      - name: Check metadata
+        run: .venv/bin/twine check dist/*
+
+      - name: Upload python dist artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: dist-sdk-python
+          path: packages/sdk-python/dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-npm:
+    name: Publish the train to npm
+    needs:
+      - fork-approval
+      - authorize
+      - train
+      - build
+    if: >-
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.build.result == 'success' &&
+      needs.train.result == 'success' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Validate npm_tag input
+        if: inputs.npm_tag != ''
+        shell: bash
+        env:
+          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
+        run: |
+          if ! echo "$NPM_TAG_INPUT" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::Invalid npm dist-tag '$NPM_TAG_INPUT'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: "24.14.1"
+          registry-url: https://registry.npmjs.org/
+          scope: "@qvac"
+
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download train dist artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: dist-${{ needs.train.outputs.name }}
+
+      # One job, so one deployment and one approval. The script publishes one
+      # package per nx call, in dependency order, and stops at the first
+      # failure. An already-published version is skipped, so a half-shipped run
+      # can be re-run.
+      #
+      # pnpm 11 reads its settings from PNPM_CONFIG_* and ignores NPM_CONFIG_*.
+      # Lifecycle scripts stay off so inference's `prepare` does not rebuild
+      # over the downloaded dist.
+      - name: Publish the train
+        env:
+          PNPM_CONFIG_IGNORE_SCRIPTS: "true"
+          PNPM_CONFIG_PROVENANCE: "true"
+          TRAIN: ${{ needs.train.outputs.name }}
+          NPM_TAG_INPUT: ${{ inputs.npm_tag }}
+        shell: bash
+        run: node .github/scripts/release-train-publish.mjs "$TRAIN" --tag="$NPM_TAG_INPUT"
+
+  publish-pypi:
+    name: Publish tetherto-qvac-sdk to PyPI
+    needs:
+      - fork-approval
+      - authorize
+      - train
+      - build-sdk-python
+      - publish-npm
+    # Publishes after @qvac/sdk reaches npm, at the same version. Escape hatch:
+    # workflow_dispatch with publish_pypi_only=true (npm already shipped).
+    if: >-
+      always() &&
+      github.repository == 'tetherto/qvac' &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.build-sdk-python.result == 'success' &&
+      (
+        (
+          needs.train.result == 'success' &&
+          needs.publish-npm.result == 'success'
+        )
+        ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          inputs.publish_pypi_only == true
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tetherto-qvac-sdk
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: dist-sdk-python
+          path: dist
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  # Replaces the per-package create-release-tag.yml call: one run published
+  # every package, so one job tags every package. Which projects get a tag is
+  # `postPublish` in the catalog. Idempotent, so re-running a half-shipped
+  # train neither fails nor moves an existing tag.
+  tag:
+    name: Tag the published packages
+    needs:
+      - train
+      - publish-npm
+    if: needs.publish-npm.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Tag
+        shell: bash
+        env:
+          TRAIN: ${{ needs.train.outputs.name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node .github/scripts/tag-release-train.mjs "$TRAIN" --push
+
+  # The catalog decides whether a train has a GitHub release and what it is
+  # called; `uses:` has to be a literal, so the job exists either way and skips
+  # when no project declares one.
+  github-release:
+    name: Create the GitHub release
+    needs:
+      - train
+      - publish-npm
+    if: >-
+      needs.publish-npm.result == 'success' &&
+      needs.train.outputs.release_slug != '' &&
+      needs.train.outputs.release_version != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/create-github-release.yml
+    with:
+      repo_name: ${{ needs.train.outputs.release_slug }}
+      release_name: ${{ needs.train.outputs.release_display_name }}
+      published_version: ${{ needs.train.outputs.release_version }}
+      prev_sha: ${{ github.event.before }}
+      workdir: ${{ needs.train.outputs.release_dir }}
+
+  # Self-contained per-platform wheels, attached to the release above so
+  # `pip install -f <release>` needs no separate worker. Declared as the
+  # `sdk-python-fat-wheels` asset in the catalog.
+  attach-fat-wheels:
+    name: Attach the fat wheels
+    needs:
+      - train
+      - publish-npm
+      - github-release
+    if: >-
+      needs.publish-npm.result == 'success' &&
+      needs.github-release.result == 'success' &&
+      contains(fromJSON(needs.train.outputs.release_assets), 'sdk-python-fat-wheels')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-sdk-python-fat-wheels.yml
+    with:
+      version: ${{ needs.train.outputs.release_version }}

@@ -30,6 +30,14 @@ If the user doesn't specify, ask which SDK pod package they want to generate a c
 
 Package slugs match git tags (`sdk`, `inference`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
 
+**On a release train, run this skill once per package the version pass moved.**
+A train is one branch carrying several packages
+(`release-train-<train>-<x.y.z>`, see `qv-release-train`), so the lockstep
+rules below still apply, but the changelogs land in one commit on one branch
+instead of one per release branch. `nx release version` has already written
+the versions and the `@qvac/inference` range, so Step 7 is skipped on that
+path. Everything else here is unchanged.
+
 **`sdk` and `inference` are lockstep on major.minor.** Two changelogs, two
 releases, engine first: `--package=inference` for `release-inference-<x.y.z>`,
 then `--package=sdk` for `release-sdk-<x.y.z>`. Both notes for the same `x.y.z`
@@ -308,6 +316,11 @@ and `tetherto-qvac-sdk` is generated from `@qvac/sdk` at the same version. An sd
 release sets both and regenerates the Python client (`SDK_VERSION` and the other
 `_generated/` outputs). Skip this step for any other `--package` value — an
 `--package=inference` release does not touch the SDK.
+
+**Skip it on a release train.** `nx release version` has already written the
+`@qvac/inference` range, and re-running this would set it a second time from a
+different source. The Python client still needs regenerating, so run the
+`sdk-python` part of `qv-sdk-inference-version` on its own.
 
 Read and follow `.agents/skills/qv-sdk-inference-version/SKILL.md` (Steps 1–4).
 Short form:

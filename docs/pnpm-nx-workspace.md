@@ -68,9 +68,18 @@ The distinction is targets-as-data, not graph membership: add a `project.json` w
 
 ```json
 {
-  "targetDefaults": { "build": { "dependsOn": ["^build"] } }
+  "targetDefaults": { "build": { "dependsOn": ["^build"] } },
+  "release": { "…": "generated, see below" }
 }
 ```
+
+Nx does one more thing, and only for packages that release together: **`nx
+release`** versions a whole dependency chain in one pass and publishes it in
+graph order. The `release` block is **generated** from
+`.github/release-trains.json` by `node .github/scripts/sync-release-trains.mjs`
+— edit the catalog, not `nx.json`. `validate-release-trains.mjs` and a test
+fail on drift, and `release-train.yml` refuses to publish a train whose
+`nx.json` has drifted. See `docs/ci/RELEASE-TRAIN.md`.
 
 The dependency graph is derived from workspace `package.json` deps. Two vendor dirs with no `package.json` (`inference-addon-cpp`, `lint-cpp`) are wired into the graph via `implicitDependencies` on the native packages that consume them.
 
@@ -84,7 +93,13 @@ pnpm exec nx show project @qvac/llm-llamacpp --json     # full RESOLVED config f
 pnpm exec nx graph                                      # interactive dependency graph
 pnpm exec nx show projects --affected -t build --base=main --head=HEAD   # what a diff affects = what CI will run
 pnpm exec nx run @qvac/llm-llamacpp:test:integration    # run a target (executes its underlying pnpm script)
+pnpm exec nx release version --dry-run                  # preview a release train's versions and range rewrites
 ```
+
+Never pass `--groups`, `--projects` or a command-line specifier to `nx release
+version`: combined with a specifier those filters write it into out-of-group
+projects. The pass is unfiltered by design, and release-group membership is
+what confines it.
 
 Read the resolved config with `nx show project <name> --json`, not by opening `project.json` — the JSON is the full merged view (defaults + inferred). You rarely need Nx for day-to-day coding (`pnpm run <script>` in the package dir is equivalent); reach for `nx ... --affected` to preview what CI will pick up, and `nx show project --json` when editing a package's `options.ci`.
 

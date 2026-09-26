@@ -1,0 +1,71 @@
+{
+  "$comment": "Catalog of release trains. A train is a set of packages that release together because they depend on each other in a line. Adding a package, or a whole new train, is an edit here followed by `node .github/scripts/sync-release-trains.mjs`; nothing else hardcodes the list. See .github/scripts/lib/release-trains.mjs.",
+  "trains": {
+    "sdk": {
+      "description": "The SDK chain: the engine, the SDK on top of it, and the agent stack that consumes the CLI.",
+      "anchorGroup": "engine",
+      "groups": {
+        "engine": {
+          "description": "@qvac/inference and @qvac/sdk share a major and minor; packages/sdk lint enforces it.",
+          "projectsRelationship": "fixed",
+          "projects": [
+            {
+              "name": "@qvac/inference",
+              "slug": "inference",
+              "dir": "packages/inference",
+              "postPublish": {
+                "$comment": "Tag only. The Releases page is the SDK's; the engine's notes ride in the SDK release for the version it depends on.",
+                "tag": true
+              }
+            },
+            {
+              "name": "@qvac/sdk",
+              "slug": "sdk",
+              "dir": "packages/sdk",
+              "postPublish": {
+                "githubRelease": { "displayName": "QVAC SDK" },
+                "assets": ["sdk-python-fat-wheels"]
+              }
+            }
+          ]
+        },
+        "agentstack": {
+          "description": "Consumers of the CLI. Each moves on its own version.",
+          "projectsRelationship": "independent",
+          "projects": [
+            { "name": "@qvac/cli", "slug": "cli", "dir": "packages/cli", "postPublish": { "tag": true } },
+            { "name": "@qvac/ai-sdk-provider", "slug": "ai-sdk-provider", "dir": "packages/ai-sdk-provider", "postPublish": { "tag": true } },
+            { "name": "@qvac/opencode-plugin", "slug": "opencode-plugin", "dir": "plugins/opencode", "postPublish": { "tag": true } },
+            { "name": "@qvac/openclaw-plugin", "slug": "openclaw-plugin", "dir": "plugins/openclaw", "postPublish": { "tag": true } }
+          ]
+        }
+      },
+      "sidecars": [
+        {
+          "name": "tetherto-qvac-sdk",
+          "registry": "pypi",
+          "environment": "pypi",
+          "dir": "packages/sdk-python",
+          "versionFrom": "@qvac/sdk",
+          "description": "Generated from @qvac/sdk and published at the same version. Not an npm package, so nx release does not carry it."
+        }
+      ]
+    }
+  },
+  "assets": {
+    "$comment": "Release assets a project can declare in postPublish.assets. Each maps to a job in release-train.yml — `uses:` must be a literal, so adding one is a catalog entry plus a job, not a catalog entry alone.",
+    "sdk-python-fat-wheels": {
+      "description": "Self-contained per-platform tetherto-qvac-sdk wheels, attached to the release so `pip install -f <release>` needs no separate worker.",
+      "workflow": ".github/workflows/build-sdk-python-fat-wheels.yml",
+      "requires": "githubRelease"
+    }
+  },
+  "nx": {
+    "$comment": "Written into nx.json's `release` block by sync-release-trains.mjs. Each value is set because the nx default does the wrong thing here. There is deliberately no releaseTag pattern: nx tags a fixed group once, with no {projectName} to interpolate, while this repo tags each package as <slug>-v<version> after its publish succeeds. Tagging stays in release-train.yml.",
+    "version": {
+      "updateDependents": "auto",
+      "preserveMatchingDependencyRanges": false,
+      "adjustSemverBumpsForZeroMajorVersion": false
+    }
+  }
+}
