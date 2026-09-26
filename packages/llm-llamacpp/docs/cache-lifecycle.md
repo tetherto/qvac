@@ -33,9 +33,10 @@ graph TB
     HIST -->|render + tokenize| LEDGER
     LEDGER <-->|describes| KV
     KV -->|begin of cached request| SNAP
+    KV -->|end of history, during prefill| CKPT
     SNAP -->|commit| CKPT
     SNAP -->|rollback: restore| KV
-    CKPT -->|divergent history: restore newest prefix| KV
+    CKPT -->|divergent history: restore longest prefix| KV
     SNAP -.-> TMPD
     SNAP -.-> HRAM
     CKPT -.-> TMPD
@@ -51,7 +52,9 @@ graph TB
   recurrent models, the recurrent state. It is the conversation.
 - The **pre-request snapshot** and the **checkpoints** exist only on models
   that cannot trim their memory (see below). Pure-attention models never
-  create either, in any storage mode.
+  create either, in any storage mode. On hybrid and recurrent models both hold
+  only the recurrent state (`LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY`); restoring
+  one puts that state back and trims the attention KV to its position.
 - The **`cacheKey` file** is the only durable artifact. Checkpoints are never
   written into it and do not survive a process restart.
 
@@ -60,9 +63,9 @@ graph TB
 | | Pure attention (Qwen3, Llama, Gemma, ...) | Full-state (Qwen3.5, Jamba, Granite-Hybrid, DeepSeek V4, ...) |
 |---|---|---|
 | Can drop a memory tail at a position | yes, `llama_memory_seq_rm` | no |
-| Reuse of a diverging history | trim to the shared prefix, decode the rest | restore the newest checkpoint that is a prefix, decode the rest; cold prefill if none |
+| Reuse of a diverging history | trim to the shared prefix, decode the rest | restore the longest checkpoint that is a prefix, decode the rest; cold prefill if none |
 | Pre-request snapshot | never | at the start of every cached request |
-| Checkpoints | never | one per committed cached request |
+| Checkpoints | never | two per committed cached request: its pre-request snapshot and one at the end of its history |
 | Rollback target | shared prefix with the request's prompt | state before the prompt was sent (the snapshot) |
 | Disk writes for a chat with one `cacheKey` and no `saveCacheToDisk` | none | none with `cache_checkpoint_storage: memory`, temp files otherwise |
 
@@ -75,7 +78,7 @@ or hybrid per llama.cpp, or the DeepSeek V4 architecture.
 stateDiagram-v2
     [*] --> Begin: run() with cacheKey
     Begin --> Reconcile: full-state model: take pre-request snapshot
-    Reconcile --> Prefill: decode the suffix after the shared prefix
+    Reconcile --> Prefill: decode the suffix after the shared prefix<br/>full-state model: stop at the end of the<br/>history to take a checkpoint
     Prefill --> Committed: prefill-only request
     Prefill --> Generation: prefill complete
     Prefill --> RolledBack: cancel during prefill<br/>decode error
@@ -90,7 +93,7 @@ stateDiagram-v2
         [*] --> KeepTokens
         KeepTokens: prompt + generated tokens stay resident
         KeepTokens --> PushCheckpoint: full-state model
-        PushCheckpoint: snapshot becomes a checkpoint
+        PushCheckpoint: snapshot and end-of-history<br/>state become checkpoints
     }
     state RolledBack {
         [*] --> Drop
@@ -113,7 +116,7 @@ flowchart TD
     B -->|covers the whole new prompt| D[Full match:<br/>back up one token so the last<br/>prompt token is decoded again<br/>and produces logits]
     B -->|ends inside the resident ledger| E{model type}
     E -->|pure attention| F[Trim memory after the prefix<br/>rollback target = prefix<br/>decode the suffix]
-    E -->|full-state| G{newest checkpoint that is<br/>a prefix of the new prompt?}
+    E -->|full-state| G{longest checkpoint that is<br/>a prefix of the new prompt?}
     G -->|found| H[Restore it<br/>decode from there]
     G -->|none| I[Cold: clear the sequence<br/>decode the whole prompt]
     D --> E
@@ -121,8 +124,16 @@ flowchart TD
 
 On a full-state model the back-up-one step of a full match also goes through
 the checkpoint search, because one token cannot be trimmed. A "regenerate"
-therefore restores the checkpoint taken before the previous prompt and decodes
-that prompt again.
+therefore restores the previous prompt's end-of-history checkpoint and decodes
+only its generation prompt again.
+
+The end-of-history checkpoint is what makes an ordinary next turn cheap. The
+template renders the previous answer differently from how it was generated
+(Qwen3.5 drops its reasoning), so the new prompt diverges right after that
+answer's assistant header. Only a checkpoint at or before that point can be
+restored, and the end of the previous history is the latest such point. The
+addon finds it by matching the template's generation prompt against the end
+of the rendered prompt; a template without one takes no such checkpoint.
 
 After every divergence, checkpoints that are no longer a prefix of the new
 prompt are deleted.
@@ -131,14 +142,17 @@ prompt are deleted.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Snapshot: cached request begins<br/>copy of the sequence state<br/>(disk or memory)
+    [*] --> Snapshot: cached request begins<br/>recurrent state<br/>(disk or memory)
+    [*] --> HistoryState: prefill reaches the<br/>end of the history
     Snapshot --> Checkpoint: request commits
+    HistoryState --> Checkpoint: request commits
+    HistoryState --> [*]: request rolls back
     Snapshot --> [*]: request rolls back<br/>restored into memory, then dropped
-    Checkpoint --> Restored: later prompt diverges and<br/>this is the newest matching prefix
+    Checkpoint --> Restored: later prompt diverges and<br/>this is the longest matching prefix
     Restored --> Checkpoint: stays in the list
     Checkpoint --> [*]: pruned, no longer a prefix<br/>of a later prompt
     Checkpoint --> [*]: evicted, oldest first,<br/>when the list exceeds<br/>cache_checkpoints_max_bytes<br/>or cache_checkpoints
-    Checkpoint --> [*]: cacheKey switched, cleared or loaded
+    Checkpoint --> [*]: cacheKey switched, cleared or loaded<br/>(parallel >= 2: kept per cacheKey<br/>across requests)
     Checkpoint --> [*]: process exits
 ```
 
@@ -164,8 +178,11 @@ stateDiagram-v2
 ```
 
 Loading a file restores the sequence state and the ledger, with an empty
-checkpoint list. The first diverging turn after a restart on a full-state model
-is therefore a cold prefill until new checkpoints accumulate.
+checkpoint list, except with `parallel >= 2`: there the scheduler hands the
+new slot the checkpoints the previous request on the same `cacheKey` left
+behind, and each is checked against the loaded ledger before use. The first
+diverging turn after a restart on a full-state model is a cold prefill until
+new checkpoints accumulate.
 
 ## Configuration that shapes the machine
 
@@ -177,7 +194,7 @@ is therefore a cold prefill until new checkpoints accumulate.
 | `cache_checkpoints` | load config | Checkpoints kept per sequence (default 32, 0 disables). Full-state models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
 | `cache_checkpoint_storage` | load config | `disk` (temp files) or `memory` (host RAM) for snapshots and checkpoints. |
-| `parallel` | load config | With `>= 2` each request runs in a slot that is wiped afterwards; cache state survives between requests only through the file. |
+| `parallel` | load config | With `>= 2` each request runs in a slot that is wiped afterwards; the sequence state survives between requests only through the file, and the checkpoints in the scheduler, per `cacheKey`. |
 
 ## Where each thing lives, at a glance
 

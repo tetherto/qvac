@@ -83,16 +83,28 @@ to load.
 
 Pure-attention models restore a matching prefix by trimming the KV tail.
 Hybrid and recurrent models (Qwen3.5, Jamba, Granite-Hybrid, DeepSeek V4, ...)
-cannot, so the addon keeps process-local full-state checkpoints per sequence:
-one is taken at the start of every cached request and kept when the request
-commits. A diverging history restores the newest checkpoint that is still a
-prefix of the new prompt and re-prefills from there. Checkpoints live in the
-OS temp directory, are pruned as soon as they stop matching, and are lost when
-the process exits.
+cannot, so the addon keeps process-local checkpoints per sequence. A cached
+request that commits keeps two:
 
-Each checkpoint is a full copy of the sequence state, so three load-config
-fields bound the footprint. None of them has any effect on pure-attention
-models.
+- the state from before its prompt was sent, and
+- the state at the end of the chat history, just before the generation prompt
+  (`<|im_start|>assistant\n<think>\n` on Qwen3.5). The prefill stops there for
+  a moment to take it.
+
+The second is the one a normal next turn uses: templates that drop a previous
+answer's reasoning change the prompt right after that answer's header, so
+the history before it is the longest part the next turn shares. A diverging
+history restores the longest checkpoint that is still a prefix of the new
+prompt and re-prefills from there. Checkpoints are pruned as soon as they stop
+matching and are lost when the process exits. With `parallel >= 2` the
+scheduler keeps them per `cacheKey` between requests, since each request runs
+on a fresh slot.
+
+On hybrid and recurrent models a checkpoint holds only the recurrent state;
+the attention KV is trimmed back instead. Its size is therefore fixed by the
+model, not the context (about 20 MB on Qwen3.5-0.8B). DeepSeek V4 keeps full
+copies of the sequence state. Three load-config fields bound the footprint.
+None of them has any effect on pure-attention models.
 
 - `cache_checkpoints`: how many to keep per sequence (default 32, maximum
   1024). `0` keeps none, which makes every divergent turn a cold prefill.
@@ -105,7 +117,7 @@ models.
 - `cache_checkpoint_storage`: `disk` (default) writes checkpoints and the
   per-request rollback snapshot to the OS temp directory; `memory` keeps them
   in host RAM, so a cached chat never touches the disk. Each live snapshot
-  costs one full copy of the sequence state in RAM.
+  costs its size in RAM.
 
 The storage setting is independent of the `cacheKey` file. In both modes that
 file is written only by the saves described in [Save the cache to
