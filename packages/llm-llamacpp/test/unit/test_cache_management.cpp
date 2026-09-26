@@ -8,10 +8,13 @@
 #include <unordered_map>
 
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/SequenceDriver.hpp"
+#include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
+#include "test_internal_peers.hpp"
 #include "test_prompt_helpers.hpp"
 
 namespace fs = std::filesystem;
@@ -1421,6 +1424,187 @@ TEST(CacheSlidingWindowTest, DivergenceBehindTheWindowMatchesAColdRun) {
   EXPECT_EQ(fromCache, fromScratch)
       << "a cached turn diverging behind the sliding window must be "
          "reprocessed, not trimmed onto an evicted window";
+
+  fs::remove(cacheFile);
+}
+
+namespace {
+
+test_common::TestModelPath hybridModelPath() {
+  return test_common::TestModelPath(
+      "Qwen3.5-0.8B-Q8_0.gguf",
+      "QWEN35_MODEL_PATH",
+      test_common::TestModelPath::OnMissing::Skip,
+      "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF");
+}
+
+std::unique_ptr<LlamaModel> loadHybridChatModel(
+    const test_common::TestModelPath& modelPath, const char* parallel) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["n_predict"] = "48";
+  config["temp"] = "0";
+  config["seed"] = "11";
+  if (parallel != nullptr) {
+    config["parallel"] = parallel;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath.path;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+std::string
+chatInput(const std::vector<std::pair<std::string, std::string>>& messages) {
+  nlohmann::json array = nlohmann::json::array();
+  for (const auto& [role, content] : messages) {
+    array.push_back({{"role", role}, {"content", content}});
+  }
+  return array.dump();
+}
+
+} // namespace
+
+// Qwen3.5's template drops a previous answer's thinking from history, so the
+// next turn diverges right after that answer's assistant header. Neither the
+// pre-request checkpoint (it holds the raw answer) nor one at the end of the
+// prompt (it holds the generation prompt) is a prefix of that turn; only the
+// end-of-history checkpoint is. Without it every turn re-prefills the whole
+// conversation on a hybrid model.
+TEST(CacheHistoryCheckpointTest, HybridThinkingChatReusesTheHistory) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridChatModel(modelPath, nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  ASSERT_EQ(LlamaModelTestPeer::scheduler(*model), nullptr);
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(text, nullptr);
+
+  const fs::path cacheFile = "history_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+  const auto run = [&](const std::string& input) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = cacheFile.string();
+    return model->processPrompt(prompt);
+  };
+
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const std::string first = run(chatInput(chat));
+  ASSERT_FALSE(first.empty());
+  EXPECT_EQ(text->lastCacheReuseForTesting(), 0u);
+
+  const std::vector<std::string> followUps = {
+      "Which of them is warmest?", "And which is coolest?"};
+  std::string last;
+  size_t previousReuse = 0;
+  chat.emplace_back("assistant", first);
+  for (const std::string& followUp : followUps) {
+    chat.emplace_back("user", followUp);
+    last = run(chatInput(chat));
+    ASSERT_FALSE(last.empty());
+    EXPECT_GT(text->lastCacheReuseForTesting(), previousReuse)
+        << "turn restored no end-of-history checkpoint and re-prefilled the "
+           "whole conversation";
+    previousReuse = text->lastCacheReuseForTesting();
+    chat.emplace_back("assistant", last);
+  }
+
+  // Same conversation, no cache: the reused turns must answer the same.
+  chat.pop_back();
+  auto cold = loadHybridChatModel(modelPath, nullptr);
+  ASSERT_TRUE(cold->isLoaded());
+  LlamaModel::Prompt fresh;
+  fresh.input = chatInput(chat);
+  EXPECT_EQ(last, cold->processPrompt(fresh));
+
+  fs::remove(cacheFile);
+}
+
+// Batch mode gives every request a fresh slot driver, so the checkpoints
+// must outlive it in the scheduler to reach the next turn on the same
+// cacheKey. The prefill stops at the end of the history for the capture.
+TEST(CacheHistoryCheckpointTest, BatchedHybridThinkingChatReusesTheHistory) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  auto* scheduler = LlamaModelTestPeer::scheduler(*model);
+  ASSERT_NE(scheduler, nullptr);
+
+  TextLlmContext* driver = nullptr;
+  const auto original =
+      ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler);
+  ContinuousBatchSchedulerTestPeer::setDriverFactory(
+      *scheduler,
+      [original, &driver](
+          const common_params& params, uint32_t seqId, llama_pos ceiling) {
+        std::unique_ptr<SequenceDriver> built =
+            original(params, seqId, ceiling);
+        driver = dynamic_cast<TextLlmContext*>(built.get());
+        return built;
+      });
+
+  const fs::path cacheFile = "batched_history_checkpoint_cache.bin";
+  fs::remove(cacheFile);
+  // Read while the request's driver is alive: it is freed with its slot.
+  size_t reuse = 0;
+  const auto run = [&](const std::string& input) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = cacheFile.string();
+    prompt.saveCacheToDisk = true;
+    bool read = false;
+    prompt.outputCallback = [&](const std::string&) {
+      if (!read && driver != nullptr) {
+        reuse = driver->lastCacheReuseForTesting();
+        read = true;
+      }
+    };
+    const auto outputs = model->processPromptBatch({prompt});
+    return outputs.empty() ? std::string() : outputs.front();
+  };
+
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"user", "Name three colours of the rainbow."}};
+  const std::string first = run(chatInput(chat));
+  ASSERT_FALSE(first.empty());
+  EXPECT_EQ(reuse, 0u);
+
+  std::string last;
+  size_t previousReuse = 0;
+  chat.emplace_back("assistant", first);
+  for (const char* followUp :
+       {"Which of them is warmest?", "And which is coolest?"}) {
+    chat.emplace_back("user", followUp);
+    last = run(chatInput(chat));
+    ASSERT_FALSE(last.empty());
+    EXPECT_GT(reuse, previousReuse)
+        << "batched turn restored no end-of-history checkpoint";
+    previousReuse = reuse;
+    chat.emplace_back("assistant", last);
+  }
+
+  // Batched output omits the force-opened `<think>` the single-prompt path
+  // echoes, so compare against a cold batched run.
+  chat.pop_back();
+  auto cold = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(cold->isLoaded());
+  LlamaModel::Prompt fresh;
+  fresh.input = chatInput(chat);
+  const auto coldOutputs = cold->processPromptBatch({fresh});
+  ASSERT_EQ(coldOutputs.size(), 1u);
+  EXPECT_EQ(last, coldOutputs.front());
 
   fs::remove(cacheFile);
 }

@@ -129,6 +129,18 @@ inline size_t commonPrefix(const Ledger& a, const Ledger& b) {
   return i;
 }
 
+// A process-local checkpoint of a sequence whose memory cannot be trimmed:
+// the saved state and the ledger it describes. `cacheTokens` is the KV cells
+// that memory occupies, which exceeds `ledger.positions()` after M-RoPE
+// media. Checkpoints only ever describe a prefix of some prompt, so they stay
+// valid for any resident memory whose ledger shares that prefix.
+struct Checkpoint {
+  qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot state;
+  Ledger ledger;
+  llama_pos cacheTokens = 0;
+};
+using Checkpoints = std::deque<Checkpoint>;
+
 // Appends `checkpoint` and evicts from the oldest end until both limits of
 // `policy` hold: total payload bytes (measured by `bytesOf`) within
 // `maxBytes` when set, then count within `maxCount`. A single checkpoint
@@ -150,6 +162,24 @@ void appendProcessCheckpoint(
           (policy.maxBytes > 0 && totalBytes() > policy.maxBytes))) {
     checkpoints.pop_front();
   }
+}
+
+// Checkpoints whose ledger is a prefix of `prompt` spanning at most
+// `maxEntries` entries, longest first. `T` needs a `ledger` member.
+template <typename T>
+std::vector<T*> usableCheckpointsLongestFirst(
+    std::deque<T>& checkpoints, const Ledger& prompt, size_t maxEntries) {
+  std::vector<T*> usable;
+  for (T& checkpoint : checkpoints) {
+    const size_t size = checkpoint.ledger.entries.size();
+    if (size <= maxEntries && commonPrefix(checkpoint.ledger, prompt) == size) {
+      usable.push_back(&checkpoint);
+    }
+  }
+  std::stable_sort(usable.begin(), usable.end(), [](const T* a, const T* b) {
+    return a->ledger.entries.size() > b->ledger.entries.size();
+  });
+  return usable;
 }
 
 // Consumes one addon-only key that may be spelled with underscores or dashes.

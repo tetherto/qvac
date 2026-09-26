@@ -3,6 +3,7 @@
 #include <atomic>
 #include <deque>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <llama.h>
@@ -141,6 +142,24 @@ public:
   void setNPast(llama_pos nPast) override;
 
   void syncPosition(llama_pos currentPos) override;
+
+  void captureHistoryCheckpoint(llama_pos pos) override;
+
+  void adoptCheckpoints(
+      qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) override {
+    if (needsFullStateSnapshot_) {
+      cacheCheckpoints_ = std::move(checkpoints);
+    }
+  }
+  qvac_lib_inference_addon_llama::cache::Checkpoints
+  releaseCheckpoints() override {
+    return std::exchange(cacheCheckpoints_, {});
+  }
+
+  /// Entries the last prompt reconciliation kept resident (0 = cold).
+  [[nodiscard]] size_t lastCacheReuseForTesting() const noexcept {
+    return pendingReuseEntries_;
+  }
 
   [[nodiscard]] llama_pos getCacheTokens() const override;
   void setCacheTokens(llama_pos cacheTokens) override;
@@ -333,11 +352,7 @@ private:
       const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
           fallbackTags);
 
-  struct CacheCheckpoint {
-    qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot state;
-    qvac_lib_inference_addon_llama::cache::Ledger ledger;
-    ContextUsage usage;
-  };
+  using CacheCheckpoint = qvac_lib_inference_addon_llama::cache::Checkpoint;
   void beginCacheRequest();
   void capturePreRequestCacheSnapshot();
   PrefillPlan reconcilePrompt(
@@ -481,7 +496,13 @@ private:
   ContextUsage preRequestCacheUsage_;
   qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot
       preRequestCacheSnapshot_;
-  std::deque<CacheCheckpoint> cacheCheckpoints_;
+  qvac_lib_inference_addon_llama::cache::Checkpoints cacheCheckpoints_;
+  // See TextLlmContext: the end-of-history checkpoint of the request in
+  // flight, the generation prompt's token count in the last rendered prompt,
+  // and the ledger entries up to the end of the history (0 = none).
+  std::optional<CacheCheckpoint> pendingHistoryCheckpoint_;
+  size_t generationPromptTokens_ = 0;
+  size_t historyCheckpointEntries_ = 0;
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
   size_t pendingReuseEntries_ = 0;

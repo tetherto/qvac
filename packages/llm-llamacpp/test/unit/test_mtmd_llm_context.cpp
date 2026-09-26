@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <nlohmann/json.hpp>
 
 #include "model-interface/CacheLedger.hpp"
 #include "model-interface/LlamaModel.hpp"
@@ -1276,4 +1277,61 @@ TEST_F(MtmdLlmContextTest, SyncPositionAdvancesKvCellsForGeneratedTokens) {
       << "syncPosition advanced the logical position but not physical KV-cell "
          "usage; onLogitsReady's per-slot KV-cell cap would be checked against "
          "a frozen prefill count";
+}
+
+// Multimodal counterpart of CacheHistoryCheckpointTest: the history holds an
+// image, the checkpoint is taken inside the final text chunk, and the next
+// turn restores it instead of re-encoding the image and re-prefilling.
+TEST_F(
+    MtmdLlmContextTest, Qwen35MultimodalFollowUpRestoresTheHistoryCheckpoint) {
+  if (!hasValidQwen35Model()) {
+    GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
+  }
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    GTEST_SKIP() << "Multimodal test image not found";
+  }
+  config_files["n_predict"] = "48";
+  config_files["temp"] = "0";
+  auto model = createQwen35Model(/*ctxSize=*/"8192");
+  ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
+  auto* ctx =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(ctx, nullptr);
+
+  const fs::path cachePath =
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-history-checkpoint.bin";
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt first;
+  first.input =
+      R"([{"role": "user", "type": "media", "content": ""},)"
+      R"( {"role": "user", "content": "What fruit is on the plate?"}])";
+  first.cacheKey = cachePath.string();
+  first.media.push_back(readBinaryFile(imagePath));
+  std::string firstOutput;
+  ASSERT_NO_THROW({ firstOutput = model->processPrompt(first); });
+  ASSERT_FALSE(firstOutput.empty());
+  EXPECT_EQ(ctx->lastCacheReuseForTesting(), 0u);
+
+  nlohmann::json history = nlohmann::json::array(
+      {{{"role", "user"}, {"type", "media"}, {"content", ""}},
+       {{"role", "user"}, {"content", "What fruit is on the plate?"}},
+       // A different answer than the one generated, so this turn diverges
+       // from the resident memory right after the assistant header.
+       {{"role", "assistant"}, {"content", "Oranges."}},
+       {{"role", "user"}, {"content", "Is the plate round?"}}});
+  LlamaModel::Prompt second;
+  second.input = history.dump();
+  second.cacheKey = cachePath.string();
+  second.media.push_back(readBinaryFile(imagePath));
+  std::string secondOutput;
+  ASSERT_NO_THROW({ secondOutput = model->processPrompt(second); });
+  EXPECT_FALSE(secondOutput.empty());
+  // Media and the first question are reused, so the reuse covers more than
+  // the one image entry.
+  EXPECT_GT(ctx->lastCacheReuseForTesting(), 1u)
+      << "the follow-up restored no end-of-history checkpoint";
+
+  fs::remove(cachePath);
 }

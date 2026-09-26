@@ -1756,3 +1756,77 @@ TEST_F(MultiRequestBatcherTest, SamplingStampsObservedTokenTimes) {
       << "lastTokenAt must advance with every sample";
   EXPECT_EQ(req->generatedTokens.size(), 2u);
 }
+
+TEST(CheckpointStopTest, PrefillStopsAtTheCheckpointUntilItIsServiced) {
+  constexpr unsigned kMaxChunkSize = 16;
+  constexpr unsigned kMaxTokensPerSeq = 100;
+  MultiRequestBatcher batcher(kMaxChunkSize, kMaxTokensPerSeq, 1);
+  LlamaBatch batch(kMaxChunkSize, 0, 1);
+
+  ASSERT_EQ(
+      batcher.addRequestAt(
+          0,
+          PrefillPlan{
+              .tokens = {1, 2, 3, 4, 5, 6}, .checkpointAtTextTokens = 4},
+          10),
+      MultiRequestBatcher::AddStatus::Ok);
+  EXPECT_FALSE(batcher.nextAwaitingCheckpoint().has_value());
+
+  // Feeding stops at the checkpoint, without logits: the prompt is not done.
+  auto result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.totalTokens, 4u);
+  EXPECT_FALSE(batch->logits[3]);
+  int prefillCompletions = 0;
+  batcher.advance([&](uint32_t, llama_pos, size_t) { ++prefillCompletions; });
+  EXPECT_EQ(prefillCompletions, 0);
+
+  const auto awaiting = batcher.nextAwaitingCheckpoint();
+  ASSERT_TRUE(awaiting.has_value());
+  EXPECT_EQ(awaiting->seqId, 0u);
+  EXPECT_EQ(awaiting->currentPos, 14);
+  EXPECT_EQ(batcher.fillBatch(batch).totalTokens, 0u)
+      << "a slot stopped at its checkpoint must not be fed";
+
+  ASSERT_TRUE(batcher.completeCheckpointStop(0));
+  EXPECT_FALSE(batcher.completeCheckpointStop(0));
+  EXPECT_FALSE(batcher.nextAwaitingCheckpoint().has_value());
+
+  result = batcher.fillBatch(batch);
+  EXPECT_EQ(result.totalTokens, 2u);
+  EXPECT_TRUE(batch->logits[1]) << "the end of the prompt still gets logits";
+  batcher.advance([&](uint32_t, llama_pos pos, size_t count) {
+    ++prefillCompletions;
+    EXPECT_EQ(pos, 16);
+    EXPECT_EQ(count, 6u);
+  });
+  EXPECT_EQ(prefillCompletions, 1);
+}
+
+TEST(CheckpointStopTest, AddRequestAtValidatesTheCheckpoint) {
+  MultiRequestBatcher batcher(8, 20, 1);
+
+  EXPECT_EQ(
+      batcher.addRequestAt(
+          0, PrefillPlan{.tokens = {1, 2, 3}, .checkpointAtTextTokens = 3}),
+      MultiRequestBatcher::AddStatus::ErrInvalidPlan)
+      << "the last token must stay after the checkpoint for its logits";
+  EXPECT_EQ(
+      batcher.addRequestAt(
+          0,
+          PrefillPlan{
+              .tokens = {1, 2, 3, 4},
+              .mediaBarriers =
+                  {{.afterTextTokens = 3, .mediaIndex = 0, .nPos = 2}},
+              .checkpointAtTextTokens = 2}),
+      MultiRequestBatcher::AddStatus::ErrInvalidPlan)
+      << "the checkpoint must come after every media barrier";
+  EXPECT_EQ(
+      batcher.addRequestAt(
+          0,
+          PrefillPlan{
+              .tokens = {1, 2, 3, 4},
+              .mediaBarriers =
+                  {{.afterTextTokens = 3, .mediaIndex = 0, .nPos = 2}},
+              .checkpointAtTextTokens = 3}),
+      MultiRequestBatcher::AddStatus::Ok);
+}

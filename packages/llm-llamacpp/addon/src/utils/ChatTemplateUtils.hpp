@@ -328,5 +328,16 @@ void requireToolChoiceHonoured(
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag);
 
+/**
+ * How many trailing tokens of @p promptTokens the template's
+ * @p generationPrompt occupies, or 0 when the prompt does not end in exactly
+ * those tokens (or there is no generation prompt). Everything before them is
+ * the chat history, which the next turn renders unchanged; that is where an
+ * end-of-history cache checkpoint goes.
+ */
+size_t generationPromptTailLength(
+    llama_context* lctx, const std::string& generationPrompt,
+    const std::vector<llama_token>& promptTokens);
+
 } // namespace utils
 } // namespace qvac_lib_inference_addon_llama

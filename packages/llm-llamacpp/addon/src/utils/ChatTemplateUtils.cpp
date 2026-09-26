@@ -1026,6 +1026,24 @@ bool configureTemplateDerivedSampling(
   return changed;
 }
 
+size_t generationPromptTailLength(
+    llama_context* lctx, const std::string& generationPrompt,
+    const std::vector<llama_token>& promptTokens) {
+  if (lctx == nullptr || generationPrompt.empty()) {
+    return 0;
+  }
+  // Templates open the generation prompt with a special token, which never
+  // merges with the text before it, so tokenizing it alone reproduces the
+  // prompt's own tail.
+  const std::vector<llama_token> tail =
+      common_tokenize(lctx, generationPrompt, false, true);
+  if (tail.empty() || tail.size() >= promptTokens.size() ||
+      !std::equal(tail.rbegin(), tail.rend(), promptTokens.rbegin())) {
+    return 0;
+  }
+  return tail.size();
+}
+
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag) {
   if (thinkingStartTag.empty()) {

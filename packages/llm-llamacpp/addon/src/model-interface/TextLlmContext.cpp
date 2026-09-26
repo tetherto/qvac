@@ -505,6 +505,14 @@ void TextLlmContext::tokenizeChat(
         ADDON_ID, toString(EmptyTokenizedInput), errorMsg);
   }
 
+  generationPromptTokens_ =
+      needsFullStateSnapshot_ && cacheReconciliationEnabled_ &&
+              inputs.add_generation_prompt &&
+              !llama_model_has_encoder(modelCtx_.model)
+          ? generationPromptTailLength(
+                modelCtx_.lctx, rendered.generationPrompt, inputTokens)
+          : 0;
+
   // Encode the input if model has encoder
   if (llama_model_has_encoder(modelCtx_.model) && nPast_ == 0 &&
       !isCacheLoaded) {
@@ -546,9 +554,17 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   requestRollback_.clear();
   lastGeneratedTokenCount_ = 0;
 
-  const std::vector<llama_token> inputTokens =
-      preparePrefill(chatMsgs, tools, {}, {}, isCacheLoaded, prefill).tokens;
+  PrefillPlan plan =
+      preparePrefill(chatMsgs, tools, {}, {}, isCacheLoaded, prefill);
+  const std::vector<llama_token> inputTokens = std::move(plan.tokens);
   const auto nTokens = static_cast<llama_pos>(inputTokens.size());
+  // The end-of-history checkpoint splits the prefill: decode up to it,
+  // capture, then decode the generation prompt.
+  const std::optional<llama_pos> checkpointAt =
+      plan.checkpointAtTextTokens.has_value()
+          ? std::optional<llama_pos>(
+                static_cast<llama_pos>(*plan.checkpointAtTextTokens))
+          : std::nullopt;
 
   // Captured AFTER `preparePrefill` so the anchor reflects any position
   // change that preparation made. The scheduler admission takes the same
@@ -632,8 +648,11 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
       return {.ok = false, .cancelled = true, .rollbackOk = rollbackOk};
     }
     textBatch->n_tokens = 0;
+    const llama_pos chunkEnd =
+        checkpointAt.has_value() && tokenIndex < *checkpointAt ? *checkpointAt
+                                                               : nTokens;
     // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,bugprone-narrowing-conversions,readability-implicit-bool-conversion,readability-identifier-naming)
-    for (; tokenIndex < nTokens && textBatch->n_tokens < params_.n_batch;
+    for (; tokenIndex < chunkEnd && textBatch->n_tokens < params_.n_batch;
          tokenIndex++) {
       llama_pos batchTokenIndex = textBatch->n_tokens;
       // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
@@ -660,6 +679,9 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
 
     nPast_ += textBatch->n_tokens;
     // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic,bugprone-narrowing-conversions,readability-implicit-bool-conversion,readability-identifier-naming)
+    if (checkpointAt.has_value() && tokenIndex == *checkpointAt) {
+      captureHistoryCheckpoint(nPast_);
+    }
   }
 
   onPrefillComplete(nPast_, inputTokens.size());
@@ -689,9 +711,19 @@ PrefillPlan TextLlmContext::preparePrefill(
   std::vector<llama_token> inputTokens;
   tokenizeChat(chatMsgs, tools, inputTokens, isCacheLoaded);
 
+  std::optional<size_t> checkpointAt;
   if (cacheReconciliationEnabled_) {
+    const size_t fullSize = inputTokens.size();
     beginCacheRequest();
     inputTokens = reconcilePrompt(inputTokens, isPrefillOnlyRequest);
+    // Only the generation prompt follows the history, so the history ends
+    // `generationPromptTokens_` tokens before the end of the suffix too. A
+    // history end inside the reused prefix has nothing left to capture.
+    if (generationPromptTokens_ > 0 &&
+        inputTokens.size() > generationPromptTokens_) {
+      checkpointAt = inputTokens.size() - generationPromptTokens_;
+      historyCheckpointEntries_ = fullSize - generationPromptTokens_;
+    }
   }
 
   const size_t nTokens = inputTokens.size();
@@ -729,7 +761,8 @@ PrefillPlan TextLlmContext::preparePrefill(
         ADDON_ID, toString(ContextOverflow), errorMsg);
   }
 
-  return PrefillPlan{.tokens = std::move(inputTokens)};
+  return PrefillPlan{
+      .tokens = std::move(inputTokens), .checkpointAtTextTokens = checkpointAt};
 }
 
 void TextLlmContext::syncPosition(llama_pos currentPos) {
@@ -1264,6 +1297,7 @@ void TextLlmContext::restoreCacheStateTokens(
   residentLedger_ = decoded.ledger;
   nPast_ = decoded.nPast;
   cacheCheckpoints_.clear();
+  pendingHistoryCheckpoint_.reset();
 }
 
 void TextLlmContext::clearCacheReconciliationState() {
@@ -1272,6 +1306,8 @@ void TextLlmContext::clearCacheReconciliationState() {
   preRequestLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();
   cacheCheckpoints_.clear();
+  pendingHistoryCheckpoint_.reset();
+  historyCheckpointEntries_ = 0;
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = false;
 }
@@ -1282,6 +1318,8 @@ bool TextLlmContext::rollbackFailedRequest() {
 
 void TextLlmContext::beginCacheRequest() {
   discardPendingResidentToken();
+  pendingHistoryCheckpoint_.reset();
+  historyCheckpointEntries_ = 0;
   cacheRequestActive_ = true;
   cacheRequestRolledBack_ = false;
   preRequestNPast_ = nPast_;
@@ -1344,17 +1382,17 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
 
   if (needsFullStateSnapshot_ && reuseTarget < cachedLength) {
     reuse = 0;
-    for (auto it = cacheCheckpoints_.rbegin(); it != cacheCheckpoints_.rend();
-         ++it) {
-      const size_t checkpointSize = it->ledger.entries.size();
-      if (checkpointSize <= reuseTarget &&
-          cache::commonPrefix(it->ledger, pendingPromptLedger_) ==
-              checkpointSize &&
-          restoreSequenceState(modelCtx_.lctx, seqId_, it->state)) {
-        residentLedger_ = it->ledger;
+    // Longest usable checkpoint first: a checkpoint is usable when its
+    // ledger is a prefix of the new prompt no longer than the reuse target,
+    // which also makes it a prefix of the resident memory a partial restore
+    // relies on.
+    for (CacheCheckpoint* candidate : cache::usableCheckpointsLongestFirst(
+             cacheCheckpoints_, pendingPromptLedger_, reuseTarget)) {
+      if (restoreSequenceState(modelCtx_.lctx, seqId_, candidate->state)) {
+        residentLedger_ = candidate->ledger;
         nPast_ = residentLedger_.positions();
-        reuse = checkpointSize;
-        checkpoint = std::to_string(checkpointSize);
+        reuse = residentLedger_.entries.size();
+        checkpoint = std::to_string(reuse);
         break;
       }
     }
@@ -1413,6 +1451,7 @@ std::vector<llama_token> TextLlmContext::reconcilePrompt(
           reuse,
           nPast_));
 
+  lastCacheReuse_ = reuse;
   return std::vector<llama_token>(fullPrompt.begin() + reuse, fullPrompt.end());
 }
 
@@ -1432,13 +1471,61 @@ void TextLlmContext::commitCacheRequest() {
   } else {
     preRequestCacheSnapshot_.clear();
   }
+  // Newest, so the next divergent turn finds it first.
+  if (pendingHistoryCheckpoint_.has_value()) {
+    cache::appendProcessCheckpoint(
+        cacheCheckpoints_,
+        std::move(*pendingHistoryCheckpoint_),
+        cacheCheckpointPolicy_,
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
+    pendingHistoryCheckpoint_.reset();
+  }
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = false;
+}
+
+void TextLlmContext::captureHistoryCheckpoint(llama_pos pos) {
+  if (!needsFullStateSnapshot_ || !cacheRequestActive_ ||
+      historyCheckpointEntries_ == 0) {
+    return;
+  }
+  cache::Ledger ledger = pendingPromptLedger_;
+  ledger.truncate(historyCheckpointEntries_);
+  // A checkpoint is useful only if it describes exactly the memory it saves.
+  // The ledger is rebuilt from the same tokens the plan fed, so a mismatch
+  // means the plan and the ledger disagree; skip rather than store it.
+  if (ledger.positions() != pos) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[TextLlm] skipping end-of-history checkpoint: memory ends at %d, "
+            "history at %d\n",
+            pos,
+            ledger.positions()));
+    return;
+  }
+  CacheCheckpoint checkpoint{.ledger = std::move(ledger)};
+  // Only an optimisation for the next turn: a failed capture costs that turn
+  // a longer prefill, never this request.
+  if (!snapshotSequenceState(
+          modelCtx_.lctx,
+          seqId_,
+          pos,
+          checkpoint.state,
+          cacheCheckpointPolicy_.storage,
+          snapshotScope_)) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[TextLlm] failed to capture end-of-history checkpoint\n");
+    return;
+  }
+  pendingHistoryCheckpoint_ = std::move(checkpoint);
 }
 
 bool TextLlmContext::restorePreRequestCacheState() {
   bool ok = true;
   discardPendingResidentToken();
+  pendingHistoryCheckpoint_.reset();
   if (!preRequestCacheSnapshot_.empty()) {
     ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
   } else if (nPast_ > preRequestNPast_) {
