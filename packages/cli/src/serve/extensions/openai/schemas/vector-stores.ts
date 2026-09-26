@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { VectorStoreExpiresAfter } from '@/serve/core/stores/vector-stores'
 
 export const vectorStoreIdParams = z.object({ id: z.string().min(1) })
 
@@ -36,12 +37,7 @@ export const vectorStoreAttachBody = z
   })
   .passthrough()
 
-// ─── Parsed shapes (source of truth; the store imports these) ─────────
-
-export interface VectorStoreExpiresAfter {
-  anchor: 'last_active_at'
-  days: number
-}
+// ─── Parsed shapes ─────────────────────────────────────────────────────
 
 export class InvalidExpiresAfterError extends Error {
   constructor(message: string) {

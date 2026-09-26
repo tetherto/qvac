@@ -1,4 +1,10 @@
 import { randomBytes } from 'node:crypto'
+import {
+  createJobsStore,
+  type JobEvictReason,
+  type JobsPage,
+  type ListJobsOptions
+} from '@/serve/core/stores/jobs'
 
 export type VideoJobStatus = 'queued' | 'in_progress' | 'completed' | 'failed'
 
@@ -54,7 +60,7 @@ export function videoJobResource(job: VideoJob): VideoResource {
   return resource
 }
 
-export type VideoEvictReason = 'max_entries'
+export type VideoEvictReason = JobEvictReason
 
 export interface VideoJobsStoreOptions {
   /** Hard cap on stored entries. Oldest evicted first. */
@@ -64,11 +70,7 @@ export interface VideoJobsStoreOptions {
   onEvict?: (job: VideoJob, reason: VideoEvictReason) => void
 }
 
-export interface ListVideoJobsOptions {
-  limit?: number
-  order?: 'asc' | 'desc'
-  after?: string | undefined
-}
+export type ListVideoJobsOptions = ListJobsOptions
 
 export interface VideoJobsStore {
   create: (input: {
@@ -83,12 +85,7 @@ export interface VideoJobsStore {
   ) => VideoJob | undefined
   get: (id: string) => VideoJob | undefined
   delete: (id: string) => boolean
-  list: (opts?: ListVideoJobsOptions) => {
-    data: VideoJob[]
-    first_id: string | null
-    last_id: string | null
-    has_more: boolean
-  }
+  list: (opts?: ListVideoJobsOptions) => JobsPage<VideoJob>
   size: () => number
   bannerLine: () => string
 }
@@ -99,20 +96,18 @@ export interface VideoJobsStore {
 // (year 9999) so the OpenAI shape remains non-null.
 const EXPIRES_AT_SENTINEL = 253402300799
 
-const DEFAULT_MAX_ENTRIES = 256
-
 export function createVideoJobsStore(options: VideoJobsStoreOptions = {}): VideoJobsStore {
-  const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES
   const nowMs = options.now ?? ((): number => Date.now())
-  const onEvict = options.onEvict
-
-  const jobs = new Map<string, VideoJob>()
+  const jobs = createJobsStore<VideoJob>({
+    ...(options.maxEntries !== undefined ? { maxEntries: options.maxEntries } : {}),
+    createdAt: (job) => job.created_at,
+    ...(options.onEvict !== undefined ? { onEvict: options.onEvict } : {})
+  })
 
   return {
     create(input): VideoJob {
-      const id = `video_${randomBytes(12).toString('hex')}`
-      const job: VideoJob = {
-        id,
+      return jobs.add({
+        id: `video_${randomBytes(12).toString('hex')}`,
         object: 'video',
         model: input.model,
         status: 'queued',
@@ -129,65 +124,15 @@ export function createVideoJobsStore(options: VideoJobsStoreOptions = {}): Video
         aviFileId: null,
         mp4FileId: null,
         controller: new AbortController()
-      }
-      jobs.set(id, job)
-      while (jobs.size > maxEntries) {
-        const oldestId = jobs.keys().next().value
-        if (oldestId === undefined) break
-        const evicted = jobs.get(oldestId)!
-        jobs.delete(oldestId)
-        if (onEvict) onEvict(evicted, 'max_entries')
-      }
-      return job
-    },
-
-    update(id, patch): VideoJob | undefined {
-      const rec = jobs.get(id)
-      if (!rec) return undefined
-      Object.assign(rec, patch)
-      return rec
-    },
-
-    get(id): VideoJob | undefined {
-      return jobs.get(id)
-    },
-
-    delete(id): boolean {
-      return jobs.delete(id)
-    },
-
-    list(opts): {
-      data: VideoJob[]
-      first_id: string | null
-      last_id: string | null
-      has_more: boolean
-    } {
-      const limit =
-        typeof opts?.limit === 'number' && opts.limit > 0 ? Math.min(opts.limit, 100) : 20
-      const order = opts?.order === 'asc' ? 'asc' : 'desc'
-      const all = Array.from(jobs.values()).sort((a, b) => {
-        return order === 'asc' ? a.created_at - b.created_at : b.created_at - a.created_at
       })
-      let start = 0
-      if (opts?.after) {
-        const idx = all.findIndex((j) => j.id === opts.after)
-        start = idx >= 0 ? idx + 1 : all.length
-      }
-      const slice = all.slice(start, start + limit)
-      return {
-        data: slice,
-        first_id: slice[0]?.id ?? null,
-        last_id: slice[slice.length - 1]?.id ?? null,
-        has_more: start + slice.length < all.length
-      }
     },
-
-    size(): number {
-      return jobs.size
-    },
-
+    update: jobs.update,
+    get: jobs.get,
+    delete: jobs.delete,
+    list: jobs.list,
+    size: jobs.size,
     bannerLine(): string {
-      return `videos: in-memory only — job IDs and rendered bytes are lost on restart, max ${maxEntries} entries`
+      return `videos: in-memory only — job IDs and rendered bytes are lost on restart, max ${jobs.maxEntries} entries`
     }
   }
 }
