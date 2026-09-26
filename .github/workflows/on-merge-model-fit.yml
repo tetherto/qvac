@@ -3,10 +3,7 @@ name: On Merge Trigger (Model Fit)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/model-fit/**"
       - ".github/workflows/*model-fit*.yml"

@@ -471,14 +471,34 @@ Route A needs a run you can point at. When you need someone *else's* branch, an
 older commit whose artifact has expired, or a specific published version, pin a
 package instead.
 
-**Step 1 — publish a dev build of your branch.** Push it as `tmp-<TICKET>`; the
-addon's *On Merge Trigger* workflow builds the prebuilds and publishes
+**Step 1 — publish a dev build of your branch.** Push it as `tmp-<TICKET>`, then
+dispatch the addon's *On Merge Trigger* workflow against that branch. It builds
+the prebuilds and publishes
 `@tetherto/<addon>-mono@<pkg-version>-tmp.runid-<run id>` to GitHub Packages.
 
 ```bash
 BRANCH=tmp-QVAC-1234
+WF=llm-llamacpp
 git push origin HEAD:refs/heads/$BRANCH
+gh workflow run on-merge-$WF.yml --repo tetherto/qvac --ref $BRANCH
 ```
+
+The push alone builds nothing. These pipelines push-trigger on `release-*` only,
+so pushing to an open PR's branch no longer starts a 9-platform matrix behind
+your back — every non-release build is a deliberate dispatch.
+
+> **Dispatch from a `tmp-*` or `feature-*` branch, never a `release-*` one.**
+> `npm-publish-logic` reads the branch name, and on a `release-*` ref a dispatch
+> sets `publish_release`, which runs `publish-npm` and ships a real release to
+> the **public npm registry**. From `main` it publishes a GPR `dev` build. Only
+> `tmp-*`/`feature-*` give you the throwaway build this page is about; a branch
+> name outside those four publishes nothing at all.
+
+The version string is unaffected — it is built from the run id, so it is the
+same whether the run came from a push or a dispatch. The GPR dist-tag can
+differ: most addons let the dispatch `tag` input (default `dev`) override the
+branch-derived `temp`, while a few ignore the input and always use `temp`.
+Step 2 pins the exact version, so the tag does not matter here.
 
 Wait for that run to finish — the mobile dispatch needs the package to exist.
 
@@ -512,9 +532,10 @@ package is `@qvac/vla-ggml`, so `WF=vla` and `GPR_NAME=vla-ggml-mono`. If
 unsure, read `addon-npm-name` from the mobile workflow and append `-mono` to the
 part after the slash.
 
-An empty `$PKG` means either that run published nothing — usually because the
-push touched nothing under `packages/<addon>/`, so the path-scoped workflow
-skipped — or that `GPR_NAME` is wrong. Check the name first:
+An empty `$PKG` means either that run published nothing — usually because you
+dispatched from a branch outside `tmp-*`/`feature-*`, since `workflow_dispatch`
+ignores the `paths:` filter but not the branch name — or that `GPR_NAME` is
+wrong. Check the name first:
 
 ```bash
 gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=1" --jq '.[0].name'
