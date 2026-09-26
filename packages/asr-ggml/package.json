@@ -1,6 +1,6 @@
 {
   "name": "@qvac/asr-ggml",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "description": "Multi-engine ASR (Whisper + NVIDIA Parakeet) inference addon for qvac on the Bare runtime",
   "addon": true,
   "engines": {
@@ -50,7 +50,7 @@
     "test:unit": "npm run build:ts && brittle-bare test/unit/**/*.test.js && npm run test:prestage && npm run test:package",
     "test:prestage": "node --test scripts/__tests__/*.test.js && node scripts/run-python-tests.js",
     "test:integration": "npm run test:integration:whisper && npm run test:integration:parakeet",
-    "test:integration:whisper": "npm run build:ts && brittle-bare test/integration/addon.test.js test/integration/multiple-transcriptions.test.js test/integration/audio-ctx-chunking.test.js test/integration/live-stream-simulation.test.js test/integration/corrupted-model.test.js test/integration/model-file-validation.test.js",
+    "test:integration:whisper": "npm run build:ts && brittle-bare test/integration/addon.test.js test/integration/multiple-transcriptions.test.js test/integration/audio-ctx-chunking.test.js test/integration/live-stream-simulation.test.js test/integration/corrupted-model.test.js test/integration/model-file-validation.test.js test/integration/fit.test.js",
     "test:integration:parakeet:generate": "brittle -r test/integration/all.js test/integration/parakeet-addon-multimodel.test.js test/integration/parakeet-duplex-streaming.test.js test/integration/parakeet-duplex-streaming-eou.test.js test/integration/parakeet-eou-streaming.test.js test/integration/parakeet-live-stream-simulation.test.js test/integration/parakeet-nemotron.test.js test/integration/parakeet-sortformer-aosc-streaming.test.js test/integration/parakeet-sortformer-streaming-alias.test.js test/integration/parakeet-multiple-transcriptions.test.js test/integration/parakeet-corrupted-model.test.js test/integration/parakeet-model-file-validation.test.js",
     "test:integration:parakeet": "npm run build:ts && npm run test:integration:parakeet:generate && bash test/integration/parakeet-run-tests.sh",
     "test:integration:long": "npm run build:ts && brittle-bare test/integration/**/longES.test.js",
@@ -154,7 +154,7 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/decoder-audio": "^0.5.0",
+    "@qvac/decoder-audio": "^0.7.0",
     "@qvac/registry-client": "^0.6.1",
     "@types/node": "^22.15.3",
     "bare-buffer": "^3.4.2",

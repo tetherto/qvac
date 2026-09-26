@@ -179,21 +179,10 @@ TEST(GrootM4_4, EulerLoopMatchesPytorch) {
   const float dt = 1.0f / static_cast<float>(N_STEPS);
 
   for (int step = 0; step < N_STEPS; ++step) {
-    // 4 GiB, and explicitly size_t like the M4.6 pools rather than the
-    // unsigned-int product this used to be. This is the ONLY groot parity test
-    // that builds the action encoder, the concat, all 32 DiT blocks, the
-    // decoder and the cont into a SINGLE arena — M4.6 spreads the same work
-    // over one context per phase — so it sat closest to its pool ceiling at the
-    // old 2 GiB. That ceiling is a hard failure rather than a slow path: every
-    // tensor here is data-backed (no_alloc=false), the cgraph is allocated
-    // LAST, after all of them, and ggml_new_object returns NULL instead of
-    // aborting once GGML_ASSERT is compiled out, which is the Release config
-    // Windows CI builds. ggml_build_forward_expand(NULL, ...) is then an access
-    // violation with no stack trace, which is exactly the SEH 0xc0000005 seen
-    // on qvac-win25-x64-runner4. M4.6 already allocates 8 GiB on that same
-    // runner, so the headroom is available. The used/total line below is what
-    // turns a recurrence into a number instead of a guess.
-    const size_t mem = size_t(4) * 1024u * 1024u * 1024u;
+    // The complete graph uses about 518 MiB on the Windows parity fixture.
+    // Keep almost 2x headroom without committing an unnecessary 4 GiB on each
+    // Windows test runner.
+    const size_t mem = size_t(1) * 1024u * 1024u * 1024u;
     std::vector<uint8_t> buf(mem);
     struct ggml_init_params ip{mem, buf.data(), false};
     struct ggml_context* c = ggml_init(ip);

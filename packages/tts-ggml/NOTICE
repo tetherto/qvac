@@ -13,38 +13,156 @@ JavaScript Dependencies
 --- apache-2.0 (Apache License 2.0) ---
 
   @qvac/error@0.1.1
-  @qvac/infer-base@0.6.1
+  @qvac/infer-base@0.6.2
     https://github.com/tetherto/qvac
-  @qvac/logging@0.1.0
-  b4a@1.8.1
+  @qvac/langdetect-text@0.1.2
+    https://github.com/tetherto/qvac
+  @qvac/logging@0.1.1
+    https://github.com/tetherto/qvac
+  b4a@1.9.0
     https://github.com/holepunchto/b4a
-  bare-buffer@3.6.0
+  bare-abort@2.0.13
+    https://github.com/holepunchto/bare-abort
+  bare-addon-resolve@1.10.1
+    https://github.com/holepunchto/bare-addon-resolve
+  bare-ansi-escapes@2.2.3
+    https://github.com/holepunchto/bare-ansi-escapes
+  bare-assert@1.2.0
+    https://github.com/holepunchto/bare-assert
+  bare-buffer@3.7.1
     https://github.com/holepunchto/bare-buffer
-  bare-events@2.9.1
+  bare-bundle@1.11.0
+    https://github.com/holepunchto/bare-bundle
+  bare-cov@1.2.2
+    https://github.com/holepunchto/bare-cov
+  bare-crypto@1.15.3
+    https://github.com/holepunchto/bare-crypto
+  bare-debug-log@2.0.0
+    https://github.com/holepunchto/bare-debug-log
+  bare-dns@2.2.0
+    https://github.com/holepunchto/bare-dns
+  bare-encoding@1.0.3
+    https://github.com/holepunchto/bare-encoding
+  bare-env@3.0.1
+    https://github.com/holepunchto/bare-env
+  bare-events@2.9.2
     https://github.com/holepunchto/bare-events
-  bare-fs@4.7.1
+  bare-format@1.0.2
+    https://github.com/holepunchto/bare-format
+  bare-fs@4.8.1
     https://github.com/holepunchto/bare-fs
-  bare-os@3.9.1
+  bare-hrtime@2.1.2
+    https://github.com/holepunchto/bare-hrtime
+  bare-http-parser@2.1.4
+    https://github.com/holepunchto/bare-http-parser
+  bare-http1@4.6.2
+    https://github.com/holepunchto/bare-http1
+  bare-https@3.1.0
+    https://github.com/holepunchto/bare-https
+  bare-inspect@3.1.10
+    https://github.com/holepunchto/bare-inspect
+  bare-inspector@6.1.0
+    https://github.com/holepunchto/bare-inspector
+  bare-module@6.4.0
+    https://github.com/holepunchto/bare-module
+  bare-module-lexer@1.6.6
+    https://github.com/holepunchto/bare-module-lexer
+  bare-module-resolve@1.12.5
+    https://github.com/holepunchto/bare-module-resolve
+  bare-net@2.3.3
+    https://github.com/holepunchto/bare-net
+  bare-os@3.9.3
     https://github.com/holepunchto/bare-os
-  bare-path@3.0.0
+  bare-path@3.1.2
     https://github.com/holepunchto/bare-path
-  bare-stream@2.13.1
+  bare-pipe@4.3.1
+    https://github.com/holepunchto/bare-pipe
+  bare-posix@1.0.1
+    https://github.com/holepunchto/bare-posix
+  bare-process@4.5.1
+    https://github.com/holepunchto/bare-process
+  bare-semver@1.1.0
+    https://github.com/holepunchto/bare-semver
+  bare-signals@5.0.0
+    https://github.com/holepunchto/bare-signals
+  bare-stdio@1.0.3
+    https://github.com/holepunchto/bare-stdio
+  bare-stream@2.13.4
     https://github.com/holepunchto/bare-stream
-  bare-url@2.4.3
+  bare-stylize@0.0.1
+    https://github.com/holepunchto/bare-stylize
+  bare-subprocess@5.2.3
+    https://github.com/holepunchto/bare-subprocess
+  bare-tcp@2.6.1
+    https://github.com/holepunchto/bare-tcp
+  bare-tls@3.1.10
+    https://github.com/holepunchto/bare-tls
+  bare-tty@5.2.1
+    https://github.com/holepunchto/bare-tty
+  bare-type@1.1.1
+    https://github.com/holepunchto/bare-type
+  bare-type-stripper@0.1.6
+    https://github.com/holepunchto/bare-type-stripper
+  bare-url@2.5.4
     https://github.com/holepunchto/bare-url
+  bare-utils@1.6.0
+    https://github.com/holepunchto/bare-utils
+  bare-v8-to-istanbul@1.0.4
+    https://github.com/holepunchto/bare-v8-to-istanbul
+  bare-ws@3.2.0
+    https://github.com/holepunchto/bare-ws
+  brittle@3.19.1
+    https://github.com/holepunchto/brittle
   events-universal@1.0.1
     https://github.com/holepunchto/events-universal
+  globbie@1.0.6
+    https://github.com/holepunchto/globbie
+  paparam@1.13.0
+    https://github.com/holepunchto/paparam
+  require-addon@1.3.0
+    https://github.com/holepunchto/require-addon
   text-decoder@1.2.7
     https://github.com/holepunchto/text-decoder
+  which-runtime@1.4.0
+    https://github.com/holepunchto/which-runtime
+
+--- isc (ISC License) ---
+
+  tmatch@5.0.0
+    https://github.com/isaacs/tmatch
+  v8-to-istanbul@9.3.0
+    https://github.com/istanbuljs/v8-to-istanbul
 
 --- mit (MIT License) ---
 
+  @jridgewell/resolve-uri@3.1.2
+    https://github.com/jridgewell/resolve-uri
+  @jridgewell/sourcemap-codec@1.6.0
+    https://github.com/jridgewell/sourcemaps
+  @jridgewell/trace-mapping@0.3.31
+    https://github.com/jridgewell/sourcemaps
+  @types/istanbul-lib-coverage@2.0.6
+    https://github.com/DefinitelyTyped/DefinitelyTyped
+  convert-source-map@2.0.0
+    https://github.com/thlorenz/convert-source-map
+  error-stack-parser@2.1.4
+    https://github.com/stacktracejs/error-stack-parser
   fast-fifo@1.3.2
     https://github.com/mafintosh/fast-fifo
-  streamx@2.25.0
+  picomatch@4.0.7
+    https://github.com/micromatch/picomatch
+  same-object@1.0.2
+    https://github.com/holepunchto/same-object
+  stackframe@1.3.4
+    https://github.com/stacktracejs/stackframe
+  streamx@2.28.1
     https://github.com/mafintosh/streamx
   teex@1.0.1
     https://github.com/mafintosh/teex
+  test-tmp@1.4.0
+    https://github.com/mafintosh/test-tmp
+  tinyld@1.3.4
+    https://github.com/komodojp/tinyld
 
 
 =========================================================================
@@ -58,8 +176,10 @@ C++ Dependencies
 
 --- mit (MIT License) ---
 
-  tts-cpp
-    https://github.com/tetherto/qvac-fabric-speech.cpp
+  ggml-speech
+    https://github.com/tetherto/qvac-ext-ggml
+  speech-cpp
+    https://github.com/tetherto/qvac-ext-lib-whisper.cpp
 
 --- Unknown ---
 

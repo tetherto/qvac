@@ -7,7 +7,7 @@
 // ocr-ggml Pipeline instances. Mirrors the LlamaLazyInitializeBackend /
 // LlamaBackendsHandle pattern from llm-llamacpp.
 //
-// The first Pipeline construction loads all GGML backend .so files and
+// The first Pipeline construction loads all GGML backend modules and
 // installs log / abort callbacks. Subsequent constructions skip the load and
 // only bump the reference count. The backends are never explicitly unloaded
 // (no ggml equivalent of llama_backend_free) — they remain resident for the

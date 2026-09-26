@@ -10,6 +10,7 @@ const TTSGgml = require('@qvac/tts-ggml')
 const { ensureAudio8Models } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const AUDIO8_SAMPLE_RATE = 44100
 const AUDIO8_MAX_FRAMES = 16
@@ -46,6 +47,7 @@ function resolveAudio8Files(models, useModelDir) {
 
 function createAudio8Model(models, useGPU, useModelDir) {
   return new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_AUDIO8,
     files: resolveAudio8Files(models, useModelDir),
     greedy: true,

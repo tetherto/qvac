@@ -67,7 +67,7 @@
     # llama-common.
     LLAMA_*;
 
-    # ggml public C API, for the consumer addons. The backend .so files that
+    # ggml public C API, for the consumer addons. The backend modules that
     # ggml_backend_load_all_from_path dlopens do not rely on it: every backend
     # shipped for linux-x64 and android-arm64 links its own ggml statically and
     # imports no ggml_* / gguf_* at all, which is also why the version node

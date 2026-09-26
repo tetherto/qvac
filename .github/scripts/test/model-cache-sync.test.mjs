@@ -55,8 +55,9 @@ test('the repository is in sync and free of new collisions', () => {
 test('fails when a consumer bumps cache-version and the seed does not', () => {
   const dir = sandbox()
   try {
-    // bump the consumer everywhere, including the nx block, and forget the seed
-    edit(dir, 'integration-test-diffusion-cpp.yml', /cache-version: v2/g, 'cache-version: v3')
+    // Bump the consumer and forget the seed. diffusion-cpp's only consumer is now
+    // the nx block in its project.json: integration-test-diffusion-cpp.yml was
+    // consolidated into integration-test-nx.yml.
     const pj = join(dir, 'packages/diffusion-cpp/project.json')
     writeFileSync(pj, readFileSync(pj, 'utf8').replaceAll('"cacheVersion": "v2"', '"cacheVersion": "v3"'))
     const r = run(dir)
@@ -114,8 +115,19 @@ test('rejects the audiogen collision the turbo-q4 suffix fixed', () => {
 test('rejects a collision between two distinct consumer call sites', () => {
   const dir = sandbox()
   try {
-    edit(dir, 'integration-test-diffusion-cpp.yml', 'cache-key-suffix: ltx', 'cache-key-suffix: base-extra')
-    edit(dir, 'integration-test-diffusion-cpp.yml', 'group: ltx', 'group: base')
+    // diffusion-cpp's call sites are now the nx modelCache blocks in its
+    // project.json, so this mutates those instead of the deleted
+    // integration-test-diffusion-cpp.yml. Same shape as before: move ltx under
+    // base's group so the two share a cache version, and give it a suffix that
+    // base's restore prefix reaches. Renaming the group too is required, since
+    // versionOf() includes group and entries in different groups never compare.
+    const pj = join(dir, 'packages/diffusion-cpp/project.json')
+    writeFileSync(
+      pj,
+      readFileSync(pj, 'utf8')
+        .replaceAll('"cacheKeySuffix": "ltx"', '"cacheKeySuffix": "base-extra"')
+        .replaceAll('"group": "ltx"', '"group": "base"'),
+    )
     const r = run(dir)
     assert.equal(r.status, 1, r.stdout)
     assert.match(r.stderr, /restore-key prefix collision/)

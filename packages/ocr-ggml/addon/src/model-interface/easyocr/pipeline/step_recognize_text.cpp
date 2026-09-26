@@ -51,6 +51,7 @@
 #include "model-interface/easyocr/crnn.hpp"
 #include "model-interface/easyocr/crnn_weights.hpp"
 #include "model-interface/easyocr/gguf_loader.hpp"
+#include "model-interface/easyocr/tensor_validation.hpp"
 #include "qlog.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic,cppcoreguidelines-pro-bounds-constant-array-index,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,readability-identifier-naming,readability-identifier-length,hicpp-use-auto,modernize-use-auto,bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions,readability-implicit-bool-conversion,modernize-avoid-c-style-cast,cppcoreguidelines-pro-type-cstyle-cast,modernize-use-integer-sign-comparison)
@@ -744,6 +745,16 @@ StepRecognizeText::StepRecognizeText(
   } else {
     // GGUF didn't carry crnn.vocab — fall back to the Lang table.
     utf32Characters_ = langChars;
+  }
+  const auto* predictionWeight = loader_->get_tensor("Prediction.weight");
+  const auto* predictionBias = loader_->get_tensor("Prediction.bias");
+  if (predictionWeight == nullptr || predictionBias == nullptr ||
+      predictionWeight->ne[1] !=
+          static_cast<int64_t>(utf32Characters_.size()) ||
+      !easyocr::ggml::TensorValidation::predictionBiasMatches(
+          *predictionBias, predictionWeight->ne[1])) {
+    throw std::runtime_error(
+        "StepRecognizeText: model class count differs from vocabulary");
   }
 }
 
@@ -1587,7 +1598,8 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
   if (!textIndex.empty()) {
     size_t first = textIndex[0];
     if (first != 0) {
-      assert(first < utf32Characters_.size());
+      easyocr::ggml::TensorValidation::validateVocabIndex(
+          first, utf32Characters_.size());
       text.push_back(utf32Characters_[first]);
     }
 
@@ -1595,7 +1607,8 @@ StepRecognizeText::decodeGreedy(const std::vector<size_t>& textIndex) {
       size_t prev = textIndex[i - 1];
       size_t curr = textIndex[i];
       if (curr != prev && curr != 0) {
-        assert(curr < utf32Characters_.size());
+        easyocr::ggml::TensorValidation::validateVocabIndex(
+            curr, utf32Characters_.size());
         text.push_back(utf32Characters_[curr]);
       }
     }

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.1] - 2026-09-23
+
+### Fixed
+
+- Update the native engine to support header-only safetensors in its memory-fit
+  C API, including auxiliary models and LoRAs. Normal model loading continues
+  to require complete weight files. No JavaScript API changes.
+
 ## [0.25.0] - 2026-09-15
 
 ### Added
