@@ -48,11 +48,19 @@
   actually decoded instead of the pre-request cursor. On hybrid models the
   cached cancel path reuses the transaction's own snapshot instead of taking
   a separate prefill-entry dump on every turn.
-- Hybrid and recurrent models no longer capture a full-state checkpoint at
-  the end of every prefill. Divergent-history reconciliation restores the
-  pre-request checkpoint instead, so a follow-up turn re-prefills the previous
-  turn's prompt and answer; this halves the number of checkpoint files kept
-  per sequence.
+- Hybrid and recurrent models take a checkpoint at the end of the chat
+  history, just before the generation prompt, on every cached request (single
+  prompt and `parallel >= 2`). A follow-up turn whose template drops the
+  previous answer's reasoning restores it and prefills only the new part,
+  instead of re-prefilling the whole conversation. Reconciliation restores the
+  longest matching checkpoint. With `parallel >= 2` the scheduler keeps
+  checkpoints per `cacheKey` between requests, which previously ended with
+  each slot.
+- Checkpoints and rollback snapshots on hybrid and recurrent models hold only
+  the recurrent state; a restore trims the attention KV instead. Their size no
+  longer grows with the context (about 20 MB each on Qwen3.5-0.8B), and
+  `cache_checkpoints_max_bytes` is validated against that size. DeepSeek V4
+  keeps full snapshots.
 - Pure-attention models never write a full-state temp-file snapshot any more.
   A rolled-back request drops what it added with a tail trim; when
   reconciliation had trimmed a diverging history first, the rollback lands on
