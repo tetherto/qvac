@@ -177,6 +177,11 @@ on:
         type: string
         required: false
         default: ""
+      fabric_prebuild_run_id:
+        description: "Run id whose `fabric-prebuilds` artifact to overlay onto the app's @qvac/fabric. Needed whenever the addon prebuild was compiled against an unreleased fabric: the addon resolves its symbols from the shared runtime at load time, so installing only the addon leaves the released fabric in place and the addon fails to dlopen on device. Defaults to `prebuild_run_id`, whose on-pr run uploads `fabric-prebuilds` alongside the addon prebuilds. Empty on both keeps the released @qvac/fabric."
+        type: string
+        required: false
+        default: ""
       qvac_perf_runs:
         description: "Override QVAC_PERF_RUNS pushed to the device"
         type: string
@@ -488,6 +493,21 @@ jobs:
           model-names: ${{ steps.mobileset.outputs.names }}
           mode: presign
 
+      # The addon resolves its llama/ggml symbols from the shared @qvac/fabric at
+      # load time, so a prebuild compiled against an unreleased fabric only runs
+      # next to that same fabric: installing the addon alone leaves the released
+      # tree npm pulled in and the addon fails to dlopen on device. Fetch the
+      # producing run's fabric-prebuilds here; build-mobile-app overlays them
+      # after its npm installs and before the app bundle is built.
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ (inputs.fabric_prebuild_run_id || inputs.prebuild_run_id) != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: fabric-prebuilds
+          run-id: ${{ inputs.fabric_prebuild_run_id || inputs.prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
       - name: Build mobile app
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
@@ -495,6 +515,9 @@ jobs:
           platform: ${{ matrix.platform }}
           addon-workdir: 'packages/llm-llamacpp'
           addon-npm-name: '@qvac/llm-llamacpp'
+          # Empty unless a run id was given, which keeps every existing caller
+          # on the released @qvac/fabric.
+          fabric-prebuilds-root: ${{ (inputs.fabric_prebuild_run_id || inputs.prebuild_run_id) != '' && format('{0}/fabric-prebuilds', runner.temp) || '' }}
           ios-build-cert-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
           ios-build-cert-password: ${{ secrets.APPLE_P12_PASSWORD }}
           ios-keychain-password: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
