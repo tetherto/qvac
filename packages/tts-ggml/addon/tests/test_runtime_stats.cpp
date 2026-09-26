@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <random>
 #include <string>
 #include <variant>
 
@@ -36,8 +37,13 @@ using StatValue = std::variant<double, int64_t>;
 namespace {
 
 std::filesystem::path stageDir() {
-  auto dir = std::filesystem::temp_directory_path() /
-             "qvac-tts-ggml-runtime-stats-tests";
+  // Per-process directory: self-hosted CI hosts run many runners with a
+  // shared /tmp, so a fixed name races with the same suite in another job.
+  static const std::filesystem::path dir = [] {
+    std::random_device entropy;
+    return std::filesystem::temp_directory_path() /
+           ("qvac-tts-ggml-runtime-stats-tests-" + std::to_string(entropy()));
+  }();
   std::filesystem::create_directories(dir);
   return dir;
 }
