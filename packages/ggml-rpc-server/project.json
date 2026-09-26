@@ -18,6 +18,43 @@
         "default",
         "{workspaceRoot}/vcpkg-overlays/ports/qvac-fabric/**"
       ]
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/ggml-rpc-server",
+        "ci": {
+          "includeVulkanSdk": true,
+          "linuxExtraPackages": "libibverbs-dev",
+          "extraStripBinaryName": "ggml-rpc-server",
+          "desktopSmokeCommand": "node test/node/prebuild-smoke.cjs && bare test/bare/prebuild-smoke.js",
+          "postArtifactBuildCommand": "bash ../../.github/scripts/validate-rpc-rdma-build.sh",
+          "matrixInclude": "[{\"os\":\"ubuntu-22.04\",\"runner_key\":\"linux_ubuntu2204_x64\",\"platform\":\"linux\",\"arch\":\"x64\"},{\"os\":\"ubuntu-22.04-arm\",\"runner_key\":\"ubuntu_2204_arm\",\"platform\":\"linux\",\"arch\":\"arm64\"},{\"os\":\"ubuntu-24.04\",\"runner_key\":\"ubuntu_2404\",\"platform\":\"android\",\"arch\":\"arm64\"},{\"os\":\"macos-15\",\"runner_key\":\"macos_15\",\"platform\":\"ios\",\"arch\":\"arm64\"},{\"os\":\"macos-15\",\"runner_key\":\"macos_15\",\"platform\":\"darwin\",\"arch\":\"arm64\"},{\"os\":\"macos-15-intel\",\"runner_key\":\"macos_15_intel\",\"platform\":\"darwin\",\"arch\":\"x64\"},{\"os\":\"windows-2025\",\"runner_key\":\"win_2025_x64\",\"platform\":\"win32\",\"arch\":\"x64\"}]"
+        }
+      },
+      "inputs": [
+        "default",
+        "!{projectRoot}/prebuilds/**"
+      ],
+      "outputs": [
+        "{projectRoot}/prebuilds"
+      ]
+    },
+    "on-merge": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'orchestrated by on-merge-nx.yml'",
+        "cwd": "packages/ggml-rpc-server",
+        "ci": {
+          "nameTransform": "none",
+          "repoName": "ggml-rpc-server",
+          "testGateMode": "none",
+          "prebuildExecutables": [
+            "ggml-rpc-server"
+          ]
+        }
+      }
     }
   }
 }

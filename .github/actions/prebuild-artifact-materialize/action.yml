@@ -22,6 +22,10 @@ inputs:
     description: 'Space-separated non-platform directories the bundle legitimately ships, e.g. fabric''s "include share". Anything else under prebuilds/ still fails.'
     required: false
     default: ''
+  executable-names:
+    description: 'Space-separated extensionless binaries in the bundle whose exec bit must be restored, e.g. "ggml-rpc-server". Artifact zips carry no file modes, so a shipped executable arrives 0644 and npm pack preserves that.'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -133,3 +137,25 @@ runs:
           }
         }
         Get-ChildItem $dest
+
+    # Publish jobs are ubuntu-only; the Windows leg of a consumer never needs
+    # this, and PowerShell has no exec bit to restore.
+    - name: Restore executable permissions
+      if: inputs.executable-names != '' && runner.os != 'Windows'
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        EXECUTABLES: ${{ inputs.executable-names }}
+      run: |
+        set -euo pipefail
+        for name in $EXECUTABLES; do
+          # Assert, don't chmod blind: find exits 0 on no match, so an empty
+          # sweep would ship a 0644 binary and read as a successful publish.
+          hits=$(find "${WORKDIR}/prebuilds" -type f -name "$name" -print -exec chmod +x {} +)
+          if [ -z "$hits" ]; then
+            echo "::error::no file named '${name}' under ${WORKDIR}/prebuilds to make executable."
+            exit 1
+          fi
+          echo "chmod +x:"
+          printf '%s\n' "$hits"
+        done
