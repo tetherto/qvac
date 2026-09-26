@@ -1,0 +1,16 @@
+{
+  "name": "qvac-sdk-kotlin-runtime",
+  "version": "0.20.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "./gradlew --no-daemon checkVersionAlignment checkContract compileKotlinJvm",
+    "build": "./gradlew --no-daemon :android-example:assembleDebug :android-example:compileDebugAndroidTestKotlin",
+    "test:unit": "./gradlew --no-daemon jvmTest :android-example:testDebugUnitTest"
+  },
+  "dependencies": {
+    "@qvac/sdk": "0.20.0",
+    "bare-link": "3.0.1",
+    "react-native-bare-kit": "0.14.0"
+  }
+}
