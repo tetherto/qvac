@@ -18,19 +18,6 @@ const TOKEN_TYPE_COUNT_KEY = 'tokenizer.ggml.token_type_count'
 const VOCAB_LESS_TOKENIZER_MODEL = 'none'
 const VOCAB_TENSOR_NAMES = ['token_embd.weight', 'output.weight']
 
-// Per-tensor manifests the tensor list already carries. Written by the
-// supertonic converter and read only by its offline requantizer, so nothing
-// loading the file needs them.
-const TENSOR_MANIFEST_KEYS = new Set([
-  'supertonic.tensor_names',
-  'supertonic.source_names',
-  'supertonic.tensor_shapes',
-  'supertonic.tensor_dtypes',
-  'supertonic.tensor_sha256',
-  'supertonic.source_aliases',
-  'supertonic.source_alias_targets'
-])
-
 function isGGUFFile(filePath) {
   return filePath.toLowerCase().endsWith('.gguf')
 }
@@ -72,7 +59,6 @@ function withoutTokenizerTables(parsed) {
 
   for (const [key, entry] of Object.entries(parsed.typedMetadata)) {
     if (key.includes(TOKENIZER_KEY_MARKER) && key !== TOKEN_TYPE_COUNT_KEY) continue
-    if (TENSOR_MANIFEST_KEYS.has(key)) continue
     metadata[key] = entry
   }
 
