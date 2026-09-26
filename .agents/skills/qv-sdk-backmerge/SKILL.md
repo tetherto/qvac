@@ -54,7 +54,7 @@ In command examples below, `ORG_REMOTE` / `FORK_REMOTE` are placeholders — sub
 | Standalone with merged release PR     | The PR's merge/squash commit on `ORG_REMOTE/release-<pkg>-<x.y.z>` (`gh pr view <num> --json mergeCommit,headRefName`) |
 | Standalone with `--commit=<sha>`      | That single commit                                                                                               |
 
-**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
+**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and for `--package=sdk` the two generated reference pages under `docs/website/content/docs/sdk/`). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
 
 ### Step 3: Detect no-op (main already aligned)
 
@@ -120,6 +120,8 @@ Resolve `<pkg-dir>` with `scripts/sdk/package-paths.cjs` (`getPackageDir('<pkg>'
 
 **Anything else → STOP. Hand control back to the user.** Do not force-resolve, skip, or abort the cherry-pick on the user's behalf.
 
+**Docs-website conflicts are never auto-resolvable.** An `--package=sdk` release commit also carries the two generated pages of the SDK's current documentation line (`docs/website/content/docs/sdk/(v<X.Y>)/reference/{api,release-notes}.mdx`, see `qv-sdk-changelog` Step 8). A conflict there — or a cherry-pick that cannot find the path at all — usually means `main` has since been cut to a newer line, so the folder the release wrote into is now the plain `v<X.Y>` one. STOP and hand it to the documentation engineer: choosing which line the content belongs in is their call, not a merge resolution.
+
 When stopping, print:
 
 - `git status -sb`
@@ -184,6 +186,7 @@ Lands the release metadata for `<pkg>@<x.y.z>` on `main`, per [gitflow.md](../..
 - `<pkg-dir>/changelog/<x.y.z>/` — generated changelog files
 - `<pkg-dir>/CHANGELOG.md` — aggregated changelog
 - `<pkg-dir>/NOTICE` — updated dependency attributions (if present)
+- `docs/website/content/docs/sdk/(v<X.Y>)/reference/` — API summary (minor only) and release notes of the SDK's current documentation line (`--package=sdk` only)
 - (any other release-metadata files included in the cherry-pick)
 ~~~
 

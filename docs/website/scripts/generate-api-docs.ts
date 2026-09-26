@@ -26,13 +26,15 @@
  * verbatim, still carrying the `(latest)` marker) without touching the
  * body.
  *
+ * The title always marks the page as the latest, because the only line this
+ * can write to is the current one. A cut is what moves that marker, and a
+ * regeneration that dropped it would demote the line it just wrote into.
+ *
  * Usage:
  *   bun run scripts/generate-api-docs.ts <version> [--force-extract]
- *   bun run scripts/generate-api-docs.ts <version> --latest
- *   bun run scripts/generate-api-docs.ts <version> --title-only [--latest]
+ *   bun run scripts/generate-api-docs.ts <version> --title-only
  *
  * Flags:
- *   --latest          Label this version as the latest in the page title.
  *   --title-only      Skip TypeDoc + render. Only rewrite the
  *                     frontmatter title of the existing page.
  *   --force-extract   Bypass mtime-based extraction cache.
@@ -51,7 +53,7 @@ import { fileURLToPath } from "node:url";
 import { extractApiData } from "./api-docs/extract.js";
 import { renderApiDocs } from "./api-docs/render.js";
 import {
-  API_PAGE,
+  apiPageFor,
   parseVersion,
   rewriteFrontmatterTitleLine,
   seriesName,
@@ -69,7 +71,6 @@ const SDK_PATH =
   path.resolve(SCRIPT_DIR, "..", "..", "..", "packages", "sdk");
 
 interface GenerateOptions {
-  isLatest: boolean;
   forceExtract: boolean;
   titleOnly: boolean;
 }
@@ -84,10 +85,11 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
   const parsed = parseVersion(version);
   const series = seriesName(parsed);
   // Series-only labels: patches don't change the API summary, so the
-  // title never carries a precise patch number — only the minor line.
-  const versionLabel = options.isLatest ? `${series} (latest)` : series;
+  // title never carries a precise patch number — only the minor line. The
+  // marker is unconditional: the target is the current line or there is none.
+  const versionLabel = `${series} (latest)`;
 
-  const outputFile = API_PAGE;
+  const outputFile = apiPageFor(parsed);
 
   if (options.titleOnly) {
     console.log(`📝 Title-only update for ${versionLabel}...`);
@@ -181,7 +183,6 @@ async function smokeTest(filePath: string): Promise<void> {
 if (import.meta.main) {
   const args = process.argv.slice(2);
   const versionArg = args.find((arg) => !arg.startsWith("--"));
-  const isLatest = args.includes("--latest");
   const forceExtract = args.includes("--force-extract");
   const titleOnly = args.includes("--title-only");
 
@@ -199,23 +200,19 @@ if (import.meta.main) {
     console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
     console.error("Flags:");
     console.error(
-      "  --latest          Label this version as the latest in the title",
-    );
-    console.error(
       "  --title-only      Rewrite frontmatter title in-place (skips TypeDoc + render)",
     );
     console.error(
       "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
     );
     console.error("Examples:");
-    console.error("  bun run scripts/generate-api-docs.ts 0.11.0 --latest");
+    console.error("  bun run scripts/generate-api-docs.ts 0.21.0");
     console.error(
-      "  bun run scripts/generate-api-docs.ts 0.11.1 --latest --title-only",
+      "  bun run scripts/generate-api-docs.ts 0.21.1 --title-only",
     );
     process.exit(1);
   } else {
     generateApiDocs(versionArg, {
-      isLatest,
       forceExtract,
       titleOnly,
     }).catch((error) => {

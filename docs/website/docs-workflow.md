@@ -13,7 +13,8 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 - [Local Development](#local-development)
   - [Quick Start](#quick-start)
   - [Generating API Docs Locally](#generating-api-docs-locally)
-  - [Updating the Versions List](#updating-the-versions-list)
+  - [Where generated pages land](#where-generated-pages-land)
+  - [Cutting a documentation line](#cutting-a-documentation-line)
   - [Full Generation (Orchestrated)](#full-generation-orchestrated)
 - [Versioning](#versioning)
 - [Branch Strategy and Deployment](#branch-strategy-and-deployment)
@@ -120,25 +121,12 @@ Bun loads `.env` automatically when running scripts.
 
 ### Generating API Docs Locally
 
-Two entry points depending on what you want to do:
-
-**1. Render the API summary for a single version (no version-bumping):**
-
 ```bash
 bun run scripts/generate-api-docs.ts <version> [flags]
 ```
 
-Examples:
-
-```bash
-# Re-render the summary into the SDK's current line
-bun run scripts/generate-api-docs.ts 0.11.0 --latest
-
-# Bump only the frontmatter title: no TypeDoc, no render
-bun run scripts/generate-api-docs.ts 0.11.1 --latest --title-only
-```
-
 This will:
+
 1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`) and write `api-data.json`
 2. Render a single MDX via the Nunjucks `single-page.njk` template into
    `content/docs/sdk/<current line>/reference/api.mdx`, the line
@@ -153,30 +141,73 @@ same smoke test.
 
 | Flag | Description |
 |---|---|
-| `--latest` | Label this version as the latest in the page title. |
 | `--title-only` | Rewrite the frontmatter title in-place (skips TypeDoc + render). |
 | `--force-extract` | Bypass the mtime cache and re-run TypeDoc extraction. |
 
-**2. Release a new version end-to-end (freeze outgoing, generate incoming, refresh dropdown):**
+There is no flag naming the target. The destination is the SDK's current line,
+read from the manifest, and a version that is not that line's is refused before
+anything is written — see [Where generated pages land](#where-generated-pages-land).
+
+Release notes work the same way:
 
 ```bash
-# Auto-detects minor (X.Y.0) vs patch (X.Y.Z, Z >= 1)
-bun run scripts/release-version.ts <new-version> [--force-extract]
+bun run scripts/generate-release-notes.ts <version> [--append-patch]
 ```
 
-This is the orchestrator the CI pipeline calls. It dispatches to the
-focused `release-version-minor.ts` / `release-version-patch.ts` modules
-based on the patch number, and never commits or opens PRs itself — the
-wrapping workflow does that. See
-[Release-version orchestrators](#release-version-orchestrators) below.
+`--append-patch` inserts a `## vX.Y.Z` section into the line's existing page
+instead of rendering it from scratch. Re-running the same patch is idempotent.
 
-### Updating the Versions List
+### Where generated pages land
 
-Nothing to run: `src/lib/versions.ts` is a hand-edited manifest. It declares every documented software, the package it is, where it is documented, and the versions published for it — a version recording its number and the folder holding it.
+Both generators write into the SDK's **current documentation line** — the
+folder `src/lib/versions.ts` declares as current — and neither takes a target.
+A line that has shipped is what the site already serves and is never
+regenerated.
 
-Publishing a version is two edits in one diff: the folder under `content/docs/`, and the entry in that file. `tests/line-structure.test.ts` fails the build when the two disagree, naming the version at fault.
+Because the destination is read rather than passed, it has to be checked. A
+version that is not the current line's is refused, before the first write:
 
-`scripts/update-versions-list.ts`, which used to regenerate this file from disk, is retired. It is kept for reference and refuses to run.
+```
+Refusing to write v0.21 pages into v0.20, the current line of /sdk.
+  v0.21 has no line yet. Cut it before documenting the release:
+    bun run scripts/cut-line.ts sdk v0.21
+```
+
+Without that refusal, documenting a release before its line is cut would
+overwrite the previous line's own release notes, and the resulting tree would
+still build and still pass the suite.
+
+### Cutting a documentation line
+
+A cut is what makes the next line current. It happens immediately after a
+release deploys — not when the next one is being prepared — so new material has
+a folder to land in and the release that just shipped is preserved as it stood.
+
+```bash
+bun run scripts/cut-line.ts <collection> <version>
+
+bun run scripts/cut-line.ts sdk v0.21
+```
+
+It renames the outgoing folder group to its plain form, copies it to the new
+group, updates the manifest, adds the preserved line's index pair to
+`public/_redirects`, and moves the currency marker from the preserved line's
+titles to the opened one's. It refuses a collection that is not versioned, a
+version that is not above the current line, a destination already on disk, and
+a working tree that already carries changes.
+
+It is a convenience, never a dependency. The same cut made by hand is the same
+cut — the procedure is in [`README.md`](README.md) — and the build is what
+accepts either. The command does not build; run `npm run build` and `npm test`
+yourself and review the diff.
+
+`src/lib/versions.ts` is hand-edited. It declares every documented software,
+the package it is, where it is documented, and the versions published for it.
+Publishing a version is two edits in one diff — the folder under
+`content/docs/`, and the entry in that file — and
+`tests/line-structure.test.ts` fails the build when the two disagree, naming
+the version at fault. `scripts/update-versions-list.ts`, which used to
+regenerate the file from disk, is retired and refuses to run.
 
 ### Full Generation (Orchestrated)
 
@@ -186,59 +217,70 @@ When running inside the monorepo, use the orchestrator script that reads the SDK
 bun run docs:generate
 ```
 
-This runs `generate-api-docs.ts --latest` — useful for previewing a regen against the current SDK without bumping the latest pointer. It no longer refreshes the version list, which is hand-edited.
+This runs `generate-api-docs.ts` — useful for previewing a regen against the current SDK. It no longer refreshes the version list, which is hand-edited.
 
 ---
 
 ## Versioning
 
-> **Being superseded.** What follows describes the patch-series scheme, where a version is a `vX.Y.x.mdx` sibling of the API summary and the release notes. Versioning is becoming a property of a collection: a documentation line, one folder under the collection holding a complete page tree, declared in the manifest at `src/lib/versions.ts`. The tooling that maintained the patch series — `update-versions-list.ts`, `create-version-bundle.ts`, and the `release-version-*` orchestrators — is retired and refuses to run. This section is accurate for what the site serves today and is rewritten when the lines land.
+Versioning is a property of a collection. A **versioned collection** — the SDK,
+the CLI — publishes one **documentation line** per minor release: one folder
+directly under the collection, holding a complete page tree for that release.
+The unversioned collections, Ecosystem and Resources, publish one copy of
+everything.
 
-Only the API summary and release notes are versioned. Every other content surface (about-qvac, getting-started, examples, tutorials, addons, cli, http-server, home) lives at a single bare path that always reflects the current SDK.
-
-Each versioned section is one folder under `content/docs/sdk/reference/` containing one MDX **per minor series** (literal `x` marker in the filename):
+The current line's folder is written in parentheses. Fumadocs reads that as a
+group and excludes it from the slug, so the current line answers the
+version-less paths; every other line's folder is plain, so its pages carry the
+version:
 
 ```
 content/docs/
-├── about-qvac/                              -> not versioned
-├── addons/                                  -> not versioned
-├── cli.mdx                                  -> not versioned
-├── http-server.mdx                          -> not versioned
-├── index.mdx                                -> not versioned (home)
-├── sdk/                                     -> not versioned
-│   ├── examples/                            -> not versioned
-│   ├── getting-started/                     -> not versioned
-│   └── tutorials/                           -> not versioned
-└── reference/
-    ├── api/
-    │   ├── index.mdx                        -> latest minor series (current SDK)
-    │   ├── v0.10.x.mdx                      -> archived minor series
-    │   ├── v0.9.x.mdx
-    │   ├── v0.8.x.mdx
-    │   └── v0.7.x.mdx
-    └── release-notes/
-        ├── index.mdx                        -> latest minor series
-        ├── v0.10.x.mdx                      -> accumulates ## vX.Y.Z patch sections under the minor
-        ├── v0.9.x.mdx
-        ├── v0.8.x.mdx
-        └── v0.7.x.mdx
+├── ecosystem/                  -> not versioned
+├── resources/                  -> not versioned
+├── sdk/
+│   ├── (v0.20)/                -> current line, serves /sdk/…
+│   │   ├── quickstart.mdx      ->            /sdk/quickstart
+│   │   └── reference/
+│   │       ├── api.mdx         ->            /sdk/reference/api          (generated)
+│   │       └── release-notes.mdx ->          /sdk/reference/release-notes (generated)
+│   ├── v0.19/                  -> preserved, serves /sdk/v0.19/…
+│   └── v0.18/
+└── cli/
+    ├── (v0.14)/
+    ├── v0.13/
+    └── v0.12/
 ```
 
-- **Format**: `vX.Y.x` (literal `x` for the patch component). One permanent page per minor line.
-- **`index.mdx`**: The current latest minor series, served from the bare basePath (e.g. `/reference/api`, `/reference/release-notes`).
-- **`vX.Y.x.mdx`**: Archived minor series, served from `<basePath>/v<X.Y>.x` (e.g. `/reference/api/v0.10.x`). Created by `scripts/create-version-bundle.ts` (called from `release-version-minor.ts`) when a newer minor replaces the outgoing one — it just copies `index.mdx` to a series-named sibling.
-- **Version list**: Two `VersionedSection` records (`API_SECTION`, `RELEASE_NOTES_SECTION`) in `src/lib/versions.ts`, refreshed by `scripts/update-versions-list.ts` from disk. Each carries both `latest` (precise patch, e.g. `v0.11.3`) and `latestSeries` (e.g. `v0.11.x`). The selector labels and URLs use the series form; the precise patch only surfaces in titles / description ranges.
-- **Sidebar tree**: Single `customTree` in `src/lib/custom-tree.ts`. The `API` and `Release notes` entries are flat single-page links; the version selector beside the page title (only on `/reference/api*` and `/reference/release-notes*`) handles series switching via full-page reload.
+- **Line name**: `vX.Y`. A line represents every patch in its range, so a line
+  is never named for a patch.
+- **Currency**: stated once, by the parentheses. Nothing else records it, which
+  is why a cut is the only thing that changes it.
+- **Manifest**: `src/lib/versions.ts`, hand-edited, naming each line and the
+  folder holding it. `tests/line-structure.test.ts` fails the build when the
+  manifest and the folders disagree.
+- **Permanence**: a published line is never removed. It is the only record of
+  how that release behaved, and the readers who need it are the ones pinned to
+  it.
+- **Everything else is derived**: the switcher, the sidebars, the canonical
+  URLs, the agent artifacts, `versions.json`, the sitemap, and the retrieval
+  metadata are computed at build time from the manifest and the folders.
 
-SDK release docs are generated **locally** as part of the release prep, not by a CI workflow. The `qv-sdk-changelog` skill (Step 8) runs the `release-version.ts` dispatcher in the same working tree as the changelog, so both land in a single release PR. The dispatcher reads the version, picks minor (freeze outgoing → regenerate) for `X.Y.0` and patch (insert `## vX.Y.Z` section under the minor block — API summary untouched) for `X.Y.Z` with `Z >= 1`, and forwards to the focused orchestrator.
+SDK release docs are generated **locally** as part of the release prep, not by
+a CI workflow. The `qv-sdk-changelog` skill (Step 8) runs the two generators in
+the same working tree as the changelog, so both land in a single release PR.
+The line being released was already cut, so the generators have somewhere to
+write; a release that reaches them before the cut is refused.
 
 ### Minor vs patch release behavior
 
-| Trigger | API summary | Release notes | Versions list |
-|---|---|---|---|
-| `release-sdk-X.Y.0` (minor) | Re-run TypeDoc → new `index.mdx`. Outgoing minor frozen as `v<outgoingMajor>.<outgoingMinor>.x.mdx`. | Full render of the new minor's `## vX.Y.0` block (per-package verbatim `CHANGELOG_LLM.md` under `### @qvac/<pkg>`) into `index.mdx`. Outgoing minor frozen as `v<outgoingMajor>.<outgoingMinor>.x.mdx`. | `latest = X.Y.0`, `latestSeries = vX.Y.x`. |
-| `release-sdk-X.Y.Z` matching current latest minor (`patch-latest`) | **Not touched.** Patches by definition don't change public API. | Insert `## v<X.Y.Z>` section directly after the existing `## v<X.Y>.0` block in `index.mdx`. Re-runs are idempotent (the section is replaced in place). Description range bumps to include the new patch. | `latest = X.Y.Z` (selector label unchanged — still `vX.Y.x (latest)`). |
-| `release-sdk-X.Y.Z` for an archived minor (`patch-archived`) | **Not touched.** | Insert the same section into the existing `v<X.Y>.x.mdx` page. No rename. | `latest` unchanged (script omits `--latest`). |
+| Trigger | API summary | Release notes |
+|---|---|---|
+| `release-sdk-X.Y.0` (minor) | Re-run TypeDoc and render `api.mdx` into the current line. | Full render of the `## vX.Y.0` block (per-package verbatim `CHANGELOG_LLM.md` under `### @qvac/<pkg>`) into the current line's `release-notes.mdx`. |
+| `release-sdk-X.Y.Z`, `Z >= 1` (patch) | **Not touched.** The public API is frozen at the minor boundary, so a patch by definition adds nothing here. | Insert the `## vX.Y.Z` section directly after the existing `## vX.Y.0` block. Description range bumps to include the new patch. |
+
+A patch of an older line is an ordinary edit to that line's page, not a release
+flow: the generators only write the current line.
 
 Re-running a patch is **idempotent** — the existing `## vX.Y.Z` block is detected and replaced in place rather than appended again. The newest patch always sits directly below the minor block; older patches stay further down.
 
@@ -253,22 +295,21 @@ without a folder for that version are skipped (the SDK typically lists
 all five pod packages; in practice only `@qvac/sdk` shares the version
 namespace with the SDK pod's release cadence).
 
-### Release-version orchestrators
+### Retired tooling
 
-A thin dispatcher (`release-version.ts`) auto-detects minor vs patch from the version's patch number and forwards to one of two focused modules:
+The patch-series scheme — where a version was a `vX.Y.x.mdx` sibling of the API
+summary rather than a folder — had orchestrators that froze the outgoing series
+and regenerated the manifest from disk. They are kept on disk for reference and
+**refuse to run**, because the manifest is now hand-edited and a cut is a
+content change:
 
-**`release-version-minor.ts`** — for `X.Y.0` releases.
+- `scripts/release-version.ts` and its `release-version-minor.ts` /
+  `release-version-patch.ts` modules
+- `scripts/update-versions-list.ts`
 
-1. Reads the current `latest` from `src/lib/versions.ts` (the outgoing version).
-2. Calls `scripts/create-version-bundle.ts <outgoing>` — copies `reference/api/index.mdx` to the series sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx` and the same for release notes.
-3. Title-only relabel: rewrites the frozen snapshots' titles to drop the `(latest)` marker.
-4. Calls `scripts/generate-api-docs.ts <new> --latest` — overwrites `reference/api/index.mdx` with the new minor's content.
-5. Calls `scripts/generate-release-notes.ts <new> --latest` — same for release notes, reading per-package CHANGELOG_LLM.md verbatim.
-6. Calls `scripts/update-versions-list.ts --latest=<new>` — refreshes `versions.ts` so the dropdown picks up the new latest series plus the frozen older sibling.
-
-**`release-version-patch.ts`** — for `X.Y.Z` releases with `Z >= 1`. Inspects `src/lib/versions.ts` to choose between `patch-latest` (write to `index.mdx`) and `patch-archived` (write to the existing `vX.Y.x.mdx`). The script never invokes the API summary generator.
-
-All three modules are pure file mutations — they never `git commit` or `gh pr create`. The wrapping GitHub workflow opens the PR.
+Nothing calls them. Running one prints what to do instead. The release path is
+the two generators; the cut is `scripts/cut-line.ts` or the hand procedure in
+[`README.md`](README.md).
 
 ---
 
@@ -403,12 +444,22 @@ The API summary page lives in the SDK's current line, at `content/docs/sdk/<curr
 
 **When:** while preparing an `@qvac/sdk` release (after the changelog / `CHANGELOG_LLM.md` is generated). Skipped for non-`sdk` packages.
 
+**Precondition:** the line for the version being released is already cut. The
+cut happens right after the *previous* release deploys, so by release prep the
+folder exists. Reaching the generators before that is refused, naming the cut
+that is missing.
+
 **What it does:**
-1. Runs `release-version.ts <version> --force-extract` from `docs/website`, which dispatches:
-   - **Minor (`X.Y.0`)** — full flow: freezes the outgoing `index.mdx` into a series sibling `v<outgoingMajor>.<outgoingMinor>.x.mdx`, generates the new API summary into `index.mdx` (TypeDoc + render — output is deterministic by construction), generates the new release notes into `index.mdx` (per-package verbatim `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block), refreshes `src/lib/versions.ts`.
-   - **Patch (`X.Y.Z`, `Z >= 1`)** — `release-version-patch.ts` inspects `src/lib/versions.ts` and picks `patch-latest` (incoming `X.Y` == latest `X.Y`: insert `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` block of `index.mdx`) or `patch-archived` (older minor: insert the same section into the existing `v<X.Y>.x.mdx`, no rename). The API summary page is never touched by patches.
+1. Runs the generators from `docs/website`, against the current line:
+   - **Minor (`X.Y.0`)** — `generate-api-docs.ts <version> --force-extract`
+     (TypeDoc + render, deterministic by construction) and
+     `generate-release-notes.ts <version>` (per-package verbatim
+     `CHANGELOG_LLM.md` under a single `## v<X.Y.0>` block).
+   - **Patch (`X.Y.Z`, `Z >= 1`)** — `generate-release-notes.ts <version> --append-patch`,
+     inserting `## v<X.Y.Z>` directly after the existing `## v<X.Y>.0` block.
+     The API summary is never touched by a patch.
 2. Runs `npm run build` from `docs/website` to verify the site still compiles (fail-stop on error).
-3. Only the generated surfaces are committed — `content/docs/sdk/<current line>/reference/api.mdx` and `content/docs/sdk/<current line>/reference/release-notes.mdx`. The skill only generates files (it never runs `git add`); review `git status` and commit these, while all build/generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored so they never show up.
+3. Only the generated surfaces are committed — `content/docs/sdk/<current line>/reference/api.mdx` and `content/docs/sdk/<current line>/reference/release-notes.mdx`. Never `src/lib/versions.ts` or `public/_redirects`: both belong to the cut. The skill only generates files (it never runs `git add`); review `git status` and commit these, while all build/generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored so they never show up.
 
 The dual-checkout race window the old CI workflow guarded against does not apply locally: the skill runs in the single release working tree after the changelog is generated, so the SDK source and CHANGELOGs are already the released state.
 
@@ -431,11 +482,12 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `api-docs/extract.ts` | -- | Phase 1: TypeDoc analysis, writes `api-data.json` |
 | `api-docs/render.ts` | -- | Phase 2: Nunjucks rendering of `single-page.njk` from `api-data.json` |
 | `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
-| `generate-release-notes.ts` | `docs:generate-release-notes` | Generates / augments the release-notes series MDX. Default mode renders the page from scratch with a `## v<X.Y.0>` block; `--append-patch` inserts a `## v<X.Y.Z>` block directly after the minor; `--title-only` relabels the frontmatter title only. |
+| `generate-release-notes.ts` | `docs:generate-release-notes` | Generates / augments the release-notes page of the SDK's current line. Default mode renders the page from scratch with a `## v<X.Y.0>` block; `--append-patch` inserts a `## v<X.Y.Z>` block directly after the minor; `--title-only` relabels the frontmatter title only. |
+| `cut-line.ts` | -- | Cuts a versioned collection's next documentation line: preserves the outgoing one, opens the new one as a copy, and updates the manifest, the redirects, and the currency marker. A convenience for the hand procedure in `README.md`, never a dependency. |
 | `update-versions-list.ts` | -- | **Retired**, kept for reference. Rebuilt `src/lib/versions.ts` from the series siblings on disk; that file is now hand-edited. |
-| `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the latest API summary using the monorepo SDK's `package.json` version (no version bump) |
+| `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the current line's API summary using the monorepo SDK's `package.json` version (no version bump) |
 | `create-version-bundle.ts` | -- | **Retired**, kept for reference. Copied the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx`. |
-| `lib/release-shared.ts` | -- | Shared helpers for the release orchestrators (version parsing, `versions.ts` reader, series-sibling resolver, series-name helpers) |
+| `lib/release-shared.ts` | -- | Shared helpers for the generators: version parsing, the manifest reader, and `referenceDirFor` / `apiPageFor` / `releaseNotesPageFor`, which resolve the current line's reference folder and refuse a version that is not its own |
 | `lib/changelog-parser.ts` | -- | Changelog parsing — `readChangelogLLMVerbatim` for the verbatim per-package render plus legacy `parseChangelog` / `parseChangelogFolder` / `mergeChangelogs` exports kept for unit-test fixtures and ad-hoc tooling |
 | `lib/link-validator.ts` | -- | Internal link extraction + resolution (used by the link-integrity test) |
 
@@ -509,7 +561,17 @@ Version vX.Y.Z was not found
 
 **Cause:** a version is recorded but its MDX file doesn't exist on disk. Only reachable through the retired release tooling; the equivalent failure today is `tests/line-structure.test.ts` reporting a declared version whose folder is missing.
 
-**Fix:** Run `docs:generate-api -- <version> --latest` to produce the missing page. For a version declared in `src/lib/versions.ts`, create the folder the entry names, or drop the entry.
+**Fix:** For a version declared in `src/lib/versions.ts`, create the folder the entry names, or drop the entry. The two must agree.
+
+### Refusing to write vX.Y pages into vA.B
+
+```
+Refusing to write v0.21 pages into v0.20, the current line of /sdk.
+```
+
+**Cause:** the generators write into the current line and only accept a version that belongs to it.
+
+**Fix:** if the version is ahead, its line has not been cut — `bun run scripts/cut-line.ts sdk v<X.Y>`, or the hand procedure in [`README.md`](README.md). If the version is behind, it has already shipped and its line is what the site serves; edit that line's page directly instead of regenerating it.
 
 ### Build fails in CI (PR checks)
 
@@ -521,11 +583,11 @@ The committed `content/docs/sdk/<current line>/reference/api.mdx` is what `next 
 
 ### Recover a broken reference page after a bad release
 
-If a release ran but produced a broken `reference/api.mdx` or `reference/release-notes.mdx`, restore it by re-running the orchestrator against the previous version:
+If a release ran but produced a broken `reference/api.mdx` or `reference/release-notes.mdx`, re-render the page from the current line's own version:
 
 ```bash
-# Auto-detects minor (full freeze + regen) vs patch (title-only + append).
-bun run scripts/release-version.ts <previous-X.Y.Z> --force-extract
+bun run scripts/generate-api-docs.ts <current-line-X.Y.Z> --force-extract
+bun run scripts/generate-release-notes.ts <current-line-X.Y.Z>
 ```
 
 Then revert the bad commit / branch state via `git`. There is no automatic backup directory — versioning is the safety net (every previous version exists as a sibling `vX.Y.Z.mdx`).

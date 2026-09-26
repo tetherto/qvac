@@ -24,11 +24,21 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..", "..");
 
 /**
- * The folder holding the SDK's current documentation line, read from the
- * version manifest. Generated pages belong to the line being written next,
- * which is the current one — a released line is not regenerated.
+ * The reference folder a version's generated pages belong in: the folder of
+ * the SDK's current documentation line, and only when that line is the
+ * version's own.
+ *
+ * The destination is read from the manifest rather than named on the command
+ * line, so it follows a cut without anything being passed. That is also why it
+ * has to be checked. Documenting a release before its line is cut would resolve
+ * to the line before it and overwrite the record of a release that already
+ * shipped — a full render replaces the page — and the tree that results still
+ * builds and still tests clean. Refusing here is what makes the missing cut
+ * visible, and what enforces the rule that a released line is never
+ * regenerated.
  */
-function currentSdkLineFolder(): string {
+export function referenceDirFor(version: string | SemVer): string {
+  const wanted = typeof version === "string" ? parseVersion(version) : version;
   const sdk = getDocumentedSoftware("/sdk");
   const current = sdk && getCurrentLine(sdk);
   if (!current) {
@@ -37,34 +47,42 @@ function currentSdkLineFolder(): string {
         "nowhere to write generated pages.",
     );
   }
-  return current.folder;
+
+  const line = `v${wanted.major}.${wanted.minor}`;
+  if (current.version !== line) {
+    const ahead =
+      line.localeCompare(current.version, undefined, { numeric: true }) > 0;
+    throw new Error(
+      `Refusing to write ${line} pages into ${current.version}, the current ` +
+        `line of /sdk.\n` +
+        (ahead
+          ? `  ${line} has no line yet. Cut it before documenting the ` +
+            `release:\n` +
+            `    bun run scripts/cut-line.ts sdk ${line}\n`
+          : `  ${line} has already shipped. A released line is what the site ` +
+            `serves and is never regenerated.\n`),
+    );
+  }
+
+  return path.join(
+    DOCS_WEBSITE_DIR,
+    "content",
+    "docs",
+    "sdk",
+    current.folder,
+    "reference",
+  );
 }
 
-/**
- * Absolute path to the reference folder of the SDK's current line. Both the
- * API summary and the release notes are written into it.
- *
- * The line segment comes from the manifest rather than being spelled here, so
- * a cut moves generated output to the new line by the same edit that declares
- * it, and nothing regenerates into a line that has already shipped.
- */
-export const CONTENT_REFERENCE = path.join(
-  DOCS_WEBSITE_DIR,
-  "content",
-  "docs",
-  "sdk",
-  currentSdkLineFolder(),
-  "reference",
-);
+/** Absolute path to the API summary page of `version`'s line. */
+export function apiPageFor(version: string | SemVer): string {
+  return path.join(referenceDirFor(version), "api.mdx");
+}
 
-/** Absolute path to the API summary page. */
-export const API_PAGE = path.join(CONTENT_REFERENCE, "api.mdx");
-
-/** Absolute path to the release notes page. */
-export const RELEASE_NOTES_PAGE = path.join(
-  CONTENT_REFERENCE,
-  "release-notes.mdx",
-);
+/** Absolute path to the release notes page of `version`'s line. */
+export function releaseNotesPageFor(version: string | SemVer): string {
+  return path.join(referenceDirFor(version), "release-notes.mdx");
+}
 
 /**
  * The directories the patch-series scheme wrote its per-series pages into,

@@ -228,10 +228,10 @@ ships them in this same release PR. There is **no longer a separate
 auto-generated docs PR** (the old `docs-release.yml` workflow was removed).
 
 Staging works the same as for the rest of the release commit — no special
-handling is needed. Step 8's three committable surfaces
-(`docs/website/content/docs/reference/api/**`,
-`docs/website/content/docs/reference/release-notes/**`,
-`docs/website/src/lib/versions.ts`) show up in `git status` alongside the
+handling is needed. Step 8's committable surfaces — the API summary (minor
+only) and the release notes of the SDK's current documentation line,
+`docs/website/content/docs/sdk/(v<X.Y>)/reference/{api,release-notes}.mdx` —
+show up in `git status` alongside the
 changelog, while every generation/build byproduct
 (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`, `next-env.d.ts`,
 `packages/sdk/dist/`) is gitignored and therefore never appears. Review
@@ -286,7 +286,7 @@ Before outputting the PR description, verify:
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
 - [ ] If the diff is a user-facing SDK capability, CLI was updated in this PR, the body says library-only, or the skip reminder was emitted
 - [ ] If diff touches sdk's `version` / `@qvac/inference` range (or sdk's deps), `qv-sdk-inference-version` ran (or `--no-sync` was set with a reminder emitted), and the version checks plus sdk-python checks pass
-- [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
+- [ ] For sdk releases with generated docs, `git status` shows only the current line's `reference/api.mdx` (minor) and `reference/release-notes.mdx` as committable docs changes, never `src/lib/versions.ts` or `public/_redirects` — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
 - [ ] Release changelog PRs: title is `chore:` (no `[bc]`); body API / Models / Breaking match `changelog/<this version>/`

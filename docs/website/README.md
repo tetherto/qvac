@@ -63,8 +63,20 @@ next line as soon as a release goes live, not when the next one is being
 prepared, so the version-less paths serve what was just released and new
 material has a folder to land in.
 
-The cut is two moves and two edits, and no tooling. For `@qvac/sdk` going from
-`0.17` to `0.18`, from `docs/website`:
+One command does the whole thing, from `docs/website`:
+
+```bash
+bun run scripts/cut-line.ts sdk v0.18
+```
+
+It refuses a collection that is not versioned, a version that is not above the
+current line, a destination already on disk, and a working tree that already
+carries changes — the cut is reviewed as its own diff. Review what it did, then
+`npm run build` and `npm test`.
+
+The command is a convenience, not a dependency. What it does is the following,
+and doing it by hand is the same cut. For `@qvac/sdk` going from `0.17` to
+`0.18`:
 
 ```bash
 # 1. Preserve the outgoing line, which keeps serving what it served.
@@ -91,12 +103,19 @@ Then edit the two hand-maintained inputs:
   Nothing else: a page carried by both lines keeps resolving on its own, and a
   page the new line drops is the only other case that needs a rule.
 
+Then move the currency marker. A page that states in its own title which series
+it documents also states whether that series is current, and the parentheses
+are the only other place currency is recorded, so nothing else can maintain the
+claim. Today that is the SDK's two generated reference pages: `v0.17.x (latest)`
+becomes plain `v0.17.x` in the preserved line, and `v0.18.x (latest)` in the new
+one.
+
 Everything else follows: the sidebars come from the `meta.json` files the copy
 brought with it, and the switcher, canonicals, agent artifacts, `versions.json`,
 sitemap, and retrieval metadata are computed from the manifest. `custom-tree.ts`
 is not edited by a cut.
 
-Finish with `npm run build` and `bun run vitest run`. Between them they reject a
+Either way, finish with `npm run build` and `bun run vitest run`. Between them they reject a
 cut that went wrong: a manifest that disagrees with the folders either way, a
 collection left with no group or two, a patch-shaped folder name, a line
 numbered above the group, a URL that stopped resolving, and an artifact that

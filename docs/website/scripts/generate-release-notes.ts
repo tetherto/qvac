@@ -5,11 +5,9 @@
  *
  * Page model
  * ----------
- * Each minor line has a single permanent MDX page that accumulates patch
- * sections as `## vX.Y.Z` blocks:
- *
- *   - latest minor series → `content/docs/sdk/reference/release-notes/index.mdx`
- *   - older minor series  → `content/docs/sdk/reference/release-notes/v<X.Y>.x.mdx`
+ * Each documentation line has one release-notes page, at
+ * `content/docs/sdk/<line>/reference/release-notes.mdx`, and it accumulates
+ * that line's patch releases as `## vX.Y.Z` blocks.
  *
  * The `## vX.Y.0` block is written by the minor release; subsequent
  * patches insert their `## vX.Y.Z` section directly after the minor
@@ -64,7 +62,7 @@ import {
   type OverrideSection,
 } from "./lib/changelog-parser";
 import {
-  RELEASE_NOTES_PAGE,
+  releaseNotesPageFor,
   parseVersion,
   rewriteFrontmatterTitleLine,
   seriesName,
@@ -243,13 +241,12 @@ function gatherVerbatim(
 async function main() {
   const args = process.argv.slice(2);
   const version = args.find((arg) => !arg.startsWith("--"));
-  const isLatest = args.includes("--latest");
   const appendPatch = args.includes("--append-patch");
   const titleOnly = args.includes("--title-only");
 
   if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
     console.error(
-      "Usage: bun run scripts/generate-release-notes.ts <version> [--latest] [--append-patch] [--title-only]",
+      "Usage: bun run scripts/generate-release-notes.ts <version> [--append-patch] [--title-only]",
     );
     console.error("  version must be semver (e.g. 0.11.1)");
     process.exit(1);
@@ -273,13 +270,13 @@ async function main() {
   const parsed = parseVersion(version);
   const series = seriesName(parsed);
   const websiteDir = process.cwd();
-  const outputPath = RELEASE_NOTES_PAGE;
+  const outputPath = releaseNotesPageFor(parsed);
 
   // -------------------------------------------------------------------
   // Title-only path — relabel a freshly-frozen archived snapshot.
   // -------------------------------------------------------------------
   if (titleOnly) {
-    const titleLabel = isLatest ? `${series} (latest)` : series;
+    const titleLabel = `${series} (latest)`;
     console.log(`📝 Title-only update for SDK Release Notes — ${titleLabel}...`);
     console.log(`   Target: ${outputPath}`);
     await rewriteFrontmatterTitleLine(
@@ -409,9 +406,9 @@ async function main() {
     );
   }
 
-  const pageTitle = isLatest
-    ? `SDK Release Notes — ${series} (latest)`
-    : `SDK Release Notes — ${series}`;
+  // The marker is unconditional: the only line this can write to is the
+  // current one, and dropping it would demote the line it just wrote into.
+  const pageTitle = `SDK Release Notes — ${series} (latest)`;
   const pageDescription = describeReleaseRange([`v${version}`], series);
 
   const rendered = nunjucks.render("release-notes-page.njk", {
