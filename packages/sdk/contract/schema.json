@@ -5892,6 +5892,122 @@
               "type": "string",
               "enum": ["hermes", "pythonic", "json", "harmony", "qwen35", "gemma4", "dsml"],
               "title": "LoadedModelInfoToolDialect"
+            },
+            "fitProbe": {
+              "description": "Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.",
+              "type": "object",
+              "properties": {
+                "verdict": {
+                  "type": "string",
+                  "enum": ["fit", "does-not-fit", "unknown"],
+                  "description": "Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+                  "title": "NativeProbeFitVerdict"
+                },
+                "basis": {
+                  "type": "string",
+                  "const": "native-probe",
+                  "description": "Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+                },
+                "estimatorVersion": {
+                  "type": "string",
+                  "description": "Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve."
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "Machine-readable reason for the verdict. Never parsed out of log text."
+                },
+                "message": {
+                  "description": "Human-readable detail, when the reason has any.",
+                  "type": "string"
+                },
+                "plan": {
+                  "description": "Placement the probe projected. Present wherever the fitter resolved one.",
+                  "type": "object",
+                  "properties": {
+                    "nCtx": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Context the probe resolved for this load, in tokens."
+                    },
+                    "nGpuLayers": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Layers the probe would offload."
+                    },
+                    "nGpuDevices": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "GPU devices the offload would span."
+                    }
+                  },
+                  "required": ["nCtx", "nGpuLayers", "nGpuDevices"],
+                  "additionalProperties": false,
+                  "title": "NativeProbeFitPlan"
+                },
+                "projection": {
+                  "description": "What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
+                  "type": "object",
+                  "properties": {
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "Device name as the backend reports it, or `host`."
+                          },
+                          "totalBytes": {
+                            "type": "number",
+                            "description": "Memory the device reports installed."
+                          },
+                          "freeBytes": {
+                            "type": "number",
+                            "description": "Memory the device reports free, before the margin."
+                          },
+                          "marginBytes": {
+                            "type": "number",
+                            "description": "Headroom the fitter withheld on this device."
+                          },
+                          "modelBytes": {
+                            "type": "number",
+                            "description": "Weights the load would place here."
+                          },
+                          "contextBytes": {
+                            "type": "number",
+                            "description": "Context and cache the load would place here."
+                          },
+                          "computeBytes": {
+                            "type": "number",
+                            "description": "Compute buffers the load would place here."
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "totalBytes",
+                          "freeBytes",
+                          "marginBytes",
+                          "modelBytes",
+                          "contextBytes",
+                          "computeBytes"
+                        ],
+                        "additionalProperties": false,
+                        "title": "NativeProbeFitProjectionDevicesItem"
+                      },
+                      "description": "Every device the load would touch."
+                    }
+                  },
+                  "required": ["devices"],
+                  "additionalProperties": false,
+                  "title": "NativeProbeFitProjection"
+                }
+              },
+              "required": ["verdict", "basis", "estimatorVersion", "reason"],
+              "additionalProperties": false,
+              "title": "NativeProbeFit"
             }
           },
           "required": ["modelId", "modelType", "handlers", "loadedAt"],
