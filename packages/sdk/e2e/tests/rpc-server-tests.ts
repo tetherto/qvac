@@ -27,9 +27,19 @@ export const rpcServerUnsafeAdvertisement = {
   expectation: { validation: 'throws-error', errorContains: 'private IPv4' },
   metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 5000 }
 } as const satisfies TestDefinition
+export const rpcServerCancelDiscovery = {
+  testId: 'rpc-server-cancel-discovery',
+  params: {},
+  expectation: {
+    validation: 'contains-all',
+    contains: ['discovery cancelled', 'other discovery completed', 'completed cancel harmless']
+  },
+  metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 5000 }
+} as const satisfies TestDefinition
 export const rpcServerTests = [
   rpcServerLifecycle,
   rpcServerEmptyDiscovery,
   rpcServerUnknownStop,
-  rpcServerUnsafeAdvertisement
+  rpcServerUnsafeAdvertisement,
+  rpcServerCancelDiscovery
 ] as const

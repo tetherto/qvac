@@ -1,4 +1,10 @@
-import { startRpcServer, stopRpcServer, discoverRpcServers } from '@qvac/sdk'
+import {
+  startRpcServer,
+  stopRpcServer,
+  discoverRpcServers,
+  cancel,
+  InferenceCancelledError
+} from '@qvac/sdk'
 import {
   BaseExecutor,
   ValidationHelpers,
@@ -13,7 +19,8 @@ export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
     'rpc-server-lifecycle': this.lifecycle.bind(this),
     'rpc-server-empty-discovery': this.empty.bind(this),
     'rpc-server-unknown-stop': this.unknown.bind(this),
-    'rpc-server-unsafe-advertisement': this.unsafe.bind(this)
+    'rpc-server-unsafe-advertisement': this.unsafe.bind(this),
+    'rpc-server-cancel-discovery': this.cancelDiscovery.bind(this)
   }
 
   async lifecycle(_params: object, expectation: Expectation): Promise<TestResult> {
@@ -48,6 +55,36 @@ export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
     })
     if (servers.length) throw new Error('Unexpected candidates on unique topic')
     return ValidationHelpers.validate('no candidates', expectation)
+  }
+
+  async cancelDiscovery(_params: object, expectation: Expectation): Promise<TestResult> {
+    const topic = `rpc-e2e-cancel-${Date.now()}-${Math.random()}`
+    const selected = discoverRpcServers({ topic, timeoutMs: 30000 })
+    const outcome = selected.then(
+      () => undefined,
+      (error: unknown) => error
+    )
+    const other = discoverRpcServers({ topic: `${topic}-other`, timeoutMs: 100 })
+    try {
+      if (!selected.requestId || selected.requestId === other.requestId) {
+        throw new Error('Discovery calls must expose distinct cancellation IDs')
+      }
+      await cancel({ requestId: selected.requestId })
+      if (!((await outcome) instanceof InferenceCancelledError)) {
+        throw new Error('Expected typed discovery cancellation')
+      }
+      if ((await other).length) throw new Error('Unexpected candidates on unique topic')
+      await cancel({ requestId: other.requestId })
+      return ValidationHelpers.validate(
+        'discovery cancelled; other discovery completed; completed cancel harmless',
+        expectation
+      )
+    } finally {
+      await Promise.all(
+        [selected.requestId, other.requestId].map((requestId) => cancel({ requestId }))
+      )
+      await Promise.allSettled([selected, other])
+    }
   }
 
   async expectError(work: () => Promise<unknown>, expectation: Expectation): Promise<TestResult> {

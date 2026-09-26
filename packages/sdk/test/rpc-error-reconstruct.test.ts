@@ -8,6 +8,7 @@ import { reconstructError, RPCError } from '@/client/rpc/rpc-error'
 // cross-process path.
 import {
   RpcServerOperationError,
+  InferenceCancelledError as EngineCancelledError,
   createErrorResponse,
   ContextOverflowError as InferenceContextOverflowError,
   RequestIdConflictError as InferenceRequestIdConflictError,
@@ -17,11 +18,22 @@ import {
 } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
+  InferenceCancelledError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   TranslationFailedError
 } from '@/utils/errors-server'
+
+test('reconstructError: cancellation preserves its public request ID and partial output', (t) => {
+  const envelope = createErrorResponse(new EngineCancelledError('rpc-request', { text: 'partial' }))
+  const result = reconstructError(envelope)
+  t.ok(result instanceof InferenceCancelledError)
+  const error = result as InferenceCancelledError
+  t.is(error.requestId, 'rpc-request')
+  t.alike(error.partial, { text: 'partial' })
+  t.is(error.code, 52419)
+})
 
 test('reconstructError: RequestRejectedByPolicyError round-trips via name + typedFields', (t) => {
   const original = new InferenceRequestRejectedByPolicyError(

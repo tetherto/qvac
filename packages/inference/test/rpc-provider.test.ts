@@ -4,11 +4,31 @@ import os from 'bare-os'
 import path from 'bare-path'
 import net from 'bare-net'
 import { startRpcServer, stopRpcServer, discoverRpcServers } from '@/api/rpc-server'
+import { cancel } from '@/api/cancel'
 import { send, close } from '@/dispatch'
 import { registerRpcServerProvider, hasRpcServerProvider } from '@/rpc/provider'
 import { getAllPlugins } from '@/plugins/registry'
-import { RpcServerOperationError, PluginsNotRegisteredError } from '@/errors/index'
+import {
+  RpcServerOperationError,
+  PluginsNotRegisteredError,
+  InferenceCancelledError
+} from '@/errors/index'
+import { getRequestRegistry } from '@/runtime/request-context'
+import { getRegisteredResourceCounts } from '@/runtime/runtime-lifecycle'
+import { rpcServers } from '@/rpc/instance'
 import type { RpcServerProvider } from '@/schemas/rpc-server'
+
+function expectCancelled(t: ReturnType<typeof test>, promise: Promise<unknown>, requestId: string) {
+  return promise.then(
+    () => {
+      t.fail('operation should reject on cancellation')
+    },
+    (error: unknown) => {
+      t.ok(error instanceof InferenceCancelledError)
+      if (error instanceof InferenceCancelledError) t.is(error.requestId, requestId)
+    }
+  )
+}
 
 env['HOME'] = path.join(os.tmpdir(), `qvac-rpc-provider-test-${os.pid()}`)
 
@@ -36,6 +56,106 @@ test('RPC discovery works without a provider or model plugins', async (t) => {
     t.absent(hasRpcServerProvider())
     t.alike(await discoverRpcServers({ topic: `provider-test-${Date.now()}`, timeoutMs: 100 }), [])
     await t.exception(send({ type: 'heartbeat' }), PluginsNotRegisteredError)
+  } finally {
+    await close()
+  }
+})
+
+test('public RPC discovery can be cancelled immediately without registered capabilities', async (t) => {
+  try {
+    t.is(getAllPlugins().length, 0)
+    t.absent(hasRpcServerProvider())
+    const search = discoverRpcServers({ topic: 'cancel-immediately', timeoutMs: 30000 })
+    t.is(typeof search.requestId, 'string')
+    const rejected = expectCancelled(t, search, search.requestId)
+    await cancel({ requestId: search.requestId })
+    await rejected
+    t.is(getRequestRegistry().list().length, 0)
+    t.is(getRegisteredResourceCounts().swarms, 0)
+    await t.exception(send({ type: 'heartbeat' }), PluginsNotRegisteredError)
+  } finally {
+    await close()
+  }
+})
+
+test('public RPC cancellation only aborts the selected discovery', async (t) => {
+  try {
+    const selected = discoverRpcServers({ topic: 'cancel-selected', timeoutMs: 30000 })
+    const other = discoverRpcServers({ topic: 'keep-searching', timeoutMs: 100 })
+    const rejected = expectCancelled(t, selected, selected.requestId)
+    t.not(selected.requestId, other.requestId)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    t.ok(getRequestRegistry().get(selected.requestId), 'public ID identifies the running request')
+    await cancel({ requestId: selected.requestId })
+    await rejected
+    t.alike(await other, [])
+    await cancel({ requestId: other.requestId })
+    t.is(getRequestRegistry().list().length, 0, 'cancel after completion is harmless')
+    t.is(getRegisteredResourceCounts().swarms, 0)
+  } finally {
+    await close()
+  }
+})
+
+test('public RPC start cancellation rolls back the handle when the provider returns', async (t) => {
+  let release!: () => void
+  let started!: () => void
+  const entered = new Promise<void>((resolve) => {
+    started = resolve
+  })
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let stops = 0
+  registerRpcServerProvider({
+    async start(options) {
+      t.absent('requestId' in options, 'cancellation metadata stays in the engine')
+      started()
+      await gate
+      return {
+        host: '127.0.0.1',
+        port: 1,
+        url: '127.0.0.1:1',
+        runtime: 'in-process',
+        rdmaCapable: false,
+        async stop() {
+          stops++
+        }
+      }
+    }
+  })
+  try {
+    const starting = startRpcServer()
+    t.is(typeof starting.requestId, 'string')
+    const rejected = expectCancelled(t, starting, starting.requestId)
+    await entered
+    await cancel({ requestId: starting.requestId })
+    release()
+    await rejected
+    t.is(stops, 1, 'cancelled native handle is stopped before the call rejects')
+    t.is(rpcServers.size, 0)
+    t.is(getRequestRegistry().list().length, 0)
+  } finally {
+    release()
+    await close()
+  }
+})
+
+test('duplicate RPC request IDs do not remove the original request from shutdown tracking', async (t) => {
+  try {
+    const request = {
+      type: 'discoverRpcServers',
+      topic: 'duplicate',
+      timeoutMs: 30000,
+      requestId: 'duplicate-rpc-id'
+    } as const
+    const first = send(request)
+    const rejected = expectCancelled(t, first, request.requestId)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    await t.exception(send(request), /already/)
+    await close()
+    await rejected
+    t.is(getRegisteredResourceCounts().swarms, 0)
   } finally {
     await close()
   }

@@ -225,7 +225,8 @@ export async function send<T extends Request>(
   await ensureReady(
     request.type === 'startRpcServer' ||
       request.type === 'stopRpcServer' ||
-      request.type === 'discoverRpcServers'
+      request.type === 'discoverRpcServers' ||
+      (request.type === 'cancel' && request.operation === 'request')
   )
   assertLifecycleAllowed(request)
 

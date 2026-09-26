@@ -498,6 +498,10 @@ export class InferenceCancelledError extends QvacErrorBase {
     this.requestId = requestId
     this.partial = partial
   }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { requestId: this.requestId, partial: this.partial }
+  }
 }
 
 export class AsyncDisposeUnavailableError extends QvacErrorBase {

@@ -113,39 +113,7 @@ await unloadModel({ modelId })
 await close() // release the swarm, registry client, storage-root lock, and registered plugins
 ```
 
-`close()` clears model plugin and RPC server provider registrations after successful cleanup. Register the capabilities you need again before reusing the engine. RPC discovery needs no registration.
-
-## Distributed GPU inference
-
-RPC serving is separate from model plugins. Install a compatible
-`@qvac/ggml-rpc-server` build only in applications that serve devices, then
-register its adapter explicitly:
-
-```js
-import { registerRpcServerProvider, startRpcServer, stopRpcServer } from '@qvac/inference'
-import { ggmlRpcServerProvider } from '@qvac/inference/ggml-rpc-server/provider'
-
-registerRpcServerProvider(ggmlRpcServerProvider)
-const server = await startRpcServer()
-await stopRpcServer({ serverId: server.serverId })
-```
-
-A server-only process needs no model plugin. Calling `startRpcServer()` without a
-provider throws `RpcServerOperationError`. Discovery works without either a
-provider or a model plugin. Initiators need only the LLM plugin and its addon;
-remote inference does not require the server addon.
-
-Custom adapters implement `RpcServerProvider`, exported from
-`@qvac/inference/rpc-server-provider`. The engine owns each returned handle,
-readiness checks, discovery announcements, rollback, and shutdown. Registration
-is local to the Bare runtime. Successful `close()` clears the provider; register
-again before restarting serving. A failed close retains it for cleanup retries.
-
-`close()` withdraws announcements, cancels active discovery and readiness probes,
-and attempts to stop every owned server. Failed stops remain owned for a retry
-and cause `close()` to reject. Native stop can wait indefinitely; the engine does
-not report a stalled stop as successful. Model unload does not stop serving
-instances.
+`close()` also clears the plugin registry, so if you keep using the API afterward you must `registerPlugin` / `plugins([...])` again first — otherwise the next call throws `PluginsNotRegisteredError`.
 
 ## Custom plugins
 
