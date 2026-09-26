@@ -163,6 +163,7 @@ export interface QvacApiKeyRef {
 }
 
 export interface QvacProviderRegistration {
+  readonly rootDir?: string
   readonly pluginConfig?: Record<string, unknown>
   readonly runtime?: {
     readonly state: {
@@ -626,7 +627,17 @@ export function registerQvacProvider(
   const pluginConfig = api.pluginConfig ?? {}
   const stateDir = api.runtime?.state.resolveStateDir() ?? resolveFallbackOpenClawStateDir()
   const apiKeyFile = resolveQvacApiKeyFile(stateDir)
-  const mergedOptions = () => ({ apiKeyFile, ...pluginConfig, ...rawOptions })
+  // OpenClaw runs plugin code from a per-process copy (2026.9.6 deletes it on
+  // exit), so `import.meta.url` must not reach the persisted localService args.
+  // `rootDir` is the install location and outlives the process.
+  const serviceEntrypoint =
+    api.rootDir === undefined ? undefined : join(api.rootDir, 'dist', 'local-service.js')
+  const mergedOptions = () => ({
+    apiKeyFile,
+    ...(serviceEntrypoint === undefined ? {} : { serviceEntrypoint }),
+    ...pluginConfig,
+    ...rawOptions
+  })
   api.registerModelCatalogProvider?.({
     provider: 'qvac',
     kinds: ['text'],
