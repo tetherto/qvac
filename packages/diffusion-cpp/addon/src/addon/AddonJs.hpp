@@ -546,6 +546,141 @@ activateUpscaler(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /**
+ * Project a load against the memory free right now. Args: [request], shaped
+ * like the createInstance model map plus a `workload` sub-object.
+ *
+ * Takes no instance and loads nothing: the engine reads model metadata only. A
+ * model it cannot read is an "error" status rather than a throw.
+ *
+ * A placement the engine reached only by changing the backend assignment is
+ * reported as "does-not-fit", because nothing here applies such a plan. A
+ * params-on-CPU load is the exception: the engine replans it in full, so the
+ * plan is compared against the placement that load already uses.
+ */
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+
+  SdCtxConfig config{};
+  config.modelPath = args.getMapEntry(0, "path");
+  config.diffusionModelPath = args.getMapEntry(0, "diffusionModelPath");
+  config.highNoiseDiffusionModelPath =
+      args.getMapEntry(0, "highNoiseDiffusionModelPath");
+  config.uncondDiffusionModelPath =
+      args.getMapEntry(0, "uncondDiffusionModelPath");
+  config.clipLPath = args.getMapEntry(0, "clipLPath");
+  config.clipGPath = args.getMapEntry(0, "clipGPath");
+  config.t5XxlPath = args.getMapEntry(0, "t5XxlPath");
+  config.llmPath = args.getMapEntry(0, "llmPath");
+  config.vaePath = args.getMapEntry(0, "vaePath");
+  config.clipVisionPath = args.getMapEntry(0, "clipVisionPath");
+  config.esrganPath = args.getMapEntry(0, "esrganPath");
+  config.audioVaePath = args.getMapEntry(0, "audioVaePath");
+  config.embeddingsConnectorsPath =
+      args.getMapEntry(0, "embeddingsConnectorsPath");
+
+  auto configMap = args.getSubmap(0, "config");
+  applySdCtxHandlers(config, configMap);
+
+  auto request = args.getJsObject(0, "request")
+                     .getOptionalProperty<js::Object>(env, "request");
+
+  SdModel::FitWorkload workload;
+  if (request.has_value()) {
+    if (auto prompt = request->getOptionalProperty<js::String>(env, "prompt")) {
+      workload.prompt = prompt->as<std::string>(env);
+    }
+  }
+  auto number = [&](const char* name) -> std::optional<double> {
+    if (!request.has_value()) {
+      return std::nullopt;
+    }
+    auto value = request->getOptionalProperty<js::Number>(env, name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    return value->as<double>(env);
+  };
+  bool rejected = false;
+  auto count =
+      [&](const char* name, double lo, double hi) -> std::optional<int> {
+    auto value = number(name);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    const double raw = *value;
+    if (!std::isfinite(raw) || raw != std::trunc(raw) || raw < lo || raw > hi) {
+      rejected = true;
+      return std::nullopt;
+    }
+    return static_cast<int>(raw);
+  };
+  constexpr double kMaxDimension = 65536;
+  constexpr double kMaxFrames = 4096;
+  if (auto width = count("width", 1, kMaxDimension)) {
+    workload.width = *width;
+  }
+  if (auto height = count("height", 1, kMaxDimension)) {
+    workload.height = *height;
+  }
+  if (auto frames = count("videoFrames", 1, kMaxFrames)) {
+    workload.videoFrames = *frames;
+  }
+  if (request.has_value()) {
+    if (auto tiling =
+            request->getOptionalProperty<js::Boolean>(env, "vaeTiling")) {
+      workload.vaeTiling = tiling->as<bool>(env);
+    }
+  }
+  if (auto tileX = count("vaeTileSizeX", 0, kMaxDimension)) {
+    workload.vaeTileSizeX = *tileX;
+  }
+  if (auto tileY = count("vaeTileSizeY", 0, kMaxDimension)) {
+    workload.vaeTileSizeY = *tileY;
+  }
+  if (auto overlap = number("vaeTileOverlap")) {
+    if (!std::isfinite(*overlap) || *overlap < 0.0 || *overlap > 1.0) {
+      rejected = true;
+    } else {
+      workload.vaeTileOverlap = static_cast<float>(*overlap);
+    }
+  }
+
+  SdModel::FitOutcome outcome;
+  if (rejected) {
+    outcome.reason = "unsupported-config";
+  } else {
+    const SdModel model{std::move(config)};
+    outcome = model.assessFit(workload);
+  }
+
+  const char* status = "error";
+  if (outcome.reason == "fits") {
+    status = "fits";
+  } else if (outcome.reason == "does-not-fit") {
+    status = "does-not-fit";
+  }
+
+  auto result = js::Object::create(env);
+  result.setProperty(
+      env, "status", js::String::create(env, std::string(status)));
+  result.setProperty(env, "reason", js::String::create(env, outcome.reason));
+  result.setProperty(env, "changed", js::Boolean::create(env, outcome.changed));
+  result.setProperty(
+      env, "vaeTiling", js::Boolean::create(env, outcome.vaeTiling));
+  result.setProperty(
+      env, "streamLayers", js::Boolean::create(env, outcome.streamLayers));
+  result.setProperty(env, "backend", js::String::create(env, outcome.backend));
+  result.setProperty(
+      env, "paramsBackend", js::String::create(env, outcome.paramsBackend));
+  result.setProperty(env, "report", js::String::create(env, outcome.report));
+  return result;
+}
+JSCATCH
+
+/**
  * Query expected ESRGAN RuntimeStats.backendDevice for a config.device value,
  * using the same backend policy as native load. Args: [device] or
  * [device, backendsDir].
