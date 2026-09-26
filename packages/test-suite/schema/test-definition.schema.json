@@ -1,0 +1,562 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qvac.dev/schema/test-definition.schema.json",
+  "title": "QVAC shared test catalog",
+  "description": "The language-neutral shape of a test definition. A client in any language reads this to know which step operations exist, which fields each one requires, and which assertion names are legal \u2014 and can generate a stub per operation that fails loudly when it is not implemented, which is what turns `incomplete` from a reporting convention into something the code enforces.\n\nNOT FROZEN. The vocabulary was read off the existing TypeScript executors and is expected to change while the first categories migrate. It freezes once two languages have run the same definitions across more than one category; the accompanying prose spec (docs/architecture/conforming-test-runner.md) says what a runner must DO with a legal definition, which a schema cannot express.",
+  "type": "object",
+  "required": [
+    "testId",
+    "expectation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "testId": {
+      "type": "string",
+      "description": "Unique identifier, e.g. \"embed-simple-text\""
+    },
+    "params": {
+      "description": "Parameters the test runs with; addressable from a step as $params.x"
+    },
+    "expectation": {
+      "$ref": "#/$defs/expectation"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "description": "Declarative test body. A definition without `steps` routes to its TypeScript executor unchanged, so migration is per-test and reversible."
+    },
+    "finally": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step"
+      },
+      "description": "Teardown steps, run after the body whether it passed or failed. This is where the imperative executors put their `finally` block: restore the runtime to active, delete the workspace, unload the model. Teardown reads the body scope, so bindings the body may not have reached must be referenced optionally (`$id?`)."
+    },
+    "suites": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Suite tags. Beyond grouping, these say what a non-JS leg may leave out: engine-quality, packaging, imperative, host-idiomatic."
+    },
+    "skip": {
+      "$ref": "#/$defs/skip"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Repo-specific data: category, the resource key the test needs, estimated duration",
+      "additionalProperties": true
+    },
+    "retryOnFailure": {
+      "type": "boolean",
+      "description": "Diagnostic reload retry. The test is reported failed regardless of the retry outcome."
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "description": "A literal, or a reference: $name for a value a previous step bound, $params.x for the test's own params. Paths may index, e.g. $result.blocks[0].text. A trailing ? marks the reference optional: a path that is not there resolves to nothing, and a call parameter that resolves to nothing is left off the call rather than passed as null",
+      "pattern": "^.*$"
+    },
+    "collect": {
+      "enum": [
+        "text",
+        "blocks",
+        "events",
+        "pcm",
+        "last",
+        "all"
+      ],
+      "description": "How a streaming call is folded into a single value"
+    },
+    "expectation": {
+      "description": "What the asserted value is checked against. Shared data, so every client must read it identically.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "validation",
+            "contains"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "validation": {
+              "enum": [
+                "contains-all",
+                "contains-any"
+              ]
+            },
+            "contains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "validation",
+            "pattern"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "validation": {
+              "const": "regex"
+            },
+            "pattern": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "validation"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "validation": {
+              "const": "numeric-range"
+            },
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "validation",
+            "expectedType"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "validation": {
+              "const": "type"
+            },
+            "expectedType": {
+              "enum": [
+                "string",
+                "number",
+                "array"
+              ]
+            },
+            "minLength": {
+              "type": "number"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "validation",
+            "errorContains"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "validation": {
+              "const": "throws-error"
+            },
+            "errorContains": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "validation"
+          ],
+          "additionalProperties": false,
+          "description": "A JavaScript closure. Cannot cross the wire, so a non-JS client reports such a definition incomplete rather than failed. Being migrated to named assertions.",
+          "properties": {
+            "validation": {
+              "const": "function"
+            },
+            "fn": {}
+          }
+        }
+      ]
+    },
+    "skip": {
+      "type": "object",
+      "required": [
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Why. The reasons are the only record of why the matrix looks the way it does and must travel with the rule."
+        },
+        "issue": {
+          "type": "string"
+        },
+        "impact": {
+          "type": "string"
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Skip only on these platforms, e.g. [\"mobile-ios\", \"mobile-android\"]"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "description": "Exactly one operation per step.",
+      "oneOf": [
+        {
+          "required": [
+            "useModel"
+          ]
+        },
+        {
+          "required": [
+            "modelSource"
+          ]
+        },
+        {
+          "required": [
+            "asset"
+          ]
+        },
+        {
+          "required": [
+            "call"
+          ]
+        },
+        {
+          "required": [
+            "start"
+          ]
+        },
+        {
+          "required": [
+            "settle"
+          ]
+        },
+        {
+          "required": [
+            "callError"
+          ]
+        },
+        {
+          "required": [
+            "repeat"
+          ]
+        },
+        {
+          "required": [
+            "project"
+          ]
+        },
+        {
+          "required": [
+            "assert"
+          ]
+        },
+        {
+          "required": [
+            "compare"
+          ]
+        }
+      ],
+      "properties": {
+        "useModel": {
+          "type": "object",
+          "required": [
+            "deps"
+          ],
+          "additionalProperties": false,
+          "description": "Load the models behind these resource keys. Everything not declared is evicted first, so a run does not depend on test order.",
+          "properties": {
+            "deps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "Resource keys. A list, not a single key: some tests genuinely need two models at once."
+            },
+            "as": {
+              "type": "string"
+            }
+          }
+        },
+        "modelSource": {
+          "type": "object",
+          "required": [
+            "dep",
+            "as"
+          ],
+          "additionalProperties": false,
+          "description": "The model source behind a resource key, without loading it. A test that drives loadModel itself needs the source as data, and the source is the one thing a definition cannot write down: it is a per-client constant the resource table holds.",
+          "properties": {
+            "dep": {
+              "$ref": "#/$defs/ref"
+            },
+            "as": {
+              "type": "string"
+            }
+          }
+        },
+        "asset": {
+          "type": "object",
+          "required": [
+            "kind",
+            "file",
+            "as"
+          ],
+          "additionalProperties": false,
+          "description": "Resolve a bundled test asset for this platform \u2014 a filesystem path on desktop, a bundled-asset URI on mobile.",
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "file": {
+              "type": "string"
+            },
+            "form": {
+              "enum": [
+                "bytes",
+                "path",
+                "text"
+              ],
+              "description": "What to bind: the contents as bytes, a reference the SDK can open, or the contents decoded as UTF-8 text. Which one an API wants is part of its contract, and the path form is what a filesystem path on desktop and a bundled-asset URI on mobile have in common."
+            },
+            "as": {
+              "type": "string"
+            }
+          }
+        },
+        "call": {
+          "type": "object",
+          "required": [
+            "method"
+          ],
+          "additionalProperties": false,
+          "description": "One SDK call, through the client's public surface. A client that reached past it into the worker would prove only that the engine works.",
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "as": {
+              "type": "string"
+            },
+            "collect": {
+              "$ref": "#/$defs/collect"
+            }
+          }
+        },
+        "start": {
+          "type": "object",
+          "required": [
+            "method",
+            "as"
+          ],
+          "additionalProperties": false,
+          "description": "Begins a call without waiting for it, binding the in-flight call under `as`. The concurrency the imperative executors express by not awaiting: suspend while a completion is in flight, cancel a running download, race two loads. `settle` awaits it; a started call the test never settles is drained at the end of the run so it cannot land inside the next test.",
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "collect": {
+              "$ref": "#/$defs/collect"
+            },
+            "as": {
+              "type": "string"
+            }
+          }
+        },
+        "settle": {
+          "type": "object",
+          "required": [
+            "of"
+          ],
+          "additionalProperties": false,
+          "description": "Waits for a call begun by `start`. A rejection fails the step exactly as it would have on `call`.",
+          "properties": {
+            "of": {
+              "type": "string"
+            },
+            "as": {
+              "type": "string"
+            },
+            "expect": {
+              "enum": [
+                "resolve",
+                "reject"
+              ],
+              "description": "What the started call must do. The default is `resolve`. With `reject` the rejection is bound the way `callError` binds one, and a call that resolved instead fails the step."
+            }
+          }
+        },
+        "callError": {
+          "type": "object",
+          "required": [
+            "method",
+            "as"
+          ],
+          "additionalProperties": false,
+          "description": "A call expected to fail; binds { code, message, hasCause }. `collect` folds the streaming result before deciding it failed, because a streaming call typically rejects only once its result is awaited",
+          "properties": {
+            "method": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "collect": {
+              "$ref": "#/$defs/collect"
+            },
+            "as": {
+              "type": "string"
+            }
+          }
+        },
+        "repeat": {
+          "type": "object",
+          "required": [
+            "over",
+            "as",
+            "collectInto",
+            "steps"
+          ],
+          "additionalProperties": false,
+          "description": "Run the nested steps once per item. Each iteration gets its own scope, so a binding cannot leak into the next.",
+          "properties": {
+            "over": {
+              "$ref": "#/$defs/ref"
+            },
+            "as": {
+              "type": "string"
+            },
+            "collectInto": {
+              "type": "string"
+            },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/step"
+              }
+            }
+          }
+        },
+        "project": {
+          "type": "object",
+          "required": [
+            "from",
+            "path",
+            "as"
+          ],
+          "additionalProperties": false,
+          "description": "Pull a field out of a bound value.",
+          "properties": {
+            "from": {
+              "$ref": "#/$defs/ref"
+            },
+            "path": {
+              "type": "string"
+            },
+            "join": {
+              "type": "string"
+            },
+            "count": {
+              "type": "boolean",
+              "description": "Bind how many elements the projected value has rather than the value itself. For the sizes a later call needs as an argument."
+            },
+            "as": {
+              "type": "string"
+            }
+          }
+        },
+        "assert": {
+          "type": "object",
+          "required": [
+            "on"
+          ],
+          "additionalProperties": false,
+          "description": "Check a bound value. Either against the definition's own expectation, or with a shared named assertion.",
+          "properties": {
+            "on": {
+              "$ref": "#/$defs/ref"
+            },
+            "use": {
+              "const": "expectation"
+            },
+            "named": {
+              "type": "string"
+            },
+            "with": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Arguments for a named assertion; values may use $refs. Needed whenever a check compares the result against something the test set up \u2014 e.g. that the returned modelId is the one we just loaded."
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "use"
+              ]
+            },
+            {
+              "required": [
+                "named"
+              ]
+            }
+          ]
+        },
+        "compare": {
+          "type": "object",
+          "required": [
+            "left",
+            "right",
+            "named"
+          ],
+          "additionalProperties": false,
+          "description": "Compare two bound values with a shared named comparison.",
+          "properties": {
+            "left": {
+              "$ref": "#/$defs/ref"
+            },
+            "right": {
+              "$ref": "#/$defs/ref"
+            },
+            "named": {
+              "type": "string"
+            },
+            "with": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Arguments for the comparison, the way `assert` passes them. A threshold belongs to the test, not to the registry."
+            }
+          }
+        }
+      }
+    }
+  }
+}

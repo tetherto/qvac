@@ -154,6 +154,60 @@ const mobileConsumerSchema = baseConsumerSchema.extend({
 })
 
 /**
+ * External consumer configuration schema
+ *
+ * One generic entry instead of a consumer type per language. The client is an
+ * ordinary process that interprets the shared catalog; the framework keeps the
+ * MQTT state machine on its side so the protocol stays implemented once.
+ */
+/**
+ * Deliberately NOT built on `baseConsumerSchema`.
+ *
+ * Every other consumer type extends it because the framework bundles or
+ * packages that consumer, so `entry`, `include` and `dependencies` mean
+ * something. An external client is already built, by its own toolchain, and is
+ * merely launched — none of those three has an answer for it, and inheriting
+ * them would invite a config that looks valid and is silently ignored.
+ */
+const externalConsumerSchema = z.object({
+  name: z.string().describe('Identifier used by run:consumer:external --name'),
+
+  platform: z
+    .string()
+    .describe('Platform label this client registers with (e.g., "desktop-python")'),
+
+  mode: z
+    .enum(['bridge', 'mqtt'])
+    .optional()
+    .default('bridge')
+    .describe(
+      'bridge: the framework drives the client over stdin/stdout and owns MQTT. ' +
+        'mqtt: the client speaks MQTT itself — declared for shape, not implemented yet'
+    ),
+
+  interpreter: z.string().describe('Executable that runs the client (e.g., ".venv/bin/python")'),
+
+  args: z
+    .array(z.string())
+    .optional()
+    .default([])
+    .describe('Arguments passed to the interpreter (e.g., ["-m", "qvac_e2e.runner"])'),
+
+  cwd: z
+    .string()
+    .optional()
+    .default('.')
+    .describe('Working directory for the client process, relative to the config directory'),
+
+  env: z
+    .record(z.string())
+    .optional()
+    .describe('Extra environment variables for the client process')
+})
+
+export type ExternalConsumerConfig = z.infer<typeof externalConsumerSchema>
+
+/**
  * MQTT broker configuration schema (separate host/port)
  */
 const mqttBrokerSchema = z.object({
@@ -278,6 +332,14 @@ export const qvacTestConfigSchema = z.object({
         .optional()
         .describe('Snap consumer configuration for strict-confined Linux packages'),
 
+      external: z
+        .array(externalConsumerSchema)
+        .optional()
+        .describe(
+          'Non-JS clients that interpret the shared catalog (e.g., the Python runner). ' +
+            'Each entry is one CI leg of its own; runs stay single-consumer'
+        ),
+
       shared: z
         .object({
           include: z
@@ -289,9 +351,13 @@ export const qvacTestConfigSchema = z.object({
         .optional()
         .describe('Shared code configuration included in both desktop and mobile consumer builds')
     })
-    .refine((data) => data.desktop || data.mobile || data.electron || data.snap, {
-      message: 'At least one consumer type (desktop, mobile, electron, or snap) must be configured'
-    })
+    .refine(
+      (data) => data.desktop || data.mobile || data.electron || data.snap || data.external?.length,
+      {
+        message:
+          'At least one consumer (desktop, mobile, electron, snap, or external) must be configured'
+      }
+    )
     .describe('Consumer configuration per platform type'),
 
   comparison: z
