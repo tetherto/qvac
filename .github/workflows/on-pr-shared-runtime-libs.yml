@@ -1,0 +1,51 @@
+name: On PR Trigger (Shared Runtime Libs)
+
+# Fails if @qvac/infer-base, @qvac/logging, or @qvac/error resolves to more
+# than one version when installing @qvac/inference with all of its optional
+# peers, or @qvac/sdk with its addon dependencies. publish-inference.yml and
+# publish-sdk.yml run the same check before npm publish.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, release-*, feature-*, tmp-*]
+    paths:
+      - "packages/inference/**"
+      - "packages/sdk/package.json"
+      - ".github/workflows/on-pr-shared-runtime-libs.yml"
+      - ".github/scripts/check-shared-runtime-libs.mjs"
+      - ".github/scripts/lib/shared-runtime-libs.mjs"
+      - ".github/scripts/test/shared-runtime-libs.test.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared-runtime-libs:
+    name: Shared runtime libs resolve once
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Run unit tests
+        run: node --test .github/scripts/test/shared-runtime-libs.test.mjs
+
+      - name: Check @qvac/inference with all optional peers
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/inference
+
+      # The in-repo engine can be ahead of npm on a PR, so it replaces the
+      # published @qvac/inference in the SDK's tree.
+      - name: Check @qvac/sdk
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
