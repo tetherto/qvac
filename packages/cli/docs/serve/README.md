@@ -65,6 +65,14 @@ currently loaded. Unloading an alias frees its resources but keeps it configured
 next request loads it again. There is no "load" endpoint — send a normal request, or set
 `preload: true`.
 
+Model-load failures return `503 model_load_failed`. If the worker exits during
+startup, the response names its exit code or signal. If startup times out while
+the worker is still running, the response reports a startup timeout.
+Full diagnostics, including worker stderr, are written to the server's error log;
+the HTTP response contains only the startup summary. Check the terminal running
+`qvac serve` or your service's captured stderr for the cause.
+The separate configured per-load deadline continues to return `503 model_load_timeout`.
+
 ### Load management (`serve.load`)
 
 Tune lazy-load behavior under `serve.load` in `qvac.config.*` (each has a CLI
