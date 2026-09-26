@@ -211,7 +211,7 @@
     "@qvac/bci-whispercpp": "^0.9.1",
     "@qvac/classification-ggml": "^0.26.1",
     "@qvac/decoder-audio": "^0.6.0",
-    "@qvac/diffusion-cpp": "^0.24.0",
+    "@qvac/diffusion-cpp": "^0.25.0",
     "@qvac/embed-llamacpp": "^0.41.1",
     "@qvac/error": "^0.1.1",
     "@qvac/inference": "^0.20.0",
@@ -277,7 +277,7 @@
     "pear-pipe": "^1.0.6",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
-    "react-native-bare-kit": "^0.14.0",
+    "react-native-bare-kit": "^0.15.5",
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
@@ -291,7 +291,7 @@
     "expo-file-system": ">=19.0.0",
     "expo-modules-core": ">=3.0.0",
     "pear-pipe": ">=1.0.0",
-    "react-native-bare-kit": "*",
+    "react-native-bare-kit": ">=0.15.5",
     "tsx": "*"
   },
   "peerDependenciesMeta": {

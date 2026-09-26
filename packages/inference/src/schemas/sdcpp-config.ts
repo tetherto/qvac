@@ -98,8 +98,10 @@ export const sdcppConfigSchema = z.object({
         'worldCreateScene({ ... }) and worldStep({ ... }). It requires ' +
         '`taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes ' +
         'and/or `sceneSrc` to walk a pre-built one. World sessions run only on ' +
-        'the machine hosting the worker and need a dedicated GPU with at least ' +
-        '20 GB free VRAM.'
+        'the machine hosting the worker and need a dedicated GPU. At 832x480, ' +
+        'the default walk with resident weights needs at least 20 GB free VRAM. ' +
+        '`world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can ' +
+        'reduce that requirement.'
     ),
   threads: z.number().optional().describe('CPU threads for loading and CPU ops. Default: auto.'),
   device: z
@@ -372,6 +374,47 @@ export const sdcppConfigSchema = z.object({
         .boolean()
         .optional()
         .describe('Keep weights in CPU memory and offload during GPU compute.'),
+      paramsBackend: z
+        .string()
+        .max(4096)
+        .optional()
+        .describe(
+          'Parameter residency for the walk session, independent of graph ' +
+            "execution. 'diffusion' is the walk DiT and 'vae' the taehv decoder. " +
+            "'diffusion=cpu' stages DiT weights from CPU RAM; 'diffusion=disk' " +
+            'reads them from the model file on demand. Disk is never selected ' +
+            "automatically, and 'vae=disk' is rejected natively because taehv " +
+            'retains its prepared weights across steps. Explicit assignments ' +
+            'override offloadParamsToCpu for those modules.'
+        ),
+      maxVram: z
+        // No .max() on the string arm, for the same reason as the flat max_vram
+        // above: a constraint makes datamodel-codegen wrap it in a RootModel.
+        .union([z.number().finite(), z.string()])
+        .optional()
+        .describe(
+          'VRAM budget in GiB for the walk DiT graph. Positive values set a ' +
+            'budget; negative values use free VRAM minus the absolute value as ' +
+            'headroom; 0 disables graph cutting. Accepts per-device assignments ' +
+            "such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the " +
+            'history KV cache and the decoder allocate on top of it. Default: 0.'
+        ),
+      streamLayers: z
+        .boolean()
+        .optional()
+        .describe(
+          'Prefetch and evict DiT layers from CPU RAM. Only takes effect with ' +
+            'graph cutting enabled by maxVram and CPU parameter residency for ' +
+            'diffusion. Does not stream from disk; use paramsBackend: ' +
+            "'diffusion=disk' for on-demand file reads. Default: false."
+        ),
+      verbosity: z
+        .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)])
+        .optional()
+        .describe(
+          'Native log level while the session is alive: 0=ERROR, 1=WARN, ' +
+            '2=INFO, 3=DEBUG. The level is process-wide and restored on unload.'
+        ),
       frameJpegQuality: z
         .number()
         .int()

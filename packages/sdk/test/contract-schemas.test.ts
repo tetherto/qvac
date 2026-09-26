@@ -46,6 +46,46 @@ test('contract diffusion load config: memory controls and removed options', (t) 
   t.is(validate({ stream_layers: 'true' }), false)
 })
 
+test('contract regeneration preserves four-coordinate OCR boxes', (t) => {
+  for (const [bbox, valid] of [
+    [[1, 2, 3, 4], true],
+    [[1, 2, 3], false],
+    [[1, 2, 3, 4, 5], false]
+  ] as const) {
+    t.is(
+      contractValidate('ocrStream.response', { type: 'ocrStream', blocks: [{ text: 'box', bbox }] })
+        .valid,
+      valid
+    )
+  }
+})
+
+test('contract world load config: memory controls reach generated clients', (t) => {
+  const document: unknown = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  )
+  const schema = findSchemaTitle(document, 'LoadModelSrcRequestSdcppGenerationModelConfigWorld')
+  t.ok(schema)
+  if (!schema) return
+  const validate = new Ajv2020({ strict: false }).compile(schema)
+
+  for (const maxVram of [0, -1, 2.5, '6', 'cuda0=6,vulkan0=4']) {
+    t.ok(
+      validate({
+        paramsBackend: 'diffusion=cpu,vae=cpu',
+        maxVram,
+        streamLayers: true,
+        verbosity: 3
+      }),
+      `${JSON.stringify(maxVram)} is carried to the addon`
+    )
+  }
+  // The world block is strict, unlike the flat diffusion config above.
+  t.is(validate({ streamLayers: 'true' }), false)
+  t.is(validate({ verbosity: 4 }), false)
+  t.is(validate({ maxVramm: 2 }), false, 'a typo is rejected rather than silently dropped')
+})
+
 // Contract-artifact checks: validate representative payloads against the
 // committed contract/schema.json (what generated clients consume). The Zod
 // round-trip checks for these same schemas live in @qvac/inference's suite; here
