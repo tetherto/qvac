@@ -3,8 +3,8 @@
 Pocket is an English, CPU-only TTS engine implemented in the Fabric speech
 library. It streams PCM16 audio through the `@qvac/tts-ggml` addon. Python
 is used only to convert weights and benchmark the upstream reference; it is
-not needed for native synthesis. Inference plugin and public SDK integration
-will follow in a separate change after the addon release.
+not needed for native synthesis. The [inference plugin, SDK and CLI](../../sdk/docs/pocket-tts.md) expose
+the same engine once a Pocket-containing addon release is installed.
 
 ## Model bundle
 
@@ -118,10 +118,10 @@ Only the flow sampling stage repeats; text/voice conditioning and Mimi audio
 decoding are not each run four times. That is why the observed total latency
 increase was about 20–25%, rather than fourfold:
 
-| Passage | One-step generation | Four-step generation |
-| --- | ---: | ---: |
-| Original sentence (2.64 s audio) | 0.46 s | 0.56 s |
-| Extended story (69.92 s audio) | 13.03 s | 15.96 s |
+| Passage                          | One-step generation | Four-step generation |
+| -------------------------------- | ------------------: | -------------------: |
+| Original sentence (2.64 s audio) |              0.46 s |               0.56 s |
+| Extended story (69.92 s audio)   |             13.03 s |              15.96 s |
 
 ## Validation
 
@@ -167,13 +167,13 @@ current validation above covers builds and functional audio checks. It uses Appl
 two workers, **one sampling step**, one warmup and three measured runs per
 prompt, matching Fabric's default. Medians:
 
-| Prompt | Upstream generation | Fabric generation | Upstream / Fabric audio length |
-| --- | ---: | ---: | ---: |
-| Short | 0.94 s | 0.98 s | 5.52 / 5.52 s |
-| Numbers | 1.23 s | 1.42 s | 7.36 / 7.44 s |
-| Punctuation | 1.18 s | 1.24 s | 6.88 / 6.72 s |
-| Accented names | 1.23 s | 1.38 s | 7.20 / 7.36 s |
-| Long | 6.16 s | 6.55 s | 36.32 / 36.48 s |
+| Prompt         | Upstream generation | Fabric generation | Upstream / Fabric audio length |
+| -------------- | ------------------: | ----------------: | -----------------------------: |
+| Short          |              0.94 s |            0.98 s |                  5.52 / 5.52 s |
+| Numbers        |              1.23 s |            1.42 s |                  7.36 / 7.44 s |
+| Punctuation    |              1.18 s |            1.24 s |                  6.88 / 6.72 s |
+| Accented names |              1.23 s |            1.38 s |                  7.20 / 7.36 s |
+| Long           |              6.16 s |            6.55 s |                36.32 / 36.48 s |
 
 Fabric RTF is 0.178–0.191 (about 5.2–5.6× real time), versus upstream
 0.167–0.172. Generation time is 5–16% above upstream across these prompts.
@@ -190,7 +190,6 @@ single assistance/assistants mismatch, and finds a contraction difference in
 the accented-name prompt. The earlier zero-temperature follow-up resolves
 that contraction and gives matching transcriptions. No subjective listening
 score or equal-naturalness claim is made.
-
 
 To reproduce the packaged iOS worklet after building the simulator prebuild,
 run `python3 scripts/run-pocket-ios-worklet.py --help`. The runner needs a

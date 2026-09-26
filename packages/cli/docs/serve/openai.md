@@ -10,43 +10,43 @@ extension adds and the `serve.openai` config block it reads.
 
 ## Endpoints
 
-| Method   | Path                             | Notes                                                                                                       |
-| -------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/v1/models`                     | Lists **all configured** models (loaded or not)                                                             |
-| `GET`    | `/v1/models/{id}`                | Model metadata                                                                                              |
-| `DELETE` | `/v1/models/{id}`                | Unload (reversible — the alias reloads on the next request)                                                 |
-| `GET`    | `/v1/models/catalog`             | **Browse** models the SDK provides, by capability (not an OpenAI route — see below)                         |
-| `GET`    | `/v1/models/catalog/{id}`        | A single catalog entry                                                                                      |
-| `POST`   | `/v1/chat/completions`           | Chat                                                                                                        |
-| `POST`   | `/v1/completions`                | Legacy text completions (single + multi-prompt; blocking + SSE)                                             |
-| `POST`   | `/v1/responses`                  | Responses API (blocking + SSE streaming); volatile, see below                                               |
-| `GET`    | `/v1/responses/{id}`             | Retrieve a stored response                                                                                  |
-| `DELETE` | `/v1/responses/{id}`             | Delete a stored response                                                                                    |
-| `GET`    | `/v1/responses/{id}/input_items` | Paginate the original input items                                                                           |
-| `POST`   | `/v1/embeddings`                 | Embeddings                                                                                                  |
-| `POST`   | `/v1/audio/transcriptions`       | Speech-to-text (source language)                                                                            |
-| `POST`   | `/v1/audio/translations`         | Speech-to-text **into English** (Whisper translate task)                                                    |
-| `POST`   | `/v1/audio/speech`               | Text-to-speech (Chatterbox / Supertonic; `wav` + `pcm`, plus `mp3` / `opus` / `aac` / `flac` with `ffmpeg`) |
-| `GET`    | `/v1/audio/voices`               | List configured TTS voices                                                                                  |
-| `GET`    | `/v1/audio/models`               | List READY text-to-speech models                                                                            |
-| `POST`   | `/v1/images/generations`         | Diffusion txt2img (blocking + SSE)                                                                          |
-| `POST`   | `/v1/images/edits`               | Diffusion img2img (multipart; blocking + SSE)                                                               |
-| `POST`   | `/v1/videos`                     | Async video generation — txt2vid (JSON) or img2vid (JSON with `input_reference`); returns a queued job      |
-| `GET`    | `/v1/videos`                     | List video generation jobs                                                                                  |
-| `GET`    | `/v1/videos/{id}`                | Get video job status and progress                                                                           |
-| `GET`    | `/v1/videos/{id}/content`        | Download rendered video (`video/mp4` or `video/avi`)                                                        |
-| `DELETE` | `/v1/videos/{id}`                | Cancel and remove a video job                                                                               |
-| `POST`   | `/v1/files`                      | Upload a file into the in-memory store (used by image URL responses + vector stores)                        |
-| `GET`    | `/v1/files`                      | List in-memory files                                                                                        |
-| `GET`    | `/v1/files/{id}`                 | File metadata                                                                                               |
-| `GET`    | `/v1/files/{id}/content`         | Stream the bytes (used by image `response_format=url`)                                                      |
-| `GET`    | `/v1/vector_stores`              | List vector stores                                                                                          |
-| `POST`   | `/v1/vector_stores`              | Create a vector store                                                                                       |
-| `GET`    | `/v1/vector_stores/{id}`         | Retrieve a vector store                                                                                     |
-| `POST`   | `/v1/vector_stores/{id}`         | Update a vector store                                                                                       |
-| `DELETE` | `/v1/vector_stores/{id}`         | Delete a vector store                                                                                       |
-| `POST`   | `/v1/vector_stores/{id}/search`  | Semantic search over a store (needs a loaded `embedding` model)                                             |
-| `POST`   | `/v1/vector_stores/{id}/files`   | Attach + embed a previously-uploaded file                                                                   |
+| Method   | Path                             | Notes                                                                                                  |
+| -------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/v1/models`                     | Lists **all configured** models (loaded or not)                                                        |
+| `GET`    | `/v1/models/{id}`                | Model metadata                                                                                         |
+| `DELETE` | `/v1/models/{id}`                | Unload (reversible — the alias reloads on the next request)                                            |
+| `GET`    | `/v1/models/catalog`             | **Browse** models the SDK provides, by capability (not an OpenAI route — see below)                    |
+| `GET`    | `/v1/models/catalog/{id}`        | A single catalog entry                                                                                 |
+| `POST`   | `/v1/chat/completions`           | Chat                                                                                                   |
+| `POST`   | `/v1/completions`                | Legacy text completions (single + multi-prompt; blocking + SSE)                                        |
+| `POST`   | `/v1/responses`                  | Responses API (blocking + SSE streaming); volatile, see below                                          |
+| `GET`    | `/v1/responses/{id}`             | Retrieve a stored response                                                                             |
+| `DELETE` | `/v1/responses/{id}`             | Delete a stored response                                                                               |
+| `GET`    | `/v1/responses/{id}/input_items` | Paginate the original input items                                                                      |
+| `POST`   | `/v1/embeddings`                 | Embeddings                                                                                             |
+| `POST`   | `/v1/audio/transcriptions`       | Speech-to-text (source language)                                                                       |
+| `POST`   | `/v1/audio/translations`         | Speech-to-text **into English** (Whisper translate task)                                               |
+| `POST`   | `/v1/audio/speech`               | Text-to-speech (including Pocket; `wav` + `pcm`, plus `mp3` / `opus` / `aac` / `flac` with `ffmpeg`)   |
+| `GET`    | `/v1/audio/voices`               | List configured TTS voices                                                                             |
+| `GET`    | `/v1/audio/models`               | List READY text-to-speech models                                                                       |
+| `POST`   | `/v1/images/generations`         | Diffusion txt2img (blocking + SSE)                                                                     |
+| `POST`   | `/v1/images/edits`               | Diffusion img2img (multipart; blocking + SSE)                                                          |
+| `POST`   | `/v1/videos`                     | Async video generation — txt2vid (JSON) or img2vid (JSON with `input_reference`); returns a queued job |
+| `GET`    | `/v1/videos`                     | List video generation jobs                                                                             |
+| `GET`    | `/v1/videos/{id}`                | Get video job status and progress                                                                      |
+| `GET`    | `/v1/videos/{id}/content`        | Download rendered video (`video/mp4` or `video/avi`)                                                   |
+| `DELETE` | `/v1/videos/{id}`                | Cancel and remove a video job                                                                          |
+| `POST`   | `/v1/files`                      | Upload a file into the in-memory store (used by image URL responses + vector stores)                   |
+| `GET`    | `/v1/files`                      | List in-memory files                                                                                   |
+| `GET`    | `/v1/files/{id}`                 | File metadata                                                                                          |
+| `GET`    | `/v1/files/{id}/content`         | Stream the bytes (used by image `response_format=url`)                                                 |
+| `GET`    | `/v1/vector_stores`              | List vector stores                                                                                     |
+| `POST`   | `/v1/vector_stores`              | Create a vector store                                                                                  |
+| `GET`    | `/v1/vector_stores/{id}`         | Retrieve a vector store                                                                                |
+| `POST`   | `/v1/vector_stores/{id}`         | Update a vector store                                                                                  |
+| `DELETE` | `/v1/vector_stores/{id}`         | Delete a vector store                                                                                  |
+| `POST`   | `/v1/vector_stores/{id}/search`  | Semantic search over a store (needs a loaded `embedding` model)                                        |
+| `POST`   | `/v1/vector_stores/{id}/files`   | Attach + embed a previously-uploaded file                                                              |
 
 Other OpenAI routes may be added over time; this file is updated when they ship.
 
@@ -556,7 +556,7 @@ You normally use the **same** underlying weights for both transcription and tran
 
 ## `POST /v1/audio/speech`
 
-OpenAI-compatible text-to-speech, backed by the SDK's `textToSpeech` capability (`@qvac/sdk` ONNX TTS — Chatterbox or Supertonic). Body is JSON, response body is binary audio.
+OpenAI-compatible text-to-speech, backed by the SDK's `textToSpeech` capability (`@qvac/sdk`, including English CPU Pocket TTS). Body is JSON, response body is binary audio.
 
 ### Loaded model
 
@@ -588,9 +588,48 @@ The route requires an alias whose **endpoint category** is `speech`. Built-in SD
 
 > **Drop-in for OpenAI clients:** alias an OpenAI TTS model name (`tts-1`, `gpt-4o-mini-tts`, …) to your loaded TTS model so SDKs that hard-code the OpenAI name work without code change.
 
+### Pocket TTS
+
+`qvac configure` includes a Pocket speech template. Replace its local bundle
+paths before loading the model, or configure the same alias directly:
+
+```json
+{
+  "serve": {
+    "models": {
+      "pocket": {
+        "type": "tts",
+        "src": "/absolute/path/to/pocket-bundle/flow-lm.gguf",
+        "preload": true,
+        "config": {
+          "ttsEngine": "pocket",
+          "mimiModelSrc": "/absolute/path/to/pocket-bundle/mimi.gguf",
+          "frontendSrc": "/absolute/path/to/pocket-bundle/frontend.json",
+          "voiceSrc": "/absolute/path/to/pocket-bundle/voice.gguf",
+          "steps": 4
+        }
+      }
+    }
+  }
+}
+```
+
+```sh
+curl http://127.0.0.1:3000/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"pocket","input":"Hello from QVAC.","response_format":"wav"}' \
+  --output pocket.wav
+```
+
+Use your configured server address and authentication headers. Pocket produces
+24 kHz mono audio unless `outputSampleRate` overrides it. It is English and CPU
+only; the voice is selected at model load. See the
+[SDK guide](../../../sdk/docs/pocket-tts.md) for model conversion, addon release
+requirements, and the four-step quality option.
+
 ### Voice → model alias
 
-OpenAI clients select a voice via the request `voice` field. QVAC TTS engines bind voice character to **load-time** config — Chatterbox uses **`referenceAudioSrc`** (a WAV path on disk); Supertonic uses **`ttsVoiceStyleSrc`** (and friends). There is no separate `voiceSrc` field on the wire — map each OpenAI voice to a model alias whose `config` carries the right paths.
+OpenAI clients select a voice via the request `voice` field. QVAC TTS engines bind voice character to **load-time** config — Chatterbox uses **`referenceAudioSrc`** (a WAV path on disk); Supertonic uses **`ttsVoiceStyleSrc`** (and friends). Pocket uses `voiceSrc` for a prepared voice GGUF. Map each OpenAI voice to a model alias whose load-time `config` carries the right paths.
 
 The route resolves the backing model alias in this order:
 

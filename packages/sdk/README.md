@@ -75,6 +75,9 @@ try {
 node quickstart.js
 ```
 
+For English CPU speech synthesis, see [Pocket TTS](./docs/pocket-tts.md), including
+local model loading, streaming PCM, and the matching `qvac serve` configuration.
+
 ## System resource diagnostics
 
 Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and

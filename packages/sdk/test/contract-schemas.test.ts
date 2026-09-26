@@ -15,6 +15,49 @@ function findSchemaTitle(node: unknown, title: string): Record<string, unknown> 
   return undefined
 }
 
+test('contract regeneration preserves the four-coordinate OCR bounding box', (t) => {
+  const document: unknown = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  )
+  const schema = findSchemaTitle(document, 'OcrStreamResponseBlocksItem')
+  t.ok(schema)
+  if (!schema) return
+  const validate = new Ajv2020({ strict: false }).compile(schema)
+  t.ok(validate({ text: 'word', bbox: [0, 1, 2, 3] }))
+  for (const bbox of [[], [0, 1, 2], [0, 1, 2, 3, 4], [0, 1, 2, '3']]) {
+    t.is(validate({ text: 'word', bbox }), false)
+  }
+})
+
+test('contract Pocket config: sources, controls and strict engine selection', (t) => {
+  const document: unknown = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  )
+  const schema = findSchemaTitle(document, 'LoadModelSrcRequestTtsGgmlModelConfigPocket')
+  t.ok(schema)
+  if (!schema) return
+  const validate = new Ajv2020({ strict: false }).compile(schema)
+  const config = {
+    ttsEngine: 'pocket',
+    mimiModelSrc: '/mimi.gguf',
+    frontendSrc: '/frontend.json',
+    voiceSrc: '/voice.gguf',
+    steps: 4,
+    seed: 4294967295
+  }
+  t.ok(validate(config))
+  for (const invalid of [
+    { useGPU: true },
+    { language: 'fr' },
+    { seed: 4294967296 },
+    { steps: 0 },
+    { voice: 'F1' },
+    { frontendSrc: undefined }
+  ]) {
+    t.is(validate({ ...config, ...invalid }), false)
+  }
+})
+
 test('contract diffusion load config: memory controls and removed options', (t) => {
   const document: unknown = JSON.parse(
     readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')

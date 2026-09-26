@@ -77,6 +77,10 @@ An operation called before any plugin is registered throws `PluginsNotRegistered
 
 ## Configuration
 
+The TTS plugin supports [Pocket TTS](../sdk/docs/pocket-tts.md) for English CPU
+synthesis, including prepared voices, streaming and cancellation. See the
+[configuration contract](./docs/configuration.md#pocket-tts).
+
 The engine resolves a `qvac.config.js` or `qvac.config.json` from the current working directory, or from the path in `QVAC_CONFIG_PATH`. The resolved config applies on the first API call.
 
 ## System resource diagnostics

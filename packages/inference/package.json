@@ -155,7 +155,8 @@
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
     "test:bare": "npm run test",
     "check-models": "bare ./dist/models/update-models/index.js --check",
-    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts"
+    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts",
+    "test:pocket": "tsc -p test/pocket/tsconfig.json && tsc-alias -p test/pocket/tsconfig.json --resolve-full-paths && brittle-bare test/dist/test/pocket/*.test.js"
   },
   "engines": {
     "bare": "^1.30.3"
@@ -173,7 +174,7 @@
     "bare-env": "^3.0.1",
     "bare-fs": "^4.7.4",
     "bare-gpu-info": "0.1.1",
-    "bare-http1": "^4.5.9",
+    "bare-http1": "^4.6.2",
     "bare-https": "^3.0.0",
     "bare-os": "^3.9.3",
     "bare-path": "^3.1.1",
@@ -204,7 +205,7 @@
     "@qvac/llm-llamacpp": "^0.53.1",
     "@qvac/ocr-ggml": "^0.24.1",
     "@qvac/translation-nmtcpp": "^0.16.1",
-    "@qvac/tts-ggml": "^0.9.1",
+    "@qvac/tts-ggml": "^0.9.2",
     "@qvac/vla-ggml": "^0.27.1"
   },
   "peerDependenciesMeta": {
@@ -260,7 +261,7 @@
     "@qvac/llm-llamacpp": "^0.53.1",
     "@qvac/ocr-ggml": "^0.24.1",
     "@qvac/translation-nmtcpp": "^0.16.1",
-    "@qvac/tts-ggml": "^0.9.1",
+    "@qvac/tts-ggml": "^0.9.2",
     "@qvac/vla-ggml": "^0.27.1",
     "@types/brittle": "^3.5.0",
     "bare": "*",

@@ -102,7 +102,8 @@ export function pcmContentType(sampleRate: number): string {
 // plays back at the wrong speed.
 const ENGINE_SAMPLE_RATE: Record<string, number> = {
   chatterbox: 24000,
-  supertonic: 44100
+  supertonic: 44100,
+  pocket: 24000
 }
 
 // 24 kHz matches OpenAI's documented pcm output (mono, 16-bit signed LE)

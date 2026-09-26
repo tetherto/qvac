@@ -15,6 +15,8 @@ import {
   type PluginModelResult,
   type ResolveContext,
   type ResolveResult,
+  type TtsPocketLoadConfig,
+  type TtsPocketRuntimeConfig,
   type TtsAudio8LoadConfig,
   type TtsChatterboxLoadConfig,
   type TtsCosyvoice3LoadConfig,
@@ -240,6 +242,80 @@ function lavasrFiles(artifacts: Record<string, string | undefined>) {
   return {
     ...(lavasrEnhancer ? { lavasrEnhancer } : {}),
     ...(lavasrDenoiser ? { lavasrDenoiser } : {})
+  }
+}
+
+async function resolvePocketConfig(
+  config: TtsPocketLoadConfig,
+  ctx: ResolveContext
+): Promise<ResolveResult<TtsRuntimeConfig>> {
+  const { mimiModelSrc, frontendSrc, voiceSrc, referenceAudioSrc, ...runtime } = config
+  if (!mimiModelSrc || !frontendSrc || !!voiceSrc === !!referenceAudioSrc) {
+    throw new TtsArtifactsRequiredError(
+      'Pocket requires Mimi, frontend, and exactly one voice or reference WAV'
+    )
+  }
+  const [mimiPath, frontendPath, voicePath, referenceAudioPath] = await Promise.all([
+    ctx.resolveModelPath(mimiModelSrc),
+    ctx.resolveModelPath(frontendSrc),
+    voiceSrc ? ctx.resolveModelPath(voiceSrc) : Promise.resolve(undefined),
+    referenceAudioSrc ? ctx.resolveModelPath(referenceAudioSrc) : Promise.resolve(undefined)
+  ])
+  return {
+    config: runtime,
+    artifacts: {
+      mimiPath,
+      frontendPath,
+      ...(voicePath ? { voicePath } : {}),
+      ...(referenceAudioPath ? { referenceAudioPath } : {})
+    }
+  }
+}
+
+function createPocketModel(
+  modelId: string,
+  config: TtsPocketRuntimeConfig,
+  params: CreateModelParams,
+  artifacts: Record<string, string | undefined>
+): PluginModelResult {
+  const { mimiPath, frontendPath, voicePath, referenceAudioPath } = artifacts
+  if (!params.modelPath || !mimiPath || !frontendPath || !!voicePath === !!referenceAudioPath) {
+    throw new TtsArtifactsRequiredError(
+      'Pocket requires FlowLM, Mimi, frontend, and exactly one voice or reference WAV'
+    )
+  }
+  const logger = createStreamLogger(modelId, ModelType.ttsGgml)
+  registerAddonLogger(modelId, ModelType.ttsGgml, logger)
+  const { language, useGPU, outputSampleRate } = config
+  return {
+    model: new TTSGgml({
+      engine: TTSGgml.ENGINE_POCKET,
+      files: {
+        pocketFlowModel: params.modelPath,
+        pocketMimiModel: mimiPath,
+        pocketFrontend: frontendPath,
+        ...(voicePath ? { pocketVoice: voicePath } : {})
+      },
+      ...(referenceAudioPath ? { referenceAudio: referenceAudioPath } : {}),
+      ...(config.threads !== undefined ? { threads: config.threads } : {}),
+      ...(config.nCtx !== undefined ? { nCtx: config.nCtx } : {}),
+      ...(config.maxTokens !== undefined ? { maxTokens: config.maxTokens } : {}),
+      ...(config.steps !== undefined ? { steps: config.steps } : {}),
+      ...(config.seed !== undefined ? { seed: config.seed } : {}),
+      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+      ...(config.noiseClamp !== undefined ? { noiseClamp: config.noiseClamp } : {}),
+      ...(config.eosThreshold !== undefined ? { eosThreshold: config.eosThreshold } : {}),
+      ...(config.framesAfterEos !== undefined ? { framesAfterEos: config.framesAfterEos } : {}),
+
+      config: {
+        language: language ?? 'en',
+        useGPU: useGPU ?? false,
+        ...(outputSampleRate !== undefined ? { outputSampleRate } : {})
+      },
+      logger,
+      opts: { stats: true },
+      exclusiveRun: true
+    })
   }
 }
 
@@ -540,6 +616,7 @@ export const ttsPlugin = definePlugin({
     const { ttsEngine } = cfg as { ttsEngine?: string }
 
     // Same default as the former onnx-tts plugin: omitting `ttsEngine` → Chatterbox.
+    if (ttsEngine === 'pocket') return resolvePocketConfig(cfg as TtsPocketLoadConfig, ctx)
     if (ttsEngine === 'parler') {
       return resolveParlerConfig(cfg as TtsParlerLoadConfig, ctx)
     }
@@ -559,6 +636,9 @@ export const ttsPlugin = definePlugin({
     const config = (params.modelConfig ?? {}) as TtsRuntimeConfig
     const artifacts = params.artifacts ?? {}
 
+    if (config.ttsEngine === 'pocket') {
+      return createPocketModel(params.modelId, config, params, artifacts)
+    }
     if (config.ttsEngine === 'parler') {
       return createParlerModel(params.modelId, config, params, artifacts)
     }
