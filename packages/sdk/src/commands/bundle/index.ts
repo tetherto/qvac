@@ -8,7 +8,7 @@ import {
 } from '@/client/config-loader/resolve-config.node'
 import { getClientLogger } from '@/logging'
 import type { Logger } from '@/logging/types'
-import { BareImportsMapNotFoundError } from '@/utils/errors-client'
+import { BareImportsMapNotFoundError, ConfigValidationFailedError } from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
@@ -16,6 +16,7 @@ import { generateAddonsManifest } from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 
 const require = createRequire(import.meta.url)
+const AUDIO_DECODER_MODULE = '@qvac/decoder-audio'
 
 export interface BundleSdkOptions {
   projectRoot?: string | undefined
@@ -33,6 +34,48 @@ export interface BundleSdkResult {
   addons: string[]
   entryPaths: { worker: string }
   manifestPath: string
+}
+
+/**
+ * Add config-driven deferred modules to the caller's list without changing
+ * the safe default: encoded file-path inputs require the decoder and its
+ * native addon to remain in the bundle and addons manifest.
+ */
+export function resolveDeferredModules(
+  config: { includeAudioDecoder?: boolean | undefined },
+  requestedModules: string[]
+): string[] {
+  const modules = [...requestedModules]
+  if (config.includeAudioDecoder === false && !modules.includes(AUDIO_DECODER_MODULE)) {
+    modules.push(AUDIO_DECODER_MODULE)
+  }
+  return modules
+}
+
+async function assertAudioDecoderOptOutSupported(sdkPath: string): Promise<void> {
+  let manifestPath: string
+  try {
+    manifestPath = require.resolve('@qvac/inference/package', {
+      paths: [fs.realpathSync(sdkPath)]
+    })
+  } catch (cause) {
+    throw new ConfigValidationFailedError(
+      'Cannot verify audio decoder opt-out support in the selected SDK. ' +
+        'Install its @qvac/inference dependency, or keep includeAudioDecoder enabled and do not defer @qvac/decoder-audio.',
+      cause
+    )
+  }
+  // Inspect the worker's runtime without importing a second engine (which can
+  // register conflicting error codes in the bundler process).
+  const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8')) as {
+    qvac?: { optionalAudioDecoder?: boolean }
+  }
+  if (manifest.qvac?.optionalAudioDecoder !== true) {
+    throw new ConfigValidationFailedError(
+      'includeAudioDecoder: false or deferring @qvac/decoder-audio requires an @qvac/inference runtime with lazy audio decoder support. ' +
+        'Update the inference package used by the SDK being bundled, or enable includeAudioDecoder and remove any @qvac/decoder-audio defer.'
+    )
+  }
 }
 
 function resolveSdkPath(projectRoot: string, explicitSdkPath?: string): string {
@@ -116,6 +159,10 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   }
 
   const sdkPath = resolveSdkPath(projectRoot, options.sdkPath)
+  const deferModules = resolveDeferredModules(config, options.defer ?? [])
+  if (deferModules.includes(AUDIO_DECODER_MODULE)) {
+    await assertAudioDecoderOptOutSupported(sdkPath)
+  }
   const sdkName = await resolveSdkName(sdkPath)
   logger.info(`📦 SDK: ${sdkName}`)
   logger.debug(`   Path: ${sdkPath}`)
@@ -130,8 +177,6 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   }
 
   const hosts = options.hosts && options.hosts.length > 0 ? options.hosts : DEFAULT_HOSTS
-
-  const deferModules = options.defer ?? []
 
   await fsp.mkdir(outputDir, { recursive: true })
 
