@@ -22,12 +22,11 @@ import {
 
 type Page = InferPageType<typeof source>;
 
-/**
- * The page telling a coding agent how to pick a corpus. Named here because
- * the root router links it, and the page itself is the only other place that
- * knows the path.
- */
-export const BUILD_WITH_AI_URL = '/resources/build-with-ai';
+// Re-exported so the artifact builders below read it from one import with
+// everything else they publish, while the address itself lives in a leaf
+// module the test runner can load.
+import { AGENT_DOCS_URL } from '@/lib/agent-docs';
+export { AGENT_DOCS_URL };
 
 export interface VersionedCollection {
   software: DocumentedSoftware;
@@ -192,7 +191,7 @@ export function corpusHeader(
     );
   }
 
-  lines.push(`- How to pick a line: ${BUILD_WITH_AI_URL}`);
+  lines.push(`- How to pick a line: ${AGENT_DOCS_URL}`);
 
   return lines.join('\n');
 }

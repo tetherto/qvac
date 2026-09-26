@@ -4,6 +4,8 @@ import type { LinkItemType } from 'fumadocs-ui/layouts/shared';
 import { FaGithub, FaDiscord, FaGlobe, FaXTwitter } from 'react-icons/fa6';
 import { SiHuggingface } from '@icons-pack/react-simple-icons';
 import { KeetIcon } from '@/components/keet-icon';
+import { ConnectMcpServer } from '@/components/for-ai-menu';
+import { FOR_AI_ENTRIES, FOR_AI_LABEL } from '@/lib/for-ai-menu';
 import KeetRoomModalMount from '@/components/keet-modal';
 import { buildCustomTree, collectionTabs } from '@/lib/custom-tree';
 import { collectionLines, packageLines } from '@/lib/lines';
@@ -26,7 +28,32 @@ export default function Layout({ children }: LayoutProps<'/'>) {
   // its repository, its chat rooms, its model host, its announcements. One is
   // what this documentation documents; the rest are where to encounter the
   // people who make it.
+  //
+  // The For AI menu leads the bar because it is the only entry that leads
+  // further into this documentation rather than away from it, and because it
+  // belongs beside the assistant: the assistant answers a question here, the
+  // menu hands the documentation elsewhere.
+  //
+  // It names only the site-wide artifacts. Each is the top of a cascade that
+  // resolves downward, so one entry point is offered rather than a list that
+  // lengthens with every documentation line cut.
   const linkItems: LinkItemType[] = [
+    {
+      type: 'menu',
+      text: FOR_AI_LABEL,
+      items: FOR_AI_ENTRIES.map((entry) =>
+        // The entry with no URL is the one that copies the MCP address
+        // instead of navigating, which the framework has no shape for.
+        entry.url === undefined
+          ? { type: 'custom' as const, children: <ConnectMcpServer /> }
+          : {
+              text: entry.text,
+              url: entry.url,
+              icon: <entry.icon />,
+              external: entry.external,
+            },
+      ),
+    },
     {
       type: 'icon',
       url: 'https://qvac.tether.io',

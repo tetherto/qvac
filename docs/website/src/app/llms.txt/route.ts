@@ -1,5 +1,5 @@
 import {
-  BUILD_WITH_AI_URL,
+  AGENT_DOCS_URL,
   currentVersionOf,
   formatPageEntry,
   formatSectionTitle,
@@ -54,7 +54,7 @@ export function GET() {
     '',
     '- To fetch one page as Markdown, append `.md` to its path (e.g. `/sdk/js-ts-sdk` → `/sdk/js-ts-sdk.md`). Alternatively, send the HTTP header `Accept: text/markdown` and any page URL will be redirected to its Markdown variant.',
     '- When citing sources to users, use the canonical URL without `.md` (e.g. `/sdk/js-ts-sdk`), not the Markdown variant.',
-    `- Some collections are versioned: they publish one documentation line per release, and each line has its own page index and its own full-text corpus. Resolve the line that matches the release you are working against before reading anything else. How to do that: ${BUILD_WITH_AI_URL}`,
+    `- Some collections are versioned: they publish one documentation line per release, and each line has its own page index and its own full-text corpus. Resolve the line that matches the release you are working against before reading anything else. How to do that: ${AGENT_DOCS_URL}`,
     '- To obtain a dump of everything at once, fetch `/llms-full.txt`. It carries the unversioned collections and the current line of each versioned one.',
     '',
     '## Versioned collections',

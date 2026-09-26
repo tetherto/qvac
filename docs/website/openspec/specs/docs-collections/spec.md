@@ -88,7 +88,7 @@ The `sdk` collection SHALL hold the material about installing, configuring, and 
 
 ### Requirement: Resources holds the unversioned supporting material
 
-The `resources` collection SHALL NOT be versioned, and MUST therefore be the home of the material that supports the products without documenting a release of one. Its pages sit directly under the collection rather than inside a documentation line, and MUST NOT be copied into one when a line is cut. It MUST hold the tutorials and the help material the SDK gives up, and the page on building with AI, which is named for what a reader wants to do rather than for the protocol it describes.
+The `resources` collection SHALL NOT be versioned, and MUST therefore be the home of the material that supports the products without documenting a release of one. Its pages sit directly under the collection rather than inside a documentation line, and MUST NOT be copied into one when a line is cut. It MUST hold the tutorials and the help material the SDK gives up, and the page telling an AI agent how to pick the documentation matching a release, which is named for the documentation it describes rather than for the activity of building with AI — an activity the SDK's own pages document.
 
 #### Scenario: Resources holds unversioned supporting material
 
@@ -110,8 +110,9 @@ The `resources` collection SHALL NOT be versioned, and MUST therefore be the hom
 #### Scenario: The Corpus protocol page is renamed for what it lets a reader do
 
 - **WHEN** the `resources` collection is enumerated
-- **THEN** the former Corpus protocol page is published as Build with AI, at `/resources/build-with-ai`
-- **AND** its sidebar label, its page title, and its URL all carry the new name
+- **THEN** the former Corpus protocol page is published as Docs for AI agents, at `/resources/docs-for-ai-agents`
+- **AND** its sidebar label, its page title, and its URL all carry that name
+- **AND** the name describes the documentation rather than the activity of building with AI, which the SDK's own pages document
 
 #### Scenario: The overview describes the scope the collection has
 

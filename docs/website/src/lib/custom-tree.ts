@@ -210,8 +210,8 @@ const resourcesChildren: Node[] = [
     icon: resolveIcon('DoorOpen'),
   },
   {
-    name: 'Build with AI',
-    url: '/resources/build-with-ai',
+    name: 'Docs for AI agents',
+    url: '/resources/docs-for-ai-agents',
     type: 'page',
     icon: resolveIcon('Bot'),
   },

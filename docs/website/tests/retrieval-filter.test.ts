@@ -98,7 +98,7 @@ describe('allowedLines', () => {
       `/sdk/${SDK_OLDER}`,
       `/sdk/${SDK_OLDER}/reference/api`,
       '/cli/http-server',
-      '/resources/build-with-ai',
+      '/resources/docs-for-ai-agents',
     ]) {
       const collections = allowedLines(pathname).map((entry) => entry.collection);
       expect(new Set(collections).size).toBe(collections.length);

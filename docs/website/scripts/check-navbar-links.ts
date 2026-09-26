@@ -58,6 +58,34 @@ const PAGES = [
  */
 const ICON_ANCHOR_MARKER = '[&amp;_svg]:size-4.5';
 
+/** What the For AI menu's trigger is labelled, as the navbar writes it. */
+const FOR_AI_LABEL = 'For AI';
+
+/**
+ * Every element opening the For AI menu, by tag name.
+ *
+ * A page carries more than one: the framework renders the navbar for a wide
+ * viewport and again inside the navigation a narrow one opens, and the menu
+ * appears in both. All of them are returned, so a trigger lost or turned into
+ * a link in one rendering is not covered for by the other.
+ *
+ * The menu's entries are not looked for, because they are not there: the
+ * framework renders a menu's contents into a popover that mounts on open, so
+ * the built page carries the triggers and nothing else. Tags are returned
+ * rather than a count so a trigger turned into a link is reported as what it
+ * became.
+ */
+function readForAiTriggers(html: string): string[] {
+  const tags: string[] = [];
+  let at = html.indexOf(`>${FOR_AI_LABEL}<`);
+  while (at !== -1) {
+    const open = html.lastIndexOf('<', at);
+    tags.push(html.slice(open + 1, at).match(/^(\w+)/)?.[1] ?? '?');
+    at = html.indexOf(`>${FOR_AI_LABEL}<`, at + 1);
+  }
+  return tags;
+}
+
 interface Entry {
   href: string;
   name: string | null;
@@ -107,6 +135,7 @@ function shape(entries: Entry[]): string {
 async function main(): Promise<void> {
   const problems: string[] = [];
   const shapes = new Map<string, string[]>();
+  let menus = 0;
 
   for (const page of PAGES) {
     const file = path.join(OUT, page);
@@ -156,6 +185,28 @@ async function main(): Promise<void> {
       }
     }
 
+    // The For AI menu, which the bar sits beside. Only its trigger can be
+    // asserted here: the entries live in a popover that renders nothing until
+    // a reader opens it, so they never reach the built HTML. Their shape is
+    // held by `tests/for-ai-menu.test.ts` against the module that declares
+    // them; what the build can show is that the menu is offered at all, and
+    // that its trigger is a button rather than a link — a link would take a
+    // reader somewhere, and this menu's job is to open.
+    const triggers = readForAiTriggers(html);
+    if (triggers.length === 0) {
+      problems.push(`${page}: the navbar offers no "${FOR_AI_LABEL}" menu`);
+    }
+    for (const tag of triggers) {
+      if (tag !== 'button') {
+        problems.push(
+          `${page}: a "${FOR_AI_LABEL}" trigger is a <${tag}>, not a button that opens`,
+        );
+      }
+    }
+    if (triggers.length > 0 && triggers.every((tag) => tag === 'button')) {
+      menus++;
+    }
+
     const key = shape(first);
     shapes.set(key, [...(shapes.get(key) ?? []), page]);
   }
@@ -176,7 +227,7 @@ async function main(): Promise<void> {
 
   const [bar] = [...shapes.keys()];
   console.log(
-    `Navbar links check passed: ${bar.split(' | ').length} named entries, identical across ${PAGES.length} pages`,
+    `Navbar links check passed: ${bar.split(' | ').length} named entries, identical across ${PAGES.length} pages, with the ${FOR_AI_LABEL} menu on ${menus}`,
   );
 }
 
