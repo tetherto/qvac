@@ -88,9 +88,13 @@ jobs:
               - ".github/workflows/prebuilds-*.yml"
               - ".github/workflows/cpp-tests-*.yml"
               - ".github/workflows/integration-test-*.yml"
+            # No prebuilds-<pkg>.yml line for on-pr-nx packages: on-pr-nx only
+            # triggers on packages/**, so a PR touching just that file would
+            # wait to the deadline for a status nothing posts. shared-ci covers it.
             asr-ggml:
               - "packages/asr-ggml/**"
-              - ".github/workflows/prebuilds-asr-ggml.yml"
+            audiogen-ggml:
+              - "packages/audiogen-ggml/**"
             bci-whispercpp:
               - "packages/bci-whispercpp/**"
             classification-ggml:
@@ -136,11 +140,13 @@ jobs:
         id: pkglist
         env:
           CHANGES: ${{ steps.filter.outputs.changes }}
-          # Every package filter key above. Kept in step with that list.
+          # Every package filter key above whose package directory exists.
+          # Kept in step with that list by ci-trust-policy.test.mjs.
           ALL_PACKAGES: >-
-            ["asr-ggml","bci-whispercpp","classification-ggml","decoder-audio",
-             "diffusion-cpp","embed-llamacpp","infer-base","llm-llamacpp",
-             "model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","fabric","vla"]
+            ["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml",
+            "decoder-audio","diffusion-cpp","embed-llamacpp","infer-base",
+            "llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp",
+            "tts-ggml","fabric","vla"]
         run: |
           CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
 
@@ -153,7 +159,8 @@ jobs:
           # nothing verified.
           SANITY="$CHANGED"
           if [ "$SANITY" = "[]" ] && echo "$CHANGES" | jq -e 'index("shared-ci")' >/dev/null; then
-            SANITY="$ALL_PACKAGES"
+            # Compacted: a multi-line value is an invalid $GITHUB_OUTPUT line.
+            SANITY=$(jq -c . <<< "$ALL_PACKAGES")
             echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
           fi
           echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
@@ -203,7 +210,9 @@ jobs:
     needs: [authorize, changes, fork-approval]
     if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # Headroom over verify.mjs's 180-minute poll, so a timeout is reported by
+    # the script with the pending contexts rather than as a bare cancellation.
+    timeout-minutes: 190
     permissions:
       contents: read
       statuses: read
@@ -231,6 +240,37 @@ jobs:
           PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
         run: node .github/scripts/prebuild-status/verify.mjs
 
+  # Verifies C++/fuzz suites without triggering them. Each C++-test-bearing
+  # on-pr flow posts a qvac/cpp-tests-<pkg> commit status on the PR head SHA
+  # (success when the suite passed or was a legitimate no-label skip). The same
+  # freshness/run-binding rules as verify-prebuilds apply.
+  verify-cpp-tests:
+    needs: [authorize, changes, fork-approval]
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 190
+    permissions:
+      contents: read
+      statuses: read
+      actions: read
+    steps:
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Verify addon C++ test statuses on the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED_PACKAGES: ${{ needs.changes.outputs.packages || '[]' }}
+          PR_UPDATED_AT: ${{ github.event.pull_request.updated_at }}
+          KIND: cpp-tests
+        run: node .github/scripts/prebuild-status/verify.mjs
+
   # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
   # pre-filter: the called workflow self-detects SDK pod changes and is a fast
   # no-op when none changed, so this stays graceful for addon-only / non-SDK PRs.
@@ -250,6 +290,7 @@ jobs:
         changes,
         sanity-checks,
         verify-prebuilds,
+        verify-cpp-tests,
         sdk-pod-checks,
       ]
     if: |
@@ -263,9 +304,10 @@ jobs:
       # A skipped gated job maps to success ONLY when the PR was actually
       # authorized. Without this, an unapproved fork (fork-approval failed,
       # authorize skipped, or authorize returned allowed=false) would skip
-      # sanity-checks / verify-prebuilds / sdk-pod-checks and their
+      # sanity-checks / verify-prebuilds / verify-cpp-tests / sdk-pod-checks and their
       # skipped=success would green the required check. Require the full
       # authorization chain up front so those skips fail closed instead.
       sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
       build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
       general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
+      cpp-tests-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped') }}

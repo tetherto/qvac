@@ -115,6 +115,7 @@ jobs:
       perfcomposite: ${{ steps.filter.outputs.perfcomposite }}
       perfrtf: ${{ steps.filter.outputs.perfrtf }}
       prebuilds: ${{ steps.filter.outputs.prebuilds }}
+      cpptests: ${{ steps.filter.outputs.cpptests }}
       packages: ${{ steps.filter.outputs.packages }}
       cppbaseline: ${{ steps.filter.outputs.cppbaseline }}
       linking: ${{ steps.filter.outputs.linking }}
@@ -173,6 +174,7 @@ jobs:
             # One qvac/prebuild-<key> status per affected prebuild package. statusKey
             # maps the vla-ggml nx project -> "vla" (Merge Guard's key); unique_by dedupes rows.
             echo "prebuilds=$(echo "$M" | jq -c '[.[] | select(.hasPrebuilds == true) | {package, statusKey: (if .package == "vla-ggml" then "vla" else .package end)}] | unique_by(.package)')"
+            echo "cpptests=$(echo "$M" | jq -c '[.[] | select(.hasCppTests == true) | {package, statusKey: (if .package == "vla-ggml" then "vla" else .package end)}] | unique_by(.package)')"
             # Passed to the leaves as their explicit `packages:`; each would otherwise
             # self-affect against its own target and miss the on-pr carveOut.
             echo "packages=$(echo "$M" | jq -c '[.[] | .package] | unique')"
@@ -588,6 +590,50 @@ jobs:
           RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTEXT: qvac/prebuild-${{ matrix.statusKey }}
+        run: node .github/scripts/prebuild-status/publish.mjs
+
+  # Posts the qvac/cpp-tests-<key> statuses Merge Guard's verify-cpp-tests reads,
+  # once per affected C++-test package. CPP_TEST_RESULT is the aggregate result,
+  # so one failing package reds every row: fail-closed, but not per-package.
+  publish-cpp-test-status:
+    needs: [cpp-tests, ci-router, matrix]
+    if: >-
+      always() && !cancelled() &&
+      (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') &&
+      needs.matrix.result == 'success' &&
+      needs.matrix.outputs.cpptests != '' &&
+      needs.matrix.outputs.cpptests != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      statuses: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.cpptests || '[]') }}
+    steps:
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Publish C++ test status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CPP_TEST_RESULT: ${{ needs.cpp-tests.result }}
+          REUSE_HIT: ''
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          # A cppTestsBaseline package runs without the label, so a skip of its
+          # suite is never a legitimate no-label skip.
+          RUN_CPP_TESTS: ${{ contains(fromJSON(needs.matrix.outputs.cppbaseline || '[]'), matrix.package) && 'true' || needs.ci-router.outputs.run_cpp_tests }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/cpp-tests-${{ matrix.statusKey }}
+          KIND: cpp-tests
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:

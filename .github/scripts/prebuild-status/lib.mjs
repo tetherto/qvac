@@ -1,12 +1,14 @@
-// Pure, unit-tested helpers for the addon prebuild commit-status protocol.
+// Pure, unit-tested helpers for the addon on-pr commit-status protocol.
 //
-// Producer side (on-pr-<pkg>.yml `publish-prebuild-status`): map a prebuild
-// outcome to a qvac/prebuild-<pkg> commit status stamped with its own run URL.
-// Verifier side (pr-gate-merge.yml `verify-prebuilds`): select the newest
-// trustworthy status and bind it to the run that produced it.
+// Producer side (`publish-prebuild-status` / `publish-cpp-test-status`): map a
+// job outcome to a qvac/prebuild-<pkg> or qvac/cpp-tests-<pkg> commit status
+// stamped with its own run URL.
+// Verifier side (pr-gate-merge.yml `verify-prebuilds` / `verify-cpp-tests`):
+// select the newest trustworthy status and bind it to the run that produced it.
 //
 // Kept free of I/O so the behaviour can be exercised directly by tests; the
-// CLIs in publish.mjs / verify.mjs inject the GitHub API calls.
+// CLIs in publish.mjs / verify.mjs (selected by KIND) inject the GitHub API
+// calls.
 
 export const PREBUILD_KEYS = [
   'asr-ggml',
@@ -19,6 +21,26 @@ export const PREBUILD_KEYS = [
   'llm-llamacpp',
   'model-fit',
   'ocr-ggml',
+  'translation-nmtcpp',
+  'tts-ggml',
+  'vla',
+]
+
+// Merge Guard keys for C++/fuzz suites. `vla` matches pr-gate-merge.yml's
+// paths-filter key (packages/vla-ggml). audiogen-ggml is here even though it is
+// not in PREBUILD_KEYS; its suite is currently a stub that always passes.
+// Left out on purpose, because a key without a producer that can fail either
+// times out or passes vacuously:
+//   - ocr-ggml: test:cpp has no options.ci, so nothing posts its status.
+//   - asr-ggml, bci-whispercpp: test:cpp is continueOnError with no
+//     hardGateCommand, so their suites cannot fail the job.
+export const CPP_TEST_KEYS = [
+  'audiogen-ggml',
+  'classification-ggml',
+  'diffusion-cpp',
+  'embed-llamacpp',
+  'llm-llamacpp',
+  'model-fit',
   'translation-nmtcpp',
   'tts-ggml',
   'vla',
@@ -43,10 +65,14 @@ export function resolvePublishState(prebuildResult, reuseHit, ciRouterResult, ru
   return 'failure'
 }
 
-// Changed packages intersected with the prebuild allowlist.
+// Changed packages intersected with an allowlist (prebuilds or C++ tests).
 export function expectedPrebuilds(changedPackages, keys = PREBUILD_KEYS) {
   const allow = new Set(keys)
   return (changedPackages ?? []).filter((pkg) => allow.has(pkg))
+}
+
+export function expectedCppTests(changedPackages, keys = CPP_TEST_KEYS) {
+  return expectedPrebuilds(changedPackages, keys)
 }
 
 // `gh api --paginate --slurp` returns one array per page wrapped in an outer
@@ -115,10 +141,16 @@ export const LOOKUP_FAILED = Symbol('prebuild-status/lookup-failed')
 // Full per-package decision: 'success' | 'failed' | 'pending'.
 // `lookupRun(runId)` returns the producing run object, null, or LOOKUP_FAILED,
 // and is injected so this stays pure and testable.
-export function evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun) {
+export function evaluatePackage(
+  statuses,
+  pkg,
+  prUpdatedEpoch,
+  lookupRun,
+  contextPrefix = 'qvac/prebuild',
+) {
   // Trusted+fresh first, then newest: newest-first would let another workflow's
   // co-post mask the real producer.
-  const context = `qvac/prebuild-${pkg}`
+  const context = `${contextPrefix}-${pkg}`
   const candidates = (statuses ?? []).filter(
     (s) => s && s.context === context && s.creator && s.creator.login === BOT_LOGIN,
   )
@@ -147,8 +179,9 @@ export function evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun) {
 // output). We retry until the deadline rather than letting one hiccup escape and
 // red the gate — the deadline is what turns *persistent* failure into a hard
 // fail, keeping fail-closed semantics intact. This mirrors lookupRun's tolerance.
-export async function pollPrebuilds({
+export async function pollStatuses({
   expected,
+  contextPrefix,
   prUpdatedEpoch,
   fetchStatuses,
   lookupRun,
@@ -157,6 +190,11 @@ export async function pollPrebuilds({
   pollIntervalMs,
   timeoutMs,
   log,
+  failTitle,
+  timeoutTitle,
+  fetchFailTitle,
+  successMessage,
+  waitingPrefix,
 }) {
   const deadline = now() + timeoutMs
   for (;;) {
@@ -165,7 +203,7 @@ export async function pollPrebuilds({
       statuses = fetchStatuses()
     } catch (err) {
       if (now() >= deadline) {
-        log(`::error title=Prebuild verification failed::statuses fetch kept failing: ${err.message}`)
+        log(`::error title=${fetchFailTitle}::statuses fetch kept failing: ${err.message}`)
         return 1
       }
       log(`::warning::statuses fetch failed, retrying: ${err.message}`)
@@ -176,24 +214,55 @@ export async function pollPrebuilds({
     const pending = []
     const failed = []
     for (const pkg of expected) {
-      const outcome = evaluatePackage(statuses, pkg, prUpdatedEpoch, lookupRun)
-      if (outcome === 'failed') failed.push(`qvac/prebuild-${pkg}`)
-      else if (outcome === 'pending') pending.push(`qvac/prebuild-${pkg}`)
+      const outcome = evaluatePackage(
+        statuses,
+        pkg,
+        prUpdatedEpoch,
+        lookupRun,
+        contextPrefix,
+      )
+      const context = `${contextPrefix}-${pkg}`
+      if (outcome === 'failed') failed.push(context)
+      else if (outcome === 'pending') pending.push(context)
     }
 
     if (failed.length > 0) {
-      log(`::error title=Prebuild has not returned success::Failing prebuild status(es): ${failed.join(' ')}`)
+      log(`::error title=${failTitle}::Failing status(es): ${failed.join(' ')}`)
       return 1
     }
     if (pending.length === 0) {
-      log('All required prebuild statuses succeeded (fresh vs this PR event).')
+      log(successMessage)
       return 0
     }
     if (now() >= deadline) {
-      log(`::error title=Prebuild verification timed out::No fresh terminal prebuild status after timeout for: ${pending.join(' ')}`)
+      log(`::error title=${timeoutTitle}::No fresh terminal status after timeout for: ${pending.join(' ')}`)
       return 1
     }
-    log(`Waiting on prebuild status(es): ${pending.join(' ')} - re-checking in ${Math.round(pollIntervalMs / 1000)}s`)
+    log(`${waitingPrefix}: ${pending.join(' ')} - re-checking in ${Math.round(pollIntervalMs / 1000)}s`)
     await sleep(pollIntervalMs)
   }
+}
+
+export async function pollPrebuilds(opts) {
+  return pollStatuses({
+    ...opts,
+    contextPrefix: 'qvac/prebuild',
+    failTitle: 'Prebuild has not returned success',
+    timeoutTitle: 'Prebuild verification timed out',
+    fetchFailTitle: 'Prebuild verification failed',
+    successMessage: 'All required prebuild statuses succeeded (fresh vs this PR event).',
+    waitingPrefix: 'Waiting on prebuild status(es)',
+  })
+}
+
+export async function pollCppTests(opts) {
+  return pollStatuses({
+    ...opts,
+    contextPrefix: 'qvac/cpp-tests',
+    failTitle: 'C++ tests have not returned success',
+    timeoutTitle: 'C++ test verification timed out',
+    fetchFailTitle: 'C++ test verification failed',
+    successMessage: 'All required C++ test statuses succeeded (fresh vs this PR event).',
+    waitingPrefix: 'Waiting on C++ test status(es)',
+  })
 }

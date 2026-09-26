@@ -870,6 +870,11 @@ test("audit-called-out privileged checkouts are pinned to event head SHA", () =>
   );
   assert.doesNotMatch(
     mergeGuard,
+    /uses:\s+\.\/\.github\/workflows\/cpp-tests/,
+    "Merge Guard must not call a C++ test workflow (verify, do not trigger)",
+  );
+  assert.doesNotMatch(
+    mergeGuard,
     /head\.repo\.full_name/,
     "Merge Guard must not privileged-checkout the PR head repo",
   );
@@ -979,6 +984,11 @@ test("merge guard fails closed when the PR was not authorized", () => {
     /needs:[\s\S]*?\bauthorize\b/,
     "merge guard must depend on authorize",
   );
+  assert.match(
+    guard,
+    /needs:[\s\S]*?\bverify-cpp-tests\b/,
+    "merge guard must depend on verify-cpp-tests",
+  );
 
   // Each gated status input must require fork-approval success, authorize
   // success, AND allowed == 'true' before a skip is treated as a pass.
@@ -986,6 +996,7 @@ test("merge guard fails closed when the PR was not authorized", () => {
     "sanity-checks-status",
     "build-status",
     "general-checks-status",
+    "cpp-tests-status",
   ]) {
     const line = guard
       .split("\n")
@@ -1109,6 +1120,144 @@ test("verify-prebuilds binds a prebuild status to its producing on-pr run", () =
   );
 });
 
+test("verify-cpp-tests binds a C++ test status to its producing on-pr run", () => {
+  const source = read(".github/workflows/pr-gate-merge.yml");
+  const verify = jobBlock(source, "verify-cpp-tests");
+
+  assert.match(
+    verify,
+    /actions:\s*read/,
+    "verify-cpp-tests can read workflow runs",
+  );
+  assert.match(
+    verify,
+    /sparse-checkout:\s*\.github\/scripts\/prebuild-status/,
+    "verify-cpp-tests checks out only the prebuild-status scripts",
+  );
+  assert.match(
+    verify,
+    /ref:\s*\$\{\{ github\.event\.repository\.default_branch \}\}/,
+    "verify-cpp-tests checks out the trusted default branch, never PR head",
+  );
+  assert.match(
+    verify,
+    /run:\s*node \.github\/scripts\/prebuild-status\/verify\.mjs/,
+    "verify-cpp-tests runs the shared verify script",
+  );
+  assert.match(
+    verify,
+    /KIND:\s*cpp-tests/,
+    "verify-cpp-tests selects the cpp-tests kind",
+  );
+
+  // LOOKUP_FAILED is a Symbol, so a bare truthiness check would memoize one
+  // transient 5xx for the whole poll and hold the package pending to timeout.
+  assert.match(
+    read(".github/scripts/prebuild-status/verify.mjs"),
+    /if \(run && run !== LOOKUP_FAILED\) runCache\.set\(runId, run\)/,
+    "verify.mjs caches only resolved runs, never a transient lookup failure",
+  );
+  assert.match(
+    verify,
+    /PR_UPDATED_AT:\s*\$\{\{ github\.event\.pull_request\.updated_at \}\}/,
+    "verify-cpp-tests passes the PR event timestamp as the freshness threshold",
+  );
+});
+
+test("publish-cpp-test-status stamps its run URL into target_url", () => {
+  const workflowDirectory = join(root, ".github/workflows");
+  const offenders = readdirSync(workflowDirectory)
+    .filter((name) => /^on-pr-.*\.yml$/.test(name))
+    .filter((name) => {
+      const text = readFileSync(join(workflowDirectory, name), "utf8");
+      if (!text.includes("\n  publish-cpp-test-status:\n")) return false;
+      // Scoped to the job: the same file's publish-prebuild-status would
+      // otherwise satisfy the shared-script and RUN_URL checks on its behalf.
+      const job = jobBlock(text, "publish-cpp-test-status");
+      const hasRunUrl =
+        /RUN_URL:\s*\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/actions\/runs\/\$\{\{ github\.run_id \}\}/.test(
+          job,
+        );
+      const hasContext = /CONTEXT:\s*qvac\/cpp-tests-/.test(job);
+      const hasKind = /KIND:\s*cpp-tests/.test(job);
+      const runsScript =
+        /run:\s*node \.github\/scripts\/prebuild-status\/publish\.mjs/.test(job);
+      // on-pr-nx may force RUN_CPP_TESTS to 'true' for cppTestsBaseline
+      // packages, but it must still fall back to ci-router's decision.
+      const hasSkipGuard =
+        /CPP_TEST_RESULT:\s*\$\{\{ needs\.cpp-tests(?:-coverage)?\.result \}\}/.test(job) &&
+        /CI_ROUTER_RESULT:\s*\$\{\{ needs\.ci-router\.result \}\}/.test(job) &&
+        /RUN_CPP_TESTS:\s*\$\{\{[^\n]*needs\.ci-router\.outputs\.run_cpp_tests \}\}/.test(job);
+      return !(hasRunUrl && hasContext && hasKind && runsScript && hasSkipGuard);
+    });
+  assert.deepEqual(
+    offenders,
+    [],
+    "every on-pr publish-cpp-test-status must run publish.mjs with KIND=cpp-tests, RUN_URL, CONTEXT, and the ci-router skip guard",
+  );
+
+  const publish = read(".github/scripts/prebuild-status/publish.mjs");
+  assert.match(
+    publish,
+    /'cpp-tests': \{ resultEnv: 'CPP_TEST_RESULT', runFlagEnv: 'RUN_CPP_TESTS' \}/,
+    "publish.mjs maps the cpp-tests kind to CPP_TEST_RESULT + RUN_CPP_TESTS",
+  );
+});
+
+test("merge guard changes filter: ALL_PACKAGES and producer-less workflow paths", async () => {
+  const { CARVED_OUT_PRODUCERS, CPP_TEST_KEYS, PREBUILD_KEYS } = await import(
+    join(root, ".github/scripts/prebuild-status/lib.mjs")
+  );
+  const changes = jobBlock(read(".github/workflows/pr-gate-merge.yml"), "changes");
+  const filters = {};
+  let current = null;
+  for (const line of changes.split("\n")) {
+    const key = line.match(/^ {12}([a-z0-9-]+):$/);
+    if (key) {
+      current = key[1];
+      filters[current] = [];
+      continue;
+    }
+    const entry = line.match(/^ {14}- "(.+)"$/);
+    if (entry && current) filters[current].push(entry[1]);
+  }
+  delete filters["pkg-any"];
+  delete filters["shared-ci"];
+  const dirOf = (pkg) => (pkg === "vla" ? "packages/vla-ggml" : `packages/${pkg}`);
+  const exists = (pkg) => readdirSync(join(root, "packages")).includes(dirOf(pkg).slice("packages/".length));
+
+  // The shared-CI sanity sweep runs every ALL_PACKAGES entry, so it must be
+  // exactly the filter keys that have a package to check.
+  const allPackagesBlock = changes.match(/ALL_PACKAGES: >-\n((?: {12}\S.*\n)+)/);
+  assert.ok(allPackagesBlock, "ALL_PACKAGES is defined in the changes job");
+  const allPackages = JSON.parse(allPackagesBlock[1].replace(/\n/g, " "));
+  assert.deepEqual(
+    [...allPackages].sort(),
+    Object.keys(filters).filter(exists).sort(),
+    "ALL_PACKAGES must list every changes filter key whose package directory exists",
+  );
+
+  // on-pr-nx only triggers on packages/**. A workflow path on an nx-produced
+  // key flags the package on a PR that never runs on-pr-nx, so the verify job
+  // waits to its deadline for a status nothing posts.
+  const nxProduced = [...new Set([...CPP_TEST_KEYS, ...PREBUILD_KEYS])].filter(
+    (pkg) => !(pkg in CARVED_OUT_PRODUCERS) && exists(pkg),
+  );
+  const offenders = nxProduced.filter((pkg) =>
+    (filters[pkg] ?? []).some((path) => path.startsWith(".github/workflows/")),
+  );
+  assert.deepEqual(offenders, [], "nx-produced packages must not list a workflow path in the changes filter");
+});
+
+test("on-pr-nx treats a cppTestsBaseline package's skipped suite as a failure", () => {
+  const job = jobBlock(read(".github/workflows/on-pr-nx.yml"), "publish-cpp-test-status");
+  assert.match(
+    job,
+    /RUN_CPP_TESTS:\s*\$\{\{ contains\(fromJSON\(needs\.matrix\.outputs\.cppbaseline \|\| '\[\]'\), matrix\.package\) && 'true' \|\| needs\.ci-router\.outputs\.run_cpp_tests \}\}/,
+    "a baseline package runs without the label, so its skip must not read as a no-label skip",
+  );
+});
+
 // on-pr-nx runs on pull_request_target, so every job that executes PR code or
 // holds a write scope must gate on fork-approval. Enumerated from the file so a
 // newly added job cannot land ungated: anything not explicitly exempted below
@@ -1130,6 +1279,10 @@ test("on-pr-nx: every non-exempt job gates on fork-approval", () => {
     ],
     [
       "publish-prebuild-status",
+      "trusted sparse checkout; publishes a commit status after gated jobs",
+    ],
+    [
+      "publish-cpp-test-status",
       "trusted sparse checkout; publishes a commit status after gated jobs",
     ],
   ]);
@@ -1269,8 +1422,18 @@ test("publish-prebuild-status stamps its run URL into target_url", () => {
   // prebuild to Merge Guard.
   assert.match(
     publish,
-    /resolvePublishState\(\s*process\.env\.PREBUILD_RESULT,\s*process\.env\.REUSE_HIT,\s*process\.env\.CI_ROUTER_RESULT,\s*process\.env\.RUN_PREBUILDS,?\s*\)/,
-    "publish.mjs passes ci-router result + run_prebuilds into the state decision",
+    /resolvePublishState\(\s*process\.env\[kind\.resultEnv\],\s*process\.env\.REUSE_HIT,\s*process\.env\.CI_ROUTER_RESULT,\s*process\.env\[kind\.runFlagEnv\],?\s*\)/,
+    "publish.mjs passes ci-router result + the kind's run flag into the state decision",
+  );
+  assert.match(
+    publish,
+    /prebuild: \{ resultEnv: 'PREBUILD_RESULT', runFlagEnv: 'RUN_PREBUILDS' \}/,
+    "publish.mjs maps the prebuild kind to PREBUILD_RESULT + RUN_PREBUILDS",
+  );
+  assert.match(
+    publish,
+    /const kindName = process\.env\.KIND \|\| 'prebuild'/,
+    "publish.mjs defaults to the prebuild kind so existing publishers are unchanged",
   );
   const lib = read(".github/scripts/prebuild-status/lib.mjs");
   assert.match(

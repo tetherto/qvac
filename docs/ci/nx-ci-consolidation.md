@@ -39,7 +39,8 @@ on-pr-nx.yml            (pull_request_target)  ── PR orchestrator
   ├─ coload-smoke-mobile→ coload-smoke-mobile.yml        (asr/tts on-device co-load)
   ├─ perf-report(-rtf)                                   (informational)
   ├─ publish-prebuild-status  (scripts/prebuild-status/publish.mjs → qvac/prebuild-<pkg>)
-  └─ merge-guard        → public-pr.yml                  (produces qvac-merge-guard / validate-pr)
+  ├─ publish-cpp-test-status  (scripts/prebuild-status/publish.mjs KIND=cpp-tests → qvac/cpp-tests-<pkg>)
+  └─ merge-guard        → public-pr.yml                  (package-level merge-guard / validate-pr; not the required check)
 
 on-merge-nx.yml         (push to main/release/feature/tmp)  ── publish orchestrator
   ├─ detect             (per-package prebuild/publish matrices)
@@ -81,7 +82,7 @@ Packages with bespoke flows set `carveOut: true` on the relevant target. `nx-pro
 
 ## Merge guard
 
-`pr-gate-merge.yml` → `public-pr.yml` produces the single required check `qvac-merge-guard / validate-pr`. Its `verify-prebuilds` step reads the `qvac/prebuild-<pkg>` commit statuses posted by `on-pr-nx`'s `publish-prebuild-status` job, trusting **only** the `on-pr-nx.yml` producer and the newest fresh status (`scripts/prebuild-status/lib.mjs`, unit-tested in `prebuild-status.test.mjs`). Wiring a new gated job in: see `docs/ci/MERGE-GUARD.md` / the `qv-merge-guard-wire` skill.
+`pr-gate-merge.yml` → `public-pr.yml` produces the single required check `qvac-merge-guard / validate-pr`. `verify-prebuilds` reads `qvac/prebuild-<pkg>` statuses from `publish-prebuild-status`; `verify-cpp-tests` reads `qvac/cpp-tests-<pkg>` statuses from `publish-cpp-test-status`. Both trust only the package's own producer (`on-pr-nx.yml`, or the carved-out package's `on-pr-<pkg>.yml`) and the newest fresh status from it (`scripts/prebuild-status/lib.mjs`, unit-tested in `prebuild-status.test.mjs`). Wiring a new gated job in: see `docs/ci/MERGE-GUARD.md` / the `qv-merge-guard-wire` skill.
 
 ## Mobile
 

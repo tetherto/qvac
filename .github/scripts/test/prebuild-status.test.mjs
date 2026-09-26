@@ -5,8 +5,10 @@ import {
   PREBUILD_KEYS,
   NX_PRODUCER,
   CARVED_OUT_PRODUCERS,
+  CPP_TEST_KEYS,
   resolvePublishState,
   expectedPrebuilds,
+  expectedCppTests,
   flattenPages,
   parseRunId,
   selectNewestBotStatus,
@@ -15,6 +17,7 @@ import {
   evaluatePackage,
   pollPrebuilds,
   LOOKUP_FAILED,
+  pollCppTests,
 } from '../prebuild-status/lib.mjs'
 
 const iso = (s) => new Date(s).toISOString()
@@ -67,6 +70,15 @@ test('expectedPrebuilds keeps only allowlisted changed packages', () => {
   assert.deepEqual(expectedPrebuilds([]), [])
   assert.deepEqual(expectedPrebuilds(['decoder-audio']), [])
   assert.deepEqual(expectedPrebuilds(null), [])
+})
+
+test('expectedCppTests keeps C++-test packages including audiogen, not fabric', () => {
+  assert.deepEqual(expectedCppTests(['tts-ggml', 'fabric', 'audiogen-ggml', 'vla']), [
+    'tts-ggml',
+    'audiogen-ggml',
+    'vla',
+  ])
+  assert.deepEqual(expectedCppTests(['infer-base']), [])
 })
 
 test('flattenPages merges paginated pages and tolerates a flat array', () => {
@@ -261,6 +273,23 @@ test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
   assert.ok(PREBUILD_KEYS.includes('vla'))
 })
 
+test('CPP_TEST_KEYS covers C++-test packages and uses the vla merge-guard key', () => {
+  assert.equal(CPP_TEST_KEYS.length, 9)
+  assert.ok(CPP_TEST_KEYS.includes('audiogen-ggml'))
+  assert.ok(CPP_TEST_KEYS.includes('vla'))
+  assert.ok(!CPP_TEST_KEYS.includes('fabric'))
+  assert.ok(!CPP_TEST_KEYS.includes('vla-ggml'))
+})
+
+// A key without a producer that can fail either times out every PR touching
+// the package (ocr: nothing posts) or passes vacuously (asr/bci: continueOnError
+// with no hardGateCommand). Re-add only once that is no longer true.
+test('CPP_TEST_KEYS excludes packages with no failable C++ test producer', () => {
+  for (const pkg of ['ocr-ggml', 'asr-ggml', 'bci-whispercpp']) {
+    assert.ok(!CPP_TEST_KEYS.includes(pkg), `${pkg} has no failable C++ test producer`)
+  }
+})
+
 // --- poll loop: retry / deadline / terminal outcomes ---------------------
 
 // A deterministic clock. `sleep` advances virtual time so the loop reaches its
@@ -333,6 +362,58 @@ test('pollPrebuilds times out (fail-closed) when a required status never appears
     sleep: clock.sleep,
     pollIntervalMs: 30_000,
     timeoutMs: 60_000,
+    log: () => {},
+  })
+  assert.equal(code, 1)
+})
+
+test('evaluatePackage with the C++ context prefix ignores a prebuild status', () => {
+  const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
+  const lookup = () => FRESH_RUN
+  const onlyPrebuild = [
+    status({
+      context: 'qvac/prebuild-tts-ggml',
+      updated_at: iso('2026-08-10T13:00:00Z'),
+      target_url: 'r/actions/runs/2',
+      state: 'success',
+    }),
+  ]
+  assert.equal(
+    evaluatePackage(onlyPrebuild, 'tts-ggml', threshold, lookup, 'qvac/cpp-tests'),
+    'pending',
+  )
+  const cppSuccess = [
+    status({
+      context: 'qvac/cpp-tests-tts-ggml',
+      updated_at: iso('2026-08-10T13:00:00Z'),
+      target_url: 'r/actions/runs/2',
+      state: 'success',
+    }),
+  ]
+  assert.equal(
+    evaluatePackage(cppSuccess, 'tts-ggml', threshold, lookup, 'qvac/cpp-tests'),
+    'success',
+  )
+})
+
+test('pollCppTests returns failure immediately when a C++ test status is failed', async () => {
+  const clock = fakeClock()
+  const code = await pollCppTests({
+    expected: ['tts-ggml'],
+    prUpdatedEpoch: THRESHOLD,
+    fetchStatuses: () => [
+      status({
+        context: 'qvac/cpp-tests-tts-ggml',
+        updated_at: iso('2026-08-10T12:01:00Z'),
+        target_url: 'r/actions/runs/2',
+        state: 'failure',
+      }),
+    ],
+    lookupRun: () => FRESH_RUN,
+    now: clock.now,
+    sleep: clock.sleep,
+    pollIntervalMs: 30_000,
+    timeoutMs: 180 * 60 * 1000,
     log: () => {},
   })
   assert.equal(code, 1)
