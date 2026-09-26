@@ -5,11 +5,13 @@ testing to QVAC's native (C++) inference addons. It is the reference for
 maintainers and agents implementing, reviewing, or extending fuzz coverage
 across the addon fleet.
 
-Status: **Phase 0 implemented for `classification-ggml`** (template fuzz
-helper + a `FUZZ_TEST` per `preprocessToTensor` branch, each seeded so both
-branches are reachable in bounded mode), including bounded Linux CI coverage.
-Fleet rollout, corpus/dictionary scale-up, scheduled continuous fuzzing, and
-optional OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
+Status: **Phase 0 implemented for `classification-ggml`**, and the shared
+fuzz helpers (`qvac_addon_fuzz_manifest`, `qvac_addon_fuzz_only_return`,
+`qvac_addon_add_fuzz_target`) are reused by unmigrated addons without a full
+CMake-template adoption. Bounded Linux CI coverage exists for classification
+and for the remaining native addons' parse/transform fronts. Fleet
+corpus/dictionary scale-up, scheduled continuous fuzzing, and optional
+OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
 
 > **The entire fuzz dependency stack comes from vcpkg — FuzzTest included.**
@@ -55,7 +57,7 @@ against `ggml` / `llama.cpp` / `whisper.cpp` / `stable-diffusion.cpp`.
 | `ocr-ggml` | ggml | OCR (easyocr / doctr) | ✅ |
 | `tts-ggml` | ggml | text-to-speech (supertonic / chatterbox) | ✅ |
 | `vla-ggml` | ggml | vision-language-action | ✅ |
-| `audiogen-ggml` | ggml | music / audio generation (acestep) | ❌ (harness needed) |
+| `audiogen-ggml` | ggml | music / audio generation (acestep) | ❌ (parse-front fuzz only) |
 | `llm-llamacpp` | llama.cpp | text / multimodal LLM | ✅ |
 | `embed-llamacpp` | llama.cpp | embeddings (BERT) | ✅ |
 | `translation-nmtcpp` | NMT | translation | ✅ |
@@ -84,9 +86,9 @@ addon-test`); the `test/unit/CMakeLists.txt` compiles the model-interface
 therefore already exercised outside the JS/addon (Bare) boundary, in an
 ordinary native executable. A fuzz target is *the same shape* — a plain
 `add_executable()` linking the same TUs — so it slots straight into this
-pattern. Two in-scope packages (`audiogen-ggml`, `fabric`) lack the harness
-today and need it stood up first (or, for `fabric`, may stay out of scope as
-pure infra).
+pattern. Two in-scope packages (`audiogen-ggml`, `fabric`) still lack a
+full `addon-test` harness; `audiogen-ggml` now fuzzes its config-parse front
+without one, and `fabric` may stay out of scope as pure infra.
 
 ### 2. A shared CMake template now owns the addon/test build shape
 
@@ -262,11 +264,14 @@ Fuzzing proves those hold across *malformed* inputs, not just curated fixtures.
 
 ## Build integration: the shared CMake template
 
-Fuzz support is added to `cmake/qvac-addon/qvac-addon.cmake` and consumed by
-each addon exactly the way the test harness is, so onboarding an addon is a few
-lines in the PR that already migrates it to the template + fabric.
+Fuzz support lives in `cmake/qvac-addon/qvac-addon.cmake`. Migrated addons
+consume it through `qvac_addon_preproject()`; unmigrated addons include the
+same module and call `qvac_addon_fuzz_manifest()` / `qvac_addon_fuzz_only_return()`
+so overlay triplets and Android STL stay as each listfile already sets them.
 
-- **`BUILD_FUZZING` option** lives in `qvac_addon_preproject` next to
+- **`BUILD_FUZZING` option** lives in `qvac_addon_fuzz_manifest()` (called from
+  `qvac_addon_preproject` and from unmigrated CMakeLists before `project()`)
+  next to
   `BUILD_TESTING` / `ENABLE_COVERAGE`, and enables the `fuzz` vcpkg manifest
   feature. `BUILD_FUZZING` **without** `BUILD_TESTING` short-circuits into a
   **fuzz-only configure** (`add_subdirectory(test/fuzz)` then `return()`),
@@ -500,14 +505,14 @@ post-merge commit, so `fuzztest` resolves from the registry with no overlay.
 
 ## Implementation phases
 
-Sequencing is bound to the CMake-template + fabric migration: an addon becomes
-fuzzable when it adopts the template, so fuzz rollout follows the template
-migration order (`docs/architecture/ADDON-CMAKE-TEMPLATE.md`, Phase 1:
-`classification-ggml` → `vla-ggml`, `ocr-ggml`, `translation-nmtcpp` → the
-llama addons once fabric's llama packaging is ready). Whisper / parakeet / tts /
-diffusion (separate vcpkg ports) are fuzzed after they migrate. Within that
-order the plan front-loads the shared parsing families that protect several
-addons at once.
+Sequencing still prefers the CMake-template + fabric migration, but unmigrated
+addons can now reuse the extracted fuzz helpers without calling
+`qvac_addon_preproject()` (that macro also sets overlay triplets and Android
+STL). Whisper / parakeet / tts / audiogen / diffusion keep their own
+CMakeLists and opt in with `qvac_addon_fuzz_manifest()` before `project()` plus
+`qvac_addon_fuzz_only_return()` after the inference-addon-cpp include path is
+resolved. Within that order the plan still front-loads the shared parsing
+families that protect several addons at once.
 
 - **Phase 0 — template fuzz helper + spike (`classification-ggml`). ✅ Done.**
   Added the `BUILD_FUZZING` option in `qvac_addon_preproject`, the
@@ -568,19 +573,23 @@ addons at once.
   compiles 3 TUs instead of 34. Validated on `preprocess-fuzz`: bounded mode, 29
   unit tests in the combined tree, and coverage-guided mode at the same 8505
   total edges as the FetchContent build, 430k execs clean.
-- **Phase 1 — image + model-header families (as addons migrate).** As each
+- **Phase 1 — image + model-header families (as addons migrate), plus
+  unmigrated parse fronts.** As each
   direct-ggml addon adopts the template, add its fuzz targets: the image family
-  (`classification-ggml`, `ocr-ggml`, `vla-ggml`; `diffusion-cpp` after it
-  migrates) and the model-file-header family. Prefer the no-fabric link;
+  (`classification-ggml`, `ocr-ggml`, `vla-ggml`) and GGUF/weight-header
+  parsers. Unmigrated addons reuse the same helpers without a template
+  migration: `asr-ggml` (s16le PCM), `tts-ggml` / `audiogen-ggml` (config
+  number parse), `bci-whispercpp` (neural-signal length prefix),
+  `diffusion-cpp` (GGUF capability inspect). Prefer the no-fabric link;
   reserve `LINK_FABRIC` for header loaders that actually call ggml/gguf. Factor
   shared parsing helpers so one target covers multiple consumers where the code
   is genuinely shared.
-- **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
-  NMT text parsers, the whisper/parakeet/tts audio buffer math, and the config
-  JSON parsers — each landing with (or after) that addon's template migration.
-- **Phase 3 — harness gaps.** Stand up the missing GTest/`addon-test` harness
-  for `audiogen-ggml` (and decide whether `fabric` is in scope), then add its
-  fuzz targets.
+- **Phase 2 — text + audio + config families.** Remaining llama.cpp / NMT text
+  parsers and deeper audio-buffer math still land with (or after) template
+  migration where the code sits behind engine state.
+- **Phase 3 — harness gaps.** `fabric` is still out of scope. `audiogen-ggml`
+  now has a parse-front fuzz target; a GTest/`addon-test` harness remains
+  future work.
 - **Phase 4 — seed corpora + dictionaries.** Every target ships the minimum
   in-harness `.WithSeeds(...)` needed to make its branches reachable per PR (see
   the Phase 0 follow-up); this phase is the scale-up. Seed from existing assets
@@ -694,20 +703,20 @@ addons at once.
   port carries has a "drop this once…" note of its own.
 - **Platform scope.** libFuzzer + ASan is Linux-first here; treat fuzzing as a
   Linux-only CI concern (matches the existing `if(NOT WIN32)` ASan gate).
-- **Migration coupling.** An addon can't be fuzzed via the shared helper until
-  it adopts the template; fuzz rollout is gated by the fabric-migration order.
-  Un-migrated addons (whisper / parakeet / tts / diffusion) wait their turn
-  rather than getting a bespoke fuzz build.
-- **Harness gaps.** `audiogen-ggml` and `fabric` need harness work before they
-  can be fuzzed; they are sequenced last so they don't block the high-value
-  shared-family coverage.
+- **Migration coupling.** Full template adoption is no longer a prerequisite
+  for the shared fuzz helper. Unmigrated addons include `qvac-addon.cmake` and
+  call `qvac_addon_fuzz_manifest()` before `project()` without
+  `qvac_addon_preproject()`, so overlay triplets and Android STL stay local.
+- **Harness gaps.** `fabric` is still out of scope. `audiogen-ggml` now fuzzes
+  its config-parse front; a full GTest/`addon-test` harness remains future
+  work.
 
 ## References
 
 - `cmake/qvac-addon/qvac-addon.cmake` — the shared addon build template; home of
-  `BUILD_FUZZING`, `qvac_addon_enable_fuzztest()`,
-  `qvac_addon_add_fuzz_target()`, and the existing
-  `qvac_addon_stage_fabric_for_test()` the fuzz harness reuses.
+  `qvac_addon_fuzz_manifest()`, `qvac_addon_fuzz_only_return()`,
+  `qvac_addon_enable_fuzztest()`, `qvac_addon_add_fuzz_target()`, and the
+  existing `qvac_addon_stage_fabric_for_test()` the fuzz harness reuses.
 - `packages/classification-ggml/test/fuzz/` — Phase 0 reference: the
   `CMakeLists.txt` fuzz wiring and `preprocess_fuzz.cpp` — one `FUZZ_TEST` per
   `preprocessToTensor` branch (encoded / raw-RGB), each seeded with

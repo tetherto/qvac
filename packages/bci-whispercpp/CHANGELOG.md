@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   index or by `integrated` / `dedicated` class when `use_gpu` is enabled.
   Unavailable or refused devices fall back to CPU; out-of-range indices warn
   and use automatic selection. Cannot be combined with `gpu_device`.
+- Bounded FuzzTest coverage for the length-prefixed neural-signal parser
+  (`readNeuralFeatures`), including the uint32×uint32×sizeof(float) overflow
+  class. Linux C++ CI runs the suite after unit tests. The parser compiles
+  without whisper, so ASan and LeakSanitizer stay at full strength. No public
+  addon API changes.
 
 ### Changed
 
