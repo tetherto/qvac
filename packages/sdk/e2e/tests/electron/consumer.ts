@@ -1,3 +1,4 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import * as os from 'node:os'
 import mqtt from 'mqtt'
 import {
@@ -611,6 +612,7 @@ export const executor = createExecutor({
     new DownloadResilienceExecutor(),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new MultiGpuExecutor(resources),

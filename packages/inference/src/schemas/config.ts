@@ -229,6 +229,9 @@ export const qvacConfigSchema = z.object({
    */
   plugins: z.array(z.string()).optional(),
 
+  /** Optional provider module selected at SDK bundle time. Direct Bare callers register in code. */
+  rpcServerProvider: z.string().min(1).optional(),
+
   /**
    * Inert: we have no bundling or ABI-verification step, so this field is
    * unused. Carried over from the bundle-time config schema.

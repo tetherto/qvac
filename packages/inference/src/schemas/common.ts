@@ -1,3 +1,11 @@
+import {
+  startRpcServerRequestSchema,
+  startRpcServerResponseSchema,
+  stopRpcServerRequestSchema,
+  stopRpcServerResponseSchema,
+  discoverRpcServersRequestSchema,
+  discoverRpcServersResponseSchema
+} from '@/schemas/rpc-server'
 import { z } from 'zod'
 import { perCallProfilingSchema } from '@/schemas/profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
@@ -116,6 +124,9 @@ export const requestSchema = z.union([
   audioGenStreamRequestSchema,
   audioEditStreamRequestSchema,
   audioUnderstandRequestSchema,
+  startRpcServerRequestSchema,
+  stopRpcServerRequestSchema,
+  discoverRpcServersRequestSchema,
   heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
@@ -162,6 +173,9 @@ export const responseSchema = z.discriminatedUnion('type', [
   audioGenStreamResponseSchema,
   audioEditStreamResponseSchema,
   audioUnderstandResponseSchema,
+  startRpcServerResponseSchema,
+  stopRpcServerResponseSchema,
+  discoverRpcServersResponseSchema,
   heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,

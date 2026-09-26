@@ -1,3 +1,4 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { Platform } from 'react-native'
 import { createExecutor, SkipExecutor } from '@qvac/test-suite/mobile'
 import type { TestDefinition } from '@qvac/test-suite'
@@ -698,6 +699,7 @@ export const executor = createExecutor({
     new MobileDownloadResilienceExecutor(resolveBakedMqttHost()),
     new DownloadExecutor(),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(Platform.OS),
     new ConfigExecutor(),
     new MobileCancellationExecutor(resources),

@@ -1,0 +1,57 @@
+import {
+  type StartRpcServerOptions,
+  type StopRpcServerOptions,
+  type DiscoverRpcServersOptions,
+  type RpcServerInfo,
+  type RpcServerCandidate
+} from '@/schemas/index'
+import { send } from '@/dispatch'
+import { InvalidResponseError } from '@/errors/index'
+import { decoratePromise } from '@/utils/decorate-promise'
+import { generateRequestId } from '@/runtime/request-id'
+
+/**
+ * Start a worker-owned native TCP server. Non-loopback binding and advertising require explicit opt-in.
+ * Cancel a pending start with its promise.requestId.
+ */
+export function startRpcServer(
+  options: StartRpcServerOptions = {}
+): Promise<RpcServerInfo> & { requestId: string } {
+  const requestId = generateRequestId()
+  return decoratePromise(runStartRpcServer(options, requestId), { requestId })
+}
+
+async function runStartRpcServer(options: StartRpcServerOptions, requestId: string) {
+  const response = await send({ ...options, type: 'startRpcServer', requestId })
+  if (response.type !== 'startRpcServer') throw new InvalidResponseError('startRpcServer')
+  return {
+    serverId: response.serverId,
+    url: response.url,
+    runtime: response.runtime,
+    rdmaCapable: response.rdmaCapable
+  }
+}
+
+/** Withdraw the announcement and await native stop. Bare stop has no deadline. */
+export async function stopRpcServer(options: StopRpcServerOptions): Promise<void> {
+  const response = await send({ ...options, type: 'stopRpcServer' })
+  if (response.type !== 'stopRpcServer') throw new InvalidResponseError('stopRpcServer')
+}
+
+/**
+ * Find private-network candidates with native device indices and memory snapshots.
+ * Use getRpcDeviceMap with the chosen endpoint registration order before loadModel.
+ * Cancel a pending search with its promise.requestId.
+ */
+export function discoverRpcServers(
+  options: DiscoverRpcServersOptions
+): Promise<RpcServerCandidate[]> & { requestId: string } {
+  const requestId = generateRequestId()
+  return decoratePromise(runDiscoverRpcServers(options, requestId), { requestId })
+}
+
+async function runDiscoverRpcServers(options: DiscoverRpcServersOptions, requestId: string) {
+  const response = await send({ ...options, type: 'discoverRpcServers', requestId })
+  if (response.type !== 'discoverRpcServers') throw new InvalidResponseError('discoverRpcServers')
+  return response.servers
+}

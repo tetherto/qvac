@@ -41,6 +41,8 @@ from . import (
     DeleteCacheResponse,
     DiffusionStreamRequest,
     DiffusionStreamResponse,
+    DiscoverRpcServersRequest,
+    DiscoverRpcServersResponse,
     DownloadAssetRequest,
     DownloadAssetResponse,
     EmbedRequest,
@@ -78,8 +80,12 @@ from . import (
     RagResponse,
     ResumeRequest,
     ResumeResponse,
+    StartRpcServerRequest,
+    StartRpcServerResponse,
     StateRequest,
     StateResponse,
+    StopRpcServerRequest,
+    StopRpcServerResponse,
     SuspendRequest,
     SuspendResponse,
     TextToSpeechRequest,
@@ -204,6 +210,13 @@ async def diffusion_stream(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield DiffusionStreamResponse.model_validate(chunk)
+
+
+async def discover_rpc_servers(
+    transport: Transport, params: DiscoverRpcServersRequest
+) -> DiscoverRpcServersResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return DiscoverRpcServersResponse.model_validate(await transport.call(payload))
 
 
 async def download_asset(
@@ -388,9 +401,23 @@ async def resume(transport: Transport, params: ResumeRequest) -> ResumeResponse:
     return ResumeResponse.model_validate(await transport.call(payload))
 
 
+async def start_rpc_server(
+    transport: Transport, params: StartRpcServerRequest
+) -> StartRpcServerResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return StartRpcServerResponse.model_validate(await transport.call(payload))
+
+
 async def state(transport: Transport, params: StateRequest) -> StateResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return StateResponse.model_validate(await transport.call(payload))
+
+
+async def stop_rpc_server(
+    transport: Transport, params: StopRpcServerRequest
+) -> StopRpcServerResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return StopRpcServerResponse.model_validate(await transport.call(payload))
 
 
 async def suspend(transport: Transport, params: SuspendRequest) -> SuspendResponse:
@@ -498,6 +525,7 @@ __all__ = [
     "completion_stream",
     "delete_cache",
     "diffusion_stream",
+    "discover_rpc_servers",
     "download_asset",
     "download_asset_with_progress",
     "embed",
@@ -519,7 +547,9 @@ __all__ = [
     "rag",
     "rag_with_progress",
     "resume",
+    "start_rpc_server",
     "state",
+    "stop_rpc_server",
     "suspend",
     "text_to_speech",
     "text_to_speech_stream",

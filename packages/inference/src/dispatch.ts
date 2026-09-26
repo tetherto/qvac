@@ -25,6 +25,7 @@ import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
 import { initialize, close as closeEngine } from '@/runtime/lifecycle'
 import { getAllPlugins } from '@/plugins/index'
+import { hasRpcServerProvider } from '@/rpc/provider'
 import { resolveConfig } from '@/config/resolve-config'
 import { setGlobalLogLevel, setGlobalConsoleOutput, getAppLogger } from '@/logging/index'
 import { profileReplyHandler, profileStreamHandler } from '@/profiling/index'
@@ -54,7 +55,7 @@ let readyPromise: Promise<void> | null = null
 let generation = 0
 
 function ensurePluginsRegistered(): void {
-  if (getAllPlugins().length === 0) {
+  if (getAllPlugins().length === 0 && !hasRpcServerProvider()) {
     throw new PluginsNotRegisteredError()
   }
 }
@@ -88,14 +89,14 @@ async function initializeConfig(): Promise<void> {
 
 async function performReady(gen: number): Promise<void> {
   initialize()
-  ensurePluginsRegistered()
   await initializeConfig()
   // Mark ready only while this generation is current — a `close()` during the
   // await bumps it past this now-superseded init.
   if (gen === generation) ready = true
 }
 
-async function ensureReady(): Promise<void> {
+async function ensureReady(allowWithoutPlugins = false): Promise<void> {
+  if (!allowWithoutPlugins) ensurePluginsRegistered()
   if (ready) return
   // A single shared promise serializes concurrent first calls: `ready` only
   // flips after `initializeConfig` awaits, so overlapping callers must run
@@ -221,7 +222,12 @@ export async function send<T extends Request>(
   request: T,
   _options?: RPCOptions
 ): Promise<Response> {
-  await ensureReady()
+  await ensureReady(
+    request.type === 'startRpcServer' ||
+      request.type === 'stopRpcServer' ||
+      request.type === 'discoverRpcServers' ||
+      (request.type === 'cancel' && request.operation === 'request')
+  )
   assertLifecycleAllowed(request)
 
   const processed = prepareRequest(request)

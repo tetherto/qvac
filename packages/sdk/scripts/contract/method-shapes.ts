@@ -7,6 +7,9 @@
  * export runs under Node, where core's native `bare-*` modules cannot load.
  */
 export const methodShapes = {
+  startRpcServer: 'reply',
+  stopRpcServer: 'reply',
+  discoverRpcServers: 'reply',
   assessModelFit: 'reply',
   audioEditStream: 'stream',
   audioGenStream: 'stream',

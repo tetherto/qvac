@@ -79,6 +79,12 @@
       "responseSchema": "schema.json#/$defs/diffusionStream.response"
     },
     {
+      "name": "discoverRpcServers",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/discoverRpcServers.request",
+      "responseSchema": "schema.json#/$defs/discoverRpcServers.response"
+    },
+    {
       "name": "downloadAsset",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/downloadAsset.request",
@@ -197,10 +203,22 @@
       "responseSchema": "schema.json#/$defs/resume.response"
     },
     {
+      "name": "startRpcServer",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/startRpcServer.request",
+      "responseSchema": "schema.json#/$defs/startRpcServer.response"
+    },
+    {
       "name": "state",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/state.request",
       "responseSchema": "schema.json#/$defs/state.response"
+    },
+    {
+      "name": "stopRpcServer",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/stopRpcServer.request",
+      "responseSchema": "schema.json#/$defs/stopRpcServer.response"
     },
     {
       "name": "suspend",

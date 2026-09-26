@@ -1,6 +1,6 @@
 # @qvac/inference
 
-The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare runtime](https://bare.pears.com) in a single process — no RPC, no worker, no subprocess. You register the inference engines you need and call the same API surface as `@qvac/sdk`, in-process.
+The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare runtime](https://bare.pears.com) in a single process without a worker or subprocess. Native GGML RPC is available as an opt-in distributed GPU path. You register the inference engines you need and call the same API surface as `@qvac/sdk`, in-process.
 
 > _Part of the **QVAC** ecosystem_
 >
@@ -13,7 +13,7 @@ The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare ru
 
 `@qvac/inference` is the pure-Bare layer of the SDK, written in TypeScript: the client API, the request engine, and the plugin system, all running in one Bare process. `@qvac/sdk` builds on top of it to reach Node, Electron, Expo, and Pear by launching this engine as a worker; on Bare you use it directly. It replaces the deprecated `@qvac/bare-sdk` package (last release 0.18.2).
 
-`@qvac/inference` ships no plugins by default and no addon dependencies. You install only the addon packages your app registers, so the resulting binary scales with the engines you actually assemble.
+`@qvac/inference` ships no plugins by default and has no required model or RPC server addon dependencies. Model addons are optional peers; RPC serving uses an explicitly registered provider. You install only the addon packages your app registers, so the resulting binary scales with the engines and services you actually assemble.
 
 ## Requirements
 
@@ -57,7 +57,7 @@ const modelId = await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 })
 const run = completion({ modelId, history: [{ role: 'user', content: 'Hi' }] })
 ```
 
-An operation called before any plugin is registered throws `PluginsNotRegisteredError`.
+Model operations require a registered model plugin. RPC discovery needs no model plugin or server provider; serving requires an explicitly registered server provider.
 
 ## Capability to addon package
 
@@ -81,7 +81,7 @@ The engine resolves a `qvac.config.js` or `qvac.config.json` from the current wo
 
 ## System resource diagnostics
 
-Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Like any other operation it runs after the first plugin is registered:
+Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Register a model plugin or RPC server provider before requesting diagnostics:
 
 ```js
 import { registerPlugin, getSystemResources } from '@qvac/inference'

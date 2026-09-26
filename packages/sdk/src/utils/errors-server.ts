@@ -1037,3 +1037,5 @@ export class ModelRegistryQueryFailedError extends QvacErrorBase {
     )
   }
 }
+
+export { RpcServerOperationError } from '@qvac/inference/surface'

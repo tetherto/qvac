@@ -125,11 +125,25 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class."
     ),
+  'rpc-servers': z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Comma-separated native RPC host:port endpoints in device registration order. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.'
+    ),
+  devices: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device of each endpoint in first-registration order, persisting for the worker lifetime. Use getRpcDeviceMap with that order; tensor-split weights follow this device order.'
+    ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])
     .optional()
     .describe(
-      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across all visible GPUs; desktop-only, requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
+      "How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly)."
     ),
   'flash-attn': z
     .enum(['on', 'off', 'auto'])

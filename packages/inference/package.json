@@ -133,6 +133,14 @@
     "./ggml-classification/plugin": {
       "types": "./dist/plugins/builtin/ggml-classification/plugin.d.ts",
       "import": "./dist/plugins/builtin/ggml-classification/plugin.js"
+    },
+    "./rpc-server-provider": {
+      "types": "./dist/rpc/index.d.ts",
+      "import": "./dist/rpc/index.js"
+    },
+    "./ggml-rpc-server/provider": {
+      "types": "./dist/rpc/ggml-provider.d.ts",
+      "import": "./dist/rpc/ggml-provider.js"
     }
   },
   "files": [
@@ -175,6 +183,7 @@
     "bare-gpu-info": "0.1.1",
     "bare-http1": "^4.5.9",
     "bare-https": "^3.0.0",
+    "bare-net": "^2.3.2",
     "bare-os": "^3.9.3",
     "bare-path": "^3.1.1",
     "bare-rpc": "^1.3.8",
@@ -201,7 +210,7 @@
     "@qvac/diffusion-cpp": "^0.24.0",
     "@qvac/embed-llamacpp": "^0.41.1",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.53.1",
+    "@qvac/llm-llamacpp": "^0.54.0",
     "@qvac/ocr-ggml": "^0.24.1",
     "@qvac/translation-nmtcpp": "^0.16.1",
     "@qvac/tts-ggml": "^0.9.1",
@@ -257,7 +266,7 @@
     "@qvac/diffusion-cpp": "^0.24.0",
     "@qvac/embed-llamacpp": "^0.41.1",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.53.1",
+    "@qvac/llm-llamacpp": "^0.54.0",
     "@qvac/ocr-ggml": "^0.24.1",
     "@qvac/translation-nmtcpp": "^0.16.1",
     "@qvac/tts-ggml": "^0.9.1",

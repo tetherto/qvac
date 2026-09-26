@@ -56,6 +56,17 @@ function isQvacError(error: unknown): error is QvacErrorBase {
   return error instanceof QvacErrorBase
 }
 
+function serializeCause(cause: unknown, depth = 0): unknown {
+  if (!(cause instanceof Error)) return typeof cause === 'string' ? cause : String(cause)
+  return {
+    name: cause.name,
+    message: cause.message,
+    stack: cause.stack,
+    ...('code' in cause && typeof cause.code === 'number' && { code: cause.code }),
+    ...(cause.cause !== undefined && depth < 5 && { cause: serializeCause(cause.cause, depth + 1) })
+  }
+}
+
 export function createErrorResponse(error: unknown): ErrorResponse {
   if (isQvacError(error)) {
     const qvacData = error.toJSON()
@@ -67,6 +78,7 @@ export function createErrorResponse(error: unknown): ErrorResponse {
       stack: qvacData.stack,
       timestamp: new Date().toISOString()
     }
+    if (qvacData.cause !== undefined) response.cause = serializeCause(qvacData.cause)
     if (hasTypedFields(error)) {
       response.typedFields = error.toErrorResponseFields()
     }

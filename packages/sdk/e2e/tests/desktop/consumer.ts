@@ -1,3 +1,4 @@
+import { RpcServerExecutor } from '../shared/executors/rpc-server-executor.js'
 import { createExecutor, SkipExecutor, type TestDefinition } from '@qvac/test-suite'
 import {
   profiler,
@@ -735,6 +736,7 @@ export const executor = createExecutor({
     }),
     new FinetuneExecutor(resources),
     new LifecycleExecutor(resources),
+    new RpcServerExecutor(),
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NoLingeringBareExecutor(),
