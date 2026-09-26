@@ -154,7 +154,15 @@
       "import": "./dist/src/models/registry/index.js",
       "require": "./dist/src/models/registry/index.js"
     },
-    "./pear-pre": "./dist/src/pear/pre.js"
+    "./pear-pre": "./dist/src/pear/pre.js",
+    "./rpc-server-provider": {
+      "types": "./dist/src/worker/rpc-server-provider.d.ts",
+      "import": "./dist/src/worker/rpc-server-provider.js"
+    },
+    "./ggml-rpc-server/provider": {
+      "types": "./dist/src/worker/ggml-rpc-server-provider.d.ts",
+      "import": "./dist/src/worker/ggml-rpc-server-provider.js"
+    }
   },
   "imports": {
     "#rpc": {

@@ -12,5 +12,6 @@
     "custom-echo-plugin/plugin"
   ],
   "loggerLevel": "debug",
-  "loggerConsoleOutput": true
+  "loggerConsoleOutput": true,
+  "rpcServerProvider": "@qvac/sdk/ggml-rpc-server/provider"
 }

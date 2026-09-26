@@ -7,6 +7,7 @@ import { getRequestRegistry } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { rpcServers } from '@/rpc/instance'
 import { discoverRpcEndpoints } from '@/rpc/discovery'
+import { clearRpcServerProvider } from '@/rpc/provider'
 import { RpcServerOperationError, InferenceCancelledError } from '@/errors/index'
 
 const requests = new Map<string, Promise<unknown>>()
@@ -17,7 +18,9 @@ async function run<T>(operation: string, work: () => Promise<T>): Promise<T> {
   try {
     return await work()
   } catch (error) {
-    if (error instanceof InferenceCancelledError) throw error
+    if (error instanceof InferenceCancelledError || error instanceof RpcServerOperationError) {
+      throw error
+    }
     throw new RpcServerOperationError(
       operation,
       error instanceof Error ? error.message : String(error),
@@ -74,6 +77,7 @@ export function closeRpcResources(): Promise<void> {
     const results = await Promise.allSettled([stopping, ...requests.values()])
     const stopResult = results[0]!
     if (stopResult.status === 'rejected') throw stopResult.reason
+    clearRpcServerProvider()
   })()
   return closing.finally(() => {
     closing = undefined

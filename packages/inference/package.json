@@ -133,6 +133,14 @@
     "./ggml-classification/plugin": {
       "types": "./dist/plugins/builtin/ggml-classification/plugin.d.ts",
       "import": "./dist/plugins/builtin/ggml-classification/plugin.js"
+    },
+    "./rpc-server-provider": {
+      "types": "./dist/rpc/index.d.ts",
+      "import": "./dist/rpc/index.js"
+    },
+    "./ggml-rpc-server/provider": {
+      "types": "./dist/rpc/ggml-provider.d.ts",
+      "import": "./dist/rpc/ggml-provider.js"
     }
   },
   "files": [

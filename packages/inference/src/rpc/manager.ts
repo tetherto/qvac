@@ -1,17 +1,10 @@
 import type { RequestContext } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { createDisposableScope } from '@/runtime/disposable-scope'
-import type { StartRpcServerOptions, RpcServerInfo } from '@/schemas/rpc-server'
+import type { StartRpcServerOptions, RpcServerInfo, RpcServerHandle } from '@/schemas/rpc-server'
 import { privateEndpoint, throwIfAborted } from './network'
 
-export interface ManagedRpcServer {
-  host: string
-  port: number
-  url: string
-  runtime: 'in-process'
-  rdmaCapable: false
-  stop(): Promise<void>
-}
+export type ManagedRpcServer = RpcServerHandle
 export interface RpcServerDependencies {
   start(options: StartRpcServerOptions): Promise<ManagedRpcServer>
   ready(server: ManagedRpcServer, ctx: RequestContext): Promise<void>

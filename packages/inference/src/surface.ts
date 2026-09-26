@@ -198,3 +198,5 @@ export type { Logger, LogTransport, LoggerOptions } from '@/logging/index'
 // Profiler
 export { profiler, attachBackendDiagnostics } from '@/profiling/index'
 export type { ProfilerRuntimeOptions, ProfilerExport } from '@/profiling/index'
+
+export type { RpcServerProvider, RpcServerHandle } from '@/schemas/rpc-server'

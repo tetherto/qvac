@@ -75,3 +75,18 @@ export type RpcServerCandidate = z.infer<typeof rpcServerCandidateSchema>
 export type StartRpcServerRequest = z.infer<typeof startRpcServerRequestSchema>
 export type StopRpcServerRequest = z.infer<typeof stopRpcServerRequestSchema>
 export type DiscoverRpcServersRequest = z.infer<typeof discoverRpcServersRequestSchema>
+
+/** Native handles remain private to the engine; callers receive an owned server ID. */
+export interface RpcServerHandle {
+  host: string
+  port: number
+  url: string
+  runtime: 'in-process'
+  rdmaCapable: false
+  stop(): Promise<void>
+}
+
+/** A model-independent serving capability registered in the Bare engine. */
+export interface RpcServerProvider {
+  start(options: Omit<StartRpcServerOptions, 'discoveryTopic'>): Promise<RpcServerHandle>
+}

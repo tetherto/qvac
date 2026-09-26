@@ -13,7 +13,7 @@ The Bare-only engine of the QVAC SDK. It runs inference directly on the [Bare ru
 
 `@qvac/inference` is the pure-Bare layer of the SDK, written in TypeScript: the client API, the request engine, and the plugin system, all running in one Bare process. `@qvac/sdk` builds on top of it to reach Node, Electron, Expo, and Pear by launching this engine as a worker; on Bare you use it directly. It replaces the deprecated `@qvac/bare-sdk` package (last release 0.18.2).
 
-`@qvac/inference` ships no inference plugins by default. It includes the managed GGML RPC server dependency, which loads only when a server is requested. You install only the addon packages your app registers, so the resulting binary scales with the engines you actually assemble.
+`@qvac/inference` ships no plugins by default and has no required model or RPC server addon dependencies. Model addons are optional peers; RPC serving uses an explicitly registered provider. You install only the addon packages your app registers, so the resulting binary scales with the engines and services you actually assemble.
 
 ## Requirements
 
@@ -57,7 +57,7 @@ const modelId = await loadModel({ modelSrc: LLAMA_3_2_1B_INST_Q4_0 })
 const run = completion({ modelId, history: [{ role: 'user', content: 'Hi' }] })
 ```
 
-An operation called before any plugin is registered throws `PluginsNotRegisteredError`.
+Model operations require a registered model plugin. RPC discovery needs no model plugin or server provider; serving requires an explicitly registered server provider.
 
 ## Capability to addon package
 
@@ -81,7 +81,7 @@ The engine resolves a `qvac.config.js` or `qvac.config.json` from the current wo
 
 ## System resource diagnostics
 
-Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Like any other operation it runs after the first plugin is registered:
+Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and driver capabilities. Pass `sample: true` only when you also need a fresh usage sample. Register a model plugin or RPC server provider before requesting diagnostics:
 
 ```js
 import { registerPlugin, getSystemResources } from '@qvac/inference'
@@ -113,14 +113,33 @@ await unloadModel({ modelId })
 await close() // release the swarm, registry client, storage-root lock, and registered plugins
 ```
 
-`close()` also clears the plugin registry, so if you keep using the API afterward you must `registerPlugin` / `plugins([...])` again first — otherwise the next call throws `PluginsNotRegisteredError`.
+`close()` clears model plugin and RPC server provider registrations after successful cleanup. Register the capabilities you need again before reusing the engine. RPC discovery needs no registration.
 
 ## Distributed GPU inference
 
-`startRpcServer`, `stopRpcServer`, and `discoverRpcServers` also work directly in
-Bare after plugin registration. They use the same request schemas as the SDK.
-See the [SDK workflow](../sdk/README.md#distributed-gpu-inference) for serving,
-discovery, explicit device ordering, and private-network requirements.
+RPC serving is separate from model plugins. Install a compatible
+`@qvac/ggml-rpc-server` build only in applications that serve devices, then
+register its adapter explicitly:
+
+```js
+import { registerRpcServerProvider, startRpcServer, stopRpcServer } from '@qvac/inference'
+import { ggmlRpcServerProvider } from '@qvac/inference/ggml-rpc-server/provider'
+
+registerRpcServerProvider(ggmlRpcServerProvider)
+const server = await startRpcServer()
+await stopRpcServer({ serverId: server.serverId })
+```
+
+A server-only process needs no model plugin. Calling `startRpcServer()` without a
+provider throws `RpcServerOperationError`. Discovery works without either a
+provider or a model plugin. Initiators need only the LLM plugin and its addon;
+remote inference does not require the server addon.
+
+Custom adapters implement `RpcServerProvider`, exported from
+`@qvac/inference/rpc-server-provider`. The engine owns each returned handle,
+readiness checks, discovery announcements, rollback, and shutdown. Registration
+is local to the Bare runtime. Successful `close()` clears the provider; register
+again before restarting serving. A failed close retains it for cleanup retries.
 
 `close()` withdraws announcements, cancels active discovery and readiness probes,
 and attempts to stop every owned server. Failed stops remain owned for a retry

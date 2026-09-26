@@ -212,7 +212,7 @@ worker is version-locked to this package.
 
 The rule: **generate what can be generated; put un-generatable behaviour in the
 worker; hand-write per language only what is irreducibly client-side, and never
-_trust_ it to match — guard it.**
+*trust* it to match — guard it.**
 
 - **Generated from the one contract.** The pydantic models + typed method stubs,
   the model-type resolution maps (`_generated/model_type_maps.py`), the
@@ -224,7 +224,7 @@ _trust_ it to match — guard it.**
   the completion tool-loop (`completionOrchestrate`) run in the worker, so
   Python and JS share one implementation instead of two that diverge (they did:
   Python once used `lingua`, JS `@qvac/langdetect-text`).
-- **Version lock-step.** This package's version _is_ the `@qvac/sdk` version it
+- **Version lock-step.** This package's version *is* the `@qvac/sdk` version it
   was generated against.
 - **Conformance corpus.** `../sdk/e2e/conformance/cases.json` is run by both a
   JS runner and `tests/test_conformance.py`, so the two clients are diffed
@@ -257,28 +257,3 @@ Real-model tests spawn a worker (`packages/sdk` built via `bun run build`, or
 `QVAC_POC_SDK_DIR`) and otherwise skip. `generate.py` runs `black` + `ruff --fix
 --select I` (with the package config) on its own output, so a fresh
 regeneration already passes the checks above.
-
-## Native RPC servers
-
-The generated `start_rpc_server`, `stop_rpc_server`, and `discover_rpc_servers`
-methods accept their typed request models. They use the same worker-owned server
-IDs and private-network requirements as the [SDK workflow](../sdk/README.md#distributed-gpu-inference).
-The worker uses native TCP and does not provide RDMA, peer authentication, or
-transport encryption.
-
-```python
-from tetherto.qvac_sdk import (
-    StartRpcServerRequest, StopRpcServerRequest, DiscoverRpcServersRequest,
-    start_rpc_server, stop_rpc_server, discover_rpc_servers,
-)
-
-server = await start_rpc_server(t, StartRpcServerRequest(
-    type="startRpcServer", host="10.0.0.2", port=50052, allow_non_loopback_host=True,
-    discovery_topic="my-private-rpc-group",
-))
-peers = await discover_rpc_servers(t, DiscoverRpcServersRequest(
-    type="discoverRpcServers", topic="my-private-rpc-group", timeout_ms=5000,
-))
-# Select and order peers.servers before setting rpc-servers and devices in load_model.
-await stop_rpc_server(t, StopRpcServerRequest(type="stopRpcServer", server_id=server.server_id))
-```

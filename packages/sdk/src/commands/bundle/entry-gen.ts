@@ -3,11 +3,20 @@ import { parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 export function generateWorkerEntry(
   pluginSpecifiers: string[],
   sdkName: string,
-  resolveImport: (specifier: string) => string = (specifier) => specifier
+  resolveImport: (specifier: string) => string = (specifier) => specifier,
+  rpcServerProvider?: string
 ): string {
   const imports: string[] = []
   const registrations: string[] = []
   let varIndex = 0
+
+  if (rpcServerProvider) {
+    imports.push(
+      `import { registerRpcServerProvider } from ${JSON.stringify(resolveImport(`${sdkName}/rpc-server-provider`))};`,
+      `import rpcServerProvider from ${JSON.stringify(resolveImport(rpcServerProvider))};`
+    )
+    registrations.push('registerRpcServerProvider(rpcServerProvider);')
+  }
 
   for (const specifier of pluginSpecifiers) {
     const builtin = parseBuiltinSpecifier(specifier, sdkName)
@@ -59,10 +68,16 @@ if (hasRPCConfig) {
 export function generateWorkerEntries(
   pluginSpecifiers: string[],
   sdkName: string,
-  resolveBundleImport: (specifier: string) => string
+  resolveBundleImport: (specifier: string) => string,
+  rpcServerProvider?: string
 ) {
   return {
-    runtimeEntry: generateWorkerEntry(pluginSpecifiers, sdkName),
-    bundleEntry: generateWorkerEntry(pluginSpecifiers, sdkName, resolveBundleImport)
+    runtimeEntry: generateWorkerEntry(pluginSpecifiers, sdkName, undefined, rpcServerProvider),
+    bundleEntry: generateWorkerEntry(
+      pluginSpecifiers,
+      sdkName,
+      resolveBundleImport,
+      rpcServerProvider
+    )
   }
 }

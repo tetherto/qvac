@@ -1,5 +1,7 @@
 /// <reference types="bare" />
 
+export { registerRpcServerProvider } from '@/rpc/provider'
+
 // Public API: the operations, engine lifecycle and explicit plugin assembly, and
 // the value-clean surface (schemas / types / consts / errors / model registry)
 // re-exported from `./surface`.
