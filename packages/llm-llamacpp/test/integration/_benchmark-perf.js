@@ -13,6 +13,7 @@
 // baseline), is split across the shard files; nothing here reduces it.
 
 const path = require('bare-path')
+const fs = require('bare-fs')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
@@ -68,6 +69,53 @@ function _envInt(key, fallback) {
 const PERF_RUNS = _envInt('QVAC_PERF_RUNS', 3)
 const PERF_WARMUP_RUNS = _envInt('QVAC_PERF_WARMUP_RUNS', 1)
 
+// Resident memory around a load. RssAnon/RssFile come from /proc, which exists
+// on Android but not iOS; `rss` is bare-os's counter, the same one
+// asr-ggml/test/integration/memory-usage.js and the model-fit calibration
+// harness use, so figures stay comparable across packages. Absent readings are
+// null — an unavailable counter, not a zero.
+function readMemorySample() {
+  let rss = null
+  try {
+    const usage = os.memoryUsage()
+    if (usage && usage.rss > 0) rss = usage.rss
+  } catch {
+    /* counter unavailable */
+  }
+  let anon = null
+  let file = null
+  let locked = null
+  try {
+    const status = fs.readFileSync('/proc/self/status', 'utf8').split('\n')
+    const readBytes = (key) => {
+      const line = status.find((l) => l.startsWith(key))
+      if (!line) return null
+      const value = Number(line.replace(/[^0-9]/g, ''))
+      return Number.isFinite(value) ? value * 1024 : null
+    }
+    anon = readBytes('RssAnon:')
+    file = readBytes('RssFile:')
+    // VmLck is absolute, not a delta: it is how much this process currently
+    // has locked. Without it an mlock that silently failed — which is the
+    // common case on Android, where RLIMIT_MEMLOCK is small and llama.cpp
+    // warns rather than throwing — is indistinguishable from one that worked.
+    locked = readBytes('VmLck:')
+  } catch {
+    /* not a /proc platform */
+  }
+  return { rss, anon, file, locked }
+}
+
+function memoryDelta(before, after) {
+  const diff = (a, b) => (a === null || b === null ? null : b - a)
+  return {
+    rss_bytes: diff(before.rss, after.rss),
+    rss_anon_bytes: diff(before.anon, after.anon),
+    rss_file_bytes: diff(before.file, after.file),
+    locked_bytes: after.locked
+  }
+}
+
 function modelSpec(size, quant) {
   return {
     id: modelId(size, quant),
@@ -76,11 +124,20 @@ function modelSpec(size, quant) {
   }
 }
 
-async function runInference(addon, prompt, reasoningBudget) {
+// nPredict caps the generation. The throughput path leaves it unset so the
+// addon's configured length applies; a load-mode cell passes 1, because its
+// only reason to generate at all is to learn which backend served the load.
+//
+// The per-request key is `predict` (GenerationParams in index.d.ts), NOT the
+// `n_predict` spelling the load-time config uses. The API REJECTS an unknown
+// key outright — "generationParams has unknown key: n_predict. Valid keys
+// are temp, top_p, top_k, predict, ..." — so the mistake is loud at the API
+// and only became invisible because the caller caught it.
+async function runInference(addon, prompt, reasoningBudget, nPredict = null) {
   const startTime = Date.now()
-  const response = await addon.run(prompt, {
-    generationParams: { reasoning_budget: parseInt(reasoningBudget, 10) }
-  })
+  const generationParams = { reasoning_budget: parseInt(reasoningBudget, 10) }
+  if (nPredict !== null) generationParams.predict = nPredict
+  const response = await addon.run(prompt, { generationParams })
   const chunks = []
   let error = null
   response
@@ -122,8 +179,22 @@ function recordCrashedPlaceholder(label, device, model) {
 // time, runs the longer BATCH_PROMPT so the batch actually spans multiple
 // prefill passes, and tags the row label with [bs=N]. When null (every
 // cross-product shard) the runner is byte-for-byte unchanged.
-function benchmarkModel(size, quant, cacheK, cacheV, batchSize = null) {
+// `loadDevice` pins a single backend for this shard. Load-mode cells use it so
+// each (mode, backend) pair gets its own process: `unload()` leaves
+// mode-dependent resident memory behind, so measuring cpu after gpu in one
+// process reads the cpu delta against a polluted baseline. Every other cell
+// leaves it null and sweeps both backends as before.
+function benchmarkModel(
+  size,
+  quant,
+  cacheK,
+  cacheV,
+  batchSize = null,
+  loadMode = null,
+  loadDevice = null
+) {
   const spec = modelSpec(size, quant)
+  const devices = loadDevice !== null ? [loadDevice] : DEVICES
   // kvLabel uses the k/v form when key and value differ (e.g. TurboQuant
   // tbq3_0/pq3_0), matching the renderer's [kv=...] tag. kvId is the
   // slash-free token used for the model id and per-run identifiers.
@@ -133,8 +204,13 @@ function benchmarkModel(size, quant, cacheK, cacheV, batchSize = null) {
   const bsId = batchSize !== null ? `-bs${batchSize}` : ''
   const batchConfig =
     batchSize !== null ? { 'batch-size': String(batchSize), 'ubatch-size': String(batchSize) } : {}
+  // '+' is dropped from the id so 'mmap+mlock' stays artifact-name safe; the
+  // label keeps it so the rendered row reads as the value a caller would pass.
+  const lmLabel = loadMode !== null ? ` [lm=${loadMode}]` : ''
+  const lmId = loadMode !== null ? `-lm${loadMode.replace(/\+/g, '')}` : ''
+  const loadModeConfig = loadMode !== null ? { load_mode: loadMode } : {}
   const prompt = batchSize !== null ? BATCH_PROMPT : PROMPT
-  const id = `${spec.id}-${kvId}${bsId}`
+  const id = `${spec.id}-${kvId}${bsId}${lmId}`
   safeTest(
     `Mobile perf benchmark: ${id} (TTFT / TPS / ppTPS)`,
     {
@@ -153,21 +229,26 @@ function benchmarkModel(size, quant, cacheK, cacheV, batchSize = null) {
         // Up-front Crashed placeholders for EVERY combo across BOTH devices before
         // any load/run, so a hard native crash during the first device's pass still
         // leaves rows for the other device. Real metrics supersede these.
-        for (const device of DEVICES) {
+        for (const device of devices) {
           for (const rb of REASONING_BUDGETS) {
             recordCrashedPlaceholder(
-              `[${spec.id}] [${device}] [rb=${rb}] [kv=${kvLabel}]${bsLabel}`,
+              `[${spec.id}] [${device}] [rb=${rb}] [kv=${kvLabel}]${bsLabel}${lmLabel}`,
               device,
               `${id}-${device}-rb${rb}`
             )
           }
         }
 
-        for (const device of DEVICES) {
-          const labelFor = (rb) => `[${spec.id}] [${device}] [rb=${rb}] [kv=${kvLabel}]${bsLabel}`
+        for (const device of devices) {
+          const labelFor = (rb) =>
+            `[${spec.id}] [${device}] [rb=${rb}] [kv=${kvLabel}]${bsLabel}${lmLabel}`
           const modelFor = (rb) => `${id}-${device}-rb${rb}`
 
           let addon = null
+          // Load time and resident memory are the quantities a load-mode cell
+          // exists to measure. They are captured for those cells only — see
+          // the sampling below.
+          let loadMetrics = null
           try {
             addon = new LlmLlamacpp({
               files: { model: [modelPath] },
@@ -176,12 +257,30 @@ function benchmarkModel(size, quant, cacheK, cacheV, batchSize = null) {
                 device,
                 'cache-type-k': cacheK,
                 'cache-type-v': cacheV,
-                ...batchConfig
+                ...batchConfig,
+                ...loadModeConfig
               },
               logger: { error: () => {}, warn: () => {}, info: () => {}, debug: () => {} },
               opts: { stats: true }
             })
+            // Load timing and residency are sampled for load-mode cells
+            // only. The established throughput grid is not a load benchmark
+            // and did not ask for these columns; adding them to all 70 cells
+            // would change that suite's output for a question it is not
+            // answering. Widen this only if a task asks for it.
+            const memBefore = loadMode !== null ? readMemorySample() : null
+            const loadStart = Date.now()
             await addon.load()
+            const loadMs = Date.now() - loadStart
+            if (loadMode !== null) {
+              loadMetrics = { load_ms: loadMs, ...memoryDelta(memBefore, readMemorySample()) }
+            }
+            t.comment(
+              loadMetrics
+                ? `[${id}] [${device}] load ${loadMs}ms ` +
+                    `rss=${loadMetrics.rss_bytes} anon=${loadMetrics.rss_anon_bytes} file=${loadMetrics.rss_file_bytes}`
+                : `[${id}] [${device}] load ${loadMs}ms`
+            )
           } catch (loadErr) {
             // Load failed (e.g. unsupported quantized KV cache) — placeholders
             // remain Crashed for this device's combos. Move on.
@@ -193,6 +292,48 @@ function benchmarkModel(size, quant, cacheK, cacheV, batchSize = null) {
           }
 
           try {
+            // A load-mode cell measures the LOAD, and the renderer excludes
+            // its rows from every throughput comparison. Running the full
+            // throughput programme here — a warm-up, both reasoning budgets
+            // and PERF_RUNS generations of up to n_predict tokens each — is
+            // Device Farm time spent producing numbers nothing reads. One
+            // short generation is still needed, and only to learn which
+            // backend actually served the load.
+            if (loadMode !== null) {
+              let stats = null
+              let probeError = null
+              try {
+                ;({ stats } = await runInference(addon, prompt, REASONING_BUDGETS[0], 1))
+              } catch (probeErr) {
+                probeError = (probeErr && probeErr.message) || String(probeErr)
+              }
+              // The load measurement is still worth recording, but a probe
+              // that THREW must fail the cell. Passing it turned an invalid
+              // generation param — rejected loudly by the API — into a green
+              // run whose every row merely read "backend unverified", which
+              // is what a platform that genuinely cannot report its backend
+              // looks like. The two must not be confusable.
+              t.comment(
+                recordPerformance(labelFor(REASONING_BUDGETS[0]), null, {
+                  stats,
+                  deviceId: device,
+                  scenario: 'benchmark-perf',
+                  model: modelFor(REASONING_BUDGETS[0]),
+                  loadMetrics,
+                  // Persisted, not only asserted: t.fail marks the TAP run,
+                  // but the report is built from this row, and a row with
+                  // load figures and no status renders as a measurement.
+                  status: probeError ? 'crashed' : null
+                })
+              )
+              if (probeError) {
+                t.fail(`[${id}] [${device}] backend probe threw: ${probeError}`)
+              } else {
+                t.pass(`[${id}] [${device}] load-mode cell measured`)
+              }
+              continue
+            }
+
             // Warm up once per backend, not per reasoning budget. The warm-up
             // primes the GPU kernels/caches for this loaded model; reasoning
             // budget is a per-call generation param that does not change the
@@ -230,7 +371,11 @@ function benchmarkModel(size, quant, cacheK, cacheV, batchSize = null) {
                       stats,
                       deviceId: device,
                       scenario: 'benchmark-perf',
-                      model: modelFor(rb)
+                      model: modelFor(rb),
+                      // Per-load, not per-run: every run of this cell reports
+                      // the same load figures, which is what lets the renderer
+                      // read them off any row.
+                      loadMetrics
                     })
                   )
                   t.ok(output.length > 0, `${label} run ${run}/${PERF_RUNS} produced output`)

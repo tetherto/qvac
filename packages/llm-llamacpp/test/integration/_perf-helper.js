@@ -106,6 +106,12 @@ try {
           // forget to pass it still produce valid output.
           model: (extra && extra.model) || null,
           execution_provider: (extra && extra.execution_provider) || null,
+          requested_device: (extra && extra.requested_device) || null,
+          // 'crashed' when the cell failed after producing figures (a thrown
+          // backend probe). Without it the renderer judges a row by its
+          // metrics alone, and a failed cell that recorded its load reads as
+          // a measurement whose backend merely went unreported.
+          status: (extra && extra.status) || null,
           metrics: Object.assign(
             {
               backend: null,
@@ -184,6 +190,8 @@ try {
             scenario: r.scenario || 'default',
             model: r.model || null,
             execution_provider: r.execution_provider,
+            requested_device: r.requested_device || null,
+            status: r.status || null,
             metrics: r.metrics,
             output: lightweight ? null : r.output
           }))
@@ -294,10 +302,22 @@ function _num(v) {
  *                                  'Qwen3-1.7B-Q4_0'). Surfaces as the
  *                                  Model column in the perf renderer.
  * @param {string} [extra._output]  Generated text (will be capped for mobile).
+ * @param {Object} [extra.loadMetrics] Per-load figures for this cell:
+ *                                  `load_ms` plus `rss_bytes` /
+ *                                  `rss_anon_bytes` / `rss_file_bytes` deltas.
+ *                                  Null fields mean the counter was
+ *                                  unavailable on this platform (no /proc on
+ *                                  iOS), not that it read zero.
+ * @param {string} [extra.status]   'crashed' when the cell failed after
+ *                                  recording figures. Omitted otherwise.
  */
 function recordPerformance(label, totalTime, extra) {
   const stats = (extra && extra.stats) || null
-  const totalSeconds = (totalTime / 1000).toFixed(2)
+  // A load-mode cell has no end-to-end generation time to report: it measures
+  // the load. null must stay null — Math.round(null) is 0, and a zero here
+  // would read as a measured instant response.
+  const hasTotal = typeof totalTime === 'number' && Number.isFinite(totalTime)
+  const totalSeconds = hasTotal ? (totalTime / 1000).toFixed(2) : null
 
   const ttftMs = stats ? _num(stats.TTFT) : null
   const tps = stats ? _num(stats.TPS) : null
@@ -311,11 +331,17 @@ function recordPerformance(label, totalTime, extra) {
       : null
 
   const labelDevice = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
-  const effectiveDevice = reportedDevice || (extra && extra.deviceId) || labelDevice
+  // What the row ASKED for. Used for the device column and grouping.
+  const requestedDevice = (extra && extra.deviceId) || labelDevice
+  // What actually ran. `reportedDevice` only — it must NOT fall back to the
+  // request, or a silent CPU fallback reads as a confirmed run on the
+  // requested device and the renderer has no way to tell the two apart.
+  const observedDevice = reportedDevice
+  const effectiveDevice = requestedDevice || observedDevice
   const backend = resolveBackend(effectiveDevice)
 
   let decodeMs = null
-  if (ttftMs !== null && totalTime > ttftMs) {
+  if (ttftMs !== null && hasTotal && totalTime > ttftMs) {
     decodeMs = Math.round(totalTime - ttftMs)
   } else if (generatedTokens !== null && tps !== null && tps > 0) {
     decodeMs = Math.round((generatedTokens / tps) * 1000)
@@ -326,7 +352,7 @@ function recordPerformance(label, totalTime, extra) {
     {
       backend,
       platform: platformLabel,
-      total_time_ms: Math.round(totalTime),
+      total_time_ms: hasTotal ? Math.round(totalTime) : null,
       prefill_time_ms: ttftMs !== null ? Math.round(ttftMs) : null,
       decode_time_ms: decodeMs,
       // mmproj / vision-encoder time. Native side wiring tracked under
@@ -338,12 +364,22 @@ function recordPerformance(label, totalTime, extra) {
       generated_tokens: generatedTokens,
       prompt_tokens: promptTokens,
       tps: tps !== null ? Number(tps.toFixed(2)) : null,
-      pp_tps: ppTps !== null ? Number(ppTps.toFixed(2)) : null
+      pp_tps: ppTps !== null ? Number(ppTps.toFixed(2)) : null,
+      // Load-time and resident-memory figures for the load this row was
+      // generated under. Absent (null) for callers that do not measure them,
+      // so existing renderers that never read these keys are unaffected.
+      load_ms: (extra && extra.loadMetrics && extra.loadMetrics.load_ms) ?? null,
+      rss_bytes: (extra && extra.loadMetrics && extra.loadMetrics.rss_bytes) ?? null,
+      rss_anon_bytes: (extra && extra.loadMetrics && extra.loadMetrics.rss_anon_bytes) ?? null,
+      rss_file_bytes: (extra && extra.loadMetrics && extra.loadMetrics.rss_file_bytes) ?? null,
+      locked_bytes: (extra && extra.loadMetrics && extra.loadMetrics.locked_bytes) ?? null
     },
     {
       scenario: (extra && extra.scenario) || 'default',
       model: (extra && extra.model) || null,
-      execution_provider: effectiveDevice,
+      execution_provider: observedDevice,
+      requested_device: requestedDevice,
+      status: (extra && extra.status) || null,
       output: (extra && extra._output) || null
     }
   )
@@ -369,7 +405,9 @@ function recordPerformance(label, totalTime, extra) {
 
   const lines = [
     `${label} Performance Metrics (backend=${backend}, platform=${platformLabel}):`,
-    `    - Total time: ${totalTime}ms (${totalSeconds}s)`,
+    hasTotal
+      ? `    - Total time: ${totalTime}ms (${totalSeconds}s)`
+      : '    - Total time: n/a (load-only cell)',
     `    - Prefill / TTFT: ${ttftMs !== null ? Math.round(ttftMs) + 'ms' : 'n/a'}`,
     `    - Decode: ${decodeMs !== null ? decodeMs + 'ms' : 'n/a'}`,
     `    - TPS: ${tps !== null ? tps.toFixed(2) : 'n/a'}`,

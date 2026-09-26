@@ -153,7 +153,7 @@ const config = {
   gpu_layers: '99', // number of model layers offloaded to GPU.
   ctx_size: '1024', // context length
   device: 'cpu', // must be specified: 'gpu' or 'cpu' else it will throw an error
-  load_mode: 'none' // read fully into memory: no mmap, mlock or direct I/O
+  load_mode: 'none' // read fully into memory; unset uses 'auto' (see Load modes)
 }
 ```
 
@@ -168,7 +168,7 @@ const config = {
 | top_k             | 0 – 128                                     | 40                           | Top-k sampling                                        |
 | predict         | integer (-1 = infinity)                     | -1                           | Maximum tokens to predict                             |
 | seed              | integer                                     | -1 (random)                  | Random seed for sampling                              |
-| load_mode         | `"none"`, `"mmap"`, `"mlock"`, `"mmap+mlock"`, or `"dio"` | `"mmap"`                     | Select the model loading mode                          |
+| load_mode         | `"auto"`, `"none"`, `"mmap"`, `"mlock"`, `"mmap+mlock"`, or `"dio"` | `"auto"`   | Select the model loading mode ([details](#load-modes)) |
 | reverse_prompt    | string (comma-separated)                    | —                            | Stop generation when these strings are encountered    |
 | repeat_penalty    | float                                       | 1.1                          | Repetition penalty                                    |
 | presence_penalty  | float                                       | 0                            | Presence penalty for sampling                         |
@@ -184,6 +184,43 @@ const config = {
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
 | mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
 
+
+#### Load modes
+
+How the model's weights are brought into memory. Measured per platform and
+device in [docs/perf/load-mode.md](./docs/perf/load-mode.md).
+
+| Mode | Maps the weights | Locks them | Direct I/O |
+|------|------------------|------------|-----------|
+| `auto` (default) | yes, **unless** a selected device reports no mmap support — then loads anonymously | no | no |
+| `mmap` | yes | no | no |
+| `mlock` | no — reads anonymously, then locks | yes | no |
+| `mmap+mlock` | yes | yes | no |
+| `none` | no | no | no |
+| `dio` | no | no | yes on Linux and Android; ignored elsewhere — see below |
+
+`mlock` is **not** "`mmap` plus locking" — it is the anonymous path plus
+locking.
+
+`auto` loads anonymously when a selected device sets `mmap_support = false`:
+OpenCL (Adreno), Hexagon, Vulkan integrated GPUs and CUDA integrated GPUs.
+Everywhere else it maps. The choice is therefore per-device, not per-platform.
+
+Locking warns and continues when it exceeds `RLIMIT_MEMLOCK`, so a load that
+succeeded may not have locked anything. `mlock` reads the weights into
+anonymous memory, and with a GPU most of them go to device memory, so there is
+little or nothing left on the host to lock; `mmap+mlock` locks the mapped file
+and does lock on a GPU load when the limit allows it.
+
+`dio` opens the model with `O_DIRECT` on Linux and Android, bypassing the page
+cache; on Windows, macOS and iOS it loads exactly as `none`. It is not a speed
+option: on CPU loads it measured 1.2–3× slower than `none` on the Linux and
+Android benchmark hosts, and no faster on GPU loads.
+Releases before 0.54.0 (`@qvac/fabric` below 0.17) ignore the flag on every
+platform.
+
+Measured load times and residency per platform and device, and what each mode
+costs, are in [docs/perf/load-mode.md](./docs/perf/load-mode.md).
 
 #### KV-cache type & auto-default
 

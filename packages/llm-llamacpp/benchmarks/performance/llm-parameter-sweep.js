@@ -16,6 +16,7 @@ const { tsFileStamp, toMarkdown, compactPromptErrors } = require('./reporters')
 const {
   PROMPTS_PER_CASE,
   buildSweepFromArgs,
+  sweepSelectionFromArgs,
   ensureDir,
   checkModelExists,
   buildCases,
@@ -46,6 +47,7 @@ async function main () {
   const repeats = args.repeats ? parsePositiveInt(args.repeats, 'repeats') : DEFAULT_REPEATS
   const resultsDir = args['results-dir'] ? path.resolve(args['results-dir']) : DEFAULT_RESULTS_DIR
   const sweep = buildSweepFromArgs(PARAMETER_SWEEP, args)
+  const selection = sweepSelectionFromArgs(args)
   const promptsFilePath = args['prompts-file']
     ? path.resolve(args['prompts-file'])
     : DEFAULT_PROMPTS_FILE
@@ -149,7 +151,7 @@ async function main () {
   }
 
   const plannedRunsByModel = selectedModels.map((modelDef) => {
-    const cases = buildCases(modelDef, sweep, BATCH_SWEEP)
+    const cases = buildCases(modelDef, sweep, BATCH_SWEEP, selection)
     return { modelDef, cases }
   })
   const totalCases = plannedRunsByModel.reduce((acc, item) => acc + item.cases.length, 0)

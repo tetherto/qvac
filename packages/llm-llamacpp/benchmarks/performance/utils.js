@@ -52,6 +52,11 @@ function loadNpmLlmAddon () {
   return require('@qvac/llm-llamacpp')
 }
 
+// The native log hook of the same addon build resolveAddonCtor loads.
+function resolveAddonLogging (addonSource) {
+  return addonSource === 'npm' ? require('@qvac/llm-llamacpp/addonLogging') : require('../../addonLogging')
+}
+
 function parseAddonSource (value) {
   const normalized = String(value || 'local').trim().toLowerCase()
   if (normalized === 'local' || normalized === 'npm') return normalized
@@ -121,7 +126,12 @@ function parseArgs (argv) {
     }
     const key = token.slice(2)
     const next = argv[i + 1]
-    if (!next || next.startsWith('--')) {
+    // `next === undefined` means the flag ended the argv; an EMPTY STRING is a
+    // real value. Treating '' as absent turned `--sweep-params ""` — what the
+    // workflow passes whenever the input is left at its default — into the
+    // boolean true, which then failed validation as an unknown param and broke
+    // the default dispatch of the existing throughput benchmark.
+    if (next === undefined || next.startsWith('--')) {
       parsed[key] = true
     } else {
       parsed[key] = normalizeArgValue(next)
@@ -129,6 +139,53 @@ function parseArgs (argv) {
     }
   }
   return parsed
+}
+
+// Resident-memory sample. `rss` comes from bare-os so it matches the counter
+// calibrate-model-fit.ts and asr-ggml's memory-usage.js already use and the
+// figures stay comparable across packages.
+//
+// rss alone cannot rank load modes. A mapped load keeps the weights file-backed
+// and evictable while the CPU backend additionally repacks them into its own
+// buffers, so on linux `mmap` reads HIGHER total rss than `none` while costing
+// LESS anonymous memory — the opposite ranking, on the number that actually has
+// to be found under pressure. So anon/file are split out where the OS exposes
+// them (/proc, i.e. linux and android). Elsewhere they are null: an absent
+// reading, not a zero.
+function readMemorySample () {
+  let rss = null
+  try {
+    const usage = require('bare-os').memoryUsage()
+    if (usage && usage.rss > 0) rss = usage.rss
+  } catch { /* counter unavailable; recorded as null */ }
+
+  let anon = null
+  let file = null
+  let locked = null
+  try {
+    const status = require('bare-fs').readFileSync('/proc/self/status', 'utf8').split('\n')
+    const readKb = (key) => {
+      const line = status.find((l) => l.startsWith(key))
+      if (!line) return null
+      const value = Number(line.replace(/[^0-9]/g, ''))
+      return Number.isFinite(value) ? value * 1024 : null
+    }
+    anon = readKb('RssAnon:')
+    file = readKb('RssFile:')
+    locked = readKb('VmLck:')
+  } catch { /* not a /proc platform; anon/file stay null */ }
+
+  return { rss, anon, file, locked }
+}
+
+function diffMemorySamples (before, after) {
+  const delta = (a, b) => (a == null || b == null ? null : b - a)
+  return {
+    rssBytes: delta(before.rss, after.rss),
+    rssAnonBytes: delta(before.anon, after.anon),
+    rssFileBytes: delta(before.file, after.file),
+    lockedBytes: after.locked
+  }
 }
 
 function buildConfigObject (runtimeConfig) {
@@ -151,6 +208,7 @@ function buildConfigObject (runtimeConfig) {
 }
 
 module.exports = {
+  resolveAddonLogging,
   DEFAULT_SWEEP_CTX_SIZES,
   DEFAULT_SWEEP_BATCH_SIZES,
   PROMPT_CTX_SIZES,
@@ -166,6 +224,8 @@ module.exports = {
   parseAddonSource,
   resolveAddonCtor,
   createAddonRuntimeLogger,
+  readMemorySample,
+  diffMemorySamples,
   stripSurroundingQuotes,
   normalizeArgValue,
   parseArgs,
