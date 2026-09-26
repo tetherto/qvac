@@ -1760,6 +1760,19 @@ class BatchCompletionStreamRequestPromptsItemToolsItem(GeneratedBaseModel):
     type: Literal["function"] = "function"
     name: str
     description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
     parameters: Annotated[
         BatchCompletionStreamRequestPromptsItemToolsItemParameters,
         Field(title="BatchCompletionStreamRequestPromptsItemToolsItemParameters"),
@@ -2825,6 +2838,19 @@ class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
     type: Literal["function"] = "function"
     name: str
     description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
     parameters: Annotated[
         CompletionOrchestrateRequestToolsItemParameters,
         Field(title="CompletionOrchestrateRequestToolsItemParameters"),
@@ -3373,6 +3399,19 @@ class CompletionStreamRequestToolsItem(GeneratedBaseModel):
     type: Literal["function"] = "function"
     name: str
     description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
     parameters: Annotated[
         CompletionStreamRequestToolsItemParameters,
         Field(title="CompletionStreamRequestToolsItemParameters"),

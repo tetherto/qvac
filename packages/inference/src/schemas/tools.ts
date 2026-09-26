@@ -6,6 +6,18 @@ export const toolSchema = z.object({
   type: z.literal('function'),
   name: z.string(),
   description: z.string(),
+  deferLoading: z
+    .boolean()
+    .optional()
+    .describe(
+      'Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.'
+    ),
+  group: z
+    .string()
+    .optional()
+    .describe(
+      'Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.'
+    ),
   parameters: z.object({
     type: z.literal('object'),
     properties: z.record(

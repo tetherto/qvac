@@ -231,3 +231,86 @@ test('request schemas: every completion entry point rejects an unmatched tool_ch
     true
   )
 })
+
+test('toolSchema: deferLoading and group are optional and preserved', (t) => {
+  const base = {
+    type: 'function',
+    name: 'create_issue',
+    description: 'Open an issue',
+    parameters: { type: 'object', properties: {} }
+  }
+
+  t.is(toolSchema.safeParse(base).success, true, 'a tool without them is unchanged')
+
+  const parsed = toolSchema.safeParse({ ...base, deferLoading: true, group: 'github' })
+  t.is(parsed.success, true)
+  t.is(parsed.success && parsed.data.deferLoading, true)
+  t.is(parsed.success && parsed.data.group, 'github')
+})
+
+test('completionClientParamsSchema: "tool_search" is reserved only when something defers', (t) => {
+  const own = {
+    type: 'function',
+    name: 'tool_search',
+    description: 'mine',
+    parameters: { type: 'object', properties: {} }
+  }
+  const deferred = {
+    type: 'function',
+    name: 'create_issue',
+    description: 'Open an issue',
+    deferLoading: true,
+    parameters: { type: 'object', properties: {} }
+  }
+  const base = { modelId: 'm', history: [{ role: 'user', content: 'hi' }], stream: true }
+
+  t.is(
+    completionClientParamsSchema.safeParse({ ...base, tools: [own] }).success,
+    true,
+    'a caller tool named tool_search is fine when nothing defers'
+  )
+
+  const result = completionClientParamsSchema.safeParse({ ...base, tools: [own, deferred] })
+  t.is(result.success, false)
+  t.ok(
+    !result.success && result.error.issues.some((issue) => issue.message.includes('reserved')),
+    'the message says the name is reserved'
+  )
+})
+
+test('completionClientParamsSchema: tool_choice cannot name a deferred tool', (t) => {
+  const deferred = {
+    type: 'function',
+    name: 'create_issue',
+    description: 'Open an issue',
+    deferLoading: true,
+    parameters: { type: 'object', properties: {} }
+  }
+
+  const named = completionClientParamsSchema.safeParse({
+    modelId: 'm',
+    history: [{ role: 'user', content: 'hi' }],
+    stream: true,
+    tools: [deferred],
+    generationParams: { tool_choice: 'create_issue' }
+  })
+  t.is(named.success, false, 'its schema is not in the prompt, so it cannot be forced')
+
+  const search = completionClientParamsSchema.safeParse({
+    modelId: 'm',
+    history: [{ role: 'user', content: 'hi' }],
+    stream: true,
+    tools: [deferred],
+    generationParams: { tool_choice: 'tool_search' }
+  })
+  t.is(search.success, true, 'forcing a search is allowed when something defers')
+
+  const noDefer = completionClientParamsSchema.safeParse({
+    modelId: 'm',
+    history: [{ role: 'user', content: 'hi' }],
+    stream: true,
+    tools: [{ ...deferred, deferLoading: false }],
+    generationParams: { tool_choice: 'tool_search' }
+  })
+  t.is(noDefer.success, false, 'there is no search tool when nothing defers')
+})

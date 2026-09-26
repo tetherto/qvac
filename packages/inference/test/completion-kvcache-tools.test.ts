@@ -1240,3 +1240,110 @@ test('completion: kv-cache sends the system message on the cold turn only', asyn
   unregisterModel(modelId)
   clearRegistry()
 })
+
+// -----------------------------------------------------------------------------
+// Deferred tools (`deferLoading`). A deferred schema must stay out of the
+// prompt until the model searches for it, and loading one must not disturb the
+// prefix: the block at the front of the payload has to render identically
+// before and after, or the cache diverges at the block and everything behind it
+// is re-prefilled.
+// -----------------------------------------------------------------------------
+
+function deferredTool(name: string): ToolDef & { deferLoading: boolean; group: string } {
+  return { ...makeTool(name), deferLoading: true, group: 'geometry' }
+}
+
+test('completion: a deferred tool sends a catalog, not its schema', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-defer-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'defer-catalog-key')
+  await complete([user('Area of a triangle, base 10 height 5?')], [deferredTool('calculate_area')])
+
+  const turn = calls.filter((call) => !call.prefill).at(-1)
+  t.ok(turn)
+  t.alike(toolNames(turn!), ['tool_search'], 'only the search tool is declared')
+
+  const searchEntry = turn!.messages.filter(isToolEntry).at(0) as { description?: string }
+  t.ok(
+    searchEntry.description?.includes('calculate_area'),
+    'the deferred tool is named in the catalog'
+  )
+  t.absent(
+    JSON.stringify(turn!.messages).includes('"height"'),
+    'no deferred parameter schema reaches the prompt'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: registration-only fields stay out of the prompt when nothing defers', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-defer-strip-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, 'defer-strip-key')
+  await complete(
+    [user('Area of a triangle, base 10 height 5?')],
+    [{ ...makeTool('calculate_area'), deferLoading: false, group: 'geometry' } as ToolDef]
+  )
+
+  const turn = calls.filter((call) => !call.prefill).at(-1)
+  t.ok(turn)
+  const entry = turn!.messages.filter(isToolEntry).at(0) as Record<string, unknown>
+  t.is(entry['name'], 'calculate_area')
+  t.absent('deferLoading' in entry, 'deferLoading is not rendered')
+  t.absent('group' in entry, 'group is not rendered')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('completion: loading a deferred tool leaves the prefix block untouched', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `kvcache-defer-load-model-${Date.now()}`
+  const calls: RecordedCall[] = []
+  const cachePaths: string[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, cachePaths)
+
+  const tools = [deferredTool('calculate_area')]
+  const complete = completer(modelId, 'defer-load-key')
+
+  const history = [user('Area of a triangle, base 10 height 5?')]
+  await complete(history, tools)
+  const before = calls.filter((call) => !call.prefill).at(-1)!
+
+  // The search result the orchestrator would have appended.
+  const { executeToolSearch } = await import('@/utils/tools/defer')
+  const loaded = executeToolSearch(tools as never, { query: 'calculate_area' }, [])
+  await complete(
+    [
+      ...history,
+      { role: 'assistant', content: '<call tool_search>', attachments: [] },
+      { role: 'tool', content: loaded, attachments: [] }
+    ],
+    tools
+  )
+  const after = calls.filter((call) => !call.prefill).at(-1)!
+
+  t.alike(
+    after.messages.filter(isToolEntry),
+    [],
+    'the warm turn skips the block, exactly as it does for a non-deferred tool set'
+  )
+  t.alike(toolNames(before), ['tool_search'], 'the cold turn declared only the search tool')
+  t.is(new Set(cachePaths).size, 1, 'loading a definition does not open a second cache file')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})

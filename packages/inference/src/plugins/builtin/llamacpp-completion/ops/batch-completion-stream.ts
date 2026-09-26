@@ -20,6 +20,7 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import { prependToolsToHistory } from '@/utils/tool-integration'
+import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
 
 const logger = getEngineLogger()
 
@@ -100,9 +101,11 @@ function renderPromptHistory(
   prompt: BatchCompletionStreamPrompt,
   options: BatchPromptRenderOptions
 ) {
-  const tools =
-    options.toolsEnabled && prompt.tools && prompt.tools.length > 0 ? prompt.tools : undefined
   const history = seedConfiguredSystemPrompt(prompt.history, options.modelConfig)
+  const tools =
+    options.toolsEnabled && prompt.tools && prompt.tools.length > 0
+      ? (resolveDeferredTools(prompt.tools, history)?.toolsToRender ?? prompt.tools.map(toWireTool))
+      : undefined
   let historyWithTools: Array<HistoryMessage | Tool> = history
 
   if (tools) {

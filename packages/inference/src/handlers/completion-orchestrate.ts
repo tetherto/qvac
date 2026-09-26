@@ -8,6 +8,7 @@ import { toolCallbackResultSchema, type ToolCallbackResult } from '@/schemas/com
 import { aggregateEvents } from '@/utils/aggregate-events'
 import { CompletionFailedError } from '@/errors/index'
 import { dispatchPluginStream } from '@/handlers/plugin-dispatch'
+import { executeToolSearch, TOOL_SEARCH_NAME } from '@/utils/tools/defer'
 
 const DEFAULT_MAX_TOOL_TURNS = 8
 
@@ -175,7 +176,23 @@ export async function* orchestrateCompletion(
     // The assistant's tool-call turn goes back verbatim so the model sees
     // its own call syntax; each result follows as a `tool` message.
     history = [...history, { role: 'assistant', content: rawFullText ?? contentText }]
+    // Without a deferred tool, a `tool_search` call is the caller's own tool.
+    const defers = request.tools?.some((tool) => tool.deferLoading === true) ?? false
     for (const call of toolCalls) {
+      // `tool_search` is the SDK's own tool: it reads the registered inventory
+      // and appends the matched definitions, so it never leaves the worker and
+      // the client is never asked to run it. The `toolCall` event still went
+      // downstream with the turn's events, so the client can see it happened.
+      if (defers && call.name === TOOL_SEARCH_NAME) {
+        history = [
+          ...history,
+          {
+            role: 'tool',
+            content: executeToolSearch(request.tools ?? [], call.arguments, history)
+          }
+        ]
+        continue
+      }
       yield {
         type: 'completionOrchestrate',
         turn,
