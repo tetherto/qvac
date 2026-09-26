@@ -12,10 +12,34 @@ option(USE_BERGAMOT "Enable Bergamot backend support" ON)
 # Off by default: Adreno 830 ggml-opencl M%4 assertion (QVAC-17790)
 option(USE_OPENCL "Prefer/allow OpenCL backend for GPU inference" OFF)
 
+# NMT's production graph (sentencepiece / marian-dev / bergamot) resolves
+# abseil@onnxruntime#1. FuzzTest needs abseil[asan] 20260526.0. Those cannot
+# share a vcpkg prefix, so fuzz has its own manifest (test/fuzz/vcpkg.json)
+# and its own build tree. See docs/architecture/ADDON-FUZZING.md.
+if(BUILD_FUZZING AND BUILD_TESTING)
+  message(FATAL_ERROR
+    "translation-nmtcpp cannot configure BUILD_TESTING and BUILD_FUZZING in one "
+    "tree: production NMT pins abseil@onnxruntime#1, which cannot coexist with "
+    "FuzzTest's abseil[asan] 20260526.0. Configure fuzz in a separate tree "
+    "(-D BUILD_FUZZING=ON -D BUILD_TESTING=OFF, npm run fuzz:build).")
+endif()
+if(BUILD_FUZZING)
+  set(VCPKG_MANIFEST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/test/fuzz")
+endif()
+
 project(translation-nmtcpp
   LANGUAGES C CXX)
 
 qvac_addon_project_setup(VALGRIND_SUPP PRE_COMMIT_HOOK)
+
+# Fuzz-only configure: skip sentencepiece / Bergamot / protobuf / the .bare
+# module. Headers for ggml.h still come from the npm @qvac/fabric package.
+if(BUILD_FUZZING)
+  qvac_addon_use_fabric()
+  enable_testing()
+  add_subdirectory(test/fuzz)
+  return()
+endif()
 
 # Required by Tokenizers
 if(ANDROID)
@@ -114,6 +138,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_tokenization.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_state_backend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_loader.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_loader_parse.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_graph_decoder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_graph_encoder.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/nmt_beam_search.cpp
