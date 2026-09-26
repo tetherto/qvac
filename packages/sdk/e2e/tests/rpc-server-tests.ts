@@ -41,5 +41,26 @@ export const rpcServerTests = [
   rpcServerEmptyDiscovery,
   rpcServerUnknownStop,
   rpcServerUnsafeAdvertisement,
-  rpcServerCancelDiscovery
-] as const
+  rpcServerCancelDiscovery,
+  {
+    testId: 'rpc-server-device-map',
+    params: {},
+    expectation: {
+      validation: 'contains-all',
+      contains: ['RPC0,RPC1,RPC2', 'second endpoint RPC2']
+    },
+    metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 1000 }
+  },
+  {
+    testId: 'rpc-server-device-map-empty',
+    params: {},
+    expectation: { validation: 'contains-all', contains: ['no devices'] },
+    metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 1000 }
+  },
+  {
+    testId: 'rpc-server-device-map-invalid',
+    params: {},
+    expectation: { validation: 'throws-error', errorContains: 'native device order' },
+    metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 1000 }
+  }
+] as const satisfies readonly TestDefinition[]

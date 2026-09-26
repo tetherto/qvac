@@ -1,5 +1,6 @@
 import {
   startRpcServer,
+  getRpcDeviceMap,
   stopRpcServer,
   discoverRpcServers,
   cancel,
@@ -16,11 +17,46 @@ import { rpcServerTests } from '../../rpc-server-tests.js'
 export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
   pattern = /^rpc-server-/
   protected handlers = {
+    'rpc-server-device-map': this.deviceMap.bind(this),
+    'rpc-server-device-map-empty': this.emptyDeviceMap.bind(this),
+    'rpc-server-device-map-invalid': this.invalidDeviceMap.bind(this),
     'rpc-server-lifecycle': this.lifecycle.bind(this),
     'rpc-server-empty-discovery': this.empty.bind(this),
     'rpc-server-unknown-stop': this.unknown.bind(this),
     'rpc-server-unsafe-advertisement': this.unsafe.bind(this),
     'rpc-server-cancel-discovery': this.cancelDiscovery.bind(this)
+  }
+
+  async deviceMap(_params: object, expectation: Expectation): Promise<TestResult> {
+    const device = { index: 0, freeMemory: 1024, totalMemory: 2048 }
+    const first = { url: '10.0.0.2:50052', devices: [device, { ...device, index: 1 }] }
+    const second = { url: '10.0.0.3:50052', devices: [device] }
+    const mapped = getRpcDeviceMap([first, second])
+    if (mapped[2]?.url !== second.url || mapped[2]?.index !== 0) {
+      throw new Error('Second endpoint mapped to the wrong device')
+    }
+    return ValidationHelpers.validate(
+      `${mapped.map(({ alias }) => alias).join(',')}; second endpoint ${mapped[2].alias}`,
+      expectation
+    )
+  }
+
+  async emptyDeviceMap(_params: object, expectation: Expectation): Promise<TestResult> {
+    if (getRpcDeviceMap([]).length) throw new Error('Unexpected devices')
+    return ValidationHelpers.validate('no devices', expectation)
+  }
+
+  async invalidDeviceMap(_params: object, expectation: Expectation): Promise<TestResult> {
+    return this.expectError(
+      async () =>
+        getRpcDeviceMap([
+          {
+            url: '10.0.0.2:50052',
+            devices: [{ index: 1, freeMemory: 1024, totalMemory: 2048 }]
+          }
+        ]),
+      expectation
+    )
   }
 
   async lifecycle(_params: object, expectation: Expectation): Promise<TestResult> {

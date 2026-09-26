@@ -5091,9 +5091,39 @@
               "url": {
                 "type": "string",
                 "minLength": 1
+              },
+              "devices": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Zero-based device index within this endpoint."
+                    },
+                    "freeMemory": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Available device memory in bytes at discovery time."
+                    },
+                    "totalMemory": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991,
+                      "description": "Total device memory in bytes."
+                    }
+                  },
+                  "required": ["index", "freeMemory", "totalMemory"],
+                  "additionalProperties": false,
+                  "title": "DiscoverRpcServersResponseServersItemDevicesItem"
+                },
+                "description": "Native served devices in endpoint enumeration order."
               }
             },
-            "required": ["url"],
+            "required": ["url", "devices"],
             "additionalProperties": false,
             "title": "DiscoverRpcServersResponseServersItem"
           }
@@ -10105,7 +10135,7 @@
                       "minLength": 1
                     },
                     "devices": {
-                      "description": "Explicit ordered native device names, for example RPC0,RPC1. RPC indices follow rpc-servers order; tensor-split weights follow this device order.",
+                      "description": "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device of each endpoint in first-registration order, persisting for the worker lifetime. Use getRpcDeviceMap with that order; tensor-split weights follow this device order.",
                       "type": "string",
                       "minLength": 1
                     },

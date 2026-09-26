@@ -137,7 +137,7 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Explicit ordered native device names, for example RPC0,RPC1. RPC indices follow rpc-servers order; tensor-split weights follow this device order.'
+      'Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device of each endpoint in first-registration order, persisting for the worker lifetime. Use getRpcDeviceMap with that order; tensor-split weights follow this device order.'
     ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])

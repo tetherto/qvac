@@ -200,3 +200,5 @@ export { profiler, attachBackendDiagnostics } from '@/profiling/index'
 export type { ProfilerRuntimeOptions, ProfilerExport } from '@/profiling/index'
 
 export type { RpcServerProvider, RpcServerHandle } from '@/schemas/rpc-server'
+
+export { getRpcDeviceMap, type RpcDeviceMapping } from '@/rpc/device-map'

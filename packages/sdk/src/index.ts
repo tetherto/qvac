@@ -399,3 +399,5 @@ export type {
   RpcServerCandidate
 } from '@qvac/inference/surface'
 export { RpcServerOperationError } from './utils/errors-server'
+
+export { getRpcDeviceMap, type RpcDeviceMapping, type RpcDevice } from '@qvac/inference/surface'

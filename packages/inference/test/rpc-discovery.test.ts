@@ -3,6 +3,7 @@ import { Buffer } from 'bare-buffer'
 import Hyperswarm, { type Connection } from 'hyperswarm'
 import EventEmitter from 'bare-events'
 import { advertiseRpcServer, discoverRpcEndpoints } from '@/rpc/discovery'
+import { getRpcDeviceMap } from '@/rpc/device-map'
 import { createRequestRegistry } from '@/runtime/request-context'
 import {
   getRegisteredResourceCounts,
@@ -11,6 +12,8 @@ import {
   suspendRuntime,
   resetLifecycleState
 } from '@/runtime/runtime-lifecycle'
+
+const devices = [{ index: 0, freeMemory: 1024, totalMemory: 2048 }]
 
 class Peer extends EventEmitter {
   destroyed = false
@@ -67,7 +70,7 @@ test('RPC lookup deduplicates, rejects unreachable endpoints, uses shared hashed
     createSwarm: factory,
     probe: async (host) => {
       probed.push(host)
-      return host !== '10.0.0.3'
+      return host !== '10.0.0.3' ? devices : undefined
     }
   })
   for (const host of ['10.0.0.2', '10.0.0.2', '10.0.0.3']) {
@@ -78,7 +81,7 @@ test('RPC lookup deduplicates, rejects unreachable endpoints, uses shared hashed
   const advertiser = fakeSwarm()
   const withdraw = await advertiseRpcServer('shared', '10.0.0.2:50052', advertiser.factory)
   t.alike(swarm.topics, advertiser.swarm.topics)
-  t.alike(await result, [{ url: '10.0.0.2:50052' }])
+  t.alike(await result, [{ url: '10.0.0.2:50052', devices }])
   t.alike(probed, ['10.0.0.2', '10.0.0.3'])
   t.ok(swarm.destroyed)
   await withdraw()
@@ -91,7 +94,7 @@ test('RPC closed peers withdraw candidates and malformed or oversized peers are 
   const { swarm, factory } = fakeSwarm()
   const result = discoverRpcEndpoints('withdraw', 100, ctx, {
     createSwarm: factory,
-    probe: async () => true
+    probe: async () => devices
   })
   const peer = new Peer()
   swarm.connect(peer)
@@ -117,7 +120,7 @@ test('RPC fragmented frames are accepted; stale announcements expire', async (t)
     createSwarm: factory,
     probe: async () => {
       probes++
-      return true
+      return devices
     }
   })
   const peer = new Peer()
@@ -168,4 +171,37 @@ test('RPC real Hyperswarm lookup with no matching peers returns within its budge
   t.alike(result, [])
   t.ok(Date.now() - started < 2000, 'lookup does not wait for DHT bootstrap')
   t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('RPC discovery returns complete inventories before mapping multi-device endpoints', async (t) => {
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'inventory', kind: 'rpcDiscovery' })
+  const { swarm, factory } = fakeSwarm()
+  const result = discoverRpcEndpoints('inventory', 100, ctx, {
+    createSwarm: factory,
+    probe: async (host) =>
+      host === '10.0.0.2'
+        ? [devices[0]!, { ...devices[0]!, index: 1 }]
+        : host === '10.0.0.3'
+          ? devices
+          : []
+  })
+  for (const host of ['10.0.0.2', '10.0.0.3', '10.0.0.4']) {
+    const peer = new Peer()
+    swarm.connect(peer)
+    peer.announce(`${host}:50052`)
+  }
+  const candidates = await result
+  t.alike(
+    candidates.map(({ devices }) => devices.length),
+    [2, 1]
+  )
+  t.alike(
+    getRpcDeviceMap(candidates).map(({ alias, url, index }) => ({ alias, url, index })),
+    [
+      { alias: 'RPC0', url: '10.0.0.2:50052', index: 0 },
+      { alias: 'RPC1', url: '10.0.0.2:50052', index: 1 },
+      { alias: 'RPC2', url: '10.0.0.3:50052', index: 0 }
+    ]
+  )
 })

@@ -4406,11 +4406,47 @@ class DiscoverRpcServersRequest(GeneratedBaseModel):
     ] = None
 
 
+class DiscoverRpcServersResponseServersItemDevicesItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    index: Annotated[
+        int,
+        Field(
+            description="Zero-based device index within this endpoint.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ]
+    free_memory: Annotated[
+        int,
+        Field(
+            alias="freeMemory",
+            description="Available device memory in bytes at discovery time.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ]
+    total_memory: Annotated[
+        int,
+        Field(
+            alias="totalMemory",
+            description="Total device memory in bytes.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ]
+
+
 class DiscoverRpcServersResponseServersItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     url: Annotated[str, Field(min_length=1)]
+    devices: Annotated[
+        list[DiscoverRpcServersResponseServersItemDevicesItem],
+        Field(description="Native served devices in endpoint enumeration order."),
+    ]
 
 
 class DiscoverRpcServersResponse(GeneratedBaseModel):
@@ -8817,7 +8853,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     devices: Annotated[
         str | None,
         Field(
-            description="Explicit ordered native device names, for example RPC0,RPC1. RPC indices follow rpc-servers order; tensor-split weights follow this device order.",
+            description="Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device of each endpoint in first-registration order, persisting for the worker lifetime. Use getRpcDeviceMap with that order; tensor-split weights follow this device order.",
             min_length=1,
         ),
     ] = None

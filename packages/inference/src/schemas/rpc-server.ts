@@ -67,7 +67,20 @@ export const discoverRpcServersOptionsSchema = z.object({
       'Search budget in milliseconds, including TCP probes. Defaults to 5000, at most 30000.'
     )
 })
-export const rpcServerCandidateSchema = z.object({ url: z.string().min(1) })
+export const rpcDeviceSchema = z.object({
+  index: z.number().int().nonnegative().describe('Zero-based device index within this endpoint.'),
+  freeMemory: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe('Available device memory in bytes at discovery time.'),
+  totalMemory: z.number().int().nonnegative().describe('Total device memory in bytes.')
+})
+export const rpcServerCandidateSchema = z.object({
+  url: z.string().min(1),
+  devices: z.array(rpcDeviceSchema).describe('Native served devices in endpoint enumeration order.')
+})
+export type RpcDevice = z.infer<typeof rpcDeviceSchema>
 export const discoverRpcServersRequestSchema = discoverRpcServersOptionsSchema.extend({
   type: z.literal('discoverRpcServers'),
   requestId: requestIdSchema

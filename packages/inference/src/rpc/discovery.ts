@@ -4,8 +4,9 @@ import type { RequestContext } from '@/runtime/request-context'
 import { createDisposableScope } from '@/runtime/disposable-scope'
 import { registerSwarm, unregisterSwarm } from '@/runtime/runtime-lifecycle'
 import { getEngineLogger } from '@/logging/index'
-import { delay, privateEndpoint, probeTcp, rpcTopic, throwIfAborted } from './network'
-import type { RpcServerCandidate } from '@/schemas/rpc-server'
+import { delay, privateEndpoint, rpcTopic, throwIfAborted } from './network'
+import { queryRpcDevices } from './inventory'
+import type { RpcDevice, RpcServerCandidate } from '@/schemas/rpc-server'
 
 const FRAME_LIMIT = 1024
 const LEASE_MS = 3000
@@ -88,14 +89,14 @@ export async function discoverRpcEndpoints(
   ctx: RequestContext,
   deps: {
     createSwarm?: typeof createDiscoverySwarm
-    probe?: typeof probeTcp
+    probe?: typeof queryRpcDevices
   } = {}
 ): Promise<RpcServerCandidate[]> {
   await using scope = createDisposableScope()
   const swarm = (deps.createSwarm ?? createDiscoverySwarm)()
   scope.defer(() => destroyDiscoverySwarm(swarm))
   const candidates = new Map<Connection, { url: string; seen: number }>()
-  const reachable = new Set<string>()
+  const inventories = new Map<string, RpcDevice[]>()
   const probes = new Map<string, Promise<void>>()
   const deadline = Date.now() + timeoutMs
   const connections = new Set<Connection>()
@@ -143,15 +144,15 @@ export async function discoverRpcEndpoints(
         candidates.set(connection, { url, seen: Date.now() })
         if (probes.has(url) || probes.size >= MAX_CANDIDATES) continue
         const endpoint = privateEndpoint(url)!
-        const probe = (deps.probe ?? probeTcp)(
+        const probe = (deps.probe ?? queryRpcDevices)(
           endpoint.host,
           endpoint.port,
           Math.max(1, Math.min(500, deadline - Date.now())),
           ctx.signal,
           scope
         )
-          .then((ok) => {
-            if (ok) reachable.add(url)
+          .then((devices) => {
+            if (devices?.length) inventories.set(url, devices)
           })
           .catch(() => {})
         probes.set(url, probe)
@@ -167,8 +168,8 @@ export async function discoverRpcEndpoints(
   return [
     ...new Set(
       [...candidates.values()]
-        .filter(({ url, seen }) => now - seen < LEASE_MS && reachable.has(url))
+        .filter(({ url, seen }) => now - seen < LEASE_MS && inventories.has(url))
         .map(({ url }) => url)
     )
-  ].map((url) => ({ url }))
+  ].map((url) => ({ url, devices: inventories.get(url)! }))
 }

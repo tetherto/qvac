@@ -39,7 +39,8 @@ export async function stopRpcServer(options: StopRpcServerOptions): Promise<void
 }
 
 /**
- * Find reachable private-network candidates. The caller chooses their order for loadModel.
+ * Find private-network candidates with native device indices and memory snapshots.
+ * Use getRpcDeviceMap with the chosen endpoint registration order before loadModel.
  * Cancel a pending search with its promise.requestId.
  */
 export function discoverRpcServers(

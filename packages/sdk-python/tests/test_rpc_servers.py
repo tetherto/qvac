@@ -62,8 +62,17 @@ async def test_discovery_preserves_candidate_order_and_empty_results():
         {
             "type": "discoverRpcServers",
             "servers": [
-                {"url": "10.0.0.3:50052"},
-                {"url": "10.0.0.2:50052"},
+                {
+                    "url": "10.0.0.3:50052",
+                    "devices": [
+                        {"index": 0, "freeMemory": 1024, "totalMemory": 2048},
+                        {"index": 1, "freeMemory": 512, "totalMemory": 2048},
+                    ],
+                },
+                {
+                    "url": "10.0.0.2:50052",
+                    "devices": [{"index": 0, "freeMemory": 4096, "totalMemory": 8192}],
+                },
             ],
         }
     )
@@ -74,6 +83,8 @@ async def test_discovery_preserves_candidate_order_and_empty_results():
         request_id="discover-rpc-request",
     )
     result = await discover_rpc_servers(transport, request)
+    assert [device.index for device in result.servers[0].devices] == [0, 1]
+    assert result.servers[1].devices[0].total_memory == 8192
     assert [server.url for server in result.servers] == [
         "10.0.0.3:50052",
         "10.0.0.2:50052",
