@@ -4,7 +4,7 @@
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.20.1
 
-QVAC SDK 0.20.1 is a patch on 0.20.0. It exposes the remaining llama.cpp load-time placement, MoE, fit, and image-token fields, and `assessModelFit` now runs the engine fitter on a registry fit stub instead of coefficients alone.
+QVAC SDK 0.20.1 is a patch on 0.20.0. It exposes the remaining llama.cpp load-time placement, MoE, fit, and image-token fields, and `assessModelFit` now runs the engine fitter on a registry fit stub instead of coefficients alone. Mobile hosts that use `react-native-bare-kit` are tested against `^0.15.5` (Bare 1.33), which matches the addon graph this release installs.
 
 Install `@qvac/sdk` and `@qvac/inference` together at 0.20.1.
 
@@ -53,6 +53,12 @@ const { verdict, evidence } = await assessModelFit({
 ```
 
 The engine depends on `@qvac/registry-client` `^0.7.0` so `fitBlobBinding` on those stubs decodes. `@qvac/sdk` no longer depends on `@qvac/registry-client`.
+
+## Bug Fixes
+
+### Mobile Bare-kit host
+
+`react-native-bare-kit` `^0.15.5` is the mobile host this release is tested against. It embeds Bare 1.33, which current Bare addons require. Other kit versions still install; the addon graph must match the Bare runtime that kit embeds.
 
 ## [0.20.0]
 
