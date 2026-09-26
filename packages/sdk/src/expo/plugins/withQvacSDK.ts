@@ -3,10 +3,12 @@ import type { ExpoConfig } from 'expo/config'
 import withAndroidArchitecture from './withAndroidArchitecture'
 import withAndroidNdkVersion from './withAndroidNdkVersion'
 import withDeviceInfo from './withDeviceInfo'
-import withMobileBundle from './withMobileBundle'
+import withMobileBundle, { type MobileBundleOptions } from './withMobileBundle'
 import withOpenCL from './withOpenCL'
 
 const { withPlugins } = configPlugins
+
+type QvacSDKPluginOptions = MobileBundleOptions
 
 /**
  * Main Qvac SDK Expo plugin that combines all necessary mobile configurations:
@@ -16,10 +18,13 @@ const { withPlugins } = configPlugins
  * - Android NDK version pinning in build.gradle
  * - Android architecture filtering (arm64-v8a only)
  * - OpenCL native library support for Android
+ *
+ * Options (`["@qvac/sdk/expo-plugin", { ... }]` in app.json) go to
+ * `withMobileBundle`.
  */
-function withQvacSDK(config: ExpoConfig): ExpoConfig {
+function withQvacSDK(config: ExpoConfig, options: QvacSDKPluginOptions = {}): ExpoConfig {
   return withPlugins(config, [
-    withMobileBundle,
+    [withMobileBundle, options],
     withDeviceInfo,
     [
       'expo-build-properties',
@@ -38,5 +43,7 @@ function withQvacSDK(config: ExpoConfig): ExpoConfig {
     withOpenCL
   ])
 }
+
+export type { QvacSDKPluginOptions }
 
 export default withQvacSDK

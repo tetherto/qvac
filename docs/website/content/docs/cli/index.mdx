@@ -99,8 +99,11 @@ Generate a tree-shaken Bare worker bundle with selected plugins.
 | `--sdk-path <path>` | Path to SDK package (default: auto-detect in node_modules) |
 | `--host <target>` | Target host (repeatable) |
 | `--defer <module>` | Defer a module (repeatable) |
+| `--no-install` | Do not install missing addon platform packages for mobile hosts |
 | `-q, --quiet` | Minimal output |
 | `-v, --verbose` | Detailed output |
+
+For mobile hosts (`android-arm64`, `ios-*`), `qvac bundle sdk` adds any addon platform packages the bundle needs (for example `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager, pinned to the addon's exact version, then bundles again. If it cannot install them, it prints the dependencies to add and bundles without them.
 
 ### `qvac serve`
 

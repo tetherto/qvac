@@ -5,6 +5,9 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { execPath } from 'process'
 import { bundleSdk, verifyBundle, hasErrors, formatVerifyBundleResult } from '@/commands'
+import { createCommandLogger } from '@/commands/command-logger'
+import { installMissingHostPrebuilds } from '@/commands/host-prebuilds/index'
+import { collectAddonsFromBundle } from '@/commands/verify/bundle-source'
 import { CONFIG_CANDIDATES } from '@/client/config-loader/resolve-config.node'
 import { resolveSDKPackageDir } from '@/expo/plugins/resolve-sdk-package-dir'
 import { getProjectRootFromMod } from '@/expo/plugins/get-project-root'
@@ -41,62 +44,90 @@ type BareKitLinkerPaths = {
   ios: string | null
 }
 
+type MobileBundleOptions = {
+  /**
+   * Install the addon platform packages the bundle needs for the current
+   * build target with the app's package manager, pinned in package.json.
+   * Off by default: `expo prebuild` then fails and names each package to add.
+   */
+  installMissingPrebuilds?: boolean
+}
+
 /**
  * Expo plugin: bundle, verify, then copy the mobile worker bundle.
  *
  * Flow: bundleSdk -> verifyBundle -> copy to `<sdkPackageDir>/dist/worker.mobile.bundle.js`.
  * Uses `qvac.config.*` if present.
  */
-function withMobileBundle(config: ExpoConfig): ExpoConfig {
-  async function buildMobileBundle(config: configPlugins.ExportedConfigWithProps<unknown>) {
-    const projectRoot = getProjectRootFromMod(config)
-    const sdkPackage = resolveSDKPackageDir(projectRoot)
-    const outputPath = path.join(sdkPackage.dir, 'dist', 'worker.mobile.bundle.js')
+function withMobileBundle(config: ExpoConfig, options: MobileBundleOptions = {}): ExpoConfig {
+  config = withDangerousMod(config, ['android', (mod) => buildMobileBundle(mod, options)])
+  config = withDangerousMod(config, ['ios', (mod) => buildMobileBundle(mod, options)])
+  return config
+}
 
-    const configPath = findConfigFile(projectRoot)
-    if (configPath) {
-      console.log(`🕚 QVAC: Found ${path.basename(configPath)}, generating tree-shaken bundle...`)
-    } else {
-      console.log('🕚 QVAC: No config found, generating default bundle (all plugins)...')
-    }
+async function buildMobileBundle<T extends configPlugins.ExportedConfigWithProps<unknown>>(
+  config: T,
+  options: MobileBundleOptions
+) {
+  const projectRoot = getProjectRootFromMod(config)
+  const sdkPackage = resolveSDKPackageDir(projectRoot)
+  const outputPath = path.join(sdkPackage.dir, 'dist', 'worker.mobile.bundle.js')
+  const platformHosts = mobileHostsForPlatform(config.modRequest.platform)
 
-    const deferredModules = [
-      ...DEFERRED_MODULES,
-      ...MOBILE_UNSUPPORTED_MODULES,
-      `${sdkPackage.name}/worker.mobile.bundle`
-    ]
-    // The bundle is one shared artifact both platforms import, so it is built
-    // for every mobile host: a dual-platform `expo prebuild` runs this mod twice
-    // and the second run would otherwise overwrite the first platform's bundle
-    // with one that resolved the other platform's conditions.
-    const linkerPaths = await runBundler(
-      projectRoot,
-      sdkPackage.dir,
-      configPath,
-      deferredModules,
-      MOBILE_HOSTS
-    )
-
-    const generatedBundle = path.join(projectRoot, 'qvac', 'worker.bundle.js')
-    await runVerifier(
-      projectRoot,
-      generatedBundle,
-      configPath,
-      mobileHostsForPlatform(config.modRequest.platform)
-    )
-
-    fs.copyFileSync(generatedBundle, outputPath)
-
-    if (config.modRequest.platform === 'ios' && linkerPaths.ios !== null) {
-      await runIOSAddonLinker(linkerPaths.ios)
-    }
-
-    console.log('🫡 QVAC: Mobile bundle generated and verified')
-    return config
+  const configPath = findConfigFile(projectRoot)
+  if (configPath) {
+    console.log(`🕚 QVAC: Found ${path.basename(configPath)}, generating tree-shaken bundle...`)
+  } else {
+    console.log('🕚 QVAC: No config found, generating default bundle (all plugins)...')
   }
 
-  config = withDangerousMod(config, ['android', buildMobileBundle])
-  config = withDangerousMod(config, ['ios', buildMobileBundle])
+  const deferredModules = [
+    ...DEFERRED_MODULES,
+    ...MOBILE_UNSUPPORTED_MODULES,
+    `${sdkPackage.name}/worker.mobile.bundle`
+  ]
+  // The bundle is one shared artifact both platforms import, so it is built
+  // for every mobile host: a dual-platform `expo prebuild` runs this mod twice
+  // and the second run would otherwise overwrite the first platform's bundle
+  // with one that resolved the other platform's conditions.
+  const bundle = () =>
+    runBundler(projectRoot, sdkPackage.dir, configPath, deferredModules, MOBILE_HOSTS)
+  let linkerPaths = await bundle()
+  const generatedBundle = path.join(projectRoot, 'qvac', 'worker.bundle.js')
+
+  if (options.installMissingPrebuilds === true) {
+    // Take the addons from the bundle graph, which records where each linked
+    // addon really is; looking their names up in the project would miss the
+    // SDK's addons under pnpm or bun's isolated layout.
+    const { installed } = await installMissingHostPrebuilds({
+      projectRoot,
+      hosts: platformHosts,
+      addons: await collectAddonsFromBundle({
+        bundlePath: generatedBundle,
+        projectRoot,
+        hosts: platformHosts
+      }),
+      quiet: false,
+      logger: createCommandLogger({})
+    })
+    if (installed.length > 0) {
+      const names = installed.map((pkg) => `${pkg.name}@${pkg.version}`).join(', ')
+      console.log(`📦 QVAC: Installed addon platform packages: ${names}`)
+      // bare-pack resolved `#host-addon` to the addon's fallback module for
+      // hosts whose platform package was missing.
+      linkerPaths = await bundle()
+    }
+  }
+
+  await runVerifier(projectRoot, generatedBundle, configPath, platformHosts)
+
+  fs.copyFileSync(generatedBundle, outputPath)
+
+  if (config.modRequest.platform === 'ios' && linkerPaths.ios !== null) {
+    await runIOSAddonLinker(linkerPaths.ios)
+  }
+
+  console.log('🫡 QVAC: Mobile bundle generated and verified')
   return config
 }
 
@@ -278,10 +309,11 @@ export {
   MOBILE_HOSTS,
   MOBILE_HOSTS_BY_PLATFORM,
   MOBILE_UNSUPPORTED_MODULES,
+  buildMobileBundle,
   mobileHostsForPlatform,
   patchBareKitLinkers,
   runIOSAddonLinker
 }
-export type { BareKitLinkerPaths, MobilePlatform }
+export type { BareKitLinkerPaths, MobileBundleOptions, MobilePlatform }
 
 export default withMobileBundle

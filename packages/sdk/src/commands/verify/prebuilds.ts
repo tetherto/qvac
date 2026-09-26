@@ -13,6 +13,26 @@ export interface MissingPrebuildIssue {
   host: string
   message: string
   packageRoot: string
+  /**
+   * The per-platform package to declare for this mobile host, at the exact
+   * version it must be installed at. Set when the addon's `#host-addon` map
+   * names one and it is either not installed or installed at another version.
+   * Never set for desktop hosts, whose platform packages install as the
+   * addon's os/cpu-filtered optionalDependencies.
+   */
+  platformPackage?: PlatformPackagePin
+}
+
+export interface PlatformPackagePin {
+  name: string
+  version: string
+}
+
+/** Platforms no install host reports, so their platform packages must be declared. */
+const MOBILE_PLATFORMS = new Set(['android', 'ios'])
+
+export function isMobileHost(host: string) {
+  return MOBILE_PLATFORMS.has(host.split('-')[0] ?? '')
 }
 
 export interface CheckPrebuildsOptions {
@@ -28,6 +48,12 @@ export interface CheckPrebuildsOptions {
 export interface PrebuildLocation {
   hostDir: string
   platformPackage?: string
+  /**
+   * The installed platform package's version when it differs from the
+   * addon's. Platform packages are version-locked to their addon, so a
+   * prebuild in a mismatched one does not count.
+   */
+  mismatchedVersion?: string
 }
 
 const PREBUILDS_DIR = 'prebuilds'
@@ -62,10 +88,19 @@ export async function resolvePrebuildLocations(
     platformPackage
   )
   if (platformRoot !== null) {
-    locations.push({
+    const location: PrebuildLocation = {
       hostDir: path.join(platformRoot, PLATFORM_ADDON_DIR, PREBUILDS_DIR, host),
       platformPackage
-    })
+    }
+    const installedVersion = await readPackageVersion(platformRoot)
+    if (
+      addon.version !== undefined &&
+      installedVersion !== undefined &&
+      installedVersion !== addon.version
+    ) {
+      location.mismatchedVersion = installedVersion
+    }
+    locations.push(location)
   }
 
   return locations
@@ -101,14 +136,23 @@ export async function checkPrebuilds(
     const locations = await resolvePrebuildLocations(addon, host)
     if (await anyLocationHasPrebuild(locations)) continue
 
-    issues.push({
+    const platformPackage = await platformPackageForHost(addon, host)
+    const platformLocation = locations.find((location) => location.platformPackage !== undefined)
+    const issue: MissingPrebuildIssue = {
       code: 'missing-prebuild',
       level: 'error',
       addon: formatAddonId(addon),
       host,
       packageRoot: addon.packageRoot,
-      message: await describeMissingPrebuild(addon, host, locations)
-    })
+      message: describeMissingPrebuild(addon, host, locations, platformPackage, platformLocation)
+    }
+    const needsPin =
+      isMobileHost(host) &&
+      (platformLocation === undefined || platformLocation.mismatchedVersion !== undefined)
+    if (platformPackage !== null && addon.version !== undefined && needsPin) {
+      issue.platformPackage = { name: platformPackage, version: addon.version }
+    }
+    issues.push(issue)
   }
 
   return issues
@@ -116,44 +160,66 @@ export async function checkPrebuilds(
 
 async function anyLocationHasPrebuild(locations: PrebuildLocation[]): Promise<boolean> {
   for (const location of locations) {
+    if (location.mismatchedVersion !== undefined) continue
     if ((await listBarePrebuildFiles(location.hostDir)).length > 0) return true
   }
   return false
 }
 
-async function describeMissingPrebuild(
+function describeMissingPrebuild(
   addon: NativeAddon,
   host: string,
-  locations: PrebuildLocation[]
-): Promise<string> {
+  locations: PrebuildLocation[],
+  platformPackage: string | null,
+  platformLocation: PrebuildLocation | undefined
+): string {
   const expected = locations.map((location) => path.join(location.hostDir, '*.bare'))
-  const platformPackage = await platformPackageForHost(addon, host)
-  const searchedPlatformPackage = locations.some(
-    (location) => location.platformPackage === platformPackage
-  )
   return (
     `${formatAddonId(addon)} is missing a prebuild for ${host} ` +
     `(expected ${expected.join(' or ')}).` +
-    missingPlatformPackageHint(addon, platformPackage, searchedPlatformPackage)
+    missingPlatformPackageHint(addon, platformPackage, platformLocation)
   )
 }
 
 function missingPlatformPackageHint(
   addon: NativeAddon,
   platformPackage: string | null,
-  searchedPlatformPackage: boolean
+  platformLocation: PrebuildLocation | undefined
 ): string {
-  if (platformPackage === null || searchedPlatformPackage) return ''
+  if (platformPackage === null) return ''
   const pin =
     addon.version === undefined ? platformPackage : `"${platformPackage}": "${addon.version}"`
-  return (
-    ` Add this exact dependency to package.json (same version as ${addon.name})` +
-    ` and reinstall: ${pin}`
-  )
+
+  if (platformLocation === undefined) {
+    return (
+      ` Add this exact dependency to package.json (same version as ${addon.name})` +
+      ` and reinstall: ${pin}`
+    )
+  }
+  if (platformLocation.mismatchedVersion !== undefined) {
+    return (
+      ` ${platformPackage} ${platformLocation.mismatchedVersion} is installed, but it must be` +
+      ` the same version as ${addon.name}. Pin it in package.json and reinstall: ${pin}`
+    )
+  }
+  return ''
 }
 
 async function platformPackageForHost(addon: NativeAddon, host: string): Promise<string | null> {
   return resolveAddonPlatformPackage(addon.name, await readHostAddonMap(addon), host)
+}
+
+async function readPackageVersion(packageRoot: string): Promise<string | undefined> {
+  try {
+    const parsed: unknown = JSON.parse(
+      await fsp.readFile(path.join(packageRoot, 'package.json'), 'utf8')
+    )
+    if (typeof parsed !== 'object' || parsed === null) return undefined
+    const version = (parsed as { version?: unknown }).version
+    return typeof version === 'string' ? version : undefined
+  } catch {
+    return undefined
+  }
 }
 
 async function readHostAddonMap(addon: NativeAddon): Promise<unknown> {

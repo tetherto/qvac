@@ -163,17 +163,19 @@ qvac bundle sdk [options]
 2. Resolves enabled plugins from the `plugins` array (defaults to all built-in plugins if omitted)
 3. Generates worker entry files with **static imports only**
 4. Bundles with `bare-pack --linked`
-5. Generates `addons.manifest.json` from the bundle graph
+5. For mobile hosts (`android-arm64`, `ios-*`), adds any addon platform packages the bundle needs (for example `@qvac/tts-ggml-android-arm64`) to `package.json` with your project's package manager (npm 7+, pnpm, bun, or Yarn Berry), pinned to the addon's exact version, and bundles again. If it cannot install them, it prints the dependencies to add and continues without them. Skip this step with `--no-install`.
+6. Generates `addons.manifest.json` from the bundle graph
 
 **Options:**
 
-| Flag                  | Description                                             |
-| --------------------- | ------------------------------------------------------- |
-| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`) |
-| `--host <target>`     | Target host (repeatable, default: all platforms)        |
-| `--defer <module>`    | Defer a module (repeatable, for mobile targets)         |
-| `--quiet, -q`         | Minimal output                                          |
-| `--verbose, -v`       | Detailed output                                         |
+| Flag                  | Description                                                     |
+| --------------------- | --------------------------------------------------------------- |
+| `--config, -c <path>` | Config file path (default: auto-detect `qvac.config.*`)         |
+| `--host <target>`     | Target host (repeatable, default: all platforms)                |
+| `--defer <module>`    | Defer a module (repeatable, for mobile targets)                 |
+| `--no-install`        | Do not install missing addon platform packages for mobile hosts |
+| `--quiet, -q`         | Minimal output                                                  |
+| `--verbose, -v`       | Detailed output                                                 |
 
 **Examples:**
 

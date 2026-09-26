@@ -927,15 +927,16 @@ describe('checkPrebuilds', () => {
 function writePlatformPackage(
   projectRoot: string,
   relPackageDir: string,
-  options: { name: string; addon: string; hosts: string[] }
+  options: { name: string; addon: string; hosts: string[]; version?: string }
 ): string {
+  const version = options.version ?? '0.9.0'
   const platformRoot = writePackageJson(projectRoot, relPackageDir, {
     name: options.name,
-    version: '0.9.0'
+    version
   })
   writeJson(path.join(platformRoot, 'addon', 'package.json'), {
     name: options.addon,
-    version: '0.9.0',
+    version,
     addon: true
   })
   for (const host of options.hosts) {
@@ -1057,6 +1058,35 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
       assert.ok(win32)
       assert.match(win32.message, /tts-ggml-win32-x64[\\/]addon[\\/]prebuilds[\\/]win32-x64/)
       assert.doesNotMatch(win32.message, /"@qvac\/tts-ggml-win32-x64": "0\.9\.0"/)
+      assert.equal(
+        linux.platformPackage,
+        undefined,
+        'desktop platform packages install as optionalDependencies, never as declared pins'
+      )
+      assert.equal(win32.platformPackage, undefined)
+    })
+  })
+
+  it('pins only a mobile platform package that is installed without its prebuild', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-android-arm64', {
+        name: '@qvac/tts-ggml-android-arm64',
+        addon: '@qvac/tts-ggml',
+        hosts: []
+      })
+      const issues = await checkPrebuilds({
+        addon: metaAddon(packageRoot),
+        hosts: ['android-arm64', 'ios-arm64']
+      })
+      const android = issues.find((i) => i.host === 'android-arm64')
+      const ios = issues.find((i) => i.host === 'ios-arm64')
+      assert.equal(
+        android?.platformPackage,
+        undefined,
+        'an installed package at the right version needs its prebuild, not another pin'
+      )
+      assert.deepEqual(ios?.platformPackage, { name: '@qvac/tts-ggml-ios', version: '0.9.0' })
     })
   })
 
@@ -1072,6 +1102,43 @@ describe('checkPrebuilds with per-platform prebuild packages', () => {
         issues[0]?.message ?? '',
         /Add this exact dependency to package\.json \(same version as @qvac\/tts-ggml\) and reinstall: "@qvac\/tts-ggml-android-arm64": "0\.9\.0"/
       )
+      assert.deepEqual(issues[0]?.platformPackage, {
+        name: '@qvac/tts-ggml-android-arm64',
+        version: '0.9.0'
+      })
+    })
+  })
+
+  it('does not accept a platform package installed at another version than its addon', async () => {
+    await withTempDir(async (dir) => {
+      const packageRoot = writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      const platformRoot = writePlatformPackage(dir, 'node_modules/@qvac/tts-ggml-android-arm64', {
+        name: '@qvac/tts-ggml-android-arm64',
+        addon: '@qvac/tts-ggml',
+        hosts: ['android-arm64'],
+        version: '0.8.3'
+      })
+
+      const locations = await resolvePrebuildLocations(metaAddon(packageRoot), 'android-arm64')
+      assert.deepEqual(locations[1], {
+        hostDir: path.join(platformRoot, 'addon', 'prebuilds', 'android-arm64'),
+        platformPackage: '@qvac/tts-ggml-android-arm64',
+        mismatchedVersion: '0.8.3'
+      })
+
+      const issues = await checkPrebuilds({
+        addon: metaAddon(packageRoot),
+        hosts: ['android-arm64']
+      })
+      assert.equal(issues.length, 1)
+      assert.match(
+        issues[0]?.message ?? '',
+        /@qvac\/tts-ggml-android-arm64 0\.8\.3 is installed, but it must be the same version as @qvac\/tts-ggml\. Pin it in package\.json and reinstall: "@qvac\/tts-ggml-android-arm64": "0\.9\.0"/
+      )
+      assert.deepEqual(issues[0]?.platformPackage, {
+        name: '@qvac/tts-ggml-android-arm64',
+        version: '0.9.0'
+      })
     })
   })
 
@@ -1934,6 +2001,27 @@ describe('formatVerifyBundleResult', () => {
       assert.match(out, /ABI mismatch/)
       assert.match(out, /bare-os@3\.9\.0 for ios-arm64-simulator/)
       assert.match(out, /requires bare >=1\.14\.0, runtime is 1\.13\.0/)
+    })
+  })
+
+  it('names the platform package to pin for a split addon', async () => {
+    await withTempDir(async (dir) => {
+      writePackageJson(dir, 'node_modules/@qvac/tts-ggml', splitTtsManifest())
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['android-arm64', 'ios-arm64'],
+        bareRuntimeVersion: '1.30.3'
+      })
+      const out = formatVerifyBundleResult(result)
+      assert.match(
+        out,
+        /@qvac\/tts-ggml@0\.9\.0 for android-arm64 \(needs "@qvac\/tts-ggml-android-arm64": "0\.9\.0" in package\.json\)/
+      )
+      assert.match(
+        out,
+        /@qvac\/tts-ggml@0\.9\.0 for ios-arm64 \(needs "@qvac\/tts-ggml-ios": "0\.9\.0" in package\.json\)/
+      )
     })
   })
 })
