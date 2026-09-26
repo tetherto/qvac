@@ -2,10 +2,13 @@ import { promises as fsp } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import path from 'node:path'
 import {
+  createLimiter,
   deduplicateAddons,
+  FS_CONCURRENCY,
   readAddonPackageJson,
   type CollectDiagnostics,
-  type NativeAddon
+  type NativeAddon,
+  type ReadAddonPackageJsonResult
 } from '@/commands/verify/addon-source'
 
 export class InvalidNodeModulesSourceError extends Error {
@@ -27,69 +30,73 @@ export interface CollectAddonsFromNodeModulesOptions {
   diagnostics?: CollectDiagnostics
 }
 
+type Limit = ReturnType<typeof createLimiter>
+
 export async function collectAddonsFromNodeModules(
   options: CollectAddonsFromNodeModulesOptions
 ): Promise<NativeAddon[]> {
   const { nodeModulesRoot, diagnostics } = options
+  const limit = createLimiter(FS_CONCURRENCY)
+  const results = await walkNodeModules(nodeModulesRoot, limit, true)
+
   const addons: NativeAddon[] = []
-  await walkNodeModules(nodeModulesRoot, addons, diagnostics, true)
+  for (const result of results) {
+    if (result.record !== undefined && diagnostics !== undefined) {
+      diagnostics.packages.push(result.record)
+    }
+    if (result.isAddon && result.addon) {
+      addons.push(result.addon)
+    } else if (result.invalid !== undefined && diagnostics !== undefined) {
+      diagnostics.invalidPackageJsons.push(result.invalid)
+    }
+  }
   return deduplicateAddons(addons)
 }
 
+/**
+ * Directory reads run in parallel under `limit`; results are concatenated in
+ * directory-entry order so the output does not depend on I/O timing.
+ */
 async function walkNodeModules(
   nodeModulesDir: string,
-  addons: NativeAddon[],
-  diagnostics: CollectDiagnostics | undefined,
+  limit: Limit,
   isRoot: boolean
-): Promise<void> {
-  let entries
+): Promise<ReadAddonPackageJsonResult[]> {
+  let entries: Dirent[]
   try {
-    entries = await fsp.readdir(nodeModulesDir, { withFileTypes: true })
+    entries = await limit(() => fsp.readdir(nodeModulesDir, { withFileTypes: true }))
   } catch (error) {
     if (isRoot) throw new InvalidNodeModulesSourceError(nodeModulesDir, error)
-    return
+    return []
   }
 
-  for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue
-    if (!isPackageEntry(entry)) continue
-
-    if (entry.name.startsWith('@')) {
-      await walkScopeDirectory(path.join(nodeModulesDir, entry.name), addons, diagnostics)
-      continue
-    }
-
-    await visitPackageDirectory(
-      path.join(nodeModulesDir, entry.name),
-      entry.name,
-      addons,
-      diagnostics
+  const visits = entries
+    .filter((entry) => !entry.name.startsWith('.') && isPackageEntry(entry))
+    .map((entry) =>
+      entry.name.startsWith('@')
+        ? walkScopeDirectory(path.join(nodeModulesDir, entry.name), limit)
+        : visitPackageDirectory(path.join(nodeModulesDir, entry.name), entry.name, limit)
     )
-  }
+  return (await Promise.all(visits)).flat()
 }
 
 async function walkScopeDirectory(
   scopeDir: string,
-  addons: NativeAddon[],
-  diagnostics: CollectDiagnostics | undefined
-): Promise<void> {
+  limit: Limit
+): Promise<ReadAddonPackageJsonResult[]> {
   const scope = path.basename(scopeDir)
-  let entries
+  let entries: Dirent[]
   try {
-    entries = await fsp.readdir(scopeDir, { withFileTypes: true })
+    entries = await limit(() => fsp.readdir(scopeDir, { withFileTypes: true }))
   } catch {
-    return
+    return []
   }
-  for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue
-    if (!isPackageEntry(entry)) continue
-    await visitPackageDirectory(
-      path.join(scopeDir, entry.name),
-      `${scope}/${entry.name}`,
-      addons,
-      diagnostics
+  const visits = entries
+    .filter((entry) => !entry.name.startsWith('.') && isPackageEntry(entry))
+    .map((entry) =>
+      visitPackageDirectory(path.join(scopeDir, entry.name), `${scope}/${entry.name}`, limit)
     )
-  }
+  return (await Promise.all(visits)).flat()
 }
 
 function isPackageEntry(entry: Dirent): boolean {
@@ -99,19 +106,16 @@ function isPackageEntry(entry: Dirent): boolean {
 async function visitPackageDirectory(
   packageDir: string,
   packageName: string,
-  addons: NativeAddon[],
-  diagnostics: CollectDiagnostics | undefined
-): Promise<void> {
-  const result = await readAddonPackageJson({
-    packageJsonPath: path.join(packageDir, 'package.json'),
-    expectedName: packageName
-  })
-  if (result.isAddon && result.addon) {
-    addons.push(result.addon)
-  } else if (result.invalid !== undefined && diagnostics !== undefined) {
-    diagnostics.invalidPackageJsons.push(result.invalid)
-  }
-
-  const nestedNodeModules = path.join(packageDir, 'node_modules')
-  await walkNodeModules(nestedNodeModules, addons, diagnostics, false)
+  limit: Limit
+): Promise<ReadAddonPackageJsonResult[]> {
+  const [result, nested] = await Promise.all([
+    limit(() =>
+      readAddonPackageJson({
+        packageJsonPath: path.join(packageDir, 'package.json'),
+        expectedName: packageName
+      })
+    ),
+    walkNodeModules(path.join(packageDir, 'node_modules'), limit, false)
+  ])
+  return [result, ...nested]
 }

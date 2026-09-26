@@ -24,6 +24,7 @@ export {
 export { checkDesktopTargets, checkAndroidTarget, checkIosTarget } from '@/doctor/checks/targets'
 export { checkFfmpeg, checkBareRuntime, checkBun } from '@/doctor/checks/tools'
 export { checkSdkInstalled } from '@/doctor/checks/project'
+export { checkBareEngines } from '@/doctor/checks/engines'
 
 export interface CollectChecksOptions {
   context?: CheckContext | undefined

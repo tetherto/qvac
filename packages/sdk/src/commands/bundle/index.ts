@@ -14,6 +14,9 @@ import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
 import { generateAddonsManifest } from '@/commands/bundle/manifest'
 import { createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
+import { verifyBundle } from '@/commands/verify/index'
+import { formatRuntimeSource } from '@/commands/verify/abi'
+import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
 
 const require = createRequire(import.meta.url)
 
@@ -25,6 +28,14 @@ export interface BundleSdkOptions {
   defer?: string[] | undefined
   quiet?: boolean | undefined
   verbose?: boolean | undefined
+  /**
+   * Check the bundled packages' engines.bare against the Bare runtime of each
+   * host and warn on a mismatch. Defaults to true; callers that run
+   * `verifyBundle` on the result can turn it off.
+   */
+  checkEngines?: boolean | undefined
+  /** Allow network lookups during the engines check. Defaults to true. */
+  network?: boolean | undefined
 }
 
 export interface BundleSdkResult {
@@ -82,10 +93,62 @@ function createCommandLogger(options: BundleSdkOptions): Logger {
   if (options.quiet) {
     return getClientLogger({ level: 'error', enableConsole: false })
   }
+  // The client logger keeps console output off unless asked; the bundler's
+  // progress and warnings are meant for the person running it.
   if (options.verbose) {
-    return getClientLogger({ level: 'debug' })
+    return getClientLogger({ level: 'debug', enableConsole: true })
   }
-  return getClientLogger()
+  return getClientLogger({ enableConsole: true })
+}
+
+interface CheckBundleEnginesOptions {
+  projectRoot: string
+  bundlePath: string
+  hosts: string[]
+  configPath: string | undefined
+  network: boolean | undefined
+  logger: Logger
+}
+
+const ENGINES_ISSUE_CODES = new Set(['abi-mismatch', 'engines-mismatch', 'unknown-runtime-version'])
+
+async function checkBundleEngines(options: CheckBundleEnginesOptions) {
+  const { projectRoot, bundlePath, hosts, configPath, network, logger } = options
+
+  logger.info('\n🔎 Checking engines.bare against the Bare runtime of each host...')
+  const result = await verifyBundle({
+    projectRoot,
+    addonsSource: bundlePath,
+    hosts,
+    ...(configPath !== undefined ? { configPath } : {}),
+    ...(network !== undefined ? { network } : {}),
+    onProgress: (message) => logger.info(`   ${message}`)
+  })
+
+  for (const group of result.runtimes ?? []) {
+    const label = group.hosts.join(', ')
+    if (group.resolution.resolved) {
+      logger.info(
+        `   ${label}: Bare ${group.resolution.runtime.version} (from ${formatRuntimeSource(group.resolution.runtime)})`
+      )
+    } else {
+      logger.debug(`   ${label}: ${group.resolution.error.reason}`)
+    }
+  }
+
+  const enginesIssues = result.issues.filter((issue) => ENGINES_ISSUE_CODES.has(issue.code))
+  const mismatches = enginesIssues.filter((issue) => issue.level === 'error')
+  if (mismatches.length === 0) {
+    for (const issue of enginesIssues) logger.debug(`   ${issue.message}`)
+    logger.info('   No engines.bare mismatches')
+    return
+  }
+
+  const lines = ['The bundle contains packages that require a newer Bare runtime:']
+  for (const issue of mismatches) lines.push(`  - ${issue.message}`)
+  lines.push('')
+  for (const advice of result.advice ?? []) lines.push(...formatEnginesAdvice(advice))
+  logger.warn(lines.join('\n').trimEnd())
 }
 
 export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleSdkResult> {
@@ -178,6 +241,17 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     projectRoot,
     logger
   })
+
+  if (options.checkEngines !== false) {
+    await checkBundleEngines({
+      projectRoot,
+      bundlePath,
+      hosts,
+      configPath: configPath ?? undefined,
+      network: options.network,
+      logger
+    })
+  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   logger.info(`\n🎉 Done in ${elapsed}s!\n`)

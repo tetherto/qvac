@@ -203,6 +203,7 @@
     "contract:export": "tsx ./scripts/export-contract.ts",
     "contract:check": "tsx ./scripts/export-contract.ts --check",
     "check:resource-collectors": "tsx ./scripts/check-resource-collectors-packaging.ts",
+    "bare-kit-runtimes:generate": "tsx ./scripts/generate-bare-kit-runtimes.ts",
     "changelog:generate": "node ../../scripts/sdk/generate-changelog-sdk-pod.cjs --package=sdk && prettier --write changelog"
   },
   "dependencies": {

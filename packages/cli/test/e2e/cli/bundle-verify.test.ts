@@ -57,8 +57,8 @@ describe('cli: bundle sdk → verify bundle (chain)', () => {
       { cwd: dir, timeoutMs: 120_000 }
     )
     assert.equal(verify.code, 0, `verify bundle failed:\n${verify.output}`)
-    // "passed" when strict ABI ran; otherwise it reports the addons it checked
+    // "passed" when strict ABI ran; otherwise it reports the packages it checked
     // with ABI skipped (Bare runtime version not auto-detected on this host).
-    assert.match(verify.output, /verification passed|ABI checks skipped for \d+ addons/)
+    assert.match(verify.output, /verification passed|ABI checks skipped for \d+ packages?/)
   })
 })

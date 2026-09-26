@@ -58,6 +58,10 @@ export function registerVerifyCommand(program: Command): void {
     )
     .option('--json', 'Output the verification result as JSON')
     .option('-q, --quiet', 'Suppress success output')
+    .option(
+      '--offline',
+      'Skip GitHub and npm registry lookups (runtime detection for new react-native-bare-kit releases, override suggestions)'
+    )
     .action(
       async (options: {
         addonsSource: string
@@ -67,6 +71,7 @@ export function registerVerifyCommand(program: Command): void {
         projectRoot?: string
         json?: boolean
         quiet?: boolean
+        offline?: boolean
       }) => {
         try {
           // verifyBundle in @qvac/sdk/commands already emits an `invalid-source`
@@ -84,6 +89,13 @@ export function registerVerifyCommand(program: Command): void {
           }
           if (options.config) {
             verifyOptions.configPath = options.config
+          }
+          if (options.offline) {
+            verifyOptions.network = false
+          }
+          if (!options.quiet) {
+            // stderr keeps `--json` output on stdout parseable.
+            verifyOptions.onProgress = (message) => process.stderr.write(`… ${message}\n`)
           }
           const result = await verifyBundle(verifyOptions)
           const failed = hasErrors(result)
