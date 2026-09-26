@@ -7,7 +7,7 @@
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.js index.d.ts process.js process.d.ts process-internal.js process-internal.d.ts process-runner.js process-runner.d.ts",
+    "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js index.d.ts process.js process.d.ts process-internal.js process-internal.d.ts process-runner.js process-runner.d.ts) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "lint": "npm run lint:js && npm run lint:ts",
