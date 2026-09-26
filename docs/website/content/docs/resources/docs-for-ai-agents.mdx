@@ -1,76 +1,151 @@
 ---
 title: Docs for AI agents
-description: How a coding agent picks the documentation matching the release a project has installed.
+description: What this documentation offers an AI agent, and how to use each one.
 schemaType: TechArticle
 ---
 
 ## Overview
 
-Some collections on this site are published as **documentation lines**: one
-complete copy of the documentation per release. The SDK and the CLI each
-publish their current line and every line cut before it. A line is
-self-contained — its pages link only to each other — so
-reading the wrong line yields answers that are internally consistent and wrong
-for the project in front of you.
+QVAC docs offers AI agents the following:
 
-This page is the procedure for choosing the right one. It is written for
-coding agents; a human can use the version switcher at the top of the sidebar
-instead.
+- `llms.txt` — an index of what is published and where to fetch it
+- `llms-full.txt` — the full text of the documentation in one fetch
+- Ask AI chat — an assistant that answers from these pages
+- Markdown negotiation — any page as plain Markdown
+- MCP server — these docs as a tool your editor can call
 
-## Procedure
+The SDK and the CLI publish one copy of their documentation per release, which
+changes how you use most of the above. Read [Versioning](#versioning) before
+you rely on an answer about either.
 
-1. **Read the installed version.** Take it from the project itself, not from
-   this site: `package.json` and the lockfile for `@qvac/sdk` or `@qvac/cli`,
-   `pyproject.toml` for the Python client. Keep the major and minor, discard
-   the patch: `0.16.3` becomes `v0.16`.
-2. **List the lines.** Fetch `/{collection}/versions.json`, for example
-   `/sdk/versions.json`. It names the package the collection tracks and every
-   line published, marking which one is current.
-3. **Resolve the line.** Take the entry whose `version` equals the major and
-   minor you read in step 1.
-4. **Read that line.** Its `index` is a page list; its `corpus` is the full
-   text of the line in one fetch. Both are named in `versions.json`, and both
-   are reachable by hand: the index of a line is always
-   `/{collection}/v{major}.{minor}/llms.txt`.
-5. **Cite the page URL.** Answers should cite the URL a human can open, which
-   for the current line carries no version segment and for any other line
-   carries its own.
+## `llms.txt`
 
-## When no line matches
+An index. It tells you what is published and where to fetch it, so you can read
+one thing instead of everything.
 
-Only the last two releases are published, so a project pinned further back
-will find no matching line.
+There is one at each of three levels:
 
-- Use the **nearest older line** — the highest published version below the
-  installed one.
-- **Say so.** State in your answer which line you read and which release the
-  project has, so the reader can judge the gap themselves.
-- Never fall forward to a newer line silently. A newer line describes
-  behaviour the installed release may not have.
+| Fetch | To get |
+| --- | --- |
+| `/llms.txt` | Every collection on the site, and where to resolve the versioned ones |
+| `/{collection}/llms.txt` | Every published line of one collection, with each line's index and corpus |
+| `/{collection}/v{major}.{minor}/llms.txt` | Every page of one line |
 
-## Artifacts
+Start at `/llms.txt`. It is small, and it names where to go next.
 
-Every artifact below is plain text, generated at build time.
+For a versioned collection, `/{collection}/versions.json` carries what that
+collection's `llms.txt` carries, as JSON. Fetch that one if you are parsing
+rather than reading.
 
-| Artifact | Where | What it holds |
-| --- | --- | --- |
-| Root router | `/llms.txt` | The collections, and where to resolve the versioned ones |
-| Line resolver | `/{collection}/llms.txt` | The lines of one collection, and where each one's index and corpus are |
-| Machine-readable lines | `/{collection}/versions.json` | The same, as JSON |
-| Line index | `/{collection}/v{major}.{minor}/llms.txt` | Every page of one line |
-| Line corpus | Named in the resolver | The full text of one line |
-| Site corpus | `/llms-full.txt` | The unversioned collections plus the current line of each versioned one |
-| Page as Markdown | Any page URL with `.md` appended | One page, with its collection, line, and tracked package stated in the front matter |
+## `llms-full.txt`
 
-Sending `Accept: text/markdown` with a page request redirects to the Markdown
-variant, so content negotiation works without rewriting URLs.
+The full text of many pages in one fetch. Use it when you need broad context
+and do not yet know which page holds the answer. Use a single page when you do.
 
-## Rules
+The same three levels:
 
-- **Do not mix lines.** Never combine text from two lines of the same
-  collection in one answer. Their APIs differ; that is why they are separate.
-- **Referencing another collection is fine.** The SDK and the CLI are
-  versioned independently, and each is cited at its own resolved line.
-- **Prefer the corpus of one line over the site corpus** when the question is
-  about a specific release. The site corpus carries only the current line of
-  each versioned collection.
+| Fetch | To get |
+| --- | --- |
+| `/llms-full.txt` | The unversioned collections, plus the current line of every versioned one |
+| `/{collection}/llms-full.txt` | The current line of that collection |
+| `/{collection}/v{major}.{minor}/llms-full.txt` | That line |
+
+Every corpus opens with a header naming what is in it, how many pages it holds,
+and where to go for what it leaves out. Read the header — it is how you find
+out you fetched the wrong scope.
+
+Release notes are withheld from every corpus. Fetch one as its own page, from
+that line's index.
+
+If you are answering about a specific release, fetch that line's corpus. The
+site corpus carries only current lines.
+
+## Ask AI chat
+
+An assistant that answers from this documentation and cites the pages it used.
+Use it when you do not know the term to search for.
+
+Press `Cmd + I` (`Ctrl + I` on Windows and Linux), or click **Ask AI** in the
+header.
+
+It searches the line you are reading, the unversioned collections, and the
+current line of every other versioned collection. It will not answer from a
+line you are not in, so open a page of the line you care about first.
+
+## Markdown negotiation
+
+Every page is also published as Markdown, without the site around it. Use it to
+hand a page to a model.
+
+There are two ways to get it:
+
+- **Append `.md` to the path** — `/sdk/js-ts-sdk` becomes `/sdk/js-ts-sdk.md`.
+- **Send `Accept: text/markdown`** — any page URL redirects to its Markdown.
+  Use this when you cannot rewrite the URL.
+
+Each Markdown page opens with front matter naming its collection, the package
+that collection tracks, its line, and whether that line is the current one.
+Check `line` and `current_line` to confirm you have the release you meant.
+
+Cite the URL without `.md`. That is the one a person can open.
+
+On a page you are reading, **Copy page** copies its Markdown, and the button
+beside it opens the page in ChatGPT or Claude.
+
+## MCP server
+
+A Model Context Protocol server, so an MCP-capable editor or agent can search
+these docs as a tool instead of fetching URLs.
+
+Add this endpoint to your client:
+
+```
+https://mcp.inkeep.com/tetherio/mcp
+```
+
+The **For AI** menu in the header copies that address for you.
+
+## Versioning
+
+The SDK and the CLI each publish one complete copy of their documentation per
+release — a **documentation line**. A line is self-contained, so reading the
+wrong one gives you answers that are internally consistent and wrong for the
+project in front of you.
+
+### Resolve the line before you read
+
+1. **Read the installed version from the project**, not from this site:
+   `package.json` and the lockfile for `@qvac/sdk` or `@qvac/cli`. Keep the
+   major and minor, drop the patch — `0.16.3` is `v0.16`.
+2. **Fetch `/{collection}/versions.json`.** It names every published line and
+   marks which one is current.
+3. **Take the line whose `version` matches.** Read its `index` for a page list,
+   or its `corpus` for the whole line in one fetch.
+
+If you are a person rather than an agent, skip all three: use the version
+switcher at the top of the sidebar.
+
+### The current line carries no version in its URL
+
+The current line is served at `/sdk/…`; every older line carries its own
+segment, `/sdk/v0.19/…`. Cite the URL of the line you actually read.
+
+### When no line matches
+
+Only the most recent releases stay published, so a project pinned further back
+will find no line of its own.
+
+- Read the **nearest older line** — the highest published version below the one
+  installed.
+- **Say which line you read and which release the project is on**, so the
+  reader can judge the gap.
+- Never fall forward to a newer line. It describes behaviour the installed
+  release may not have.
+
+### Never mix lines
+
+Do not combine text from two lines of the same collection in one answer. Their
+APIs differ; that is why they are separate.
+
+Combining collections is fine. The SDK and the CLI are versioned
+independently — resolve each at its own line.
