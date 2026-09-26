@@ -418,6 +418,14 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
 
   const bool isCacheLoaded = driver->loadCache(request.cacheKey);
   driver->setCacheReconciliationEnabled(!request.cacheKey.empty());
+  // The previous request on this cacheKey ended with its slot driver; its
+  // checkpoints were kept here. They only describe prefixes, and the driver
+  // checks each against the memory `loadCache` just restored before use.
+  if (const auto kept = checkpointStore_.find(request.cacheKey);
+      kept != checkpointStore_.end()) {
+    driver->adoptCheckpoints(std::move(kept->second));
+    checkpointStore_.erase(kept);
+  }
 
   ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
 
@@ -858,8 +866,29 @@ void ContinuousBatchScheduler::drainFinishedLocked(
   }
 }
 
+void ContinuousBatchScheduler::serviceCheckpointStopsLocked() {
+  // Partial snapshots are small and the context is not shared with anything
+  // else while the worker holds the lock, so capture in place.
+  while (const auto awaiting = batcher_.nextAwaitingCheckpoint()) {
+    auto& slot = slots_[awaiting->seqId];
+    if (slot.has_value() && slot->driver) {
+      try {
+        slot->driver->syncPosition(awaiting->currentPos);
+        slot->driver->captureHistoryCheckpoint(awaiting->currentPos);
+      } catch (...) {
+        batcher_.completeCheckpointStop(awaiting->seqId);
+        failSlotLocked(awaiting->seqId, std::current_exception());
+        continue;
+      }
+    }
+    batcher_.completeCheckpointStop(awaiting->seqId);
+  }
+}
+
 bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   serviceNextMediaSegmentLocked(lock);
+  // A media segment can complete right at a checkpoint stop.
+  serviceCheckpointStopsLocked();
 
   const auto fillResult = batcher_.fillBatch(batch_);
   if (fillResult.totalTokens == 0) {
@@ -918,6 +947,9 @@ bool ContinuousBatchScheduler::stepLocked(std::unique_lock<std::mutex>* lock) {
   // the driver to a cursor one chunk behind live memory, and a cancel that
   // commits would save a cache whose metadata does not match its contents.
   applyDeferredTeardownLocked();
+  // Slots whose chunk just reached their checkpoint stop, before any sampling
+  // so the stop is serviced by the time the next batch is filled.
+  serviceCheckpointStopsLocked();
 
   if (!cancelRequested_.load()) {
     batcher_.sampleAndAppendIdle([this](uint32_t seqId, int logitIdx) {
@@ -1416,6 +1448,7 @@ void ContinuousBatchScheduler::clearLocked() noexcept {
   } catch (...) {
     logTeardownFailureNoexcept("clear: batcher_.clear threw unexpectedly");
   }
+  checkpointStore_.clear();
 }
 
 void ContinuousBatchScheduler::completeGroupRequestLocked(
@@ -1525,7 +1558,21 @@ void ContinuousBatchScheduler::notifyDoneNoexcept(uint32_t seqId) noexcept {
 
 void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
   if (seqId < slots_.size()) {
-    slots_[seqId].reset();
+    auto& slot = slots_[seqId];
+    // Every teardown path frees here, after the driver finalized, so this is
+    // where the request's checkpoints outlive its driver.
+    if (slot.has_value() && slot->driver && !slot->cacheKey.empty()) {
+      try {
+        cache::Checkpoints checkpoints = slot->driver->releaseCheckpoints();
+        if (!checkpoints.empty()) {
+          checkpointStore_[slot->cacheKey] = std::move(checkpoints);
+        }
+      } catch (...) {
+        logTeardownFailureNoexcept(
+            "free: keeping cache checkpoints failed", seqId, nullptr);
+      }
+    }
+    slot.reset();
   }
 }
 

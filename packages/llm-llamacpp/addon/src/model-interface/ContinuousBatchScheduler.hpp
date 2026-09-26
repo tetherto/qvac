@@ -534,6 +534,9 @@ private:
   /// drained, so the caller's only obligation is to break out of its
   /// driving loop.
   [[nodiscard]] bool stepLocked(std::unique_lock<std::mutex>* lock = nullptr);
+  /// Capture every slot stopped at its end-of-history checkpoint and let it
+  /// resume. A capture that throws fails that slot only.
+  void serviceCheckpointStopsLocked();
   /// Evaluate the head media barrier of one awaiting slot (lowest seqId)
   /// via its driver, unlocking around the embedded `llama_decode`. A
   /// media failure only fails that slot's request, never the whole
@@ -672,6 +675,11 @@ private:
   /// before the release and back after the reacquire); `cancel`, `clear`,
   /// `cancelGroupQueued` and `submitLocked` read it under the same lock. So it
   /// only writer is the thread holding `mutex_` when the window opens.
+  /// Process-local checkpoints per `cacheKey`, kept between the requests
+  /// that use it because each request gets a fresh slot driver. Moved into
+  /// the driver at admission and back out when its slot is freed. Bounded
+  /// per key by the checkpoint policy; dropped on `clear()`.
+  std::unordered_map<std::string, cache::Checkpoints> checkpointStore_;
   bool teardownDeferred_ = false;
   /// Live tagged groups, so a cancel can find a group that holds no slot yet.
   /// Guarded by `mutex_`; an entry lives exactly as long as its `processBatch`

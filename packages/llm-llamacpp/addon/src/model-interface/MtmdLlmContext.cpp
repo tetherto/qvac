@@ -497,6 +497,23 @@ void MtmdLlmContext::tokenizeChat(
   }
 
   resetMedia();
+
+  // The generation prompt is plain text at the end of the last chunk; see
+  // TextLlmContext::tokenizeChat.
+  generationPromptTokens_ = 0;
+  const size_t nChunks = chunks.size();
+  if (needsFullStateSnapshot_ && cacheReconciliationEnabled_ &&
+      inputs.add_generation_prompt && nChunks > 0 &&
+      mtmd_input_chunk_get_type(chunks[nChunks - 1]) ==
+          MTMD_INPUT_CHUNK_TYPE_TEXT) {
+    size_t count = 0;
+    const llama_token* tokens =
+        mtmd_input_chunk_get_tokens_text(chunks[nChunks - 1], &count);
+    generationPromptTokens_ = generationPromptTailLength(
+        modelCtx_.lctx,
+        rendered.generationPrompt,
+        std::vector<llama_token>(tokens, tokens + count));
+  }
 }
 
 LlmContext::EvalMessageResult MtmdLlmContext::evalMessage(
@@ -635,16 +652,28 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
                         ? pendingReuseEntries_ - ledgerEntryIndex
                         : size_t{0})
               : 0;
+      // The end-of-history checkpoint lands inside this chunk when the
+      // history ends within its entries; the chunk is then decoded by hand so
+      // the decode can stop there.
+      const size_t chunkStart = ledgerEntryIndex;
+      const std::optional<size_t> checkpointOffset =
+          historyCheckpointEntries_ > chunkStart &&
+                  historyCheckpointEntries_ < chunkStart + textTokenCount
+              ? std::optional<size_t>(historyCheckpointEntries_ - chunkStart)
+              : std::nullopt;
       ledgerEntryIndex += textTokenCount;
       if (skip == textTokenCount) {
         continue;
       }
-      if (skip > 0) {
+      if (skip > 0 || checkpointOffset.has_value()) {
         LlamaBatch textBatch(params_.n_batch, 0, 1);
         for (size_t offset = skip; offset < textTokenCount;) {
           textBatch->n_tokens = 0;
-          while (offset < textTokenCount &&
-                 textBatch->n_tokens < params_.n_batch) {
+          const size_t chunkEnd =
+              checkpointOffset.has_value() && offset < *checkpointOffset
+                  ? *checkpointOffset
+                  : textTokenCount;
+          while (offset < chunkEnd && textBatch->n_tokens < params_.n_batch) {
             const int32_t batchIndex = textBatch->n_tokens++;
             textBatch->token[batchIndex] = textTokens[offset++];
             textBatch->pos[batchIndex] = nPastLocal++;
@@ -658,6 +687,9 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
                 ADDON_ID,
                 toString(FailedToDecode),
                 "[MtmdLlm] failed to decode reconciled text suffix");
+          }
+          if (checkpointOffset.has_value() && offset == *checkpointOffset) {
+            captureHistoryCheckpoint(nPastLocal);
           }
         }
         continue;
@@ -1393,6 +1425,8 @@ MtmdLlmContext::ledgerFromChunks(const mtmd::input_chunks& chunks) const {
 
 void MtmdLlmContext::beginCacheRequest() {
   discardPendingResidentToken();
+  pendingHistoryCheckpoint_.reset();
+  historyCheckpointEntries_ = 0;
   cacheRequestActive_ = true;
   cacheRequestRolledBack_ = false;
   preRequestUsage_ = current_;
@@ -1461,16 +1495,16 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
 
   if (needsFullStateSnapshot_ && reuseTarget < cachedLength) {
     reuse = 0;
-    for (auto it = cacheCheckpoints_.rbegin(); it != cacheCheckpoints_.rend();
-         ++it) {
-      const size_t count = it->ledger.entries.size();
-      if (count <= reuseTarget &&
-          cache::commonPrefix(it->ledger, fullLedger) == count &&
-          restoreSequenceState(modelCtx_.lctx, seqId_, it->state)) {
-        residentLedger_ = it->ledger;
-        current_ = it->usage;
-        reuse = count;
-        checkpoint = std::to_string(count);
+    // Longest usable checkpoint first; see TextLlmContext::reconcilePrompt.
+    for (CacheCheckpoint* candidate : cache::usableCheckpointsLongestFirst(
+             cacheCheckpoints_, fullLedger, reuseTarget)) {
+      if (restoreSequenceState(modelCtx_.lctx, seqId_, candidate->state)) {
+        residentLedger_ = candidate->ledger;
+        current_ = {
+            .pos = residentLedger_.positions(),
+            .cacheTokens = candidate->cacheTokens};
+        reuse = residentLedger_.entries.size();
+        checkpoint = std::to_string(reuse);
         break;
       }
     }
@@ -1511,6 +1545,14 @@ PrefillPlan MtmdLlmContext::reconcilePrompt(
   }
 
   pendingReuseEntries_ = reuse;
+  // Only the generation prompt follows the history; a history end inside the
+  // reused prefix has nothing left to capture.
+  if (generationPromptTokens_ > 0 &&
+      fullLedger.entries.size() > generationPromptTokens_ &&
+      fullLedger.entries.size() - generationPromptTokens_ > reuse) {
+    historyCheckpointEntries_ =
+        fullLedger.entries.size() - generationPromptTokens_;
+  }
   rebuildSamplerFromLedger(residentLedger_);
 
   PrefillPlan suffix;
@@ -1560,19 +1602,65 @@ void MtmdLlmContext::commitCacheRequest() {
         CacheCheckpoint{
             .state = std::move(preRequestCacheSnapshot_),
             .ledger = preRequestLedger_,
-            .usage = preRequestCacheUsage_},
+            .cacheTokens = preRequestCacheUsage_.cacheTokens},
         cacheCheckpointPolicy_,
         [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
   } else {
     preRequestCacheSnapshot_.clear();
   }
+  if (pendingHistoryCheckpoint_.has_value()) {
+    cache::appendProcessCheckpoint(
+        cacheCheckpoints_,
+        std::move(*pendingHistoryCheckpoint_),
+        cacheCheckpointPolicy_,
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
+    pendingHistoryCheckpoint_.reset();
+  }
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = false;
+}
+
+void MtmdLlmContext::captureHistoryCheckpoint(llama_pos pos) {
+  if (!needsFullStateSnapshot_ || !cacheRequestActive_ ||
+      historyCheckpointEntries_ == 0) {
+    return;
+  }
+  // See TextLlmContext::captureHistoryCheckpoint.
+  cache::Ledger ledger = pendingPromptLedger_;
+  ledger.truncate(historyCheckpointEntries_);
+  if (ledger.positions() != pos) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[MtmdLlm] skipping end-of-history checkpoint: memory ends at %d, "
+            "history at %d\n",
+            pos,
+            ledger.positions()));
+    return;
+  }
+  CacheCheckpoint checkpoint{
+      .ledger = std::move(ledger),
+      .cacheTokens =
+          pendingPromptLedger_.cacheTokens(historyCheckpointEntries_)};
+  if (!snapshotSequenceState(
+          modelCtx_.lctx,
+          seqId_,
+          pos,
+          checkpoint.state,
+          cacheCheckpointPolicy_.storage,
+          snapshotScope_)) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[MtmdLlm] failed to capture end-of-history checkpoint\n");
+    return;
+  }
+  pendingHistoryCheckpoint_ = std::move(checkpoint);
 }
 
 bool MtmdLlmContext::restorePreRequestCacheState() {
   bool ok = true;
   discardPendingResidentToken();
+  pendingHistoryCheckpoint_.reset();
   if (!preRequestCacheSnapshot_.empty()) {
     ok = restoreSequenceState(modelCtx_.lctx, seqId_, preRequestCacheSnapshot_);
   } else if (current_.pos > preRequestCacheUsage_.pos) {
@@ -1686,6 +1774,10 @@ PrefillPlan MtmdLlmContext::preparePrefill(
     const cache::Ledger fullLedger = ledgerFromChunks(chunks);
     beginCacheRequest();
     plan = reconcilePrompt(std::move(plan), fullLedger, isPrefillOnlyRequest);
+    if (historyCheckpointEntries_ > 0) {
+      plan.checkpointAtTextTokens =
+          plan.tokens.size() - generationPromptTokens_;
+    }
   }
 
   // The batcher can only request logits on text tokens it feeds, so a
@@ -2020,6 +2112,7 @@ void MtmdLlmContext::restoreCacheStateTokens(
   residentLedger_ = decoded.ledger;
   current_ = {.pos = decoded.nPast, .cacheTokens = decoded.cacheTokens};
   cacheCheckpoints_.clear();
+  pendingHistoryCheckpoint_.reset();
 }
 
 void MtmdLlmContext::clearCacheReconciliationState() {
@@ -2028,6 +2121,8 @@ void MtmdLlmContext::clearCacheReconciliationState() {
   preRequestLedger_.entries.clear();
   preRequestCacheSnapshot_.clear();
   cacheCheckpoints_.clear();
+  pendingHistoryCheckpoint_.reset();
+  historyCheckpointEntries_ = 0;
   pendingReuseEntries_ = 0;
   cacheRequestActive_ = false;
   cacheRequestRolledBack_ = false;

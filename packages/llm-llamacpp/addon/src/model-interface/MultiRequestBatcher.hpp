@@ -39,6 +39,10 @@ struct Request {
   /// The slot stops feeding text once `prefillFedCount` reaches the head
   /// barrier's anchor and waits for `completeMediaBarrier`.
   std::vector<MediaBarrier> pendingMediaBarriers;
+  /// Text-token index the slot stops at until the scheduler has checkpointed
+  /// the driver (`PrefillPlan::checkpointAtTextTokens`); cleared by
+  /// `completeCheckpointStop`.
+  std::optional<size_t> pendingCheckpointAt;
   size_t prefillTokenCount = 0;
   size_t prefillFedCount = 0;
   std::vector<llama_token> generatedTokens;
@@ -74,6 +78,11 @@ struct Request {
   /// must run `SequenceDriver::evalMediaSegment` before more can flow.
   [[nodiscard]] bool isAwaitingMedia() const;
   static bool isOptAwaitingMedia(const std::optional<Request>& slot);
+  /// True when every text token before the checkpoint stop has been fed
+  /// and decoded and no media is pending: the scheduler must run
+  /// `SequenceDriver::captureHistoryCheckpoint` before more can flow.
+  [[nodiscard]] bool isAwaitingCheckpoint() const;
+  static bool isOptAwaitingCheckpoint(const std::optional<Request>& slot);
   [[nodiscard]] bool isGenerationIdle() const;
   static bool isOptGenerationIdle(const std::optional<Request>& slot);
   [[nodiscard]] bool isGenerationPending() const;
@@ -223,6 +232,19 @@ public:
   bool completeMediaBarrier(
       uint32_t seqId, llama_pos newPos,
       const PrefillCompleteFn& onPrefillComplete = {});
+
+  struct AwaitingCheckpoint {
+    uint32_t seqId;
+    llama_pos currentPos;
+  };
+
+  /// First slot (lowest seqId) stopped at its checkpoint, or nullopt.
+  [[nodiscard]] std::optional<AwaitingCheckpoint>
+  nextAwaitingCheckpoint() const;
+
+  /// Resume `seqId` after the scheduler checkpointed it. Returns false when
+  /// the slot is missing or has no pending stop.
+  bool completeCheckpointStop(uint32_t seqId);
 
   /// Extract finished requests and free their slots. Callers are responsible
   /// for clearing the freed seqIds' KV-cache entries before reusing the slots.

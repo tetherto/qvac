@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <numeric>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -106,6 +107,12 @@ struct MediaBarrier {
 struct PrefillPlan {
   std::vector<llama_token> tokens;
   std::vector<MediaBarrier> mediaBarriers;
+  /// Text-token index at which the driver wants its state checkpointed
+  /// before the rest of the plan is fed: the end of the chat history, in
+  /// front of the generation prompt. The scheduler stops feeding there,
+  /// calls `captureHistoryCheckpoint`, then resumes. Always after the last
+  /// media barrier and before the final token.
+  std::optional<size_t> checkpointAtTextTokens;
 
   /// Total positional span of the staged prompt (text + media).
   [[nodiscard]] llama_pos totalPositions() const {
@@ -242,6 +249,26 @@ public:
             qvac_errors::general_error::InternalError),
         "SequenceDriver::evalMediaSegment: driver stages no media segments");
   }
+
+  /// Hands the driver the process-local checkpoints kept for this request's
+  /// `cacheKey` by an earlier request's driver. Called after `loadCache`,
+  /// before `preparePrefill`. Drivers without checkpoints drop them.
+  virtual void adoptCheckpoints(
+      qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) {
+    (void)checkpoints;
+  }
+
+  /// Gives up the driver's checkpoints when its request ends, so the next
+  /// request with the same `cacheKey` can reuse them.
+  virtual qvac_lib_inference_addon_llama::cache::Checkpoints
+  releaseCheckpoints() {
+    return {};
+  }
+
+  /// The scheduler fed the plan up to `checkpointAtTextTokens` and decoded
+  /// it; live memory for this sequence ends at `pos`. Drivers without
+  /// checkpoints ignore it.
+  virtual void captureHistoryCheckpoint(llama_pos pos) { (void)pos; }
 
   /// Notify the driver that the scheduler has finished prefill-decoding
   /// `prefillTokenCount` tokens up to absolute position `currentPos`.

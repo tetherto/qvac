@@ -173,6 +173,19 @@ public:
 
   void syncPosition(llama_pos currentPos) override;
 
+  void captureHistoryCheckpoint(llama_pos pos) override;
+
+  void adoptCheckpoints(
+      qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) override {
+    if (needsFullStateSnapshot_) {
+      cacheCheckpoints_ = std::move(checkpoints);
+    }
+  }
+  qvac_lib_inference_addon_llama::cache::Checkpoints
+  releaseCheckpoints() override {
+    return std::exchange(cacheCheckpoints_, {});
+  }
+
   SequenceStepResult onLogitsReady(
       int logitIdx, unsigned generatedAfterAccept,
       const std::function<void(const std::string&)>& outputCallback,
@@ -213,6 +226,13 @@ public:
   /// of committing a partially injected close sequence.
   void forceReasoningRecoveryDecodeFailureForTesting() noexcept {
     forceReasoningRecoveryDecodeFailureForTesting_ = true;
+  }
+  /// Entries the last prompt reconciliation kept resident (0 = cold).
+  [[nodiscard]] size_t lastCacheReuseForTesting() const noexcept {
+    return lastCacheReuse_;
+  }
+  [[nodiscard]] size_t cacheCheckpointCountForTesting() const noexcept {
+    return cacheCheckpoints_.size();
   }
   /// True while the active cache request holds a pre-request full-state
   /// dump. Lets tests prove pure-attention append-only requests never write
@@ -296,10 +316,7 @@ private:
       const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
           fallbackTags);
 
-  struct CacheCheckpoint {
-    qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot state;
-    qvac_lib_inference_addon_llama::cache::Ledger ledger;
-  };
+  using CacheCheckpoint = qvac_lib_inference_addon_llama::cache::Checkpoint;
   void beginCacheRequest();
   void capturePreRequestCacheSnapshot();
   std::vector<llama_token> reconcilePrompt(
@@ -417,7 +434,17 @@ private:
   qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
   qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot
       preRequestCacheSnapshot_;
-  std::deque<CacheCheckpoint> cacheCheckpoints_;
+  qvac_lib_inference_addon_llama::cache::Checkpoints cacheCheckpoints_;
+  // End-of-history checkpoint of the request in flight (see
+  // `captureHistoryCheckpoint`), pushed after the pre-request one on commit.
+  std::optional<CacheCheckpoint> pendingHistoryCheckpoint_;
+  // Tokens the template's generation prompt occupies at the end of the last
+  // rendered prompt; 0 when there is no end-of-history checkpoint to take.
+  size_t generationPromptTokens_ = 0;
+  // Ledger entries up to the end of the history for the request in flight;
+  // 0 when this request takes no end-of-history checkpoint.
+  size_t historyCheckpointEntries_ = 0;
+  size_t lastCacheReuse_ = 0;
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
 
