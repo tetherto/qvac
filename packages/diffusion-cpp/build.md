@@ -132,6 +132,34 @@ bare-make install
 npm run test:cpp
 ```
 
+### CUDA build (Linux x64)
+
+CUDA is opt-in. Install an NVIDIA driver, a CUDA toolkit that provides `nvcc`,
+and a Clang C++ compiler compatible with the QVAC libc++ triplet. `VCPKG_ROOT`
+is still required, but no `CUDACXX`, `CMAKE_PREFIX_PATH`, or manual CUDA include
+path is needed. The CUDA script enables this package's local vcpkg overlays:
+`stable-diffusion-cpp` receives CUDA 13's target-layout include directory
+before it imports ggml, and `ggml` uses Clang as NVCC's host compiler to match
+the QVAC libc++ triplet.
+
+```bash
+npm run build:cuda
+```
+
+On a CUDA runner, run the explicit SD2.1 smoke test after the build. It downloads
+the manifest-pinned model into `test/model/` on first use, verifies its SHA-256,
+selects `CUDA0`, performs one 512x512 inference, unloads, and verifies CPU
+fallback for an unavailable requested GPU.
+
+```bash
+npm run test:cuda
+```
+
+The CUDA build path is validated with CUDA 13.3's
+`targets/x86_64-linux/include` layout. The port configuration selects Clang as
+NVCC's host compiler so CUDA compile probes use the same libc++ toolchain as the
+addon.
+
 ## Building for Different Platforms
 
 Native builds (building for the same platform you're running on) work out of the box.
