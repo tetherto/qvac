@@ -1,0 +1,37 @@
+{
+  "dependencies": [
+    {
+      "name": "qvac-fabric",
+      "version>=": "10549.3.0",
+      "features": [
+        {
+          "name": "rpc-server",
+          "platform": "!ios"
+        }
+      ]
+    },
+    {
+      "name": "qvac-lint-cpp",
+      "version>=": "1.4.4#3"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Enable native test configuration",
+      "dependencies": []
+    },
+    "rpc-rdma": {
+      "description": "Build the managed ggml-rpc-server package with libibverbs/RDMA auto-negotiation support on Linux.",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "version>=": "10549.3.0",
+          "features": [
+            "rpc-rdma"
+          ],
+          "platform": "linux"
+        }
+      ]
+    }
+  }
+}
