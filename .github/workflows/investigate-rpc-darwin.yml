@@ -1,0 +1,53 @@
+name: Investigate RPC Darwin startup
+
+on:
+  push:
+    branches: [investigate/pr4516-darwin-startup]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+  startup:
+    needs: runner_names
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
+          - arch: x64
+            runner: ${{ needs.runner_names.outputs.macos_15_intel }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: '22'
+      # Artifacts from PR 4516 at 5d460ab15053e84309936861ae35c968bbaa7914.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuild-ggml-rpc-server-darwin-${{ matrix.arch }}
+          run-id: 36181455988
+          github-token: ${{ github.token }}
+          path: packages/ggml-rpc-server/prebuilds
+      - name: Restore executable permission lost by artifact archive
+        run: find packages/ggml-rpc-server/prebuilds -type f -name ggml-rpc-server -exec chmod +x {} +
+      - name: Original PR Node smoke test
+        working-directory: packages/ggml-rpc-server
+        run: node test/node/prebuild-smoke.cjs
+      - name: Compare Metal enabled and disabled with machine diagnostics
+        if: ${{ !cancelled() }}
+        working-directory: packages/ggml-rpc-server
+        run: node scripts/diagnose-darwin-startup.cjs
