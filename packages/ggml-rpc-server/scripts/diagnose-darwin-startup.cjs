@@ -17,8 +17,14 @@ async function main() {
   console.log(JSON.stringify({ node: process.version, arch: process.arch }));
   inspect("sw_vers", []);
   inspect("sysctl", [
-    "machdep.cpu.brand_string", "hw.model", "hw.ncpu", "hw.physicalcpu",
-    "hw.logicalcpu", "hw.memsize", "vm.swapusage", "vm.loadavg",
+    "machdep.cpu.brand_string",
+    "hw.model",
+    "hw.ncpu",
+    "hw.physicalcpu",
+    "hw.logicalcpu",
+    "hw.memsize",
+    "vm.swapusage",
+    "vm.loadavg",
   ]);
   inspect("system_profiler", ["SPDisplaysDataType"]);
   inspect("vm_stat", []);
@@ -35,14 +41,26 @@ async function main() {
       try {
         const logs = server.logs();
         console.log(logs);
-        assert.equal(logs.includes("ggml_metal_library_init: loaded in"), metal === "1");
-        const probe = await probeRpcServerProtocol(net, server.host, server.port);
+        assert.equal(
+          logs.includes("ggml_metal_library_init: loaded in"),
+          metal === "1",
+        );
+        const probe = await probeRpcServerProtocol(
+          net,
+          server.host,
+          server.port,
+        );
         assert.equal(probe.deviceCount, 1);
-        const compilation = /ggml_metal_library_init: loaded in\s+([\d.]+) sec/.exec(logs);
+        const compilation =
+          /ggml_metal_library_init: loaded in\s+([\d.]+) sec/.exec(logs);
         const result = {
-          arch: process.arch, repetition, metal, startupMs,
+          arch: process.arch,
+          repetition,
+          metal,
+          startupMs,
           metalLibraryMs: compilation ? Number(compilation[1]) * 1000 : null,
-          version: probe.version, deviceCount: probe.deviceCount,
+          version: probe.version,
+          deviceCount: probe.deviceCount,
         };
         results.push(result);
         console.log(`RESULT ${JSON.stringify(result)}`);
