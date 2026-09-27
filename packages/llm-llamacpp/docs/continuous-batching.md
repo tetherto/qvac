@@ -220,10 +220,10 @@ The scheduler owns the decode loop. It wraps `MultiRequestBatcher`, the shared `
 
 1. The thread starts on the first `processBatch` call (`ensureWorkerStartedLocked`).
 2. It waits on `workCv_` until there is something to do — queued requests, active sequences, a recorded cancel (`hasPendingCancels()`), a cancel-all, a clear request, or shutdown.
-3. On wake it first applies any deferred cancel teardown (`applyDeferredTeardownLocked`), since cancels recorded from a streaming callback are only *recorded* there and applied here.
+3. On wake it first applies any deferred cancel teardown (`applyDeferredTeardownLocked`), since cancels recorded from a streaming callback, or from another thread while a step has the lock dropped, are only *recorded* there. Inside a step they are applied only once the step's bookkeeping is recorded: after `advance()` for a decode, after `completeMediaBarrier` for a media segment. Applied earlier, a teardown would sync its driver to a position one chunk behind live memory, and a cancel that commits would save a cache whose metadata does not match its contents.
 4. Then it calls `admitPendingIntoFreeSlotsLocked()` to move requests from `pending_` into free slots.
 5. It runs `stepLocked()` in a loop until no active sequences remain.
-6. Each step: fill batch, decode, sample, advance, drain finished sequences (`drainFinishedLocked`), refill slots.
+6. Each step: service a media segment, fill batch, decode, advance, apply deferred teardown, service checkpoint stops, sample, drain finished sequences (`drainFinishedLocked`), refill slots.
 7. A cancel-all raised while slots were active is consumed *after* the step — `stepLocked` finished the active slots, and this loop then drains `pending_` instead of admitting from it, so active and queued prompts are covered atomically. With nothing active it is drained at the top of the loop instead. A throw mid-step is unrecoverable for slot state, so the catch-all fails every live group, drains `pending_`, and clears.
 
 **SlotState** holds, per slot:
@@ -272,6 +272,8 @@ The batcher keeps a fixed-size `vector<optional<Request>>` indexed by `seqId`. A
 - Commits the chunks the preceding `fillBatch()` planned: advances `currentPos` for each slot by the chunk it was actually given, and notifies the driver via `PrefillCompleteFn` when prefill finishes.
 - Committing is one-shot. A second `advance()` with no `fillBatch()` between is a no-op, so a slot's position cannot run ahead of the KV cache by replaying a budget. Freeing a slot (`cancel`, `clear`, `extractFinished`) drops its budget, so a budget can never be committed against a later occupant of the same seqId.
 
+**Stop points** — a slot's prefill can stop short of its prompt in two ways, and `remainingToFeed()` caps at whichever comes first. A *media barrier* stops text until the scheduler evaluates the image or audio segment (`nextAwaitingMedia` / `completeMediaBarrier`). A *checkpoint stop* (`PrefillPlan::checkpointAtTextTokens`) stops at the end of the chat history, in front of the generation prompt, so the scheduler can call `captureHistoryCheckpoint` on the driver (`nextAwaitingCheckpoint` / `completeCheckpointStop`) before the rest is fed. A chunk that ends at either stop carries no logits. The checkpoint stop always sits after the last media barrier and before the final prompt token.
+
 **sampleAndAppendIdle** — called after `advance`:
 - Fires the caller-supplied `SamplerFn(seqId, logitIdx)` for each slot whose chunk consumed all its pending tokens.
 - The sampled token is appended to the slot's `generatedTokens` and staged for the next step.
@@ -289,13 +291,18 @@ Lifecycle methods in call order:
 | Method | When | What it does |
 |--------|------|--------------|
 | `loadCache` | At admission | Loads KV cache from disk if `cacheKey` is set |
-| `preparePrefill` | At admission | Tokenizes chat messages, returns pending tokens |
-| `onPrefillComplete` | When prefill finishes | Records `nPast`, snapshots the reasoning-rollback boundary |
+| `adoptCheckpoints` | At admission, after `loadCache` | Takes the process-local checkpoints the previous request on the same `cacheKey` left in the scheduler (full-state models only) |
+| `preparePrefill` | At admission | Renders and tokenizes the full history, reconciles it with the resident ledger, and returns the plan: the tokens to feed, media barriers, and the end-of-history checkpoint stop |
+| `captureHistoryCheckpoint` | At the checkpoint stop | Snapshots the state at the end of the history; kept as a checkpoint if the request commits |
+| `onPrefillComplete` | When prefill finishes | Records `nPast` and adopts the prompt ledger; a prefill-only request commits here |
 | `onLogitsReady` | Each generation step | Samples next token, runs antiprompt/stop checks |
 | `onGenerationFinished` | Natural EOG | Flushes UTF-8 buffer |
 | `onCancel` | User cancel or decode error | Flushes UTF-8 buffer; called before KV clear |
 | `onSequenceEnd` | Every terminal path | Flushes remaining UTF-8 buffer |
 | `saveCache` | Before KV clear | Persists KV cache to disk if `saveCacheToDisk` is set. `drainFinishedLocked` calls `saveCacheForSlot` and only then `clearSeqKv` — the order matters, since saving after the clear would serialise an empty sequence. This is what makes a persistable prefill's product survive the slot teardown. |
+| `releaseCheckpoints` | When the slot is freed | Hands the driver's checkpoints back to the scheduler, keyed by `cacheKey`, for the next request on it |
+
+On the batch path a driver records a sampled token in its ledger only once the next `syncPosition` shows the scheduler decoded it. A sample that is never fed (a terminal token, or a cancel before the next step) therefore never reaches the ledger, and a committed or saved cache always describes exactly the memory it holds.
 
 Each driver carries its own `perSeqCtxCeiling_` (set to `perSeqMaxTokens_` by the scheduler, or `-1` for single-sequence). Prefill and generation overflow checks use this ceiling rather than the full `llama_n_ctx()`.
 
@@ -395,7 +402,9 @@ The write-sharing rule spans jobs, not just one batch. Each saving item reserves
 
 ## KV reuse: single-prompt vs batch
 
-The single-prompt path keeps one long-lived context (`TextLlmContext`, or `MtmdLlmContext` for a multimodal model) for the model's lifetime, so its KV survives across `run()` calls and a follow-up only evaluates the new tokens. The batch path is the reverse: each `submit` gets a fresh `SequenceDriver` on a recycled slot (`nPast_ = 0`, empty KV) because slots serve unrelated requests, so a cache miss costs a full prefill. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
+The single-prompt path keeps one long-lived context (`TextLlmContext`, or `MtmdLlmContext` for a multimodal model) for the model's lifetime, so its KV survives across `run()` calls and a follow-up only evaluates the new tokens. The batch path is the reverse: each `submit` gets a fresh `SequenceDriver` on a recycled slot (`nPast_ = 0`, empty KV) because slots serve unrelated requests, so a cache miss costs a full prefill.
+
+On hybrid and recurrent models the process-local checkpoints would die with each slot's driver, so the scheduler keeps them per `cacheKey` (`checkpointStore_`): the list moves into the next request's driver after `loadCache` and back out when its slot is freed, and `clear()` drops the store. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` with `saveCacheToDisk` therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
 
 ---
 

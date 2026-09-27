@@ -61,6 +61,20 @@
   longer grows with the context (about 20 MB each on Qwen3.5-0.8B), and
   `cache_checkpoints_max_bytes` is validated against that size. DeepSeek V4
   keeps full snapshots.
+- With `parallel >= 2`, a cached request could save a `cacheKey` file that
+  every later load rejected with `UnableToLoadSessionFile` ("cache ledger
+  totals do not match cache state"). This happened when it was cancelled by
+  job id mid-generation, or on Qwen3-family models when an EOS inside the
+  reasoning block was replaced by the closing tag. The ledger now records a
+  batch token only once the scheduler has decoded it. A cancel that lands
+  while a decode is in flight is applied only after that decode is counted,
+  so the saved `nPast` matches the memory.
+- With `parallel >= 2`, a prefill-only request whose prompt is already fully
+  cached no longer fails with `InvalidArgument` (`ErrEmptyTokens`); it commits
+  immediately.
+- On sliding-window models (Gemma 3/4, gpt-oss) a cached turn that diverges
+  behind the attention window is reprocessed instead of trimmed onto evicted
+  window cells, which made the model answer from a truncated context.
 - Pure-attention models never write a full-state temp-file snapshot any more.
   A rolled-back request drops what it added with a tail trim; when
   reconciliation had trimmed a diverging history first, the rollback lands on

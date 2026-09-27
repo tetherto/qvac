@@ -113,9 +113,13 @@ tokens actually decoded.
 flowchart TD
     A[Render full history once<br/>compare with resident ledger] --> B{shared prefix?}
     B -->|covers the whole resident ledger| C[Append only:<br/>decode the new suffix]
-    B -->|covers the whole new prompt| D[Full match:<br/>back up one token so the last<br/>prompt token is decoded again<br/>and produces logits]
+    B -->|covers the whole new prompt| P{prefill-only?}
+    P -->|yes| Q[Nothing to decode:<br/>commit at once]
+    P -->|no| D[Full match:<br/>back up one token so the last<br/>prompt token is decoded again<br/>and produces logits]
     B -->|ends inside the resident ledger| E{model type}
-    E -->|pure attention| F[Trim memory after the prefix<br/>rollback target = prefix<br/>decode the suffix]
+    E -->|pure attention| W{sliding-window cells in front<br/>of the prefix still resident?}
+    W -->|yes, or no sliding window| F[Trim memory after the prefix<br/>rollback target = prefix<br/>decode the suffix]
+    W -->|evicted| I
     E -->|full-state| G{longest checkpoint that is<br/>a prefix of the new prompt?}
     G -->|found| H[Restore it<br/>decode from there]
     G -->|none| I[Cold: clear the sequence<br/>decode the whole prompt]
@@ -134,6 +138,17 @@ answer's assistant header. Only a checkpoint at or before that point can be
 restored, and the end of the previous history is the latest such point. The
 addon finds it by matching the template's generation prompt against the end
 of the rendered prompt; a template without one takes no such checkpoint.
+
+Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) keep only the
+last `n_swa` positions in their window layers. A trim back to the shared prefix
+is refused when the cells in front of it were already evicted (the same
+`llama_memory_seq_pos_min` test llama-server uses): the suffix would attend to
+a truncated window, so the prompt is reprocessed from scratch instead. Those
+models take no checkpoints yet.
+
+A prefill-only request whose whole prompt is already resident has nothing to
+decode. It is admitted with an empty plan and commits immediately, on the
+single-prompt and batch paths alike.
 
 After every divergence, checkpoints that are no longer a prefix of the new
 prompt are deleted.
