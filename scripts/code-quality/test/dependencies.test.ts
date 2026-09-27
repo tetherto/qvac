@@ -90,6 +90,23 @@ test('unresolved imports are analysis errors, not quality findings', async () =>
   )
 })
 
+test('dependency traversal does not follow excluded vendor sources', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quality-dependencies-vendor-'))
+  const sources = {
+    'src/index.ts': "import { value } from '../vendor/thing.js'\nexport { value }\n",
+    'vendor/thing.js': "import { missing } from './missing.js'\nexport const value = missing\n",
+  }
+  await writeSources(root, sources)
+
+  const result = await analyzeDependencies({
+    root,
+    files: ['src/index.ts'],
+  })
+
+  assert.deepEqual(result.diagnostics, [])
+  assert.equal(result.coverage[0]?.modulesAnalyzed, 1)
+})
+
 test('nearest tsconfig aliases resolve while unavailable external packages are out of graph scope', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quality-dependencies-tsconfig-'))
   const sources = {

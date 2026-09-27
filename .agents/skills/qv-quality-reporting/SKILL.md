@@ -96,6 +96,12 @@ uncertain, say so instead of inventing certainty.
 
 ## Recurring Runs
 
+`pnpm quality:reporting` compares the current findings with the previous
+successful run in `.quality/previous-run-baseline.json`. When no snapshot exists,
+the first run uses the committed audit baseline. The command advances the local
+snapshot only after complete analysis and successful triage. Do not delete it
+between recurring runs.
+
 Reconcile by stable group marker before proposing work:
 
 - new actionable group with no match: propose ticket creation;
@@ -108,8 +114,9 @@ Reconcile by stable group marker before proposing work:
 
 The helper records only the group action and deterministic evidence hash in
 `.quality/reporting-state.json`. This ignored local checkpoint prevents the same
-regression comment or resolution notice from being proposed repeatedly. It
-contains no Asana IDs or private links. Do not delete it between recurring runs.
+ticket creation, regression comment, or resolution notice from being proposed
+repeatedly. It contains no Asana IDs or private links. Do not delete it between
+recurring runs.
 
 Use [`references/scheduling.md`](references/scheduling.md) only when the user asks
 to create or modify the twice-monthly automation.

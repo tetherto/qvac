@@ -5,8 +5,9 @@ review. The file is ignored local state; it must not contain Asana task IDs,
 private links, tokens, assignees, or due dates.
 
 The helper separately maintains `.quality/reporting-state.json` with group keys,
-actions, and deterministic evidence hashes. That ignored checkpoint is not a
-ticket registry and must never contain Asana task IDs or links.
+actions, and deterministic evidence hashes. That ignored checkpoint suppresses
+an immediate replay of the same creation or update while Asana search catches
+up. It is not a ticket registry and must never contain Asana task IDs or links.
 
 ## Machine shape
 

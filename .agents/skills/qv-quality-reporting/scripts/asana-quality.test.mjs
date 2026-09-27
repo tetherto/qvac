@@ -90,7 +90,7 @@ test("an existing exact group marker suppresses duplicate creation", async (t) =
   assert.equal(fake.requests.filter(({ method }) => method === "POST").length, 0);
 });
 
-test("exact marker reconciliation follows Asana search pagination", async (t) => {
+test("search reconciliation does not follow unsupported offset pagination", async (t) => {
   const fake = await fakeAsana(t, {
     taskPages: [
       [{ gid: "possible-task", name: "Possible", notes: "related quality work" }],
@@ -112,8 +112,8 @@ test("exact marker reconciliation follows Asana search pagination", async (t) =>
     apiBase: fake.url,
   });
 
-  assert.equal(result.actions[0].outcome, "existing");
-  assert.equal(fake.requests.filter(({ method }) => method === "GET").length, 2);
+  assert.equal(result.actions[0].outcome, "ambiguous");
+  assert.equal(fake.requests.filter(({ method }) => method === "GET").length, 1);
   assert.equal(fake.requests.filter(({ method }) => method === "POST").length, 0);
 });
 
@@ -281,6 +281,30 @@ test("an unchanged reported regression is silent on later runs", async (t) => {
     { id: "quality-001", action: "comment", outcome: "unchanged" },
   ]);
   assert.equal(fake.requests.length, requestCount);
+});
+
+test("a just-created task is not recreated while Asana search indexing lags", async (t) => {
+  const fake = await fakeAsana(t);
+  const input = {
+    proposalBatch: batch([proposal()]),
+    report: triageReport(),
+    approvedIds: ["quality-001"],
+    apply: true,
+    config: asanaConfig(),
+    token: "test-token",
+    apiBase: fake.url,
+  };
+
+  const first = await applyQualityProposals(input);
+  const second = await applyQualityProposals({
+    ...input,
+    state: first.nextState,
+  });
+
+  assert.deepEqual(second.actions, [
+    { id: "quality-001", action: "create", outcome: "unchanged" },
+  ]);
+  assert.equal(fake.requests.filter(({ method }) => method === "POST").length, 1);
 });
 
 test("a later measurement regression is not hidden by reporting state", async (t) => {

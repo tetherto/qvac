@@ -2,7 +2,12 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 import { runAudit } from './audit.js'
-import type { AuditedAnalysisResult } from './model.js'
+import {
+  compareWithBaseline,
+  createBaseline,
+  parseBaseline,
+} from './baseline.js'
+import type { AuditedAnalysisResult, Baseline } from './model.js'
 import { buildTriageReport } from './triage.js'
 import {
   renderTriageJson,
@@ -23,6 +28,11 @@ export interface TriageArtifacts {
   readonly report: TriageReport
   readonly jsonPath: string
   readonly markdownPath: string
+}
+
+export interface RecurringTriageArtifacts extends TriageArtifacts {
+  readonly audit: AuditedAnalysisResult
+  readonly snapshotPath: string
 }
 
 export async function writeTriageArtifacts(
@@ -48,18 +58,56 @@ export async function writeTriageArtifacts(
   return { report, jsonPath, markdownPath }
 }
 
+export async function writeRecurringTriageArtifacts(
+  options: WriteTriageArtifactsOptions & { readonly snapshotPath?: string },
+): Promise<RecurringTriageArtifacts> {
+  const snapshotPath = options.snapshotPath
+    ?? join(options.root, '.quality/previous-run-baseline.json')
+  const previousSnapshot = await loadOptionalBaseline(snapshotPath)
+  const currentFindings = options.audit.findings.map(({ finding }) => finding)
+  const audit = previousSnapshot === undefined
+    ? options.audit
+    : {
+      schemaVersion: 1 as const,
+      coverage: options.audit.coverage,
+      diagnostics: options.audit.diagnostics,
+      ...compareWithBaseline(
+        currentFindings,
+        previousSnapshot,
+        options.audit.diagnostics.length === 0 ? 'calculate' : 'withhold',
+      ),
+    }
+  const artifacts = await writeTriageArtifacts({
+    root: options.root,
+    audit,
+    ...(options.outputDirectory === undefined
+      ? {}
+      : { outputDirectory: options.outputDirectory }),
+    ...(options.now === undefined ? {} : { now: options.now }),
+    ...(options.render === undefined ? {} : { render: options.render }),
+  })
+  await writeAtomically(
+    snapshotPath,
+    `${JSON.stringify(createBaseline(currentFindings), undefined, 2)}\n`,
+  )
+  return { ...artifacts, audit, snapshotPath }
+}
+
 async function main(): Promise<void> {
   const root = resolve(process.cwd())
   const mode = process.argv[2] ?? 'fresh'
-  const audit = mode === 'fresh'
-    ? (await runAudit({ root, command: 'audit' })).result
-    : mode === 'existing'
-      ? parseAuditReport(await readFile(join(root, '.quality/report.json'), 'utf8'))
-      : undefined
-  if (audit === undefined) {
+  let artifacts: TriageArtifacts
+  if (mode === 'fresh') {
+    const audit = (await runAudit({ root, command: 'audit' })).result
+    artifacts = await writeRecurringTriageArtifacts({ root, audit })
+  } else if (mode === 'existing') {
+    const audit = parseAuditReport(
+      await readFile(join(root, '.quality/report.json'), 'utf8'),
+    )
+    artifacts = await writeTriageArtifacts({ root, audit })
+  } else {
     throw new Error(`Unknown triage mode: ${mode}`)
   }
-  const artifacts = await writeTriageArtifacts({ root, audit })
   process.stdout.write(
     `Code quality triage: ${artifacts.report.candidates.length} candidate groups.\n`,
   )
@@ -83,6 +131,17 @@ function parseAuditReport(source: string): AuditedAnalysisResult {
   return parsed as unknown as AuditedAnalysisResult
 }
 
+async function loadOptionalBaseline(path: string): Promise<Baseline | undefined> {
+  try {
+    return parseBaseline(await readFile(path, 'utf8'))
+  } catch (error) {
+    if (isMissingFile(error)) {
+      return undefined
+    }
+    throw error
+  }
+}
+
 async function writeAtomically(path: string, content: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   const temporaryPath = `${path}.${process.pid}.tmp`
@@ -96,6 +155,12 @@ function formatCount(count: number, singular: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isMissingFile(error: unknown): boolean {
+  return error instanceof Error
+    && 'code' in error
+    && error.code === 'ENOENT'
 }
 
 const invokedPath = process.argv[1]?.replaceAll('\\', '/') ?? ''

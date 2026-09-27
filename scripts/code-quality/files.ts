@@ -10,7 +10,7 @@ const execFileAsync = promisify(execFile)
 const SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|[cm]ts)$/
 const DECLARATION_FILE = /\.d\.(?:[cm]?ts)$/
 const GENERATED_FILE = /(?:^|\/)[^/]+\.(?:generated|gen)\.[^/]+$/
-const EXCLUDED_SEGMENTS = new Set([
+const EXCLUDED_SEGMENT_NAMES = [
   'build',
   'coverage',
   'dist',
@@ -19,7 +19,13 @@ const EXCLUDED_SEGMENTS = new Set([
   'prebuilds',
   'third-party',
   'vendor',
-])
+] as const
+const EXCLUDED_SEGMENTS = new Set<string>(EXCLUDED_SEGMENT_NAMES)
+
+export const SOURCE_PATH_EXCLUSION_PATTERN = [
+  `(^|/)(?:${EXCLUDED_SEGMENT_NAMES.join('|')})(?:/|$)`,
+  '(^|/)[^/]+\\.(?:generated|gen)\\.[^/]+$',
+].join('|')
 
 export async function discoverSourceFiles(root: string): Promise<readonly string[]> {
   const { stdout } = await execFileAsync(

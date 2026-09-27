@@ -8,7 +8,10 @@ import {
   UNRESOLVED_IMPORT_EXEMPTIONS,
 } from '../config.js'
 import { canonicalDirectedCycle } from '../fingerprint.js'
-import { classifySourceFile } from '../files.js'
+import {
+  classifySourceFile,
+  SOURCE_PATH_EXCLUSION_PATTERN,
+} from '../files.js'
 import type {
   AnalysisDiagnostic,
   AnalysisResult,
@@ -117,10 +120,10 @@ async function cruiseGroup(
     {
       baseDir,
       combinedDependencies: true,
-      doNotFollow: { path: 'node_modules' },
+      doNotFollow: { path: SOURCE_PATH_EXCLUSION_PATTERN },
       outputType: 'json',
       tsPreCompilationDeps: dependencyMode === 'combined' ? 'specify' : false,
-      exclude: '(^|/)(?:build|coverage|dist|prebuilds)/',
+      exclude: SOURCE_PATH_EXCLUSION_PATTERN,
       extraExtensionsToScan: ['.json'],
       ...(group.tsConfig === undefined
         ? {}

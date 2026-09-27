@@ -292,7 +292,6 @@ function proposalEvidenceHash(proposal, candidateById) {
 }
 
 function wasReported(state, proposal, evidenceHash) {
-  if (proposal.action === "create") return false;
   const previous = state.groups[proposal.groupKey];
   return previous?.action === proposal.action && previous.evidenceHash === evidenceHash;
 }
@@ -338,27 +337,16 @@ function asanaClient({ apiBase, token, fetchImpl }) {
 
 async function findGroupMatches(client, config, groupKey) {
   const marker = groupMarker(groupKey);
-  const tasks = [];
-  const seenOffsets = new Set();
-  let offset = null;
-  do {
-    const query = new URLSearchParams({
-      "projects.any": config.asana.project.gid,
-      text: marker,
-      opt_fields: "gid,name,notes,completed",
-      limit: "100",
-      ...(offset === null ? {} : { offset }),
-    });
-    const page = await client.requestEnvelope(
-      `/workspaces/${encodeURIComponent(config.asana.workspace.gid)}/tasks/search?${query}`,
-    );
-    tasks.push(...(page.data || []));
-    offset = page.next_page?.offset ?? null;
-    if (offset !== null && seenOffsets.has(offset)) {
-      throw new Error("Asana search returned a repeated pagination offset");
-    }
-    if (offset !== null) seenOffsets.add(offset);
-  } while (offset !== null);
+  const query = new URLSearchParams({
+    "projects.any": config.asana.project.gid,
+    text: marker,
+    opt_fields: "gid,name,notes,completed",
+    limit: "100",
+  });
+  const page = await client.requestEnvelope(
+    `/workspaces/${encodeURIComponent(config.asana.workspace.gid)}/tasks/search?${query}`,
+  );
+  const tasks = page.data || [];
   return {
     exact: tasks.filter(({ notes = "" }) => notes.split("\n").includes(marker)),
     possible: tasks.filter(({ notes = "" }) => !notes.split("\n").includes(marker)),

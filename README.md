@@ -342,7 +342,10 @@ dependency clusters, adds 180-day Git-change evidence, and writes
 `.quality/triage.md` plus `.quality/triage.json`. The first Markdown page shows
 ten candidate remediation groups; the JSON retains every group. Use
 `pnpm quality:triage` to rebuild only the triage artifacts from an existing
-successful audit report.
+successful audit report. Recurring runs compare against the last successful run
+stored in `.quality/previous-run-baseline.json`, then advance that ignored local
+snapshot only after triage succeeds. This makes later regressions and
+resolutions visible without changing the committed debt baseline.
 
 ## Banners and badges
 
