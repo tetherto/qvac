@@ -2571,24 +2571,16 @@ TEST_F(
       ", output[1] (first 200 chars): " + outputs[1].substr(0, 200));
 }
 
-/// MTMD + hybrid (Qwen3.5 M-RoPE + recurrent memory) is the hardest cancel
-/// path: partial `seq_rm` is rejected by recurrent memory, so
-/// `cancelGenerationCleanup` restores a full sequence-state snapshot instead
-/// of tail-removing tokens. The single-prompt path captures that snapshot
-/// mid-`evalMessageWithTools`; the batch path never runs that site, so
-/// `snapshotPreRequestRollbackAnchor` (called by the scheduler at admission
-/// right after `snapshotPreRequestCursor`) must take it. If it doesn't,
-/// `hasPrefillEntry()` returns false at cancel time,
-/// `cancelGenerationCleanup` silently does nothing, and `CacheTokens` still
-/// reports the transient peak — same failure mode as the text case, just
-/// wearing a different mask.
-///
-/// Structure mirrors `BatchCancelRestoresCacheToWarmBaseline` but with an
-/// image primer (the only way to exercise M-RoPE per-cell KV in the cache
-/// snapshot). Each phase runs on a fresh model to isolate per-batch stats.
+/// Multimodal hybrid counterpart of `BatchCancelCommitsProgressAndPersists`:
+/// a cancelled cached batch request on an M-RoPE hybrid model commits what
+/// its caller received. The image primer, the decoded suffix and the
+/// streamed tokens stay resident, `CacheTokens` reports that committed cursor
+/// rather than the primer, `saveCacheToDisk` rewrites the file, and the next
+/// full-history turn continues from it. (A cancel during prefill still rolls
+/// back; see `MtmdLlmContextCancelTest`.)
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    BatchMtmdHybridCancelRestoresCacheToWarmBaseline) {
+    BatchMtmdHybridCancelCommitsProgressAndPersists) {
   const std::string vlmPath =
       test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
   const std::string mmprojPath =
@@ -2602,98 +2594,86 @@ TEST_F(
   const fs::path cachePath = fs::temp_directory_path() /
                              ("mtmd-hybrid-cancel-" + uniqueTestId() + ".bin");
 
-  auto makeModel = [&] {
-    std::string path = vlmPath;
-    std::string projection = mmprojPath;
-    auto cfg = config_;
-    // Qwen3.5 image prefill commits ~2899 KV cells (M-RoPE cells >>
-    // positions); 4096 is the minimum the Qwen3.5 mtmd unit tests use.
-    cfg["ctx_size"] = "4096";
-    // Reasoning model; disable thinking so generation reaches user-visible
-    // tokens fast enough for the outputCallback cancel to fire.
-    cfg["reasoning-budget"] = "0";
-    cfg["n_predict"] = "32";
-    auto m = std::make_unique<LlamaModel>(
-        std::move(path), std::move(projection), std::move(cfg));
-    m->waitForLoadInitialization();
-    return m;
-  };
+  std::string path = vlmPath;
+  std::string projection = mmprojPath;
+  auto cfg = config_;
+  // Qwen3.5 image prefill commits ~2899 KV cells (M-RoPE cells >>
+  // positions), and the prefill guard counts the cached cells plus the whole
+  // resent prompt, image included, so two image turns need more than 4096.
+  cfg["ctx_size"] = "8192";
+  // Reasoning model; disable thinking so generation reaches user-visible
+  // tokens fast enough for the outputCallback cancel to fire.
+  cfg["reasoning-budget"] = "0";
+  cfg["n_predict"] = "32";
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::move(projection), std::move(cfg));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
 
-  auto primer = [&] {
-    LlamaModel::Prompt p;
-    p.input = R"([{"role":"user","type":"media","content":""},)"
-              R"({"role":"user","content":"Describe this image."}])";
-    p.media.push_back(image);
-    p.prefill = true;
-    p.cacheKey = cachePath.string();
-    p.saveCacheToDisk = true;
-    return p;
-  }();
-
-  auto primeModel = makeModel();
-  ASSERT_TRUE(primeModel->isLoaded());
-  std::vector<LlamaModel::Prompt> primeBatch;
-  primeBatch.push_back(std::move(primer));
-  primeModel->processPromptBatch(primeBatch);
+  const std::string imageTurn =
+      R"({"role":"user","type":"media","content":""},)"
+      R"({"role":"user","content":"Describe this image."})";
+  LlamaModel::Prompt primer;
+  primer.input = "[" + imageTurn + "]";
+  primer.media.push_back(image);
+  primer.prefill = true;
+  primer.cacheKey = cachePath.string();
+  primer.saveCacheToDisk = true;
+  std::vector<LlamaModel::Prompt> primeBatch{std::move(primer)};
+  model->processPromptBatch(primeBatch);
   ASSERT_TRUE(fs::exists(cachePath));
   const double primeCacheTokens =
-      test_common::getStatValue(primeModel->runtimeStats(), "CacheTokens");
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
   ASSERT_GT(primeCacheTokens, 0.0)
       << "image prefill did not populate CacheTokens";
+  const auto primedCacheBytes = readFileBytes(cachePath);
 
-  auto baselineModel = makeModel();
-  ASSERT_TRUE(baselineModel->isLoaded());
-  auto baseline = makePrompt("Continue the description with a short sentence.");
-  baseline.cacheKey = cachePath.string();
-  std::vector<LlamaModel::Prompt> baselineBatch;
-  baselineBatch.push_back(std::move(baseline));
-  auto baselineOutputs = baselineModel->processPromptBatch(baselineBatch);
-  ASSERT_EQ(baselineOutputs.size(), 1u);
-  EXPECT_FALSE(baselineOutputs[0].empty());
-  const double baselineCacheTokens =
-      test_common::getStatValue(baselineModel->runtimeStats(), "CacheTokens");
-  ASSERT_GT(baselineCacheTokens, primeCacheTokens)
-      << "baseline batch did not grow past the warm baseline; test setup "
-         "is not exercising the peak-vs-rollback distinction";
-
-  auto cancelModel = makeModel();
-  ASSERT_TRUE(cancelModel->isLoaded());
   std::atomic<bool> cancelIssued = false;
-  auto cancelPrompt =
-      makePrompt("Continue the description with a short sentence.");
+  LlamaModel::Prompt cancelPrompt;
+  cancelPrompt.input =
+      "[" + imageTurn +
+      R"(,{"role":"assistant","content":"An elephant."},)"
+      R"({"role":"user","content":"Continue the description with a short sentence."}])";
+  cancelPrompt.media.push_back(image);
   cancelPrompt.cacheKey = cachePath.string();
-  cancelPrompt.outputCallback = [&cancelModel,
-                                 &cancelIssued](const std::string&) {
+  cancelPrompt.saveCacheToDisk = true;
+  cancelPrompt.outputCallback = [&model, &cancelIssued](const std::string&) {
     bool expected = false;
     if (cancelIssued.compare_exchange_strong(expected, true)) {
-      cancelModel->cancel();
+      model->cancel();
     }
   };
-  std::vector<LlamaModel::Prompt> cancelBatch;
-  cancelBatch.push_back(std::move(cancelPrompt));
-  cancelModel->processPromptBatch(cancelBatch);
+  std::vector<LlamaModel::Prompt> cancelBatch{std::move(cancelPrompt)};
+  model->processPromptBatch(cancelBatch);
   ASSERT_TRUE(cancelIssued.load())
       << "test setup: cancel was never issued, the run finished naturally";
   const double cancelledCacheTokens =
-      test_common::getStatValue(cancelModel->runtimeStats(), "CacheTokens");
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens");
 
-  EXPECT_LT(cancelledCacheTokens, baselineCacheTokens)
+  EXPECT_GT(cancelledCacheTokens, primeCacheTokens)
       << "cancelled batch reported CacheTokens=" << cancelledCacheTokens
-      << " >= baseline " << baselineCacheTokens
-      << "; pre-rollback peak is leaking into stats";
-  // Rollback must land on the admission cursor. If the batch-path
-  // prefill-entry snapshot is missing (the bug this test guards),
-  // `cancelGenerationCleanup` is a silent no-op on hybrid and CacheTokens
-  // stays at peak, blowing this assertion.
-  EXPECT_LE(std::abs(cancelledCacheTokens - primeCacheTokens), 1.0)
-      << "cancelled batch CacheTokens=" << cancelledCacheTokens
-      << " but warm baseline was " << primeCacheTokens
-      << "; hybrid batch rollback did not restore the admission cursor "
-         "(the prefill-entry snapshot at admission is missing or its "
-         "restore short-read)";
+      << " <= image primer " << primeCacheTokens
+      << "; the decoded suffix and streamed tokens were not committed";
+  EXPECT_NE(readFileBytes(cachePath), primedCacheBytes)
+      << "a cancelled cached request commits and must persist its state";
 
-  std::error_code ec2;
-  fs::remove(cachePath, ec2);
+  LlamaModel::Prompt followup;
+  followup.input =
+      "[" + imageTurn +
+      R"(,{"role":"assistant","content":"An elephant."},)"
+      R"({"role":"user","content":"Continue the description with a short sentence."},)"
+      R"({"role":"assistant","content":"It is standing."},)"
+      R"({"role":"user","content":"What animal is it?"}])";
+  followup.media.push_back(image);
+  followup.cacheKey = cachePath.string();
+  std::vector<LlamaModel::Prompt> followupBatch{std::move(followup)};
+  const auto followupOutputs = model->processPromptBatch(followupBatch);
+  ASSERT_EQ(followupOutputs.size(), 1u);
+  EXPECT_FALSE(followupOutputs[0].empty());
+
+  model.reset();
+  std::error_code ec;
+  fs::remove(cachePath, ec);
 }
 
 // The embedded cache ledger must round-trip across the single-prompt and batch
