@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "description": "GGML-backed OCR addon for qvac (EasyOCR and DocTR pipelines on GGUF weights)",
   "addon": true,
   "engines": {
@@ -33,8 +33,8 @@
     "test": "npm run lint && npm run test:types && npm run test:unit && npm run test:integration",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:dts": "npm run test:types",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
-    "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test ocr-prediction-bias-gguf-test",
+    "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml && ./ocr-prediction-bias-gguf-test --gtest_output=xml:prediction-bias-gguf-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-model": "bash scripts/convert-model.sh",
