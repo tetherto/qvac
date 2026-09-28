@@ -1,7 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "dca20a940d85d6741285c888b53bd10da29c0723",
+    "baseline": "5add468a5206e10eeea07ab4f346d09bb10113ce",
+    "reference": "QVAC-25376/moss-transcribe-diarize",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
