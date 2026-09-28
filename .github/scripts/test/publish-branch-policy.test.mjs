@@ -84,14 +84,20 @@ function publishWorkflows() {
 }
 
 // Indentation-scoped, not YAML-parsed: this suite runs with no deps installed.
+// Comments and blank lines are dropped and any indent width is re-indented to
+// two spaces per level, so the fixed-offset readers below see one shape.
 function onBlock(source) {
-  const lines = source.split('\n')
-  const start = lines.findIndex((line) => /^on:\s*$/.test(line))
+  const lines = source.split('\n').filter((line) => line.trim() && !/^\s*#/.test(line))
+  const start = lines.findIndex((line) => /^on:\s*(#.*)?$/.test(line))
   assert.notEqual(start, -1, 'workflow has no top-level `on:` block')
   const body = []
+  const stack = [0]
   for (const line of lines.slice(start + 1)) {
     if (/^\S/.test(line)) break
-    body.push(line)
+    const indent = line.length - line.trimStart().length
+    while (indent < stack.at(-1)) stack.pop()
+    if (indent > stack.at(-1)) stack.push(indent)
+    body.push(' '.repeat(2 * (stack.length - 1)) + line.trimStart())
   }
   return body
 }
@@ -140,8 +146,9 @@ function pushBranches(source) {
   if (idx === -1) return { kind: 'all' }
   const branches = []
   for (const line of body.slice(idx + 1)) {
-    if (/^ {4}\S/.test(line)) break
-    const m = line.match(/^ {6}-\s*(.+?)\s*$/)
+    // A list may sit at its key's own indent (`branches:` then `- main`).
+    if (/^ {0,4}[^\s-]/.test(line)) break
+    const m = line.match(/^ {4,6}-\s*(.+?)\s*(#.*)?$/)
     if (m) branches.push(m[1].replace(/^["']|["']$/g, ''))
   }
   return branches.length ? { kind: 'list', branches } : { kind: 'all' }
@@ -211,6 +218,20 @@ test('automatic pushes stay off PR-head branches', () => {
         'a publish; use workflow_dispatch on the branch instead.',
     )
   }
+})
+
+test('the push parser reads comments and any indent width', () => {
+  const push = (src) => pushBranches(src)
+  const main = { kind: 'list', branches: ['main'] }
+  assert.deepEqual(push('on:\n# publish\n  push:\n    branches:\n      - main\n'), main, 'comment at column 0')
+  assert.deepEqual(push('on:\n    push:\n        branches:\n            - main\n'), main, 'four-space indent')
+  assert.deepEqual(push('on:\n  push:\n    branches:\n    - main\n'), main, 'list at key indent')
+  assert.deepEqual(
+    push('on:\n  push:\n    branches:\n      - release-*\n    # legacy\n      - main # old\n'),
+    { kind: 'list', branches: ['release-*', 'main'] },
+    'comment inside the list',
+  )
+  assert.deepEqual(push('on: # triggers\n  push:\n    branches:\n      - main\n'), main, 'comment on on:')
 })
 
 test('the manual entry point survives', () => {

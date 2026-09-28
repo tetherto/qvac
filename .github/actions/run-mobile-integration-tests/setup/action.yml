@@ -479,9 +479,11 @@ runs:
               echo "Dev builds are named @tetherto/<addon>-mono@<version>-tmp.runid-<run id>;"
               echo "the version is produced by the On Merge Trigger run for your branch."
               echo "For an addon, only a release-* push starts that run; pushing any"
-              echo "other branch does not. Dispatch it on the branch first:"
-              echo "  gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref <branch> -f package=<pkg>"
-              echo "model-fit publishes from its own on-merge-model-fit.yml;"
+              echo "other branch does not. Push your code to a tmp-* or feature-* branch"
+              echo "and dispatch it there (other branches publish nothing; release-*"
+              echo "publishes to public npm):"
+              echo "  gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref <tmp-branch> -f package=<pkg>"
+              echo "model-fit and ggml-rpc-server publish from their own on-merge-*.yml;"
               echo "see docs/ci/MOBILE-ON-DEMAND.md."
               ;;
             *)

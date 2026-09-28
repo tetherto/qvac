@@ -132,9 +132,9 @@ git push -u origin feature-<package>-<short-desc>
 
 For native addons, any non-`release-*` build — `main` included — is started by
 running `on-merge-nx.yml` with `workflow_dispatch` on that branch; pushing to the
-branch does not start one. The dist-tag such a build lands on is usually `dev`
-rather than `feature`/`temp`, because most addons let the dispatch `tag` input
-override the branch-derived tag — pin the exact version rather than the tag. See
+branch does not start one. The dist-tag follows the branch (`feature`/`temp`)
+unless the dispatch `tag` input overrides it, and `on-merge-model-fit.yml`
+defaults that input to `dev`, so pin the exact version rather than the tag. See
 [MOBILE-ON-DEMAND.md](ci/MOBILE-ON-DEMAND.md#testing-unmerged--unpublished-native-code).
 
 **Release branch names use the package directory name**

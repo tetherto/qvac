@@ -498,10 +498,10 @@ your back — every non-release build is a deliberate dispatch.
 > name outside those four publishes nothing at all.
 
 The version string is unaffected — it is built from the run id, so it is the
-same whether the run came from a push or a dispatch. The GPR dist-tag can
-differ: most addons let the dispatch `tag` input (default `dev`) override the
-branch-derived `temp`, while a few ignore the input and always use `temp`.
-Step 2 pins the exact version, so the tag does not matter here.
+same whether the run came from a push or a dispatch. The GPR dist-tag follows
+the branch (`temp` or `feature`) unless you set the dispatch `tag` input;
+`on-merge-model-fit.yml` defaults that input to `dev`. Step 2 pins the exact
+version, so the tag does not matter here.
 
 Wait for that run to finish — the mobile dispatch needs the package to exist.
 
