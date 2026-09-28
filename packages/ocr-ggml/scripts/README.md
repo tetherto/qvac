@@ -12,9 +12,10 @@ installed `@qvac/fabric` runtime. Run after `npm install`:
 bash scripts/check_ggml_backends.sh
 ```
 
-By default it inspects
-`node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/` — override with the
-`BACKENDS_DIR` environment variable to point at another Fabric backend folder.
+By default it inspects `prebuilds/<host>/qvac__fabric/` of the installed
+`@qvac/fabric` (source builds) or of its `@qvac/fabric-<host>/addon` platform
+package — override with the `BACKENDS_DIR` environment variable to point at
+another Fabric backend folder.
 
 Sections it prints:
 

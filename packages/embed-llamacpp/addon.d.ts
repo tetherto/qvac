@@ -22,8 +22,8 @@ export interface AddonConfigurationParams {
     config: GGMLConfig;
     /**
      * Root the native side searches for ggml compute backends, with
-     * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the
-     * `@qvac/fabric` package's `prebuilds/` on desktop, falling back to this
+     * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the root
+     * `@qvac/fabric/backends` resolves on desktop, falling back to this
      * addon's own `prebuilds/` on mobile.
      */
     backendsDir?: string;

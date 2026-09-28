@@ -2,7 +2,6 @@
 
 const { OcrGgml } = require('../..')
 const test = require('brittle')
-const path = require('bare-path')
 const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('@qvac/ocr-ggml/lib/main-gpu')
 const {
   isMobile,
@@ -37,7 +36,7 @@ const shouldSkip = isMobile || !vulkanBackendLib
 
 function nativeBackendsDir() {
   if (isMobile) return PREBUILDS_DIR
-  return path.join(path.dirname(require.resolve('@qvac/fabric/package')), 'prebuilds')
+  return require('@qvac/fabric/backends').resolveBackendsDir()
 }
 
 for (const key of ['main-gpu', 'main_gpu']) {

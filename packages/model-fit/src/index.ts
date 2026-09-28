@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 import fs = require('bare-fs')
 import path = require('bare-path')
+import fabricBackends = require('@qvac/fabric/backends')
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 /** Shape of the native addon this module wraps. */
@@ -19,9 +20,9 @@ export interface FitConfig {
    */
   modelPath: string
   /**
-   * Directory holding ggml backend shared libraries. `@qvac/fabric`'s
-   * `prebuilds/` is used when omitted (desktop); on mobile the packed worklet
-   * falls back to this package's `prebuilds/`. Native code appends
+   * Directory holding ggml backend shared libraries. The root
+   * `@qvac/fabric/backends` resolves is used when omitted (desktop); on mobile
+   * the packed worklet falls back to this package's `prebuilds/`. Native code appends
    * `BACKENDS_SUBDIR` (`<host>/qvac__fabric`).
    *
    * Must be an absolute path that resolves to an existing directory; anything
@@ -233,22 +234,17 @@ export type FitReason = FitResult['reason']
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily from package prebuilds.
 const binding = require('./binding') as FitBinding
 
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, in the
-// @qvac/fabric dependency (prebuilds/<host>/qvac__fabric). We deliberately do
-// not copy them into this addon. On desktop, resolve the single @qvac/fabric
-// install. On mobile the package tree isn't resolvable at runtime (the worklet
-// runs from a packed bundle), so fall back to this addon's own prebuilds.
-// Native code appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to the root.
-// Return undefined only when neither directory exists, so a statically linked
-// build still skips backendsDir.
+// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
+// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
+// copy them into this addon. On desktop, @qvac/fabric/backends resolves that
+// root in whichever package holds the runtime. On mobile the package tree isn't
+// resolvable at runtime (the worklet runs from a packed bundle), so fall back to
+// this addon's own prebuilds. Native code appends BACKENDS_SUBDIR
+// ("<host>/qvac__fabric") to the root. Return undefined only when neither
+// directory exists, so a statically linked build still skips backendsDir.
 function resolveBackendsDir (): string | undefined {
-  try {
-    const fabricPkg = require.resolve('@qvac/fabric/package')
-    const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds')
-    if (fs.statSync(fabricPrebuilds).isDirectory()) return fabricPrebuilds
-  } catch {
-    // Mobile worklets cannot resolve the @qvac/fabric package tree.
-  }
+  const fabricRoot = fabricBackends.resolveBackendsDir()
+  if (fabricRoot !== null) return fabricRoot
   try {
     const packaged = path.join(__dirname, 'prebuilds')
     return fs.statSync(packaged).isDirectory() ? packaged : undefined
@@ -393,8 +389,8 @@ function prepareFitConfig (config: FitConfig): FitConfig {
  * running together.
  *
  * Backends must be registered before the fitter can see any device. When
- * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
- * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
+ * `backendsDir` is omitted this package uses the root `@qvac/fabric/backends`
+ * resolves (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
  * statically linked build, which self-registers.
  * Every backend library in that directory is `dlopen`ed into this process, so
  * it must be an application-controlled location — never remote or user input.

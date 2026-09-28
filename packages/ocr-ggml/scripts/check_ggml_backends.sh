@@ -4,7 +4,8 @@
 # Unlike upstream EasyOcr-ggml (which builds ggml as a submodule and inspects
 # build/third_party/ggml/...), this package consumes ggml from the
 # `@qvac/fabric` npm runtime. The runtime artefacts live under
-# `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`.
+# `prebuilds/<host>/qvac__fabric/` of `@qvac/fabric` itself (source builds) or
+# of its `@qvac/fabric-<host>/addon` platform package.
 #
 # Outputs four sections:
 #   1. Shipped backend libraries — which `libggml-*.so` files were installed
@@ -33,11 +34,28 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Fabric backend path: node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/
 # `host` is set by cmake-bare based on the runtime platform; on x64 Linux it
 # is `linux-x64`, on Apple Silicon `darwin-arm64`, etc.
 HOST_GUESS="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed -E 's/^x86_64$/x64/;s/^aarch64$/arm64/')"
-BACKENDS_DIR="${BACKENDS_DIR:-${REPO_ROOT}/node_modules/@qvac/fabric/prebuilds/${HOST_GUESS}/qvac__fabric}"
+
+# Same precedence as @qvac/fabric/backends: a runtime in @qvac/fabric itself
+# wins, then the platform package as a pnpm sibling, npm nested, or npm hoisted.
+default_backends_dir() {
+    local fabric="${REPO_ROOT}/node_modules/@qvac/fabric" real candidate
+    [[ -d "${fabric}" ]] || return 0
+    real="$(cd "${fabric}" && pwd -P)"
+    for candidate in \
+        "${real}/prebuilds" \
+        "$(dirname "${real}")/fabric-${HOST_GUESS}/addon/prebuilds" \
+        "${real}/node_modules/@qvac/fabric-${HOST_GUESS}/addon/prebuilds" \
+        "${REPO_ROOT}/node_modules/@qvac/fabric-${HOST_GUESS}/addon/prebuilds"; do
+        if [[ -d "${candidate}/${HOST_GUESS}/qvac__fabric" ]]; then
+            echo "${candidate}/${HOST_GUESS}/qvac__fabric"
+            return 0
+        fi
+    done
+}
+BACKENDS_DIR="${BACKENDS_DIR:-$(default_backends_dir)}"
 
 print_section() {
     echo
@@ -46,11 +64,11 @@ print_section() {
     echo "============================================================"
 }
 
-if [[ ! -d "${BACKENDS_DIR}" ]]; then
-    echo "error: backends directory not found: ${BACKENDS_DIR}" >&2
+if [[ -z "${BACKENDS_DIR}" || ! -d "${BACKENDS_DIR}" ]]; then
+    echo "error: no @qvac/fabric backends directory for ${HOST_GUESS}: ${BACKENDS_DIR:-(none found)}" >&2
     echo "" >&2
-    echo "Run 'npm install' to install @qvac/fabric," >&2
-    echo "or override BACKENDS_DIR=/abs/path/to/@qvac/fabric/prebuilds/<host>/qvac__fabric" >&2
+    echo "Run 'npm install' to install @qvac/fabric and @qvac/fabric-${HOST_GUESS}," >&2
+    echo "or override BACKENDS_DIR=/abs/path/to/prebuilds/<host>/qvac__fabric" >&2
     exit 1
 fi
 

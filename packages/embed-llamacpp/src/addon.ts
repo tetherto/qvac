@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-import fs = require("bare-fs");
 import path = require("bare-path");
+import fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 export type NumericLike = `${number}`;
@@ -29,8 +29,8 @@ export interface AddonConfigurationParams {
   config: GGMLConfig;
   /**
    * Root the native side searches for ggml compute backends, with
-   * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the
-   * `@qvac/fabric` package's `prebuilds/` on desktop, falling back to this
+   * BACKENDS_SUBDIR ("<host>/qvac__fabric") appended. Defaults to the root
+   * `@qvac/fabric/backends` resolves on desktop, falling back to this
    * addon's own `prebuilds/` on mobile.
    */
   backendsDir?: string;
@@ -130,23 +130,16 @@ export function mapAddonEvent(
   return null;
 }
 
-// The ggml compute backends ship with the @qvac/fabric dependency
-// (prebuilds/<host>/qvac__fabric). We deliberately do not copy them into this
+// The ggml compute backends ship next to the @qvac/fabric runtime
+// (<root>/<host>/qvac__fabric). We deliberately do not copy them into this
 // addon to avoid duplicating tens of MB per fabric consumer. On desktop,
-// resolve the single @qvac/fabric install and load the backends from there. On
-// mobile the package tree isn't resolvable at runtime (the worklet runs from a
-// packed bundle), so fall back to this addon's own prebuilds, where the mobile
-// packaging stages the backends. The native side appends BACKENDS_SUBDIR
-// ("<host>/qvac__fabric") to whichever root we return.
+// @qvac/fabric/backends resolves that root in whichever package holds the
+// runtime. On mobile the package tree isn't resolvable at runtime (the worklet
+// runs from a packed bundle), so fall back to this addon's own prebuilds, where
+// the mobile packaging stages the backends. The native side appends
+// BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 export function resolveBackendsDir(): string {
-  try {
-    const fabricPkg = require.resolve("@qvac/fabric/package");
-    const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
-    if (fs.existsSync(fabricPrebuilds)) return fabricPrebuilds;
-  } catch {
-    // Mobile worklets cannot resolve the @qvac/fabric package tree.
-  }
-  return path.join(__dirname, "prebuilds");
+  return fabricBackends.resolveBackendsDir() ?? path.join(__dirname, "prebuilds");
 }
 
 /** An interface between the Bare C++ addon and the JS runtime. */
