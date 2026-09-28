@@ -82,19 +82,41 @@ jobs:
           fi
           git reset -q --hard "$ORIG"
 
+
+  # Separate job, fresh install. The SHARED step's pnpm add mutates node_modules,
+  # and git reset does not restore node_modules, which blanked both numbers here
+  # when they shared a job.
+  lockonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - shell: bash
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
       - name: LOCKONLY - a real lockfile-only commit from main
         shell: bash
         run: |
           set -uo pipefail
-          json_line() { grep -E '^\[' | tail -n1; }
-          affected() {
-            cp "$1" nx.json; rm -rf .nx
-            o=$(pnpm exec nx show projects --affected --base="$2" --head="$3" --json 2>/dev/null | json_line)
-            [ -n "$o" ] && echo "$o" || echo "[]"
-          }
+          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.default.json
+          jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = []' nx.json > /tmp/nx.none.json
           C=d2e24d152
+          P=$(git rev-parse "$C^")
           echo "LOCKONLY files in $C: $(git show --name-only --format= $C | tr '\n' ' ')"
-          D=$(affected /tmp/nx.default.json "$C^" "$C")
-          N=$(affected /tmp/nx.none.json "$C^" "$C")
-          echo "LOCKONLY default    : $(echo "$D" | jq 'length')"
-          echo "LOCKONLY empty list : $(echo "$N" | jq 'length')"
+          for v in default none; do
+            cp "/tmp/nx.$v.json" nx.json; rm -rf .nx
+            pnpm exec nx show projects --affected --base="$P" --head="$C" --json \
+              > "/tmp/out.$v" 2> "/tmp/err.$v" || true
+            L=$(grep -E '^\[' "/tmp/out.$v" | tail -n1)
+            n=$(echo "${L:-[]}" | jq 'length' 2>/dev/null || echo "unparsed")
+            echo "LOCKONLY $v : $n"
+            echo "  LOCKONLY-RAW $v stdout: $(tr '\n' ' ' < /tmp/out.$v | cut -c1-160)"
+            echo "  LOCKONLY-RAW $v stderr: $(tr '\n' ' ' < /tmp/err.$v | cut -c1-160)"
+          done
