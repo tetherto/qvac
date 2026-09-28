@@ -3,6 +3,8 @@
 // no SDK RPCs here — this is the testable core the interactive layer (and, later,
 // an LLM advisor) feeds.
 
+import type { TtsEngine } from '@qvac/sdk'
+
 export type Modality = 'chat' | 'embedding' | 'transcription' | 'speech' | 'image'
 
 export interface ServeModelEntry {
@@ -67,7 +69,10 @@ export const DEFAULT_STARTER: Modality[] = ['chat', 'transcription']
 // and relies on the docs link to finish. Not guaranteed to run untouched.
 export const TTS_VOICE_PLACEHOLDER = '/path/to/voice.wav'
 
-export type TtsEngine = 'chatterbox' | 'supertonic' | 'parler' | 'cosyvoice3' | 'audio8' | 'moss'
+// The SDK's engine list rather than a copy of it: an engine added there
+// without a starter below fails the `Record<TtsEngine, …>` typecheck instead of
+// reaching `configure` with none.
+export type { TtsEngine }
 
 interface TtsEngineTemplate {
   label: string
