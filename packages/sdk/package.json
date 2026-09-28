@@ -220,7 +220,7 @@
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.24.1",
     "@qvac/translation-nmtcpp": "^0.16.1",
-    "@qvac/tts-ggml": "^0.9.1",
+    "@qvac/tts-ggml": "^0.10.0",
     "@qvac/vla-ggml": "^0.27.1",
     "bare-abort-controller": "^1.0.0",
     "bare-cpu-info": "0.1.1",
