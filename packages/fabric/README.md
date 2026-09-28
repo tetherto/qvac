@@ -21,12 +21,46 @@ consumer guide.
   `llama.h`, `llama-cpp.h`, `common/*.h`, `mtmd/*.h` under `include/llama/`.
 - **CMake config** (`prebuilds/share/qvac-fabric/`) — `find_package(qvac-fabric)`
   exposes `qvac-fabric::headers` for compile-time includes
-- **ggml compute backends** — on **Linux and Android**, separate shared libraries
+- **ggml compute backends** — on **Linux, Android, and Windows**, separate shared libraries
   ship under `prebuilds/<platform>/qvac__fabric/` and are loaded at runtime via
-  `ggml_backend_load_all_from_path()`. On **macOS, Windows, and iOS** the backends
+  `ggml_backend_load_all_from_path()`. On **macOS and iOS** the backends
   are linked statically inside `qvac__fabric.bare` and self-register on load.
   On **linux-x64** this includes the ROCm/HIP backend (`libqvac-ggml-hip.so`,
   gfx1151) alongside Vulkan; the DL loader skips it on non-AMD hosts.
+
+## Platform packages
+
+Since 0.18, `@qvac/fabric` is a meta package that ships the loader, headers and
+CMake config. The runtime and backends for each desktop host live in a
+version-locked platform package selected at install time through `os`/`cpu`
+filtered `optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/fabric-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/fabric-linux-arm64` |
+| darwin-arm64 | `@qvac/fabric-darwin-arm64` |
+| darwin-x64 | `@qvac/fabric-darwin-x64` |
+| win32-x64 | `@qvac/fabric-win32-x64` |
+
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time with an error naming the missing
+package; a runtime in the package's own `prebuilds/<host>` (source builds,
+fabric 0.17 and earlier) always takes precedence. Consumer addons locate the
+runtime with the CMake template and the ggml backends with
+`require('@qvac/fabric/backends').resolveBackendsDir()`; see
+[INTEGRATION.md](./INTEGRATION.md).
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/fabric` version their addons resolve:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/fabric-android-arm64` |
+| ios (device + simulators) | `@qvac/fabric-ios` |
 
 ## Architecture
 
@@ -40,7 +74,7 @@ consumer guide.
 ┌───────────────────────────▼────────────────────────────────┐
 │  qvac__fabric@0.bare  (this package)                        │
 │  libllama · libcommon · libmtmd · libggml-base              │
-│  + ggml backends (.so on Linux/Android; static elsewhere)   │
+│  + ggml backend modules (.so/.dll; static on Apple)         │
 │  exports llama_* / LLAMA_* / ggml_* / gguf_* / mtmd_* /     │
 │          common_* / json_schema_to_grammar                  │
 └───────────────────────────┬────────────────────────────────┘
@@ -89,6 +123,6 @@ with a real one under the same ABI hash. Other platforms need nothing extra; the
 |----------|---------|----------|
 | Linux | `x64-linux`, `arm64-linux` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` (x64 also ships ROCm/HIP) |
 | macOS | `arm64-osx` | static (CPU, Metal) inside `.bare` |
-| Windows | (default MSVC) | static inside `.bare` |
+| Windows | (default MSVC) | dynamic `.dll` under `prebuilds/<platform>/qvac__fabric/` |
 | Android | `arm64-android` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` |
 | iOS | `arm64-ios` | static inside `.bare` |

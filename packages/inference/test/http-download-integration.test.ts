@@ -1,10 +1,7 @@
 import test from 'brittle'
 import http from 'bare-http1'
 import fs from 'bare-fs'
-import os from 'bare-os'
-import path from 'bare-path'
 import Buffer from 'bare-buffer'
-import { isConfigSet, setConfig } from '@/runtime/state'
 import { downloadModelFromHttp, isResumableTransferError } from '@/handlers/load-model/http'
 import {
   ChecksumUnavailableError,
@@ -12,6 +9,7 @@ import {
   HTTPError,
   InsecureModelSourceError
 } from '@/errors/index'
+import { useTestCacheDir } from './fixtures/test-cache'
 
 // Deterministic, offline coverage of the hand-rolled download client driving the
 // real http.ts path (redirect walk -> pipe-to-file, and Range/206 resume) over a
@@ -25,12 +23,6 @@ function bytesEqual(a: Buffer, b: Buffer): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
   return true
-}
-
-const cacheDir = path.join(os.cwd(), 'test', 'tmp-http-integration')
-
-function ensureConfig() {
-  if (!isConfigSet()) setConfig({ cacheDirectory: cacheDir, loggerConsoleOutput: false })
 }
 
 interface Server {
@@ -79,7 +71,7 @@ async function startServer(): Promise<Server> {
 }
 
 test('downloadModelFromHttp: follows a redirect and streams the body to disk intact', async (t) => {
-  ensureConfig()
+  const cacheDir = useTestCacheDir()
   fs.rmSync(cacheDir, { recursive: true, force: true })
   const server = await startServer()
   t.teardown(async () => {
@@ -95,7 +87,7 @@ test('downloadModelFromHttp: follows a redirect and streams the body to disk int
 })
 
 test('downloadModelFromHttp: resumes a partial download via a Range/206 request', async (t) => {
-  ensureConfig()
+  const cacheDir = useTestCacheDir()
   fs.rmSync(cacheDir, { recursive: true, force: true })
   const server = await startServer()
   t.teardown(async () => {

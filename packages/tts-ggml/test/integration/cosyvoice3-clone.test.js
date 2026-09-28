@@ -19,6 +19,7 @@ const {
   cosyvoiceBaseFileNames
 } = require('../utils/downloadModel')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -68,7 +69,12 @@ function samplesDiffer(a, b) {
 }
 
 async function synthOnce(t, loadParams, label) {
-  const model = await loadCosyvoiceTTS({ ...loadParams, seed: CLONE_SEED, useGPU })
+  const model = await loadCosyvoiceTTS({
+    threads: TTS_TEST_THREADS,
+    ...loadParams,
+    seed: CLONE_SEED,
+    useGPU
+  })
   try {
     const result = await runCosyvoiceTTS(
       model,
@@ -134,6 +140,7 @@ test(
     t.exception(
       () =>
         new TTSGgml({
+          threads: TTS_TEST_THREADS,
           engine: TTSGgml.ENGINE_COSYVOICE3,
           referenceAudio: resolveRefWavPath({}),
           files: {
@@ -174,6 +181,7 @@ test(
     }
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: baseOnlyDir },
       referenceAudio: resolveRefWavPath({})

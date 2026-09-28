@@ -642,6 +642,27 @@ jobs:
           workdir: ${{ env.WORKDIR_INFERENCE }}
           name-suffix: "-mono"
 
+  # Resolves the committed @qvac/inference range from npm, like the release
+  # build above. Same check as on-pr-shared-runtime-libs.yml.
+  shared-runtime-libs:
+    name: Shared runtime libs resolve once
+    needs: [publish-logic]
+    if: needs.publish-logic.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Check @qvac/sdk
+        run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk
+
   publish-npm:
     name: Publish to NPM
     needs:
@@ -649,8 +670,10 @@ jobs:
       - build
       - publish-logic
       - release-merge-guard
+      - shared-runtime-libs
     if: >-
       needs.publish-logic.outputs.publish_release == 'true' &&
+      needs.shared-runtime-libs.result == 'success' &&
       (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
