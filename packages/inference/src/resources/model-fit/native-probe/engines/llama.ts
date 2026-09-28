@@ -30,45 +30,37 @@ const CANONICAL_KEY: Record<string, string> = {
 }
 
 /**
- * Settings that cannot change how much device memory the load needs: sampling,
- * generation, logging, CPU scheduling, and this SDK's own keys, which llama's
- * argument table does not know.
- *
- * `fit` and `fit-ctx` are llama's own auto-fit, which the fitter performs
- * itself, and the image token bounds only bind a multimodal load, which is
- * refused before this point.
+ * Settings that decide how much device memory the load needs, in the spelling
+ * each transform emits. `device` and `fit-target` are absent because they are
+ * read before this point.
  */
-const IGNORED_KEYS: Record<LlamaLoadKind, readonly string[]> = {
+const MEMORY_KEYS: Record<LlamaLoadKind, readonly string[]> = {
   completion: [
-    'temp',
-    'top_p',
-    'top_k',
-    'seed',
-    'predict',
-    'presence_penalty',
-    'frequency_penalty',
-    'repeat_penalty',
-    'reverse_prompt',
-    'n_discarded',
-    'tools',
-    'verbosity',
-    'reasoning_budget',
-    'image_tile_mode',
-    'image_no_upscale',
-    'mmproj-use-gpu',
-    'openclCacheDir',
-    'threads',
-    'threads-batch',
-    'cpu-mask',
-    'cpu-mask-batch',
-    'device',
+    'ctx_size',
+    'gpu_layers',
+    'load_mode',
+    'parallel',
+    'cache-type-k',
+    'cache-type-v',
+    'main-gpu',
+    'split-mode',
+    'flash-attn',
+    'tensor-split',
+    'batch-size',
+    'ubatch-size',
+    'cpu-moe',
+    'n-cpu-moe',
+    'kv-offload',
+    'no-kv-offload',
+    'override-tensor',
+    'n-cpu-ffn',
+    'moe-cache-mib',
+    'prefetch-weights',
+    'tensor-read-lazy',
     'fit',
-    'fit-ctx',
-    'fit-target',
-    'image-max-tokens',
-    'image-min-tokens'
+    'fit-ctx'
   ],
-  embedding: ['pooling', 'attention', 'embd_normalize', 'verbosity', 'openclCacheDir', 'device']
+  embedding: ['gpu_layers', 'batch_size', 'flash_attn', 'main-gpu', 'split-mode', 'tensor-split']
 }
 
 /** Shapes the SDK resolves elsewhere; reaching here means they were not. */
@@ -119,14 +111,14 @@ function loadParams(
   loadKind: LlamaLoadKind,
   transformed: Record<string, string>
 ): { params: Record<string, string> } | { detail: string } {
-  const ignored = new Set(IGNORED_KEYS[loadKind])
+  const carried = new Set(MEMORY_KEYS[loadKind])
   const params: Record<string, string> = {}
 
   for (const [key, value] of Object.entries(transformed)) {
     if (UNSUPPORTED_KEYS.includes(key)) {
       return { detail: `unsupported load setting: ${key}` }
     }
-    if (ignored.has(key)) continue
+    if (!carried.has(key)) continue
     params[CANONICAL_KEY[key] ?? key] = value
   }
 

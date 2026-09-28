@@ -24,8 +24,16 @@ function describe(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error)
 }
 
+/** How long a marker keeps a model off the native path. */
+const MARKER_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * `marginBytes` is excluded: it carries the bytes of every model resident at
+ * the time, so it differs between two attempts at the same load.
+ */
 function markerKey(probe: FitProbeRequest): string {
-  return generateShortHash(JSON.stringify(probe))
+  const { marginBytes: _margin, ...request } = probe.request as Record<string, unknown>
+  return generateShortHash(JSON.stringify({ engine: probe.engine, request }))
 }
 
 export function crashMarkerPath(stateDir: string, probe: FitProbeRequest): string {
@@ -40,6 +48,14 @@ function exists(file: string): boolean {
   try {
     fs.accessSync(file)
     return true
+  } catch {
+    return false
+  }
+}
+
+function expired(file: string): boolean {
+  try {
+    return Date.now() - fs.statSync(file).mtimeMs > MARKER_TTL_MS
   } catch {
     return false
   }
@@ -80,6 +96,10 @@ export async function runInProcessFit(
   const stateDir = await resolveStateDir(options.stateDir)
   const running = crashMarkerPath(stateDir, probe)
   const crashed = crashedMarkerPath(stateDir, probe)
+
+  for (const marker of [crashed, running]) {
+    if (exists(marker) && expired(marker)) clearRunning(marker)
+  }
 
   if (exists(crashed) || exists(running)) {
     try {

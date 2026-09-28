@@ -178,14 +178,22 @@ test('completion: a per-device fit target takes its largest entry', (t) => {
   t.is(plan.probe.request.marginBytes, 2048 * 1024 * 1024)
 })
 
-// Whether a setting is one llama knows is llama's own question, answered by its
-// argument table at projection time rather than guessed at here.
-test('completion: a setting this layer does not know is left for llama to judge', (t) => {
-  const plan = completionRequest({ some_new_load_knob: 7 })
+test('completion: a setting outside the memory set does not reach the engine', (t) => {
+  const plan = completionRequest({ some_new_load_knob: 7, temp: 0.4 })
 
   t.ok(plan.supported)
   if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
-  t.is(plan.probe.request.params?.['some_new_load_knob'], '7')
+  t.absent('some_new_load_knob' in (plan.probe.request.params ?? {}))
+  t.absent('temp' in (plan.probe.request.params ?? {}))
+})
+
+test("completion: llama's own auto-fit reaches the engine", (t) => {
+  const plan = completionRequest({ fit: false, 'fit-ctx': 8192 })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
+  t.is(plan.probe.request.params?.['fit'], 'false')
+  t.is(plan.probe.request.params?.['fit-ctx'], '8192')
 })
 
 // The transform rewrites the boolean into whichever flag it asserts, and llama
@@ -219,19 +227,23 @@ test('completion: a symbolic main-gpu travels as written', (t) => {
   t.is(plan.probe.request.params?.['main-gpu'], 'dedicated')
 })
 
-// llama's own auto-fit is what the fitter performs, and how weights are read
-// does not change how many are resident.
-test('completion: settings that cannot move device memory are dropped', (t) => {
-  t.ok(
-    completionRequest({
-      load_mode: 'mmap',
-      parallel: 2,
-      'prefetch-weights': 'auto',
-      'tensor-read-lazy': 'on',
-      fit: true,
-      'fit-ctx': 8192
-    }).supported
-  )
+// Residency follows from how weights are read and how many sequences the cache
+// holds, so each of these reaches the fitter.
+test('completion: the settings that move device memory reach the engine', (t) => {
+  const plan = completionRequest({
+    load_mode: 'mmap',
+    parallel: 2,
+    'prefetch-weights': 'auto',
+    'tensor-read-lazy': 'on'
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported || plan.probe.engine !== 'llm-llamacpp') return
+  const params = plan.probe.request.params ?? {}
+  t.is(params['load-mode'], 'mmap')
+  t.is(params['parallel'], '2')
+  t.is(params['prefetch-weights'], 'auto')
+  t.is(params['tensor-read-lazy'], 'on')
 })
 
 test('completion: a LoRA load is refused', (t) => {
