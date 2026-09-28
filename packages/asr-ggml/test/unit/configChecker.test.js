@@ -40,6 +40,11 @@ test('checkConfig rejects detect_language regardless of value', (t) => {
   )
 })
 
+test('checkConfig accepts carry_initial_prompt', (t) => {
+  checkConfig(baseConfig({ initial_prompt: 'QVAC', carry_initial_prompt: true }))
+  t.pass('carry_initial_prompt is a whitelisted whisper param')
+})
+
 test('checkConfig accepts max_initial_ts and no_speech_thold', (t) => {
   checkConfig(baseConfig({ max_initial_ts: 1.0, no_speech_thold: 0.6 }))
   t.pass('whitelisted whisper params should not throw')
