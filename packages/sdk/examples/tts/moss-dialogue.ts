@@ -5,7 +5,7 @@ import {
   TTS_CODEC_DECODER_MOSS_TTS_F16,
   TTS_CODEC_ENCODER_MOSS_TTS_F16
 } from '@qvac/sdk'
-import { createWav } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
 
 // MOSS-TTSD (GGML): multi-speaker dialogue in one pass, each voice cloned from
 // a 24 kHz reference recording. The model continues the references, so the
@@ -64,6 +64,12 @@ try {
 
   createWav(samples, sampleRate, 'moss-dialogue-output.wav')
   console.log('▸ Audio saved to moss-dialogue-output.wav')
+
+  console.log('▸ Playing audio...')
+  const audioData = int16ArrayToBuffer(samples)
+  const wavBuffer = Buffer.concat([createWavHeader(audioData.length, sampleRate), audioData])
+  playAudio(wavBuffer)
+  console.log('▸ Audio playback complete')
 
   await unloadModel({ modelId })
   console.log('▸ Model unloaded')
