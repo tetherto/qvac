@@ -203,8 +203,10 @@ runs:
                 gh api "repos/${REPO}/contents/$1?ref=${PR_HEAD_SHA}" -H 'Accept: application/vnd.github.raw' > "$3" 2>/dev/null || rm -f "$3"
               }
             else
+              # Same merge base the three-dot path list uses.
+              MERGE_BASE=$(git merge-base "$BASE" "$HEAD" 2>/dev/null) || MERGE_BASE="$BASE"
               fetch() {
-                git show "${BASE}:$1" > "$2" 2>/dev/null || rm -f "$2"
+                git show "${MERGE_BASE}:$1" > "$2" 2>/dev/null || rm -f "$2"
                 git show "${HEAD}:$1" > "$3" 2>/dev/null || rm -f "$3"
               }
             fi
