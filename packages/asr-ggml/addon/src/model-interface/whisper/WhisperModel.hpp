@@ -24,6 +24,14 @@
 
 namespace qvac::asrggml::whisper {
 
+#if defined(__ANDROID__) || defined(__linux__) || defined(_WIN32)
+/**
+ * Registers the ggml backends shipped as separate modules. Static builds have
+ * nothing to load and do not declare this.
+ */
+void ensureBackendsLoaded(const std::string& backendsDir);
+#endif
+
 class WhisperModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
       public qvac_lib_inference_addon_cpp::model::IModelCancel,
@@ -110,6 +118,9 @@ public:
   bool isStreamEnded() const { return stream_ended_; }
   bool isLoaded() const { return is_loaded_; }
   bool isCaptionModeEnabled() const;
+  // Read from whisperConfig; gate the optional per-segment output fields.
+  bool isTokenTimestampsEnabled() const;
+  bool isTdrzEnabled() const;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
 
   // Active backend identity captured by captureActiveBackendInfo() at load();

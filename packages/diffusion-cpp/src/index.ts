@@ -18,6 +18,7 @@ import {
   type SdConfigurationParams
 } from './addon'
 import type VideoStableDiffusionConstructor from './video'
+import { assertFilePaths, toFilePaths } from './file-paths'
 
 export type NumericLike = number | `${number}`
 
@@ -242,17 +243,6 @@ type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>
 type DiffusionAddon = Addon & SdInterface
 type UpscalerAddon = EsrganUpscalerInterface
 
-const COMPANION_FILE_KEYS = [
-  'clipL',
-  'clipG',
-  't5Xxl',
-  'llm',
-  'vae',
-  'esrgan',
-  'highNoiseDiffusionModel',
-  'uncondModel'
-] as const
-
 const RUN_BUSY_ERROR_MESSAGE = 'Cannot set new job: a job is already set or being processed'
 const NATIVE_UPSCALE_REPEATS_MAX = 2_147_483_647
 
@@ -326,12 +316,7 @@ export class ImgStableDiffusion {
     if (!files || typeof files !== 'object') {
       throw new TypeError('files must be an object containing at least { model }')
     }
-    assertAbsolute('model', files.model)
-    for (const key of COMPANION_FILE_KEYS) {
-      if (files[key] !== undefined) {
-        assertAbsolute(key, files[key])
-      }
-    }
+    assertFilePaths(files)
     this._files = files
     this._config = config || {}
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface | undefined)
@@ -354,25 +339,11 @@ export class ImgStableDiffusion {
   private async _load(): Promise<void> {
     this.logger.info('Starting stable-diffusion model load')
 
-    const isSplitLayout =
-      !!this._files.llm || !!this._files.t5Xxl || !!this._files.clipL || !!this._files.clipG
     const filesWithClipVision = this._files as DiffusionFiles & {
       clipVision?: string
     }
     const configurationParams: SdConfigurationParams = {
-      path: isSplitLayout ? '' : this._files.model,
-      diffusionModelPath: isSplitLayout ? this._files.model : '',
-      highNoiseDiffusionModelPath: this._files.highNoiseDiffusionModel || '',
-      uncondDiffusionModelPath: this._files.uncondModel || '',
-      clipLPath: this._files.clipL || '',
-      clipGPath: this._files.clipG || '',
-      t5XxlPath: this._files.t5Xxl || '',
-      llmPath: this._files.llm || '',
-      vaePath: this._files.vae || '',
-      clipVisionPath: filesWithClipVision.clipVision || '',
-      esrganPath: this._files.esrgan || '',
-      audioVaePath: '',
-      embeddingsConnectorsPath: '',
+      ...toFilePaths(filesWithClipVision),
       config: this._config
     }
 
@@ -894,6 +865,16 @@ export type {
 } from './video'
 export type { QvacResponse }
 
+import { assessFit as assessFitImpl } from './fit'
+
+export { assessFit } from './fit'
+export type {
+  DiffusionFitRequest,
+  DiffusionFitResult,
+  DiffusionFitStatus,
+  DiffusionFitWorkload
+} from './fit'
+
 export type VideoStableDiffusion = InstanceType<typeof VideoStableDiffusionConstructor>
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- preserve the CommonJS video subpath export.
@@ -906,9 +887,11 @@ const cjsExports = ImgStableDiffusion as typeof ImgStableDiffusion & {
   VideoStableDiffusion?: typeof VideoStableDiffusion
   EsrganUpscaler?: typeof EsrganUpscaler
   applyFluxImg2ImgDimDefaults?: typeof applyFluxImg2ImgDimDefaults
+  assessFit?: typeof assessFitImpl
 }
 cjsExports.ImgStableDiffusion = ImgStableDiffusion
 cjsExports.VideoStableDiffusion = VideoStableDiffusion
 cjsExports.EsrganUpscaler = EsrganUpscaler
 cjsExports.applyFluxImg2ImgDimDefaults = applyFluxImg2ImgDimDefaults
+cjsExports.assessFit = assessFitImpl
 module.exports = cjsExports

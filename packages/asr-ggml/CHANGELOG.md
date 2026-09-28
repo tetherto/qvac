@@ -14,12 +14,59 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Parakeet voice-activity events. `streamingEnergyVad` / `emitEnergyVad` now
+  delivers `{ type: 'vad', source: 'energy' }` events on each speech/silence
+  change; before, the detector was enabled but its events never reached JS.
+  It is tuned with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`
+  and `streamingEnergyVadHangoverMs` (per call: `energyVadThresholdDb`,
+  `energyVadWindowMs`, `energyVadHangoverMs`). `streamingSpeakerVad` /
+  `emitSpeakerVad` adds `{ type: 'vad', source: 'sortformer', speakerId }`
+  events from Sortformer speaker activity. Parakeet VAD events carry a
+  session `timestamp`.
+- Structured Sortformer output: streamed diarization segments carry
+  `speakerId`, and the offline transcript carries
+  `speakerSegments: [{ speakerId, start, end }]`. The `"Speaker N: ..."` text
+  is unchanged.
+- `diarizationThreshold` and `diarizationMinSegmentMs` (per call in
+  `runStreaming()` too) for offline and streaming Sortformer. The defaults
+  stay at the values the addon already sent: 0.641 and 510 ms.
+- `prewarm` / `prewarmAudioSeconds` run one encoder pass while loading, so
+  the first request skips the GPU shader or kernel compile.
+- `longFormWindowFrames` / `longFormContextFrames` control the offline
+  long-form encoder windowing.
+- `getBackendInfo().modelType`: `'whisper'`, or the Parakeet family detected
+  from the GGUF. Sortformer runtime stats and the terminal stats of a
+  Sortformer `runStreaming()` add `aoscActive`.
+- Whisper segments carry `language` and `noSpeechProb`; `token_timestamps`
+  adds `tokens: [{ text, start, end, probability }]` and `tdrz_enable` adds
+  `speakerTurnNext`. New Whisper key `carry_initial_prompt`.
+
 ### Changed
 
+- Parakeet `cancel()` now stops an offline `run()` between long-form encoder
+  windows instead of after the whole call.
+- speech-cpp's own Parakeet log lines now reach the JS logger instead of
+  stderr.
+- Offline Sortformer `encoderMs` is the engine's encoder time; preprocessing
+  and decoding now report in `melSpecMs` and `decoderMs` (before, `encoderMs`
+  held the whole call's wall time).
+
+## [0.6.0] - 2026-09-25
+
+### Changed
+
+- Update the `@qvac/decoder-audio` development dependency to `^0.7.0` for the audio decoding examples.
 - Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to `2026-09-23#1`: the speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2), and fixes a crash in CosyVoice3 GPU synthesis on NVIDIA GPUs with cooperative-matrix2 support. Same models, same GPU backends, no API change.
 
 ### Added
 
+- `RuntimeStats.encoderUsedCoreml` for Parakeet: `1` when every offline ASR
+  transcription in the job ran its encoder on the Core ML sidecar, `0` when any
+  fell back to ggml. `encoderOnCoreml` keeps reporting only that a sidecar
+  loaded. The field is absent after Sortformer diarization and streaming jobs,
+  where the engine does not report per-call routing.
 - Cache-aware streaming for `parakeet-unified-en-0.6b`. The engine keeps
   per-layer attention and convolution caches across steps instead of
   re-encoding a sliding window, so `streamingChunkMs` now selects a trained
@@ -32,17 +79,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 - Raise the `speech-cpp` floor to `2026-09-18#1`, keeping the speech packages on
   one engine stack. The pinned engine adds cache-aware streaming for the
-  Unified RNN-T model, on top of the optional Apple-only Core ML sidecar for
-  the Sortformer diarization encoder that the prebuilds keep disabled.
+  Unified RNN-T model; its streaming encoder stays on ggml even when a Core ML
+  sidecar is staged.
 - Raise the `speech-cpp` floor to `2026-09-18`, keeping the speech packages on
   one engine stack. The pinned engine adds an Apple-only Core ML sidecar for the
   Parakeet Unified RNN-T encoder, presence-driven on a compiled `.mlmodelc` next
   to the model file and falling back to ggml without it, so published behavior
   is unchanged unless that file is shipped.
 - Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
-  one engine stack. The pinned engine adds an optional Apple-only Core ML
-  sidecar for the Sortformer diarization encoder; the prebuilds keep it
-  disabled, so published behavior is unchanged.
+  one engine stack. The pinned engine adds an Apple-only Core ML sidecar for
+  the Sortformer v2.1 diarization encoder (batch and AOSC), presence-driven on
+  compiled `.mlmodelc` files next to the model file, so published behavior is
+  unchanged unless those files are shipped.
 - Add Whisper `contextParams["main-gpu"]` / `contextParams.main_gpu` selection
   for raw ggml registry indices plus `dedicated` and `integrated` classes.
   The selector is mutually exclusive with `gpu_device`, does not enable GPU by

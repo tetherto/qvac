@@ -81,6 +81,7 @@ export type MappedAddonEvent = {
  * event names (caller logs and skips dispatch).
  */
 export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedAddonEvent | null;
+export declare function resolveBackendsDir(): string;
 /** An interface between the Bare C++ addon and the JS runtime. */
 export declare class BertInterface implements Addon {
     private readonly _binding;

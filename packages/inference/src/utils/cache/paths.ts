@@ -4,7 +4,7 @@ import { getConfiguredCacheDir } from '@/runtime/state'
 import { getQvacPath } from '@/utils/qvac-paths'
 import type { ShardFileMetadata } from '@/schemas/index'
 import { calculateFileChecksum } from '@/utils/checksum'
-import { validateAndJoinPath } from '@/utils/path-security'
+import { validateAndJoinPath, joinWithinBase } from '@/utils/path-security'
 import { generateShortHash } from '@/utils/formatting'
 import { getEngineLogger } from '@/logging/index'
 import { nowMs } from '@/profiling/index'
@@ -98,9 +98,10 @@ export function getCompanionSetPath(setKey: string, targetName: string): string 
  * Get cache path for a single (non-sharded, non-companion) registry model.
  */
 export function getSingleFileCachePath(registryPath: string): string {
+  // A path ending in "/" falls back to the whole path, separators included.
   const filename = registryPath.split('/').pop() || registryPath
   const sourceHash = generateShortHash(registryPath)
-  return path.join(getModelsCacheDir(), `${sourceHash}_${filename}`)
+  return joinWithinBase(getModelsCacheDir(), `${sourceHash}_${filename}`)
 }
 
 /**

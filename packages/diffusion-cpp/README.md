@@ -34,6 +34,7 @@ The package exposes four JS entry points:
 - [ESRGAN Upscaler](#esrgan-upscaler)
 - [Response Streams and Stats](#response-streams-and-stats)
 - [Cancellation and Unload](#cancellation-and-unload)
+- [Assessing fit](#assessing-fit)
 - [Operational Notes](#operational-notes)
 - [Credits](#credits)
   - [Test Images](#test-images)
@@ -711,6 +712,50 @@ await model.unload()
 ```
 
 During ESRGAN upscale, cancellation is honored between repeat passes.
+
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data, so a GGUF file set can be the registry's weightless copy and the projection can run before anything is downloaded. A safetensors file is still read against its declared tensor data, so a header-only copy of one comes back as `status: "error"`. It is a module export, not an instance method — nothing is loaded to call it.
+
+```js
+const { assessFit } = require('@qvac/diffusion-cpp')
+
+const fit = assessFit({
+  files: { model: '/models/model.gguf' },
+  config: { backendsDir: '/opt/backends' },
+  workload: { prompt: 'a lighthouse at dusk', width: 1024, height: 1024 }
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // 'fits' | 'does-not-fit' | 'model-unreadable' | 'unsupported-config'
+fit.changed // the engine placed the load only by altering the backend assignment
+fit.backend
+fit.paramsBackend
+fit.vaeTiling
+fit.streamLayers
+fit.report // per-device, per-module memory table, suitable for logging
+```
+
+`files` and `config` are what `createInstance` takes, plus `files.clipVision`, `files.audioVae` and `files.embeddingsConnectors`. Paths must be absolute. `workload` describes the generation the projection is sized for, and its defaults are the generation defaults:
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `prompt` | a stand-in prompt | Token count drives the text-encoder memory. |
+| `width`, `height` | 512 | Output dimensions. |
+| `videoFrames` | 1 | 1 or less projects image generation. A video-only model is projected at one frame unless this is passed, while `run()` defaults to 33. |
+| `vaeTiling` | `false` | Tiled decoding trades speed for a much smaller VAE arena. |
+| `vaeTileSizeX`, `vaeTileSizeY` | 512 | The tile geometry, in pixels. |
+| `vaeTileOverlap` | 0.5 | Fraction of a tile used as the overlap seam. |
+
+Every number must be finite, whole and in range; anything else is `status: "error"` with `reason: "unsupported-config"`.
+
+The engine chooses the placement, so it has to be given an unpinned configuration. A `config.mainGpu`, a `config.device` of `cpu`, or a `paramsBackend` naming individual modules is `reason: "unsupported-config"`.
+
+A `changed` of `true` comes with `status: "does-not-fit"` — the configuration as given does not fit, and the engine reached a placement only by moving modules between backends. A `paramsBackend` of `*=cpu` is the exception: the engine replans every module for it, so the plan is compared against the placement that load already uses, and an equal one is `fits`.
+
+A model the engine cannot read is `status: "error"` with `reason: "model-unreadable"`; only a broken request throws.
+
+The projection runs in the calling process and shares its engine state: the GPU backend modules load once per process, so the first `config.backendsDir` any call supplies is the one every later load uses, and the native log callback is process-global like everywhere else.
 
 ## Operational Notes
 
