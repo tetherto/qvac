@@ -271,9 +271,10 @@ declare namespace LlmLlamacpp {
          * so a diverging history is served by restoring the longest checkpoint
          * that is still a prefix of the new prompt. A committed cached request
          * adds two (its pre-request state and one at the end of its history),
-         * each holding the model's recurrent state. The default of 1 keeps the
-         * newest, the end-of-history checkpoint an ordinary next turn and a
-         * regenerate restore; raise it to also serve edits further back. `0`
+         * each holding the model's recurrent state. The default of 2 keeps the
+         * last request's pair: the end-of-history checkpoint an ordinary next
+         * turn and a regenerate restore, and the pre-request state an edit of the
+         * last message restores. Raise it to also serve edits further back. `0`
          * keeps none (every divergent turn is a cold prefill), the maximum is
          * 1024.
          * Ignored on pure-attention models, which never take checkpoints.

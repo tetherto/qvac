@@ -31,15 +31,17 @@ inline constexpr size_t LEDGER_ENTRY_WORDS = 5;
 // (on disk or in memory, see `SnapshotStorage`), so the policy below bounds
 // that footprint.
 //   * `cache_checkpoints`: how many to keep; 0 keeps none, which turns every
-//     divergent turn into a cold prefill. The default of 1 keeps the newest,
-//     the end-of-history checkpoint an ordinary next turn and a regenerate
-//     restore; more also serve edits further back in the history.
+//     divergent turn into a cold prefill. The default of 2 keeps the last
+//     committed request's pair: its end-of-history checkpoint, which an
+//     ordinary next turn and a regenerate restore, and its pre-request
+//     snapshot, which serves an edit of that request's last message. More
+//     also serve edits further back in the history.
 //   * `cache_checkpoints_max_bytes`: total payload budget per sequence; 0 is
 //     unlimited. It is enforced before the count, and the model load fails
 //     early when it cannot hold `cache_checkpoints` checkpoints of the
 //     largest size the context allows.
 //   * `cache_checkpoint_storage`: `disk` (temp files, default) or `memory`.
-inline constexpr size_t DEFAULT_PROCESS_CHECKPOINTS = 1;
+inline constexpr size_t DEFAULT_PROCESS_CHECKPOINTS = 2;
 inline constexpr size_t MAX_CONFIGURABLE_PROCESS_CHECKPOINTS = 1024;
 inline constexpr const char* CACHE_CHECKPOINTS_KEY = "cache_checkpoints";
 inline constexpr const char* CACHE_CHECKPOINTS_KEY_DASHED = "cache-checkpoints";

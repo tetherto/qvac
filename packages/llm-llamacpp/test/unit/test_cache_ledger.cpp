@@ -92,17 +92,19 @@ TEST(CacheLedger, ProcessCheckpointCollectionEvictsOldestFirst) {
   EXPECT_EQ(checkpoints.back().id, 6);
 }
 
-// The default keeps only the newest checkpoint: the end-of-history one, which
-// a commit pushes after the pre-request snapshot.
-TEST(CacheLedger, DefaultPolicyKeepsTheNewestCheckpoint) {
-  EXPECT_EQ(cache::DEFAULT_PROCESS_CHECKPOINTS, 1u);
+// The default keeps the last committed request's pair: a commit pushes its
+// pre-request snapshot, then its end-of-history checkpoint, and the next
+// commit's pair replaces both.
+TEST(CacheLedger, DefaultPolicyKeepsTheLastRequestsPair) {
+  EXPECT_EQ(cache::DEFAULT_PROCESS_CHECKPOINTS, 2u);
   std::deque<FakeCheckpoint> checkpoints;
-  cache::appendProcessCheckpoint(
-      checkpoints, FakeCheckpoint{1, 1}, cache::CheckpointPolicy{}, kBytesOf);
-  cache::appendProcessCheckpoint(
-      checkpoints, FakeCheckpoint{2, 1}, cache::CheckpointPolicy{}, kBytesOf);
-  ASSERT_EQ(checkpoints.size(), 1u);
-  EXPECT_EQ(checkpoints.front().id, 2);
+  for (int id = 1; id <= 4; ++id) {
+    cache::appendProcessCheckpoint(
+        checkpoints, FakeCheckpoint{id, 1}, cache::CheckpointPolicy{}, kBytesOf);
+  }
+  ASSERT_EQ(checkpoints.size(), 2u);
+  EXPECT_EQ(checkpoints.front().id, 3);
+  EXPECT_EQ(checkpoints.back().id, 4);
 }
 
 TEST(CacheLedger, ProcessCheckpointCollectionHonoursConfiguredCount) {
