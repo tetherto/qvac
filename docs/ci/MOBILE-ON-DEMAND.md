@@ -482,6 +482,7 @@ PKG=llm-llamacpp   # package directory name; `package` is a required input
 git push origin HEAD:refs/heads/$BRANCH
 # The 13 native addons publish from on-merge-nx.yml. model-fit keeps its own:
 # gh workflow run on-merge-model-fit.yml --repo tetherto/qvac --ref $BRANCH
+# ggml-rpc-server likewise: on-merge-ggml-rpc-server.yml, no package input.
 gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref $BRANCH -f package=$PKG
 ```
 

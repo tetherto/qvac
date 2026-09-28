@@ -66,6 +66,7 @@ const LIBRARY_PUBLISHERS = new Set([
 // QVAC-19792 folded the 13 per-package on-merge-<pkg> pipelines into
 // on-merge-nx; model-fit kept its own. Add a pipeline here when one appears.
 const KNOWN = [
+  'on-merge-ggml-rpc-server.yml',
   'on-merge-model-fit.yml',
   'on-merge-nx.yml',
 ]
