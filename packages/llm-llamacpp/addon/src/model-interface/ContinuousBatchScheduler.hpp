@@ -4,6 +4,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -12,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <common/sampling.h>
@@ -22,6 +24,7 @@
 #include "MediaLoadOrder.hpp"
 #include "MultiRequestBatcher.hpp"
 #include "SequenceDriver.hpp"
+#include "SlotStateCache.hpp"
 
 /// Defined in test/unit/test_internal_peers.hpp (tests only); befriended below
 /// so unit tests can inject decode/media-eval stubs. Never defined in
@@ -391,6 +394,26 @@ public:
   /// is running, for the same reason as `cancel(seqId)`.
   void clear();
 
+  /// Byte budget of the RAM tier that keeps conversation states moved out of
+  /// their slot (`cache_ram_mib`); 0 disables it. Resident slots do not
+  /// depend on it.
+  void setCacheRamBudget(uint64_t bytes);
+
+  /// Sequences that hold a parked conversation (a committed keyed request's
+  /// state kept for the next request on its `cacheKey`).
+  [[nodiscard]] std::vector<uint32_t> parkedSeqIds() const;
+
+  /// Moves the conversation parked on `seqId` out of the way: unsaved turns
+  /// are written to its `cacheKey` file, the state goes to the RAM tier when
+  /// enabled, and the sequence is cleared. For callers that need the raw
+  /// sequence (the single-prompt path shares seq 0). No-op when nothing is
+  /// parked there.
+  void evictParked(uint32_t seqId);
+
+  /// Test seams: how often admission reused a parked slot or a RAM-tier state.
+  [[nodiscard]] uint64_t residentHitsForTesting() const;
+  [[nodiscard]] uint64_t ramTierHitsForTesting() const;
+
   /// Decode function used by stepLocked() (defaults to llama_decode), context
   /// synchronization used before recording decode/media step time (defaults to
   /// llama_synchronize), and media-segment eval used by
@@ -512,6 +535,14 @@ private:
     bool saveCacheToDisk = false;
     bool activeCacheSavedToDisk = false;
     bool prefillOnly = false;
+    /// Set at finalize: the request committed coherent keyed state, so
+    /// `freeSlot` parks the sequence instead of it being cleared.
+    bool parkable = false;
+    /// This commit wrote the `cacheKey` file.
+    bool savedThisCommit = false;
+    /// The save found the file the state came from deleted; like the
+    /// single-prompt path, the caller's deletion drops the conversation.
+    bool backingStoreDropped = false;
     /// Carried from SubmitRequest so the drain can compute observed stats.
     std::chrono::steady_clock::time_point enqueuedAt{};
     /// Ownership token for this admission, strictly incrementing across the
@@ -623,6 +654,19 @@ private:
   /// escape a noexcept path nor skip the group-completion below.
   void notifyDoneNoexcept(uint32_t seqId) noexcept;
   void freeSlot(uint32_t seqId) noexcept;
+  /// Free sequence for a request on `cacheKey`: the one parked with that key,
+  /// else one with nothing parked, else the least recently used parked one,
+  /// evicted first. Nullopt when every sequence is busy.
+  [[nodiscard]] std::optional<uint32_t>
+  chooseSeqIdLocked(const std::string& cacheKey);
+  void evictParkedLocked(uint32_t seqId) noexcept;
+  /// Writes the live state of `seqId`, described by `ledgerWords`, to
+  /// `cacheKey` through a temp file. Returns false (logged) on failure.
+  bool writeStateToFileLocked(
+      uint32_t seqId, const std::string& cacheKey,
+      const std::vector<llama_token>& ledgerWords) noexcept;
+  /// Fails every key-deferred request's group with a `Cancelled` error.
+  void cancelKeyDeferredLocked() noexcept;
   /// Remove every KV-cache cell owned by `seqId` from the shared context.
   /// Single home for the cleanup repeated across all slot-teardown paths.
   void clearSeqKv(uint32_t seqId) noexcept;
@@ -680,6 +724,28 @@ private:
   /// the driver at admission and back out when its slot is freed. Bounded
   /// per key by the checkpoint policy; dropped on `clear()`.
   std::unordered_map<std::string, cache::Checkpoints> checkpointStore_;
+
+  /// A committed keyed conversation kept in its sequence after its request
+  /// ended, for the next request on the same `cacheKey`. The sequence is free
+  /// for admission; claiming it for another key evicts this first.
+  struct ParkedState {
+    std::string cacheKey;
+    std::vector<llama_token> ledgerWords;
+    cache::Checkpoints checkpoints;
+    /// Has turns its `cacheKey` file does not hold yet.
+    bool dirty = false;
+    bool activeCacheSavedToDisk = false;
+    uint64_t lastUse = 0;
+  };
+  std::vector<std::optional<ParkedState>> parked_;
+  uint64_t parkClock_ = 0;
+  SlotStateCache ramTier_;
+  /// Keys with a request in a slot. A request on a busy key waits in
+  /// `keyDeferred_` so each key is served in order and never forks.
+  std::unordered_set<std::string> busyKeys_;
+  std::deque<QueuedRequest> keyDeferred_;
+  uint64_t residentHits_ = 0;
+  uint64_t ramTierHits_ = 0;
   bool teardownDeferred_ = false;
   /// Live tagged groups, so a cancel can find a group that holds no slot yet.
   /// Guarded by `mutex_`; an entry lives exactly as long as its `processBatch`

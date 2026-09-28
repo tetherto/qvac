@@ -1608,3 +1608,257 @@ TEST(CacheHistoryCheckpointTest, BatchedHybridThinkingChatReusesTheHistory) {
 
   fs::remove(cacheFile);
 }
+
+namespace {
+
+std::unique_ptr<LlamaModel>
+loadBatchedModel(const char* cacheRamMib = nullptr) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "4096";
+  config["parallel"] = "2";
+  config["n_predict"] = "16";
+  config["temp"] = "0";
+  config["seed"] = "5";
+  if (cacheRamMib != nullptr) {
+    config["cache_ram_mib"] = cacheRamMib;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = test_common::BaseTestModelPath::get();
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+// Runs one keyed batch request and returns its output plus the prompt
+// entries its driver reused (read while the driver is alive).
+struct BatchedTurn {
+  std::string output;
+  size_t reuse = 0;
+};
+
+class BatchedCacheHarness {
+public:
+  explicit BatchedCacheHarness(LlamaModel& model)
+      : model_(model), scheduler_(LlamaModelTestPeer::scheduler(model)) {
+    const auto original =
+        ContinuousBatchSchedulerTestPeer::driverFactory(*scheduler_);
+    ContinuousBatchSchedulerTestPeer::setDriverFactory(
+        *scheduler_,
+        [original,
+         this](const common_params& params, uint32_t seqId, llama_pos ceiling) {
+          std::unique_ptr<SequenceDriver> built =
+              original(params, seqId, ceiling);
+          driver_ = dynamic_cast<TextLlmContext*>(built.get());
+          return built;
+        });
+  }
+
+  BatchedTurn
+  run(const std::string& input, const std::string& cacheKey,
+      bool saveCacheToDisk = false) {
+    BatchedTurn turn;
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    prompt.cacheKey = cacheKey;
+    prompt.saveCacheToDisk = saveCacheToDisk;
+    bool read = false;
+    prompt.outputCallback = [&](const std::string&) {
+      if (!read && driver_ != nullptr) {
+        turn.reuse = driver_->lastCacheReuseForTesting();
+        read = true;
+      }
+    };
+    const auto outputs = model_.processPromptBatch({prompt});
+    turn.output = outputs.empty() ? std::string() : outputs.front();
+    return turn;
+  }
+
+  qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler&
+  scheduler() {
+    return *scheduler_;
+  }
+
+private:
+  LlamaModel& model_;
+  qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler*
+      scheduler_;
+  TextLlmContext* driver_ = nullptr;
+};
+
+std::string userTurns(const std::vector<std::string>& turns) {
+  std::vector<std::pair<std::string, std::string>> chat;
+  for (size_t i = 0; i < turns.size(); ++i) {
+    chat.emplace_back(i % 2 == 0 ? "user" : "assistant", turns[i]);
+  }
+  return chatInput(chat);
+}
+
+} // namespace
+
+// Without saveCacheToDisk the batch path used to wipe the slot after every
+// request, so a follow-up re-prefilled the whole conversation. The committed
+// state now stays parked in its sequence for the next request on its key.
+TEST(BatchedCacheResidencyTest, FollowUpReusesTheParkedSlotWithoutAFile) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::string key = "resident_batch_cache.bin";
+  fs::remove(key);
+
+  const BatchedTurn first =
+      harness.run(userTurns({"Name a colour of the sky."}), key);
+  ASSERT_FALSE(first.output.empty());
+  EXPECT_EQ(harness.scheduler().parkedSeqIds().size(), 1u);
+
+  const BatchedTurn second = harness.run(
+      userTurns({"Name a colour of the sky.", first.output, "And of grass?"}),
+      key);
+  ASSERT_FALSE(second.output.empty());
+  EXPECT_GT(second.reuse, 0u) << "the follow-up re-prefilled the conversation";
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), 1u);
+  EXPECT_FALSE(fs::exists(key)) << "nothing asked for the file to be written";
+}
+
+// With every sequence parked, a request on a new key evicts the least
+// recently used conversation. Its unsaved turns are written to its cacheKey
+// file first, so its next request loads them instead of starting cold.
+TEST(BatchedCacheResidencyTest, EvictionWritesUnsavedTurnsToTheCacheFile) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::vector<std::string> keys = {
+      "evict_a.bin", "evict_b.bin", "evict_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+
+  const BatchedTurn a =
+      harness.run(userTurns({"Say one word: apple."}), keys[0]);
+  harness.run(userTurns({"Say one word: banana."}), keys[1]);
+  EXPECT_FALSE(fs::exists(keys[0]));
+  harness.run(userTurns({"Say one word: cherry."}), keys[2]);
+  EXPECT_TRUE(fs::exists(keys[0])) << "evicted unsaved turns were not saved";
+  EXPECT_FALSE(fs::exists(keys[1]))
+      << "only the least recently used is evicted";
+
+  const BatchedTurn followUp = harness.run(
+      userTurns({"Say one word: apple.", a.output, "Again."}), keys[0]);
+  EXPECT_GT(followUp.reuse, 0u) << "the evicted conversation was not reloaded";
+  EXPECT_EQ(harness.scheduler().ramTierHitsForTesting(), 0u);
+
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// With `cache_ram_mib`, an evicted conversation is also copied to the RAM
+// tier and its next request restores it from there. A budget too small for
+// one state leaves it on disk only.
+TEST(BatchedCacheResidencyTest, RamTierRestoresAnEvictedConversation) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  for (const auto& [budget, expectRamHit] :
+       std::vector<std::pair<const char*, bool>>{{"512", true}, {"1", false}}) {
+    auto model = loadBatchedModel(budget);
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    const std::vector<std::string> keys = {
+        "ram_a.bin", "ram_b.bin", "ram_c.bin"};
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+    std::string history;
+    for (int i = 0; i < 30; ++i) {
+      history += "Remember fact " + std::to_string(i) + ". ";
+    }
+    const BatchedTurn a =
+        harness.run(userTurns({history + "Say apple."}), keys[0]);
+    harness.run(userTurns({"Say banana."}), keys[1]);
+    harness.run(userTurns({"Say cherry."}), keys[2]);
+
+    const BatchedTurn followUp = harness.run(
+        userTurns({history + "Say apple.", a.output, "Again."}), keys[0]);
+    EXPECT_GT(followUp.reuse, 0u) << "budget " << budget;
+    EXPECT_EQ(
+        harness.scheduler().ramTierHitsForTesting(), expectRamHit ? 1u : 0u)
+        << "budget " << budget << " MiB";
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+  }
+}
+
+// Requests without a cacheKey have nothing to be found by, so they are never
+// parked.
+TEST(BatchedCacheResidencyTest, KeylessRequestsAreNotParked) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  harness.run(userTurns({"Say hello."}), "");
+  EXPECT_TRUE(harness.scheduler().parkedSeqIds().empty());
+  auto* mem = llama_get_memory(model->getContext());
+  ASSERT_NE(mem, nullptr);
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0), -1);
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 1), -1);
+}
+
+// Deleting the file a parked conversation was loaded from drops the
+// conversation, like the single-prompt path does for its active session.
+TEST(BatchedCacheResidencyTest, DeletedBackingFileDropsTheParkedState) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::string key = "dropped_batch_cache.bin";
+  fs::remove(key);
+
+  const BatchedTurn first =
+      harness.run(userTurns({"Name a fruit."}), key, /*saveCacheToDisk=*/true);
+  ASSERT_TRUE(fs::exists(key));
+  fs::remove(key);
+
+  const BatchedTurn second =
+      harness.run(userTurns({"Name a fruit.", first.output, "Another."}), key);
+  EXPECT_EQ(second.reuse, 0u);
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), 0u);
+  fs::remove(key);
+}
+
+// Two prompts on one cacheKey in the same batch run one after the other, so
+// the second continues from what the first committed instead of forking it.
+TEST(BatchedCacheResidencyTest, SameKeyPromptsRunInOrder) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const std::string key = "same_key_batch_cache.bin";
+  fs::remove(key);
+
+  LlamaModel::Prompt prompt;
+  prompt.input = userTurns({"Name a planet."});
+  prompt.cacheKey = key;
+  const auto outputs = model->processPromptBatch({prompt, prompt});
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_FALSE(outputs[1].empty());
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), 1u)
+      << "the second prompt did not start from the first one's state";
+  fs::remove(key);
+}

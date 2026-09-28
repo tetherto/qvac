@@ -19,6 +19,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "CacheManager.hpp"
 #include "GenerationParamsApply.hpp"
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -197,6 +198,7 @@ ContinuousBatchScheduler::ContinuousBatchScheduler(
         "ContinuousBatchScheduler: ctxTotalTokens / batchSize underflowed "
         "to 0; reduce batchSize or grow n_ctx");
   }
+  parked_.resize(batchSize);
 }
 
 ContinuousBatchScheduler::~ContinuousBatchScheduler() {
@@ -341,20 +343,52 @@ void ContinuousBatchScheduler::workerLoop() {
 }
 
 void ContinuousBatchScheduler::admitPendingIntoFreeSlotsLocked() {
-  QueuedRequest queued;
-  while (batcher_.firstFreeSeqId().has_value() &&
-         pending_.try_dequeue(queued)) {
+  const auto admit = [this](QueuedRequest&& queued) {
     const std::shared_ptr<BatchGroup> group = queued.group;
-    // already-failed/cancelled also skipped as group is `done`
-    if (group && group->done) {
-      continue;
-    }
     try {
       const uint32_t seqId = submitLocked(std::move(queued));
       (void)seqId;
     } catch (...) {
       failGroupLocked(group, std::current_exception());
     }
+  };
+  const auto keyBusy = [this](const QueuedRequest& queued) {
+    return !queued.request.cacheKey.empty() &&
+           busyKeys_.contains(queued.request.cacheKey);
+  };
+  // Requests that waited for their key go first, in order.
+  for (auto it = keyDeferred_.begin();
+       it != keyDeferred_.end() && batcher_.firstFreeSeqId().has_value();) {
+    if (it->group && it->group->done) {
+      it = keyDeferred_.erase(it);
+      continue;
+    }
+    if (keyBusy(*it)) {
+      ++it;
+      continue;
+    }
+    QueuedRequest queued = std::move(*it);
+    it = keyDeferred_.erase(it);
+    admit(std::move(queued));
+  }
+  QueuedRequest queued;
+  while (batcher_.firstFreeSeqId().has_value() &&
+         pending_.try_dequeue(queued)) {
+    // already-failed/cancelled also skipped as group is `done`
+    if (queued.group && queued.group->done) {
+      continue;
+    }
+    // One request per cacheKey at a time: a second one waits for the first
+    // to end, so a conversation's state is never forked.
+    if (keyBusy(queued) ||
+        std::ranges::any_of(keyDeferred_, [&](const QueuedRequest& waiting) {
+          return waiting.request.cacheKey == queued.request.cacheKey &&
+                 !queued.request.cacheKey.empty();
+        })) {
+      keyDeferred_.push_back(std::move(queued));
+      continue;
+    }
+    admit(std::move(queued));
   }
 }
 
@@ -382,7 +416,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   // scheduler cap, batcher's maxTokensPerSequence ceiling wins". That
   // ceiling is a hard invariant of the partitioned KV pool: an overrun is
   // an admit-time error (below), never a silent clamp.
-  const auto maybeSeqId = batcher_.firstFreeSeqId();
+  const auto maybeSeqId = chooseSeqIdLocked(request.cacheKey);
   if (!maybeSeqId.has_value()) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -416,18 +450,102 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
   std::unique_ptr<SequenceDriver> driver = driverFactory_(
       tmpParams, seqId, static_cast<llama_pos>(perSeqMaxTokens_));
 
-  const bool isCacheLoaded = driver->loadCache(request.cacheKey);
-  driver->setCacheReconciliationEnabled(!request.cacheKey.empty());
-  // The previous request on this cacheKey ended with its slot driver; its
-  // checkpoints were kept here. They only describe prefixes, and the driver
-  // checks each against the memory `loadCache` just restored before use.
-  if (const auto kept = checkpointStore_.find(request.cacheKey);
+  // Where the conversation comes from, fastest first: still resident in this
+  // sequence, the RAM tier, then the cacheKey file. A source whose file was
+  // loaded and has since been deleted is dropped, as on the single-prompt
+  // path: the caller deleted the cache.
+  const std::string& key = request.cacheKey;
+  bool isCacheLoaded = false;
+  bool activeCacheSavedToDisk = false;
+  // A state with turns its file lacks must survive a failed admission.
+  bool adoptedDirtyState = false;
+  std::optional<cache::Checkpoints> adoptedCheckpoints;
+  if (!key.empty() && parked_[seqId].has_value() &&
+      parked_[seqId]->cacheKey == key) {
+    ParkedState parked = std::move(*parked_[seqId]);
+    parked_[seqId].reset();
+    if (parked.activeCacheSavedToDisk &&
+        persistedCacheBackingStoreMissing(key)) {
+      clearSeqKv(seqId);
+    } else if (driver->adoptResidentState(parked.ledgerWords)) {
+      isCacheLoaded = true;
+      activeCacheSavedToDisk = parked.activeCacheSavedToDisk;
+      adoptedDirtyState = parked.dirty;
+      adoptedCheckpoints = std::move(parked.checkpoints);
+      ++residentHits_;
+    }
+  }
+  if (!isCacheLoaded && !key.empty()) {
+    if (std::optional<SlotStateCacheEntry> kept = ramTier_.take(key)) {
+      const bool usable =
+          !(kept->activeCacheSavedToDisk &&
+            persistedCacheBackingStoreMissing(key));
+      if (usable &&
+          llama_state_seq_set_data_ext(
+              shared_.lctx,
+              kept->state.data(),
+              kept->state.size(),
+              static_cast<llama_seq_id>(seqId),
+              0) != 0 &&
+          driver->adoptResidentState(kept->ledgerWords)) {
+        isCacheLoaded = true;
+        activeCacheSavedToDisk = kept->activeCacheSavedToDisk;
+        adoptedCheckpoints = std::move(kept->checkpoints);
+        ++ramTierHits_;
+      } else {
+        clearSeqKv(seqId);
+      }
+    }
+  }
+  if (!isCacheLoaded) {
+    isCacheLoaded = driver->loadCache(key);
+    activeCacheSavedToDisk = isCacheLoaded;
+  }
+  driver->setCacheReconciliationEnabled(!key.empty());
+  // Checkpoints travel with the state; a key whose state was only on disk
+  // keeps them in `checkpointStore_`. They only describe prefixes, and the
+  // driver checks each against the restored memory before use.
+  if (adoptedCheckpoints.has_value()) {
+    driver->adoptCheckpoints(std::move(*adoptedCheckpoints));
+  } else if (
+      const auto kept = checkpointStore_.find(key);
       kept != checkpointStore_.end()) {
     driver->adoptCheckpoints(std::move(kept->second));
     checkpointStore_.erase(kept);
   }
 
-  ScopeGuard cacheGuard([this, seqId] { clearSeqKv(seqId); });
+  // A failed admission leaves the sequence as it found it: a conversation
+  // adopted with unsaved turns is rolled back and parked again (its file
+  // does not have them), anything else is cleared (it is still on disk, or
+  // there was nothing).
+  ScopeGuard cacheGuard([this,
+                         seqId,
+                         &driver,
+                         &key,
+                         adoptedDirtyState,
+                         activeCacheSavedToDisk]() noexcept {
+    if (adoptedDirtyState && driver) {
+      try {
+        if (driver->onFailure({})) {
+          std::vector<llama_token> words = driver->residentStateTokens();
+          if (!words.empty()) {
+            parked_[seqId] = ParkedState{
+                .cacheKey = key,
+                .ledgerWords = std::move(words),
+                .checkpoints = driver->releaseCheckpoints(),
+                .dirty = true,
+                .activeCacheSavedToDisk = activeCacheSavedToDisk,
+                .lastUse = ++parkClock_};
+            return;
+          }
+        }
+      } catch (...) {
+        logTeardownFailureNoexcept(
+            "admission rollback of a resident state failed", seqId, nullptr);
+      }
+    }
+    clearSeqKv(seqId);
+  });
 
   // `json_schema` / `tool_choice` shape the chat-template render, not the
   // sampler, so they travel separately from the `tmpParams` overrides above.
@@ -542,11 +660,14 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           .group = std::move(queued.group),
           .outputIndex = queued.outputIndex,
           .saveCacheToDisk = request.saveCacheToDisk,
-          .activeCacheSavedToDisk = isCacheLoaded,
+          .activeCacheSavedToDisk = activeCacheSavedToDisk,
           .prefillOnly = request.prefill,
           .enqueuedAt = request.enqueuedAt,
           .admissionId = admissionId});
   cacheGuard.dismiss();
+  if (!slots_[seqId]->cacheKey.empty()) {
+    busyKeys_.insert(slots_[seqId]->cacheKey);
+  }
   if (alreadyPrefilled) {
     try {
       prefillCompleteFn()(seqId, slots_[seqId]->driver->getNPast(), 0);
@@ -854,13 +975,21 @@ void ContinuousBatchScheduler::drainFinishedLocked(
     if (rollbackOk && slot.driver->shouldPersistAfterFinalize()) {
       try {
         saveCacheForSlot(req.seqId, *slots_[req.seqId]);
+        // Committed and coherent: keep the conversation in its sequence for
+        // the next request on its key (`freeSlot` parks it).
+        auto& kept = slots_[req.seqId];
+        kept->parkable = !kept->cacheKey.empty() && !kept->backingStoreDropped;
       } catch (...) {
         failSlotLocked(req.seqId, std::current_exception());
       }
     }
   }
   for (const auto& req : finished) {
-    clearSeqKv(req.seqId);
+    const bool park =
+        slots_[req.seqId].has_value() && slots_[req.seqId]->parkable;
+    if (!park) {
+      clearSeqKv(req.seqId);
+    }
     notifyDone(req.seqId);
     freeSlot(req.seqId);
   }
@@ -1029,7 +1158,7 @@ bool ContinuousBatchScheduler::hasWork() const {
 }
 
 bool ContinuousBatchScheduler::hasWorkLocked() const noexcept {
-  return numActiveLocked() > 0;
+  return numActiveLocked() > 0 || !keyDeferred_.empty();
 }
 
 unsigned ContinuousBatchScheduler::numActive() const {
@@ -1039,8 +1168,8 @@ unsigned ContinuousBatchScheduler::numActive() const {
 
 unsigned ContinuousBatchScheduler::occupancy() const {
   std::scoped_lock lock(mutex_);
-  const size_t total =
-      static_cast<size_t>(numActiveLocked()) + pending_.size_approx();
+  const size_t total = static_cast<size_t>(numActiveLocked()) +
+                       pending_.size_approx() + keyDeferred_.size();
   return static_cast<unsigned>(
       std::min<size_t>(total, std::numeric_limits<unsigned>::max()));
 }
@@ -1337,6 +1466,8 @@ void ContinuousBatchScheduler::cancelSlotLocked(
       if (savePolicy == SaveCachePolicy::Save && rollbackOk &&
           slots_[seqId]->driver->shouldPersistAfterFinalize()) {
         saveCacheForSlot(seqId, *slots_[seqId]);
+        auto& kept = slots_[seqId];
+        kept->parkable = !kept->cacheKey.empty() && !kept->backingStoreDropped;
       }
     } catch (const std::exception& e) {
       logTeardownFailureNoexcept("cancel teardown failed", seqId, e.what());
@@ -1348,8 +1479,14 @@ void ContinuousBatchScheduler::cancelSlotLocked(
   // batcher_.cancel takes a KvClearFn callback so it is not noexcept; the
   // clearSeqKv lambda cannot throw, but wrap defensively so this noexcept path
   // cannot terminate if that ever changes.
+  // A committed cancel keeps its sequence for `freeSlot` to park.
+  const bool park = slots_[seqId].has_value() && slots_[seqId]->parkable;
   try {
-    batcher_.cancel(seqId, [this](uint32_t s) { clearSeqKv(s); });
+    batcher_.cancel(seqId, [this, park](uint32_t s) {
+      if (!park) {
+        clearSeqKv(s);
+      }
+    });
   } catch (...) {
     logTeardownFailureNoexcept("cancel: batcher_.cancel threw", seqId, nullptr);
   }
@@ -1448,6 +1585,17 @@ void ContinuousBatchScheduler::clearLocked() noexcept {
   } catch (...) {
     logTeardownFailureNoexcept("clear: batcher_.clear threw unexpectedly");
   }
+  // Clearing drops what is kept between requests too, without writing it,
+  // like a single-prompt reset.
+  for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
+    if (parked_[seqId].has_value()) {
+      parked_[seqId].reset();
+      clearSeqKv(seqId);
+    }
+  }
+  ramTier_.clear();
+  cancelKeyDeferredLocked();
+  busyKeys_.clear();
   checkpointStore_.clear();
 }
 
@@ -1516,6 +1664,175 @@ void ContinuousBatchScheduler::cancelPendingLocked() {
                   "was requested)")));
     }
   }
+  cancelKeyDeferredLocked();
+}
+
+void ContinuousBatchScheduler::cancelKeyDeferredLocked() noexcept {
+  std::deque<QueuedRequest> waiting;
+  waiting.swap(keyDeferred_);
+  for (QueuedRequest& queued : waiting) {
+    if (queued.group) {
+      failGroupLocked(
+          queued.group,
+          std::make_exception_ptr(
+              qvac_errors::StatusError(
+                  ADDON_ID,
+                  qvac_lib_inference_addon_llama::errors::toString(
+                      qvac_lib_inference_addon_llama::errors::Cancelled),
+                  "ContinuousBatchScheduler: request cancelled before it "
+                  "could run (waiting for an earlier request on its "
+                  "cacheKey when cancel was requested)")));
+    }
+  }
+}
+
+void ContinuousBatchScheduler::setCacheRamBudget(uint64_t bytes) {
+  std::scoped_lock lock(mutex_);
+  ramTier_.setBudget(bytes);
+}
+
+std::vector<uint32_t> ContinuousBatchScheduler::parkedSeqIds() const {
+  std::scoped_lock lock(mutex_);
+  std::vector<uint32_t> ids;
+  for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
+    if (parked_[seqId].has_value()) {
+      ids.push_back(seqId);
+    }
+  }
+  return ids;
+}
+
+void ContinuousBatchScheduler::evictParked(uint32_t seqId) {
+  std::scoped_lock lock(mutex_);
+  evictParkedLocked(seqId);
+}
+
+uint64_t ContinuousBatchScheduler::residentHitsForTesting() const {
+  std::scoped_lock lock(mutex_);
+  return residentHits_;
+}
+
+uint64_t ContinuousBatchScheduler::ramTierHitsForTesting() const {
+  std::scoped_lock lock(mutex_);
+  return ramTierHits_;
+}
+
+std::optional<uint32_t>
+ContinuousBatchScheduler::chooseSeqIdLocked(const std::string& cacheKey) {
+  // Free means neither the batcher nor the scheduler holds a request there
+  // (see the note in `submitLocked` on the drain window).
+  const auto isFree = [this](uint32_t seqId) {
+    return batcher_.requestAt(seqId) == nullptr && !slots_[seqId].has_value();
+  };
+  const auto nSeq = static_cast<uint32_t>(slots_.size());
+  if (!cacheKey.empty()) {
+    for (uint32_t seqId = 0; seqId < nSeq; ++seqId) {
+      if (isFree(seqId) && parked_[seqId].has_value() &&
+          parked_[seqId]->cacheKey == cacheKey) {
+        return seqId;
+      }
+    }
+  }
+  for (uint32_t seqId = 0; seqId < nSeq; ++seqId) {
+    if (isFree(seqId) && !parked_[seqId].has_value()) {
+      return seqId;
+    }
+  }
+  std::optional<uint32_t> oldest;
+  for (uint32_t seqId = 0; seqId < nSeq; ++seqId) {
+    if (isFree(seqId) && parked_[seqId].has_value() &&
+        (!oldest.has_value() ||
+         parked_[seqId]->lastUse < parked_[*oldest]->lastUse)) {
+      oldest = seqId;
+    }
+  }
+  if (oldest.has_value()) {
+    evictParkedLocked(*oldest);
+  }
+  return oldest;
+}
+
+void ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId) noexcept {
+  if (seqId >= parked_.size() || !parked_[seqId].has_value()) {
+    return;
+  }
+  ParkedState parked = std::move(*parked_[seqId]);
+  parked_[seqId].reset();
+  try {
+    // A caller that deleted the file this state came from dropped the
+    // conversation; do not bring it back.
+    const bool dropped = parked.activeCacheSavedToDisk &&
+                         persistedCacheBackingStoreMissing(parked.cacheKey);
+    // Unsaved turns go to the file first, the same auto-save the
+    // single-prompt path does when it switches keys, so nothing is lost.
+    bool onDisk = !parked.dirty;
+    if (!dropped && parked.dirty) {
+      onDisk =
+          writeStateToFileLocked(seqId, parked.cacheKey, parked.ledgerWords);
+    }
+    bool inRam = false;
+    if (!dropped && ramTier_.enabled()) {
+      const auto seq = static_cast<llama_seq_id>(seqId);
+      const size_t size = llama_state_seq_get_size_ext(shared_.lctx, seq, 0);
+      SlotStateCacheEntry entry;
+      try {
+        entry.state.resize(size);
+      } catch (const std::bad_alloc&) {
+        entry.state.clear();
+      }
+      if (size > 0 && entry.state.size() == size &&
+          llama_state_seq_get_data_ext(
+              shared_.lctx, entry.state.data(), size, seq, 0) == size) {
+        entry.ledgerWords = std::move(parked.ledgerWords);
+        entry.checkpoints = std::move(parked.checkpoints);
+        entry.activeCacheSavedToDisk = onDisk;
+        inRam = ramTier_.insert(parked.cacheKey, std::move(entry));
+        if (!inRam) {
+          // Too large for the whole budget: it stays on disk only, and
+          // keeps its checkpoints for the next load of that file.
+          parked.checkpoints = std::move(entry.checkpoints);
+        }
+      }
+    }
+    if (!dropped && !inRam && !parked.checkpoints.empty()) {
+      checkpointStore_[parked.cacheKey] = std::move(parked.checkpoints);
+    }
+  } catch (...) {
+    logTeardownFailureNoexcept(
+        "evicting a parked cache state failed", seqId, nullptr);
+  }
+  clearSeqKv(seqId);
+}
+
+bool ContinuousBatchScheduler::writeStateToFileLocked(
+    uint32_t seqId, const std::string& cacheKey,
+    const std::vector<llama_token>& ledgerWords) noexcept {
+  try {
+    const std::string tmp = cacheKey + ".tmp";
+    const size_t written = llama_state_seq_save_file(
+        shared_.lctx,
+        tmp.c_str(),
+        static_cast<llama_seq_id>(seqId),
+        ledgerWords.data(),
+        ledgerWords.size());
+    if (written == 0) {
+      std::error_code ec;
+      std::filesystem::remove(tmp, ec);
+      logTeardownFailureNoexcept(
+          "writing an evicted cache state to its cacheKey failed",
+          seqId,
+          cacheKey.c_str());
+      return false;
+    }
+    CacheManager::atomicPromoteFile(tmp, cacheKey);
+    return true;
+  } catch (const std::exception& e) {
+    logTeardownFailureNoexcept(
+        "writing an evicted cache state to its cacheKey failed",
+        seqId,
+        e.what());
+    return false;
+  }
 }
 
 void ContinuousBatchScheduler::notifyDone(uint32_t seqId) {
@@ -1560,16 +1877,38 @@ void ContinuousBatchScheduler::freeSlot(uint32_t seqId) noexcept {
   if (seqId < slots_.size()) {
     auto& slot = slots_[seqId];
     // Every teardown path frees here, after the driver finalized, so this is
-    // where the request's checkpoints outlive its driver.
+    // where the request's state and checkpoints outlive its driver: parked
+    // in the sequence when the request committed coherent keyed state,
+    // otherwise the checkpoints alone are kept for the key.
     if (slot.has_value() && slot->driver && !slot->cacheKey.empty()) {
+      busyKeys_.erase(slot->cacheKey);
       try {
+        std::vector<llama_token> words;
+        if (slot->parkable) {
+          words = slot->driver->residentStateTokens();
+        }
         cache::Checkpoints checkpoints = slot->driver->releaseCheckpoints();
-        if (!checkpoints.empty()) {
-          checkpointStore_[slot->cacheKey] = std::move(checkpoints);
+        if (!words.empty()) {
+          parked_[seqId] = ParkedState{
+              .cacheKey = slot->cacheKey,
+              .ledgerWords = std::move(words),
+              .checkpoints = std::move(checkpoints),
+              .dirty = !slot->savedThisCommit,
+              .activeCacheSavedToDisk = slot->activeCacheSavedToDisk,
+              .lastUse = ++parkClock_};
+        } else {
+          if (slot->parkable) {
+            clearSeqKv(seqId);
+          }
+          if (!checkpoints.empty()) {
+            checkpointStore_[slot->cacheKey] = std::move(checkpoints);
+          }
         }
       } catch (...) {
         logTeardownFailureNoexcept(
-            "free: keeping cache checkpoints failed", seqId, nullptr);
+            "free: keeping the cache state failed", seqId, nullptr);
+        parked_[seqId].reset();
+        clearSeqKv(seqId);
       }
     }
     slot.reset();
@@ -1591,10 +1930,12 @@ void ContinuousBatchScheduler::saveCacheForSlot(
             slot.cacheKey.c_str(),
             seqId));
     slot.activeCacheSavedToDisk = false;
+    slot.backingStoreDropped = true;
     return;
   }
   slot.driver->saveCache(slot.cacheKey);
   slot.activeCacheSavedToDisk = true;
+  slot.savedThisCommit = true;
 }
 
 ObservedRequestStats computeObservedStats(

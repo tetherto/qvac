@@ -48,6 +48,12 @@ inline constexpr const char* CACHE_CHECKPOINT_STORAGE_KEY =
     "cache_checkpoint_storage";
 inline constexpr const char* CACHE_CHECKPOINT_STORAGE_KEY_DASHED =
     "cache-checkpoint-storage";
+// Host-RAM budget, in MiB, for batch conversation states moved out of their
+// slot (`parallel >= 2`); 0 (default) disables that tier. Resident slots and
+// the cacheKey file do not depend on it.
+inline constexpr const char* CACHE_RAM_MIB_KEY = "cache_ram_mib";
+inline constexpr const char* CACHE_RAM_MIB_KEY_DASHED = "cache-ram-mib";
+inline constexpr uint64_t MAX_CACHE_RAM_MIB = 1ULL << 20; // 1 TiB
 
 struct CheckpointPolicy {
   size_t maxCount = DEFAULT_PROCESS_CHECKPOINTS;
@@ -239,6 +245,20 @@ parseCheckpointPolicy(std::unordered_map<std::string, std::string>& config) {
     }
   }
   return policy;
+}
+
+// Consumes `cache_ram_mib` and returns the budget in bytes (0 when absent).
+// Throws std::invalid_argument for a malformed value or both spellings.
+inline uint64_t
+parseCacheRamBytes(std::unordered_map<std::string, std::string>& config) {
+  const auto value =
+      takeConfigKey(config, CACHE_RAM_MIB_KEY, CACHE_RAM_MIB_KEY_DASHED);
+  if (!value.has_value()) {
+    return 0;
+  }
+  const uint64_t mib =
+      parseUnsigned64InRange(value->second, 0, MAX_CACHE_RAM_MIB, value->first);
+  return mib * 1024ULL * 1024ULL;
 }
 
 inline uint64_t hashBytes(const void* data, size_t size) {

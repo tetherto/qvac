@@ -201,6 +201,9 @@ void LlamaModel::init(bool acquireLock) {
     snap->cacheCheckpointPolicy_ =
         qvac_lib_inference_addon_llama::cache::parseCheckpointPolicy(
             configFilemap);
+    snap->cacheRamBytes_ =
+        qvac_lib_inference_addon_llama::cache::parseCacheRamBytes(
+            configFilemap);
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, e.what());
@@ -381,7 +384,7 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
   // load unmapped. Both traps are really a `parallel` misconfiguration, so
   // they are reported as InvalidArgument naming the knobs the caller sets.
   try {
-    return std::make_unique<batching::ContinuousBatchScheduler>(
+    auto scheduler = std::make_unique<batching::ContinuousBatchScheduler>(
         shared,
         maxChunkSize,
         ctxTotalTokens,
@@ -392,6 +395,8 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
             shared,
             state.llmContext_->visionContext(),
             state.cacheCheckpointPolicy_));
+    scheduler->setCacheRamBudget(state.cacheRamBytes_);
+    return scheduler;
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
@@ -1090,6 +1095,9 @@ std::string LlamaModel::processPromptImpl(const Prompt& prompt) {
       std::memory_order_relaxed);
   if (state_->batchScheduler_) {
     state_->batchScheduler_->resetRuntimeStats();
+    // The single-prompt context runs on seq 0, which the scheduler may hold
+    // a parked batch conversation on: write that out of the way first.
+    state_->batchScheduler_->evictParked(0);
   }
 
   // Reset per-inference counters so they don't leak across runs.
@@ -1316,8 +1324,18 @@ batching::BatchResult LlamaModel::processPromptBatchImpl(
       }
       if (llama_context* lctx = getContext(); lctx != nullptr) {
         if (llama_memory_t mem = llama_get_memory(lctx); mem != nullptr) {
+          // Conversations the scheduler parked for their next request on the
+          // same cacheKey are its own state, not single-prompt leftovers.
+          std::vector<uint32_t> parked;
+          if (state_->batchScheduler_) {
+            parked = state_->batchScheduler_->parkedSeqIds();
+          }
           const int nSeqMax = llama_n_seq_max(lctx);
           for (int seqId = 0; seqId < nSeqMax; seqId++) {
+            if (std::ranges::find(parked, static_cast<uint32_t>(seqId)) !=
+                parked.end()) {
+              continue;
+            }
             llama_memory_seq_rm(mem, static_cast<llama_seq_id>(seqId), -1, -1);
           }
         }

@@ -356,6 +356,8 @@ private:
     /// the single-prompt context and to every batch driver.
     qvac_lib_inference_addon_llama::cache::CheckpointPolicy
         cacheCheckpointPolicy_;
+    /// RAM tier budget for batch conversation states (`cache_ram_mib`).
+    uint64_t cacheRamBytes_ = 0;
 
     // configuration values parsed from configFilemap
     std::optional<load_fit_normalization::NormalizedFitSnapshot>
