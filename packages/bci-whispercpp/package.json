@@ -24,6 +24,7 @@
     "test": "npm run test:types && npm run test:unit && npm run test:integration",
     "test:unit": "npm run build:ts && brittle-bare test/unit/*.test.js",
     "test:integration": "npm run build:ts && brittle-bare test/integration/*.test.js",
+    "test:integration:smoke": "npm run build:ts && brittle-bare test/integration/addon.test.js",
     "test:benchmark:rtf": "brittle-bare test/benchmark/rtf-benchmark.test.js",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target test-bci-core && bare-make install",
     "test:cpp:run": "cd build/addon/tests/ && LLVM_PROFILE_FILE=default.profraw ./test-bci-core --gtest_output=xml:cpp-test-results.xml",
