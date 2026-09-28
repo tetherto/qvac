@@ -297,6 +297,7 @@ test(
     if (!dl) return
 
     const badEnhancer = path.join(baseDir, 'models', 'lavasr', 'invalid-enhancer.gguf')
+    fs.mkdirSync(path.dirname(badEnhancer), { recursive: true })
     fs.writeFileSync(badEnhancer, 'not a gguf')
 
     const model = new TTSGgml({
