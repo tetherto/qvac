@@ -146,8 +146,7 @@ runs:
         INPUT_CONFIG_REF: ${{ inputs.config-ref }}
         INPUT_OVERRIDES: ${{ inputs.overrides }}
         INPUT_PACKAGES: ${{ inputs.packages }}
-        # Read the PR head's lockfile as data through the API on
-        # pull_request_target, where the PR's objects never enter this checkout.
+        # PR lockfile is read via the API, never checked out.
         GH_TOKEN: ${{ github.token }}
         REPO: ${{ github.repository }}
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -175,11 +174,7 @@ runs:
           # two forms stay separate. Transitive expansion is identical either way.
           CHANGED_FILES="${RUNNER_TEMP}/nx-changed-files.txt"
 
-          # nx.json ignores the lockfile for affected selection, because pnpm
-          # rewrites shared entries across most importers on a one-line change.
-          # lockfile-selection.mjs corrects the two cases that leaves wrong; see
-          # its header. If the paths cannot be read, keep today's behaviour
-          # rather than narrow blind.
+          # Lockfile selection: see lockfile-selection.mjs.
           if [ -f "$CHANGED_FILES" ]; then
             PATHS=$(cat "$CHANGED_FILES")
           else
@@ -192,9 +187,6 @@ runs:
           rm -f "$BASE_LOCK" "$HEAD_LOCK" "$BASE_WS" "$HEAD_WS"
           if grep -qx 'pnpm-lock.yaml' <<< "$PATHS"; then
             if [ -f "$CHANGED_FILES" ] && [ -n "$PR_HEAD_SHA" ]; then
-              # pull_request_target: compare against the merge base, as the PR's
-              # own file list does, so a PR behind main is not charged with
-              # main's later lockfile changes. Both revisions via the API.
               MERGE_BASE=$(gh api "repos/${REPO}/compare/${PR_BASE_SHA}...${PR_HEAD_SHA}" --jq '.merge_base_commit.sha' 2>/dev/null) || MERGE_BASE=""
               fetch() {
                 if [ -n "$MERGE_BASE" ]; then
@@ -203,7 +195,6 @@ runs:
                 gh api "repos/${REPO}/contents/$1?ref=${PR_HEAD_SHA}" -H 'Accept: application/vnd.github.raw' > "$3" 2>/dev/null || rm -f "$3"
               }
             else
-              # Same merge base the three-dot path list uses.
               MERGE_BASE=$(git merge-base "$BASE" "$HEAD" 2>/dev/null) || MERGE_BASE="$BASE"
               fetch() {
                 git show "${MERGE_BASE}:$1" > "$2" 2>/dev/null || rm -f "$2"
@@ -215,7 +206,6 @@ runs:
               fetch pnpm-workspace.yaml "$BASE_WS" "$HEAD_WS"
             fi
           fi
-          # A missing revision makes the script keep today's behaviour.
           SELECTION=$(printf '%s\n' "$PATHS" | node "$GITHUB_ACTION_PATH/lockfile-selection.mjs" . "$BASE_LOCK" "$HEAD_LOCK" "$BASE_WS" "$HEAD_WS")
           LOCKFILE_MODE=$(jq -r '.mode' <<< "$SELECTION")
           DEPENDENTS=$(jq -c '.extra' <<< "$SELECTION")

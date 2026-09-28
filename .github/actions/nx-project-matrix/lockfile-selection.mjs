@@ -1,28 +1,6 @@
-// Decides how a lockfile change counts toward nx affected for one run.
-//
-// nx.json sets projectsAffectedByDependencyUpdates to [], so the lockfile selects
-// nothing on its own. nx's other modes can't do what is needed: "all" selects
-// every project on any lockfile change, "auto" reasons per external package and
-// on the --stdin lane can't diff the lockfile at all, so both select every addon
-// for a one-addon dependency bump.
-//
-// This selects exactly the workspace packages whose resolved dependency tree
-// changed, by walking each importer through the lockfile's snapshots at base and
-// head and comparing what it would install. Then it adds the workspace packages
-// that depend on those (read from the manifests), because a consumer linking a
-// changed package installs something different too, and nx's graph loses those
-// edges after the --ignore-scripts install the action does.
-//
-// It keeps today's behaviour ("all") whenever it cannot attribute the change:
-// the root manifest or a pnpm config file changed, pnpm-workspace.yaml changed a
-// setting the lockfile does not record, the lockfile's settings or overrides
-// changed, the root importer's tree changed, a file could not be read or parsed,
-// or the lockfile changed without any importer's tree changing.
-//
-// Usage: node lockfile-selection.mjs <repo-root> [<base-lock> <head-lock>
-//          [<base-workspace-yaml> <head-workspace-yaml>]]
-// Changed paths on stdin, one per line. Prints {"mode": "all"|"", "extra": [...]}.
-// Paths and lockfile text are only compared, never executed.
+// Selects the workspace packages whose installed dependencies changed between two
+// lockfiles, plus their workspace dependents. Prints {"mode": "all"|"", "extra": [...]}.
+// Usage: node lockfile-selection.mjs <root> [<base-lock> <head-lock> [<base-ws> <head-ws>]] < paths
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -34,13 +12,9 @@ const paths = new Set(
     .filter(Boolean)
 )
 
-// Files that change resolution for every package rather than one.
 const GLOBAL = ['package.json', '.npmrc', '.pnpmfile.cjs', '.pnpmfile.mjs']
 
-// pnpm-workspace.yaml keys whose effect the lockfile itself records: overrides in
-// its header, packages as importers, and minimumReleaseAgeExclude only lets a
-// version be resolved, which then shows in the tree. Any other key changing
-// (allowBuilds, fetch settings, ...) alters every install, so it keeps "all".
+// pnpm-workspace.yaml keys whose effect shows up in the lockfile.
 const RECORDED_IN_LOCK = new Set(['overrides', 'packages', 'minimumReleaseAgeExclude'])
 
 const print = (mode, extra = []) => {
@@ -51,7 +25,6 @@ const print = (mode, extra = []) => {
 if (!paths.has('pnpm-lock.yaml')) print('')
 if (GLOBAL.some((f) => paths.has(f))) print('all')
 
-// Top-level key -> its block, for a YAML file of top-level keys.
 function topLevel(text) {
   const out = new Map()
   let key = null
@@ -79,10 +52,7 @@ if (paths.has('pnpm-workspace.yaml')) {
   }
 }
 
-// ---- workspace --------------------------------------------------------------
-
-// Directories matched by pnpm-workspace.yaml's packages: list. Only exact paths
-// and a trailing /* are used there, so only those are understood.
+// Supports exact paths and a trailing /* only.
 function workspaceDirs() {
   const yaml = readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8')
   const block = (yaml.split(/^packages:\s*$/m)[1] ?? '').split(/^\S/m)[0]
@@ -103,12 +73,9 @@ function workspaceDirs() {
   return dirs
 }
 
-// ---- lockfile ---------------------------------------------------------------
-
 const unquote = (s) => s.replace(/^'(.*)'$/, '$1').replace(/^"(.*)"$/, '$1')
 
-// pnpm-lock.yaml v9 is regular two-space YAML, so it is read by indentation
-// rather than with a YAML library, matching the no-dependency scripts here.
+// Indentation reader for pnpm-lock.yaml v9.
 function parseLock(text) {
   const lines = text.split('\n')
   const section = {}
@@ -123,8 +90,7 @@ function parseLock(text) {
     if (top) section[top].push(line)
   }
 
-  // Split a section into its two-space keys. An entry may carry its body inline
-  // on the key line, as `  foo@1.0.0: {}` or `  foo@1.0.0: {resolution: ...}`.
+  // Bodies may be inline: `  foo@1.0.0: {}`.
   const entries = (name) => {
     const out = new Map()
     let key = null
@@ -158,7 +124,6 @@ function parseLock(text) {
     importers.set(dir, deps)
   }
 
-  // snapshots: key -> child snapshot keys
   const snapshots = new Map()
   for (const [key, body] of entries('snapshots')) {
     const children = []
@@ -169,7 +134,6 @@ function parseLock(text) {
     snapshots.set(key, children)
   }
 
-  // packages: resolution by key without the peer suffix
   const packages = new Map([...entries('packages')].map(([k, body]) => [k, body.join('\n')]))
 
   if (importers.size === 0) throw new Error('no importers parsed')
@@ -182,9 +146,7 @@ function parseLock(text) {
   }
 }
 
-// Everything an importer installs: each reachable snapshot, fingerprinted with
-// its package's resolution so an integrity-only change still counts. link:
-// entries are workspace packages, handled by the dependents walk instead.
+// What an importer installs, with resolutions. link: entries are left to the dependents walk.
 function tree(lock, dir) {
   const seen = new Set()
   const queue = [...(lock.importers.get(dir) ?? [])]
@@ -201,8 +163,6 @@ function tree(lock, dir) {
   return out.sort().join('\n')
 }
 
-// ---- decide -----------------------------------------------------------------
-
 let base
 let head
 try {
@@ -215,9 +175,6 @@ try {
 
 if (base.header !== head.header) print('all')
 
-// An importer changed if its own block did (a dependency added, removed, re-ranged
-// or re-linked) or if anything it installs did. The block alone misses a
-// transitive change; the tree alone misses a new workspace link.
 const changed = [...new Set([...base.importers.keys(), ...head.importers.keys()])].filter(
   (dir) =>
     base.importerText.get(dir) !== head.importerText.get(dir) || tree(base, dir) !== tree(head, dir)
@@ -250,9 +207,7 @@ while (queue.length) {
   }
 }
 
-// The matrix loop reads packages/<name>/project.json and warns when it is
-// absent, so emit only packages that have one there. The rest (plugins,
-// registry clients, inference) are not nx projects and carry no rows.
+// Only packages the matrix loop can read.
 print(
   '',
   [...selected]

@@ -1,12 +1,3 @@
-// nx.json ignores pnpm-lock.yaml for affected selection, and the matrix action
-// selects instead exactly the workspace packages whose resolved dependency tree
-// changed, plus their workspace dependents (lockfile-selection.mjs). The first
-// half alone narrows a shared bump to one package; the second alone changes
-// nothing. These tests pin both.
-//
-// Lockfiles are small synthetic v9 files so the suite needs no git history. The
-// importer paths are real workspace directories, because the dependents walk and
-// the matrix-readable filter read the real manifests.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -20,7 +11,6 @@ const script = join(root, '.github/actions/nx-project-matrix/lockfile-selection.
 const action = join(root, '.github/actions/nx-project-matrix/action.yml')
 const scratch = mkdtempSync(join(tmpdir(), 'lock-'))
 
-// A minimal pnpm-lock.yaml v9. `edit` mutates the parts a test changes.
 function lock(edit = {}) {
   const v = {
     settings: 'autoInstallPeers: true',
@@ -174,8 +164,7 @@ test('a new workspace link counts, though it installs nothing external', () => {
 
 test("the root importer, settings and overrides keep today's behaviour", () => {
   assert.equal(withLock({ rootNx: '23.2.0' }).mode, 'all', 'root devDependencies are tooling for everything')
-  // Paired with a real bump, so the unattributable-change fallback can't be what
-  // returns "all": without the settings/overrides check these would narrow.
+  // Paired with a real bump so the fallback can't mask these.
   assert.equal(withLock({ settings: 'autoInstallPeers: false', llmFs: '4.8.0' }).mode, 'all')
   assert.equal(withLock({ overrides: 'bare-path: 3.0.0', llmFs: '4.8.0' }).mode, 'all')
 })
@@ -190,7 +179,6 @@ test("pnpm config and the root manifest keep today's behaviour", () => {
   }
 })
 
-// A workspace file of the shape the real one has.
 const ws = ({ exclude = [], builds = ['esbuild'] } = {}) => `packages:
   - packages/*
 
@@ -204,7 +192,6 @@ fetchRetries: 5
 `
 
 test('a pnpm-workspace.yaml change the lockfile records still narrows', () => {
-  // As in #4733: a release-age exclusion for the fabric version being bumped.
   const paths = ['pnpm-lock.yaml', 'pnpm-workspace.yaml']
   const { mode, extra } = select(paths, lock(), lock({ llmFs: '4.8.0' }), ws(), ws({ exclude: ['@qvac/fabric@0.18.0'] }))
   assert.equal(mode, '')
@@ -234,7 +221,6 @@ test('without a lockfile change nothing is corrected', () => {
 })
 
 test('selected packages are only ones the matrix loop can read', () => {
-  // It reads packages/<name>/project.json and warns when absent.
   const { extra } = withLock({ fabricPath: '3.2.0' })
   assert.ok(!extra.includes('inference'), 'inference has no project.json')
   assert.ok(!extra.some((name) => name.endsWith('-plugin')), 'plugins live outside packages/')
