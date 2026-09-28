@@ -1,0 +1,56 @@
+name: TMP nx stdin probe (QVAC-25682)
+
+# THROWAWAY. Deleted before review.
+#
+# Code review: on-pr-nx runs on pull_request_target and feeds nx the changed
+# paths through --stdin, not --base/--head. Every earlier probe used
+# --base/--head, so the lane Gianfranco actually hit was never measured.
+# In --stdin mode nx records each listed file as a whole-file change and never
+# diffs the lockfile, so "auto" should behave like "all" there. Measure it.
+
+on:
+  push:
+    branches:
+      - infra/QVAC-25682-nx-lockfile-affected
+
+permissions:
+  contents: read
+
+jobs:
+  stdin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - shell: bash
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Measure the --stdin lane
+        shell: bash
+        run: |
+          set -uo pipefail
+          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.default.json
+          jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = []' nx.json > /tmp/nx.none.json
+          jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = "auto"' nx.json > /tmp/nx.auto.json
+
+          printf '%s\n' pnpm-lock.yaml packages/ocr-ggml/package.json > /tmp/bump.txt
+          printf '%s\n' pnpm-lock.yaml packages/ocr-ggml/index.js     > /tmp/drift.txt
+          printf '%s\n' packages/ocr-ggml/index.js                    > /tmp/src.txt
+
+          run() {  # $1 config, $2 path list
+            cp "/tmp/nx.$1.json" nx.json; rm -rf .nx
+            o=$(pnpm exec nx show projects --affected --stdin --json < "$2" 2>/dev/null | grep -E '^\[' | tail -n1)
+            echo "${o:-[]}" | jq 'length'
+          }
+
+          for list in bump drift src; do
+            for cfg in default none auto; do
+              echo "STDIN $list $cfg : $(run $cfg /tmp/$list.txt)"
+            done
+          done
