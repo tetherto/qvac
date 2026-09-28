@@ -200,12 +200,14 @@ runs:
           ROOT=$(echo "$PROJECT_JSON" | jq -r '.root')
           # hasPrebuilds is DERIVED (not declared): a package has prebuilds exactly
           # when build.options.ci exists, so transitive consumers need no flag.
+          # hasCppTests is the same derivation for targets.test:cpp.options.ci.
           HAS_PREBUILDS=$(echo "$PROJECT_JSON" | jq -c 'if .targets.build.options.ci then true else false end')
-          PKG_ROWS=$(echo "$CI" | jq -c --arg pkg "$pkg" --arg workdir "$ROOT" --argjson hasPrebuilds "$HAS_PREBUILDS" '
+          HAS_CPP_TESTS=$(echo "$PROJECT_JSON" | jq -c 'if .targets["test:cpp"].options.ci then true else false end')
+          PKG_ROWS=$(echo "$CI" | jq -c --arg pkg "$pkg" --arg workdir "$ROOT" --argjson hasPrebuilds "$HAS_PREBUILDS" --argjson hasCppTests "$HAS_CPP_TESTS" '
             (.platforms // [{}]) as $platforms
             | (del(.platforms)) as $rest
             | $platforms
-            | map({package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds} + $rest + .)
+            | map({package: $pkg, workdir: $workdir, hasPrebuilds: $hasPrebuilds, hasCppTests: $hasCppTests} + $rest + .)
           ')
           ROWS=$(jq -c --argjson new "$PKG_ROWS" '. + $new' <<< "$ROWS")
         done
