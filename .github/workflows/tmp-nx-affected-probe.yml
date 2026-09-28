@@ -10,8 +10,12 @@ name: TMP nx affected probe (QVAC-25682)
 # Runs `nx show projects --affected` against a changed-file list of exactly
 # pnpm-lock.yaml, once with the config and once without, and prints both counts.
 
+# push-scoped to this branch: a brand-new workflow file cannot be dispatched,
+# since workflow_dispatch resolves against the default branch.
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - infra/QVAC-25682-nx-lockfile-affected
 
 permissions:
   contents: read
