@@ -1,6 +1,8 @@
 import test from 'brittle'
+import Buffer from 'bare-buffer'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
+import { textToSpeechStream } from '@/plugins/builtin/tts-ggml/ops/text-to-speech-stream'
 
 // MOSS streams natively: `stream: true` runs the whole text as one addon job
 // and forwards each `streamChunkTokens` chunk as it arrives. The sentence
@@ -18,6 +20,7 @@ type FakeTtsModel = {
   cancel: () => Promise<void>
   run: (job: RunJob) => Promise<unknown>
   runStream: (text: string, options?: unknown) => Promise<unknown>
+  runStreaming?: (source: AsyncIterable<string>, options?: unknown) => Promise<unknown>
 }
 
 function fakeTtsModel(engine: string): FakeTtsModel {
@@ -152,6 +155,56 @@ test('other engines keep the sentence chunker for stream: true', async (t) => {
       locale: 'en',
       maxChunkScalars: 80
     })
+  } finally {
+    unregisterModel(modelId)
+  }
+})
+
+// The addon rejects both sentence-based paths on a MOSS-TTSD dialogue (every
+// job has to open with the reference transcripts); the rejection has to reach
+// the caller as an error rather than an empty, "completed" run.
+const DIALOGUE_REJECTION =
+  'tts-ggml: runStreaming: MOSS dialogue cannot be split into sentences, because every job ' +
+  'must open with the reference transcripts; use run() or native streaming (streamChunkTokens)'
+
+function fakeMossDialogueModel(): FakeTtsModel {
+  const model = fakeTtsModel('moss')
+  model.runStream = async () => {
+    throw new Error(DIALOGUE_REJECTION.replace('runStreaming', 'run with streamOutput'))
+  }
+  model.runStreaming = async () => {
+    throw new Error(DIALOGUE_REJECTION)
+  }
+  return model
+}
+
+test('MOSS dialogue: the addon rejecting sentenceStream surfaces as an error', async (t) => {
+  const modelId = 'tts-moss-dialogue-sentence-stream'
+  register(modelId, fakeMossDialogueModel())
+
+  try {
+    await t.exception(
+      drain(run(modelId, { sentenceStream: true })),
+      /MOSS dialogue cannot be split into sentences/
+    )
+  } finally {
+    unregisterModel(modelId)
+  }
+})
+
+test('MOSS dialogue: the addon rejecting textToSpeechStream surfaces as an error', async (t) => {
+  const modelId = 'tts-moss-dialogue-duplex'
+  register(modelId, fakeMossDialogueModel())
+
+  const input = (async function* () {
+    yield Buffer.from('[S1] Reference one. [S2] Reference two. [S1] Hello.')
+  })()
+
+  try {
+    await t.exception(
+      drain(textToSpeechStream({ type: 'textToSpeechStream', modelId, inputType: 'text' }, input)),
+      /MOSS dialogue cannot be split into sentences/
+    )
   } finally {
     unregisterModel(modelId)
   }
