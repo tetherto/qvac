@@ -16077,7 +16077,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
         bool | None,
         Field(
             alias="streamLayers",
-            description="Prefetch and evict DiT layers from CPU RAM. Only takes effect with graph cutting enabled by maxVram and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
+            description="Prefetch and evict DiT layers from CPU RAM. Only takes effect with GPU execution, graph cutting enabled by maxVram, and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
         ),
     ] = None
     verbosity: Annotated[

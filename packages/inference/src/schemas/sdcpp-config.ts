@@ -404,8 +404,8 @@ export const sdcppConfigSchema = z.object({
         .optional()
         .describe(
           'Prefetch and evict DiT layers from CPU RAM. Only takes effect with ' +
-            'graph cutting enabled by maxVram and CPU parameter residency for ' +
-            'diffusion. Does not stream from disk; use paramsBackend: ' +
+            'GPU execution, graph cutting enabled by maxVram, and CPU parameter ' +
+            'residency for diffusion. Does not stream from disk; use paramsBackend: ' +
             "'diffusion=disk' for on-demand file reads. Default: false."
         ),
       verbosity: z
