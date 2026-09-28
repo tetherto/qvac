@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Raise the `speech-cpp` floor to `2026-09-28`. `assessFit` on a Supertonic,
+  Chatterbox or CosyVoice voice no longer aborts the process on hosts whose GPU
+  does not run the whole graph; the projection is priced on the primary backend
+  and returns a verdict. Synthesis is unchanged.
+
 ## [0.10.0] - 2026-09-25
 
 ### Added
