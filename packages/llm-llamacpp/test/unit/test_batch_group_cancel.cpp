@@ -6,6 +6,7 @@
 #include <any>
 #include <atomic>
 #include <chrono>
+#include <filesystem>
 #include <future>
 #include <string>
 #include <thread>
@@ -498,4 +499,54 @@ TEST_F(
       << "the worker-thread cancel never returned from cancelById";
   EXPECT_THROW(queuedFuture.get(), qvac_errors::StatusError);
   EXPECT_NO_THROW(holderFuture.get());
+}
+
+/// Two prompts on one cacheKey run one after the other, so while the first
+/// decodes the second waits for its key even though slots are free. That
+/// waiting prompt is queued work for the cancel contract: a targeted cancel
+/// must reject the group with `Cancelled`, and nothing may stay behind.
+TEST_F(BatchGroupCancelTest, CancelOfAKeyDeferredPromptRejectsCancelled) {
+  REQUIRE_MODEL(model_);
+  auto model = loadModel();
+  const std::string key = "group_cancel_same_key.bin";
+  std::filesystem::remove(key);
+
+  constexpr JobId kGroupId = 97;
+  std::atomic<bool> tokenSeen = false;
+  std::vector<LlamaModel::Prompt> group;
+  for (int i = 0; i < 2; ++i) {
+    auto prompt = makePrompt(
+        "Write a long, detailed, multi-paragraph essay about the history of "
+        "astronomy.");
+    prompt.cacheKey = key;
+    prompt.outputCallback = [&tokenSeen](const std::string&) {
+      tokenSeen.store(true);
+    };
+    group.push_back(std::move(prompt));
+  }
+
+  auto future = std::async(std::launch::async, [&model, &group] {
+    return model->process(std::any(group), kGroupId);
+  });
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds(120);
+  while (!tokenSeen.load() && std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_TRUE(tokenSeen.load()) << "test setup: the first prompt never streamed";
+  EXPECT_EQ(model->activeSlots(), 2u)
+      << "the prompt waiting for its key must count as queued work";
+
+  model->cancelById(kGroupId);
+  ASSERT_EQ(
+      future.wait_for(std::chrono::seconds(120)), std::future_status::ready);
+  try {
+    (void)future.get();
+    FAIL() << "a group whose second prompt never ran completed as a success";
+  } catch (const qvac_errors::StatusError& e) {
+    EXPECT_NE(e.codeString().find("Cancelled"), std::string::npos)
+        << "expected a Cancelled error code, got: " << e.codeString();
+  }
+  EXPECT_EQ(model->activeSlots(), 0u);
+  std::filesystem::remove(key);
 }
