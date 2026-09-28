@@ -1188,6 +1188,57 @@ const {
 | 13010 | `FAILED_TO_STOP` |
 | 13011 | `JOB_ALREADY_RUNNING` |
 
+## Assessing fit
+
+`assessFit` projects a load against the memory free right now. It reads GGUF metadata and never weight data, so the registry's weightless copy of each file answers the same as the file itself and the projection can run before anything is downloaded. It is a module export, not an instance method: nothing is loaded to call it.
+
+A request is a `createInstance` config plus the workload, so it carries the same keys the load takes and the engine's own config builder reads it.
+
+```js
+const TTSGgml = require('@qvac/tts-ggml')
+
+const fit = TTSGgml.assessFit({
+  engineType: 'supertonic',
+  supertonicModelPath: '/models/supertonic.gguf',
+  useGPU: true,
+  textTokens: 256,
+  audioSeconds: 30
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'error'
+fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
+fit.modelVariant // which pipeline was projected, e.g. 'chatterbox-t3-turbo'
+fit.deviceName
+fit.deviceBytes
+fit.weightsBytes
+fit.stateBytes
+fit.lmComputeBytes // 0 for a pipeline with no language-model stage, such as supertonic
+fit.codecComputeBytes // 0 for a pipeline with no separate codec stage
+fit.hostBytes
+fit.lavasrFileBytes // the LavaSR stages' size on disk, 0 when none was named
+fit.report
+```
+
+`engineType` picks the fitter, the same key a load uses, and is required: a fit request carries none of the file keys a load is inferred from. Each engine takes the load's own file keys, plus a workload the fit adds:
+
+| `engineType` | Files | Workload |
+| --- | --- | --- |
+| `supertonic` | `supertonicModelPath` | `textTokens`, `audioSeconds`, `precision`, `f16Weights` |
+| `parler` | `parlerModelPath` | `descriptionTokens`, `promptTokens`, `maxFrames` |
+| `chatterbox` | `t3ModelPath`, `s3genModelPath` | `textTokens`, `predictTokens` |
+| `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
+| `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
+
+Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
+
+`lavasrEnhancerPath` and `lavasrDenoiserPath` are reported as `lavasrFileBytes`, their size on disk. Those stages have no fitter, so the figure is a size on disk. It is counted in neither `deviceBytes` nor `hostBytes`.
+
+`deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
+
+A model the engine cannot read is `status: "error"`, as is a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS is the one voice in that state. A broken request, or a host with no native binding, throws.
+
+The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
+
 ## Examples
 
 Runnable demos under `examples/`:

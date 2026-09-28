@@ -81,7 +81,7 @@ test('a tokenizer under the architecture prefix is dropped too', async (t) => {
   t.is(parsed.metadata['parler.embedding_length'], fixture.embeddingLength, 'settings survive')
 })
 
-test('a per-tensor manifest is dropped', async (t) => {
+test('a per-tensor manifest survives', async (t) => {
   const dir = tempDir(t)
   const fixture = buildGguf({
     tensorCount: 3,
@@ -93,8 +93,21 @@ test('a per-tensor manifest is dropped', async (t) => {
 
   const parsed = await parseBlob(dir, await fitBlobContent(filePath))
 
-  t.absent(parsed.metadata['supertonic.tensor_names'], 'no name manifest')
-  t.absent(parsed.metadata['supertonic.tensor_sha256'], 'no checksum manifest')
+  t.alike(
+    parsed.metadata['supertonic.tensor_names'],
+    fixture.manifestNames,
+    'the name manifest survives'
+  )
+  t.alike(
+    parsed.metadata['supertonic.source_names'],
+    fixture.manifestSources,
+    'the source manifest survives, so names still resolve to storage'
+  )
+  t.alike(
+    parsed.metadata['supertonic.tensor_sha256'],
+    fixture.manifestChecksums,
+    'the checksum manifest survives'
+  )
   t.alike(
     parsed.tensorInfos.map((info) => info.name),
     fixture.tensorNames,

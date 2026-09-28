@@ -29,6 +29,7 @@ const {
 } = require('../utils/runChatterboxTTS')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureChatterboxModels, ensureSupertonicModel } = require('../utils/downloadModel')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -73,6 +74,7 @@ test(
     }
 
     const model = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
       modelDir: download.targetDir,
       refWavPath,
       language: 'en'
@@ -137,6 +139,7 @@ test(
     for (let i = 0; i < N; i++) {
       const t0 = Date.now()
       const model = await loadChatterboxTTS({
+        threads: TTS_TEST_THREADS,
         modelDir: download.targetDir,
         refWavPath,
         language: 'en'
@@ -195,6 +198,7 @@ test('Chatterbox: reload() between runs preserves stability', { timeout: 1800000
   }
 
   const model = await loadChatterboxTTS({
+    threads: TTS_TEST_THREADS,
     modelDir: download.targetDir,
     refWavPath,
     language: 'en'
@@ -235,6 +239,7 @@ test('Supertonic: reload() between runs preserves stability', { timeout: 1800000
   }
 
   const model = await loadSupertonicTTS({
+    threads: TTS_TEST_THREADS,
     supertonicModelPath: download.path,
     voice: 'F1',
     language: 'en',
@@ -291,7 +296,12 @@ test(
       return
     }
 
-    const c1 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en' })
+    const c1 = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
+      modelDir: cb.targetDir,
+      refWavPath,
+      language: 'en'
+    })
     try {
       const r = await runChatterboxTTS(c1, { text: 'Hello from chatterbox.' }, { minSamples: 5000 })
       t.ok(r.passed, 'first chatterbox instance OK')
@@ -302,6 +312,7 @@ test(
     }
 
     const s1 = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: st.path,
       voice: 'F1',
       language: 'en',
@@ -316,7 +327,12 @@ test(
       } catch (_e) {}
     }
 
-    const c2 = await loadChatterboxTTS({ modelDir: cb.targetDir, refWavPath, language: 'en' })
+    const c2 = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
+      modelDir: cb.targetDir,
+      refWavPath,
+      language: 'en'
+    })
     try {
       const r = await runChatterboxTTS(
         c2,
