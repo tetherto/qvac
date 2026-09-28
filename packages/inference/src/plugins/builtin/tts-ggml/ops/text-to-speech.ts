@@ -14,6 +14,7 @@ import {
 import {
   assertParlerJobOptionsSupported,
   getParlerJobOptions,
+  getTtsEngineType,
   type ParlerJobOptions
 } from '@/plugins/builtin/tts-ggml/ops/parler-options'
 import { bindTtsCancel, cancelIfAborted } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
@@ -135,6 +136,15 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     return finish(modelStart, response, ctx.signal.aborted)
   }
 
+  // MOSS streams natively: one job over the whole text, emitting a chunk every
+  // `streamChunkTokens` codec frames while the backbone is still generating.
+  // The sentence chunker behind `streamOutput` would restart the prompt per
+  // sentence, which a MOSS-TTSD dialogue cannot do (every job has to open
+  // with the reference transcripts, so the addon rejects it) and which would
+  // apply `durationTokens` to each sentence rather than to the text.
+  // `sentenceStream: true` above still asks for the chunker explicitly.
+  const sentenceChunked = stream && getTtsEngineType(model) !== 'moss'
+
   const response = (await model.run({
     input: text,
     // The addon's job field is `type`, and its native layer accepts only
@@ -142,12 +152,14 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     // it. Pin it here too, so the request's `inputType` (which the schema
     // does not constrain) behaves the same on every path.
     type: 'text',
-    ...(stream ? { streamOutput: true } : {}),
+    ...(sentenceChunked ? { streamOutput: true } : {}),
     // `run({ streamOutput: true })` runs the same chunker as `runStream()`, so
     // the chunking knobs apply here too — they used to be honoured only on the
     // sentenceStream path.
-    ...(stream && sentenceStreamLocale !== undefined ? { locale: sentenceStreamLocale } : {}),
-    ...(stream && sentenceStreamMaxChunkScalars !== undefined
+    ...(sentenceChunked && sentenceStreamLocale !== undefined
+      ? { locale: sentenceStreamLocale }
+      : {}),
+    ...(sentenceChunked && sentenceStreamMaxChunkScalars !== undefined
       ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
       : {}),
     ...parlerJobOptions

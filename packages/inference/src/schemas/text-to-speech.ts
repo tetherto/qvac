@@ -69,7 +69,14 @@ export const TTS_SUPERTONIC_LANGUAGES = [
 // The engines @qvac/tts-ggml exposes as `TTSGgml.ENGINE_*`, in the order the
 // addon lists them. Exported so callers can discriminate a TTS config without
 // re-declaring the union (the CLI used to).
-export const TTS_ENGINES = ['chatterbox', 'supertonic', 'parler', 'cosyvoice3', 'audio8'] as const
+export const TTS_ENGINES = [
+  'chatterbox',
+  'supertonic',
+  'parler',
+  'cosyvoice3',
+  'audio8',
+  'moss'
+] as const
 
 // Mirror of the addon's `SentenceDelimiterPreset` (./text-stream-accumulator).
 export const TTS_SENTENCE_DELIMITER_PRESETS = ['latin', 'cjk', 'multilingual'] as const
@@ -221,9 +228,10 @@ function refineGpuIntent(
 
 // Desired output sample rate in Hz. Matches the @qvac/tts-ggml addon's
 // accepted range; omit to keep the engine's native rate (or 48 kHz when the
-// LavaSR enhancer is active). Every engine resamples, so this is exposed on
-// all five configs; the engines whose native chunk streaming cannot resample
-// seam-free (Parler, CosyVoice3) constrain it in their own refinements.
+// LavaSR enhancer is active). Every engine but MOSS (24 kHz only) resamples,
+// so this is exposed on the other five configs; the engines whose native chunk
+// streaming cannot resample seam-free (Parler, CosyVoice3) constrain it in
+// their own refinements.
 const ttsOutputSampleRateSchema = ttsIntegerSchema
   .min(8000)
   .max(192000)
@@ -681,12 +689,63 @@ export const ttsAudio8RuntimeConfigSchema = z
   .object(ttsAudio8RuntimeConfigShape)
   .superRefine(refineGpuIntent)
 
+// @qvac/tts-ggml's MOSS_MAX_DURATION_TOKENS: the 2048-row generation budget
+// less the 31 delay-pattern drain rows and the two termination rows.
+const TTS_MOSS_MAX_DURATION_TOKENS = 2015
+
+// MOSS emits its native 24 kHz only (the addon rejects any other
+// `outputSampleRate`) and supports neither the LavaSR stages nor a smaller
+// first streaming chunk, so none of those fields exist on this arm.
+const ttsMossRuntimeConfigShape = {
+  ttsEngine: z
+    .literal('moss')
+    .describe(
+      'TTS engine: MOSS (OpenMOSS MOSS-TTS v1.5 / MOSS-TTSD Delay; 24 kHz, 8B backbone, desktop only).'
+    ),
+  // The addon forwards it into the model prompt as a hint and does not
+  // validate it, so the vocabulary is the model's, not a fixed enum.
+  language: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe('Language hint written into the model prompt, e.g. `en` or `zh`. Default `en`.'),
+  durationTokens: ttsIntegerSchema
+    .min(0)
+    .max(TTS_MOSS_MAX_DURATION_TOKENS)
+    .optional()
+    .describe(
+      'Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), 0–2015; 0 or unset keeps the length free.'
+    ),
+  streamChunkTokens: ttsNonNegativeInt32Schema
+    .optional()
+    .describe(
+      'Codec frames per native streaming chunk (12.5 per second, so 25 ≈ 2 s); 0 or unset synthesizes the whole text before emitting.'
+    ),
+  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+  nGpuLayers: ttsInt32Schema
+    .optional()
+    .describe(
+      'Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGPU`; when both are set they must agree.'
+    ),
+  seed: ttsInt32Schema
+    .optional()
+    .describe('RNG seed for the backbone’s sampling (engine default 1234).'),
+  ...ttsBackendDirFieldsShape
+}
+
+export const ttsMossRuntimeConfigSchema = z
+  .object(ttsMossRuntimeConfigShape)
+  .superRefine(refineGpuIntent)
+
 export const ttsRuntimeConfigSchema = z.discriminatedUnion('ttsEngine', [
   ttsChatterboxRuntimeConfigSchema,
   ttsSupertonicRuntimeConfigSchema,
   ttsParlerRuntimeConfigSchema,
   ttsCosyvoice3RuntimeConfigSchema,
-  ttsAudio8RuntimeConfigSchema
+  ttsAudio8RuntimeConfigSchema,
+  ttsMossRuntimeConfigSchema
 ])
 
 // Optional LavaSR post-processing model sources, shared across engines. Supply
@@ -937,9 +996,76 @@ export const ttsAudio8LoadConfigSchema = z
   })
   .superRefine(refineAudio8LoadConfig)
 
+type TtsMossLoadRefinementInput = {
+  mossCodecEncoderModelSrc?: ModelSrcInput | undefined
+  referenceAudioSrc?: ModelSrcInput | undefined
+  dialogueReferenceSrcs?: ModelSrcInput[] | undefined
+  useGPU?: boolean | undefined
+  nGpuLayers?: number | undefined
+}
+
+// The addon enforces the same three rules at construction; catching them here
+// names the SDK field instead of the addon's `files.*` option.
+function refineMossLoadConfig(config: TtsMossLoadRefinementInput, ctx: z.RefinementCtx) {
+  refineGpuIntent(config, ctx)
+
+  if (config.referenceAudioSrc !== undefined && config.dialogueReferenceSrcs !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['dialogueReferenceSrcs'],
+      message:
+        'referenceAudioSrc and dialogueReferenceSrcs are exclusive; pass one recording per speaker in dialogueReferenceSrcs.'
+    })
+  }
+
+  const cloningField =
+    config.referenceAudioSrc !== undefined
+      ? 'referenceAudioSrc'
+      : config.dialogueReferenceSrcs !== undefined
+        ? 'dialogueReferenceSrcs'
+        : undefined
+  if (cloningField !== undefined && config.mossCodecEncoderModelSrc === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['mossCodecEncoderModelSrc'],
+      message: `${cloningField} requires the MOSS codec encoder GGUF (mossCodecEncoderModelSrc).`
+    })
+  }
+}
+
+// MOSS loads from explicit per-component GGUFs like Audio8: the primary
+// `modelSrc` is the Delay backbone — MOSS-TTS (`moss-tts-delay-*.gguf`) or the
+// MOSS-TTSD dialogue checkpoint (`moss-ttsd-*.gguf`) — the codec decoder is
+// required, and the codec encoder is only needed to encode reference audio.
+export const ttsMossLoadConfigSchema = z
+  .object({
+    ...ttsMossRuntimeConfigShape,
+    mossCodecDecoderModelSrc: modelSrcInputSchema.describe(
+      'MOSS codec decoder model source (codes to 24 kHz waveform).'
+    ),
+    mossCodecEncoderModelSrc: modelSrcInputSchema
+      .optional()
+      .describe(
+        'MOSS codec encoder model source (waveform to codes); required only with `referenceAudioSrc` or `dialogueReferenceSrcs`.'
+      ),
+    referenceAudioSrc: modelSrcInputSchema
+      .optional()
+      .describe(
+        'MOSS voice-cloning reference recording source: a 24 kHz WAV (no resampling; multichannel is downmixed, at most 60 s). No transcript needed. Fixed for the loaded model.'
+      ),
+    dialogueReferenceSrcs: z
+      .array(modelSrcInputSchema)
+      .min(1)
+      .optional()
+      .describe(
+        'MOSS-TTSD dialogue: one 24 kHz WAV per speaker, in the order the text tags them (`[S1]`, `[S2]`, …). The text must open with each recording’s transcript under its tag, followed by the lines to generate. Needs a MOSS-TTSD backbone as `modelSrc`; fixed for the loaded model.'
+      )
+  })
+  .superRefine(refineMossLoadConfig)
+
 type TtsTokenizerAssetRefinementInput = {
   ttsEngine?: string
-  language?: string
+  language?: string | undefined
   mecabDictSrc?: ModelSrcInput | undefined
   cangjieTsvSrc?: ModelSrcInput | undefined
 }
@@ -973,7 +1099,8 @@ export const ttsLoadConfigSchema = z
     ttsSupertonicLoadConfigSchema,
     ttsParlerLoadConfigSchema,
     ttsCosyvoice3LoadConfigSchema,
-    ttsAudio8LoadConfigSchema
+    ttsAudio8LoadConfigSchema,
+    ttsMossLoadConfigSchema
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
@@ -1017,7 +1144,8 @@ export const ttsConfigSchema = z
     ttsSupertonicLoadConfigSchema.extend(legacyTtsOnnxFieldsShape).strict(),
     ttsParlerLoadConfigSchema.strict(),
     ttsCosyvoice3LoadConfigSchema.strict(),
-    ttsAudio8LoadConfigSchema.strict()
+    ttsAudio8LoadConfigSchema.strict(),
+    ttsMossLoadConfigSchema.strict()
   ])
   .superRefine(refineChatterboxTokenizerAssets)
 
@@ -1074,8 +1202,9 @@ export const ttsStatsSchema = z.object({
   realTimeFactor: z.number().optional(),
   tokensPerSecond: z.number().optional(),
   totalSamples: z.number().optional(),
-  // Audio8 counts codec frames on a fixed 46 ms grid rather than tokens, and
-  // reports them as the unit behind its `tokensPerSecond`.
+  // Audio8 (on a fixed 46 ms grid) and MOSS (12.5 per second) count codec
+  // frames rather than tokens, and report them as the unit behind their
+  // `tokensPerSecond`.
   generatedFrames: z.number().optional(),
   // Backend selection captured once at model load. `0` CPU / `1` GPU;
   // `backendId` codes the family (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL,
@@ -1171,6 +1300,7 @@ export type TtsSupertonicLoadConfig = z.infer<typeof ttsSupertonicLoadConfigSche
 export type TtsParlerLoadConfig = z.infer<typeof ttsParlerLoadConfigSchema>
 export type TtsCosyvoice3LoadConfig = z.infer<typeof ttsCosyvoice3LoadConfigSchema>
 export type TtsAudio8LoadConfig = z.infer<typeof ttsAudio8LoadConfigSchema>
+export type TtsMossLoadConfig = z.infer<typeof ttsMossLoadConfigSchema>
 export type TtsLoadConfig = z.infer<typeof ttsLoadConfigSchema>
 /** @deprecated Use {@link TtsChatterboxLoadConfig} */
 export type TtsChatterboxConfig = TtsChatterboxLoadConfig
@@ -1181,6 +1311,7 @@ export type TtsSupertonicRuntimeConfig = z.infer<typeof ttsSupertonicRuntimeConf
 export type TtsParlerRuntimeConfig = z.infer<typeof ttsParlerRuntimeConfigSchema>
 export type TtsCosyvoice3RuntimeConfig = z.infer<typeof ttsCosyvoice3RuntimeConfigSchema>
 export type TtsAudio8RuntimeConfig = z.infer<typeof ttsAudio8RuntimeConfigSchema>
+export type TtsMossRuntimeConfig = z.infer<typeof ttsMossRuntimeConfigSchema>
 export type TtsRuntimeConfig = z.infer<typeof ttsRuntimeConfigSchema>
 export type TtsConfig = z.infer<typeof ttsConfigSchema>
 export type TtsClientParamsInput = z.input<typeof ttsClientParamsSchema>

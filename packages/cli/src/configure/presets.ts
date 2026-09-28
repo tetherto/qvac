@@ -67,7 +67,7 @@ export const DEFAULT_STARTER: Modality[] = ['chat', 'transcription']
 // and relies on the docs link to finish. Not guaranteed to run untouched.
 export const TTS_VOICE_PLACEHOLDER = '/path/to/voice.wav'
 
-export type TtsEngine = 'chatterbox' | 'supertonic' | 'parler' | 'cosyvoice3' | 'audio8'
+export type TtsEngine = 'chatterbox' | 'supertonic' | 'parler' | 'cosyvoice3' | 'audio8' | 'moss'
 
 interface TtsEngineTemplate {
   label: string
@@ -82,8 +82,9 @@ interface TtsEngineTemplate {
 // One starter per TTS engine, mirroring the runnable examples in
 // packages/sdk/examples/tts. TTS is a multi-part assembly, so each template
 // pre-populates the engine's required auxiliary sources (schema-optional but
-// needed to actually run) — chatterbox's S3Gen, audio8's codec decoder — that a
-// bare model pick can't supply. Voice cloning stays a user asset (placeholder).
+// needed to actually run) — chatterbox's S3Gen, audio8's and moss's codec
+// decoders — that a bare model pick can't supply. Voice cloning stays a user
+// asset (placeholder).
 export const TTS_ENGINE_TEMPLATES: Record<TtsEngine, TtsEngineTemplate> = {
   chatterbox: {
     label: 'Chatterbox (English, voice cloning)',
@@ -121,6 +122,16 @@ export const TTS_ENGINE_TEMPLATES: Record<TtsEngine, TtsEngineTemplate> = {
     config: {
       ttsEngine: 'audio8',
       audio8CodecDecoderModelSrc: 'TTS_CODEC_DECODER_AUDIO8_Q8_0'
+    }
+  },
+  moss: {
+    label: 'MOSS (multilingual, directable, 8B desktop)',
+    hint: 'Delay backbone + codec decoder; add the encoder to clone a voice.',
+    model: 'TTS_DELAY_LLM_MOSS_TTS_F16',
+    config: {
+      ttsEngine: 'moss',
+      language: 'en',
+      mossCodecDecoderModelSrc: 'TTS_CODEC_DECODER_MOSS_TTS_F16'
     }
   }
 }
