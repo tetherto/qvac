@@ -297,7 +297,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -716,7 +716,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -1059,7 +1059,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -1163,7 +1163,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       bare-fs:
         specifier: ^4.5.1
         version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1227,7 +1227,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -1903,7 +1903,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -2067,7 +2067,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -4284,6 +4284,10 @@ packages:
 
   '@qvac/fabric@0.16.1':
     resolution: {integrity: sha512-sw/PNip8N/vioJ6tJaJ2BNFCB7e6kqv9wMFbMvEvhU/mmK4yCPNpim7jGDmzCfsrmNlp2/rwe1NFDx5e4m0PlA==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric@0.17.0':
+    resolution: {integrity: sha512-yFaPaVFrGxkRB6veQJi5GY3968cgBKj0RNEWYRWWu+vC1jF8FFj8Nj2ux0LLUr9m1cRhRJT0GowfXDLqjuQdKg==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/infer-base@0.1.1':
@@ -13498,6 +13502,8 @@ snapshots:
   '@qvac/error@0.1.1': {}
 
   '@qvac/fabric@0.16.1': {}
+
+  '@qvac/fabric@0.17.0': {}
 
   '@qvac/infer-base@0.1.1(@qvac/dl-hyperdrive@0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))':
     dependencies:
