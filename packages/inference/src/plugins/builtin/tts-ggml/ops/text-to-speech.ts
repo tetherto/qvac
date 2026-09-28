@@ -8,6 +8,7 @@ import { TextToSpeechFailedError } from '@/errors/index'
 import {
   type TtsStreamChunk,
   type TtsOpYield,
+  appendPcm,
   collectTtsStats,
   chunkMetadata
 } from '@/utils/tts-stats'
@@ -101,7 +102,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     const response = await model.runStream(text, streamOpts)
 
     if (!stream) {
-      let completeBuffer: number[] = []
+      const completeBuffer: number[] = []
       let sampleRate: number | undefined
       try {
         for await (const data of response.iterate()) {
@@ -109,7 +110,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
           // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
           if (data.outputArray != null) {
             sampleRate ??= data.sampleRate
-            completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+            appendPcm(completeBuffer, data.outputArray)
           }
         }
       } catch (error) {
@@ -166,14 +167,14 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   })) as unknown as TtsResponse
 
   if (!stream) {
-    let completeBuffer: number[] = []
+    const completeBuffer: number[] = []
     let sampleRate: number | undefined
 
     try {
       for await (const data of response.iterate()) {
         if (await cancelIfAborted(model, ctx.signal)) continue
         sampleRate ??= data.sampleRate
-        completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+        appendPcm(completeBuffer, data.outputArray)
       }
     } catch (error) {
       rethrowUnlessCancelled(error, ctx.signal)

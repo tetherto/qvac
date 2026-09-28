@@ -33,6 +33,16 @@ export function chunkMetadata(chunk: TtsStreamChunk) {
   }
 }
 
+/**
+ * Appends a chunk's samples to `target` in place. The collect paths used to
+ * `concat` per chunk, which copies the whole buffer every time — quadratic in
+ * the utterance length, and a natively chunked MOSS run emits dozens of
+ * 2-second chunks into a single buffer.
+ */
+export function appendPcm(target: number[], samples: ArrayLike<number>) {
+  for (let i = 0; i < samples.length; i++) target.push(samples[i]!)
+}
+
 // Field-for-field, apart from `audioDurationMs` -> `audioDuration`, which keeps
 // the name the SDK has always exposed.
 export function collectTtsStats(response: { stats?: AddonTtsStats }): TtsStats {
