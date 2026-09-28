@@ -1,0 +1,73 @@
+name: TMP nx affected probe (QVAC-25682)
+
+# THROWAWAY. Deleted before this PR is ready for review.
+#
+# Answers one question: does pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates
+# do anything in this workspace? @nx/js is not a dependency here — the only nx
+# package is nx itself — so the setting may be read by nx core or silently
+# ignored, and those two look identical from nx.json alone.
+#
+# Runs `nx show projects --affected` against a changed-file list of exactly
+# pnpm-lock.yaml, once with the config and once without, and prints both counts.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - shell: bash
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Total project count
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOTAL=$(pnpm exec nx show projects --json | tail -n1 | jq 'length')
+          echo "TOTAL_PROJECTS=$TOTAL" | tee -a "$GITHUB_ENV"
+
+      - name: Affected by a lockfile-only change, WITH the config
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "pnpm-lock.yaml" > /tmp/changed.txt
+          jq -r '.pluginsConfig' nx.json
+          OUT=$(pnpm exec nx show projects --affected -t build --stdin --json < /tmp/changed.txt | tail -n1)
+          echo "WITH_COUNT=$(echo "$OUT" | jq 'length')" | tee -a "$GITHUB_ENV"
+          echo "$OUT" | jq -r '.[]' | head -20
+
+      - name: Affected by a lockfile-only change, WITHOUT the config
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.json && mv /tmp/nx.json nx.json
+          rm -rf .nx
+          OUT=$(pnpm exec nx show projects --affected -t build --stdin --json < /tmp/changed.txt | tail -n1)
+          echo "WITHOUT_COUNT=$(echo "$OUT" | jq 'length')" | tee -a "$GITHUB_ENV"
+          echo "$OUT" | jq -r '.[]' | head -20
+
+      - name: Verdict
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "total projects      : $TOTAL_PROJECTS"
+          echo "affected WITH auto  : $WITH_COUNT"
+          echo "affected WITHOUT    : $WITHOUT_COUNT"
+          if [ "$WITH_COUNT" -lt "$WITHOUT_COUNT" ]; then
+            echo "::notice::The setting IS read: auto narrowed the set."
+          else
+            echo "::warning::No narrowing. Either the config is ignored without @nx/js, or this lockfile diff genuinely affects everything."
+          fi
