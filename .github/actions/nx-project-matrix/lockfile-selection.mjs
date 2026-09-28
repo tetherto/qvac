@@ -14,17 +14,19 @@
 // edges after the --ignore-scripts install the action does.
 //
 // It keeps today's behaviour ("all") whenever it cannot attribute the change:
-// the root manifest or a pnpm config file changed, the lockfile's settings or
-// overrides changed, the root importer's tree changed, the lockfile could not be
-// read or parsed, or it changed without any importer's tree changing.
+// the root manifest or a pnpm config file changed, pnpm-workspace.yaml changed a
+// setting the lockfile does not record, the lockfile's settings or overrides
+// changed, the root importer's tree changed, a file could not be read or parsed,
+// or the lockfile changed without any importer's tree changing.
 //
-// Usage: node lockfile-selection.mjs <repo-root> [<base-lock> <head-lock>]
+// Usage: node lockfile-selection.mjs <repo-root> [<base-lock> <head-lock>
+//          [<base-workspace-yaml> <head-workspace-yaml>]]
 // Changed paths on stdin, one per line. Prints {"mode": "all"|"", "extra": [...]}.
 // Paths and lockfile text are only compared, never executed.
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-const [root = '.', baseLockPath, headLockPath] = process.argv.slice(2)
+const [root = '.', baseLockPath, headLockPath, baseWsPath, headWsPath] = process.argv.slice(2)
 const paths = new Set(
   readFileSync(0, 'utf8')
     .split('\n')
@@ -33,7 +35,13 @@ const paths = new Set(
 )
 
 // Files that change resolution for every package rather than one.
-const GLOBAL = ['package.json', 'pnpm-workspace.yaml', '.npmrc', '.pnpmfile.cjs', '.pnpmfile.mjs']
+const GLOBAL = ['package.json', '.npmrc', '.pnpmfile.cjs', '.pnpmfile.mjs']
+
+// pnpm-workspace.yaml keys whose effect the lockfile itself records: overrides in
+// its header, packages as importers, and minimumReleaseAgeExclude only lets a
+// version be resolved, which then shows in the tree. Any other key changing
+// (allowBuilds, fetch settings, ...) alters every install, so it keeps "all".
+const RECORDED_IN_LOCK = new Set(['overrides', 'packages', 'minimumReleaseAgeExclude'])
 
 const print = (mode, extra = []) => {
   process.stdout.write(`${JSON.stringify({ mode, extra })}\n`)
@@ -42,6 +50,34 @@ const print = (mode, extra = []) => {
 
 if (!paths.has('pnpm-lock.yaml')) print('')
 if (GLOBAL.some((f) => paths.has(f))) print('all')
+
+// Top-level key -> its block, for a YAML file of top-level keys.
+function topLevel(text) {
+  const out = new Map()
+  let key = null
+  for (const line of text.split('\n')) {
+    const m = line.match(/^([A-Za-z][\w-]*):/)
+    if (m) {
+      key = m[1]
+      out.set(key, [line])
+    } else if (key && line.trim() && !line.trim().startsWith('#')) {
+      out.get(key).push(line)
+    }
+  }
+  return new Map([...out].map(([k, lines]) => [k, lines.join('\n')]))
+}
+
+if (paths.has('pnpm-workspace.yaml')) {
+  try {
+    if (!baseWsPath || !headWsPath) throw new Error('pnpm-workspace.yaml revisions not provided')
+    const before = topLevel(readFileSync(baseWsPath, 'utf8'))
+    const after = topLevel(readFileSync(headWsPath, 'utf8'))
+    const keys = new Set([...before.keys(), ...after.keys()])
+    if ([...keys].some((k) => before.get(k) !== after.get(k) && !RECORDED_IN_LOCK.has(k))) print('all')
+  } catch {
+    print('all')
+  }
+}
 
 // ---- workspace --------------------------------------------------------------
 

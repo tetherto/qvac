@@ -109,14 +109,15 @@ snapshots:
 }
 
 let n = 0
-function select(paths, base, head) {
+function select(paths, base, head, wsBase, wsHead) {
   const args = [script, root]
-  if (base !== undefined) {
-    const b = join(scratch, `b${n}`)
-    const h = join(scratch, `h${n++}`)
-    writeFileSync(b, base)
-    writeFileSync(h, head)
-    args.push(b, h)
+  for (const [a, b] of [[base, head], [wsBase, wsHead]]) {
+    if (a === undefined) break
+    const pa = join(scratch, `a${n}`)
+    const pb = join(scratch, `b${n++}`)
+    writeFileSync(pa, a)
+    writeFileSync(pb, b)
+    args.push(pa, pb)
   }
   const out = execFileSync('node', args, { input: paths.map((p) => `${p}\n`).join('') })
   return JSON.parse(out.toString())
@@ -184,9 +185,40 @@ test("a lockfile change no importer installs keeps today's behaviour", () => {
 })
 
 test("pnpm config and the root manifest keep today's behaviour", () => {
-  for (const file of ['package.json', 'pnpm-workspace.yaml', '.npmrc']) {
+  for (const file of ['package.json', '.npmrc']) {
     assert.equal(select(['pnpm-lock.yaml', file], lock(), lock({ llmFs: '4.8.0' })).mode, 'all', file)
   }
+})
+
+// A workspace file of the shape the real one has.
+const ws = ({ exclude = [], builds = ['esbuild'] } = {}) => `packages:
+  - packages/*
+
+minimumReleaseAgeExclude:
+${['@qvac/fabric@0.17.0', ...exclude].map((e) => `  - '${e}'`).join('\n')}
+
+allowBuilds:
+${builds.map((b) => `  ${b}: true`).join('\n')}
+
+fetchRetries: 5
+`
+
+test('a pnpm-workspace.yaml change the lockfile records still narrows', () => {
+  // As in #4733: a release-age exclusion for the fabric version being bumped.
+  const paths = ['pnpm-lock.yaml', 'pnpm-workspace.yaml']
+  const { mode, extra } = select(paths, lock(), lock({ llmFs: '4.8.0' }), ws(), ws({ exclude: ['@qvac/fabric@0.18.0'] }))
+  assert.equal(mode, '')
+  assert.ok(extra.includes('llm-llamacpp'))
+  assert.ok(!extra.includes('ocr-ggml'))
+})
+
+test("a pnpm-workspace.yaml change the lockfile cannot show keeps today's behaviour", () => {
+  const paths = ['pnpm-lock.yaml', 'pnpm-workspace.yaml']
+  const bump = lock({ llmFs: '4.8.0' })
+  assert.equal(select(paths, lock(), bump, ws(), ws({ builds: ['esbuild', 'sharp'] })).mode, 'all', 'allowBuilds')
+  assert.equal(select(paths, lock(), bump, ws(), ws().replace('fetchRetries: 5', 'fetchRetries: 2')).mode, 'all', 'fetch setting')
+  assert.equal(select(paths, lock(), bump).mode, 'all', 'no workspace revisions supplied')
+  assert.equal(select(paths, lock(), bump, ws(), 'x').mode, 'all', 'key removed')
 })
 
 test("a lockfile that cannot be read keeps today's behaviour", () => {
@@ -228,7 +260,7 @@ test('nx.json ignores the lockfile for affected selection', () => {
 
 test('the matrix action still feeds both lockfile revisions and adds the selection', () => {
   const source = readFileSync(action, 'utf8')
-  assert.match(source, /lockfile-selection\.mjs" \. "\$BASE_LOCK" "\$HEAD_LOCK"/,
+  assert.match(source, /lockfile-selection\.mjs" \. "\$BASE_LOCK" "\$HEAD_LOCK" "\$BASE_WS" "\$HEAD_WS"/,
     'nx-project-matrix no longer passes the base and head lockfiles, so every ' +
       'lockfile change would fall back to selecting everything')
   assert.match(source, /\$DEPENDENTS/, 'nx-project-matrix no longer adds the selection to AFFECTED')

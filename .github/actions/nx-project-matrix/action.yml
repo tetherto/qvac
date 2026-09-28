@@ -187,27 +187,38 @@ runs:
           fi
           BASE_LOCK="${RUNNER_TEMP}/lock.base"
           HEAD_LOCK="${RUNNER_TEMP}/lock.head"
-          rm -f "$BASE_LOCK" "$HEAD_LOCK"
+          BASE_WS="${RUNNER_TEMP}/workspace.base"
+          HEAD_WS="${RUNNER_TEMP}/workspace.head"
+          rm -f "$BASE_LOCK" "$HEAD_LOCK" "$BASE_WS" "$HEAD_WS"
           if grep -qx 'pnpm-lock.yaml' <<< "$PATHS"; then
             if [ -f "$CHANGED_FILES" ] && [ -n "$PR_HEAD_SHA" ]; then
               # pull_request_target: compare against the merge base, as the PR's
               # own file list does, so a PR behind main is not charged with
               # main's later lockfile changes. Both revisions via the API.
-              raw() { gh api "repos/${REPO}/contents/pnpm-lock.yaml?ref=$1" -H 'Accept: application/vnd.github.raw'; }
               MERGE_BASE=$(gh api "repos/${REPO}/compare/${PR_BASE_SHA}...${PR_HEAD_SHA}" --jq '.merge_base_commit.sha' 2>/dev/null) || MERGE_BASE=""
-              if [ -n "$MERGE_BASE" ]; then raw "$MERGE_BASE" > "$BASE_LOCK" 2>/dev/null || rm -f "$BASE_LOCK"; fi
-              raw "$PR_HEAD_SHA" > "$HEAD_LOCK" 2>/dev/null || rm -f "$HEAD_LOCK"
+              fetch() {
+                if [ -n "$MERGE_BASE" ]; then
+                  gh api "repos/${REPO}/contents/$1?ref=${MERGE_BASE}" -H 'Accept: application/vnd.github.raw' > "$2" 2>/dev/null || rm -f "$2"
+                fi
+                gh api "repos/${REPO}/contents/$1?ref=${PR_HEAD_SHA}" -H 'Accept: application/vnd.github.raw' > "$3" 2>/dev/null || rm -f "$3"
+              }
             else
-              git show "${BASE}:pnpm-lock.yaml" > "$BASE_LOCK" 2>/dev/null || rm -f "$BASE_LOCK"
-              git show "${HEAD}:pnpm-lock.yaml" > "$HEAD_LOCK" 2>/dev/null || rm -f "$HEAD_LOCK"
+              fetch() {
+                git show "${BASE}:$1" > "$2" 2>/dev/null || rm -f "$2"
+                git show "${HEAD}:$1" > "$3" 2>/dev/null || rm -f "$3"
+              }
+            fi
+            fetch pnpm-lock.yaml "$BASE_LOCK" "$HEAD_LOCK"
+            if grep -qx 'pnpm-workspace.yaml' <<< "$PATHS"; then
+              fetch pnpm-workspace.yaml "$BASE_WS" "$HEAD_WS"
             fi
           fi
           # A missing revision makes the script keep today's behaviour.
-          SELECTION=$(printf '%s\n' "$PATHS" | node "$GITHUB_ACTION_PATH/lockfile-selection.mjs" . "$BASE_LOCK" "$HEAD_LOCK")
+          SELECTION=$(printf '%s\n' "$PATHS" | node "$GITHUB_ACTION_PATH/lockfile-selection.mjs" . "$BASE_LOCK" "$HEAD_LOCK" "$BASE_WS" "$HEAD_WS")
           LOCKFILE_MODE=$(jq -r '.mode' <<< "$SELECTION")
           DEPENDENTS=$(jq -c '.extra' <<< "$SELECTION")
           if [ "$LOCKFILE_MODE" = "all" ]; then
-            echo "::notice::pnpm-lock.yaml changed with no workspace package manifest behind it; selecting every project for this run, as before"
+            echo "::notice::pnpm-lock.yaml changed in a way no single package owns; selecting every project for this run, as before"
             jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = "all"' nx.json > "${RUNNER_TEMP}/nx.json"
             cp "${RUNNER_TEMP}/nx.json" nx.json
           fi
@@ -223,7 +234,7 @@ runs:
           fi
 
           if [ "$DEPENDENTS" != "[]" ]; then
-            echo "::notice::workspace dependents of the changed manifests, added: $DEPENDENTS"
+            echo "::notice::packages whose installed dependencies changed, and their workspace dependents, added: $DEPENDENTS"
             AFFECTED=$(jq -c --argjson extra "$DEPENDENTS" '. + $extra | unique' <<< "$AFFECTED")
           fi
           echo "Affected ($TARGET, transitive): $AFFECTED"
