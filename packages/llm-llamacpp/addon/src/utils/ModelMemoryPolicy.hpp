@@ -15,8 +15,12 @@ namespace qvac_lib_inference_addon_llama::utils {
 // Which part of the sequence those snapshots hold. Hybrid and recurrent
 // memory only need their recurrent state saved: the attention KV is trimmed
 // back instead, which keeps a snapshot the size of that state however long
-// the context grows. DeepSeek V4's compressed cache defines its own partial
-// state, so it keeps full snapshots.
+// the context grows. DeepSeek V4 keeps full snapshots: its partial state
+// (fabric `llama_kv_cache_dsv4::state_write`) omits the compressed K caches,
+// and its `seq_rm` refuses a tail trim below the end of the sequence (only a
+// bounded speculative rollback of `n_rs_seq` tokens, 0 by default), so a
+// partial restore could neither drop the later raw cells nor the compressed
+// rows past the checkpoint.
 [[nodiscard]] inline SnapshotScope
 snapshotScopeFor(bool isDeepSeekV4) noexcept {
   return isDeepSeekV4 ? SnapshotScope::Full : SnapshotScope::Partial;
