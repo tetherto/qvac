@@ -157,20 +157,46 @@ memory between requests.
   another, while prompts on other keys run in parallel.
 - **Eviction.** When every slot holds a resident conversation and a request
   needs a slot for another key, the least recently used conversation is moved
-  out. If it has turns its `cacheKey` file does not hold yet, they are written
-  to that file first, the same automatic save the single-prompt path does when
-  it switches keys. Its next request loads the file.
-- **RAM tier (`cache_ram_mib`).** With this load-config field set, an evicted
-  conversation is also copied to host RAM, up to that many MiB, and its next
-  request restores it from there instead of reading the file. The oldest
-  copies are dropped when the budget is full; they are always already on disk,
-  so nothing is lost. A conversation larger than the whole budget is kept on
-  disk only. `0` (default) disables the tier; resident slots do not need it.
+  out: into the [RAM tier](#keep-switched-away-conversations-in-ram) when it is
+  enabled, otherwise to its `cacheKey` file if it has turns the file does not
+  hold yet (the same automatic save the single-prompt path does when it
+  switches keys). Its next request restores it from wherever it went.
 - A conversation whose loaded `cacheKey` file is deleted is dropped, as on the
   single-prompt path. Requests without a `cacheKey` are never kept.
 
-Resident and RAM-tier conversations do not survive a process restart or a
-model reload; only `cacheKey` files do.
+Resident conversations are written to their files when the model is
+unloaded or reloaded, like the RAM tier below; a crash loses the turns that
+were only in memory.
+
+## Keep switched-away conversations in RAM
+
+`cache_ram_mib` (load config, default `0` = off) gives the model a host-RAM
+budget, in MiB, for conversations that are not the one currently running.
+Both paths share it:
+
+- **Single prompt (`parallel = 1`).** A switch to another `cacheKey`, or a
+  request without one, moves the active conversation into RAM instead of
+  writing its file. Switching back restores it from RAM, including its
+  checkpoints, so neither a file read nor a file write happens.
+- **Batch (`parallel >= 2`).** A conversation evicted from its slot moves into
+  RAM instead of being written through to its file.
+
+The tier is a write-back cache. A conversation with unsaved turns reaches its
+`cacheKey` file only when:
+
+- a request on it sets `saveCacheToDisk`;
+- the budget is full and it is the oldest entry: it is written, then dropped;
+- it is too large to fit the whole budget: it is saved the way it would be
+  without the tier;
+- the model is unloaded or reloaded: every conversation with unsaved turns,
+  in RAM, resident in a slot or active on the single-prompt path, is written
+  to its file.
+
+Admission and eviction follow llama-server's `--cache-ram`: a newer entry for
+the same key replaces the older one, and the oldest entries go first.
+A conversation whose loaded file was deleted is dropped instead of written
+back. A crash loses turns that were only in RAM; set `saveCacheToDisk` on the
+turns that must survive one.
 
 ```js
 const model = new LlmLlamacpp({
@@ -193,10 +219,17 @@ await model.run(
 )
 ```
 
-Without `saveCacheToDisk`, the cache stays in RAM. It is only written to disk automatically in two cases:
+Without `saveCacheToDisk`, the cache stays in RAM. Without the [RAM
+tier](#keep-switched-away-conversations-in-ram) it is only written to disk
+automatically in these cases:
 
 1. **Switching to a different `cacheKey`** — the old session is saved before loading the new one.
 2. **Omitting `cacheKey`** — the active session is saved and then cleared.
+3. **Unloading or reloading the model** — a session with unsaved turns is saved.
+
+A switch or an omitted `cacheKey` skips the write when nothing ran since the
+file was last written or loaded. With the RAM tier, the first two move the
+session into RAM instead; see that section for when its file is written.
 
 ### saveCacheToDisk on some turns, omitted on others
 

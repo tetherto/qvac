@@ -211,12 +211,14 @@ stateDiagram-v2
     Running --> [*]: rolls back or fails<br/>sequence cleared
     Resident --> Running: next request on the same cacheKey<br/>routed to this sequence, nothing copied
     Resident --> Evicted: another key needs the slot<br/>least recently used first
-    Evicted --> OnDisk: unsaved turns written to<br/>the cacheKey file
-    Evicted --> RamTier: cache_ram_mib set<br/>state copied to host RAM
+    Evicted --> RamTier: cache_ram_mib set<br/>state moved to host RAM,<br/>unsaved turns included
+    Evicted --> OnDisk: no RAM tier<br/>unsaved turns written to<br/>the cacheKey file
     RamTier --> Running: next request on the key<br/>restored from RAM
-    RamTier --> OnDisk: dropped, oldest first,<br/>when the budget is full
+    RamTier --> OnDisk: oldest dropped when the<br/>budget is full, unsaved<br/>turns written first
     OnDisk --> Running: next request on the key<br/>loads the file
-    Resident --> [*]: its loaded file was deleted<br/>clear() or model reload
+    Resident --> OnDisk: model unloaded or reloaded<br/>unsaved turns written
+    RamTier --> OnDisk: model unloaded or reloaded<br/>unsaved turns written
+    Resident --> [*]: its loaded file was deleted<br/>or clear()
 ```
 
 - A request whose `cacheKey` is already running waits in the scheduler until
@@ -241,7 +243,7 @@ stateDiagram-v2
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
 | `cache_checkpoint_storage` | load config | `disk` (temp files) or `memory` (host RAM) for snapshots and checkpoints. |
 | `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |
-| `cache_ram_mib` | load config | With `parallel >= 2`, host-RAM budget for conversations evicted from their slot (default 0, off). |
+| `cache_ram_mib` | load config | Host-RAM budget for conversations that are not running: switched away on the single-prompt path, or evicted from their batch slot. Write-back: files are written on budget eviction, `saveCacheToDisk` or unload (default 0, off). |
 
 ## Where each thing lives, at a glance
 

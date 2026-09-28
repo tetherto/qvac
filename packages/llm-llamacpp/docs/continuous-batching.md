@@ -406,8 +406,10 @@ The single-prompt path keeps one long-lived context (`TextLlmContext`, or `MtmdL
 
 A committed keyed request no longer leaves an empty slot, though. `freeSlot` **parks** its sequence (`parked_`: the ledger words from `residentStateTokens()`, the checkpoints, whether it has unsaved turns) instead of `clearSeqKv`. `chooseSeqIdLocked` then picks, for a request on key K: the free sequence parked with K, else a free unparked one, else the least recently used parked one, which `evictParkedLocked` moves out first:
 
-- **Unsaved turns:** written to K's file (`llama_state_seq_save_file` through a temp file), the same auto-save the single-prompt path does on a key switch.
-- **RAM tier:** with `cache_ram_mib` set, the full sequence state is copied into `SlotStateCache`. That LRU store follows llama-server's `--cache-ram` rules, and its entries are always already on disk.
+- **RAM tier:** with `cache_ram_mib` set, the full sequence state moves into `SlotStateCache`, unsaved turns included. The store is shared with the single-prompt path's key switches, follows llama-server's `--cache-ram` rules, and writes an entry's unsaved turns to its file before dropping it.
+- **No RAM tier:** unsaved turns are written to K's file (`llama_state_seq_save_file` through a temp file), the same auto-save the single-prompt path does on a key switch.
+
+`flushForUnload()` writes every parked conversation with unsaved turns to its file; the model calls it, together with the single-prompt session and RAM tier flushes, before it is destroyed or reloaded.
 
 At admission the driver takes the state from the first source that has it: the parked sequence (`adoptResidentState`, which runs the same validation as a file load), the RAM tier (`llama_state_seq_set_data_ext`, then `adoptResidentState`), or the file (`loadCache`). If admission fails after adopting a conversation with unsaved turns, the driver rolls back (`onFailure`) and the conversation is parked again. Model-level exceptions:
 
