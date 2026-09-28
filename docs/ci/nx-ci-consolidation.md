@@ -60,7 +60,7 @@ Per target, common fields (see any `packages/*/project.json`):
 - **build** — `artifactNamePrefix`, `includeVulkanSdk`, `includeRocm`, `linuxExtraPackages`, `macBrewPackages`, `extraCmakeDefines`, `platformCmakeDefines`. Presence of `build.options.ci` is what makes a package "have prebuilds" (`hasPrebuilds` is derived, not declared).
 - **on-pr** — `hasCppLint`, `hasTsChecks` (`tsChecksMode`), `hasFabricLockstep`, `cppTestsBaseline` (run the package's `test:cpp` lane on every PR, without the `run-cpp-addon-tests` label), `hasCoload`/`coloadActive`, `hasPerfReport` (`perfReportVariant`, `perfReportPattern`, `perfReportTitle`, `perfReportExtraArgs`).
 - **test:cpp** — `platforms[]` (os/platform/arch/runner), `vcpkgMode`, `coverageOn`, `mode`, plus per-package flags; `carveOut: true` routes to a bespoke reusable.
-- **test:integration** — usually just `carveOut: true` for packages with bespoke integration flows (asr, llm).
+- **test:integration** — `platforms[]` rows, each able to override any shared field (e.g. `timeoutMinutes`, `modelDownloadScript`); `testScript`, the npm script a leg runs instead of `test:integration` (darwin-x64 legs point it at a single-suite smoke script); `carveOut: true` for packages with bespoke integration flows (asr, llm).
 - **benchmark** — `aggregateScript`, `manualDir`.
 - **on-merge** — `buildStep`, `nameTransform`, `repoName`, `testGateMode`.
 
