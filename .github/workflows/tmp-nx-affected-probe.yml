@@ -2,13 +2,17 @@ name: TMP nx affected probe (QVAC-25682)
 
 # THROWAWAY. Deleted before this PR is ready for review.
 #
-# Answers one question: does pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates
-# do anything in this workspace? @nx/js is not a dependency here — the only nx
-# package is nx itself — so the setting may be read by nx core or silently
-# ignored, and those two look identical from nx.json alone.
+# Does pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates do anything
+# here? @nx/js is not a dependency of this workspace, so the key may be read by
+# nx core or silently ignored, and nx.json cannot tell you which.
 #
-# Runs `nx show projects --affected` against a changed-file list of exactly
-# pnpm-lock.yaml, once with the config and once without, and prints both counts.
+# Probe v1 fed `pnpm-lock.yaml` through --stdin on a branch whose lockfile was
+# unchanged, so nx had no delta to analyse and "auto" had nothing to narrow. It
+# reported 25 either way, which proved nothing.
+#
+# v2 uses a real lockfile-only commit from main (d2e24d152, parent 51d90bf16)
+# so there IS a lockfile delta, and tests BOTH forms the matrix action uses:
+# --base/--head on pull_request, and --stdin on pull_request_target.
 
 # push-scoped to this branch: a brand-new workflow file cannot be dispatched,
 # since workflow_dispatch resolves against the default branch.
@@ -20,6 +24,10 @@ on:
 permissions:
   contents: read
 
+env:
+  LOCK_COMMIT: d2e24d152
+  LOCK_PARENT: 51d90bf16
+
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -27,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
@@ -36,42 +45,54 @@ jobs:
       - shell: bash
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Total project count
+      - name: Confirm the probe commit really is lockfile-only
         shell: bash
         run: |
           set -euo pipefail
-          TOTAL=$(pnpm exec nx show projects --json | tail -n1 | jq 'length')
-          echo "TOTAL_PROJECTS=$TOTAL" | tee -a "$GITHUB_ENV"
+          echo "files in $LOCK_COMMIT:"
+          git show --name-only --format= "$LOCK_COMMIT"
 
-      - name: Affected by a lockfile-only change, WITH the config
+      - name: Four-way A/B
         shell: bash
         run: |
           set -euo pipefail
+          cp nx.json /tmp/nx.with.json
+          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.without.json
           echo "pnpm-lock.yaml" > /tmp/changed.txt
-          jq -r '.pluginsConfig' nx.json
-          OUT=$(pnpm exec nx show projects --affected -t build --stdin --json < /tmp/changed.txt | tail -n1)
-          echo "WITH_COUNT=$(echo "$OUT" | jq 'length')" | tee -a "$GITHUB_ENV"
-          echo "$OUT" | jq -r '.[]' | head -20
 
-      - name: Affected by a lockfile-only change, WITHOUT the config
-        shell: bash
-        run: |
-          set -euo pipefail
-          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.json && mv /tmp/nx.json nx.json
-          rm -rf .nx
-          OUT=$(pnpm exec nx show projects --affected -t build --stdin --json < /tmp/changed.txt | tail -n1)
-          echo "WITHOUT_COUNT=$(echo "$OUT" | jq 'length')" | tee -a "$GITHUB_ENV"
-          echo "$OUT" | jq -r '.[]' | head -20
+          count() {  # $1 = nx.json variant, $2 = mode
+            cp "$1" nx.json
+            rm -rf .nx
+            if [ "$2" = "range" ]; then
+              pnpm exec nx show projects --affected \
+                --base="$LOCK_PARENT" --head="$LOCK_COMMIT" --json 2>/dev/null \
+                | tail -n1 | jq 'length'
+            else
+              pnpm exec nx show projects --affected --stdin --json < /tmp/changed.txt 2>/dev/null \
+                | tail -n1 | jq 'length'
+            fi
+          }
 
-      - name: Verdict
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "total projects      : $TOTAL_PROJECTS"
-          echo "affected WITH auto  : $WITH_COUNT"
-          echo "affected WITHOUT    : $WITHOUT_COUNT"
-          if [ "$WITH_COUNT" -lt "$WITHOUT_COUNT" ]; then
-            echo "::notice::The setting IS read: auto narrowed the set."
+          TOTAL=$(pnpm exec nx show projects --json | tail -n1 | jq 'length')
+          RW=$(count /tmp/nx.with.json range)
+          RO=$(count /tmp/nx.without.json range)
+          SW=$(count /tmp/nx.with.json stdin)
+          SO=$(count /tmp/nx.without.json stdin)
+          cp /tmp/nx.with.json nx.json
+
+          echo "total projects                 : $TOTAL"
+          echo "--base/--head  WITH auto       : $RW"
+          echo "--base/--head  WITHOUT         : $RO"
+          echo "--stdin        WITH auto       : $SW"
+          echo "--stdin        WITHOUT         : $SO"
+
+          if [ "$RW" -lt "$RO" ]; then
+            echo "::notice::auto works on the --base/--head path ($RO -> $RW)."
           else
-            echo "::warning::No narrowing. Either the config is ignored without @nx/js, or this lockfile diff genuinely affects everything."
+            echo "::warning::auto did NOT narrow on --base/--head."
+          fi
+          if [ "$SW" -lt "$SO" ]; then
+            echo "::notice::auto works on the --stdin path ($SO -> $SW)."
+          else
+            echo "::warning::auto did NOT narrow on --stdin, which is the path the addon on-PR lanes use."
           fi
