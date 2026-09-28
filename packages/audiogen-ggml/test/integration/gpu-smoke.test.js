@@ -35,15 +35,14 @@ const RELAX = proc.env && proc.env.QVAC_AUDIOGEN_GPU_SMOKE_RELAX === '1'
 const MIN_PEAK = 0.1
 const MIN_RMS = 0.005
 
-const GPU_DURATION_S = 6
-const CPU_DURATION_S = 1
+const DURATION_S = 6
 
 function modelsDir() {
   return path.join(getBaseDir(), 'models')
 }
 
 // Shape + loudness + length of a render, for either backend.
-function assertAudio(t, data, tag, durationS) {
+function assertAudio(t, data, tag) {
   t.is(data.channels, 2, `${tag}: stereo output`)
   t.is(data.sampleRate, 48000, `${tag}: 48 kHz output`)
   t.ok(data.sampleCount > 0, `${tag}: produced ${data.sampleCount} interleaved samples`)
@@ -56,7 +55,7 @@ function assertAudio(t, data, tag, durationS) {
   // The LM quantises the request into whole audio codes, so a render lands near
   // the requested length rather than on it (6 s -> ~5.6 s). Bound it loosely to
   // catch a truncated or runaway render without encoding the code grid.
-  const requestedMs = durationS * 1000
+  const requestedMs = DURATION_S * 1000
   t.ok(
     data.durationMs >= requestedMs * 0.5 && data.durationMs <= requestedMs * 1.5,
     `${tag}: duration ${Math.round(data.durationMs)} ms is within 50-150% of the requested ${requestedMs} ms`
@@ -116,11 +115,11 @@ test(
 
     const { data } = await runAudioGen(gen, {
       caption: 'cinematic orchestral, epic drums, rising strings',
-      opts: { lyrics: '[Instrumental]', duration: GPU_DURATION_S, seed: 3 }
+      opts: { lyrics: '[Instrumental]', duration: DURATION_S, seed: 3 }
     })
 
     assertRanOnGpu(t, data.stats)
-    assertAudio(t, data, 'GPU', GPU_DURATION_S)
+    assertAudio(t, data, 'GPU')
   }
 )
 
@@ -145,12 +144,12 @@ test(
 
     const { data } = await runAudioGen(gen, {
       caption: 'simple solo piano melody, sparse and gentle',
-      opts: { lyrics: '[Instrumental]', duration: CPU_DURATION_S, seed: 4 }
+      opts: { lyrics: '[Instrumental]', duration: DURATION_S, seed: 4 }
     })
 
     if (data.stats && typeof data.stats.backendDevice === 'number') {
       t.is(data.stats.backendDevice, 0, 'CPU: useGPU:false resolved to the CPU backend')
     }
-    assertAudio(t, data, 'CPU', CPU_DURATION_S)
+    assertAudio(t, data, 'CPU')
   }
 )
