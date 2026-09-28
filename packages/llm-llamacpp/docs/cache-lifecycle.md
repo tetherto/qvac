@@ -239,7 +239,7 @@ stateDiagram-v2
 | `cacheKey` | `runOptions` | Turns the cache on for this sequence and names the durable file. |
 | `saveCacheToDisk` | `runOptions` | Write the file when this request commits. |
 | `prefill` | `runOptions` | Warm the cache without generating; commits as soon as prefill completes. Needs `saveCacheToDisk` on `parallel >= 2`. |
-| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 32, 0 disables). Full-state models only. |
+| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 1: the newest, end-of-history one; 0 disables). Full-state models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
 | `cache_checkpoint_storage` | load config | `disk` (temp files) or `memory` (host RAM) for snapshots and checkpoints. |
 | `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |

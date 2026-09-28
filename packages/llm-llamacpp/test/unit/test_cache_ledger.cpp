@@ -80,14 +80,29 @@ using qvac_lib_inference_addon_llama::utils::SnapshotStorage;
 
 TEST(CacheLedger, ProcessCheckpointCollectionEvictsOldestFirst) {
   std::deque<FakeCheckpoint> checkpoints;
-  for (int i = 0; i < 35; ++i) {
+  cache::CheckpointPolicy four;
+  four.maxCount = 4;
+  for (int i = 0; i < 7; ++i) {
     cache::appendProcessCheckpoint(
-        checkpoints, FakeCheckpoint{i, 1}, cache::CheckpointPolicy{}, kBytesOf);
+        checkpoints, FakeCheckpoint{i, 1}, four, kBytesOf);
   }
 
-  ASSERT_EQ(checkpoints.size(), cache::DEFAULT_PROCESS_CHECKPOINTS);
+  ASSERT_EQ(checkpoints.size(), 4u);
   EXPECT_EQ(checkpoints.front().id, 3);
-  EXPECT_EQ(checkpoints.back().id, 34);
+  EXPECT_EQ(checkpoints.back().id, 6);
+}
+
+// The default keeps only the newest checkpoint: the end-of-history one, which
+// a commit pushes after the pre-request snapshot.
+TEST(CacheLedger, DefaultPolicyKeepsTheNewestCheckpoint) {
+  EXPECT_EQ(cache::DEFAULT_PROCESS_CHECKPOINTS, 1u);
+  std::deque<FakeCheckpoint> checkpoints;
+  cache::appendProcessCheckpoint(
+      checkpoints, FakeCheckpoint{1, 1}, cache::CheckpointPolicy{}, kBytesOf);
+  cache::appendProcessCheckpoint(
+      checkpoints, FakeCheckpoint{2, 1}, cache::CheckpointPolicy{}, kBytesOf);
+  ASSERT_EQ(checkpoints.size(), 1u);
+  EXPECT_EQ(checkpoints.front().id, 2);
 }
 
 TEST(CacheLedger, ProcessCheckpointCollectionHonoursConfiguredCount) {

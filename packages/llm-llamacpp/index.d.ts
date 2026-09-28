@@ -268,11 +268,14 @@ declare namespace LlmLlamacpp {
          * Per-sequence cap on the process-local full-state checkpoints kept for
          * cached requests on hybrid / recurrent models (Qwen3.5, Jamba,
          * Granite-Hybrid, DeepSeek V4, ...). Such models cannot trim a KV tail,
-         * so an edited or diverging history is served by restoring the newest
-         * checkpoint that is still a prefix of the new prompt. One checkpoint is
-         * added per committed cached request and each is a full sequence dump in
-         * the OS temp directory, so this bounds disk usage: `0` keeps none (every
-         * divergent turn is a cold prefill), the default is 32, the maximum 1024.
+         * so a diverging history is served by restoring the longest checkpoint
+         * that is still a prefix of the new prompt. A committed cached request
+         * adds two (its pre-request state and one at the end of its history),
+         * each holding the model's recurrent state. The default of 1 keeps the
+         * newest, the end-of-history checkpoint an ordinary next turn and a
+         * regenerate restore; raise it to also serve edits further back. `0`
+         * keeps none (every divergent turn is a cold prefill), the maximum is
+         * 1024.
          * Ignored on pure-attention models, which never take checkpoints.
          * Also accepted as `cache-checkpoints`; supplying both is an error.
          */

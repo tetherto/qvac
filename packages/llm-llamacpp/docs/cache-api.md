@@ -106,8 +106,11 @@ model, not the context (about 20 MB on Qwen3.5-0.8B). DeepSeek V4 keeps full
 copies of the sequence state. Three load-config fields bound the footprint.
 None of them has any effect on pure-attention models.
 
-- `cache_checkpoints`: how many to keep per sequence (default 32, maximum
-  1024). `0` keeps none, which makes every divergent turn a cold prefill.
+- `cache_checkpoints`: how many to keep per sequence (default 1, maximum
+  1024). The default keeps the newest, the end-of-history checkpoint that an
+  ordinary next turn and a regenerate restore; raise it to also serve edits
+  further back in the history, at about two checkpoints per turn. `0` keeps
+  none, which makes every divergent turn a cold prefill.
 - `cache_checkpoints_max_bytes`: total payload budget per sequence, enforced
   before the count: the oldest checkpoints are dropped until the total fits.
   `0` (default) is unlimited. When set, the load fails with `InvalidArgument`

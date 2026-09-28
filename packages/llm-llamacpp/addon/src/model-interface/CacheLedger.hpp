@@ -25,18 +25,21 @@ inline constexpr llama_token LEDGER_MAGIC = 0x514c4447; // "QLDG"
 inline constexpr llama_token LEDGER_VERSION = 1;
 inline constexpr size_t LEDGER_HEADER_WORDS = 8;
 inline constexpr size_t LEDGER_ENTRY_WORDS = 5;
-// Process-local full-state checkpoints kept per sequence on models that
-// cannot trim a KV tail. One is added per committed cached request, and each
-// is a full copy of the sequence state (on disk or in memory, see
-// `SnapshotStorage`), so the policy below bounds that footprint.
+// Process-local checkpoints kept per sequence on models that cannot trim a KV
+// tail. A committed cached request adds two, its pre-request snapshot and
+// the end-of-history one, each the non-trimmable part of the sequence state
+// (on disk or in memory, see `SnapshotStorage`), so the policy below bounds
+// that footprint.
 //   * `cache_checkpoints`: how many to keep; 0 keeps none, which turns every
-//     divergent turn into a cold prefill.
+//     divergent turn into a cold prefill. The default of 1 keeps the newest,
+//     the end-of-history checkpoint an ordinary next turn and a regenerate
+//     restore; more also serve edits further back in the history.
 //   * `cache_checkpoints_max_bytes`: total payload budget per sequence; 0 is
 //     unlimited. It is enforced before the count, and the model load fails
 //     early when it cannot hold `cache_checkpoints` checkpoints of the
 //     largest size the context allows.
 //   * `cache_checkpoint_storage`: `disk` (temp files, default) or `memory`.
-inline constexpr size_t DEFAULT_PROCESS_CHECKPOINTS = 32;
+inline constexpr size_t DEFAULT_PROCESS_CHECKPOINTS = 1;
 inline constexpr size_t MAX_CONFIGURABLE_PROCESS_CHECKPOINTS = 1024;
 inline constexpr const char* CACHE_CHECKPOINTS_KEY = "cache_checkpoints";
 inline constexpr const char* CACHE_CHECKPOINTS_KEY_DASHED = "cache-checkpoints";

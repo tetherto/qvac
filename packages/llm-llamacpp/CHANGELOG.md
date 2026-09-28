@@ -19,7 +19,9 @@
 
 - `cache_checkpoints` load-config field (also `cache-checkpoints`): per-sequence
   cap on the process-local full-state checkpoints kept for cached requests on
-  hybrid / recurrent models. Default 32, `0` disables them, maximum 1024.
+  hybrid / recurrent models. Default 1 (the newest, end-of-history
+  checkpoint, which serves an ordinary next turn and a regenerate), `0`
+  disables them, maximum 1024.
 - `cache_checkpoints_max_bytes`: byte budget for those checkpoints, enforced
   before the count. The load fails early with `InvalidArgument` when the budget
   cannot hold `cache_checkpoints` checkpoints of the largest size the context
