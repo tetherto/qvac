@@ -2027,6 +2027,14 @@
                     "description": {
                       "type": "string"
                     },
+                    "deferLoading": {
+                      "description": "Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+                      "type": "boolean"
+                    },
+                    "group": {
+                      "description": "Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.",
+                      "type": "string"
+                    },
                     "parameters": {
                       "type": "object",
                       "properties": {
@@ -3209,6 +3217,14 @@
               "description": {
                 "type": "string"
               },
+              "deferLoading": {
+                "description": "Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+                "type": "boolean"
+              },
+              "group": {
+                "description": "Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.",
+                "type": "string"
+              },
               "parameters": {
                 "type": "object",
                 "properties": {
@@ -3813,6 +3829,14 @@
                 "type": "string"
               },
               "description": {
+                "type": "string"
+              },
+              "deferLoading": {
+                "description": "Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+                "type": "boolean"
+              },
+              "group": {
+                "description": "Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.",
                 "type": "string"
               },
               "parameters": {
