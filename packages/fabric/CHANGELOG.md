@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.18.0] - Unreleased
+
+### Breaking
+
+- The runtime ships in per-platform packages. `@qvac/fabric` keeps the loader,
+  headers and CMake config, and each host's `qvac__fabric.bare` and ggml
+  backends move to `@qvac/fabric-<host>/addon/prebuilds/<host>/`. The desktop
+  packages (`linux-x64`, `linux-arm64`, `darwin-arm64`, `darwin-x64`,
+  `win32-x64`) are version-locked `optionalDependencies`. Yarn v1 and
+  `--omit=optional` installs no longer get a runtime and fail at require time
+  with an error naming the missing package.
+- Mobile applications must add `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` as a direct dependency pinned to the exact `@qvac/fabric`
+  version. Cross-built targets are never selected by `os`/`cpu` filters.
+- Consumer addons can no longer find the runtime or backends at
+  `@qvac/fabric/prebuilds/<host>`. Link through the CMake template's
+  `qvac_addon_use_fabric()` or `qvac_addon_fabric_layout()`, and take the
+  backends root from `@qvac/fabric/backends`. Configure now fails, naming the
+  package to install, when no runtime for the target is installed.
+- Consumer addons that build Android or iOS prebuilds must add
+  `@qvac/fabric-android-arm64` and `@qvac/fabric-ios` to `devDependencies`,
+  pinned to the exact `@qvac/fabric` version, to link against them.
+
+### Added
+
+- `@qvac/fabric/backends` exports `resolveBackendsDir()`, which returns the
+  directory the native side appends `<host>/qvac__fabric` to, or `null` in a
+  packed mobile bundle.
+- The loader selects the runtime through a `#host-addon` imports map, so
+  `bare-pack --host` bundles the target's platform package, and the SDK Expo
+  plugin and `qvac verify prebuilds` handle fabric like the other split addons.
+
+### Changed
+
+- A runtime in `@qvac/fabric/prebuilds/<host>` (source builds, linked
+  workspaces, the CI overlay) wins over the platform package everywhere the
+  runtime is resolved.
+- GitHub Packages dev builds stay a single package carrying every host.
+
 ## [0.17.1] - 2026-09-26
 
 ### Changed
