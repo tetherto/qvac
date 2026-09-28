@@ -38,6 +38,10 @@ async function runCosyvoice3Test (options = {}) { // eslint-disable-line no-unus
   return runIntegrationModule('../integration/cosyvoice3.test.js', options)
 }
 
+async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit.test.js', options)
+}
+
 async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/gpu-smoke.test.js', options)
 }
@@ -99,6 +103,7 @@ module.exports = {
   runCosyvoice3CloneTest,
   runCosyvoice3LavasrTest,
   runCosyvoice3Test,
+  runFitTest,
   runGpuSmokeTest,
   runLavasrEnhancerTest,
   runMossTest,

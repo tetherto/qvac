@@ -312,6 +312,78 @@ test('Real addon with downloaded models - success case', { timeout: 120000 }, as
   }
 })
 
+test(
+  'Whisper segments carry language, noSpeechProb, and opt-in tokens',
+  { timeout: 120000 },
+  async (t) => {
+    await ensureWhisperModel(modelPath)
+    const samplePath = path.join(path.dirname(audioPath), 'sample.raw')
+    if (!fs.existsSync(samplePath)) {
+      t.pass('sample.raw not found - skipping')
+      return
+    }
+
+    const ASRGgml = require('../../index')
+    const model = new ASRGgml({
+      files: { model: modelPath },
+      config: {
+        engine: 'whisper',
+        whisperConfig: {
+          language: 'auto',
+          token_timestamps: true,
+          temperature: 0.0,
+          n_threads: WHISPER_TEST_THREADS
+        }
+      }
+    })
+
+    try {
+      await model.load()
+      const { createAudioStream } = require('./helpers.js')
+      const response = await model.run(createAudioStream(samplePath))
+      const segments = []
+      await response
+        .onUpdate((out) => {
+          for (const seg of Array.isArray(out) ? out : [out]) {
+            if (seg && typeof seg.text === 'string') segments.push(seg)
+          }
+        })
+        .await()
+
+      t.ok(segments.length > 0, 'transcribed the English sample')
+      t.ok(
+        segments.every((s) => s.language === 'en'),
+        'language: "auto" reports the detected language per segment'
+      )
+      t.ok(
+        segments.every((s) => s.noSpeechProb >= 0 && s.noSpeechProb <= 1),
+        'noSpeechProb is a probability'
+      )
+      t.ok(
+        segments.every(
+          (s) =>
+            Array.isArray(s.tokens) &&
+            s.tokens.length > 0 &&
+            s.tokens.map((token) => token.text).join('') === s.text
+        ),
+        'token_timestamps adds the text tokens of each segment'
+      )
+      t.ok(
+        segments.every((s) =>
+          s.tokens.every((token) => token.start <= token.end && token.probability > 0)
+        ),
+        'tokens carry timing and probability'
+      )
+      t.ok(
+        segments.every((s) => s.speakerTurnNext === undefined),
+        'speakerTurnNext appears only with tdrz_enable'
+      )
+    } finally {
+      await model.unload()
+    }
+  }
+)
+
 test('Runtime stats are populated by default (enableStats)', { timeout: 120000 }, async (t) => {
   await ensureWhisperModel(modelPath)
   generateTestAudio(audioPath)

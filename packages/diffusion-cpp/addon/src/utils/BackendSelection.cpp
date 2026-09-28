@@ -432,4 +432,78 @@ std::string expectedEsrganBackendDeviceForConfig(const std::string& device) {
   }
 }
 
+bool openClPreferenceMatchesFirstGpu(
+    const std::vector<std::string>& gpuDeviceNames) {
+  return !gpuDeviceNames.empty() && containsOpenClToken(gpuDeviceNames.front());
+}
+
+namespace {
+
+std::vector<std::string> enumeratedGpuDeviceNames() {
+  std::vector<std::string> names;
+  const size_t nDevices = ggml_backend_dev_count();
+  for (size_t i = 0; i < nDevices; ++i) {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    if (ggml_backend_dev_type(dev) != GGML_BACKEND_DEVICE_TYPE_GPU) {
+      continue;
+    }
+    const char* name = ggml_backend_dev_name(dev);
+    names.emplace_back(name != nullptr ? name : "");
+  }
+  return names;
+}
+
+std::optional<std::string> firstGpuDeviceName() {
+  const std::vector<std::string> names = enumeratedGpuDeviceNames();
+  if (names.empty())
+    return std::nullopt;
+  return names.front();
+}
+
+bool everyAssignmentTargets(
+    const std::string& spec, const std::string& target) {
+  if (spec.empty()) {
+    return true;
+  }
+  size_t start = 0;
+  while (start <= spec.size()) {
+    const size_t comma = spec.find(',', start);
+    const std::string entry = spec.substr(
+        start, comma == std::string::npos ? std::string::npos : comma - start);
+    const size_t equals = entry.find('=');
+    if (equals == std::string::npos || entry.substr(equals + 1) != target) {
+      return false;
+    }
+    if (comma == std::string::npos) {
+      break;
+    }
+    start = comma + 1;
+  }
+  return true;
+}
+
+} // namespace
+
+bool openClPreferenceMatchesEnumeratedGpu() {
+  return openClPreferenceMatchesFirstGpu(enumeratedGpuDeviceNames());
+}
+
+bool matchesCpuOffloadPlacement(
+    const std::string& runtimeSpec, const std::string& paramsSpec,
+    bool vaeTiling, bool streamLayers, bool vaeTilingRequested,
+    bool streamLayersConfigured) {
+  if (streamLayers && !streamLayersConfigured) {
+    return false;
+  }
+  if (vaeTiling && !vaeTilingRequested) {
+    return false;
+  }
+  const std::optional<std::string> gpu = firstGpuDeviceName();
+  if (!gpu.has_value()) {
+    return false;
+  }
+  return everyAssignmentTargets(runtimeSpec, *gpu) &&
+         everyAssignmentTargets(paramsSpec, "cpu");
+}
+
 } // namespace sd_backend_selection

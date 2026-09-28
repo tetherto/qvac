@@ -48,7 +48,7 @@ Concretely, relative to the legacy `classification-ggml/CMakeLists.txt`:
 
 | Legacy | New |
 |---|---|
-| `find_package(ggml CONFIG REQUIRED)` | `set(qvac-fabric_DIR …/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake)` + `find_package(qvac-fabric CONFIG REQUIRED)` + `include_bare_module("@qvac/fabric" qvac_fabric_target PREBUILD)` |
+| `find_package(ggml CONFIG REQUIRED)` | `set(qvac-fabric_DIR …/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake)` + `find_package(qvac-fabric CONFIG REQUIRED)` + `qvac_addon_fabric_layout()` + `include_bare_module(<resolved specifier> qvac_fabric_target PREBUILD WORKING_DIRECTORY <resolved dir>)` |
 | `foreach(_backend ${GGML_AVAILABLE_BACKENDS}) … INSTALL TARGET ggml::${_backend}` loop feeding `add_bare_module(… EXPORTS ${BACKEND_DL_LIBS})` | **deleted**; `add_bare_module(… EXPORTS)` (no exports) |
 | `BACKENDS_SUBDIR = ${bare_target_value}/${module_name}` (per-addon) | `BACKENDS_SUBDIR = ${bare_target_value}/qvac__fabric` (fixed, points at fabric's shared backend dir) |
 | `target_link_libraries(${tgt} PRIVATE ggml::ggml ggml::ggml-base)` + conditional `ggml::ggml-cpu` | `target_link_libraries(${tgt} PRIVATE qvac-fabric::headers)` (headers on lib target) **and** `target_link_libraries(${tgt}_module PRIVATE ${qvac_fabric_target}_module)` (dynamic link on module target) |
@@ -90,7 +90,7 @@ Present, in the same order, in essentially every addon:
 New shared blocks introduced by the fabric form (also extract):
 
 - **Runtime discovery**: `set(qvac-fabric_DIR …)` + `find_package(qvac-fabric)`
-  + `include_bare_module`.
+  + `qvac_addon_fabric_layout()` + `include_bare_module`.
 - **Two-target link split**: `::headers` on the lib target, `_module` on the
   module target.
 - **Fixed `BACKENDS_SUBDIR = <host>/qvac__fabric`**.
@@ -181,6 +181,13 @@ state (`VCPKG_MANIFEST_FEATURES`, the vcpkg toolchain, `ANDROID_STL`,
 - `qvac_addon_use_fabric()` (macro) — fabric discovery (`set(qvac-fabric_DIR …)`
   + `find_package` + `include_bare_module`). Sets `qvac_fabric_target` and
   `BACKENDS_SUBDIR_VALUE` (`<host>/qvac__fabric`) in the caller's scope.
+- `qvac_addon_fabric_layout(<host> <base_dir> <out_specifier> <out_working_dir>
+  <out_prebuilds>)` — locates the fabric runtime for `<host>`: the meta
+  package's own `prebuilds/<host>` when present (fabric ≤0.17, source builds, the
+  CI overlay), otherwise `@qvac/fabric-<host>/addon` resolved from fabric's real
+  path (0.18+ platform packages). Returns the `include_bare_module` specifier
+  and working directory, and the `prebuilds` root that holds
+  `<host>/qvac__fabric`.
 - `qvac_addon_link_fabric(<addon_target> <fabric_target>)` — the two-target link
   split (`qvac-fabric::headers` on the lib, `${fabric_target}_module` on the
   module), plus `qvac_addon_import_fabric_cxx_runtime` on the module.

@@ -1,5 +1,5 @@
 /**
- * Advisory llama.cpp fit check (QVAC-22629).
+ * Advisory model fit check.
  *
  * Before a completion or embedding load, the SDK runs `@qvac/model-fit` in one
  * disposable Bare child and projects whether the exact configuration it is
@@ -8,8 +8,8 @@
  * The result is ADVISORY. It never blocks a load. `does-not-fit` is logged and
  * the ordinary load path runs unchanged. Crashes, timeouts, malformed
  * responses, unsupported configurations, and internal errors all resolve to
- * "no evidence" and are equally non-blocking. Nothing consumes the verdict
- * yet — this PR only produces it.
+ * "no evidence" and are equally non-blocking. No verdict changes the load;
+ * `getLoadedModelInfo` returns it as `fitProbe`.
  *
  * The verdict is emitted on the SDK server log stream, not to stdout, so this
  * example subscribes to `loggingStream({ id: SDK_LOG_ID })` and reprints the

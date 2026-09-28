@@ -16,6 +16,16 @@ struct ParakeetConfig {
   static constexpr int DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS = 80;
   static constexpr int DEFAULT_STREAMING_CHUNK_RIGHT_CONTEXT_MS = 560;
   static constexpr int DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD = 144;
+  // speech-cpp's StreamingOptions energy-VAD defaults.
+  static constexpr float DEFAULT_STREAMING_ENERGY_VAD_THRESHOLD_DB = -35.0F;
+  static constexpr int DEFAULT_STREAMING_ENERGY_VAD_WINDOW_MS = 30;
+  static constexpr int DEFAULT_STREAMING_ENERGY_VAD_HANGOVER_MS = 200;
+  // Sortformer segmentation defaults the addon has always sent (CallHome
+  // tuning: onset 0.641, minimum 0.511 s, which truncates to 510 ms).
+  static constexpr float DEFAULT_DIARIZATION_THRESHOLD = 0.641F;
+  static constexpr int DEFAULT_DIARIZATION_MIN_SEGMENT_MS = 510;
+  // speech-cpp's EngineOptions prewarm default.
+  static constexpr float DEFAULT_PREWARM_AUDIO_SECONDS = 1.0F;
 
   std::string modelPath;
 
@@ -63,6 +73,15 @@ struct ParakeetConfig {
       DEFAULT_STREAMING_HISTORY_MS; // Sortformer rolling window only
   bool streamingEmitPartials = true;
   bool streamingEnergyVad = false; // ASR only; ignored by EOU/Sortformer
+  // Energy-VAD tuning, forwarded to pkt::StreamingOptions.energy_vad_*.
+  // Only read when streamingEnergyVad is on.
+  float streamingEnergyVadThresholdDb =
+      DEFAULT_STREAMING_ENERGY_VAD_THRESHOLD_DB;
+  int streamingEnergyVadWindowMs = DEFAULT_STREAMING_ENERGY_VAD_WINDOW_MS;
+  int streamingEnergyVadHangoverMs = DEFAULT_STREAMING_ENERGY_VAD_HANGOVER_MS;
+  // Sortformer only: emit a VAD event whenever any speaker starts or stops
+  // talking, tagged with the dominant speaker (pkt::StreamEvent).
+  bool streamingSpeakerVad = false;
   // Forwarded to pkt::StreamingOptions.left_context_ms /
   // right_lookahead_ms. ASR sessions only (Sortformer ignores both --
   // it has its own SortformerStreamingOptions::history_ms knob).
@@ -94,6 +113,24 @@ struct ParakeetConfig {
   int streamingChunkLeftContextMs = DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS;
   int streamingChunkRightContextMs = DEFAULT_STREAMING_CHUNK_RIGHT_CONTEXT_MS;
   int streamingSpkCacheUpdatePeriod = DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD;
+
+  // ── Sortformer segmentation (offline and streaming) ────────────────────
+  // Speaker-activity threshold (0..1) and shortest emitted segment in ms.
+  // Negative keeps the DEFAULT_DIARIZATION_* values above, not speech-cpp's
+  // own 0.5 / 0 ms.
+  float diarizationThreshold = -1.0F;
+  int diarizationMinSegmentMs = -1;
+
+  // ── Engine construction (pkt::EngineOptions) ───────────────────────────
+  // prewarm runs one synthetic encoder pass at load so the first request
+  // skips the shader/kernel compile; prewarmAudioSeconds sizes that pass.
+  bool prewarm = false;
+  float prewarmAudioSeconds = DEFAULT_PREWARM_AUDIO_SECONDS;
+  // Offline long-form encoder windowing, in encoder frames. Window: 0 =
+  // auto, > 0 = explicit ceiling (clamped to the model's positional range),
+  // < 0 = always single pass. Context: 0 = auto, < 0 = no shared context.
+  int longFormWindowFrames = 0;
+  int longFormContextFrames = 0;
 
   // ── Dynamic-backend loading ────────────────────────────────────────────
   // Forwarded to pkt::EngineOptions::backends_dir /
@@ -127,6 +164,11 @@ struct ParakeetConfig {
            streamingHistoryMs == other.streamingHistoryMs &&
            streamingEmitPartials == other.streamingEmitPartials &&
            streamingEnergyVad == other.streamingEnergyVad &&
+           streamingEnergyVadThresholdDb ==
+               other.streamingEnergyVadThresholdDb &&
+           streamingEnergyVadWindowMs == other.streamingEnergyVadWindowMs &&
+           streamingEnergyVadHangoverMs == other.streamingEnergyVadHangoverMs &&
+           streamingSpeakerVad == other.streamingSpeakerVad &&
            streamingLeftContextMs == other.streamingLeftContextMs &&
            streamingRightLookaheadMs == other.streamingRightLookaheadMs &&
            streamingSpkCacheEnable == other.streamingSpkCacheEnable &&
@@ -136,6 +178,12 @@ struct ParakeetConfig {
            streamingChunkRightContextMs == other.streamingChunkRightContextMs &&
            streamingSpkCacheUpdatePeriod ==
                other.streamingSpkCacheUpdatePeriod &&
+           diarizationThreshold == other.diarizationThreshold &&
+           diarizationMinSegmentMs == other.diarizationMinSegmentMs &&
+           prewarm == other.prewarm &&
+           prewarmAudioSeconds == other.prewarmAudioSeconds &&
+           longFormWindowFrames == other.longFormWindowFrames &&
+           longFormContextFrames == other.longFormContextFrames &&
            backendsDir == other.backendsDir &&
            openclCacheDir == other.openclCacheDir;
   }
