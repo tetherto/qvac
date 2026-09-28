@@ -5,6 +5,7 @@ import {
   TOOL_SEARCH_NAME,
   buildCatalog,
   buildToolSearchTool,
+  deferredToolChoice,
   executeToolSearch,
   loadedToolNames,
   partitionTools,
@@ -210,6 +211,32 @@ test('a loaded tool becomes callable and stays out of the prompt', (t) => {
     ['get_weather', TOOL_SEARCH_NAME],
     'the prompt block is unchanged, so the prefix in front of it still matches'
   )
+})
+
+test('the tool-call grammar is off only once a deferred tool is loaded', (t) => {
+  const fresh = [{ role: 'user', content: 'open an issue' }]
+  const loaded = [
+    ...fresh,
+    { role: 'assistant', content: '<call tool_search>' },
+    { role: 'tool', content: executeToolSearch(INVENTORY, { query: 'create_issue' }, []) }
+  ]
+
+  t.is(
+    deferredToolChoice(resolveDeferredTools(INVENTORY, fresh), undefined),
+    undefined,
+    'nothing loaded yet: every callable name is in the grammar'
+  )
+  t.is(
+    deferredToolChoice(resolveDeferredTools(INVENTORY, loaded), undefined),
+    'none',
+    'a loaded name is not in the grammar, so it must not be enforced'
+  )
+  t.is(
+    deferredToolChoice(resolveDeferredTools(INVENTORY, loaded), 'required'),
+    'required',
+    'a caller choice is kept'
+  )
+  t.is(deferredToolChoice(null, undefined), undefined, 'nothing defers')
 })
 
 test('loading the same tool twice appends no second definition', (t) => {

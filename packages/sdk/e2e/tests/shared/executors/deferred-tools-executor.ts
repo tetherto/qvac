@@ -260,7 +260,7 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
 
     try {
       const once = this.withSearch(this.baseHistory(p), p, p.searchQuery!)
-      const twice = this.withSearch(once, p, p.expectedToolCall.name)
+      const twice = this.withSearch(once, p, p.searchQuery!)
       const repeat = JSON.parse(twice[twice.length - 1]!.content) as SearchEnvelope
 
       // Other tools matching the query may load fresh; only the loaded one must not repeat.

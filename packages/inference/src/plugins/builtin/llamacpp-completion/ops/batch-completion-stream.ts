@@ -20,7 +20,12 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { normalizeCompletionStats } from '@/plugins/builtin/llamacpp-completion/ops/completion-stats'
 import { prependToolsToHistory } from '@/utils/tool-integration'
-import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
+import {
+  deferredToolChoice,
+  resolveDeferredTools,
+  toWireTool,
+  type DeferredResolution
+} from '@/utils/tools/defer'
 
 const logger = getEngineLogger()
 
@@ -99,12 +104,13 @@ function mergeGenerationParams(
 
 function renderPromptHistory(
   prompt: BatchCompletionStreamPrompt,
+  history: HistoryMessage[],
+  deferred: DeferredResolution | null,
   options: BatchPromptRenderOptions
 ) {
-  const history = seedConfiguredSystemPrompt(prompt.history, options.modelConfig)
   const tools =
     options.toolsEnabled && prompt.tools && prompt.tools.length > 0
-      ? (resolveDeferredTools(prompt.tools, history)?.toolsToRender ?? prompt.tools.map(toWireTool))
+      ? (deferred?.toolsToRender ?? prompt.tools.map(toWireTool))
       : undefined
   let historyWithTools: Array<HistoryMessage | Tool> = history
 
@@ -121,13 +127,19 @@ function buildBatchPrompt(
   prompt: BatchCompletionStreamPrompt,
   options: BatchPromptRenderOptions
 ): AddonBatchPrompt {
-  const mergedGenerationParams = mergeGenerationParams(
-    prompt.generationParams,
-    prompt.responseFormat
+  const history = seedConfiguredSystemPrompt(prompt.history, options.modelConfig)
+  const deferred = resolveDeferredTools(prompt.tools, history)
+  let mergedGenerationParams = mergeGenerationParams(prompt.generationParams, prompt.responseFormat)
+  const toolChoice = deferredToolChoice(
+    options.toolsEnabled ? deferred : null,
+    mergedGenerationParams?.tool_choice
   )
+  if (toolChoice !== mergedGenerationParams?.tool_choice) {
+    mergedGenerationParams = { ...(mergedGenerationParams ?? {}), tool_choice: toolChoice }
+  }
   return {
     ...(prompt.id !== undefined && { id: prompt.id }),
-    prompt: renderPromptHistory(prompt, options),
+    prompt: renderPromptHistory(prompt, history, deferred, options),
     ...(mergedGenerationParams && {
       runOptions: { generationParams: mergedGenerationParams }
     })

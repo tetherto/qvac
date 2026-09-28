@@ -299,6 +299,23 @@ export function resolveDeferredTools(
 }
 
 /**
+ * The `tool_choice` to send once the history has loaded deferred definitions.
+ *
+ * The addon builds its tool-call grammar from the rendered tools only, and a
+ * loaded definition lives in the history rather than that block, so under the
+ * default grammar the model can never produce the name it just loaded. With no
+ * caller choice, those turns run with the grammar off and the parser, which
+ * does accept loaded names, validates the call.
+ */
+export function deferredToolChoice(
+  resolution: DeferredResolution | null,
+  toolChoice: string | undefined
+): string | undefined {
+  if (toolChoice !== undefined || !resolution) return toolChoice
+  return resolution.callableTools.length > resolution.toolsToRender.length ? 'none' : undefined
+}
+
+/**
  * Run a `tool_search` call and produce the `tool` message that carries its
  * result. Pure over the history it is given; the caller appends the message.
  *
