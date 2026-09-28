@@ -2,18 +2,16 @@ name: TMP nx affected probe (QVAC-25682)
 
 # THROWAWAY. Deleted before this PR is ready for review.
 #
-# Does pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates narrow the
-# affected set here? @nx/js is not a dependency of this workspace, so the key
-# may be read by nx core or ignored, and nx.json cannot tell you which.
+# v4 established that auto IS read (39 -> 19 on a one-package delta) but that
+# the 19 still contains every addon, including ones with no dependency on the
+# package that changed. So auto is attributing the lockfile change to them and
+# the question is what it is reacting to.
 #
-# v1 fed pnpm-lock.yaml through --stdin on a branch whose lockfile matched base,
-# so there was no delta to analyse. Proved nothing.
-# v2/v3 used a real lockfile commit (d2e24d152) but that commit deletes 865
-# resolved entries, so "everything is affected" may be the CORRECT answer there
-# and the test could not separate that from the config being inert.
-# v4 builds the delta on purpose: add one dependency to ONE package, so exactly
-# one project's resolved dependencies change. If auto is live, the affected set
-# must be small. If it returns all 39, the config is doing nothing.
+# v5 answers that. It makes the smallest realistic change a developer makes —
+# widen one range in one addon's package.json and refresh the lockfile — then
+# attributes every changed hunk of pnpm-lock.yaml to the importer block it sits
+# in, before running the A/B. If one importer changed but every addon is still
+# marked, auto cannot deliver what was asked for and the fix has to be elsewhere.
 
 # push-scoped to this branch: a brand-new workflow file cannot be dispatched,
 # since workflow_dispatch resolves against the default branch.
@@ -42,55 +40,70 @@ jobs:
       - shell: bash
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Build a one-package lockfile delta
+      - name: Smallest realistic change - widen one range in one addon
         shell: bash
         run: |
           set -euo pipefail
           git config user.email probe@local
           git config user.name probe
-          BASE=$(git rev-parse HEAD)
-          echo "BASE_SHA=$BASE" >> "$GITHUB_ENV"
+          echo "BASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
-          pnpm add -D --filter @qvac/ocr-ggml tiny-invariant@1.3.3 --ignore-scripts
+          node -e "
+            const fs=require('fs'); const p='packages/ocr-ggml/package.json';
+            const j=JSON.parse(fs.readFileSync(p,'utf8'));
+            j.dependencies['bare-path']='^3.1.0';
+            fs.writeFileSync(p, JSON.stringify(j,null,2)+'\n');
+          "
+          pnpm install --lockfile-only --ignore-scripts
 
-          echo "--- files changed:"
-          git status --porcelain
-          echo "--- lockfile importer sections touched:"
-          git diff -- pnpm-lock.yaml | grep -oE "^[-+] *packages/[a-z0-9-]+" | sort -u || true
-
+      - name: Which importers did the lockfile change touch?
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --stat -- pnpm-lock.yaml
+          python3 - <<'PY'
+          import re, subprocess
+          new = subprocess.run(['git','show',':pnpm-lock.yaml'],capture_output=True,text=True).stdout
+          if not new:
+              new = open('pnpm-lock.yaml').read()
+          lines = new.split('\n')
+          # importer blocks are two-space keys under `importers:`
+          starts = [(i, l.rstrip(':').strip()) for i, l in enumerate(lines)
+                    if re.match(r'^  \S.*:$', l)]
+          diff = subprocess.run(['git','diff','-U0','--','pnpm-lock.yaml'],
+                                capture_output=True,text=True).stdout
+          touched = set()
+          for h in re.finditer(r'^@@ -\d+(?:,\d+)? \+(\d+)', diff, re.M):
+              ln = int(h.group(1)) - 1
+              owner = None
+              for i, name in starts:
+                  if i <= ln: owner = name
+                  else: break
+              if owner: touched.add(owner)
+          print(f"importer blocks touched: {len(touched)}")
+          for t in sorted(touched): print("  ", t)
+          PY
           git add -A
-          git commit -q -m "probe: one dependency on one package"
+          git commit -q -m "probe: widen one range in one addon"
           echo "HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: A/B the affected set
         shell: bash
         run: |
           set -uo pipefail
-          git show "$BASE_SHA:nx.json" > /tmp/nx.base.json
           cp nx.json /tmp/nx.with.json
           jq 'del(.pluginsConfig)' nx.json > /tmp/nx.without.json
-
           run_affected() {
-            cp "$1" nx.json
-            rm -rf .nx
+            cp "$1" nx.json; rm -rf .nx
             pnpm exec nx show projects --affected \
               --base="$BASE_SHA" --head="$HEAD_SHA" --json 2>/dev/null | tail -n1
           }
-
           TOTAL=$(pnpm exec nx show projects --json | tail -n1 | jq 'length')
-          W=$(run_affected /tmp/nx.with.json)
-          O=$(run_affected /tmp/nx.without.json)
+          W=$(run_affected /tmp/nx.with.json); O=$(run_affected /tmp/nx.without.json)
           cp /tmp/nx.with.json nx.json
-
           WC=$(echo "$W" | jq 'length'); OC=$(echo "$O" | jq 'length')
-          echo "total projects        : $TOTAL"
-          echo "affected WITH auto    : $WC"
-          echo "affected WITHOUT      : $OC"
-          echo "--- WITH auto, the projects:"
-          echo "$W" | jq -r '.[]' | head -40
-
-          if [ "$WC" -lt "$OC" ]; then
-            echo "::notice::auto narrows a single-package change: $OC -> $WC"
-          else
-            echo "::warning::auto did not narrow a single-package change ($WC of $TOTAL). The config is inert here."
-          fi
+          echo "RESULT total=$TOTAL without=$OC with_auto=$WC"
+          echo "RESULT affected-with-auto:"
+          echo "$W" | jq -r '.[]' | sed 's/^/  ADDON /'
+          ADDONS=$(echo "$W" | jq -r '.[]' | grep -cE "ocr-ggml|llm-llamacpp|vla-ggml|asr-ggml|tts-ggml|audiogen|bci-|embed-|classification|translation|model-fit" || true)
+          echo "RESULT addon-like projects still marked: $ADDONS"
