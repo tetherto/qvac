@@ -188,6 +188,9 @@ public:
     return cfg_.streamingSpkCacheUpdatePeriod;
   }
   bool isSortformer() const { return cfg_.modelType == ModelType::SORTFORMER; }
+  bool isDiarization() const {
+    return isSortformer() || cfg_.modelType == ModelType::NEMOTRON_DIARIZATION;
+  }
   bool isNemotron() const { return cfg_.modelType == ModelType::NEMOTRON; }
   // Sortformer segmentation knobs with the addon defaults applied.
   float getDiarizationThreshold() const {
@@ -266,8 +269,8 @@ public:
   [[nodiscard]] static std::vector<float> preprocessAudioData(
       const std::vector<uint8_t>& audioData,
       const std::string& audioFormat = "s16le");
-  [[nodiscard]] static ModelType modelTypeFromMetadata(
-      const std::string& detected, ModelType fallback);
+  [[nodiscard]] static ModelType
+  modelTypeFromMetadata(const std::string& detected, ModelType fallback);
   [[nodiscard]] static int
   resolveStreamingChunkMs(ModelType modelType, int configuredChunkMs);
   // Rejects out-of-range values speech-cpp does not clamp itself; called by

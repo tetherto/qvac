@@ -2,6 +2,7 @@
 
 const fs = require('bare-fs')
 const path = require('bare-path')
+const process = require('bare-process')
 const test = require('brittle')
 const {
   binding,
@@ -12,6 +13,7 @@ const {
 } = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
+const NEMOTRON_SPEAKER_COUNT = 8
 
 function loadAudioSample(filename = 'sample.raw') {
   const samplePath = path.join(samplesDir, filename)
@@ -88,6 +90,7 @@ async function runModelTest(t, modelType, modelPath, audio, expectations) {
         `${modelType} produced text (${fullText.length} chars)`
       )
     }
+    return segments
   } finally {
     try {
       await model.unload()
@@ -188,6 +191,40 @@ test('Sortformer desktop integration — speaker diarization', { timeout: 600000
     }
   }
 })
+
+test(
+  'Nemotron 3 desktop integration — eight-speaker diarization',
+  { timeout: 600000 },
+  async (t) => {
+    const modelPath = process.env.QVAC_TEST_NEMOTRON_DIARIZATION_GGUF
+    if (!modelPath || !fs.existsSync(modelPath)) {
+      t.pass('Set QVAC_TEST_NEMOTRON_DIARIZATION_GGUF to run this model test')
+      return
+    }
+    const audio = loadAudioSample()
+    if (!audio) {
+      t.pass('sample.raw not found — skipping')
+      return
+    }
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      const outputs = await runModelTest(t, 'nemotron-diarization', modelPath, audio, {
+        containsSpeaker: true,
+        backendModelType: 'nemotron-diarization'
+      })
+      const segments = outputs.flatMap((output) => output.speakerSegments || [])
+      t.ok(segments.length > 0, 'Nemotron 3 returns structured speaker segments')
+      t.ok(
+        segments.every(
+          (segment) => segment.speakerId >= 0 && segment.speakerId < NEMOTRON_SPEAKER_COUNT
+        ),
+        'speaker IDs stay within the eight-speaker range'
+      )
+    } finally {
+      loggerBinding.releaseLogger()
+    }
+  }
+)
 
 test(
   'Sortformer — diarizationMinSegmentMs longer than the clip drops every turn',

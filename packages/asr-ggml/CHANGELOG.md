@@ -16,6 +16,9 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- Nemotron 3 Diarization GGUF support in the Parakeet engine for offline and
+  streaming speaker segments with up to eight speakers.
+
 - Parakeet voice-activity events. `streamingEnergyVad` / `emitEnergyVad` now
   delivers `{ type: 'vad', source: 'energy' }` events on each speech/silence
   change; before, the detector was enabled but its events never reached JS.

@@ -69,7 +69,8 @@ enum class ModelType : std::uint8_t {
   EOU, // Real-time streaming with end-of-utterance detection
   SORTFORMER, // Speaker diarization (up to 4 speakers)
   RNNT,
-  NEMOTRON // Locale-conditioned cache-aware streaming RNN-T
+  NEMOTRON, // Locale-conditioned cache-aware streaming RNN-T
+  NEMOTRON_DIARIZATION
 };
 
 /**

@@ -106,6 +106,7 @@
     "example:parakeet:nemotron": "bare examples/parakeet-nemotron-transcribe.js",
     "example:parakeet:indic-conformer": "bare examples/parakeet-indic-conformer-transcribe.js",
     "example:parakeet:diarize": "bare examples/parakeet-diarized-transcribe.js",
+    "example:parakeet:nemotron-diarize": "bare examples/nemotron-diarization.js",
     "example:parakeet:mic": "bare examples/parakeet-live-mic.js",
     "example:parakeet:mic-diarize": "bare examples/parakeet-live-mic-diarized.js",
     "example:parakeet:mic-diarize-aosc": "bare examples/parakeet-live-mic-diarized-aosc.js",

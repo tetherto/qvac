@@ -1,0 +1,31 @@
+speech-cpp is an umbrella port: enable the engines you need as features and
+consume each enabled engine's own CMake package. The default feature set is
+the whisper engine plus the platform's default GPU backend; set
+default-features to false to pick a different engine mix.
+
+  speech-cpp[whisper]:
+    find_package(whisper CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE whisper::whisper)
+
+  speech-cpp[parakeet]:
+    find_package(qvac-parakeet CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE qvac::parakeet)
+
+  speech-cpp[tts]  (Chatterbox, Supertonic, CosyVoice3, Parler-TTS, LavaSR):
+    find_package(tts-cpp CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE tts-cpp::tts-cpp)
+
+  speech-cpp[audiogen]  (ACE-Step music generation):
+    find_package(audiogen-cpp CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE audiogen-cpp::audiogen-cpp)
+
+GPU backends (fan out to ggml-speech, shared by all engines):
+  metal  - Metal (macOS/iOS; default on Apple platforms)
+  vulkan - Vulkan (default on Windows/Linux/Android)
+  opencl - OpenCL (default on Android)
+Parakeet extra:
+  coreml - Apple Core ML encoder sidecar (implies the parakeet feature)
+
+Example consumer manifest dependency:
+  { "name": "speech-cpp", "default-features": false,
+    "features": ["whisper", "parakeet", "vulkan"] }

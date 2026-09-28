@@ -24,6 +24,8 @@ struct ParakeetConfig {
   // tuning: onset 0.641, minimum 0.511 s, which truncates to 510 ms).
   static constexpr float DEFAULT_DIARIZATION_THRESHOLD = 0.641F;
   static constexpr int DEFAULT_DIARIZATION_MIN_SEGMENT_MS = 510;
+  static constexpr float DEFAULT_NEMOTRON_DIARIZATION_THRESHOLD = 0.5F;
+  static constexpr int DEFAULT_NEMOTRON_DIARIZATION_MIN_SEGMENT_MS = 200;
   // speech-cpp's EngineOptions prewarm default.
   static constexpr float DEFAULT_PREWARM_AUDIO_SECONDS = 1.0F;
 
