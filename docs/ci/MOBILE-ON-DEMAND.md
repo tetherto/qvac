@@ -502,9 +502,8 @@ PKG=$(gh api "orgs/tetherto/packages/npm/$GPR_NAME/versions?per_page=50" \
 echo "$PKG"   # @tetherto/llm-llamacpp-mono@0.47.0-tmp.runid-33179656677
 ```
 
-The 13 native addons publish from the single `on-merge-nx.yml`, so the run is
-found by branch rather than by a per-addon workflow name. `model-fit` still has
-its own `on-merge-model-fit.yml`.
+The native addons, including `model-fit`, publish from `on-merge-nx.yml`, so the run is
+found by branch rather than by a per-addon workflow name.
 
 For every addon except one, `GPR_NAME` is just `$WF-mono`. **`vla` is the
 exception:** its mobile workflow is `integration-mobile-test-vla.yml`, but the
