@@ -74,7 +74,7 @@ class FeatureLabActivity : ComponentActivity() {
                 client = connected
                 runner = FeatureLabRunner(applicationContext, connected)
                 state = state.copy(
-                    status = "Ready · QVAC 0.20.0 worker connected",
+                    status = "Ready · QVAC 0.20.1 worker connected",
                     isReady = true,
                 )
             } catch (error: CancellationException) {

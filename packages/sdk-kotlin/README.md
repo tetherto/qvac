@@ -115,7 +115,7 @@ dependencyResolutionManagement {
 ```kotlin
 // app/build.gradle.kts
 dependencies {
-    implementation("io.tether:qvac-sdk-android:0.20.0")
+    implementation("io.tether:qvac-sdk-android:0.20.1")
 }
 ```
 
@@ -171,7 +171,7 @@ Then add the Android host:
 ```kotlin
 // app/build.gradle.kts
 dependencies {
-    implementation("io.tether:qvac-sdk-android:0.20.0")
+    implementation("io.tether:qvac-sdk-android:0.20.1")
 }
 ```
 
