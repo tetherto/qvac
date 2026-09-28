@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-25
+
 ### Added
 
 - Add `contextParams.main-gpu` (alias `main_gpu`) to select a GPU by registry
@@ -16,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Raise the `speech-cpp` floor to `2026-09-23#1`, which pulls in a `ggml-speech` that fixes a crash in GPU synthesis on NVIDIA GPUs with cooperative-matrix2 support.
 - Raise the `speech-cpp` floor to `2026-09-18`, keeping the speech packages on
   one engine stack. Nothing in the window touches the whisper engine this
   package builds, so published behavior is unchanged.

@@ -11,20 +11,22 @@
 // vars.  When unset, the gated tests skip cleanly via GTEST_SKIP() so
 // the suite stays green in environments without converted models.
 
-#include <gtest/gtest.h>
-
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
+#include <gtest/gtest.h>
 #include <tts-cpp/chatterbox/engine.h>
 
+#include "inference-addon-cpp/Errors.hpp"
 #include "model-interface/chatterbox/ChatterboxConfig.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
-#include "inference-addon-cpp/Errors.hpp"
 
 using qvac::ttsggml::chatterbox::ChatterboxConfig;
 using qvac::ttsggml::chatterbox::ChatterboxModel;
@@ -32,14 +34,38 @@ using qvac_errors::StatusError;
 
 namespace {
 
-std::filesystem::path testTempDir() {
-  return std::filesystem::temp_directory_path() / "qvac-tts-ggml-chatterbox-tests";
+constexpr const char* TEST_DIR_PREFIX = "qvac-tts-ggml-chatterbox-tests-";
+
+class TestTempDir {
+public:
+  TestTempDir() : path_(createUniqueDir()) {}
+  TestTempDir(const TestTempDir&) = delete;
+  TestTempDir& operator=(const TestTempDir&) = delete;
+  ~TestTempDir() {
+    std::error_code ignored;
+    std::filesystem::remove_all(path_, ignored);
+  }
+  const std::filesystem::path& path() const { return path_; }
+
+private:
+  static std::filesystem::path createUniqueDir() {
+    std::random_device entropy;
+    auto dir = std::filesystem::temp_directory_path() /
+               (std::string(TEST_DIR_PREFIX) + std::to_string(entropy()));
+    std::filesystem::create_directories(dir);
+    return dir;
+  }
+
+  std::filesystem::path path_;
+};
+
+const std::filesystem::path& testTempDir() {
+  static const TestTempDir dir;
+  return dir.path();
 }
 
 std::filesystem::path tempPath(const std::string& suffix) {
-  auto dir = testTempDir();
-  std::filesystem::create_directories(dir);
-  return dir / suffix;
+  return testTempDir() / suffix;
 }
 
 void writeStubFile(const std::filesystem::path& p,
@@ -322,6 +348,99 @@ TEST(ChatterboxEngineOptions, CfgRatePositiveForwarded) {
   EXPECT_FLOAT_EQ(
       qvac::ttsggml::chatterbox::engineOptionsForTests(cfg).s3gen_cfg_rate,
       0.7f);
+}
+
+// Unset knobs keep the engine's own defaults, so an existing config maps to
+// exactly the options it did before these fields existed.
+TEST(ChatterboxEngineOptions, UnsetEngineKnobsKeepEngineDefaults) {
+  const tts_cpp::chatterbox::EngineOptions defaults;
+  const auto opts =
+      qvac::ttsggml::chatterbox::engineOptionsForTests(ChatterboxConfig{});
+  EXPECT_EQ(opts.n_predict, defaults.n_predict);
+  EXPECT_EQ(opts.cfm_steps, defaults.cfm_steps);
+  EXPECT_EQ(opts.stream_cfm_steps, defaults.stream_cfm_steps);
+  EXPECT_EQ(
+      opts.stream_left_context_tokens, defaults.stream_left_context_tokens);
+  EXPECT_EQ(opts.max_sentence_chars, defaults.max_sentence_chars);
+  EXPECT_EQ(opts.crossfade_ms, defaults.crossfade_ms);
+  EXPECT_EQ(opts.top_k, defaults.top_k);
+  EXPECT_FLOAT_EQ(opts.top_p, defaults.top_p);
+  EXPECT_FLOAT_EQ(opts.temperature, defaults.temperature);
+  EXPECT_FLOAT_EQ(opts.repeat_penalty, defaults.repeat_penalty);
+  EXPECT_FLOAT_EQ(opts.exaggeration, defaults.exaggeration);
+  EXPECT_FLOAT_EQ(opts.cfg_weight, defaults.cfg_weight);
+  EXPECT_FLOAT_EQ(opts.min_p, defaults.min_p);
+}
+
+TEST(ChatterboxEngineOptions, LengthAndSplitKnobsForwarded) {
+  ChatterboxConfig cfg;
+  cfg.nPredict = 2500;
+  cfg.maxSentenceChars = 180;
+  cfg.crossfadeMs = 0;
+  cfg.batchCfmSteps = 7;
+  cfg.streamCfmSteps = 1;
+  cfg.streamLeftContextTokens = 50;
+  const auto opts = qvac::ttsggml::chatterbox::engineOptionsForTests(cfg);
+  EXPECT_EQ(opts.n_predict, 2500);
+  EXPECT_EQ(opts.max_sentence_chars, 180);
+  EXPECT_EQ(opts.crossfade_ms, 0);
+  EXPECT_EQ(opts.cfm_steps, 7);
+  EXPECT_EQ(opts.stream_cfm_steps, 1);
+  EXPECT_EQ(opts.stream_left_context_tokens, 50);
+}
+
+TEST(ChatterboxEngineOptions, SamplingAndExpressivityForwarded) {
+  ChatterboxConfig cfg;
+  cfg.topK = 0;
+  cfg.topP = 0.9f;
+  cfg.temperature = 0.0f;
+  cfg.repeatPenalty = 1.0f;
+  cfg.exaggeration = 0.8f;
+  cfg.cfgWeight = 0.0f;
+  cfg.minP = 0.05f;
+  const auto opts = qvac::ttsggml::chatterbox::engineOptionsForTests(cfg);
+  EXPECT_EQ(opts.top_k, 0);
+  EXPECT_FLOAT_EQ(opts.top_p, 0.9f);
+  EXPECT_FLOAT_EQ(opts.temperature, 0.0f);
+  EXPECT_FLOAT_EQ(opts.repeat_penalty, 1.0f);
+  EXPECT_FLOAT_EQ(opts.exaggeration, 0.8f);
+  EXPECT_FLOAT_EQ(opts.cfg_weight, 0.0f);
+  EXPECT_FLOAT_EQ(opts.min_p, 0.05f);
+}
+
+TEST(ChatterboxValidate, OutOfRangeEngineKnobsRejected) {
+  const auto reject = [](void (*mutate)(ChatterboxConfig&)) {
+    auto cfg = minimallyValidStubConfig();
+    mutate(cfg);
+    EXPECT_THROW(ChatterboxModel{cfg}, StatusError);
+  };
+  reject([](ChatterboxConfig& c) { c.nPredict = 0; });
+  reject([](ChatterboxConfig& c) { c.batchCfmSteps = -1; });
+  reject([](ChatterboxConfig& c) { c.streamLeftContextTokens = -1; });
+  reject([](ChatterboxConfig& c) { c.maxSentenceChars = -1; });
+  reject([](ChatterboxConfig& c) { c.crossfadeMs = -1; });
+  reject([](ChatterboxConfig& c) { c.topK = -1; });
+  reject([](ChatterboxConfig& c) { c.topP = 0.0f; });
+  reject([](ChatterboxConfig& c) { c.topP = 1.5f; });
+  reject([](ChatterboxConfig& c) { c.temperature = -0.1f; });
+  reject([](ChatterboxConfig& c) { c.repeatPenalty = 0.0f; });
+  reject([](ChatterboxConfig& c) { c.cfgWeight = -0.5f; });
+  reject([](ChatterboxConfig& c) { c.minP = 1.5f; });
+  reject([](ChatterboxConfig& c) {
+    c.exaggeration = std::numeric_limits<float>::quiet_NaN();
+  });
+}
+
+TEST(ChatterboxValidate, BoundaryEngineKnobsAccepted) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.nPredict = 1;
+  cfg.topK = 0;
+  cfg.topP = 1.0f;
+  cfg.temperature = 0.0f;
+  cfg.cfgWeight = 0.0f;
+  cfg.minP = 0.0f;
+  cfg.exaggeration = -0.5f;
+  EXPECT_NO_THROW(ChatterboxModel{cfg});
 }
 
 // ─────────────────────────────────────────────────────────────────────

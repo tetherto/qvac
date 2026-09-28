@@ -19,6 +19,7 @@ auto qvac_lib_inference_addon_bci_exports(
     }                                                                          \
   }
 
+  V("assessFit", qvac_lib_inference_addon_bci::assessFit)
   V("createInstance", qvac_lib_inference_addon_bci::createInstance)
   V("runJob", qvac_lib_inference_addon_bci::runJob)
   V("reload", qvac_lib_inference_addon_bci::reload)

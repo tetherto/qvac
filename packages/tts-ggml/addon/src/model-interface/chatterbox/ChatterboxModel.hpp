@@ -164,6 +164,12 @@ private:
   double realTimeFactor_ = 0.0;
   double tokensPerSecond_ = 0.0;
   size_t textLength_ = 0;
+  // Engine stage stats of the last synthesis (SynthesisResult t3_ms /
+  // s3gen_ms / t3_tokens): T3 decode and S3Gen+HiFT wall time, and the speech
+  // tokens T3 emitted.
+  double t3Ms_ = 0.0;
+  double s3genMs_ = 0.0;
+  int64_t t3Tokens_ = 0;
 
   int backendDevice_ = 0;
   int backendId_ = 0;
@@ -177,6 +183,9 @@ private:
   // as backendIdFromName() in BackendUtils.hpp (-1 = no enhancer loaded).
   int enhancerBackendDevice_ = -1;
   int enhancerBackendId_ = -1;
+  // LavaSR denoiser backend, same codes and sentinels as the enhancer's.
+  int denoiserBackendDevice_ = -1;
+  int denoiserBackendId_ = -1;
 
   mutable std::atomic_bool cancelRequested_{false};
 };

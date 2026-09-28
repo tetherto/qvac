@@ -219,6 +219,60 @@ registerOperationMetrics<{ modelId?: string }, { stats?: TranscribeStats }>({
   }
 })
 
+// BCI runs on the same whisper.cpp decoder as the whisper ASR engine, so it
+// reports that engine's stage timings plus its own window counters. The
+// streaming variant gets no stats from the addon — only the timing.
+function bciGauges(res: { stats?: TranscribeStats }): Record<string, number> {
+  const gauges: Record<string, number> = {}
+  const modelExecMs = readModelExecutionMs(res)
+  if (modelExecMs !== undefined) gauges['modelExecutionTime'] = modelExecMs
+  if (res.stats?.tokensPerSecond !== undefined) {
+    gauges['tokensPerSecond'] = res.stats.tokensPerSecond
+  }
+  if (res.stats?.totalTokens !== undefined) gauges['totalTokens'] = res.stats.totalTokens
+  if (res.stats?.totalSegments !== undefined) gauges['totalSegments'] = res.stats.totalSegments
+  // No totalTime gauge: the addon reports it in seconds while every other
+  // producer of this gauge uses ms. totalWallMs is the same measurement in ms.
+  if (res.stats?.totalWallMs !== undefined) gauges['totalWallMs'] = res.stats.totalWallMs
+  if (res.stats?.processCalls !== undefined) gauges['processCalls'] = res.stats.processCalls
+  if (res.stats?.whisperEncodeTime !== undefined) {
+    gauges['whisperEncodeTime'] = res.stats.whisperEncodeTime
+  }
+  if (res.stats?.whisperDecodeTime !== undefined) {
+    gauges['whisperDecodeTime'] = res.stats.whisperDecodeTime
+  }
+  if (res.stats?.whisperSampleMs !== undefined) {
+    gauges['whisperSampleMs'] = res.stats.whisperSampleMs
+  }
+  if (res.stats?.whisperBatchdMs !== undefined) {
+    gauges['whisperBatchdMs'] = res.stats.whisperBatchdMs
+  }
+  if (res.stats?.whisperPromptMs !== undefined) {
+    gauges['whisperPromptMs'] = res.stats.whisperPromptMs
+  }
+  return gauges
+}
+
+registerOperationMetrics<{ modelId?: string }, { stats?: TranscribeStats }>({
+  op: 'bciTranscribe',
+  kind: 'handler',
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromFinalChunk: (res) => {
+    const gauges = bciGauges(res)
+    return Object.keys(gauges).length > 0 ? gauges : undefined
+  }
+})
+
+registerOperationMetrics<{ modelId?: string }, { stats?: TranscribeStats }>({
+  op: 'bciTranscribeStream',
+  kind: 'handler',
+  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+  fromFinalChunk: (res) => {
+    const gauges = bciGauges(res)
+    return Object.keys(gauges).length > 0 ? gauges : undefined
+  }
+})
+
 registerOperationMetrics<{ modelId?: string }, { stats?: TtsStats }>({
   op: 'textToSpeech',
   kind: 'handler',

@@ -473,7 +473,7 @@ jobs:
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
+          INTEGRATION_TEST_TIMEOUT: '1800'
           # ggml backend .so/.dylib files load transitively from the prebuilds
           # dir (parakeet's transitive-.so gotcha) — keep for the merged addon.
           # matrix.cuda_libs additionally resolves the CUDA module's

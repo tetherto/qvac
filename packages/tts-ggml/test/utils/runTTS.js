@@ -235,25 +235,20 @@ async function runTTS(model, params, expectation = {}, options = {}) {
 
     const stats = response.stats || jobStats
 
+    // Every engine stat passes through, with only the three rates rounded for
+    // logging. An allowlist here used to drop fields the engine reported
+    // (gpuUnsupported, then the per-engine stage stats), so tests read what
+    // the addon emitted rather than a curated subset.
     const roundedStats = stats
       ? {
+          ...stats,
           totalTime: stats.totalTime ? Number(stats.totalTime.toFixed(4)) : stats.totalTime,
           tokensPerSecond: stats.tokensPerSecond
             ? Number(stats.tokensPerSecond.toFixed(2))
             : stats.tokensPerSecond,
           realTimeFactor: stats.realTimeFactor
             ? Number(stats.realTimeFactor.toFixed(5))
-            : stats.realTimeFactor,
-          audioDurationMs: stats.audioDurationMs,
-          totalSamples: stats.totalSamples,
-          backendDevice: stats.backendDevice,
-          backendId: stats.backendId,
-          // The allowlist above dropped gpuUnsupported, so gpu-smoke's
-          // policy-CPU escape hatch (allowPolicyCpu && dev===0 &&
-          // stats.gpuUnsupported) never saw the flag the engine set and the
-          // Chatterbox/Mali fallback failed the strict assertion. Pass it
-          // through (runSupertonicTTS already returns the raw stats object).
-          gpuUnsupported: stats.gpuUnsupported
+            : stats.realTimeFactor
         }
       : null
 

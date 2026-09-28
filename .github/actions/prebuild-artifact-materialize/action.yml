@@ -18,6 +18,10 @@ inputs:
     description: 'Place only this arch (pair with platform).'
     required: false
     default: ''
+  extra-dirs:
+    description: 'Space-separated non-platform directories the bundle legitimately ships, e.g. fabric''s "include share". Anything else under prebuilds/ still fails.'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -40,7 +44,7 @@ runs:
         echo "package=$pkg artifact=prebuilds-$pkg"
 
     - name: Download prebuilds bundle
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+      uses: ./.github/actions/download-artifact-retry
       with:
         name: ${{ steps.id.outputs.artifact }}
         path: ${{ runner.temp }}/prebuilds-staging
@@ -55,6 +59,7 @@ runs:
         PACKAGE: ${{ steps.id.outputs.package }}
         PLATFORM: ${{ inputs.platform }}
         ARCH: ${{ inputs.arch }}
+        EXTRA_DIRS: ${{ inputs.extra-dirs }}
       run: |
         set -euo pipefail
         STAGING="${RUNNER_TEMP}/prebuilds-staging"
@@ -77,9 +82,12 @@ runs:
         fi
 
         # require.addon() resolves prebuilds/<platform>-<arch>/<name>.bare, so any
-        # extra directory level would break every consumer at runtime. Fail instead.
+        # extra directory level would break every consumer at runtime. Fail
+        # instead, unless the caller declared it (fabric ships its C++ SDK under
+        # prebuilds/include and prebuilds/share).
         for d in "$DEST"/*/; do
           base="$(basename "$d")"
+          case " ${EXTRA_DIRS:-} " in *" $base "*) continue ;; esac
           case "$base" in
             *-*) : ;;
             *) echo "::error::'${base}/' is not a <platform>-<arch> directory. prebuilds/ must contain platform directories only."; exit 1 ;;
@@ -95,6 +103,7 @@ runs:
         PACKAGE: ${{ steps.id.outputs.package }}
         PLATFORM: ${{ inputs.platform }}
         ARCH: ${{ inputs.arch }}
+        EXTRA_DIRS: ${{ inputs.extra-dirs }}
       run: |
         $ErrorActionPreference = "Stop"
         $staging = Join-Path $env:RUNNER_TEMP "prebuilds-staging"
@@ -117,6 +126,7 @@ runs:
         }
 
         foreach ($d in Get-ChildItem -Directory $dest) {
+          if (($env:EXTRA_DIRS -split ' ' | Where-Object { $_ }) -contains $d.Name) { continue }
           if ($d.Name -notlike "*-*") {
             Write-Output "::error::'$($d.Name)/' is not a <platform>-<arch> directory. prebuilds/ must contain platform directories only."
             exit 1

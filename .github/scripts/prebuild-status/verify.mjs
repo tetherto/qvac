@@ -8,7 +8,7 @@
 // Env: GH_TOKEN, REPO, HEAD_SHA, CHANGED_PACKAGES, PR_UPDATED_AT
 import { execFileSync } from 'node:child_process'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { expectedPrebuilds, flattenPages, pollPrebuilds } from './lib.mjs'
+import { LOOKUP_FAILED, expectedPrebuilds, flattenPages, pollPrebuilds } from './lib.mjs'
 
 // Prebuilds take tens of minutes (median 9-32 min, worst ~32 min observed);
 // nothing resolves inside 2 minutes, so a longer interval costs no meaningful
@@ -32,10 +32,22 @@ function fetchStatuses(repo, sha) {
 }
 
 function fetchRun(repo, runId) {
+  // No run id in the status target_url: there is nothing to look up and nothing
+  // transient about it, so this is "untrusted", not "retry".
+  if (runId === null || runId === undefined || runId === '') return null
+
   try {
     return ghJson([`repos/${repo}/actions/runs/${runId}`])
-  } catch {
-    return null
+  } catch (err) {
+    // A 404 is a definite answer: that run does not exist, so the status is not
+    // from a trusted producer. Only a transient failure (5xx, network, truncated
+    // JSON) becomes LOOKUP_FAILED, which evaluatePackage turns into pending so
+    // the poll retries rather than letting an older success outrank a newer
+    // failure. Returning LOOKUP_FAILED for a 404 would hold the package pending
+    // to the deadline even with a valid newer status sitting there.
+    const text = `${err?.stderr ?? ''}${err?.message ?? ''}`
+    if (/\b404\b|Not Found/i.test(text)) return null
+    return LOOKUP_FAILED
   }
 }
 

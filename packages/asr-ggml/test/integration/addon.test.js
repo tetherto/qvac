@@ -15,7 +15,8 @@ const {
   makePcmNoise,
   setupJsLogger,
   getTestPaths,
-  getBackendsDir
+  getBackendsDir,
+  WHISPER_TEST_THREADS
 } = require('./helpers.js')
 
 const platform = detectPlatform()
@@ -321,7 +322,8 @@ test('Runtime stats are populated by default (enableStats)', { timeout: 120000 }
     whisperConfig: {
       language: 'en',
       audio_format: 's16le',
-      temperature: 0.0
+      temperature: 0.0,
+      n_threads: WHISPER_TEST_THREADS
     }
   }
 

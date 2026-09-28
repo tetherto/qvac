@@ -25,6 +25,7 @@ const {
   ensureCangjieTsv
 } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -61,6 +62,7 @@ async function loadChatterboxMtlTTS(params) {
   }
 
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     files: {
       modelDir: params.modelDir,
       t3Model: params.t3ModelPath,
@@ -145,6 +147,10 @@ test(
               'backendDevice surfaced in stats'
             )
             t.ok(typeof result.data.stats.backendId === 'number', 'backendId surfaced in stats')
+            const { t3Tokens, t3Ms, s3genMs, denoiserBackendDevice } = result.data.stats
+            t.ok(t3Tokens > 0, 'stats report the speech tokens T3 emitted')
+            t.ok(t3Ms > 0 && s3genMs > 0, 'stats report the T3 and S3Gen stage times')
+            t.is(denoiserBackendDevice, -1, 'no denoiser loaded -> denoiserBackendDevice=-1')
           } else {
             t.fail('expected stats from MTL run')
           }

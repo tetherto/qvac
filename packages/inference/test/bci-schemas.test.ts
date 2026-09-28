@@ -7,8 +7,11 @@ import {
   bciTranscribeResponseSchema,
   bciStreamOptsSchema,
   bciTranscribeStreamRequestSchema,
-  bciTranscribeStreamResponseSchema
+  bciTranscribeStreamResponseSchema,
+  bciStreamSegmentSchema
 } from '@/schemas/bci'
+import { transcribeSegmentSchema, transcribeStatsSchema } from '@/schemas/transcription'
+import { toTranscribeSegment } from '@/utils/transcribe-metadata'
 import { requestSchema, responseSchema } from '@/schemas/common'
 import { loadModelSrcRequestSchema, loadModelOptionsToRequestSchema } from '@/schemas/load-model'
 import { ModelType } from '@/schemas'
@@ -309,4 +312,76 @@ test('loadModelSrcRequestSchema: accepts a BCI load via the canonical modelType'
     modelConfig: {}
   })
   t.is(result.success, true)
+})
+
+// =============================================================================
+// Segment and stats fields specific to BCI
+// =============================================================================
+
+test('bci segments carry windowStartTimestep for delta streaming', (t) => {
+  // lib/stream.js attaches this to every segment emitted in `emit: 'delta'`
+  // mode. The segment's own timestamps are window-local, so without it a
+  // consumer cannot place the segment on the stream timeline.
+  const mapped = toTranscribeSegment({
+    text: 'tail',
+    start: 0.5,
+    end: 1.5,
+    toAppend: true,
+    windowStartTimestep: 1500
+  })
+  t.is(mapped.windowStartTimestep, 1500, 'the absolute window origin survives the mapper')
+  t.is(
+    bciStreamSegmentSchema.parse(mapped).windowStartTimestep,
+    1500,
+    'and the BCI stream segment schema declares it, so parsing keeps it'
+  )
+  t.is(
+    'windowStartTimestep' in transcribeSegmentSchema.parse(mapped),
+    false,
+    'while the shared ASR segment shape drops it, never promising it to ASR callers'
+  )
+
+  const batch = toTranscribeSegment({ text: 'x', start: 0, end: 1 })
+  t.is(
+    'windowStartTimestep' in batch,
+    false,
+    'batch segments do not gain a key the addon never sent'
+  )
+})
+
+test('bci response frames accept the diagnostics payload', (t) => {
+  const parsed = bciTranscribeResponseSchema.safeParse({
+    type: 'bciTranscribe',
+    text: '',
+    done: true,
+    diagnostics: { selectedBackend: 'metal', selectedDevice: 'gpu', graphicsApi: 'metal' }
+  })
+  t.ok(parsed.success, 'terminal frame carries backend diagnostics')
+})
+
+test('bci stats accept every field BCIModel.cpp emits', (t) => {
+  // The 14 fields the SDK surfaces of what the native model reports: no
+  // audioDurationMs / realTimeFactor / encoderMs / decoderMs / melSpecMs,
+  // which belong to the asr-ggml engines, and no totalTime, which the addon
+  // reports in seconds while this schema is in ms.
+  const emitted = {
+    tokensPerSecond: 12,
+    totalTokens: 24,
+    totalSegments: 3,
+    totalWallMs: 950,
+    processCalls: 4,
+    whisperEncodeTime: 10,
+    whisperDecodeTime: 20,
+    whisperSampleMs: 3,
+    whisperBatchdMs: 7,
+    whisperPromptMs: 1,
+    backendDevice: 1,
+    backendId: 1,
+    gpuMemTotalMb: 8192,
+    gpuMemFreeMb: 4096
+  }
+  // The schema is not strict, so parsing junk would still "succeed": compare
+  // the parsed output instead, which fails if a field is missing from the
+  // schema and gets stripped.
+  t.alike(transcribeStatsSchema.parse(emitted), emitted, 'every emitted field survives parsing')
 })

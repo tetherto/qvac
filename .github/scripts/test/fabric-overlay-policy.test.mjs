@@ -182,6 +182,27 @@ function fabricConsumerPackages() {
     .sort()
 }
 
+const NX_WORKFLOW = '.github/workflows/on-pr-nx.yml'
+
+// on-pr-nx builds its matrix from project.json instead of naming packages, so a
+// literal `packages/<pkg>` match cannot see what it covers. Resolve that the
+// same way the workflow does: any package with an on-pr target, minus the
+// carve-outs, which nx-project-matrix strips from the matrix and which are
+// driven by their own on-pr-<pkg>.yml. Counting a carve-out here would let that
+// file drop its detect-fabric-stack job with this test still green.
+function nxCoveredPackages () {
+  return readdirSync(PACKAGE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => {
+      const projectJson = join(PACKAGE_DIR, name, 'project.json')
+      if (!existsSync(projectJson)) return false
+      const onPr = JSON.parse(readFileSync(projectJson, 'utf8')).targets?.['on-pr']
+      if (onPr === undefined) return false
+      return onPr.options?.ci?.carveOut !== true
+    })
+}
+
 const WORKFLOWS = onPrWorkflows()
 const CONSUMER_PACKAGES = fabricConsumerPackages()
 
@@ -201,8 +222,10 @@ test('on-pr workflows and fabric consumers were discovered', () => {
     CONSUMER_PACKAGES.length >= 5,
     `found ${CONSUMER_PACKAGES.length} fabric consumers: ${CONSUMER_PACKAGES.join(', ')}`
   )
+  // Not one-per-consumer any more: on-pr-nx covers every package in its
+  // matrix. Coverage is asserted per package below, which is stronger.
   assert.ok(
-    FABRIC_WORKFLOWS.length >= 5,
+    FABRIC_WORKFLOWS.length >= 1,
     `found ${FABRIC_WORKFLOWS.length} on-pr workflows with a ${DETECT_JOB} job`
   )
 })
@@ -228,8 +251,13 @@ test('only the fabric producer detects the stack without resolving an artifact',
 // place. Tie the package list to the workflow list explicitly.
 test('every fabric-consumer package has an on-pr workflow that detects the stack', () => {
   const detectingSources = FABRIC_WORKFLOWS.map((p) => read(p))
+  const nxCovers = FABRIC_WORKFLOWS.includes(NX_WORKFLOW)
+    ? new Set(nxCoveredPackages())
+    : new Set()
   const missing = CONSUMER_PACKAGES.filter(
-    (pkg) => !detectingSources.some((source) => source.includes(`packages/${pkg}`))
+    (pkg) =>
+      !nxCovers.has(pkg) &&
+      !detectingSources.some((source) => source.includes(`packages/${pkg}`))
   )
   assert.deepEqual(
     missing,

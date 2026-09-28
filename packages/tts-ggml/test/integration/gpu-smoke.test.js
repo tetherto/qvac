@@ -45,6 +45,7 @@ const {
   ensureCosyvoiceModel
 } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -228,6 +229,7 @@ test(
     }
 
     const model = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
       modelDir: download.targetDir,
       refWavPath,
       language: 'en',
@@ -287,6 +289,7 @@ test(
     }
 
     const model = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
       modelDir: download.targetDir,
       t3ModelPath: path.join(download.targetDir, 'chatterbox-t3-mtl.gguf'),
       s3genModelPath: path.join(download.targetDir, 'chatterbox-s3gen-mtl.gguf'),
@@ -338,6 +341,7 @@ test(
     const supertonicPath = download.path || path.join(modelsDir, 'supertonic.gguf')
 
     const model = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: supertonicPath,
       language: 'en',
       voice: 'F1',
@@ -385,6 +389,7 @@ test(
     }
 
     const model = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: download.path,
       language: 'en',
       voice: 'F1',
@@ -431,6 +436,7 @@ test(
     }
 
     const model = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: download.path,
       language: 'en',
       voice: 'F1',
@@ -488,6 +494,7 @@ test(
     }
 
     const model = await loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
       modelDir: download.targetDir,
       refWavPath,
       language: 'en',
@@ -532,6 +539,7 @@ test(
     const supertonicPath = download.path || path.join(modelsDir, 'supertonic.gguf')
 
     const model = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: supertonicPath,
       language: 'en',
       voice: 'F1',
@@ -583,6 +591,7 @@ for (const v of [
         return
       }
       const model = await loadParlerTTS({
+        threads: TTS_TEST_THREADS,
         parlerModelPath: download.path,
         seed: 42,
         useGPU: true
@@ -625,6 +634,7 @@ for (const v of [
         return
       }
       const model = await loadParlerTTS({
+        threads: TTS_TEST_THREADS,
         parlerModelPath: download.path,
         seed: 42,
         useGPU: false
@@ -678,6 +688,7 @@ async function probeAndroidGpuVendor(t) {
   })
   if (!download || !download.success) return null
   const model = await loadSupertonicTTS({
+    threads: TTS_TEST_THREADS,
     supertonicModelPath: download.path,
     language: 'en',
     voice: 'F1',
@@ -730,6 +741,7 @@ test(
       }
     }
     const model = await loadCosyvoiceTTS({
+      threads: TTS_TEST_THREADS,
       cosyvoiceModelDir: download.modelDir,
       useGPU: true
     })
@@ -788,6 +800,7 @@ test(
       return
     }
     const model = await loadCosyvoiceTTS({
+      threads: TTS_TEST_THREADS,
       cosyvoiceModelDir: download.modelDir,
       useGPU: false
     })

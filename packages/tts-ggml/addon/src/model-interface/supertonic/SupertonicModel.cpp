@@ -60,6 +60,7 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   tts_cpp::supertonic::EngineOptions opts;
   opts.model_gguf_path = cfg.modelGgufPath;
   opts.voice           = cfg.voice;
+  opts.voice_json_path = cfg.voiceJsonPath;
   if (!cfg.language.empty()) opts.language = cfg.language;
   if (cfg.steps.has_value())   opts.steps = *cfg.steps;
   if (cfg.speed.has_value())   opts.speed = *cfg.speed;
@@ -72,6 +73,18 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
     opts.n_gpu_layers = *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
   opts.noise_npy_path = cfg.noiseNpyPath;
+  if (cfg.vulkanDevice.has_value())
+    opts.vulkan_device = *cfg.vulkanDevice;
+  // Set before applyVulkanPipelineCache, which only fills an empty pre-warm.
+  opts.prewarm_text = cfg.prewarmText;
+  if (cfg.streamChunkTokens.has_value())
+    opts.stream_chunk_tokens = *cfg.streamChunkTokens;
+  if (cfg.streamFirstChunkTokens.has_value())
+    opts.stream_first_chunk_tokens = *cfg.streamFirstChunkTokens;
+  if (cfg.streamChunkTolerancePct.has_value())
+    opts.stream_chunk_tolerance_pct = *cfg.streamChunkTolerancePct;
+  if (cfg.streamMinChunkTokens.has_value())
+    opts.stream_min_chunk_tokens = *cfg.streamMinChunkTokens;
 
   // Output-frequency selection. Forward the requested rate to the engine
   // (EngineOptions::output_sample_rate; 0 = native), which resamples with its
@@ -105,6 +118,38 @@ tts_cpp::supertonic::EngineOptions toEngineOptions(const SupertonicConfig& cfg) 
   return opts;
 }
 
+void validateStreamingOptions(const SupertonicConfig& cfg) {
+  const std::pair<const char*, const std::optional<int>*> fields[] = {
+      {"streamChunkTokens", &cfg.streamChunkTokens},
+      {"streamFirstChunkTokens", &cfg.streamFirstChunkTokens},
+      {"streamChunkTolerancePct", &cfg.streamChunkTolerancePct},
+      {"streamMinChunkTokens", &cfg.streamMinChunkTokens},
+  };
+  for (const auto& [name, value] : fields) {
+    if (value->has_value() && **value < 0) {
+      throw StatusError(
+          general_error::InvalidArgument, std::string(name) + " must be >= 0");
+    }
+  }
+  // tts-cpp exposes one-shot enhance() / denoise() only, and the Supertonic
+  // engine does not report its native rate before synthesis, so the addon has
+  // no seam-free streaming stage for either at this point. Reject the combo
+  // rather than silently skip post-processing on streamed chunks.
+  if (cfg.streamChunkTokens.value_or(0) > 0 &&
+      (!cfg.enhancerGgufPath.empty() || !cfg.denoiserGgufPath.empty())) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "SupertonicModel: the LavaSR enhancer/denoiser are not supported with "
+        "native chunk streaming (streamChunkTokens > 0). Use batch synthesis "
+        "or sentence-level streaming for enhanced or denoised output.");
+  }
+}
+
+} // namespace
+
+tts_cpp::supertonic::EngineOptions
+detail::engineOptionsForTests(const SupertonicConfig& cfg) {
+  return toEngineOptions(cfg);
 }
 
 SupertonicModel::SupertonicModel(SupertonicConfig config)
@@ -139,6 +184,18 @@ void SupertonicModel::validateConfig(const SupertonicConfig& cfg) {
     throw createTTSError(TTSErrorCode::ModelFileNotFound,
                          "noise npy not found: " + cfg.noiseNpyPath);
   }
+  if (!cfg.voiceJsonPath.empty() &&
+      !std::filesystem::exists(cfg.voiceJsonPath)) {
+    throw createTTSError(
+        TTSErrorCode::ModelFileNotFound,
+        "supertonic voice JSON not found: " + cfg.voiceJsonPath);
+  }
+  if (cfg.vulkanDevice.has_value() && *cfg.vulkanDevice < -1) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "vulkanDevice must be >= -1 (-1 = auto-pick, 0 = first adapter)");
+  }
+  validateStreamingOptions(cfg);
   if (!cfg.enhancerGgufPath.empty() &&
       !std::filesystem::exists(cfg.enhancerGgufPath)) {
     throw createTTSError(
@@ -221,19 +278,27 @@ void SupertonicModel::loadLocked() {
   LoadedEnhancer loaded = loadEnhancer(
       cfg_.enhancerGgufPath,
       backendDevice_ == kBackendDeviceGpu,
-      "SupertonicModel::load: lavasr enhancer: ");
+      "SupertonicModel::load: lavasr enhancer: ",
+      cfg_.vulkanDevice.value_or(0));
   enhancer_ = std::move(loaded.enhancer);
   enhancerBackendDevice_ = loaded.backendDevice;
   enhancerBackendId_ = loaded.backendId;
 
-  denoiser_ = loadDenoiser(
-      cfg_.denoiserGgufPath, "SupertonicModel::load: lavasr denoiser: ");
+  LoadedDenoiser denoiser = loadDenoiser(
+      cfg_.denoiserGgufPath,
+      backendDevice_ == kBackendDeviceGpu,
+      "SupertonicModel::load: lavasr denoiser: ");
+  denoiser_ = std::move(denoiser.denoiser);
+  denoiserBackendDevice_ = denoiser.backendDevice;
+  denoiserBackendId_ = denoiser.backendId;
 }
 
 void SupertonicModel::unloadLocked() {
   engine_.reset();
   enhancer_.reset();
   denoiser_.reset();
+  denoiserBackendDevice_ = -1;
+  denoiserBackendId_ = -1;
 }
 
 void SupertonicModel::cancel() const {
@@ -246,7 +311,8 @@ void SupertonicModel::cancel() const {
   if (e) e->cancel();
 }
 
-SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
+SupertonicModel::SynthesizeResult SupertonicModel::synthesize(
+    const std::string& text, const ChunkCallback& chunkCallback) {
   std::shared_ptr<tts_cpp::supertonic::Engine> engine;
   std::shared_ptr<tts_cpp::lavasr::Enhancer> enhancer;
   std::shared_ptr<tts_cpp::lavasr::Denoiser> denoiser;
@@ -267,10 +333,30 @@ SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
 
   textLength_ = text.size();
 
+  // Pin the streaming decision to the engine we actually call, as
+  // ChatterboxModel does, so a concurrent reload() cannot flip it mid-call.
+  const bool streaming = static_cast<bool>(chunkCallback) &&
+                         engine->options().stream_chunk_tokens > 0;
+
   const auto t0 = std::chrono::steady_clock::now();
   tts_cpp::supertonic::SynthesisResult result;
   try {
-    result = engine->synthesize(text);
+    if (streaming) {
+      // The engine calls this on this thread, once per chunk, at the emitted
+      // rate; the returned result still holds the full PCM. The sink is
+      // captured by copy so the lambda does not depend on that timing.
+      result = engine->synthesize(
+          text,
+          [sink = chunkCallback](
+              const float* pcm,
+              std::size_t samples,
+              int chunkIndex,
+              bool isLast) {
+            sink(pcmFloatToInt16(pcm, samples), chunkIndex, isLast);
+          });
+    } else {
+      result = engine->synthesize(text);
+    }
   } catch (const std::exception& e) {
     throw createTTSError(TTSErrorCode::SynthesisFailed,
                          std::string("supertonic.synthesize: ") + e.what());
@@ -279,8 +365,9 @@ SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
   // LavaSR neural denoiser (opt-in). Runs BEFORE the enhancer and preserves the
   // sample rate (cleans the signal, no rate change). The UL-UNAS forward is
   // implemented in qvac-fabric-speech.cpp PR #78; this runs whenever a
-  // denoiser was loaded (i.e. the pinned tts-cpp includes #78).
-  if (denoiser) {
+  // denoiser was loaded (i.e. the pinned tts-cpp includes #78). Streaming with
+  // either LavaSR stage is rejected in validateConfig.
+  if (denoiser && !streaming) {
     try {
       result.pcm = denoiser->denoise(result.pcm, result.sample_rate);
     } catch (const std::exception& e) {
@@ -293,7 +380,7 @@ SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
   // LavaSR neural bandwidth extension (opt-in). Runs on the full utterance
   // (batch path) and upsamples to 48 kHz; timed as part of synthesis so the
   // reported RTF reflects the enhanced output.
-  if (enhancer) {
+  if (enhancer && !streaming) {
     try {
       result.pcm = enhancer->enhance(result.pcm, result.sample_rate);
       result.sample_rate = enhancer->output_sample_rate();
@@ -329,7 +416,10 @@ SupertonicModel::Output SupertonicModel::synthesize(const std::string& text) {
       ? static_cast<double>(textLength_) / totalTime_
       : 0.0;
 
-  return pcmFloatToInt16(result.pcm.data(), result.pcm.size());
+  if (streaming) {
+    return {Output{}, true}; // chunks already emitted via chunkCallback
+  }
+  return {pcmFloatToInt16(result.pcm.data(), result.pcm.size()), false};
 }
 
 std::any SupertonicModel::process(const std::any& input) {
@@ -351,7 +441,13 @@ std::any SupertonicModel::process(const std::any& input) {
   } guard{jobInProgress_};
 
   cancelRequested_.store(false, std::memory_order_relaxed);
-  return std::any(synthesize(anyInput->text));
+  SynthesizeResult out = synthesize(anyInput->text, anyInput->chunkCallback);
+  // Streaming already published its chunks via chunkCallback -> OutputQueue;
+  // returning the concatenated PCM would duplicate them as a final
+  // outputArray event (matches ChatterboxModel::process).
+  if (out.wasStreaming)
+    return std::any{};
+  return std::any(std::move(out.pcm));
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats SupertonicModel::runtimeStats() const {
@@ -368,6 +464,10 @@ qvac_lib_inference_addon_cpp::RuntimeStats SupertonicModel::runtimeStats() const
       "enhancerBackendDevice", static_cast<int64_t>(enhancerBackendDevice_));
   stats.emplace_back(
       "enhancerBackendId", static_cast<int64_t>(enhancerBackendId_));
+  stats.emplace_back(
+      "denoiserBackendDevice", static_cast<int64_t>(denoiserBackendDevice_));
+  stats.emplace_back(
+      "denoiserBackendId", static_cast<int64_t>(denoiserBackendId_));
   return stats;
 }
 

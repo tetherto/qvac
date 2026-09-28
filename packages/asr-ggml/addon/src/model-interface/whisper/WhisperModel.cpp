@@ -170,6 +170,8 @@ void loadBackendsFromRoot(const std::filesystem::path& root) {
   ggml_backend_load_all_from_path(variantsDir.string().c_str());
 }
 
+} // namespace
+
 // Android, desktop linux-arm64, and CUDA-enabled linux-x64 / win32-x64
 // builds ship ggml with `GGML_BACKEND_DL=ON`, so no backend is statically
 // registered. Load the per-arch CPU + GPU modules once per process before
@@ -209,7 +211,6 @@ void ensureBackendsLoaded(const std::string& backendsDir) {
     ggml_backend_load_all();
   });
 }
-} // namespace
 #endif // __ANDROID__ || __linux__ || _WIN32
 
 namespace {

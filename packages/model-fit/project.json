@@ -84,7 +84,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/model-fit",
         "ci": {
-          "buildStep": "none",
           "nameTransform": "none",
           "repoName": "model-fit",
           "testGateMode": "none"

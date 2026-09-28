@@ -8,6 +8,12 @@ namespace qvac::ttsggml::supertonic {
 struct SupertonicConfig {
   std::string modelGgufPath;
   std::string voice;
+  /**
+   * External voice JSON ({ style_ttl, style_dp }), forwarded to
+   * EngineOptions::voice_json_path. Overrides the baked `voice` preset; the
+   * engine checks the tensor sizes against the model at construction.
+   */
+  std::string voiceJsonPath;
   std::string language = "en";
   std::optional<int> steps;
   /** Exact rate multiplier. Mutually exclusive with `pace` (engine rejects). */
@@ -47,6 +53,34 @@ struct SupertonicConfig {
 
   // Persistent Vulkan pipeline-cache dir; empty -> no cross-process cache.
   std::string vulkanCacheDir;
+
+  /**
+   * Vulkan adapter index, forwarded to EngineOptions::vulkan_device and to the
+   * LavaSR enhancer: 0 (engine default) = first adapter, N = the Nth, -1 =
+   * auto-pick by free VRAM preferring a discrete adapter.
+   */
+  std::optional<int> vulkanDevice;
+
+  /**
+   * Throwaway synthesis run at load (EngineOptions::prewarm_text) so GPU
+   * pipelines compile (and a Core ML vocoder sidecar specializes) before the
+   * first run(); the engine skips it on a plain CPU run. Wins over the
+   * vulkanCacheDir default pre-warm sentence.
+   */
+  std::string prewarmText;
+
+  /**
+   * Native streaming, forwarded to EngineOptions::stream_*. With
+   * streamChunkTokens > 0 the engine splits the text into chunks of about that
+   * many text tokens and emits each chunk's PCM as it is synthesized; 0 =
+   * batch. streamFirstChunkTokens sizes the first chunk (0 = same),
+   * streamChunkTolerancePct is the boundary-snap window (engine default 20)
+   * and streamMinChunkTokens the per-chunk floor (engine default 30).
+   */
+  std::optional<int> streamChunkTokens;
+  std::optional<int> streamFirstChunkTokens;
+  std::optional<int> streamChunkTolerancePct;
+  std::optional<int> streamMinChunkTokens;
 
   // LavaSR neural speech enhancement. A non-empty `enhancerGgufPath` is the
   // single switch: when set, the model loads the enhancer GGUF and
