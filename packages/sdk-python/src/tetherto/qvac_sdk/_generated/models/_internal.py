@@ -14862,7 +14862,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
     seed: Annotated[
         int | None,
         Field(
-            description="RNG seed for the backbone’s sampling (engine default 1234).",
+            description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
             ge=-2147483648,
             le=2147483647,
         ),
@@ -14901,7 +14901,8 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
         | None,
         Field(
             alias="dialogueReferenceSrcs",
-            description="MOSS-TTSD dialogue: one 24 kHz WAV per speaker, in the order the text tags them (`[S1]`, `[S2]`, …). The text must open with each recording’s transcript under its tag, followed by the lines to generate. Needs a MOSS-TTSD backbone as `modelSrc`; fixed for the loaded model.",
+            description="MOSS-TTSD dialogue: one 24 kHz WAV per speaker (one to five, at most 60 s combined), in the order the text tags them (`[S1]`, `[S2]`, …). The text must open with each recording’s transcript under its tag, followed by the lines to generate. Needs a MOSS-TTSD backbone as `modelSrc`; fixed for the loaded model.",
+            max_length=5,
             min_length=1,
         ),
     ] = None

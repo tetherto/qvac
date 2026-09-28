@@ -994,12 +994,20 @@ test('ttsConfigSchema: MOSS referenceAudioSrc and dialogueReferenceSrcs are excl
   }
 })
 
-test('ttsConfigSchema: rejects an empty MOSS dialogue reference list', (t) => {
-  const r = moss({
-    mossCodecEncoderModelSrc: 's3:///example/encoder.gguf',
-    dialogueReferenceSrcs: []
-  })
-  t.is(r.success, false, 'the addon needs at least one speaker reference')
+test('ttsConfigSchema: bounds the MOSS dialogue reference list to one-five speakers', (t) => {
+  const speakers = (count: number) =>
+    moss({
+      mossCodecEncoderModelSrc: 's3:///example/encoder.gguf',
+      dialogueReferenceSrcs: Array.from({ length: count }, (_, i) => `/voices/s${i + 1}.wav`)
+    })
+  t.is(speakers(0).success, false, 'the addon needs at least one speaker reference')
+  t.is(speakers(1).success, true)
+  t.is(speakers(5).success, true)
+  const six = speakers(6)
+  t.is(six.success, false, 'each entry is a source to resolve, so the list is capped')
+  if (!six.success) {
+    t.is(six.error.issues[0]?.path.join('.'), 'dialogueReferenceSrcs')
+  }
 })
 
 test('ttsConfigSchema: bounds MOSS durationTokens to the generation budget', (t) => {

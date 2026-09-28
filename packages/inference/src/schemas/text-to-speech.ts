@@ -693,6 +693,8 @@ export const ttsAudio8RuntimeConfigSchema = z
 // less the 31 delay-pattern drain rows and the two termination rows.
 const TTS_MOSS_MAX_DURATION_TOKENS = 2015
 
+const TTS_MOSS_MAX_DIALOGUE_SPEAKERS = 5
+
 // MOSS emits its native 24 kHz only (the addon rejects any other
 // `outputSampleRate`) and supports neither the LavaSR stages nor a smaller
 // first streaming chunk, so none of those fields exist on this arm.
@@ -724,14 +726,14 @@ const ttsMossRuntimeConfigShape = {
     ),
   useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+  // Not TTS_NGPU_LAYERS_DESC: MOSS does not offload per layer, so a layer
+  // count would misdescribe it — the value only picks the backend.
   nGpuLayers: ttsInt32Schema
     .optional()
     .describe(
       'Any non-zero value selects the GPU backend, 0 keeps MOSS on the CPU. Wins over `useGPU`; when both are set they must agree.'
     ),
-  seed: ttsInt32Schema
-    .optional()
-    .describe('RNG seed for the backbone’s sampling (engine default 1234).'),
+  seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
   ...ttsBackendDirFieldsShape
 }
 
@@ -1053,12 +1055,16 @@ export const ttsMossLoadConfigSchema = z
       .describe(
         'MOSS voice-cloning reference recording source: a 24 kHz WAV (no resampling; multichannel is downmixed, at most 60 s). No transcript needed. Fixed for the loaded model.'
       ),
+    // MOSS-TTSD covers one to five speakers. The engine itself sets no count
+    // (only a 60 s cap on the references combined), so without a bound here a
+    // single load could fan out into any number of parallel source downloads.
     dialogueReferenceSrcs: z
       .array(modelSrcInputSchema)
       .min(1)
+      .max(TTS_MOSS_MAX_DIALOGUE_SPEAKERS)
       .optional()
       .describe(
-        'MOSS-TTSD dialogue: one 24 kHz WAV per speaker, in the order the text tags them (`[S1]`, `[S2]`, …). The text must open with each recording’s transcript under its tag, followed by the lines to generate. Needs a MOSS-TTSD backbone as `modelSrc`; fixed for the loaded model.'
+        'MOSS-TTSD dialogue: one 24 kHz WAV per speaker (one to five, at most 60 s combined), in the order the text tags them (`[S1]`, `[S2]`, …). The text must open with each recording’s transcript under its tag, followed by the lines to generate. Needs a MOSS-TTSD backbone as `modelSrc`; fixed for the loaded model.'
       )
   })
   .superRefine(refineMossLoadConfig)

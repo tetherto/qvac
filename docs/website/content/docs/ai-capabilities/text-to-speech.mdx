@@ -507,12 +507,12 @@ const modelId = await loadModel({
 
 The MOSS-TTSD backbone is not in the QVAC Registry yet, so pass it as a local
 file; it shares the codec halves with MOSS-TTS. Load it with
-`dialogueReferenceSrcs`: one 24 kHz recording
-per speaker, in the order the text tags them (`[S1]`, `[S2]`, …; one to five
-speakers). The model continues the references, so the text must open with
-what each recording says under its tag, followed by the lines to generate;
-only the new lines come out as audio. Dialogue needs the codec encoder and
-excludes `referenceAudioSrc`.
+`dialogueReferenceSrcs`: one 24 kHz recording per speaker, in the order the
+text tags them (`[S1]`, `[S2]`, …; one to five speakers, at most 60 s of
+reference audio combined). The model continues the references, so the text
+must open with what each recording says under its tag, followed by the lines
+to generate; only the new lines come out as audio. Dialogue needs the codec
+encoder and excludes `referenceAudioSrc`.
 
 ```ts
 const modelId = await loadModel({
