@@ -98,7 +98,7 @@ jobs:
             drift|nonworkspace-manifest)
               has 'pnpm-lock.yaml' || fail "the override did not change the lockfile"
               ! grep -qE "$WS" <<<"$CHANGED" || fail "a workspace manifest changed" ;;
-            plugin-bump)  has 'pnpm-lock.yaml' && has 'plugins/opencode-plugin/package.json' || fail "want lockfile + plugin manifest" ;;
+            plugin-bump)  has 'pnpm-lock.yaml' && has 'plugins/opencode/package.json' || fail "want lockfile + plugin manifest" ;;
             root-bump)    has 'pnpm-lock.yaml' && has 'package.json' || fail "want lockfile + root manifest" ;;
             workflow-only) ! grep -qE '^packages/|pnpm-lock' <<<"$CHANGED" || fail "want no package paths" ;;
           esac
@@ -123,7 +123,7 @@ jobs:
           head-ref: ${{ steps.build.outputs.head }}
           config-ref: ${{ steps.build.outputs.base }}
 
-      - name: Report
+      - name: Report and assert
         shell: bash
         env:
           CASE: ${{ matrix.case }}
@@ -133,7 +133,25 @@ jobs:
         run: |
           set -euo pipefail
           ROWS="${ALLROWS:-[]}"
-          PKGS=$(echo "$ROWS" | jq -r '[.[].package] | unique | join(",")')
-          N=$(echo "$ROWS" | jq '[.[].package] | unique | length')
+          PKGS=$(echo "$ROWS" | jq -c '[.[].package] | unique')
+          N=$(echo "$PKGS" | jq 'length')
           SETTING=$(jq -c '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates' nx.json)
-          echo "RESULT case=$CASE lane=$LANE setting=$SETTING any=$ANY packages=$N [$PKGS]"
+          echo "RESULT case=$CASE lane=$LANE setting=$SETTING any=$ANY packages=$N $PKGS"
+
+          ALL=14
+          FABRIC='["classification-ggml","embed-llamacpp","fabric","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","vla-ggml"]'
+          ok() { echo "VERDICT $CASE/$LANE: PASS ($1)"; }
+          bad() { echo "::error::VERDICT $CASE/$LANE: FAIL - $1"; exit 1; }
+          case "$CASE" in
+            addon-bump|addon-source)
+              [ "$PKGS" = '["ocr-ggml"]' ] && ok "ocr-ggml only" || bad "want [ocr-ggml], got $PKGS" ;;
+            shared-bump)
+              MISSING=$(jq -nc --argjson want "$FABRIC" --argjson got "$PKGS" '$want - $got')
+              [ "$MISSING" = "[]" ] && ok "fabric + all consumers" || bad "consumers missing: $MISSING" ;;
+            drift|nonworkspace-manifest|root-bump)
+              [ "$SETTING" = '"all"' ] && [ "$N" = "$ALL" ] && ok "fallback, all $ALL" || bad "want fallback to all $ALL, got setting=$SETTING n=$N" ;;
+            plugin-bump)
+              [ "$SETTING" = '[]' ] && [ "$N" = "0" ] && ok "narrow, no addon rows" || bad "want narrow with no addon rows, got setting=$SETTING $PKGS" ;;
+            workflow-only)
+              [ "$N" = "0" ] && ok "nothing selected" || bad "want nothing, got $PKGS" ;;
+          esac

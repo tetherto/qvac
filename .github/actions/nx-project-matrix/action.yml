@@ -171,18 +171,19 @@ runs:
 
           # nx.json ignores the lockfile for affected selection, because pnpm
           # rewrites shared entries across most importers on a one-line change.
-          # A lockfile change with no workspace manifest behind it is
-          # unexplained, so keep today's behaviour for this run instead of
-          # selecting nothing. If the paths cannot be read, do the same rather
-          # than narrow blind.
+          # lockfile-selection.mjs corrects the two cases that leaves wrong; see
+          # its header. If the paths cannot be read, keep today's behaviour
+          # rather than narrow blind.
           if [ -f "$CHANGED_FILES" ]; then
             PATHS=$(cat "$CHANGED_FILES")
           else
-            PATHS=$(git diff --name-only "$BASE...$HEAD" 2>/dev/null) || PATHS="pnpm-lock.yaml"
+            PATHS=$(git diff --name-only "$BASE...$HEAD" 2>/dev/null) || PATHS=$'pnpm-lock.yaml\npackage.json'
           fi
-          LOCKFILE_MODE=$(printf '%s\n' "$PATHS" | "$GITHUB_ACTION_PATH/lockfile-mode.sh")
+          SELECTION=$(printf '%s\n' "$PATHS" | node "$GITHUB_ACTION_PATH/lockfile-selection.mjs")
+          LOCKFILE_MODE=$(jq -r '.mode' <<< "$SELECTION")
+          DEPENDENTS=$(jq -c '.extra' <<< "$SELECTION")
           if [ "$LOCKFILE_MODE" = "all" ]; then
-            echo "::notice::pnpm-lock.yaml changed with no workspace package.json; selecting every project for this run, as before"
+            echo "::notice::pnpm-lock.yaml changed with no workspace package manifest behind it; selecting every project for this run, as before"
             jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = "all"' nx.json > "${RUNNER_TEMP}/nx.json"
             cp "${RUNNER_TEMP}/nx.json" nx.json
           fi
@@ -195,6 +196,11 @@ runs:
             AFFECTED=$(pnpm exec nx show projects --affected -t "$TARGET" --base="$BASE" --head="$HEAD" --json \
               | tail -n1 \
               | jq -c 'map(sub("^@qvac/"; ""))')
+          fi
+
+          if [ "$DEPENDENTS" != "[]" ]; then
+            echo "::notice::workspace dependents of the changed manifests, added: $DEPENDENTS"
+            AFFECTED=$(jq -c --argjson extra "$DEPENDENTS" '. + $extra | unique' <<< "$AFFECTED")
           fi
           echo "Affected ($TARGET, transitive): $AFFECTED"
         fi
