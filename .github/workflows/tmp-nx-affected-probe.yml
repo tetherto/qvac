@@ -55,6 +55,9 @@ jobs:
             fs.writeFileSync(p, JSON.stringify(j,null,2)+'\n');
           "
           pnpm install --lockfile-only --ignore-scripts
+          # --lockfile-only leaves node_modules on the old graph, and nx then
+          # prints an out-of-date warning as its last line. Re-sync to match.
+          pnpm install --ignore-scripts
 
       - name: Which importers did the lockfile change touch?
         shell: bash
@@ -95,22 +98,28 @@ jobs:
           cp nx.json /tmp/nx.auto.json
           jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = []' nx.json > /tmp/nx.none.json
 
+          # nx can print warnings after its JSON; take the array line itself.
+          json_line() { grep -E '^\[' | tail -n1; }
+
           run_affected() {
             cp "$1" nx.json; rm -rf .nx
             out=$(pnpm exec nx show projects --affected \
-              --base="$BASE_SHA" --head="$HEAD_SHA" --json 2>/dev/null | tail -n1)
-            case "$out" in \[*) echo "$out";; *) echo "[]";; esac
+              --base="$BASE_SHA" --head="$HEAD_SHA" --json 2>"/tmp/err.$2" | json_line)
+            [ -n "$out" ] && echo "$out" || echo "[]"
           }
 
-          TOTAL=$(pnpm exec nx show projects --json | tail -n1 | jq 'length')
-          D=$(run_affected /tmp/nx.default.json)
-          A=$(run_affected /tmp/nx.auto.json)
-          N=$(run_affected /tmp/nx.none.json)
+          cp /tmp/nx.auto.json nx.json
+          TOTAL=$(pnpm exec nx show projects --json 2>/dev/null | json_line | jq 'length')
+          D=$(run_affected /tmp/nx.default.json default)
+          A=$(run_affected /tmp/nx.auto.json auto)
+          N=$(run_affected /tmp/nx.none.json none)
           cp /tmp/nx.auto.json nx.json
 
-          echo "RESULT total                       : $TOTAL"
-          echo "RESULT default (all)               : $(echo "$D" | jq 'length')"
-          echo "RESULT auto                        : $(echo "$A" | jq 'length')"
-          echo "RESULT empty list (lockfile marks nothing) : $(echo "$N" | jq 'length')"
+          echo "RESULT total                 : $TOTAL"
+          echo "RESULT default (all)         : $(echo "$D" | jq 'length')"
+          echo "RESULT auto                  : $(echo "$A" | jq 'length')"
+          echo "RESULT empty list            : $(echo "$N" | jq 'length')"
           echo "RESULT projects under empty list:"
           echo "$N" | jq -r '.[]' | sed 's/^/  KEEP /'
+          echo "--- nx stderr for the empty-list run (does it accept []?):"
+          sed 's/^/  STDERR /' /tmp/err.none | head -10
