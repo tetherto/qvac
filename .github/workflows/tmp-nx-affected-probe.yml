@@ -2,17 +2,18 @@ name: TMP nx affected probe (QVAC-25682)
 
 # THROWAWAY. Deleted before this PR is ready for review.
 #
-# Does pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates do anything
-# here? @nx/js is not a dependency of this workspace, so the key may be read by
-# nx core or silently ignored, and nx.json cannot tell you which.
+# Does pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates narrow the
+# affected set here? @nx/js is not a dependency of this workspace, so the key
+# may be read by nx core or ignored, and nx.json cannot tell you which.
 #
-# Probe v1 fed `pnpm-lock.yaml` through --stdin on a branch whose lockfile was
-# unchanged, so nx had no delta to analyse and "auto" had nothing to narrow. It
-# reported 25 either way, which proved nothing.
-#
-# v2 uses a real lockfile-only commit from main (d2e24d152, parent 51d90bf16)
-# so there IS a lockfile delta, and tests BOTH forms the matrix action uses:
-# --base/--head on pull_request, and --stdin on pull_request_target.
+# v1 fed pnpm-lock.yaml through --stdin on a branch whose lockfile matched base,
+# so there was no delta to analyse. Proved nothing.
+# v2/v3 used a real lockfile commit (d2e24d152) but that commit deletes 865
+# resolved entries, so "everything is affected" may be the CORRECT answer there
+# and the test could not separate that from the config being inert.
+# v4 builds the delta on purpose: add one dependency to ONE package, so exactly
+# one project's resolved dependencies change. If auto is live, the affected set
+# must be small. If it returns all 39, the config is doing nothing.
 
 # push-scoped to this branch: a brand-new workflow file cannot be dispatched,
 # since workflow_dispatch resolves against the default branch.
@@ -24,14 +25,10 @@ on:
 permissions:
   contents: read
 
-env:
-  LOCK_COMMIT: d2e24d152
-  LOCK_PARENT: 51d90bf16
-
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
@@ -45,83 +42,55 @@ jobs:
       - shell: bash
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Confirm the probe commit really is lockfile-only
+      - name: Build a one-package lockfile delta
         shell: bash
         run: |
           set -euo pipefail
-          echo "files in $LOCK_COMMIT:"
-          git show --name-only --format= "$LOCK_COMMIT"
+          git config user.email probe@local
+          git config user.name probe
+          BASE=$(git rev-parse HEAD)
+          echo "BASE_SHA=$BASE" >> "$GITHUB_ENV"
 
-      - name: Does installing @nx/js make the setting live?
+          pnpm add -D --filter @qvac/ocr-ggml tiny-invariant@1.3.3 --ignore-scripts
+
+          echo "--- files changed:"
+          git status --porcelain
+          echo "--- lockfile importer sections touched:"
+          git diff -- pnpm-lock.yaml | grep -oE "^[-+] *packages/[a-z0-9-]+" | sort -u || true
+
+          git add -A
+          git commit -q -m "probe: one dependency on one package"
+          echo "HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: A/B the affected set
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          git show "$BASE_SHA:nx.json" > /tmp/nx.base.json
           cp nx.json /tmp/nx.with.json
           jq 'del(.pluginsConfig)' nx.json > /tmp/nx.without.json
-          NXV=$(node -p "require('./package.json').devDependencies.nx")
-          echo "installing @nx/js@$NXV to match nx"
-          pnpm add -D -w "@nx/js@$NXV" --ignore-scripts >/dev/null 2>&1 || {
-            echo "::warning::could not add @nx/js@$NXV"; exit 0; }
 
-          jsc() {
-            cp "$1" nx.json; rm -rf .nx
-            pnpm exec nx show projects --affected \
-              --base="$LOCK_PARENT" --head="$LOCK_COMMIT" --json 2>/dev/null \
-              | tail -n1 | jq 'length'
-          }
-          JW=$(jsc /tmp/nx.with.json)
-          JO=$(jsc /tmp/nx.without.json)
-          cp /tmp/nx.with.json nx.json
-          echo "with @nx/js installed  WITH auto : $JW"
-          echo "with @nx/js installed  WITHOUT   : $JO"
-          if [ "$JW" -lt "$JO" ]; then
-            echo "::notice::Installing @nx/js makes the setting work ($JO -> $JW). That is the missing piece."
-          else
-            echo "::warning::Still no narrowing even with @nx/js installed."
-          fi
-          git checkout -- package.json pnpm-lock.yaml 2>/dev/null || true
-
-      - name: Four-way A/B
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp nx.json /tmp/nx.with.json
-          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.without.json
-          echo "pnpm-lock.yaml" > /tmp/changed.txt
-
-          count() {  # $1 = nx.json variant, $2 = mode
+          run_affected() {
             cp "$1" nx.json
             rm -rf .nx
-            if [ "$2" = "range" ]; then
-              pnpm exec nx show projects --affected \
-                --base="$LOCK_PARENT" --head="$LOCK_COMMIT" --json 2>/dev/null \
-                | tail -n1 | jq 'length'
-            else
-              pnpm exec nx show projects --affected --stdin --json < /tmp/changed.txt 2>/dev/null \
-                | tail -n1 | jq 'length'
-            fi
+            pnpm exec nx show projects --affected \
+              --base="$BASE_SHA" --head="$HEAD_SHA" --json 2>/dev/null | tail -n1
           }
 
           TOTAL=$(pnpm exec nx show projects --json | tail -n1 | jq 'length')
-          RW=$(count /tmp/nx.with.json range)
-          RO=$(count /tmp/nx.without.json range)
-          SW=$(count /tmp/nx.with.json stdin)
-          SO=$(count /tmp/nx.without.json stdin)
+          W=$(run_affected /tmp/nx.with.json)
+          O=$(run_affected /tmp/nx.without.json)
           cp /tmp/nx.with.json nx.json
 
-          echo "total projects                 : $TOTAL"
-          echo "--base/--head  WITH auto       : $RW"
-          echo "--base/--head  WITHOUT         : $RO"
-          echo "--stdin        WITH auto       : $SW"
-          echo "--stdin        WITHOUT         : $SO"
+          WC=$(echo "$W" | jq 'length'); OC=$(echo "$O" | jq 'length')
+          echo "total projects        : $TOTAL"
+          echo "affected WITH auto    : $WC"
+          echo "affected WITHOUT      : $OC"
+          echo "--- WITH auto, the projects:"
+          echo "$W" | jq -r '.[]' | head -40
 
-          if [ "$RW" -lt "$RO" ]; then
-            echo "::notice::auto works on the --base/--head path ($RO -> $RW)."
+          if [ "$WC" -lt "$OC" ]; then
+            echo "::notice::auto narrows a single-package change: $OC -> $WC"
           else
-            echo "::warning::auto did NOT narrow on --base/--head."
-          fi
-          if [ "$SW" -lt "$SO" ]; then
-            echo "::notice::auto works on the --stdin path ($SO -> $SW)."
-          else
-            echo "::warning::auto did NOT narrow on --stdin, which is the path the addon on-PR lanes use."
+            echo "::warning::auto did not narrow a single-package change ($WC of $TOTAL). The config is inert here."
           fi
