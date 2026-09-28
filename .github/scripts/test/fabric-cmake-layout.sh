@@ -94,6 +94,18 @@ mkdir -p pnpm/node_modules/@qvac
 ln -s "$WORK/$store/fabric" pnpm/node_modules/@qvac/fabric
 expect "pnpm isolated" pnpm "$store/fabric-$HOST/addon/prebuilds/$HOST/qvac__fabric.bare"
 
+# Cross-built slices are never fabric's optional deps: the consumer depends on
+# them directly, so pnpm links them into the consumer's node_modules only.
+write_consumer pnpm-direct
+meta_store="pnpm-direct/node_modules/.pnpm/@qvac+fabric@0.18.0/node_modules/@qvac"
+slice_store="pnpm-direct/node_modules/.pnpm/@qvac+fabric-$HOST@0.18.0/node_modules/@qvac"
+write_meta "$meta_store/fabric" 0.18.0
+write_slice "$slice_store/fabric-$HOST"
+mkdir -p pnpm-direct/node_modules/@qvac
+ln -s "$WORK/$meta_store/fabric" pnpm-direct/node_modules/@qvac/fabric
+ln -s "$WORK/$slice_store/fabric-$HOST" "pnpm-direct/node_modules/@qvac/fabric-$HOST"
+expect "pnpm, slice as a direct dependency" pnpm-direct "pnpm-direct/node_modules/@qvac/fabric-$HOST/addon/prebuilds/$HOST/qvac__fabric.bare"
+
 write_consumer hoisted
 write_meta hoisted/node_modules/@qvac/fabric 0.18.0
 write_slice "hoisted/node_modules/@qvac/fabric-$HOST"
