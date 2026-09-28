@@ -204,7 +204,12 @@ jobs:
             echo "::error::No train projects to build"
             exit 1
           fi
-          pnpm exec nx run-many -t build --projects="$TRAIN_PROJECTS"
+          # `^build` would also build every workspace package the train links,
+          # including the native addons, whose build compiles C++ with a
+          # toolchain this runner does not have. The train compiles against
+          # their checked-in .d.ts and rag's dist from its install `prepare`.
+          # Train packages still build in dependency order among themselves.
+          pnpm exec nx run-many -t build --projects="$TRAIN_PROJECTS" --exclude-task-dependencies
 
       # The publish job turns lifecycle scripts off, so a package's own
       # prepublishOnly check (cli's check-publish-ready.cjs) runs here instead.
