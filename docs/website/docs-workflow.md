@@ -19,6 +19,7 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 - [Versioning](#versioning)
 - [Branch Strategy and Deployment](#branch-strategy-and-deployment)
   - [Branch Strategy](#branch-strategy)
+  - [Builder configuration](#builder-configuration)
   - [Staging (automatic)](#staging-automatic)
   - [Production (manual promotion)](#production-manual-promotion)
 - [CI Workflows](#ci-workflows)
@@ -335,6 +336,22 @@ Hosting provider builds              ▼
 
 With `main` + `docs-production`, production is always a fast-forward of a reviewed, already-on-`main` state — so the two branches never diverge historically and staging is always what production will become.
 
+### Builder configuration
+
+The build runs in two phases, and each sizes its own parallelism from the core count the builder reports — the host's, not the container's share. On a 16-core builder that means more than 12 GB, and a smaller builder is killed by the kernel partway through `Creating an optimized production build`. It prints no error, because the overrun is Turbopack's native memory rather than a V8 heap it could abort on.
+
+Three build-time environment variables cap both phases and bring the whole build under 5 GB. Set them on every builder that runs `next build`; they must be real environment variables, since Next and Turbopack read them at startup, before any `.env` file:
+
+- `TURBO_TASKS_AVAILABLE_PARALLELISM=1` — threads Turbopack compiles with. This is the one that governs the peak.
+- `CIRCLE_NODE_TOTAL=2` — static generation workers, as `value - 1`.
+- `NODE_OPTIONS=--max-old-space-size=2048` — V8 heap ceiling per Node process, for the generation phase only.
+
+Measured on this tree, with the full `npm run build` chain and a cold cache: the default parallelism dies at 8 GB, `4` fits in 8 GB, `2` in 6 GB, `1` in 5 GB, and nothing fits in 4 GB. The cost of `1` is compile time, roughly three minutes instead of forty seconds.
+
+Raising `NODE_OPTIONS` does not help and tends to hurt: it is a ceiling, not a reservation, so a larger value only lets each process grow further before collecting, and the kernel kills it.
+
+`TURBO_TASKS_AVAILABLE_PARALLELISM=1` is the last notch of that dial. The requirement grows with the content — every retained documentation line is a full copy of a content tree — so once growth outgrows 5 GB the answer has to come from fewer retained lines or a larger builder. Re-measure after each cut.
+
 ### Staging (automatic)
 
 ```
@@ -572,6 +589,20 @@ Refusing to write v0.21 pages into v0.20, the current line of /sdk.
 **Cause:** the generators write into the current line and only accept a version that belongs to it.
 
 **Fix:** if the version is ahead, its line has not been cut — `bun run scripts/cut-line.ts sdk v<X.Y>`, or the hand procedure in [`README.md`](README.md). If the version is behind, it has already shipped and its line is what the site serves; edit that line's page directly instead of regenerating it.
+
+### Build stops with no error and no log
+
+**Symptom:** the builder's output ends partway through `Creating an optimized production build` and nothing follows — no stack trace, no `JavaScript heap out of memory`, no failing step. The exit status is 137 or 143.
+
+**Cause:** the kernel's OOM killer, not a build error. Compilation exceeded the builder's RAM. Because Turbopack allocates outside V8's heap, the process is killed rather than aborting with a message, which is why there is nothing to read.
+
+**Fix:** set `TURBO_TASKS_AVAILABLE_PARALLELISM=1` on the builder, which caps the phase that overran. See [Builder configuration](#builder-configuration). Raising `NODE_OPTIONS=--max-old-space-size` does not help here and makes matters worse by letting each Node process grow further.
+
+To reproduce locally, run the build under the same ceiling:
+
+```bash
+systemd-run --user --scope -p MemoryMax=8G -p MemorySwapMax=0 npx next build
+```
 
 ### Build fails in CI (PR checks)
 
