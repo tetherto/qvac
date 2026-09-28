@@ -445,9 +445,11 @@ the prebuilds and publishes
 
 ```bash
 BRANCH=tmp-QVAC-1234
-WF=llm-llamacpp
+PKG=llm-llamacpp   # package directory name; `package` is a required input
 git push origin HEAD:refs/heads/$BRANCH
-gh workflow run on-merge-$WF.yml --repo tetherto/qvac --ref $BRANCH
+# The 13 native addons publish from on-merge-nx.yml. model-fit keeps its own:
+# gh workflow run on-merge-model-fit.yml --repo tetherto/qvac --ref $BRANCH
+gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref $BRANCH -f package=$PKG
 ```
 
 The push alone builds nothing. These pipelines push-trigger on `release-*` only,

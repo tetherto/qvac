@@ -83,7 +83,8 @@ This repo assumes a **fork-first** workflow:
    - Merge to `main` can publish **dev** builds (GitHub Packages) when package paths changed.
    - `feature-*` / `tmp-*` publish **feature/temp** builds (GitHub Packages).
    - **Native addons publish on `release-*` pushes only.** Their
-     `on-merge-<addon>.yml` pipelines do not push-trigger on `main`, `feature-*` or
+     `on-merge-nx.yml` pipeline (and `on-merge-model-fit.yml`) does not
+     push-trigger on `main`, `feature-*` or
      `tmp-*`, because a push to a `feature-*`/`tmp-*` branch would start a 9-platform
      matrix off an open PR's branch. Every non-release addon build is started with
      `workflow_dispatch` on the branch.

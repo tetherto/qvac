@@ -480,8 +480,8 @@ runs:
               echo "the version is produced by the On Merge Trigger run for your branch."
               echo "For an addon, only a release-* push starts that run; pushing any"
               echo "other branch does not. Dispatch it on the branch first:"
-              echo "  gh workflow run on-merge-<workflow-slug>.yml --repo tetherto/qvac --ref <branch>"
-              echo "The slug is not always the package name (vla-ggml -> on-merge-vla.yml);"
+              echo "  gh workflow run on-merge-nx.yml --repo tetherto/qvac --ref <branch> -f package=<pkg>"
+              echo "model-fit publishes from its own on-merge-model-fit.yml;"
               echo "see docs/ci/MOBILE-ON-DEMAND.md."
               ;;
             *)
