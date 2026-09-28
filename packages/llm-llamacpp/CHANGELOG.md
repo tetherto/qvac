@@ -24,9 +24,24 @@
   before the count. The load fails early with `InvalidArgument` when the budget
   cannot hold `cache_checkpoints` checkpoints of the largest size the context
   allows, measured on the loaded model.
+- `cache_ram_mib` load-config field (also `cache-ram-mib`): with
+  `parallel >= 2`, host-RAM budget in MiB for conversation states evicted
+  from their scheduler slot, restored from RAM by the next request on their
+  `cacheKey`. Default `0` (off).
 - `cache_checkpoint_storage`: `disk` (default) or `memory`. With `memory` the
   checkpoints and the per-request rollback snapshot stay in host RAM, so a
   cached chat on a hybrid / recurrent model never touches the disk.
+
+### Changed
+
+- With `parallel >= 2`, a keyed request's committed state now stays in its
+  scheduler slot, and the next request with the same `cacheKey` continues
+  from it without `saveCacheToDisk` or a file round-trip, as on the
+  single-prompt path. When a slot is needed for another key, the least
+  recently used conversation is evicted: unsaved turns are written to its
+  `cacheKey` file, and with `cache_ram_mib` the state is also kept in host
+  RAM. Requests on the same `cacheKey` now run one at a time instead of
+  concurrently, so a conversation's state is never forked.
 
 ### Fixed
 

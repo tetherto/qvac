@@ -167,7 +167,7 @@ stateDiagram-v2
     Restored --> Checkpoint: stays in the list
     Checkpoint --> [*]: pruned, no longer a prefix<br/>of a later prompt
     Checkpoint --> [*]: evicted, oldest first,<br/>when the list exceeds<br/>cache_checkpoints_max_bytes<br/>or cache_checkpoints
-    Checkpoint --> [*]: cacheKey switched, cleared or loaded<br/>(parallel >= 2: kept per cacheKey<br/>across requests)
+    Checkpoint --> [*]: cacheKey switched, cleared or loaded<br/>(parallel >= 2: kept with the conversation<br/>across requests)
     Checkpoint --> [*]: process exits
 ```
 
@@ -199,6 +199,37 @@ behind, and each is checked against the loaded ledger before use. The first
 diverging turn after a restart on a full-state model is a cold prefill until
 new checkpoints accumulate.
 
+## Batch mode: where a conversation lives between requests
+
+With `parallel >= 2` each request gets a fresh driver in a scheduler slot, but
+a keyed conversation's state does not have to leave the slot when it ends.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Running: keyed request admitted
+    Running --> Resident: commits<br/>state stays in its sequence
+    Running --> [*]: rolls back or fails<br/>sequence cleared
+    Resident --> Running: next request on the same cacheKey<br/>routed to this sequence, nothing copied
+    Resident --> Evicted: another key needs the slot<br/>least recently used first
+    Evicted --> OnDisk: unsaved turns written to<br/>the cacheKey file
+    Evicted --> RamTier: cache_ram_mib set<br/>state copied to host RAM
+    RamTier --> Running: next request on the key<br/>restored from RAM
+    RamTier --> OnDisk: dropped, oldest first,<br/>when the budget is full
+    OnDisk --> Running: next request on the key<br/>loads the file
+    Resident --> [*]: its loaded file was deleted<br/>clear() or model reload
+```
+
+- A request whose `cacheKey` is already running waits in the scheduler until
+  that request ends, so a key never has two committed states to reconcile.
+- Checkpoints travel with the state: resident, in the RAM tier, or kept per
+  `cacheKey` for the next load of its file.
+- Every source is validated like a file load before it is used: the ledger
+  must match the memory it describes, or the state is dropped and the next
+  source is tried.
+- The batch entry wipe of stale single-prompt state skips resident
+  conversations, and a single-prompt request on a parallel model first evicts
+  whatever is resident on sequence 0, which it shares.
+
 ## Configuration that shapes the machine
 
 | Setting | Where | Effect |
@@ -209,7 +240,8 @@ new checkpoints accumulate.
 | `cache_checkpoints` | load config | Checkpoints kept per sequence (default 32, 0 disables). Full-state models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
 | `cache_checkpoint_storage` | load config | `disk` (temp files) or `memory` (host RAM) for snapshots and checkpoints. |
-| `parallel` | load config | With `>= 2` each request runs in a slot that is wiped afterwards; the sequence state survives between requests only through the file, and the checkpoints in the scheduler, per `cacheKey`. |
+| `parallel` | load config | With `>= 2` each request runs in its own slot; a committed keyed conversation stays resident in it for the next request on its `cacheKey` (see above). |
+| `cache_ram_mib` | load config | With `parallel >= 2`, host-RAM budget for conversations evicted from their slot (default 0, off). |
 
 ## Where each thing lives, at a glance
 

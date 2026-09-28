@@ -393,7 +393,7 @@ Each `BatchPrompt` may carry its own `cacheKey` and `saveCacheToDisk`. The sched
 
 Two restrictions apply in batch mode:
 
-1. **Read sharing is allowed.** Multiple prompts in the same batch may use the same `cacheKey` without `saveCacheToDisk`. This is a valid cache-warming pattern.
+1. **Read sharing is serialized.** Multiple prompts in the same batch may use the same `cacheKey` without `saveCacheToDisk`, but only one runs at a time: a request whose key is held by a running slot waits in `keyDeferred_` until that slot is freed, then continues from its committed state. Prompts on other keys are not held up.
 2. **Write sharing is rejected.** Two prompts with the same `cacheKey` and `saveCacheToDisk: true` would clobber each other (last writer wins, no ordering guarantee). `processPromptBatchImpl` detects this before any admission and throws `InvalidArgument`.
 
 The write-sharing rule spans jobs, not just one batch. Each saving item reserves its `cacheKey` in a model-wide `inflightSaveKeys_` set for the length of the run, so a concurrent `run()` that tries to save a key another in-flight job already reserved is refused the same way — the error reads "already being saved by an in-flight request". This matters for cache-warming loops: give each save a distinct key, or await the previous run before reusing one. The reservation is released on every exit path, including cancellation and failure.
@@ -404,7 +404,18 @@ The write-sharing rule spans jobs, not just one batch. Each saving item reserves
 
 The single-prompt path keeps one long-lived context (`TextLlmContext`, or `MtmdLlmContext` for a multimodal model) for the model's lifetime, so its KV survives across `run()` calls and a follow-up only evaluates the new tokens. The batch path is the reverse: each `submit` gets a fresh `SequenceDriver` on a recycled slot (`nPast_ = 0`, empty KV) because slots serve unrelated requests, so a cache miss costs a full prefill.
 
-On hybrid and recurrent models the process-local checkpoints would die with each slot's driver, so the scheduler keeps them per `cacheKey` (`checkpointStore_`): the list moves into the next request's driver after `loadCache` and back out when its slot is freed, and `clear()` drops the store. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` with `saveCacheToDisk` therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
+A committed keyed request no longer leaves an empty slot, though. `freeSlot` **parks** its sequence (`parked_`: the ledger words from `residentStateTokens()`, the checkpoints, whether it has unsaved turns) instead of `clearSeqKv`. `chooseSeqIdLocked` then picks, for a request on key K: the free sequence parked with K, else a free unparked one, else the least recently used parked one, which `evictParkedLocked` moves out first:
+
+- **Unsaved turns:** written to K's file (`llama_state_seq_save_file` through a temp file), the same auto-save the single-prompt path does on a key switch.
+- **RAM tier:** with `cache_ram_mib` set, the full sequence state is copied into `SlotStateCache`. That LRU store follows llama-server's `--cache-ram` rules, and its entries are always already on disk.
+
+At admission the driver takes the state from the first source that has it: the parked sequence (`adoptResidentState`, which runs the same validation as a file load), the RAM tier (`llama_state_seq_set_data_ext`, then `adoptResidentState`), or the file (`loadCache`). If admission fails after adopting a conversation with unsaved turns, the driver rolls back (`onFailure`) and the conversation is parked again. Model-level exceptions:
+
+- The batch entry wipe of single-prompt leftovers skips parked sequences (`parkedSeqIds()`).
+- A single-prompt request first calls `evictParked(0)`, since it shares sequence 0.
+- `clear()` drops parked and RAM-tier state without writing it.
+
+On hybrid and recurrent models the checkpoints go with the parked state; a key with no resident or RAM-tier state keeps them in `checkpointStore_` for the next load of its file. Each checkpoint only describes a prefix, and the driver checks it against the ledger it just loaded before restoring it. A follow-up turn on the same `cacheKey` with `saveCacheToDisk` therefore restores the previous turn's end-of-history checkpoint instead of re-prefilling the conversation. That is also why a rejected `loadCache` must clear the cells it restored: otherwise they strand under the slot's `seqId`, contaminating an empty batch slot or following the single-prompt sequence for the rest of the session.
 
 ---
 

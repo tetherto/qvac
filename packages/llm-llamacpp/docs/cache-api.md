@@ -38,7 +38,7 @@ await model.run([
 
 ## Prefill on a parallel model (`parallel >= 2`)
 
-A prefill-only run warms context state without generating. On a model loaded with `parallel >= 2` that state lives in a scheduler slot which is torn down when the run ends, so nothing a concurrent job could reach survives unless the prefill is **persistable** — `saveCacheToDisk: true` plus a `cacheKey`.
+A prefill-only run warms context state without generating. On a model loaded with `parallel >= 2` that state lives in a scheduler slot, and concurrent jobs can only reach it through its `cacheKey`, so the prefill must be **persistable** — `saveCacheToDisk: true` plus a `cacheKey`.
 
 A *live-only* prefill (no persistence) is therefore rejected with `InvalidArgument` on a parallel model, both as a single `run()` and per batch item, rather than silently producing nothing. Load with `parallel: 1` if you want live-only cache warming, where the warmed context is reused by the next run on that instance.
 
@@ -139,6 +139,43 @@ const model = new LlmLlamacpp({
     cache_checkpoints_max_bytes: String(2 * 1024 * 1024 * 1024),
     cache_checkpoint_storage: 'memory'
   }
+})
+```
+
+## Batch mode (`parallel >= 2`)
+
+On a model loaded with `parallel >= 2`, keyed requests keep the same promise
+as the single-prompt path: without `saveCacheToDisk` the conversation stays in
+memory between requests.
+
+- **Resident slot.** When a keyed request commits, its state stays in its
+  scheduler slot. The next request with the same `cacheKey` is routed to that
+  slot and continues from it, with nothing copied or read from disk.
+- **One request per key at a time.** A request whose `cacheKey` is already
+  running waits until that request ends, then continues from its committed
+  state. Several prompts on one key in the same batch therefore run one after
+  another, while prompts on other keys run in parallel.
+- **Eviction.** When every slot holds a resident conversation and a request
+  needs a slot for another key, the least recently used conversation is moved
+  out. If it has turns its `cacheKey` file does not hold yet, they are written
+  to that file first, the same automatic save the single-prompt path does when
+  it switches keys. Its next request loads the file.
+- **RAM tier (`cache_ram_mib`).** With this load-config field set, an evicted
+  conversation is also copied to host RAM, up to that many MiB, and its next
+  request restores it from there instead of reading the file. The oldest
+  copies are dropped when the budget is full; they are always already on disk,
+  so nothing is lost. A conversation larger than the whole budget is kept on
+  disk only. `0` (default) disables the tier; resident slots do not need it.
+- A conversation whose loaded `cacheKey` file is deleted is dropped, as on the
+  single-prompt path. Requests without a `cacheKey` are never kept.
+
+Resident and RAM-tier conversations do not survive a process restart or a
+model reload; only `cacheKey` files do.
+
+```js
+const model = new LlmLlamacpp({
+  files: { model: [modelPath] },
+  config: { ctx_size: '16384', parallel: '4', cache_ram_mib: '2048' }
 })
 ```
 
