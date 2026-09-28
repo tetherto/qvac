@@ -364,8 +364,8 @@ JSCATCH
 
 // ── assessFit ────────────────────────────────────────────────────────────
 
-inline std::string fitBackendsDir(const std::string &configured,
-                                  const std::string &requested) {
+inline std::string
+fitBackendsDir(const std::string& configured, const std::string& requested) {
   return resolveBackendsDir(configured.empty() ? requested : configured)
       .string();
 }
