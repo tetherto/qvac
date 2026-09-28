@@ -5,8 +5,8 @@ set(VCPKG_BUILD_TYPE release)
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO tetherto/qvac-fabric-speech.cpp
-    REF ace2569fb84c11ce639a6c083e0ece041dc7b3cd
-    SHA512 bb671f5c4d9b3f02d370a0fda08e9b460be43618d808bcf145951c487aa94b69c1e98bcd42a9332c5b2c9fce98f406bd75438958150ba4f100015212b427e56e
+    REF a41bfdb927758aa01568619593640d8aad358a56
+    SHA512 85a17ebeacf4ee17264f3ee421ee4a1a9f51919ee538e6c9147d2cdef3d36e9400fac835c9fb14487faf4ffbddcc6b18978c2a92d879f7a728589fa018e57b67
     HEAD_REF feat/add-nemotron-diarize
 )
 

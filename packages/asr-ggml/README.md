@@ -572,9 +572,10 @@ key is documented inline there, and any key outside it throws
 | Backends | `backendsDir`, `openclCacheDir` |
 
 The `streamingSpkCache*` / `streamingFifoLen` /
-`streamingChunk{Left,Right}ContextMs` defaults are the NeMo-port tuning
-parakeet-cpp ships — keep them unless you are A/B comparing AOSC against the
-v1 sliding-window path. There is no `modelType`: the ASR and diarization
+`streamingChunk{Left,Right}ContextMs` defaults follow the loaded model's
+NeMo-port tuning. Omitted left context resolves to 80 ms for Sortformer and
+0 ms for Nemotron 3 Diarization; explicitly setting 80 ms retains one
+Nemotron encoder frame. There is no `modelType`: the ASR and diarization
 families, including Nemotron 3 Diarization, are detected from GGUF metadata.
 
 Parakeet `runStreaming(audio, opts)` options are per-call overrides of the same

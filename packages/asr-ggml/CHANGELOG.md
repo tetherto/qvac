@@ -14,6 +14,12 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Fixed
+
+- Nemotron 3 Diarization streaming preserves first-chunk predictions with left
+  context, applies the same peak gain as offline inference, and retains an
+  explicitly requested 80 ms left context.
+
 ### Added
 
 - Nemotron 3 Diarization GGUF support in the Parakeet engine for offline and

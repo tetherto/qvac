@@ -75,7 +75,7 @@ export interface ParakeetConfig {
     streamingSpkCacheLen?: number;
     /** AOSC FIFO warmup buffer rows (default: 188). */
     streamingFifoLen?: number;
-    /** AOSC encoder left-context window in ms (default: 80). */
+    /** AOSC encoder left-context window in ms (default: 80 for Sortformer, 0 for Nemotron 3 Diarization). */
     streamingChunkLeftContextMs?: number;
     /** AOSC encoder right-context window in ms (default: 560). */
     streamingChunkRightContextMs?: number;
