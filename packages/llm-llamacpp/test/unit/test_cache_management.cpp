@@ -2047,3 +2047,27 @@ TEST(BatchedCacheResidencyTest, RamTierDefersTheFileUntilUnload) {
     fs::remove(key);
   }
 }
+
+// Finetuning reloads the model before training (and training clears every
+// sequence). The reload must first write a parked batch conversation's
+// unsaved turns to its file, so nothing kept in memory is lost.
+TEST(BatchedCacheResidencyTest, ReloadWritesParkedConversationsToTheirFiles) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  const std::string key = "reload_parked.bin";
+  fs::remove(key);
+  {
+    BatchedCacheHarness harness(*model);
+    harness.run(userTurns({"Say one word: apple."}), key);
+    ASSERT_EQ(harness.scheduler().parkedSeqIds().size(), 1u);
+    ASSERT_FALSE(fs::exists(key));
+  }
+  model->reload();
+  model->waitForLoadInitialization();
+  EXPECT_TRUE(fs::exists(key)) << "the reload dropped the parked conversation";
+  model.reset();
+  fs::remove(key);
+}
