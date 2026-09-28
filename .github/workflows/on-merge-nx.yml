@@ -5,10 +5,11 @@ name: General CI/CD (native addons, nx)
 on:
   push:
     branches:
-      - main
+      # release-* only. A push to main, feature-* or tmp-* used to start a
+      # publish, and those branches can be an open PR's head, so pushing to your
+      # own PR ran the prebuild matrix and published a GPR build off it. Every
+      # non-release build is a deliberate workflow_dispatch now.
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/asr-ggml/**"
       - "packages/audiogen-ggml/**"
@@ -549,13 +550,15 @@ jobs:
           # leave the dist-tag to be derived.
           tag: ${{ matrix.npmTagOverride || inputs.npm_tag || 'latest' }}
 
-      # asr/audiogen/tts ship one npm package per platform plus a JS-only meta
+      # asr/audiogen/tts/fabric ship one npm package per platform plus a meta
       # with version-locked optionalDependencies. npm only; GPR stays unsliced.
+      # prebuildExtraDirs (fabric's C++ SDK) stay in the meta.
       - name: Slice platform packages
         if: matrix.slicePlatformPackages
         env:
           WORKDIR: ${{ matrix.workdir }}
-        run: node scripts/ci/slice-platform-packages.mjs --workdir "$WORKDIR" --out-dir "${{ runner.temp }}/platform-packages"
+          KEEP_DIRS: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
+        run: node scripts/ci/slice-platform-packages.mjs --workdir "$WORKDIR" --out-dir "${{ runner.temp }}/platform-packages" --keep-dirs "$KEEP_DIRS"
 
       - name: Set up Node.js for platform package publish
         if: matrix.slicePlatformPackages
@@ -573,27 +576,56 @@ jobs:
         env:
           DIST_TAG: ${{ steps.dist-tag.outputs.tag }}
           OUT_DIR: ${{ runner.temp }}/platform-packages
+          WORKDIR: ${{ matrix.workdir }}
         run: |
           set -euo pipefail
+          # Prints "hit" or "miss"; any npm view failure other than E404 is a
+          # registry error, so do not publish blind. Assign the result to a
+          # variable: set -e does not see a failure inside a test expression.
+          on_npm() {
+            local out rc
+            set +e
+            out=$(npm view "$1@$2" version 2>&1)
+            rc=$?
+            set -e
+            if [ "$rc" -eq 0 ] && [ -n "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then echo hit; return; fi
+            if [ "$rc" -eq 0 ] || printf '%s' "$out" | grep -q 'E404'; then echo miss; return; fi
+            echo "::error title=npm view failed::Could not query $1@$2 (exit ${rc}); refusing to publish blind. Re-run after the registry recovers." >&2
+            printf '%s\n' "$out" >&2
+            exit 1
+          }
+          META_NAME=$(node -p "require('./${WORKDIR}/package.json').name")
+          META_VERSION=$(node -p "require('./${WORKDIR}/package.json').version")
+          META_STATE=$(on_npm "$META_NAME" "$META_VERSION")
+          # Check every slice before publishing any, so a failed check leaves
+          # no new slice behind.
+          TO_PUBLISH=()
           for dir in "$OUT_DIR"/*/; do
             NAME=$(node -p "require('${dir}package.json').name")
             VERSION=$(node -p "require('${dir}package.json').version")
-            # Skip on a confirmed hit, publish on a confirmed miss; any other
-            # npm view failure is a registry error, so do not publish blind.
-            set +e
-            VIEW_OUT=$(npm view "${NAME}@${VERSION}" version 2>&1)
-            VIEW_RC=$?
-            set -e
-            VIEW_TRIMMED=$(printf '%s' "$VIEW_OUT" | tr -d '[:space:]')
-            if [ "$VIEW_RC" -eq 0 ] && [ -n "$VIEW_TRIMMED" ]; then
-              echo "${NAME}@${VERSION} already on npm, skipping"
+            SLICE_STATE=$(on_npm "$NAME" "$VERSION")
+            if [ "$SLICE_STATE" = miss ]; then
+              TO_PUBLISH+=("$dir")
               continue
             fi
-            if [ "$VIEW_RC" -ne 0 ] && ! printf '%s' "$VIEW_OUT" | grep -q 'E404'; then
-              echo "::error title=npm view failed::Could not query ${NAME}@${VERSION} (exit ${VIEW_RC}); refusing to publish blind. Re-run after the registry recovers." >&2
-              printf '%s\n' "$VIEW_OUT" >&2
+            if [ "$META_STATE" = hit ]; then
+              echo "${NAME}@${VERSION} already on npm and ${META_NAME}@${META_VERSION} is released, skipping"
+              continue
+            fi
+            # Meta missing: a partial release. Only a retry of the same build
+            # may resume it; npm pack normalises mtimes, so re-slicing the
+            # same artifact reproduces the published tarball.
+            PUBLISHED=$(npm view "${NAME}@${VERSION}" dist.integrity)
+            STAGED=$(cd "$dir" && npm pack --dry-run --json --ignore-scripts | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8"))[0].integrity')
+            if [ "$PUBLISHED" != "$STAGED" ]; then
+              echo "::error title=Partial release from another build::${NAME}@${VERSION} is on npm from a different build and ${META_NAME}@${META_VERSION} is not, so publishing would pair the meta with binaries from another commit. Bump the version." >&2
               exit 1
             fi
+            echo "${NAME}@${VERSION} already on npm with identical contents, skipping"
+          done
+          for dir in "${TO_PUBLISH[@]}"; do
+            NAME=$(node -p "require('${dir}package.json').name")
+            VERSION=$(node -p "require('${dir}package.json').version")
             echo "Publishing ${NAME}@${VERSION} with tag ${DIST_TAG}"
             (cd "$dir" && npm publish --tag "$DIST_TAG" --access public --provenance)
           done
