@@ -2,17 +2,19 @@
 // workflows never run on a pull request, so a reintroduced feature-*/tmp-*
 // filter is invisible until it publishes off someone's PR branch.
 //
-// Known cost, accepted deliberately: FOUR addons lose post-merge integration
-// and Device Farm legs on main, not one. decoder-audio via
+// Intended, not merely accepted: FOUR addons lose post-merge integration and
+// Device Farm legs on main, not one. Post-merge phone runs are not part of how
+// mobile is tested here — the on-demand dispatch lane is — so a Device Farm run
+// firing on every merge is spend with no reader, which the device-minute
+// programme exists to remove. decoder-audio via
 // mobile-gate-decoder-audio, and asr-ggml, bci-whispercpp and tts-ggml because
 // post-build-gate opens on a GPR publish too, not only npm, and publish-gpr
 // accepted publish_main. Those three set postIntegrationOnGpr in their
 // project.json, so the gate handed them post-publish-integration and a
 // mobile-post-publish-* Device Farm run on every main push.
 //
-// Restoring them means a Device Farm run per main push across four addons,
-// which the device-minute programme is spending down; the PR-time lane keeps
-// the coverage. Sized against four packages, not one.
+// Restoring them would mean a Device Farm run per main push across four
+// addons. The PR-time lane keeps the coverage.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
