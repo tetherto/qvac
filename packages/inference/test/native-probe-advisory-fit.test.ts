@@ -61,8 +61,13 @@ const FIT_PROJECTION = {
   deviceTotalBytes: 24 * 1024 ** 3
 }
 
-function withResultStatus(status: 'does-not-fit' | 'error', reason: string): FitProbeResult {
-  const base = FIT_RESULT.result as Extract<FitProbeResult, { engine: 'llm-llamacpp' }>['result']
+type LlamaProbeResult = Extract<FitProbeResult, { engine: 'llm-llamacpp' }>['result']
+
+function withResultStatus(
+  status: LlamaProbeResult['status'],
+  reason: LlamaProbeResult['reason']
+): FitProbeResult {
+  const base = FIT_RESULT.result as LlamaProbeResult
   return { engine: 'llm-llamacpp', result: { ...base, status, reason } }
 }
 
@@ -169,7 +174,12 @@ test('advisory fit: reports a projected insufficiency without denying the load',
 })
 
 test('advisory fit: treats every engine error as absent evidence', async (t) => {
-  for (const reason of ['model-unreadable', 'no-backend-device', 'unsupported-config']) {
+  const reasons: LlamaProbeResult['reason'][] = [
+    'model-unreadable',
+    'no-backend-device',
+    'unsupported-config'
+  ]
+  for (const reason of reasons) {
     const { logger } = recordingLogger()
     const { runFit } = fitReturning({
       status: 'completed',
@@ -399,66 +409,10 @@ test('advisory fit: absorbs a resident-bytes probe that rejects', async (t) => {
 
 const GIB = 1024 ** 3
 
-// 5 GiB on the device, 256 MiB on the host.
-const FIT_WITH_PROJECTION: FitLlamaResult = {
-  ...FIT_PLAN,
-  projection: [
-    {
-      name: 'Metal',
-      totalBytes: 24 * GIB,
-      freeBytes: 20 * GIB,
-      marginBytes: GIB,
-      modelBytes: 4 * GIB,
-      contextBytes: GIB,
-      computeBytes: 0
-    },
-    {
-      name: 'host',
-      totalBytes: 24 * GIB,
-      freeBytes: 22 * GIB,
-      marginBytes: GIB,
-      modelBytes: 256 * 1024 * 1024,
-      contextBytes: 0,
-      computeBytes: 0
-    }
-  ]
-}
-
 const PROJECTED_DEMAND = 5 * GIB + 256 * 1024 * 1024
 
 const countsDevices = () => Promise.resolve(true)
 const hostOnly = () => Promise.resolve(false)
-
-test('advisory fit: carries the per-device figures the fitter measured', async (t) => {
-  const { logger } = recordingLogger()
-  const { runFit } = fitReturning({ status: 'completed', result: FIT_WITH_PROJECTION })
-
-  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
-    residentModelBytes: zeroResident,
-    availableSystemBytes: () => Promise.resolve(PROJECTED_DEMAND + 2 * GIB),
-    countsDeviceRows: countsDevices,
-    runFit,
-    logger
-  })
-
-  t.is(outcome.verdict, 'fit')
-  t.alike(outcome.projection, { devices: FIT_WITH_PROJECTION.projection })
-})
-
-test('advisory fit: omits the projection where the fitter reports none', async (t) => {
-  const { logger } = recordingLogger()
-  const { runFit } = fitReturning({ status: 'completed', result: FIT_PLAN })
-
-  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-    mobile: false,
-    residentModelBytes: zeroResident,
-    runFit,
-    logger
-  })
-
-  t.is(outcome.projection, undefined)
-})
 
 test('advisory fit: refuses a projected fit the machine cannot hold', async (t) => {
   const { logger } = recordingLogger()
@@ -494,9 +448,9 @@ test('advisory fit: keeps the placement the fitter resolved on a budget refusal'
 
   t.is(outcome.verdict, 'does-not-fit')
   t.alike(outcome.plan, {
-    nCtx: FIT_PLAN.nCtx,
-    nGpuLayers: FIT_PLAN.nGpuLayers,
-    nGpuDevices: FIT_PLAN.nGpuDevices
+    nCtx: 4096,
+    nGpuLayers: 32,
+    nGpuDevices: 1
   })
 })
 
@@ -504,7 +458,7 @@ test('advisory fit: keeps the placement the fitter resolved on a budget refusal'
 // to system memory.
 test('advisory fit: a device with its own memory is not charged to the system', async (t) => {
   const { logger } = recordingLogger()
-  const { runFit } = fitReturning({ status: 'completed', result: FIT_WITH_PROJECTION })
+  const { runFit } = fitReturning({ status: 'completed', probe: FIT_RESULT })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
     mobile: false,

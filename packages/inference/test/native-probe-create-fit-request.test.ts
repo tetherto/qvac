@@ -502,10 +502,10 @@ test('tts: chatterbox carries both checkpoints and the cache type', (t) => {
   if (!plan.supported) return
   t.alike(plan.probe.request, {
     engineType: 'chatterbox',
-    t3Path: '/models/t3.gguf',
-    s3genPath: '/models/s3gen.gguf',
-    gpuLayers: 99,
-    contextSize: 2048,
+    t3ModelPath: '/models/t3.gguf',
+    s3genModelPath: '/models/s3gen.gguf',
+    nGpuLayers: 99,
+    nCtx: 2048,
     kvCacheType: 'q8_0'
   })
 })
@@ -533,7 +533,7 @@ test('tts: audio8 projects cloning only when the encoder is resolved', (t) => {
 
   t.ok(withoutEncoder.supported)
   if (!withoutEncoder.supported) return
-  t.absent('codecEncoderPath' in withoutEncoder.probe.request)
+  t.absent('audio8CodecEncoderPath' in withoutEncoder.probe.request)
 
   const withEncoder = createFitRequest({
     modelType: ModelType.ttsGgml,
@@ -550,7 +550,7 @@ test('tts: audio8 projects cloning only when the encoder is resolved', (t) => {
   if (!withEncoder.supported) return
   t.is(
     withEncoder.probe.engine === 'tts-ggml' && withEncoder.probe.request.engineType === 'audio8'
-      ? withEncoder.probe.request.codecEncoderPath
+      ? withEncoder.probe.request.audio8CodecEncoderPath
       : undefined,
     '/models/encoder.gguf'
   )
@@ -579,8 +579,8 @@ test('tts: supertonic and parler are single-file loads', (t) => {
   if (!supertonic.supported) return
   t.alike(supertonic.probe.request, {
     engineType: 'supertonic',
-    modelPath: '/models/supertonic.gguf',
-    gpuLayers: 0,
+    supertonicModelPath: '/models/supertonic.gguf',
+    nGpuLayers: 0,
     steps: 16
   })
 
@@ -594,8 +594,8 @@ test('tts: supertonic and parler are single-file loads', (t) => {
   if (!parler.supported) return
   t.alike(parler.probe.request, {
     engineType: 'parler',
-    modelPath: '/models/parler.gguf',
-    gpuLayers: 0,
+    parlerModelPath: '/models/parler.gguf',
+    nGpuLayers: 0,
     maxFrames: 2048
   })
 })
@@ -620,7 +620,7 @@ test('tts: an explicit layer count wins over the GPU flag', (t) => {
     })
     t.ok(plan.supported)
     if (!plan.supported || plan.probe.engine !== 'tts-ggml') continue
-    t.is(plan.probe.request.gpuLayers, layers, JSON.stringify(config))
+    t.is(plan.probe.request.nGpuLayers, layers, JSON.stringify(config))
   }
 })
 

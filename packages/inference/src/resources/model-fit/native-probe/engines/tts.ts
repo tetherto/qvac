@@ -32,7 +32,7 @@ function cosyvoiceCompanion(
 }
 
 interface TtsCommon {
-  gpuLayers: number
+  nGpuLayers: number
   marginBytes?: number
 }
 
@@ -60,10 +60,10 @@ function cosyvoiceRequest(modelPath: string, common: TtsCommon): FitRequestPlan 
       engine: 'tts-ggml',
       request: {
         engineType: 'cosyvoice3',
-        llmPath: modelPath,
-        flowPath,
-        hiftPath,
-        voicePath,
+        cosyvoiceLlmModelPath: modelPath,
+        cosyvoiceFlowModelPath: flowPath,
+        cosyvoiceHiftModelPath: hiftPath,
+        cosyvoiceVoiceModelPath: voicePath,
         ...common
       }
     }
@@ -75,7 +75,7 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
   const artifacts = params.artifacts ?? {}
 
   const common: TtsCommon = {
-    gpuLayers: gpuLayersFromCount(config.useGPU, config.nGpuLayers),
+    nGpuLayers: gpuLayersFromCount(config.useGPU, config.nGpuLayers),
     ...(params.marginBytes !== undefined && { marginBytes: params.marginBytes })
   }
 
@@ -88,7 +88,7 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
     case 'supertonic':
       return supported({
         engineType: 'supertonic',
-        modelPath: params.modelPath,
+        supertonicModelPath: params.modelPath,
         ...common,
         ...(config.ttsNumInferenceSteps !== undefined && { steps: config.ttsNumInferenceSteps })
       })
@@ -96,7 +96,7 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
     case 'parler':
       return supported({
         engineType: 'parler',
-        modelPath: params.modelPath,
+        parlerModelPath: params.modelPath,
         ...common,
         ...(config.maxFrames !== undefined && { maxFrames: config.maxFrames })
       })
@@ -109,11 +109,9 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
       const codecEncoderPath = artifacts['audio8CodecEncoderPath']
       return supported({
         engineType: 'audio8',
-        lmPath: params.modelPath,
-        codecDecoderPath,
-        // Supplying the encoder projects voice cloning, which the decoder
-        // alone cannot do.
-        ...(codecEncoderPath !== undefined && { codecEncoderPath }),
+        audio8LmPath: params.modelPath,
+        audio8CodecDecoderPath: codecDecoderPath,
+        ...(codecEncoderPath !== undefined && { audio8CodecEncoderPath: codecEncoderPath }),
         ...common,
         ...(config.maxFrames !== undefined && { maxFrames: config.maxFrames })
       })
@@ -122,6 +120,9 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
     case 'cosyvoice3':
       return cosyvoiceRequest(params.modelPath, common)
 
+    case 'moss':
+      return unsupported('the moss engine takes no fit request')
+
     default: {
       const s3genPath = artifacts['s3genPath']
       if (s3genPath === undefined) {
@@ -129,10 +130,10 @@ export function createTtsFitRequest(params: TtsFitRequestParams): FitRequestPlan
       }
       return supported({
         engineType: 'chatterbox',
-        t3Path: params.modelPath,
-        s3genPath,
+        t3ModelPath: params.modelPath,
+        s3genModelPath: s3genPath,
         ...common,
-        ...(config.nCtx !== undefined && config.nCtx > 0 && { contextSize: config.nCtx }),
+        ...(config.nCtx !== undefined && config.nCtx > 0 && { nCtx: config.nCtx }),
         ...(config.kvCacheType !== undefined && { kvCacheType: config.kvCacheType })
       })
     }

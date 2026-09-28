@@ -16,10 +16,12 @@ function device(name: string, modelBytes: number) {
   }
 }
 
+type LlamaProbeResult = Extract<FitProbeResult, { engine: 'llm-llamacpp' }>['result']
+
 function llama(
   devices: ReturnType<typeof device>[],
-  status: 'fits' | 'does-not-fit' | 'error' = 'fits',
-  reason = 'fits'
+  status: LlamaProbeResult['status'] = 'fits',
+  reason: LlamaProbeResult['reason'] = 'fits'
 ): FitProbeResult {
   return {
     engine: 'llm-llamacpp',
@@ -101,6 +103,7 @@ test('an engine error carries no figures', (t) => {
 
 test('the diffusion placement stands in for a reason string', (t) => {
   const base = {
+    reason: 'does-not-fit' as const,
     vaeTiling: false,
     streamLayers: false,
     backend: 'Metal',
@@ -121,7 +124,10 @@ test('the diffusion placement stands in for a reason string', (t) => {
   t.is(refused.reason, 'does-not-fit')
 
   const unreadable = classifyFit(
-    { engine: 'diffusion-cpp', result: { ...base, status: 'error', changed: false } },
+    {
+      engine: 'diffusion-cpp',
+      result: { ...base, status: 'error', reason: 'model-unreadable' as const, changed: false }
+    },
     PROVENANCE
   )
   t.is(unreadable.verdict, 'unknown')
@@ -147,6 +153,7 @@ test('a speech projection carries the device the engine measured', (t) => {
         lmComputeBytes: 0,
         codecComputeBytes: 0,
         hostBytes: 128 * 1024 ** 2,
+        lavasrFileBytes: 0,
         report: 'table'
       }
     },
@@ -203,6 +210,7 @@ test('an engine reporting only a total has no breakdown', (t) => {
         hostFreeBytes: 12 * 1024 ** 3,
         hostTotalBytes: 24 * 1024 ** 3,
         stagesResident: false,
+        stages: [],
         report: 'table'
       }
     },
