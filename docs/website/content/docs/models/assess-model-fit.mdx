@@ -1,0 +1,145 @@
+---
+title: Assess model fit
+description: Check whether a model is likely to fit in memory before downloading it.
+schemaType: HowTo
+---
+
+## Overview
+
+[`assessModelFit()`](/reference/api#assessmodelfit) answers one question before anything is downloaded: is this model likely to fit in memory? It reads the model constant metadata together with a fresh memory sample, and returns a verdict for each candidate plus one for the set. For a single candidate it also fetches the registry's weightless description of the artifact — tens of KB, the tensor list with no data section — and runs the engine's own fitter against it.
+
+It is **advisory**. It never downloads weights or loads a model, and it does not block [`loadModel()`](/reference/api#loadmodel), reserve memory, pick a model for you, or make any claim about speed.
+
+<Callout type="info">
+Only catalog model constants get a verdict.
+</Callout>
+
+## Functions
+
+1. [`assessModelFit()`](/reference/api#assessmodelfit) — pass the candidate model constants with the workload you intend to run.
+2. [`downloadAsset()`](/reference/api#downloadasset) or [`loadModel()`](/reference/api#loadmodel) — fetch whichever candidate you picked.
+
+For how to use each function, see [SDK — API reference](/reference/api/).
+
+## Parameters
+
+```ts
+assessModelFit({
+  models: [
+    { model: QWEN3_8B_INST_Q4_K_M, workload: { kind: "llm", contextTokens: 8192 } },
+  ],
+  execution: "sequential",
+});
+```
+
+### `models`
+
+The candidates, at least one. They are assessed together, against a single budget.
+
+- `model` — a catalog model constant. Its name, checksum and registry coordinates are read; the byte totals and transformer facts come from the resource profile that checksum resolves to, and the coordinates locate the description the fitter reads.
+- `workload` — what you intend to run on it: `{ kind: "llm", contextTokens }` for completion and embedding models, `{ kind: "audio", windowMs, streaming }` for speech-to-text, with an optional `batch` for concurrent windows per call.
+- `artifacts` — optional. Extra catalog constants the same load also requires, such as a VAD or a pivot model. Their bytes are added to this candidate.
+
+### `execution`
+
+Either `sequential` or `concurrent`:
+- `sequential`: counts every model as resident but adds only the largest single working peak.
+- `concurrent`: adds every peak.
+
+The mode describes what you intend to do so the numbers match your plan — the SDK does not schedule, serialize, or reserve anything on the strength of it.
+
+Defaults to `sequential`.
+
+### `policy`
+
+How much memory to withhold from the budget as headroom, left for the rest of the system:
+
+- `interactive-v1`: withholds 20% of the memory free at the time of the call, capped at 2 GiB on desktop and 1 GiB on mobile. Right now, it is the only accepted value and it applies by default, so passing it is optional.
+
+## Returns
+
+The result answers for the whole set, and `result.models` repeats the same shape for each candidate. These are the fields to branch on.
+
+### `verdict`
+
+| Verdict | Meaning |
+| --- | --- |
+| `likely-fits` | The conservative upper bound is within the memory budget. |
+| `likely-too-large` | Even the optimistic lower bound exceeds the budget. |
+| `unknown` | The evidence does not support either claim. |
+
+### `evidence`
+
+What backs the verdict.
+
+| `evidence` | What it is | Can say |
+| --- | --- | --- |
+| `native-fit` | The engine's own fitter, run against the registry's weightless description of the artifact. | any verdict |
+| `calibration` | A two-sided `estimate` from coefficients measured on this platform. | any verdict |
+| `computed-only` | A floor from catalog facts alone — artifact bytes, plus the KV cache for llama.cpp models — reported as `floorBytes`. | `likely-too-large` or `unknown` |
+
+`native-fit` is the strongest: it is the answer the loader itself would give on this machine, so it outranks `calibration` where both exist. It carries no `estimate`, because the fitter returns a plan rather than a byte range, so branch on the verdict rather than on bounds. It is reachable only for a single llama.cpp candidate, without companion `artifacts`, whose registry record publishes a description; a set of candidates, a candidate with companions, a model with no description, and an offline caller keep the calibrated estimate.
+
+Read `evidence` alongside the verdict, because the same `unknown` can mean different things:
+- Under `calibration`, the numbers came out too close to call.
+- Under `computed-only`, this platform has no measurements at all, so the answer says nothing about whether the model fits.
+
+That difference matters once you act on the result. Hiding the `likely-too-large` candidates works the same way under all three, since that verdict is trustworthy either way. Telling a user that a model will fit needs `native-fit` or `calibration`; the computed floor never produces `likely-fits`.
+
+### `basis`
+
+The memory the verdict was weighed against:
+
+- `system-memory` — device RAM and system-wide use. Desktop, and Android, whose low-memory killer acts system-wide.
+- `process-memory` — the app's own ceiling. iOS, where jetsam terminates an app on its own footprint against a limit well below device RAM.
+- `device-memory` — a discrete GPU's own memory, when the model would execute there.
+- `device-budget` — on Windows, the GPU memory the OS grants this process, since a card's readings there are per-process rather than device-wide.
+
+Both device bases additionally require the `system-memory` budget to hold, because a GPU load is paid for in system RAM too.
+
+### `reasons`
+
+Every `unknown` names its cause here — on the model when the cause is that model, on the result when it is the machine. The ones you are most likely to meet:
+- No validated calibration for this platform, or for the GPU placement the model would use.
+- The model is not a catalog constant, so there is no resource profile to read.
+- The workload kind does not match the model's engine — an `llm` workload on a whisper model, or the reverse.
+
+## Where verdicts are available
+
+`calibration` evidence — and with it any `likely-fits` — exists only where coefficients have been measured on real hardware and validated against a held-out model. Today that is LLM workloads (`llamacpp-completion`, `llamacpp-embedding`) on desktop, except `win32-arm64`. Where a GPU would run the model, the platform also needs a fixture measured on that placement.
+
+Everywhere else the assessment falls back to the computed floor: `likely-too-large` when the weights alone exceed the budget, `unknown` otherwise. That covers Android, iOS, `win32-arm64`, audio workloads, and every engine with no estimator yet.
+
+`native-fit` is independent of calibration. Wherever the engine's fitter runs — every platform with a llama.cpp addon, mobile included — a single llama.cpp candidate with a published description and no companion `artifacts` gets the fitter's verdict, including `likely-fits`, before any coefficients are consulted.
+
+The per-platform calibration matrix, which changes with every release, lives in [`packages/sdk/docs/assess-model-fit.md`](https://github.com/tetherto/qvac/blob/main/packages/sdk/docs/assess-model-fit.md#supported-surface).
+
+## Example
+
+The following script asks which of five Qwen3 models this machine is likely to run at 8192 tokens of context, printing the budget basis, each verdict against the model's size on disk, and the reasons behind every `unknown`:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/assess-model-fit.js title="assess-model-fit.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/assess-model-fit.ts title="assess-model-fit.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/js-ts-sdk#quickstart) or the [Python quickstart](/python-sdk#quickstart).
+</Callout>

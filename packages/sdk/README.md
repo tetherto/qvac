@@ -144,7 +144,9 @@ initialized, the event omits the resource block.
 
 Use `assessModelFit` to check, before downloading anything, whether models are
 likely to fit in this device's memory. It reads generated catalog metadata plus a
-fresh memory sample — no weights, no load, no native probe:
+fresh memory sample, and for a single candidate the registry's weightless
+description of the artifact, so the engine's own fitter can answer — no weights,
+no load:
 
 ```ts
 import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'

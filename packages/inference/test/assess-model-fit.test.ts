@@ -8,7 +8,7 @@ import type { CalibrationPoint } from '@/resources/model-fit/calibration/fit'
 import type { PlatformCalibration } from '@/resources/model-fit/types'
 import type { GgufFacts, ModelResourceProfile } from '@/schemas/model-resource-profile'
 import type { SystemResources } from '@/schemas/system-resources'
-import type { ModelFitCandidate } from '@/schemas/assess-model-fit'
+import type { ModelFitCandidate, NativeProbeFit } from '@/schemas/assess-model-fit'
 
 const MIB = 1024 * 1024
 const GIB = 1024 * 1024 * 1024
@@ -2064,4 +2064,110 @@ test('assess: a second GPU with an unusable reading still makes the choice ambig
 
   t.is(result.basis, 'system-memory', 'no device budget is formed')
   t.is(result.verdict, 'unknown')
+})
+
+// ---------------------------------------------------------------------------
+// Native fit from the registry's stub
+// ---------------------------------------------------------------------------
+
+const NATIVE_FIT: NativeProbeFit = {
+  verdict: 'fit',
+  basis: 'native-probe',
+  estimatorVersion: 'native-probe-v1',
+  reason: 'fits'
+}
+
+test('assess: the engine fitter outranks the coefficients that model it', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile(),
+    nativeFit: NATIVE_FIT
+  })
+
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.evidence, 'native-fit')
+  t.is(result.models[0]?.evidence, 'native-fit')
+  t.is(result.models[0]?.estimatorVersion, 'native-probe-v1')
+  t.absent(result.estimate, 'the fitter reports no byte range to publish')
+  t.ok(result.budget, 'the memory sample is still reported')
+  t.alike(
+    result.reasons,
+    ['the engine fitter read the registry description of this model'],
+    'nothing from the estimator path is reported alongside the verdict'
+  )
+  t.alike(result.assumptions, [], 'the fitter made its own placement')
+})
+
+// The modelled path had no memory sample and would have said so. Under a native
+// verdict that explanation is false, and it must not travel with `likely-fits`.
+test("assess: a native verdict does not carry the estimator's unknown reasons", (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: undefined,
+    calibration: undefined,
+    resolveProfile: () => profile(),
+    nativeFit: NATIVE_FIT
+  })
+
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.evidence, 'native-fit')
+  t.absent(
+    result.reasons.find((line) => line.includes('unknown')),
+    'no "combined verdict is unknown" under a fit'
+  )
+})
+
+// A host with plenty of memory would estimate `likely-fits`; the fitter saw the
+// real placement and refused. The refusal has to win, or the probe is decoration.
+test('assess: a native refusal overrides a comfortable estimate', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile(),
+    nativeFit: { ...NATIVE_FIT, verdict: 'does-not-fit', reason: 'does-not-fit' }
+  })
+
+  t.is(result.verdict, 'likely-too-large')
+  t.is(result.evidence, 'native-fit')
+})
+
+test('assess: an undecided probe leaves the calibrated verdict alone', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile(),
+    nativeFit: { ...NATIVE_FIT, verdict: 'unknown', reason: 'disabled' }
+  })
+
+  t.is(result.evidence, 'calibration')
+  t.ok(result.estimate, 'the calibrated bound is still published')
+})
+
+// One probe measures one model against the whole machine. Applying it to a set
+// would drop every other candidate from the budget.
+test('assess: a set of candidates keeps the estimator that can aggregate', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate(), candidate()],
+    execution: 'concurrent',
+    resources: resources({ totalBytes: 64 * GIB, usedBytes: 16 * GIB }),
+    platform: 'darwin-arm64',
+    calibration: calibration(),
+    resolveProfile: () => profile(),
+    nativeFit: NATIVE_FIT
+  })
+
+  t.is(result.evidence, 'calibration')
+  t.is(result.models.length, 2, 'both candidates are still reported')
 })

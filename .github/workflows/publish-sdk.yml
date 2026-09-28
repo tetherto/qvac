@@ -690,65 +690,6 @@ jobs:
           tag: ${{ steps.dist-tag.outputs.tag }}
           workdir: ${{ env.WORKDIR }}
 
-  publish-npm-inference:
-    name: Publish @qvac/inference to NPM
-    needs:
-      - fork-approval
-      - build-inference
-      - publish-logic
-      - release-merge-guard
-    if: >-
-      needs.publish-logic.outputs.publish_release == 'true' &&
-      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-      !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
-    runs-on: ubuntu-latest
-    environment: npm
-    outputs:
-      published_version: ${{ steps.publish.outputs.npm_published_version }}
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-    env:
-      WORKDIR_INFERENCE: packages/inference
-      # prepare runs tsc; publish the prebuilt dist only.
-      NPM_CONFIG_IGNORE_SCRIPTS: "true"
-    steps:
-      - name: Validate npm_tag input
-        if: inputs.npm_tag != ''
-        shell: bash
-        run: |
-          tag="${{ inputs.npm_tag }}"
-          if ! echo "$tag" | grep -qE '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
-            echo "::error::Invalid npm dist-tag '$tag'. Must match ^[a-zA-Z0-9][a-zA-Z0-9._-]*$ (e.g. release-1.x)"
-            exit 1
-          fi
-
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Download inference dist artifact
-        uses: ./.github/actions/download-release-artifact
-        with:
-          name: dist-inference
-          path: ${{ env.WORKDIR_INFERENCE }}/dist/
-
-      - name: Determine dist-tag
-        id: dist-tag-inference
-        uses: tetherto/qvac-actions/npm-dist-tag-determination@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
-        with:
-          workdir: ${{ env.WORKDIR_INFERENCE }}
-          tag: ${{ inputs.npm_tag }}
-
-      - name: Publish to NPM Package Registry
-        id: publish
-        uses: tetherto/qvac-actions/publish-library-to-npm@096b1cfbd1d95399ae64d37f55cc16fd7a43314e # 0.4.0
-        with:
-          tag: ${{ steps.dist-tag-inference.outputs.tag }}
-          workdir: ${{ env.WORKDIR_INFERENCE }}
-
   publish-pypi:
     name: Publish tetherto-qvac-sdk to PyPI
     needs:
@@ -758,8 +699,7 @@ jobs:
       - publish-logic
       - release-merge-guard
       - publish-npm
-      - publish-npm-inference
-    # Lockstep release after npm publishes. Escape hatch:
+    # Publishes after @qvac/sdk reaches npm, at the same version. Escape hatch:
     # workflow_dispatch with publish_pypi_only=true (npm already shipped).
     if: >-
       always() &&
@@ -770,8 +710,7 @@ jobs:
         (
           needs.publish-logic.outputs.publish_release == 'true' &&
           (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped') &&
-          needs.publish-npm.result == 'success' &&
-          needs.publish-npm-inference.result == 'success'
+          needs.publish-npm.result == 'success'
         )
         ||
         (
@@ -797,13 +736,11 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
   # Create GitHub release only for actual releases (after NPM publish).
-  # Require all lockstep npm publishes before tagging sdk-v*.
   # PyPI is separate; recover with workflow_dispatch publish_pypi_only.
   publish-release:
-    needs: [publish-npm, publish-npm-inference]
+    needs: [publish-npm]
     if: >-
       needs.publish-npm.result == 'success' && needs.publish-npm.outputs.published_version != ''
-      && needs.publish-npm-inference.result == 'success' && needs.publish-npm-inference.outputs.published_version != ''
     permissions:
       contents: write
     uses: ./.github/workflows/create-github-release.yml
@@ -813,16 +750,6 @@ jobs:
       published_version: ${{ needs.publish-npm.outputs.published_version }}
       prev_sha: ${{ github.event.before }}
       workdir: "packages/sdk"
-
-  create-tag-inference:
-    needs: [publish-npm-inference]
-    if: needs.publish-npm-inference.result == 'success' && needs.publish-npm-inference.outputs.published_version != ''
-    permissions:
-      contents: write
-    uses: ./.github/workflows/create-release-tag.yml
-    with:
-      repo_name: "inference"
-      published_version: ${{ needs.publish-npm-inference.outputs.published_version }}
 
   # Build the self-contained per-platform tetherto-qvac-sdk wheels and attach
   # them to the sdk-v<version> release the job above just created, for a turnkey

@@ -3,8 +3,10 @@
 `assessModelFit` answers one question before anything is downloaded: is this
 model likely to fit in this device's memory? It reads generated catalog metadata
 and a fresh memory sample — system-wide or process-scoped, depending on the
-result's [`basis`](#policy-interactive-v1). It never downloads weights, never
-loads a model, and never runs a native probe.
+result's [`basis`](#policy-interactive-v1). For a single candidate it also
+fetches the registry's weightless description of the artifact — tens of KB, the
+tensor list and the settings with no data section — and runs the engine's own
+fitter against it. It never downloads weights and never loads a model.
 
 It is **advisory**. It does not block `loadModel`, reserve memory, choose a
 model for you, or make any claim about speed.
@@ -24,15 +26,33 @@ metrics are unsupported, and whenever the only evidence is a
 one model in a call is `unknown`, the combined verdict is `unknown`; each model
 still reports its own.
 
-## Two kinds of evidence
+## Three kinds of evidence
 
 Every verdict says what it rests on, in `evidence` — on the result and on each
 model:
 
 | `evidence`      | What it is                                                                                                          | Can say                         |
 | --------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `native-fit`    | The engine's own fitter, run against the registry's weightless description of the artifact.                         | any verdict                     |
 | `calibration`   | A two-sided `estimate` from coefficients measured on this platform.                                                 | any verdict                     |
 | `computed-only` | A floor from catalog facts alone: artifact bytes, plus the KV cache for llama.cpp models. Reported as `floorBytes`. | `likely-too-large` or `unknown` |
+
+`native-fit` is the strongest of the three: it is the answer the loader itself
+would give on this machine, not a model of it, so it outranks `calibration`
+wherever both are available. It carries no `estimate` — the fitter returns a
+plan, not a byte range — so branch on the verdict there rather than on bounds.
+
+It is reachable only for a single candidate with no companion `artifacts`,
+and only where the registry publishes a description for that artifact. One fit
+measures one model against the whole machine, and two such answers carry
+nothing that can be summed under one budget, so a set of candidates keeps the
+calibrated estimate that can be aggregated; so does a candidate whose
+companions' bytes the fitter would not see. A model with no published
+description, and an offline caller, fall back the same way.
+
+The fitter follows the catalog's engine, not the workload: a completion model
+is fitted at `contextTokens`, an embedding model as an embedding load at the
+context window it declares.
 
 The floor omits everything that only a real load can tell you — engine
 overhead, compute buffers, a completion's working peak — and all of those are

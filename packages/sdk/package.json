@@ -1,6 +1,6 @@
 {
   "name": "@qvac/sdk",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -225,7 +225,6 @@
     "@qvac/llm-llamacpp": "^0.53.0",
     "@qvac/logging": "^0.1.0",
     "@qvac/ocr-ggml": "^0.24.1",
-    "@qvac/registry-client": "^0.6.1",
     "@qvac/translation-nmtcpp": "^0.16.1",
     "@qvac/tts-ggml": "^0.9.1",
     "@qvac/vla-ggml": "^0.27.1",
@@ -284,7 +283,7 @@
     "pear-pipe": "^1.0.6",
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
-    "react-native-bare-kit": "^0.14.0",
+    "react-native-bare-kit": "^0.15.5",
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
