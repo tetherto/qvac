@@ -33,20 +33,32 @@ jobs:
       - shell: bash
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Real llm PR f1c4648b0 under three configs
+      - name: Real PRs, today vs this PR, both lanes
         shell: bash
         run: |
           set -uo pipefail
-          C=f1c4648b0; B=$(git rev-parse "$C^")
-          echo "DIFF has lockfile: $(git diff --name-only $B $C | grep -cx pnpm-lock.yaml)"
           git fetch -q origin main
           git show origin/main:nx.json > /tmp/nx.main.json
-          jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = "all"' nx.json > /tmp/nx.all.json
           cp nx.json /tmp/nx.branch.json
-          for cfg in main all branch; do
-            cp "/tmp/nx.$cfg.json" nx.json; rm -rf .nx
-            echo "CONFIG $cfg reads: $(jq -c '.pluginsConfig // "none"' nx.json)"
-            o=$(pnpm exec nx show projects --affected -t on-pr --base="$B" --head="$C" --json 2>/dev/null | grep -E '^\[' | tail -n1)
-            echo "CONFIG $cfg -t on-pr affected: $(echo "${o:-[]}" | jq length) $(echo "${o:-[]}" | jq -c 'map(sub("^@qvac/";""))|sort')"
+          for N in 4733 4570; do git fetch -q origin "pull/$N/head:refs/remotes/pr/$N"; done
+          for T in f1c4648b0 9d0914037 pr4733 pr4570; do
+            case "$T" in
+              pr*) H=$(git rev-parse "refs/remotes/pr/${T#pr}"); B=$(git merge-base origin/main "$H") ;;
+              *)   H=$(git rev-parse "$T"); B=$(git rev-parse "$T^") ;;
+            esac
+            git diff --name-only "$B" "$H" > /tmp/changed.txt
+            L=$(grep -cx pnpm-lock.yaml /tmp/changed.txt || true)
+            for lane in range stdin; do
+              for cfg in main branch; do
+                cp "/tmp/nx.$cfg.json" nx.json; rm -rf .nx
+                if [ "$lane" = range ]; then
+                  o=$(pnpm exec nx show projects --affected -t on-pr --base="$B" --head="$H" --json 2>/dev/null | grep -E '^\[' | tail -n1)
+                else
+                  o=$(pnpm exec nx show projects --affected -t on-pr --stdin --json < /tmp/changed.txt 2>/dev/null | grep -E '^\[' | tail -n1)
+                fi
+                eval "R_$cfg=\$(echo \"\${o:-[]}\" | jq -c 'map(sub(\"^@qvac/\";\"\"))|sort')"
+              done
+              echo "REAL $T lockfile=$L $lane : today=$(echo "$R_main" | jq length)  thisPR=$(echo "$R_branch" | jq length) $R_branch"
+            done
           done
           cp /tmp/nx.branch.json nx.json
