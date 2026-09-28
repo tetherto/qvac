@@ -1,6 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import {
+  collectHostAddonPackages,
   resolvePlatformPackageName,
   selectMobilePlatformPackages
 } from '../../dist/cli/commands/build-consumer-mobile.js'
@@ -151,6 +155,73 @@ test('an addon with no package for the target platform is skipped', () => {
   assert.deepEqual(selectMobilePlatformPackages('android', [desktopOnly], {}), {})
   assert.deepEqual(selectMobilePlatformPackages('ios', [desktopOnly], {}), {})
 })
+
+test('a pnpm install still selects the fabric slice of a transitive dependency', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-mobile-pnpm-'))
+  try {
+    const configDir = path.join(root, 'app')
+    const store = path.join(configDir, 'node_modules', '.pnpm', 'llm@0.55.0', 'node_modules')
+    writePackage(path.join(store, '@qvac', 'llm-llamacpp'), {
+      name: '@qvac/llm-llamacpp',
+      version: '0.55.0',
+      dependencies: { '@qvac/fabric': '0.18.0' },
+      imports: { '#host-addon': hostAddonMap('@qvac/llm-llamacpp') }
+    })
+    writePackage(path.join(store, '@qvac', 'fabric'), {
+      name: '@qvac/fabric',
+      version: '0.18.0',
+      dependencies: { '@qvac/llm-llamacpp': '0.55.0' },
+      imports: { '#host-addon': hostAddonMap('@qvac/fabric') }
+    })
+    const topLlm = path.join(configDir, 'node_modules', '@qvac', 'llm-llamacpp')
+    fs.mkdirSync(path.dirname(topLlm), { recursive: true })
+    fs.symlinkSync(path.join(store, '@qvac', 'llm-llamacpp'), topLlm)
+
+    const additions = selectMobilePlatformPackages('android', collectHostAddonPackages(configDir), {
+      '@qvac/llm-llamacpp': '0.55.0'
+    })
+
+    assert.equal(additions['@qvac/fabric-android-arm64'], '0.18.0')
+    assert.equal(additions['@qvac/fabric'], '0.18.0')
+    assert.equal(additions['@qvac/llm-llamacpp-android-arm64'], '0.55.0')
+    assert.equal(fs.existsSync(path.join(configDir, 'node_modules', '@qvac', 'fabric')), false)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('an npm-nested fabric install is selected from the addon that depends on it', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-mobile-nested-'))
+  try {
+    const configDir = path.join(root, 'app')
+    const llmDir = path.join(configDir, 'node_modules', '@qvac', 'llm-llamacpp')
+    writePackage(llmDir, {
+      name: '@qvac/llm-llamacpp',
+      version: '0.55.0',
+      dependencies: { '@qvac/fabric': '0.18.0' },
+      imports: { '#host-addon': hostAddonMap('@qvac/llm-llamacpp') }
+    })
+    writePackage(path.join(llmDir, 'node_modules', '@qvac', 'fabric'), {
+      name: '@qvac/fabric',
+      version: '0.18.0',
+      imports: { '#host-addon': hostAddonMap('@qvac/fabric') }
+    })
+
+    const additions = selectMobilePlatformPackages('ios', collectHostAddonPackages(configDir), {
+      '@qvac/llm-llamacpp': '0.55.0'
+    })
+
+    assert.equal(additions['@qvac/fabric-ios'], '0.18.0')
+    assert.equal(additions['@qvac/llm-llamacpp-ios'], '0.55.0')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+function writePackage(dir, manifest) {
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(manifest))
+}
 
 test('resolvePlatformPackageName reads the addon own imports map', () => {
   const map = hostAddonMap('@qvac/tts-ggml')

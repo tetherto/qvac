@@ -149,7 +149,7 @@ bare examples/backend-device.js --backend metal
 | `params.lowConfidenceThreshold` | `number` | | `0.4` | retry threshold (`easyocr` only) |
 | `params.recognizerBatchSize` | `number` | | `32` | recognizer batch size (`easyocr` only) |
 | `params.nThreads` | `number` | | `0` (auto) | CPU thread count for GGML; `<0` leaves the GGML default |
-| `params.backendsDir` | `string` | | `<package>/prebuilds` | directory holding `libggml-*.so` backend shared libs |
+| `params.backendsDir` | `string` | | fabric backends root | directory holding `libggml-*.so` backend shared libs. On desktop, the root `@qvac/fabric/backends` resolves; on mobile, this package's `prebuilds/` |
 | `params.backendDevice` | `'cpu'` \| `'vulkan'` \| `'metal'` \| `'opencl'` | | `'cpu'` | ggml backend device. `'vulkan'` (Linux/Windows/Android), `'metal'` (Apple) and `'opencl'` (Android/Adreno) opt in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan--metal--opencl) |
 | `params.main-gpu` / `params.main_gpu` | `number` \| `string` | | _prefer dedicated_ | Raw ggml registry index or strict GPU class; requires GPU `backendDevice`. See below. |
 | `params.gpuDevice` | `number` | | _prefer discrete_ | 0-based index into the matching GPU/iGPU devices for `'vulkan'`/`'metal'`/`'opencl'`; out-of-range → CPU fallback — see [Selecting a specific GPU](#selecting-a-specific-gpu-gpudevice) |
@@ -234,7 +234,7 @@ Behaviour and expectations:
   `backendIsGpu` stat). It never silently does the wrong thing.
 - **Required backend libs.** Vulkan execution needs the `libggml-vulkan`
   backend shared library (`libggml-vulkan.so` / `.dll` / `.dylib`) present in
-  `backendsDir` (default `<package>/prebuilds/<target>/`), plus a working
+  `backendsDir` (on desktop, the root `@qvac/fabric/backends` resolves; on mobile, this package's `prebuilds/<target>/`), plus a working
   Vulkan driver/ICD and a Vulkan-capable GPU on the host. **OpenCL** likewise
   needs the `libggml-opencl` backend shared library plus a working OpenCL
   runtime (`libOpenCL.so`); it is built primarily for **Android** (the `opencl`
@@ -667,7 +667,7 @@ omission for v1: `--debug-png` (annotated overlay) — print boxes via
 
 | Script | Purpose |
 |---|---|
-| [`scripts/check_ggml_backends.sh`](./scripts/check_ggml_backends.sh) | Probe shipped ggml backends + BLAS/Vulkan/OpenCL paths in `prebuilds/` |
+| [`scripts/check_ggml_backends.sh`](./scripts/check_ggml_backends.sh) | Probe shipped ggml backends + BLAS/Vulkan/OpenCL paths in the installed `@qvac/fabric` runtime |
 | [`scripts/pth_to_gguf.py`](./scripts/pth_to_gguf.py) | Weight converter: EasyOCR PyTorch `.pth` → `.gguf` (optionally `Q8_0` / `Q4_K` quantized) |
 | [`scripts/convert-model.sh`](./scripts/convert-model.sh) | Wrapper around the converter (`npm run convert-model`) — venv discovery, sanity checks |
 | [`scripts/setup-venv.sh`](./scripts/setup-venv.sh) | One-time provisioning of the converter venv (`npm run setup:venv`) |

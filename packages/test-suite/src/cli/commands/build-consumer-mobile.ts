@@ -1202,8 +1202,14 @@ function firstPackageName(candidate: unknown): string | undefined {
  * a `#host-addon` imports map. That map names the platform packages the addon
  * resolves at runtime, so it cannot drift from what the publish-time slicer
  * produced, and pre-split versions are skipped by having no map at all.
+ *
+ * Direct dependencies are not the whole set. `@qvac/fabric` is installed
+ * because an addon depends on it, and under pnpm that package is a sibling of
+ * the addon inside the virtual store, not a top-level `node_modules` entry.
+ * Each installed package's dependencies are resolved the way Node resolves
+ * them from that package's real path, so the fabric slice is declared too.
  */
-function collectHostAddonPackages(configDir: string): HostAddonPackage[] {
+export function collectHostAddonPackages(configDir: string): HostAddonPackage[] {
   const modulesDir = path.join(configDir, 'node_modules')
   if (!fs.existsSync(modulesDir)) {
     console.warn(
@@ -1212,7 +1218,77 @@ function collectHostAddonPackages(configDir: string): HostAddonPackage[] {
     )
     return []
   }
-  return listInstalledPackageDirs(modulesDir).flatMap(readHostAddonPackage)
+
+  const found: HostAddonPackage[] = []
+  const seen = new Set<string>()
+  const queue = listInstalledPackageDirs(modulesDir)
+  while (queue.length > 0) {
+    const packageRoot = queue.pop()
+    if (packageRoot === undefined) break
+    const identity = packageIdentity(packageRoot)
+    if (seen.has(identity)) continue
+    seen.add(identity)
+
+    const manifest = readPackageManifest(packageRoot)
+    if (manifest === null) continue
+    const addon = hostAddonFromManifest(packageRoot, manifest)
+    if (addon !== null) found.push(addon)
+    for (const name of dependencyNames(manifest)) {
+      const resolved = resolveInstalledPackage(identity, name)
+      if (resolved !== null) queue.push(resolved)
+    }
+  }
+  return found
+}
+
+function packageIdentity(packageRoot: string): string {
+  try {
+    return fs.realpathSync(packageRoot)
+  } catch {
+    return path.resolve(packageRoot)
+  }
+}
+
+function dependencyNames(manifest: PackageManifest): string[] {
+  return [
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.optionalDependencies ?? {})
+  ]
+}
+
+/**
+ * Locates `packageName` from `fromDir` the way Node would: `<dir>/node_modules/<name>`
+ * for `fromDir` and each ancestor. `fromDir` is the package's real path, so a
+ * pnpm virtual-store sibling (`.../node_modules/@qvac/fabric` next to
+ * `.../node_modules/@qvac/llm-llamacpp`) resolves, as does an npm-nested copy.
+ */
+function resolveInstalledPackage(fromDir: string, packageName: string): string | null {
+  const segments = packageSegments(packageName)
+  if (segments === null) return null
+
+  let dir = fromDir
+  for (;;) {
+    const candidate = path.join(dir, 'node_modules', ...segments)
+    if (isPackageDir(candidate)) return candidate
+    const parent = path.dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+}
+
+function packageSegments(packageName: string): string[] | null {
+  const segments = packageName.split('/')
+  if (segments.some((segment) => segment.length === 0)) return null
+  if (packageName.startsWith('@')) return segments.length === 2 ? segments : null
+  return segments.length === 1 ? segments : null
+}
+
+function isPackageDir(dir: string): boolean {
+  try {
+    return fs.statSync(path.join(dir, 'package.json')).isFile()
+  } catch {
+    return false
+  }
 }
 
 function listInstalledPackageDirs(modulesDir: string): string[] {
@@ -1242,18 +1318,35 @@ function readDirSafe(dir: string): string[] {
   }
 }
 
-function readHostAddonPackage(packageRoot: string): HostAddonPackage[] {
-  let manifest: { name?: unknown; version?: unknown; imports?: Record<string, unknown> }
+interface PackageManifest {
+  name?: unknown
+  version?: unknown
+  imports?: Record<string, unknown>
+  dependencies?: Record<string, unknown>
+  optionalDependencies?: Record<string, unknown>
+}
+
+function readPackageManifest(packageRoot: string): PackageManifest | null {
   try {
-    manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf-8'))
+    const parsed: unknown = JSON.parse(
+      fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf-8')
+    )
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+    return parsed as PackageManifest
   } catch {
-    return []
+    return null
   }
-  const hostAddon = manifest?.imports?.[HOST_ADDON_IMPORT]
+}
+
+function hostAddonFromManifest(
+  packageRoot: string,
+  manifest: PackageManifest
+): HostAddonPackage | null {
+  const hostAddon = manifest.imports?.[HOST_ADDON_IMPORT]
   if (!hostAddon || typeof manifest.name !== 'string' || typeof manifest.version !== 'string') {
-    return []
+    return null
   }
-  return [{ name: manifest.name, version: manifest.version, hostAddon, packageRoot }]
+  return { name: manifest.name, version: manifest.version, hostAddon, packageRoot }
 }
 
 function generateAppJson(
