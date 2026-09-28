@@ -1298,6 +1298,15 @@ files are absent.  They cover, across the engines:
   for WER against the synthesized audio (whisper-small via the
   `@qvac/asr-ggml` development dependency).
 
+On CPU the suite keeps to brief inference: single short syntheses, plus
+Supertonic's sub-second multi-sentence checks and a few capped CPU-backend
+checks (Audio8's 16-frame runs, the LavaSR denoiser composition). Tests that
+synthesize more (several runs or loads, longer text, WER) run on the GPU and
+are skipped when `NO_GPU=true`. So are the CosyVoice3, Chatterbox MTL and
+Parler f16/large tests, where one CPU synthesis already takes about a minute;
+the CPU smokes in `gpu-smoke.test.js` still run everywhere. The multi-run
+Parler tests need Metal, so off Apple they are skipped too.
+
 The MOSS integration test (`moss.test.js`) does not download its GGUFs:
 set `QVAC_TEST_MOSS_MODEL_DIR` to a directory holding them, otherwise it is
 skipped.  The C++ suite runs its MOSS synthesis cases when

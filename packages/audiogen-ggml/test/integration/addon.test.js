@@ -272,7 +272,7 @@ async function runRepaintThenFlow(t, gen, source) {
 
 test(
   'AudioGen (ggml): instrumental music generation end-to-end',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -286,7 +286,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -318,7 +318,7 @@ test(
 
 test(
   'AudioGen (ggml): generateLrc reports synchronized lyrics',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -329,7 +329,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -358,7 +358,7 @@ test(
 
 test(
   'AudioGen (ggml): computeQualityScore reports stats.qualityScore',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -369,7 +369,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -402,7 +402,7 @@ test(
 
 test(
   'AudioGen (ggml): rewriteQuery formats the request through the LM',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -413,7 +413,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -433,7 +433,7 @@ test(
 
 test(
   'AudioGen (ggml): understand describes generated audio',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -444,7 +444,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -486,7 +486,7 @@ test(
 
 test(
   'AudioGen (ggml): immediate ACE-Step cancellation is terminal',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -497,7 +497,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -527,7 +527,7 @@ test(
 
 test(
   'AudioGen (ggml): song with lyrics + musical hints, and PCM encodes to WAV',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -540,7 +540,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -588,7 +588,7 @@ test(
 
 test(
   'AudioGen (ggml): frozen semantic codes bypass LM length generation',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -601,7 +601,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -669,7 +669,7 @@ test(
 
 test(
   'AudioGen (ggml): Repaint and FlowEdit variants cross the native bridge in order',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -682,7 +682,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU,
+      useGPU: true,
       inferenceSteps: COVER_STEPS,
       shift: COVER_SHIFT
     })
