@@ -2198,6 +2198,12 @@ class TTSGgml {
             typeof data.totalSamples === "number" ? data.totalSamples : 0;
         accumulator.generatedFrames +=
             typeof data.generatedFrames === "number" ? data.generatedFrames : 0;
+        if (typeof data.codecSidecarLoaded === "number") {
+            accumulator.codecSidecarLoaded = data.codecSidecarLoaded;
+        }
+        if (typeof data.codecOnCoreml === "number") {
+            accumulator.codecOnCoreml = data.codecOnCoreml;
+        }
     }
     _rejectActiveChunk(error) {
         const resolver = this._sentenceStreamCtx?.chunkResolver;

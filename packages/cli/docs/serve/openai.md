@@ -648,7 +648,7 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
 - **Fields:**
   - `model` (required) — alias, resolved as described above
   - `input` (required) — non-empty string, capped at **`serve.openai.audio.speech.maxInputChars`** (default **4096**, OpenAI's documented limit; set to `null` to disable)
-  - `voice` (optional, defaults to `defaultVoice`)
+  - `voice` (optional, defaults to `defaultVoice`) — an OpenAI built-in voice name (`alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`), any other string, or a custom voice reference `{ "id": "voice_1234" }`. The object form routes the same way as its `id` string.
   - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
 - **Accepted but ignored:** `speed`, `instructions`, `stream_format` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
 
@@ -696,7 +696,7 @@ ffplay -f s16le -ar 24000 -ac 1 speech.pcm  # rate/channels come from the respon
 | 400  | `missing_model`           | `model` field is missing                                                                                |
 | 400  | `missing_input`           | `input` is missing or empty/whitespace                                                                  |
 | 400  | `input_too_long`          | `input.length` exceeds `maxInputChars` (default 4096)                                                   |
-| 400  | `missing_voice`           | `voice` not sent and `defaultVoice` is `null`                                                           |
+| 400  | `missing_voice`           | `voice` not sent and `defaultVoice` is `null`, or `voice` is neither a string nor `{ "id": "..." }`     |
 | 400  | `invalid_response_format` | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac`                                     |
 | 400  | `invalid_model_type`      | Alias is not a `speech` model                                                                           |
 | 404  | `model_not_found`         | No `voices` mapping, no hyphen alias, no bare alias matches                                             |
