@@ -934,19 +934,15 @@ test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
   );
   assert.match(source, /ref:\s+\$\{\{ env\.HEAD_SHA \}\}/);
   assert.doesNotMatch(source, /PR_HEAD_REF|env\.HEAD_REF/);
-  assert.match(source, /linux-extra-packages:/);
-  assert.match(
-    source,
-    /if:\s+\$\{\{ inputs\.linux-extra-packages != '' \}\}[\s\S]*?PACKAGES:\s+\$\{\{ inputs\.linux-extra-packages \}\}[\s\S]*?sudo apt-get install -y \$PACKAGES/,
-  );
 });
 
-test("Fabric CI installs the Linux RDMA build dependency", () => {
+// Self-hosted legs (cpp-lint, linux-x64 prebuild) get libibverbs from the
+// runner image. This covers the GitHub-hosted legs on the PR path; the release
+// path reads linuxExtraPackages from packages/fabric/project.json.
+test("Fabric prebuilds install the Linux RDMA build dependency", () => {
   const prebuilds = read(".github/workflows/prebuilds-fabric.yml");
-  const pullRequest = read(".github/workflows/on-pr-fabric.yml");
 
-  assert.match(prebuilds, /linux-extra-packages:\s*libibverbs-dev/);
-  assert.match(pullRequest, /linux-extra-packages:\s*libibverbs-dev/);
+  assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs-dev$/m);
 });
 
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
