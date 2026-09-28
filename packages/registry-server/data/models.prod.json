@@ -8878,5 +8878,38 @@
     "tags": ["generation", "multimodal", "qwen3.8-flash-next", "instruct", "video-instruct"],
     "notes": "Required for image and video input with every Qwen3.8 Flash Next quantization.",
     "link": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-decoder-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTS codec decoder (GGUF, multilingual)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-tts", "codec", "decoder", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-encoder-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTS codec encoder for voice cloning (GGUF, multilingual)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-tts", "codec", "encoder", "multilingual", "gguf"],
+    "notes": "Only needed for voice cloning; text-only synthesis can omit this GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-09-25/moss-tts-delay-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTS Delay language model (GGUF, multilingual)",
+    "quantization": "f16",
+    "params": "8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-tts", "delay", "llm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
   }
 ]

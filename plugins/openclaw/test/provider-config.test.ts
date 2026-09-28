@@ -545,6 +545,44 @@ test('registerQvacProvider derives the key path from the OpenClaw runtime state'
   rmSync(stateDir, { recursive: true })
 })
 
+test('registerQvacProvider points localService at the install root, not the loaded copy', async () => {
+  const registered: RegisteredProvider[] = []
+  const rootDir = join(
+    tmpdir(),
+    'openclaw-npm-projects',
+    'node_modules',
+    '@qvac',
+    'openclaw-plugin'
+  )
+
+  registerQvacProvider({
+    rootDir,
+    registerProvider(provider: RegisteredProvider) {
+      registered.push(provider)
+    }
+  })
+
+  const catalog = await registered[0]?.catalog.run()
+  assert.ok(catalog)
+  const provider = catalog.provider as OpenClawProvider
+  assert.equal(provider.localService.args[0], join(rootDir, 'dist', 'local-service.js'))
+})
+
+test('registerQvacProvider falls back to the loaded module path without rootDir', async () => {
+  const registered: RegisteredProvider[] = []
+
+  registerQvacProvider({
+    registerProvider(provider: RegisteredProvider) {
+      registered.push(provider)
+    }
+  })
+
+  const catalog = await registered[0]?.catalog.run()
+  assert.ok(catalog)
+  const provider = catalog.provider as OpenClawProvider
+  assert.equal(provider.localService.args[0], DEFAULT_OPTIONS.serviceEntrypoint)
+})
+
 test('registerQvacProvider registers static model catalog rows for OpenClaw model listing', () => {
   const registered: RegisteredModelCatalogProvider[] = []
 

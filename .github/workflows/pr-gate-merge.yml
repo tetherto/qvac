@@ -137,10 +137,9 @@ jobs:
         env:
           CHANGES: ${{ steps.filter.outputs.changes }}
           # Every package filter key above. Kept in step with that list.
-          ALL_PACKAGES: >-
-            ["asr-ggml","bci-whispercpp","classification-ggml","decoder-audio",
-             "diffusion-cpp","embed-llamacpp","infer-base","llm-llamacpp",
-             "model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","fabric","vla"]
+          # One line: a folded scalar with a deeper indent keeps its newlines,
+          # and $GITHUB_OUTPUT rejects a multiline value.
+          ALL_PACKAGES: '["asr-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","fabric","vla"]'
         run: |
           CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
 
@@ -153,7 +152,8 @@ jobs:
           # nothing verified.
           SANITY="$CHANGED"
           if [ "$SANITY" = "[]" ] && echo "$CHANGES" | jq -e 'index("shared-ci")' >/dev/null; then
-            SANITY="$ALL_PACKAGES"
+            # Compacted again so a wrapped value cannot split the output line.
+            SANITY=$(jq -c . <<< "$ALL_PACKAGES")
             echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
           fi
           echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
