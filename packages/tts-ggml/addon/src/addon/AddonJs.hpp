@@ -532,7 +532,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     tts_cpp::supertonic::FitOptions options;
     options.model_gguf_path = cfg.modelGgufPath;
     options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+        resolveBackendsDir(cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir).string();
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     if (cfg.vulkanDevice.has_value()) {
       options.vulkan_device = *cfg.vulkanDevice;
@@ -560,7 +560,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     tts_cpp::parler::FitOptions options;
     options.model_gguf_path = cfg.modelGgufPath;
     options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+        resolveBackendsDir(cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir).string();
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     integer("descriptionTokens", options.description_tokens);
     integer("promptTokens", options.prompt_tokens);
@@ -577,7 +577,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     options.t3_gguf_path = cfg.t3ModelPath;
     options.s3gen_gguf_path = cfg.s3genModelPath;
     options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+        resolveBackendsDir(cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir).string();
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     if (!cfg.kvCacheType.empty()) {
       options.kv_cache_type = cfg.kvCacheType;
@@ -600,7 +600,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     options.codec_decoder_gguf_path = cfg.codecDecoderPath;
     options.codec_encoder_gguf_path = cfg.codecEncoderPath;
     options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+        resolveBackendsDir(cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir).string();
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     integer("promptTokens", options.prompt_tokens);
     integer("maxFrames", options.max_frames);
@@ -619,7 +619,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     options.hift_gguf_path = cfg.hiftModelPath;
     options.voice_gguf_path = cfg.voiceModelPath;
     options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+        resolveBackendsDir(cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir).string();
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     if (cfg.vulkanDevice.has_value()) {
       options.vulkan_device = *cfg.vulkanDevice;
