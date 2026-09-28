@@ -124,10 +124,14 @@ missing package rather than failing later at link.
 ### Publish
 
 `on-merge-nx` slices, publishes each platform package, then publishes the meta
-last, so the name consumers depend on never appears without its binaries. A
-version already on npm is skipped only on a confirmed hit, and any registry error
-other than `E404` fails the release instead of publishing blind. GPR `-mono` dev
-builds stay unsliced.
+last, so the name consumers depend on never appears without its binaries. Any
+registry error other than `E404` fails the release instead of publishing blind.
+A slice already on npm is skipped when its meta is released, as on a follow-up
+merge to the release branch. With the meta missing, the release is partial: a
+slice is skipped only if its published tarball matches the staged one (a retry of
+the same build), otherwise the run fails before publishing anything, because the
+meta, which carries the headers every consumer compiles against, would pair with
+binaries from another commit. GPR `-mono` dev builds stay unsliced.
 
 ### Consumer migration
 
