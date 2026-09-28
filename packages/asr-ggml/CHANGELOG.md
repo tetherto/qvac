@@ -14,6 +14,45 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Parakeet voice-activity events. `streamingEnergyVad` / `emitEnergyVad` now
+  delivers `{ type: 'vad', source: 'energy' }` events on each speech/silence
+  change; before, the detector was enabled but its events never reached JS.
+  It is tuned with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`
+  and `streamingEnergyVadHangoverMs` (per call: `energyVadThresholdDb`,
+  `energyVadWindowMs`, `energyVadHangoverMs`). `streamingSpeakerVad` /
+  `emitSpeakerVad` adds `{ type: 'vad', source: 'sortformer', speakerId }`
+  events from Sortformer speaker activity. Parakeet VAD events carry a
+  session `timestamp`.
+- Structured Sortformer output: streamed diarization segments carry
+  `speakerId`, and the offline transcript carries
+  `speakerSegments: [{ speakerId, start, end }]`. The `"Speaker N: ..."` text
+  is unchanged.
+- `diarizationThreshold` and `diarizationMinSegmentMs` (per call in
+  `runStreaming()` too) for offline and streaming Sortformer. The defaults
+  stay at the values the addon already sent: 0.641 and 510 ms.
+- `prewarm` / `prewarmAudioSeconds` run one encoder pass while loading, so
+  the first request skips the GPU shader or kernel compile.
+- `longFormWindowFrames` / `longFormContextFrames` control the offline
+  long-form encoder windowing.
+- `getBackendInfo().modelType`: `'whisper'`, or the Parakeet family detected
+  from the GGUF. Sortformer runtime stats and the terminal stats of a
+  Sortformer `runStreaming()` add `aoscActive`.
+- Whisper segments carry `language` and `noSpeechProb`; `token_timestamps`
+  adds `tokens: [{ text, start, end, probability }]` and `tdrz_enable` adds
+  `speakerTurnNext`. New Whisper key `carry_initial_prompt`.
+
+### Changed
+
+- Parakeet `cancel()` now stops an offline `run()` between long-form encoder
+  windows instead of after the whole call.
+- speech-cpp's own Parakeet log lines now reach the JS logger instead of
+  stderr.
+- Offline Sortformer `encoderMs` is the engine's encoder time; preprocessing
+  and decoding now report in `melSpecMs` and `decoderMs` (before, `encoderMs`
+  held the whole call's wall time).
+
 ## [0.6.0] - 2026-09-25
 
 ### Changed
