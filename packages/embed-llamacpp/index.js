@@ -1,16 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GGMLBert = exports.BertInterface = void 0;
+exports.GGMLBert = exports.assessFit = exports.BertInterface = void 0;
 exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
+const fit_1 = require("./fit");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const addon_1 = require("./addon");
 var addon_2 = require("./addon");
 Object.defineProperty(exports, "BertInterface", { enumerable: true, get: function () { return addon_2.BertInterface; } });
+var fit_2 = require("./fit");
+Object.defineProperty(exports, "assessFit", { enumerable: true, get: function () { return fit_2.assessFit; } });
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
 function loadIdMapIndex() {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep the native addon lazy on the package root.
@@ -214,6 +217,7 @@ cjsExports.default = GGMLBert;
 cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = addon_1.BertInterface;
+cjsExports.assessFit = fit_1.assessFit;
 Object.defineProperties(cjsExports, {
     IdMapIndex: {
         enumerable: true,

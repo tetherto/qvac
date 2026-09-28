@@ -575,6 +575,8 @@ void ParakeetModel::reset() {
   output_.clear();
   stream_ended_ = false;
   processed_time_ = 0.0f;
+  jobEncoderCalls_ = 0;
+  jobCoremlEncoderCalls_ = 0;
   cancelGeneration_.store(0, std::memory_order_relaxed);
   activeGeneration_.store(0, std::memory_order_relaxed);
 }
@@ -722,17 +724,22 @@ std::string ParakeetModel::runAsrProcess(const Input& input) {
 
   pkt::EngineResult result = engine->transcribe_samples(
       input.data(), static_cast<int>(input.size()), sample_rate_);
-  // Record per-stage timings verbatim; engines that don't report a stage
-  // record 0 rather than mis-attributing wall-clock across buckets.
+  recordTranscriptionResult(result);
+
+  if (result.text.empty())
+    return ERR_NO_SPEECH;
+  return result.text;
+}
+
+void ParakeetModel::recordTranscriptionResult(const pkt::EngineResult& result) {
   encoderMs_ += static_cast<int64_t>(result.encoder_ms);
   decoderMs_ += static_cast<int64_t>(result.decode_ms);
   melSpecMs_ += static_cast<int64_t>(result.preprocess_ms);
   totalEncodedFrames_ += result.encoder_frames;
   totalTokens_ += static_cast<int64_t>(result.token_ids.size());
-
-  if (result.text.empty())
-    return ERR_NO_SPEECH;
-  return result.text;
+  ++jobEncoderCalls_;
+  if (result.encoder_used_coreml)
+    ++jobCoremlEncoderCalls_;
 }
 
 std::string ParakeetModel::runSortformerProcess(const Input& input) {
@@ -1123,10 +1130,14 @@ RuntimeStats ParakeetModel::runtimeStats() const {
   stats.emplace_back("backendId", static_cast<int64_t>(backend_id_));
   stats.emplace_back(
       "gpuUnsupported", static_cast<int64_t>(backend_gpu_unsupported_));
-  // 1 when the FastConformer encoder ran on the Apple Neural Engine (Core ML
-  // sidecar) instead of the ggml backend; 0 otherwise. Always 0 off Apple.
   stats.emplace_back(
       "encoderOnCoreml", static_cast<int64_t>(encoder_on_coreml_));
+  if (jobEncoderCalls_ > 0) {
+    stats.emplace_back(
+        "encoderUsedCoreml",
+        static_cast<int64_t>(
+            jobCoremlEncoderCalls_ == jobEncoderCalls_ ? 1 : 0));
+  }
 
   // audioDurationMs derived from samples / sample_rate
   const double sr = sample_rate_ > 0 ? static_cast<double>(sample_rate_)

@@ -65,7 +65,7 @@ test('Parler: parlerModel file path alone routes to parler engine', (t) => {
 test('Parler: invalid engine error message lists parler', (t) => {
   t.exception(
     () => new TTSGgml({ engine: 'parakeet' }),
-    /'chatterbox', 'supertonic', 'cosyvoice3', 'parler', 'audio8' or 'moss'/,
+    /'chatterbox', 'supertonic', 'cosyvoice3', 'parler', 'audio8', 'moss' or 'pocket'/,
     'engine validation message includes parler'
   )
 })

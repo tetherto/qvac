@@ -1,11 +1,11 @@
 name: On Merge vcpkg Cache (Embed)
 
-# cpp-tests-embed.yml only writes its vcpkg cache on a trusted event, and its
+# cpp-tests-nx.yml only writes its vcpkg cache on a trusted event, and its
 # only other caller is pull_request_target -- so without this, nothing populates
 # the cache and every PR leg stays cold. Paths mirror the cache key's inputs; the
 # cron recovers from eviction before the server prunes it (see the schedule).
 #
-# This dispatches cpp-tests-embed.yml rather than calling it with `uses:`. A
+# This dispatches cpp-tests-nx.yml rather than calling it with `uses:`. A
 # `uses:` call fails at startup with no jobs and no error text, because the
 # callee's test job declares `environment: release` and the release environment
 # has custom_branch_policies with no policies defined -- which blocks a job in a
@@ -30,7 +30,7 @@ on:
       # workflow, and the toolchain digest the action computes. Without these a
       # key change merges without warming anything and every PR leg stays cold
       # until the cron.
-      - ".github/workflows/cpp-tests-embed.yml"
+      - ".github/workflows/cpp-tests-nx.yml"
       - ".github/actions/vcpkg-toolchain-fingerprint/**"
   schedule:
     # Every 2 days, not weekly. The self-hosted cache server prunes an entry when
@@ -66,16 +66,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dispatch cpp-tests-embed
+      - name: Dispatch cpp-tests-nx
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          gh workflow run "cpp-tests-embed.yml" \
+          gh workflow run "cpp-tests-nx.yml" \
             --repo "$GITHUB_REPOSITORY" \
             --ref "$TARGET_REF" \
-            -f "ref=$TARGET_REF" \
-            -f "workdir=packages/embed-llamacpp"
-          echo "dispatched cpp-tests-embed.yml on $TARGET_REF"
+            -f "packages=[\"embed-llamacpp\"]"
+          echo "dispatched cpp-tests-nx.yml for embed-llamacpp on $TARGET_REF"
