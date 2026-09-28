@@ -52,6 +52,35 @@ jobs:
           echo "files in $LOCK_COMMIT:"
           git show --name-only --format= "$LOCK_COMMIT"
 
+      - name: Does installing @nx/js make the setting live?
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp nx.json /tmp/nx.with.json
+          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.without.json
+          NXV=$(node -p "require('./package.json').devDependencies.nx")
+          echo "installing @nx/js@$NXV to match nx"
+          pnpm add -D -w "@nx/js@$NXV" --ignore-scripts >/dev/null 2>&1 || {
+            echo "::warning::could not add @nx/js@$NXV"; exit 0; }
+
+          jsc() {
+            cp "$1" nx.json; rm -rf .nx
+            pnpm exec nx show projects --affected \
+              --base="$LOCK_PARENT" --head="$LOCK_COMMIT" --json 2>/dev/null \
+              | tail -n1 | jq 'length'
+          }
+          JW=$(jsc /tmp/nx.with.json)
+          JO=$(jsc /tmp/nx.without.json)
+          cp /tmp/nx.with.json nx.json
+          echo "with @nx/js installed  WITH auto : $JW"
+          echo "with @nx/js installed  WITHOUT   : $JO"
+          if [ "$JW" -lt "$JO" ]; then
+            echo "::notice::Installing @nx/js makes the setting work ($JO -> $JW). That is the missing piece."
+          else
+            echo "::warning::Still no narrowing even with @nx/js installed."
+          fi
+          git checkout -- package.json pnpm-lock.yaml 2>/dev/null || true
+
       - name: Four-way A/B
         shell: bash
         run: |
