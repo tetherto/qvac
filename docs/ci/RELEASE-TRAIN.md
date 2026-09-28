@@ -81,8 +81,9 @@ pnpm exec nx release version --dry-run   # read the versions and ranges first
 pnpm exec nx release version
 ```
 
-This writes every version, rewrites every dependency range, updates
-`pnpm-lock.yaml`, and deletes the plan file it consumed. Never pass `--groups`,
+This writes every version, rewrites every dependency range and updates
+`pnpm-lock.yaml`. It does not delete the plan file: remove it before
+committing, or the next `nx release version` applies it again. Never pass `--groups`,
 `--projects` or a command-line specifier: combined with a specifier those
 filters write it into out-of-group projects. The pass is meant to be
 unfiltered.

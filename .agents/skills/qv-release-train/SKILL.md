@@ -88,8 +88,9 @@ with a specifier those filters write it into out-of-group projects and
 double-bump dependents. The pass is unfiltered by design; group membership is
 what confines it.
 
-The command consumes and deletes the plan file, updates `pnpm-lock.yaml`, and
-stages its changes.
+The command updates `pnpm-lock.yaml` and stages its changes. It does not
+delete the plan file: remove `.nx/version-plans/<ticket>.md` before committing,
+or the next `nx release version` applies the same bumps again.
 
 ### Step 3: Changelogs, NOTICE and docs
 
@@ -162,6 +163,7 @@ records.
 - [ ] The version plan names every package that must move, including any whose
       range has to follow across a group boundary
 - [ ] `nx release version --dry-run` was read, not skipped
+- [ ] The consumed plan file was deleted before committing
 - [ ] No `--groups`, `--projects` or specifier was passed to the version pass
 - [ ] A changelog exists for every package whose manifest moved — the branch
       guard fails otherwise
