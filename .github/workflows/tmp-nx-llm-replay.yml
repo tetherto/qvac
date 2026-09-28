@@ -1,0 +1,130 @@
+name: TMP nx real-PR replay (QVAC-25682)
+
+# THROWAWAY. Deleted before merge.
+#
+# Replays real PRs through main's nx-project-matrix and this branch's, in the
+# same job, on the same diff, so the before/after is measured rather than
+# inferred. Both lanes: stdin as on-pr-nx, range as on-pr-ts-nx.
+#
+#   f1c4648b0  QVAC-22415, a real llm PR: llm-llamacpp + the lockfile, nothing else
+#   9d0914037  QVAC-23977, a real fabric consumer bump: 7 addons + the lockfile
+#   pr4733     open, fabric 0.18 consumer bump, same shape as 9d0914037
+#   pr4570     open llm PR with no lockfile change: control, must not change
+
+on:
+  push:
+    branches:
+      - infra/QVAC-25682-nx-lockfile-affected
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    name: ${{ matrix.target }} / ${{ matrix.lane }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [f1c4648b0, 9d0914037, pr4733, pr4570]
+        lane: [stdin, range]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - shell: bash
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Resolve the real diff
+        id: diff
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          LANE: ${{ matrix.lane }}
+        run: |
+          set -euo pipefail
+          git fetch -q origin main
+          case "$TARGET" in
+            pr*)
+              N=${TARGET#pr}
+              git fetch -q origin "pull/$N/head:refs/remotes/pr/$N"
+              HEAD_SHA=$(git rev-parse "refs/remotes/pr/$N")
+              BASE_SHA=$(git merge-base origin/main "$HEAD_SHA") ;;
+            *)
+              HEAD_SHA=$(git rev-parse "$TARGET")
+              BASE_SHA=$(git rev-parse "$TARGET^") ;;
+          esac
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "REPLAY $TARGET: $(grep -c . <<<"$CHANGED") files, lockfile=$(grep -qx pnpm-lock.yaml <<<"$CHANGED" && echo yes || echo no)"
+          echo "REPLAY $TARGET packages: $(grep '^packages/' <<<"$CHANGED" | cut -d/ -f2 | sort -u | tr '\n' ' ')"
+          if [ "$LANE" = stdin ]; then printf '%s\n' "$CHANGED" > "$RUNNER_TEMP/nx-changed-files.txt"; fi
+          echo "base=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Stage main's action and nx.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github/actions/nx-matrix-main
+          git show origin/main:.github/actions/nx-project-matrix/action.yml > .github/actions/nx-matrix-main/action.yml
+          git show origin/main:nx.json > nx.json
+          rm -rf .nx
+
+      - id: before
+        uses: ./.github/actions/nx-matrix-main
+        with:
+          target: on-pr
+          base-ref: ${{ steps.diff.outputs.base }}
+          head-ref: ${{ steps.diff.outputs.head }}
+          config-ref: ${{ steps.diff.outputs.base }}
+
+      - name: Restore this branch's nx.json
+        shell: bash
+        run: |
+          git checkout HEAD -- nx.json
+          rm -rf .nx
+
+      - id: after
+        uses: ./.github/actions/nx-project-matrix
+        with:
+          target: on-pr
+          base-ref: ${{ steps.diff.outputs.base }}
+          head-ref: ${{ steps.diff.outputs.head }}
+          config-ref: ${{ steps.diff.outputs.base }}
+
+      - name: Before vs after
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          LANE: ${{ matrix.lane }}
+          BEFORE: ${{ steps.before.outputs.allrows }}
+          AFTER: ${{ steps.after.outputs.allrows }}
+        run: |
+          set -euo pipefail
+          B=$(echo "${BEFORE:-[]}" | jq -c '[.[].package] | unique')
+          A=$(echo "${AFTER:-[]}" | jq -c '[.[].package] | unique')
+          echo "BEFORE ($TARGET/$LANE) $(echo "$B" | jq length): $B"
+          echo "AFTER  ($TARGET/$LANE) $(echo "$A" | jq length): $A"
+          echo "DROPPED: $(jq -nc --argjson b "$B" --argjson a "$A" '$b - $a')"
+          echo "ADDED:   $(jq -nc --argjson b "$B" --argjson a "$A" '$a - $b')"
+
+          ok()  { echo "VERDICT $TARGET/$LANE: PASS ($1)"; }
+          bad() { echo "::error::VERDICT $TARGET/$LANE: FAIL - $1"; exit 1; }
+          SEVEN='["classification-ggml","embed-llamacpp","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","vla-ggml"]'
+          case "$TARGET" in
+            f1c4648b0)
+              [ "$A" = '["llm-llamacpp"]' ] && ok "llm alone, was $(echo "$B" | jq length)" || bad "want [llm-llamacpp], got $A" ;;
+            9d0914037|pr4733)
+              MISSING=$(jq -nc --argjson want "$SEVEN" --argjson got "$A" '$want - $got')
+              [ "$MISSING" = "[]" ] || bad "touched addons missing: $MISSING"
+              EXTRA=$(jq -nc --argjson want "$SEVEN" --argjson got "$A" '$got - $want')
+              ok "the addons it touched, extra=$EXTRA, was $(echo "$B" | jq length)" ;;
+            pr4570)
+              [ "$A" = "$B" ] && ok "unchanged, no lockfile" || bad "control changed: before $B after $A" ;;
+          esac
