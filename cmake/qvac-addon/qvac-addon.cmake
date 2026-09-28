@@ -116,19 +116,83 @@ endmacro()
 #                            to the runtime-provided backendsDir before calling
 #                            ggml_backend_load_all_from_path().
 #
-# The ggml compute backends live in @qvac/fabric's own prebuilds and are loaded
-# once per process; the addon neither collects nor installs them.
+# The ggml compute backends live next to the fabric runtime and are loaded once
+# per process; the addon neither collects nor installs them.
 # ---------------------------------------------------------------------------
 macro(qvac_addon_use_fabric)
   set(qvac-fabric_DIR
       "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake")
   find_package(qvac-fabric CONFIG REQUIRED)
-  include_bare_module("@qvac/fabric" qvac_fabric_target PREBUILD)
 
   bare_target(bare_target_value)
+  qvac_addon_fabric_layout("${bare_target_value}" "${CMAKE_CURRENT_SOURCE_DIR}"
+    _qvac_fabric_specifier _qvac_fabric_working_dir _qvac_fabric_prebuilds)
+  include_bare_module("${_qvac_fabric_specifier}" qvac_fabric_target PREBUILD
+    WORKING_DIRECTORY "${_qvac_fabric_working_dir}")
+
   set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/qvac__fabric")
   message(STATUS "qvac-addon: BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 endmacro()
+
+# ---------------------------------------------------------------------------
+# qvac_addon_fabric_layout(<host> <base_dir> <out_specifier> <out_working_dir>
+#                          <out_prebuilds>)
+#
+# Which installed bare module provides prebuilds/<host>/qvac__fabric.bare, as an
+# include_bare_module() specifier + WORKING_DIRECTORY, plus that module's
+# prebuilds/ dir. Same precedence as @qvac/fabric's binding.js, so the build
+# links the runtime the addon will load:
+#
+#   1. @qvac/fabric itself when it carries prebuilds/<host>: every fabric before
+#      the 0.18 platform split, a source build or linked workspace, and the CI
+#      overlay, which writes the PR-built runtime there.
+#   2. The host's platform package, @qvac/fabric-<host>/addon. It is fabric's
+#      dependency rather than the addon's, so it is resolved from fabric's real
+#      path, as Node would from inside fabric (pnpm and nested npm installs do
+#      not put it in the addon's node_modules). Its addon/ manifest is named
+#      @qvac/fabric, which keeps the artifact qvac__fabric.bare and every
+#      shipped consumer's DT_NEEDED on it valid.
+#
+# With neither (a cross-built target whose platform package the consumer has
+# not installed) this warns with the package to add and falls back to
+# @qvac/fabric, so the link fails on the missing prebuild.
+# ---------------------------------------------------------------------------
+function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir out_prebuilds)
+  resolve_node_module("@qvac/fabric" _meta_dir WORKING_DIRECTORY "${base_dir}")
+  if(_meta_dir MATCHES "-NOTFOUND$")
+    message(FATAL_ERROR "qvac-addon: @qvac/fabric is not installed under ${base_dir}; run npm install first.")
+  endif()
+
+  set(${out_specifier} "@qvac/fabric" PARENT_SCOPE)
+  set(${out_working_dir} "${base_dir}" PARENT_SCOPE)
+  set(${out_prebuilds} "${_meta_dir}/prebuilds" PARENT_SCOPE)
+  if(IS_DIRECTORY "${_meta_dir}/prebuilds/${host}")
+    return()
+  endif()
+
+  if(host MATCHES "^ios-")
+    set(_platform_package "@qvac/fabric-ios")
+  else()
+    set(_platform_package "@qvac/fabric-${host}")
+  endif()
+
+  file(REAL_PATH "${_meta_dir}" _meta_real)
+  resolve_node_module("${_platform_package}/addon" _platform_addon WORKING_DIRECTORY "${_meta_real}")
+  if(NOT _platform_addon MATCHES "-NOTFOUND$")
+    message(STATUS "qvac-addon: fabric runtime from ${_platform_package}")
+    set(${out_specifier} "${_platform_package}/addon" PARENT_SCOPE)
+    set(${out_working_dir} "${_meta_real}" PARENT_SCOPE)
+    set(${out_prebuilds} "${_platform_addon}/prebuilds" PARENT_SCOPE)
+    return()
+  endif()
+
+  file(READ "${_meta_dir}/package.json" _meta_manifest)
+  string(JSON _meta_version GET "${_meta_manifest}" version)
+  message(WARNING
+    "qvac-addon: no fabric runtime for ${host}: @qvac/fabric has no prebuilds/${host} "
+    "and ${_platform_package} is not installed. Cross-built targets are never selected "
+    "by os/cpu filters; add \"${_platform_package}\": \"${_meta_version}\" to dependencies.")
+endfunction()
 
 # ---------------------------------------------------------------------------
 # qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)
@@ -465,8 +529,10 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
     COMMENT "Copying qvac__fabric@0.bare to test directory")
 
   bare_target(_qvac_host)
+  qvac_addon_fabric_layout("${_qvac_host}" "${CMAKE_SOURCE_DIR}"
+    _qvac_fabric_test_specifier _qvac_fabric_test_working_dir _qvac_fabric_test_prebuilds)
   file(GLOB _qvac_fabric_test_backends
-    "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${_qvac_host}/qvac__fabric/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    "${_qvac_fabric_test_prebuilds}/${_qvac_host}/qvac__fabric/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
   if(_qvac_fabric_test_backends)
     get_property(_qvac_stage_target DIRECTORY PROPERTY QVAC_FABRIC_TEST_BACKENDS_TARGET)
     if(NOT _qvac_stage_target)

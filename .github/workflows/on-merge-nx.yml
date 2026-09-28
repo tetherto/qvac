@@ -546,13 +546,15 @@ jobs:
           # leave the dist-tag to be derived.
           tag: ${{ matrix.npmTagOverride || inputs.npm_tag || 'latest' }}
 
-      # asr/audiogen/tts ship one npm package per platform plus a JS-only meta
+      # asr/audiogen/tts/fabric ship one npm package per platform plus a meta
       # with version-locked optionalDependencies. npm only; GPR stays unsliced.
+      # prebuildExtraDirs (fabric's C++ SDK) stay in the meta.
       - name: Slice platform packages
         if: matrix.slicePlatformPackages
         env:
           WORKDIR: ${{ matrix.workdir }}
-        run: node scripts/ci/slice-platform-packages.mjs --workdir "$WORKDIR" --out-dir "${{ runner.temp }}/platform-packages"
+          KEEP_DIRS: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
+        run: node scripts/ci/slice-platform-packages.mjs --workdir "$WORKDIR" --out-dir "${{ runner.temp }}/platform-packages" --keep-dirs "$KEEP_DIRS"
 
       - name: Set up Node.js for platform package publish
         if: matrix.slicePlatformPackages

@@ -28,6 +28,40 @@ consumer guide.
   On **linux-x64** this includes the ROCm/HIP backend (`libqvac-ggml-hip.so`,
   gfx1151) alongside Vulkan; the DL loader skips it on non-AMD hosts.
 
+## Platform packages
+
+Since 0.18, `@qvac/fabric` is a meta package that ships the loader, headers and
+CMake config. The runtime and backends for each desktop host live in a
+version-locked platform package selected at install time through `os`/`cpu`
+filtered `optionalDependencies`:
+
+| Host | Package |
+| --- | --- |
+| linux-x64 (glibc) | `@qvac/fabric-linux-x64` |
+| linux-arm64 (glibc) | `@qvac/fabric-linux-arm64` |
+| darwin-arm64 | `@qvac/fabric-darwin-arm64` |
+| darwin-x64 | `@qvac/fabric-darwin-x64` |
+| win32-x64 | `@qvac/fabric-win32-x64` |
+
+Do not depend on desktop platform packages directly. Supported installers are
+npm 7+, pnpm, bun, and Yarn Berry. Yarn v1 and `--omit=optional` installs skip
+the platform package and fail at require time with an error naming the missing
+package; a runtime in the package's own `prebuilds/<host>` (source builds,
+fabric 0.17 and earlier) always takes precedence. Consumer addons locate the
+runtime with the CMake template and the ggml backends with
+`require('@qvac/fabric/backends').resolveBackendsDir()`; see
+[INTEGRATION.md](./INTEGRATION.md).
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and `optionalDependencies` filtering can never select them. Mobile
+applications must declare the target's platform package as a direct
+dependency, pinned to the exact `@qvac/fabric` version their addons resolve:
+
+| Target | Package |
+| --- | --- |
+| android-arm64 | `@qvac/fabric-android-arm64` |
+| ios (device + simulators) | `@qvac/fabric-ios` |
+
 ## Architecture
 
 ```
