@@ -46,9 +46,11 @@
   enabled, otherwise its unsaved turns are written to its `cacheKey` file.
   Requests on the same `cacheKey` now run one at a time instead of
   concurrently, so a conversation's state is never forked.
-- Unloading or reloading the model writes every conversation with unsaved
-  turns to its `cacheKey` file: the active single-prompt session, resident
-  batch conversations and the RAM tier.
+- Reloading the model (finetuning does), and unloading it with
+  `cache_ram_mib` set, writes every conversation with unsaved turns to its
+  `cacheKey` file: the active single-prompt session, resident batch
+  conversations and the RAM tier. Without the tier an unload writes
+  nothing, as before.
 - A single-prompt key switch no longer rewrites the old session's file when
   nothing ran since it was last written or loaded.
 

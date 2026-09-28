@@ -164,8 +164,10 @@ memory between requests.
 - A conversation whose loaded `cacheKey` file is deleted is dropped, as on the
   single-prompt path. Requests without a `cacheKey` are never kept.
 
-Resident conversations are written to their files when the model is
-unloaded or reloaded, like the RAM tier below; a crash loses the turns that
+Resident conversations with unsaved turns are written to their files when
+the model is reloaded (finetuning reloads it), and when it is unloaded with
+the RAM tier below enabled. Without the tier an unload drops them, as the
+single-prompt path drops its active session; a crash always loses turns that
 were only in memory.
 
 ## Keep switched-away conversations in RAM
@@ -190,7 +192,7 @@ The tier is a write-back cache. A conversation with unsaved turns reaches its
   without the tier;
 - the model is unloaded or reloaded: every conversation with unsaved turns,
   in RAM, resident in a slot or active on the single-prompt path, is written
-  to its file.
+  to its file. (A reload does this with or without the tier.)
 
 Admission and eviction follow llama-server's `--cache-ram`: a newer entry for
 the same key replaces the older one, and the oldest entries go first.
@@ -225,7 +227,10 @@ automatically in these cases:
 
 1. **Switching to a different `cacheKey`** — the old session is saved before loading the new one.
 2. **Omitting `cacheKey`** — the active session is saved and then cleared.
-3. **Unloading or reloading the model** — a session with unsaved turns is saved.
+3. **Reloading the model** (finetuning does) — a session with unsaved turns is saved.
+
+Unloading the model without the RAM tier writes nothing, so turns sent without
+`saveCacheToDisk` since the last save are lost.
 
 A switch or an omitted `cacheKey` skips the write when nothing ran since the
 file was last written or loaded. With the RAM tier, the first two move the

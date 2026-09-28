@@ -248,7 +248,7 @@ public:
 private:
   /// Writes every conversation with unsaved turns to its `cacheKey` file:
   /// the active single-prompt session, parked batch conversations and the
-  /// RAM tier. Run before the state is torn down (unload, reload).
+  /// RAM tier. Run before a reload, and at unload when the RAM tier is on.
   void flushResidentCaches() noexcept;
   friend class LlamaFinetuner;
   // Unit tests reach internals (scheduler, single-prompt context) through this

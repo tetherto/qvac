@@ -101,7 +101,13 @@ void LlamaModel::reload(
 LlamaModel::~LlamaModel() {
   cancelInference();
   std::unique_lock lock(stateMtx_);
-  flushResidentCaches();
+  // Writing unsaved conversations at unload is part of the RAM tier's
+  // write-back contract. Without the tier nothing is written at unload, as
+  // before: a conversation's file is only written by the saves the caller
+  // controls (saveCacheToDisk, a key switch, a keyless request).
+  if (state_ && state_->ramTier_ && state_->ramTier_->enabled()) {
+    flushResidentCaches();
+  }
 }
 
 void LlamaModel::flushResidentCaches() noexcept {
@@ -143,7 +149,10 @@ void LlamaModel::setInitLoader(
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   cancelInference();
   std::unique_lock lock(stateMtx_);
-  // A reload discards the contexts; keep what their conversations hold.
+  // A reload discards the contexts while the process keeps serving the same
+  // conversations (finetuning reloads before training, and the finetuner
+  // saves the active session for the same reason): keep what they hold,
+  // with or without the RAM tier.
   flushResidentCaches();
   // Unconditionally stop the old contexts before destroying them, regardless
   // of job counters. cancel() above only routes to active engines (counters >

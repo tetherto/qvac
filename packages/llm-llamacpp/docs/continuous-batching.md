@@ -409,7 +409,7 @@ A committed keyed request no longer leaves an empty slot, though. `freeSlot` **p
 - **RAM tier:** with `cache_ram_mib` set, the full sequence state moves into `SlotStateCache`, unsaved turns included. The store is shared with the single-prompt path's key switches, follows llama-server's `--cache-ram` rules, and writes an entry's unsaved turns to its file before dropping it.
 - **No RAM tier:** unsaved turns are written to K's file (`llama_state_seq_save_file` through a temp file), the same auto-save the single-prompt path does on a key switch.
 
-`flushForUnload()` writes every parked conversation with unsaved turns to its file; the model calls it, together with the single-prompt session and RAM tier flushes, before it is destroyed or reloaded.
+`flushForUnload()` writes every parked conversation with unsaved turns to its file. The model calls it, together with the single-prompt session and RAM tier flushes, before a reload, and before it is destroyed when the RAM tier is enabled.
 
 At admission the driver takes the state from the first source that has it: the parked sequence (`adoptResidentState`, which runs the same validation as a file load), the RAM tier (`llama_state_seq_set_data_ext`, then `adoptResidentState`), or the file (`loadCache`). If admission fails after adopting a conversation with unsaved turns, the driver rolls back (`onFailure`) and the conversation is parked again. Model-level exceptions:
 

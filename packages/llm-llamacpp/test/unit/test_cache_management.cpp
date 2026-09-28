@@ -1792,6 +1792,8 @@ TEST(BatchedCacheResidencyTest, RamTierRestoresAnEvictedConversation) {
     EXPECT_EQ(
         harness.scheduler().ramTierHitsForTesting(), expectRamHit ? 1u : 0u)
         << "budget " << budget << " MiB";
+    // Unload first: with the tier on it writes unsaved turns out.
+    model.reset();
     for (const auto& key : keys) {
       fs::remove(key);
     }
