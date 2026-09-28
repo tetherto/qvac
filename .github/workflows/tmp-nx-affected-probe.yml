@@ -87,23 +87,30 @@ jobs:
           git commit -q -m "probe: widen one range in one addon"
           echo "HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
-      - name: A/B the affected set
+      - name: A/B across three configs
         shell: bash
         run: |
           set -uo pipefail
-          cp nx.json /tmp/nx.with.json
-          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.without.json
+          jq 'del(.pluginsConfig)' nx.json > /tmp/nx.default.json
+          cp nx.json /tmp/nx.auto.json
+          jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = []' nx.json > /tmp/nx.none.json
+
           run_affected() {
             cp "$1" nx.json; rm -rf .nx
-            pnpm exec nx show projects --affected \
-              --base="$BASE_SHA" --head="$HEAD_SHA" --json 2>/dev/null | tail -n1
+            out=$(pnpm exec nx show projects --affected \
+              --base="$BASE_SHA" --head="$HEAD_SHA" --json 2>/dev/null | tail -n1)
+            case "$out" in \[*) echo "$out";; *) echo "[]";; esac
           }
+
           TOTAL=$(pnpm exec nx show projects --json | tail -n1 | jq 'length')
-          W=$(run_affected /tmp/nx.with.json); O=$(run_affected /tmp/nx.without.json)
-          cp /tmp/nx.with.json nx.json
-          WC=$(echo "$W" | jq 'length'); OC=$(echo "$O" | jq 'length')
-          echo "RESULT total=$TOTAL without=$OC with_auto=$WC"
-          echo "RESULT affected-with-auto:"
-          echo "$W" | jq -r '.[]' | sed 's/^/  ADDON /'
-          ADDONS=$(echo "$W" | jq -r '.[]' | grep -cE "ocr-ggml|llm-llamacpp|vla-ggml|asr-ggml|tts-ggml|audiogen|bci-|embed-|classification|translation|model-fit" || true)
-          echo "RESULT addon-like projects still marked: $ADDONS"
+          D=$(run_affected /tmp/nx.default.json)
+          A=$(run_affected /tmp/nx.auto.json)
+          N=$(run_affected /tmp/nx.none.json)
+          cp /tmp/nx.auto.json nx.json
+
+          echo "RESULT total                       : $TOTAL"
+          echo "RESULT default (all)               : $(echo "$D" | jq 'length')"
+          echo "RESULT auto                        : $(echo "$A" | jq 'length')"
+          echo "RESULT empty list (lockfile marks nothing) : $(echo "$N" | jq 'length')"
+          echo "RESULT projects under empty list:"
+          echo "$N" | jq -r '.[]' | sed 's/^/  KEEP /'
