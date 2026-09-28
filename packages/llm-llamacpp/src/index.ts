@@ -6,6 +6,13 @@ import BatchHandler = require("./batchHandler");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import { createJobHandler, exclusiveRunQueue, QvacResponse, type JobHandler } from "@qvac/infer-base";
 import { LlamaInterface, mapAddonEvent } from "./addon";
+import {
+  assessFit as assessFitImpl,
+  type LlamaFitDevice,
+  type LlamaFitRequest,
+  type LlamaFitResult,
+  type LlamaFitStatus
+} from "./fit";
 import type * as AddonModule from "./addon";
 
 const { runBusyError } = BatchHandler;
@@ -406,11 +413,13 @@ interface LlmLlamacppConstructor {
   readonly prototype: LlmLlamacpp;
   /** Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole entry for single-file models. */
   readonly pickPrimaryGgufPath: typeof pickPrimaryGgufPath;
+  readonly assessFit: typeof assessFitImpl;
 }
 
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
   static readonly pickPrimaryGgufPath = pickPrimaryGgufPath;
+  static readonly assessFit = assessFitImpl;
   // Attached for tests; untyped because `typeof QvacResponse` is not nameable by consumers.
   static readonly QvacResponse = QvacResponse;
 
@@ -1602,6 +1611,11 @@ namespace LlmLlamacpp {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirrors `QvacResponse<Output = any>` in @qvac/infer-base.
   export type QvacResponse<Output = any> = InferQvacResponseOf<Output>;
+
+  export type FitRequest = LlamaFitRequest;
+  export type FitResult = LlamaFitResult;
+  export type FitStatus = LlamaFitStatus;
+  export type FitDevice = LlamaFitDevice;
 }
 
 export = LlmLlamacpp;
@@ -1609,5 +1623,6 @@ export = LlmLlamacpp;
 // Runtime-redundant: ESM named imports need the top-level `module.exports.X =` form.
 /* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface. */
 module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+module.exports.assessFit = assessFitImpl;
 module.exports.QvacResponse = QvacResponse;
 /* eslint-enable @typescript-eslint/no-unsafe-member-access */

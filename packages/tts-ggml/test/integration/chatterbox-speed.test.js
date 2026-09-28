@@ -11,6 +11,7 @@ const path = require('bare-path')
 
 const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
 const { ensureChatterboxModels } = require('../utils/downloadModel')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 function getBaseDir() {
   const platform = os.platform()
@@ -47,7 +48,12 @@ test(
     // across loads, so the only difference between runs is the speed knob.
     async function sampleCountAt(speed) {
       const label = speed === undefined ? 'default' : String(speed)
-      const model = await loadChatterboxTTS({ modelDir, language: 'en', speed })
+      const model = await loadChatterboxTTS({
+        threads: TTS_TEST_THREADS,
+        modelDir,
+        language: 'en',
+        speed
+      })
       try {
         const r = await runChatterboxTTS(model, { text: TEXT }, EXPECTATION)
         t.ok(r.passed, `speed=${label}: passes synthesis expectations`)
@@ -94,7 +100,12 @@ test('Chatterbox TTS (ggml): out-of-range speed is rejected', { timeout: 600000 
   // `speed` is bounded to [0.25, 4.0] by ChatterboxModel::validateConfig,
   // which runs at load time and surfaces as a rejected load.
   await t.exception(
-    loadChatterboxTTS({ modelDir: download.targetDir, language: 'en', speed: 5 }),
+    loadChatterboxTTS({
+      threads: TTS_TEST_THREADS,
+      modelDir: download.targetDir,
+      language: 'en',
+      speed: 5
+    }),
     'speed=5 (> 4.0) is rejected at load'
   )
 })

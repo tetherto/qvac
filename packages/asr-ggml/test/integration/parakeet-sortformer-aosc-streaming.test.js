@@ -93,16 +93,18 @@ function pushableStream() {
   }
 }
 
-async function feedAndCollect(model, audio) {
+// Collects text segments; VAD events go to `vadEvents` when given.
+async function feedAndCollect(model, audio, streamingOpts = undefined, vadEvents = null) {
   const samplesPerChunk = Math.floor((FEED_CHUNK_MS / 1000) * SAMPLE_RATE)
   const stream = pushableStream()
   const segments = []
 
-  const response = await model.runStreaming(stream)
+  const response = await model.runStreaming(stream, streamingOpts)
   const updateDone = response
     .onUpdate((out) => {
       const items = Array.isArray(out) ? out : [out]
       for (const seg of items) {
+        if (seg && seg.type === 'vad' && vadEvents) vadEvents.push(seg)
         if (!seg || !seg.text) continue
         segments.push(seg)
       }
@@ -174,6 +176,10 @@ test(
 
         const speakerIds = segments.map((s) => parseSpeakerId(s.text)).filter((id) => id >= 0)
         t.ok(speakerIds.length > 0, 'segments should match the "Speaker N: ..." format')
+        t.ok(
+          segments.every((s) => s.speakerId === parseSpeakerId(s.text)),
+          'each segment carries its speaker as a structured speakerId'
+        )
 
         const distinctIds = new Set(speakerIds)
         console.log(
@@ -244,6 +250,77 @@ test(
         t.ok(speakerIds.length > 0, 'segments should match the "Speaker N: ..." format')
 
         console.log(`[aosc/disabled] segments=${segments.length}`)
+      } finally {
+        try {
+          await model.unload()
+        } catch (e) {
+          /* ignore */
+        }
+      }
+    } finally {
+      try {
+        loggerBinding.releaseLogger()
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+)
+
+test(
+  'Sortformer v2.1 AOSC — emitSpeakerVad reports speech start/stop with the speaker',
+  { timeout: 600000 },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
+
+    try {
+      const modelPath = await loadGgufOrSkip(t, 'sortformerStreaming')
+      if (!modelPath) return
+
+      const audio = loadAudioSample()
+      if (!audio) {
+        t.pass('sample.raw not found - skipping')
+        return
+      }
+
+      const model = new ASRGgml({
+        files: { model: modelPath },
+        config: {
+          engine: 'parakeet',
+          parakeetConfig: {
+            streaming: true,
+            streamingChunkMs: STREAM_CHUNK_MS,
+            maxThreads: 4,
+            useGPU: false
+          }
+        }
+      })
+
+      try {
+        await model.load()
+        const vadEvents = []
+        const segments = await feedAndCollect(model, audio, { emitSpeakerVad: true }, vadEvents)
+        console.log(
+          '[aosc/speaker-vad] ' +
+            vadEvents
+              .map((e) => `${e.speaking ? `speaker ${e.speakerId}` : 'silence'}@${e.timestamp}s`)
+              .join(' ')
+        )
+
+        t.ok(segments.length > 0, 'diarization segments still arrive')
+        t.ok(vadEvents.length > 0, 'at least one speaker-activity transition')
+        t.ok(
+          vadEvents.every((e) => e.source === 'sortformer'),
+          'events come from Sortformer speaker activity'
+        )
+        t.ok(
+          vadEvents.every((e) => (e.speaking ? e.speakerId >= 0 : e.speakerId === undefined)),
+          'speech starts name the dominant speaker; silences name none'
+        )
+        t.ok(
+          vadEvents.every((e, i) => i === 0 || e.speaking !== vadEvents[i - 1].speaking),
+          'only state changes are reported'
+        )
       } finally {
         try {
           await model.unload()

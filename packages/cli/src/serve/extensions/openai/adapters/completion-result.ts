@@ -31,6 +31,12 @@ export interface DrainedCompletion {
   completionTokens: number
   /** OpenAI `finish_reason`: `tool_calls` wins, then `length` on truncation, else `stop`. */
   finishReason: OpenAiFinishReason
+  /**
+   * The turn's output exactly as the model emitted it, tool-call markup
+   * included, when the addon reported it. Replaying a tool-call turn needs
+   * this rather than `text`: the model has to see its own call syntax.
+   */
+  rawFullText: string | undefined
 }
 
 /**
@@ -56,6 +62,7 @@ export async function drainCompletion(
   const toolErrors: ToolCallError[] = []
   let stats: CompletionStats | undefined
   let stopReason: string | undefined
+  let rawFullText: string | undefined
 
   for await (const event of result.events) {
     if (event.type === 'contentDelta') {
@@ -71,6 +78,9 @@ export async function drainCompletion(
     } else if (event.type === 'completionStats') {
       stats = event.stats
     } else if (event.type === 'completionDone') {
+      if ('raw' in event && event.raw) {
+        rawFullText = event.raw.fullText
+      }
       if (event.stopReason === 'error') {
         throw new HttpError(502, 'inference_failed', 'Inference failed mid-stream.')
       }
@@ -96,7 +106,46 @@ export async function drainCompletion(
     stats,
     stopReason,
     completionTokens,
-    finishReason
+    finishReason,
+    rawFullText
+  }
+}
+
+const SUMMED_STAT_KEYS = [
+  'promptTokens',
+  'cacheTokens',
+  'generatedTokens',
+  'emittedTokens'
+] as const
+
+function sumStat(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined) return b
+  if (b === undefined) return a
+  return a + b
+}
+
+/**
+ * Fold one turn of a multi-round request into the running total, so `usage`
+ * covers every round the request ran, not only the last. Token counts are
+ * summed; rates and timings are the latest turn's.
+ */
+export function accumulateUsage<T extends DrainedCompletion>(
+  previous: DrainedCompletion | undefined,
+  next: T
+): T {
+  if (!previous) return next
+  let stats = next.stats
+  if (previous.stats || next.stats) {
+    stats = { ...previous.stats, ...next.stats }
+    for (const key of SUMMED_STAT_KEYS) {
+      const total = sumStat(previous.stats?.[key], next.stats?.[key])
+      if (total !== undefined) stats[key] = total
+    }
+  }
+  return {
+    ...next,
+    stats,
+    completionTokens: previous.completionTokens + next.completionTokens
   }
 }
 

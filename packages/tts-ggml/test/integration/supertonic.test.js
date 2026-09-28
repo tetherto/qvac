@@ -12,6 +12,7 @@ const test = require('brittle')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureSupertonicModel } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -46,6 +47,7 @@ test(
     }
 
     const model = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: download.path,
       voice: 'F1',
       language: 'en',
@@ -140,6 +142,7 @@ test(
 
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: download.path },
       voice: 'F1',
@@ -211,6 +214,7 @@ test(
 
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: download.path },
       voice: 'F1',
@@ -275,6 +279,7 @@ test(
 
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: download.path },
       voice: 'F1',
@@ -329,6 +334,7 @@ test(
     }
 
     const model = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: download.path,
       voice: 'F1',
       steps: 4,

@@ -127,7 +127,7 @@ describe('writeStreamingResponse', () => {
       stats: { generatedTokens: 5, emittedTokens: 2 }
     })
 
-    const completed = await writeStreamingResponse(holder.res, p, result)
+    const completed = await writeStreamingResponse(holder.res, p, () => result)
     const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
 
     const deltas = events.filter((e) => e['type'] === 'response.output_text.delta')
@@ -158,7 +158,7 @@ describe('writeStreamingResponse', () => {
       stats: { generatedTokens: 3 }
     })
 
-    const completed = await writeStreamingResponse(holder.res, p, result)
+    const completed = await writeStreamingResponse(holder.res, p, () => result)
     const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
 
     const argDeltas = events.filter((e) => e['type'] === 'response.function_call_arguments.delta')
@@ -195,7 +195,7 @@ describe('writeStreamingResponse', () => {
       stopReason: 'length'
     })
 
-    const completed = await writeStreamingResponse(holder.res, p, result)
+    const completed = await writeStreamingResponse(holder.res, p, () => result)
     const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
 
     assert.equal(completed['status'], 'incomplete')
@@ -207,5 +207,69 @@ describe('writeStreamingResponse', () => {
     assert.ok(terminal)
     assert.equal(terminal.response.status, 'incomplete')
     assert.equal(terminal.response.incomplete_details.reason, 'max_output_tokens')
+  })
+})
+
+describe('writeStreamingResponse: deferred tools', () => {
+  const deferredTool = {
+    type: 'function' as const,
+    name: 'create_issue',
+    description: 'Open a new issue on a repository',
+    deferLoading: true,
+    parameters: { type: 'object' as const, properties: { title: { type: 'string' as const } } }
+  }
+
+  it('streams both turns live and keeps only the answer in the response object', async () => {
+    const holder = createStreamResponse()
+    const p = { ...baseHandlerParams('resp_defer'), tools: [deferredTool] }
+
+    const turns = [
+      // Search turn: a preamble, then the search call the client never sees.
+      fakeStreamCompletion({
+        tokens: ['Looking ', 'that up. '],
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        text: 'Looking that up. '
+      }),
+      // Answer turn.
+      fakeStreamCompletion({
+        tokens: ['Opened ', 'it.'],
+        toolCalls: [],
+        text: 'Opened it.'
+      })
+    ]
+    const seenHistories: Array<Array<{ role: string; content: string }>> = []
+    let turn = 0
+
+    const completed = await writeStreamingResponse(holder.res, p, (history) => {
+      seenHistories.push(history)
+      return turns[turn++]!
+    })
+
+    assert.equal(turn, 2, 'the search turn was followed by a second generation')
+
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const deltas = events
+      .filter((e) => e['type'] === 'response.output_text.delta')
+      .map((e) => e['delta'])
+    assert.deepEqual(
+      deltas,
+      ['Looking ', 'that up. ', 'Opened ', 'it.'],
+      'both turns streamed live — nothing was buffered or dropped'
+    )
+
+    // The search result reached the second turn through the history.
+    const second = seenHistories[1]!
+    assert.equal(second.at(-1)!.role, 'tool')
+    assert.ok(second.at(-1)!.content.includes('"create_issue"'))
+
+    // The stored answer is the answering turn only, and carries no tool call
+    // the client would have to run.
+    assert.equal(completed['status'], 'completed')
+    assert.equal(
+      JSON.stringify(completed['output']).includes('tool_search'),
+      false,
+      'tool_search never reaches the client'
+    )
+    assert.ok(JSON.stringify(completed['output']).includes('Opened it.'))
   })
 })
