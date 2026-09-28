@@ -114,6 +114,13 @@ dependencies pinned to the exact meta version. The SDK Expo plugin and
 the bundle manifest lists `@qvac/fabric` as an addon, so fabric's slice is linked
 and a missing pin is reported by name.
 
+Consumer addons need the same slices to *build* their Android and iOS prebuilds,
+and a CI runner installs only its own host's slice. Each consumer therefore adds
+both as exact-pinned `devDependencies`, not `dependencies`, which would ship
+about 150 MB of mobile runtime with every desktop install of the addon. The
+application still supplies the runtime at run time. Configure fails naming the
+missing package rather than failing later at link.
+
 ### Publish
 
 `on-merge-nx` slices, publishes each platform package, then publishes the meta

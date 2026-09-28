@@ -17,7 +17,11 @@
 - Consumer addons can no longer find the runtime or backends at
   `@qvac/fabric/prebuilds/<host>`. Link through the CMake template's
   `qvac_addon_use_fabric()` or `qvac_addon_fabric_layout()`, and take the
-  backends root from `@qvac/fabric/backends`.
+  backends root from `@qvac/fabric/backends`. Configure now fails, naming the
+  package to install, when no runtime for the target is installed.
+- Consumer addons that build Android or iOS prebuilds must add
+  `@qvac/fabric-android-arm64` and `@qvac/fabric-ios` to `devDependencies`,
+  pinned to the exact `@qvac/fabric` version, to link against them.
 
 ### Added
 

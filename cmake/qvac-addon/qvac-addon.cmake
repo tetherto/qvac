@@ -153,9 +153,10 @@ endmacro()
 #      @qvac/fabric, which keeps the artifact qvac__fabric.bare and every
 #      shipped consumer's DT_NEEDED on it valid.
 #
-# With neither (a cross-built target whose platform package the consumer has
-# not installed) this warns with the package to add and falls back to
-# @qvac/fabric, so the link fails on the missing prebuild.
+# With neither, configure fails naming the package to install. Cross-built
+# targets (android, ios) are never selected by os/cpu filters, so an addon that
+# builds them needs the platform package as an exact-pinned devDependency: the
+# app supplies the runtime at run time through its own direct dependency.
 # ---------------------------------------------------------------------------
 function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir out_prebuilds)
   resolve_node_module("@qvac/fabric" _meta_dir WORKING_DIRECTORY "${base_dir}")
@@ -188,10 +189,19 @@ function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir ou
 
   file(READ "${_meta_dir}/package.json" _meta_manifest)
   string(JSON _meta_version GET "${_meta_manifest}" version)
-  message(WARNING
+  if(host MATCHES "^(android|ios)-")
+    string(CONCAT _remedy
+      "Cross-built targets are never selected by os/cpu filters; add "
+      "\"${_platform_package}\": \"${_meta_version}\" to devDependencies.")
+  else()
+    string(CONCAT _remedy
+      "It is an optional dependency of @qvac/fabric: reinstall without --omit=optional "
+      "(Yarn v1 skips optional dependencies), or build @qvac/fabric from source if it "
+      "publishes no runtime for ${host}.")
+  endif()
+  message(FATAL_ERROR
     "qvac-addon: no fabric runtime for ${host}: @qvac/fabric has no prebuilds/${host} "
-    "and ${_platform_package} is not installed. Cross-built targets are never selected "
-    "by os/cpu filters; add \"${_platform_package}\": \"${_meta_version}\" to dependencies.")
+    "and ${_platform_package} is not installed. ${_remedy}")
 endfunction()
 
 # ---------------------------------------------------------------------------

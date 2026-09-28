@@ -95,6 +95,25 @@ After `npm install`, the headers and CMake config are under
 backends are in its platform package (see
 [Platform packages](#platform-packages-018)).
 
+An addon that builds Android or iOS prebuilds also needs those targets' platform
+packages to link against, and no install host selects them. Add them to
+`devDependencies`, pinned to the exact version the `@qvac/fabric` range resolves
+to, and bump them together with it:
+
+```json
+{
+  "devDependencies": {
+    "@qvac/fabric-android-arm64": "0.18.0",
+    "@qvac/fabric-ios": "0.18.0"
+  }
+}
+```
+
+Keep them out of `dependencies`: that would download both mobile runtimes (about
+150 MB) with every install of the addon, while the application supplies the
+runtime at run time through its own direct dependency. When one is missing,
+configure fails and names the package to add.
+
 ---
 
 ## Step 2 — vcpkg manifest (`vcpkg.json`)
@@ -308,7 +327,7 @@ readelf -d prebuilds/<host>/<addon>.bare | grep NEEDED   # → NEEDED qvac__fabr
 
 | # | Step | What to verify |
 |---|------|----------------|
-| 1 | `package.json` | `@qvac/fabric` `^0.18.0` in `dependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies` |
+| 1 | `package.json` | `@qvac/fabric` `^0.18.0` in `dependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus exact-pinned `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` when building mobile prebuilds |
 | 2 | `vcpkg.json` | `qvac-fabric` is **not** listed; `vk-profiling` feature removed; addon-specific deps remain |
 | 3 | `CMakeLists.txt` | `qvac_addon_use_fabric()`, or `find_package(qvac-fabric ...)` + `qvac_addon_fabric_layout()`; `qvac-fabric::headers`; companion install |
 | 4 | `binding.js` | `require('@qvac/fabric')` **before** `require.addon()`; backends root from `@qvac/fabric/backends` |
