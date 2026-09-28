@@ -471,7 +471,12 @@ TEST_F(
   fs::remove(cachePath);
 }
 
-TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
+// A generation that stops at `n_predict` inside reasoning is a completed
+// request from the caller's side: the partial answer was streamed. Like on the
+// text path (CacheManagementTest.PredictionLimitGenerationCommitsCache) it
+// commits: its tokens stay resident, the MTMD bookkeeping matches live memory,
+// and the next full-history turn continues from there.
+TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningCommitsCache) {
   if (!hasValidQwen35Model()) {
     GTEST_SKIP() << "Qwen3.5 multimodal model or projection file not found";
   }
@@ -481,85 +486,78 @@ TEST_F(MtmdLlmContextTest, Qwen35MtmdNPredictCutoffMidReasoningRollsBackCache) {
 
   auto model = createQwen35Model();
   ASSERT_NE(model, nullptr) << "Qwen3.5 multimodal model failed to load";
-  auto* base = LlamaModelTestPeer::llmContext(*model);
-  ASSERT_NE(base, nullptr);
-  auto* ctx = dynamic_cast<MtmdLlmContext*>(base);
+  auto* ctx =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
   ASSERT_NE(ctx, nullptr) << "Qwen3.5 VLM must use the MTMD context";
 
   const fs::path cachePath =
-      fs::temp_directory_path() / "qvac-qwen35-mtmd-npredict-rollback.bin";
+      fs::temp_directory_path() / "qvac-qwen35-mtmd-npredict-commit.bin";
   fs::remove(cachePath);
-
-  const char* systemMsg =
-      R"({"role":"system","content":"You are a helpful assistant. Answer concisely with just the city name."})";
-  const char* userTurn1 =
-      R"({"role":"user","content":"What is the capital of France?"})";
-
-  LlamaModel::Prompt primer;
-  primer.input = std::string("[") + systemMsg + "," + userTurn1 + "]";
-  primer.cacheKey = cachePath.string();
-  primer.generationParams.reasoning_budget = 0;
-
-  const std::string primerOutput = model->processPrompt(primer);
-  ASSERT_TRUE(containsCaseInsensitive(primerOutput, "Paris"))
-      << "primer should answer from the clean cache seed: " << primerOutput;
-
   auto* mem = llama_get_memory(model->getContext());
   ASSERT_NE(mem, nullptr);
   const llama_seq_id seqId = ctx->getSeqId();
+  const auto liveCells = [&] {
+    return static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
+  };
+
+  nlohmann::json history = nlohmann::json::array(
+      {{{"role", "system"},
+        {"content",
+         "You are a helpful assistant. Answer concisely with just the city "
+         "name."}},
+       {{"role", "user"}, {"content", "What is the capital of France?"}}});
+  LlamaModel::Prompt primer;
+  primer.input = history.dump();
+  primer.cacheKey = cachePath.string();
+  primer.generationParams.reasoning_budget = 0;
+  const std::string primerOutput = model->processPrompt(primer);
+  ASSERT_TRUE(containsCaseInsensitive(primerOutput, "Paris")) << primerOutput;
   const llama_pos primerCacheTokens = ctx->getCacheTokens();
-  const llama_pos primerSequenceCells =
-      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
-  ASSERT_GT(primerCacheTokens, 0)
-      << "primer must populate the MTMD cache before rollback test";
-  ASSERT_EQ(primerCacheTokens, primerSequenceCells)
-      << "test setup expects MTMD bookkeeping to match live memory";
+  ASSERT_GT(primerCacheTokens, 0);
+  ASSERT_EQ(primerCacheTokens, liveCells());
 
+  history.push_back({{"role", "assistant"}, {"content", primerOutput}});
+  history.push_back(
+      {{"role", "user"},
+       {"content",
+        "Before answering, reason in detail for at least 20 sentences, then "
+        "answer: What is the capital of Italy?"}});
   LlamaModel::Prompt cutoff;
-  cutoff.input =
-      R"([{"role":"user","content":"Before answering, reason in detail for at least 20 sentences, then answer: What is the capital of France?"}])";
+  cutoff.input = history.dump();
   cutoff.cacheKey = cachePath.string();
-
   const std::string cutoffOutput = model->processPrompt(cutoff);
-  const auto cutoffStats = model->runtimeStats();
-  const double generatedTokens = getStatValue(cutoffStats, "generatedTokens");
-  const double reportedCacheTokens = getStatValue(cutoffStats, "CacheTokens");
-  const llama_pos postCutoffSequenceCells =
-      static_cast<llama_pos>(llama_memory_seq_token_count(mem, seqId));
-
+  const auto stats = model->runtimeStats();
   SCOPED_TRACE(
-      "generatedTokens=" + std::to_string(generatedTokens) +
-      ", reportedCacheTokens=" + std::to_string(reportedCacheTokens) +
-      ", primerCacheTokens=" + std::to_string(primerCacheTokens) +
-      ", ctxCacheTokens=" + std::to_string(ctx->getCacheTokens()) +
-      ", sequenceCells=" + std::to_string(postCutoffSequenceCells) +
-      ", cutoff output (first 200 chars): " + cutoffOutput.substr(0, 200));
+      "cutoff output (first 200 chars): " + cutoffOutput.substr(0, 200));
 
   EXPECT_NE(cutoffOutput.find("<think>"), std::string::npos)
-      << "small-budget MTMD run must enter reasoning before n_predict cutoff";
+      << "the run must enter reasoning before the n_predict cutoff";
   EXPECT_EQ(cutoffOutput.find("</think>"), std::string::npos)
-      << "test must stop inside reasoning to exercise rollback";
-  EXPECT_GE(generatedTokens, 64.0)
-      << "small-budget MTMD run should reach n_predict";
-  EXPECT_EQ(ctx->getCacheTokens(), primerCacheTokens)
-      << "MTMD rollback must restore cache-token bookkeeping to primer state";
-  EXPECT_EQ(postCutoffSequenceCells, primerSequenceCells)
-      << "MTMD rollback must restore live llama memory to primer state";
-  EXPECT_EQ(reportedCacheTokens, static_cast<double>(primerCacheTokens))
-      << "runtime stats must report the rolled-back cache size";
+      << "the run must stop inside reasoning";
+  EXPECT_EQ(
+      getStatValue(stats, "stopReason"),
+      static_cast<double>(GenerationStopReason::PredictionLimit));
+  EXPECT_GT(ctx->getCacheTokens(), primerCacheTokens)
+      << "a prediction-limit stop must commit its tokens, not roll back";
+  EXPECT_EQ(ctx->getCacheTokens(), liveCells())
+      << "MTMD bookkeeping must match live memory after the commit";
+  EXPECT_EQ(
+      getStatValue(stats, "CacheTokens"),
+      static_cast<double>(ctx->getCacheTokens()));
 
+  history.push_back({{"role", "assistant"}, {"content", cutoffOutput}});
+  history.push_back(
+      {{"role", "user"},
+       {"content", "And what about Germany? Answer with just the city name."}});
   LlamaModel::Prompt followUp;
-  followUp.input =
-      R"([{"role":"user","content":"And what about Germany? Answer with just the city name."}])";
+  followUp.input = history.dump();
   followUp.cacheKey = cachePath.string();
   followUp.generationParams.reasoning_budget = 0;
-
   const std::string followUpOutput = model->processPrompt(followUp);
   EXPECT_TRUE(containsCaseInsensitive(followUpOutput, "Berlin"))
-      << "follow-up after rollback should answer from clean cache: "
+      << "the full-history follow-up must answer from the committed cache: "
       << followUpOutput;
-  EXPECT_GT(ctx->getCacheTokens(), primerCacheTokens)
-      << "follow-up should extend the rolled-back primer cache";
+  EXPECT_EQ(ctx->getCacheTokens(), liveCells());
 
   fs::remove(cachePath);
 }
