@@ -1,5 +1,6 @@
 // nx.json ignores pnpm-lock.yaml for affected selection, and the matrix action
-// falls back to lockfile analysis only when nothing else owns a lockfile change.
+// falls back to today's behaviour only when no workspace manifest explains a
+// lockfile change.
 // Both halves are needed: the first alone lets a transitive bump merge untested,
 // the second alone changes nothing. These tests pin both.
 import test from 'node:test'
@@ -18,12 +19,12 @@ const mode = (...paths) =>
     .toString()
     .trim()
 
-test('a lockfile change with no package.json is analysed', () => {
-  assert.equal(mode('pnpm-lock.yaml'), 'auto')
+test('a lockfile change with no workspace manifest keeps today\'s behaviour', () => {
+  assert.equal(mode('pnpm-lock.yaml'), 'all')
 })
 
-test('a lockfile change riding along other files, with no manifest, is analysed', () => {
-  assert.equal(mode('pnpm-lock.yaml', 'packages/llm-llamacpp/src/index.js'), 'auto')
+test('a lockfile change riding along other files, with no manifest, keeps today\'s behaviour', () => {
+  assert.equal(mode('pnpm-lock.yaml', 'packages/llm-llamacpp/src/index.js'), 'all')
 })
 
 test('a dependency bump selects through its package.json, not the lockfile', () => {
@@ -41,6 +42,27 @@ test('no lockfile change leaves the empty list in charge', () => {
 
 test('only the root lockfile counts, not one nested in a package', () => {
   assert.equal(mode('packages/x/pnpm-lock.yaml'), '')
+})
+
+test('only workspace manifests own a lockfile change', () => {
+  // pnpm-workspace.yaml: packages/*, registry-server client+shared, plugins/*
+  assert.equal(mode('pnpm-lock.yaml', 'plugins/opencode-plugin/package.json'), '')
+  assert.equal(mode('pnpm-lock.yaml', 'packages/registry-server/client/package.json'), '')
+  // Not workspace members, so they explain nothing in this lockfile.
+  assert.equal(mode('pnpm-lock.yaml', 'docs/website/package.json'), 'all')
+  assert.equal(mode('pnpm-lock.yaml', 'packages/llm-llamacpp/benchmarks/server/package.json'), 'all')
+  assert.equal(
+    mode('pnpm-lock.yaml', 'packages/inference-addon-cpp/tests/integration_js/x/package.json'),
+    'all'
+  )
+})
+
+test('a path list larger than the pipe buffer is still read correctly', () => {
+  // grep -q exits on the first match; with `printf | grep -q` under pipefail the
+  // writer's SIGPIPE turned a match into a failure once the list grew past ~64KB.
+  const filler = Array.from({ length: 6000 }, (_, i) => `packages/llm-llamacpp/src/f${i}.js`)
+  assert.equal(mode('pnpm-lock.yaml', ...filler), 'all')
+  assert.equal(mode('packages/llm-llamacpp/package.json', ...filler, 'pnpm-lock.yaml'), '')
 })
 
 test('nx.json ignores the lockfile for affected selection', () => {

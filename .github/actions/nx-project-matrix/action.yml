@@ -171,18 +171,19 @@ runs:
 
           # nx.json ignores the lockfile for affected selection, because pnpm
           # rewrites shared entries across most importers on a one-line change.
-          # A lockfile change with no package.json behind it has no owner, so
-          # analyse the lockfile for this run instead of selecting nothing. If
-          # the paths cannot be read, analyse it too rather than narrow blind.
+          # A lockfile change with no workspace manifest behind it is
+          # unexplained, so keep today's behaviour for this run instead of
+          # selecting nothing. If the paths cannot be read, do the same rather
+          # than narrow blind.
           if [ -f "$CHANGED_FILES" ]; then
             PATHS=$(cat "$CHANGED_FILES")
           else
             PATHS=$(git diff --name-only "$BASE...$HEAD" 2>/dev/null) || PATHS="pnpm-lock.yaml"
           fi
           LOCKFILE_MODE=$(printf '%s\n' "$PATHS" | "$GITHUB_ACTION_PATH/lockfile-mode.sh")
-          if [ "$LOCKFILE_MODE" = "auto" ]; then
-            echo "::notice::pnpm-lock.yaml changed with no package.json; selecting by lockfile resolution for this run"
-            jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = "auto"' nx.json > "${RUNNER_TEMP}/nx.json"
+          if [ "$LOCKFILE_MODE" = "all" ]; then
+            echo "::notice::pnpm-lock.yaml changed with no workspace package.json; selecting every project for this run, as before"
+            jq '.pluginsConfig["@nx/js"].projectsAffectedByDependencyUpdates = "all"' nx.json > "${RUNNER_TEMP}/nx.json"
             cp "${RUNNER_TEMP}/nx.json" nx.json
           fi
 
