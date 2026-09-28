@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.55.0] - 2026-09-28
+
+### Added
+
+- `assessFit` projects a load's memory demand against the memory free right
+  now, without loading weights. It reads GGUF metadata only, so the registry's
+  weightless copy of a model answers the same as the model itself. The load is
+  given in llama's own CLI spelling and dispatched through llama's argument
+  table, so a pinned placement such as `gpu-layers` reaches the projection.
+  The result carries a `fits` / `does-not-fit` / `error` status and reason, the
+  resolved `gpuLayers` and `ctxSize`, and per-device model, context and compute
+  bytes. Exported from the package root and as `LlmLlamacpp.assessFit`, with
+  `LlamaFitRequest`, `LlamaFitResult`, `LlamaFitStatus` and `LlamaFitDevice`
+  types ([#4664](https://github.com/tetherto/qvac/pull/4664)).
+- `rpc-servers` and `devices` configuration options distribute inference
+  across remote `ggml-rpc-server` devices. Remote devices join the local ones
+  and can be selected explicitly with `devices`, in combination with the
+  `layer` and `tensor` split modes. The RPC channel is unauthenticated; use it
+  only on a trusted private network
+  ([#4527](https://github.com/tetherto/qvac/pull/4527)).
+
 ## [0.54.0] - 2026-09-23
 
 ### Changed
