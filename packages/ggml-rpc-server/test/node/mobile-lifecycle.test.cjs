@@ -7,12 +7,12 @@ const { test } = require("node:test");
 const vm = require("node:vm");
 
 const packageDir = join(__dirname, "../..");
-const mobileSource = readFileSync(join(packageDir, "mobile.js"), "utf8");
+const addonSource = readFileSync(join(packageDir, "index.js"), "utf8");
 
-function loadMobile(binding) {
+function loadAddon(binding, resolveBackendsDir = () => packageDir) {
   const module = { exports: {} };
   vm.runInNewContext(
-    `${mobileSource}\nmodule.exports.activeHandleCount = () => activeServerHandles.size;`,
+    `${addonSource}\nmodule.exports.activeHandleCount = () => activeServerHandles.size;`,
     {
       __dirname: packageDir,
       console,
@@ -20,7 +20,10 @@ function loadMobile(binding) {
       module,
       require(name) {
         if (name === "bare-net") return {};
-        if (name === "bare-path") return { join };
+        if (name === "bare-path") return require("node:path");
+        if (name === "@qvac/fabric/backends") {
+          return { resolveBackendsDir };
+        }
         if (name === "./binding") return binding;
         throw new Error(`Unexpected mobile require: ${name}`);
       },
@@ -29,36 +32,54 @@ function loadMobile(binding) {
   return module.exports;
 }
 
+test("packed mobile bundles use the addon's staged prebuilds", async () => {
+  let receivedOptions;
+  const addon = loadAddon(
+    {
+      startServer: (options) => {
+        receivedOptions = options;
+        return Promise.resolve({});
+      },
+      stopServer: () => Promise.resolve(),
+    },
+    () => null,
+  );
+
+  const server = await addon.startRpcServer({ port: 50052 });
+  assert.equal(receivedOptions.backendsDir, join(packageDir, "prebuilds"));
+  await server.stop();
+});
+
 test("mobile server handle stays pinned until asynchronous stop completes", async () => {
   let finishStop;
   const stopPending = new Promise((resolve) => {
     finishStop = resolve;
   });
   let stopCalls = 0;
-  const mobile = loadMobile({
+  const addon = loadAddon({
     startServer: () => Promise.resolve({}),
     stopServer: () => {
       stopCalls++;
       return stopPending;
     },
   });
-  let server = await mobile.startRpcServer({ port: 50052 });
-  assert.equal(mobile.activeHandleCount(), 1);
+  let server = await addon.startRpcServer({ port: 50052 });
+  assert.equal(addon.activeHandleCount(), 1);
 
   const firstStop = server.stop();
   assert.strictEqual(server.stop(), firstStop);
   server = undefined;
-  assert.equal(mobile.activeHandleCount(), 1);
+  assert.equal(addon.activeHandleCount(), 1);
   assert.equal(stopCalls, 1);
 
   finishStop();
   await firstStop;
-  assert.equal(mobile.activeHandleCount(), 0);
+  assert.equal(addon.activeHandleCount(), 0);
 });
 
 test("mobile server handle stays pinned if stop fails and can be retried", async () => {
   let stopCalls = 0;
-  const mobile = loadMobile({
+  const addon = loadAddon({
     startServer: () => Promise.resolve({}),
     stopServer: () => {
       stopCalls++;
@@ -67,13 +88,13 @@ test("mobile server handle stays pinned if stop fails and can be retried", async
         : Promise.resolve();
     },
   });
-  const server = await mobile.startRpcServer({ port: 50052 });
+  const server = await addon.startRpcServer({ port: 50052 });
 
   await assert.rejects(server.stop(), /stop failed/);
-  assert.equal(mobile.activeHandleCount(), 1);
+  assert.equal(addon.activeHandleCount(), 1);
   await server.stop();
   assert.equal(stopCalls, 2);
-  assert.equal(mobile.activeHandleCount(), 0);
+  assert.equal(addon.activeHandleCount(), 0);
 });
 
 test("mobile startup awaits the native result without blocking JS work", async () => {
@@ -81,18 +102,18 @@ test("mobile startup awaits the native result without blocking JS work", async (
   const startPending = new Promise((resolve) => {
     finishStart = resolve;
   });
-  const mobile = loadMobile({
+  const addon = loadAddon({
     startServer: () => startPending,
     stopServer: () => Promise.resolve(),
   });
 
-  const starting = mobile.startRpcServer({ port: 50052 });
+  const starting = addon.startRpcServer({ port: 50052 });
   await Promise.resolve();
-  assert.equal(mobile.activeHandleCount(), 0);
+  assert.equal(addon.activeHandleCount(), 0);
 
   finishStart({});
   const server = await starting;
-  assert.equal(mobile.activeHandleCount(), 1);
+  assert.equal(addon.activeHandleCount(), 1);
   await server.stop();
-  assert.equal(mobile.activeHandleCount(), 0);
+  assert.equal(addon.activeHandleCount(), 0);
 });

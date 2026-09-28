@@ -1759,7 +1759,7 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
   )
 });
 
-test('ggml-rpc-server overlay triggers activate with the server package layer', () => {
+test('ggml-rpc-server npm Fabric triggers activate with the server package layer', () => {
   const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml');
   const rpcMerge = read('.github/workflows/on-merge-ggml-rpc-server.yml');
   const tsProducer = read('.github/workflows/on-pr-ts-nx.yml');
@@ -1767,47 +1767,46 @@ test('ggml-rpc-server overlay triggers activate with the server package layer', 
   const rpcProject = JSON.parse(
     read('packages/ggml-rpc-server/project.json'),
   );
-  const fabricOverlay = /vcpkg-overlays\/ports\/qvac-fabric/;
+  const fabricPackage = /packages\/fabric/;
   const rpcGate = mergeGate.match(
     /^ {12}ggml-rpc-server:\n(?:^ {14}- .+\n?)+/m,
   )?.[0];
 
   assert.match(
     rpcPr,
-    fabricOverlay,
+    fabricPackage,
     'fabric changes must run RPC server PR checks once the package exists',
   )
   assert.match(
     rpcMerge,
-    fabricOverlay,
+    fabricPackage,
     'fabric changes must rebuild the RPC server once the package exists',
   )
   assert.match(
     tsProducer,
-    fabricOverlay,
+    /packages\/\*\*/,
     'the unprivileged TS-check producer must run whenever the RPC consumer runs',
   )
   assert.ok(rpcGate, 'the merge gate must retain its ggml-rpc-server mapping');
   assert.match(
     rpcGate,
-    fabricOverlay,
+    fabricPackage,
     'fabric changes must require the RPC server prebuild once the package exists',
   )
   assert.ok(
     rpcProject.targets['on-pr'].inputs.includes(
-      '{workspaceRoot}/vcpkg-overlays/ports/qvac-fabric/**',
+      '{workspaceRoot}/packages/fabric/**',
     ),
     'Nx must mark ggml-rpc-server affected for fabric-overlay-only changes',
   );
 });
 
-test('RPC RDMA validation covers the server without replacing release artifacts', () => {
+test('RPC server prebuilds consume PR-built npm Fabric artifacts', () => {
   const reusable = read('.github/workflows/reusable-prebuilds.yml')
   const nxPrebuilds = read('.github/workflows/prebuilds-nx.yml')
   const rpcPrebuilds = read('.github/workflows/prebuilds-ggml-rpc-server.yml')
   const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml')
   const stripAction = read('.github/actions/strip-prebuilds/action.yml')
-  const validation = read('.github/scripts/validate-rpc-rdma-build.sh')
   const uploadIndex = reusable.indexOf(
     'name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}',
   )
@@ -1816,11 +1815,6 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
   assert.ok(
     validationIndex > uploadIndex,
     'the optional validation rebuild must run only after the release artifact is captured',
-  )
-  assert.match(
-    validation,
-    /ABI_INFO=\$\(find build\/_vcpkg[^\n]+\|\| true\)/,
-    'a missing ABI metadata directory must reach the explicit validation error',
   )
   assert.match(stripAction, /extra-names:/)
   assert.match(
@@ -1875,18 +1869,19 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
   )
   assert.match(
     rpcPr,
-    /reuse-workflow-file:\s*on-pr-ggml-rpc-server\.yml/,
+    /reuse-workflow-file:\s*\$\{\{ needs\.detect-fabric-stack\.outputs\.fabric_stack != 'true' && 'on-pr-ggml-rpc-server\.yml' \|\| '' \}\}/,
   )
   assert.match(
     rpcPr,
     /REUSE_HIT:\s*\$\{\{ needs\.prebuild\.outputs\.reuse_hit \}\}/,
   )
 
-  assert.match(rpcPrebuilds, /linux-extra-packages:\s*libibverbs-dev/)
   assert.match(
     rpcPrebuilds,
-    /post-artifact-build-command:\s*bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
+    /fabric-overlay-artifact:\s*\$\{\{ inputs\.fabric-overlay-artifact \}\}/,
   )
+  assert.match(rpcPr, /detect-fabric-stack:/)
+  assert.match(rpcPr, /wait-and-download-fabric-prebuilds/)
 
   const mobile = read('.github/workflows/integration-mobile-test-ggml-rpc-server.yml')
   assert.match(
@@ -1908,58 +1903,6 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
       /name:\s*Checkout repository[\s\S]*?persist-credentials:\s*false/,
       `${name} must not persist checkout credentials while publishing`,
     )
-  }
-});
-
-test('RPC RDMA validation checks the packaged Linux backend and server executable', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'qvac-rdma-validation-'))
-  const packageDirectory = join(directory, 'ggml-rpc-server')
-  const binDirectory = join(directory, 'bin')
-  mkdirSync(packageDirectory)
-  mkdirSync(binDirectory)
-  const bareMake = join(binDirectory, 'bare-make')
-  writeFileSync(bareMake, `#!/usr/bin/env bash
-set -euo pipefail
-if [[ "$1" != "install" ]]; then exit 0; fi
-mkdir -p build/_vcpkg/test/share/qvac-fabric prebuilds/linux-arm64/qvac__ggml-rpc-server
-printf 'features core,rpc-rdma,rpc-server\\n' > build/_vcpkg/test/share/qvac-fabric/vcpkg_abi_info.txt
-if [[ "\${RPC_TEST_SERVER_PRESENT}" == "yes" ]]; then
-  printf 'server without marker\\n' > prebuilds/linux-arm64/qvac__ggml-rpc-server/ggml-rpc-server
-fi
-if [[ "\${RPC_TEST_BACKEND_MARKER}" == "yes" ]]; then
-  printf 'RDMA auto-negotiate enabled\\n' > prebuilds/linux-arm64/qvac__ggml-rpc-server/libqvac-ggml-rpc.so
-else
-  printf 'backend without marker\\n' > prebuilds/linux-arm64/qvac__ggml-rpc-server/libqvac-ggml-rpc.so
-fi
-`)
-  chmodSync(bareMake, 0o755)
-
-  function validate(serverPresent, backendMarker) {
-    return spawnSync('bash', [join(root, '.github/scripts/validate-rpc-rdma-build.sh')], {
-      cwd: packageDirectory,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${binDirectory}:${process.env.PATH}`,
-        BUILD_PLATFORM: 'linux',
-        BUILD_ARCH: 'arm64',
-        RPC_TEST_SERVER_PRESENT: serverPresent ? 'yes' : 'no',
-        RPC_TEST_BACKEND_MARKER: backendMarker ? 'yes' : 'no',
-      },
-    })
-  }
-
-  try {
-    const valid = validate(true, true)
-    assert.equal(valid.status, 0, valid.stderr)
-    const missingMarker = validate(true, false)
-    assert.notEqual(missingMarker.status, 0)
-    assert.match(missingMarker.stderr, /RPC backend does not contain the RDMA capability marker/)
-    const missingServer = validate(false, true)
-    assert.notEqual(missingServer.status, 0)
-    assert.match(missingServer.stderr, /ggml-rpc-server executable is missing/)
-  } finally {
-    rmSync(directory, { recursive: true, force: true })
   }
 });
 

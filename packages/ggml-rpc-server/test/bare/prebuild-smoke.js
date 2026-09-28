@@ -1,5 +1,5 @@
 const net = require("bare-net");
-const { startRpcServer } = require("../../mobile");
+const { startRpcServer } = require("../../index");
 const { probeRpcServerProtocol } = require("../mobile/rpc-protocol.cjs");
 
 async function main() {

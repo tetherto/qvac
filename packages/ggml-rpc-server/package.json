@@ -24,8 +24,6 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "mobile.js",
-    "mobile.d.ts",
     "binding.js",
     "prebuilds",
     "CHANGELOG.md",
@@ -43,8 +41,11 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/ggml-rpc-server#readme",
   "devDependencies": {
+    "@qvac/fabric-android-arm64": "0.18.0",
+    "@qvac/fabric-ios": "0.18.0",
     "@types/node": "^24.2.1",
     "cmake-bare": "^1.7.5",
+    "cmake-npm": "^1.1.0",
     "cmake-vcpkg": "^1.1.0",
     "eslint": "^9.39.4",
     "eslint-import-resolver-typescript": "^4.4.5",
@@ -56,28 +57,18 @@
     "typescript-eslint": "^8.63.0"
   },
   "dependencies": {
+    "@qvac/fabric": "^0.18.0",
     "bare-net": "^2.3.2",
     "bare-path": "^3.0.0"
   },
   "engines": {
-    "bare": ">=1.24.0",
-    "node": ">=20.0.0"
+    "bare": ">=1.24.0"
   },
   "exports": {
     "./package": "./package.json",
     ".": {
-      "bare": {
-        "types": "./mobile.d.ts",
-        "default": "./mobile.js"
-      },
-      "node": {
-        "types": "./index.d.ts",
-        "default": "./index.js"
-      },
-      "default": {
-        "types": "./index.d.ts",
-        "default": "./index.js"
-      }
+      "types": "./index.d.ts",
+      "default": "./index.js"
     }
   },
   "types": "index.d.ts"

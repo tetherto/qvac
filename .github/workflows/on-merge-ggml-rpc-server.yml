@@ -9,7 +9,8 @@ on:
       - tmp-*
     paths:
       - packages/ggml-rpc-server/**
-      - vcpkg-overlays/ports/qvac-fabric/**
+      - packages/fabric/**
+      - cmake/qvac-addon/**
       - .github/workflows/*ggml-rpc-server*.yml
 
   workflow_dispatch:
@@ -113,10 +114,6 @@ jobs:
           name: prebuilds-ggml-rpc-server
           path: packages/ggml-rpc-server/prebuilds
 
-      - name: Restore RPC server executable permissions
-        shell: bash
-        run: find packages/ggml-rpc-server/prebuilds -type f -name ggml-rpc-server -exec chmod +x {} +
-
       - name: Publish to GitHub Package Registry
         uses: ./.github/actions/publish-library-to-gpr
         with:
@@ -149,10 +146,6 @@ jobs:
         with:
           name: prebuilds-ggml-rpc-server
           path: packages/ggml-rpc-server/prebuilds
-
-      - name: Restore RPC server executable permissions
-        shell: bash
-        run: find packages/ggml-rpc-server/prebuilds -type f -name ggml-rpc-server -exec chmod +x {} +
 
       - name: Determine dist-tag
         id: dist-tag

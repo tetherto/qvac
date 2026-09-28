@@ -9,7 +9,7 @@ const packageRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const outputs = ["index.js", "index.d.ts", "mobile.js", "mobile.d.ts"];
+const outputs = ["index.js", "index.d.ts"];
 const temporaryRoot = fs.mkdtempSync(
   path.join(os.tmpdir(), "ggml-rpc-server-generated-"),
 );

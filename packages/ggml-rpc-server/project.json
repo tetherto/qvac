@@ -16,7 +16,8 @@
       },
       "inputs": [
         "default",
-        "{workspaceRoot}/vcpkg-overlays/ports/qvac-fabric/**"
+        "{workspaceRoot}/packages/fabric/**",
+        "{workspaceRoot}/cmake/qvac-addon/**"
       ]
     }
   }

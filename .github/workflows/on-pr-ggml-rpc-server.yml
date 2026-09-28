@@ -19,7 +19,8 @@ on:
       - tmp-*
     paths:
       - packages/ggml-rpc-server/**
-      - vcpkg-overlays/ports/qvac-fabric/**
+      - packages/fabric/**
+      - cmake/qvac-addon/**
       - .github/workflows/*ggml-rpc-server*.yml
   workflow_dispatch:
 
@@ -86,6 +87,50 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  detect-fabric-stack:
+    if: needs.authorize.outputs.allowed == 'true'
+    needs: [fork-approval, authorize, ci-router]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      fabric_stack: ${{ steps.detect.outputs.fabric_stack }}
+      needs_fabric_artifact: ${{ steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds == 'true' && github.event_name == 'pull_request_target' }}
+    steps:
+      - name: Checkout repository from the default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Detect fabric-stack PR
+        id: detect
+        uses: tetherto/qvac/.github/actions/detect-fabric-stack@6620d695d3a07cafe3931182e7844dde376a23f8
+      - name: Warn when a stack PR builds against released Fabric
+        if: steps.detect.outputs.fabric_stack == 'true' && needs.ci-router.outputs.run_prebuilds != 'true'
+        shell: bash
+        run: echo "::warning::This PR changes packages/fabric, but no prebuilds label is set. Add the label to test against this PR's Fabric artifacts."
+
+  resolve-fabric-prebuilds:
+    if: needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && needs.authorize.outputs.allowed == 'true'
+    needs: [fork-approval, authorize, detect-fabric-stack]
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Wait for fabric-prebuilds from on-pr-fabric
+        uses: tetherto/qvac/.github/actions/wait-and-download-fabric-prebuilds@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          github-token: ${{ github.token }}
+          head-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Re-publish fabric-prebuilds for downstream jobs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fabric-prebuilds
+          path: fabric-prebuilds-staging
+
   await-ts-checks:
     name: Await PR-head TypeScript checks
     needs: [fork-approval, authorize]
@@ -95,22 +140,40 @@ jobs:
       check_name: 'ggml-rpc-server-pr-head-ts-checks / ts-checks'
 
   cpp-lint:
-    needs: [fork-approval, authorize]
-    if: needs.authorize.outputs.allowed == 'true'
+    needs:
+      - fork-approval
+      - authorize
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
     uses: ./.github/workflows/cpp-lint.yaml
     secrets: inherit
     with:
       sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       workdir: packages/ggml-rpc-server
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   prebuild:
-    needs: [fork-approval, authorize, await-ts-checks, ci-router]
+    needs:
+      - fork-approval
+      - authorize
+      - await-ts-checks
+      - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     if: |
       always() &&
       !cancelled() &&
       needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-fabric-stack.result == 'success' &&
       needs.ci-router.outputs.run_prebuilds == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') &&
       (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success')
     permissions:
       actions: read
@@ -123,7 +186,8 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
-      reuse-workflow-file: on-pr-ggml-rpc-server.yml
+      reuse-workflow-file: ${{ needs.detect-fabric-stack.outputs.fabric_stack != 'true' && 'on-pr-ggml-rpc-server.yml' || '' }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
   publish-prebuild-status:
     needs: [fork-approval, authorize, await-ts-checks, prebuild, ci-router]
@@ -155,9 +219,17 @@ jobs:
         run: node .github/scripts/prebuild-status/publish.mjs
 
   merge-guard:
-    needs: [fork-approval, authorize, await-ts-checks, cpp-lint, prebuild, ci-router]
+    needs:
+      - fork-approval
+      - authorize
+      - await-ts-checks
+      - cpp-lint
+      - prebuild
+      - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
-      sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success') && needs.cpp-lint.result == 'success' }}
-      build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && needs.ci-router.result == 'success' && needs.ci-router.outputs.run_prebuilds == 'false')) }}
+      sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && needs.detect-fabric-stack.result == 'success' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success') && needs.cpp-lint.result == 'success' }}
+      build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && needs.detect-fabric-stack.result == 'success' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && needs.ci-router.result == 'success' && needs.ci-router.outputs.run_prebuilds == 'false')) }}

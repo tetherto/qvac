@@ -1,18 +1,15 @@
 # @qvac/ggml-rpc-server
 
-Managed wrapper for `ggml-rpc-server`.
+Managed in-process GGML RPC server for Bare applications.
 
-This package ships the RPC server binary built from the same `qvac-fabric`
-revision as the LLM client stack. The JavaScript API starts and stops the
-server so applications do not need to invoke the CLI manually. Node uses the
-packaged server executable; Bare on Android and iOS uses an in-process native
-addon because mobile hosts cannot launch that executable as a child process.
+The package loads the RPC backend supplied by `@qvac/fabric` and starts it
+through a native addon. It does not bundle or launch llama.cpp's
+`ggml-rpc-server` CLI executable.
 
 Prebuild artifacts are produced for macOS arm64/x64, Linux arm64/x64, Windows
 x64, Android arm64, and iOS arm64. Desktop prebuild jobs smoke-test both the
-executable and in-process lifecycle paths; Android/iOS jobs cross-build the
-same in-process addon for their physical ARM64 targets. RDMA remains Linux-only;
-mobile builds use TCP.
+in-process lifecycle path; Android/iOS jobs cross-build the same addon for
+their physical ARM64 targets.
 
 ```js
 const { startRpcServer } = require('@qvac/ggml-rpc-server')
@@ -21,7 +18,7 @@ const server = await startRpcServer({ device: 'Vulkan0' })
 
 try {
   console.log(server.url)
-  console.log(server.runtime) // 'process' on Node, 'in-process' on mobile Bare
+  console.log(server.runtime) // 'in-process'
   console.log(server.rdmaCapable)
 } finally {
   await server.stop()
@@ -38,21 +35,19 @@ and do not treat loopback binding as an access-control boundary. Non-loopback
 hosts are rejected unless `allowNonLoopbackHost: true` is passed; use them only
 on a trusted/private network with external access controls.
 
-On Android and iOS, native server output is written to the host application's
-platform log; `logs()` returns an empty string because there is no child-process
-stdout stream to capture. Node continues to return the captured output tail.
+Native server output is written to the host application's platform log;
+`logs()` returns an empty string because there is no child-process stdout
+stream to capture.
 
 ## RDMA-capable builds
 
-RDMA uses `qvac-fabric`'s existing `GGML_RPC_RDMA` support. It is opt-in at
-build time with the `rpc-rdma` vcpkg feature and requires `libibverbs` from
-rdma-core on Linux. Both the client-side `@qvac/llm-llamacpp` build and this
-server package must be built with RDMA support; a server-only RDMA build will
-fall back to TCP when the client is TCP-only.
+Fabric supports building its Linux RPC backend with `GGML_RPC_RDMA`, but the
+currently required npm Fabric artifacts are TCP-only. Both the client and the
+Fabric backend used by this server must be published with RDMA support before
+the package can expose it.
 
-The endpoint syntax does not change. Fabric auto-negotiates RDMA over the
-existing RPC connection when both sides support it. To fail closed when the
-managed server binary is expected to be RDMA-capable, pass `expectRdma: true`:
+To fail closed when RDMA is required, pass `expectRdma: true`. Startup rejects
+that option while the required Fabric artifact is TCP-only:
 
 ```js
 const server = await startRpcServer({
@@ -65,8 +60,5 @@ const server = await startRpcServer({
 console.log(server.rdmaCapable)
 ```
 
-Without `expectRdma`, startup does not scan the server binary or backend
-libraries. `rdmaCapable` is `true` when startup logs report support and `null`
-when capability was not checked; `null` does not mean RDMA is unavailable.
-Pass `expectRdma: true` to check the packaged binary when the logs do not
-report support, or reject startup if RDMA is unavailable.
+Without `expectRdma`, the server starts over TCP and reports
+`rdmaCapable: false`.

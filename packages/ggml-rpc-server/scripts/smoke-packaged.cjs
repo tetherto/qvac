@@ -93,7 +93,6 @@ try {
   for (const path of manifest.files) copyIntoPackage(path);
   // The probes are CI-only; they are not included in the published package.
   for (const path of [
-    "test/node/prebuild-smoke.cjs",
     "test/bare/prebuild-smoke.js",
     "test/mobile/rpc-protocol.cjs",
   ]) {
@@ -113,7 +112,6 @@ try {
   }
 
   const env = smokeEnvironment();
-  run(process.execPath, ["test/node/prebuild-smoke.cjs"], env);
   run(
     "bare",
     ["test/bare/prebuild-smoke.js"],
