@@ -85,9 +85,7 @@ test('MOSS stream: true runs the whole text natively and forwards every chunk', 
   register(modelId, model)
 
   try {
-    const { frames, result } = await drain(
-      run(modelId, { sentenceStreamLocale: 'en', sentenceStreamMaxChunkScalars: 80 })
-    )
+    const { frames, result } = await drain(run(modelId, {}))
 
     t.is(model.runCalls.length, 1, 'one addon job for the whole text')
     t.alike(
@@ -96,7 +94,7 @@ test('MOSS stream: true runs the whole text natively and forwards every chunk', 
         input: '[S1] Reference one. [S2] Reference two. [S1] Did the build finish?',
         type: 'text'
       },
-      'no streamOutput and no chunker knobs reach the addon'
+      'no streamOutput reaches the addon'
     )
     t.is(model.runStreamCalls.length, 0)
     t.alike(frames, [
@@ -105,6 +103,33 @@ test('MOSS stream: true runs the whole text natively and forwards every chunk', 
       { buffer: [5], sampleRate: 24000, chunkIndex: 2, isLast: true }
     ])
     t.alike((result as { stats?: unknown }).stats, { audioDuration: 208, generatedFrames: 3 })
+  } finally {
+    unregisterModel(modelId)
+  }
+})
+
+test('MOSS stream: true rejects the chunker knobs instead of dropping them', async (t) => {
+  const modelId = 'tts-moss-native-stream-knobs'
+  const model = fakeTtsModel('moss')
+  register(modelId, model)
+
+  try {
+    for (const knobs of [
+      { sentenceStreamLocale: 'en' },
+      { sentenceStreamMaxChunkScalars: 80 },
+      { sentenceStreamLocale: 'en', sentenceStreamMaxChunkScalars: 80 }
+    ]) {
+      await t.exception(
+        drain(run(modelId, knobs)),
+        /sentenceStreamLocale and sentenceStreamMaxChunkScalars need the sentence chunker/,
+        `rejects ${Object.keys(knobs).join(' + ')}`
+      )
+    }
+    t.is(model.runCalls.length, 0, 'nothing reaches the addon')
+
+    // The same knobs stay valid where the chunker runs.
+    await drain(run(modelId, { sentenceStream: true, sentenceStreamLocale: 'en' }))
+    t.is(model.runStreamCalls.length, 1)
   } finally {
     unregisterModel(modelId)
   }

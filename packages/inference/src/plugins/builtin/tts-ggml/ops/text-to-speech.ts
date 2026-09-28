@@ -4,7 +4,7 @@ import { ttsRequestSchema, type TtsRequest, type TtsStats } from '@/schemas/inde
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
 import type { TtsResponse, TtsStats as AddonTtsStats } from '@/utils/addon-responses'
-import { TextToSpeechFailedError } from '@/errors/index'
+import { PluginRequestValidationFailedError, TextToSpeechFailedError } from '@/errors/index'
 import {
   type TtsStreamChunk,
   type TtsOpYield,
@@ -76,6 +76,26 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   const model = getModel(modelId)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
 
+  // MOSS streams natively: one job over the whole text, emitting a chunk every
+  // `streamChunkTokens` codec frames while the backbone is still generating.
+  // The sentence chunker behind `streamOutput` would restart the prompt per
+  // sentence, which a MOSS-TTSD dialogue cannot do (every job has to open
+  // with the reference transcripts, so the addon rejects it) and which would
+  // apply `durationTokens` to each sentence rather than to the text.
+  // `sentenceStream: true` still asks for the chunker explicitly.
+  const nativeStream = stream && !sentenceStream && getTtsEngineType(model) === 'moss'
+  // The chunker is what reads these, so on the native path they would be
+  // dropped without a trace.
+  if (
+    nativeStream &&
+    (sentenceStreamLocale !== undefined || sentenceStreamMaxChunkScalars !== undefined)
+  ) {
+    throw new PluginRequestValidationFailedError(
+      'textToSpeech',
+      'sentenceStreamLocale and sentenceStreamMaxChunkScalars need the sentence chunker; MOSS streams the whole text natively, so they only apply with sentenceStream: true'
+    )
+  }
+
   await using ctx = await bindTtsCancel(model, modelId, request.requestId)
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
@@ -137,14 +157,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     return finish(modelStart, response, ctx.signal.aborted)
   }
 
-  // MOSS streams natively: one job over the whole text, emitting a chunk every
-  // `streamChunkTokens` codec frames while the backbone is still generating.
-  // The sentence chunker behind `streamOutput` would restart the prompt per
-  // sentence, which a MOSS-TTSD dialogue cannot do (every job has to open
-  // with the reference transcripts, so the addon rejects it) and which would
-  // apply `durationTokens` to each sentence rather than to the text.
-  // `sentenceStream: true` above still asks for the chunker explicitly.
-  const sentenceChunked = stream && getTtsEngineType(model) !== 'moss'
+  const sentenceChunked = stream && !nativeStream
 
   const response = (await model.run({
     input: text,

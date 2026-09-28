@@ -473,7 +473,9 @@ continues; without it the audio arrives in one piece when synthesis ends.
 Either way the text is synthesized as one utterance rather than sentence by
 sentence, so `durationTokens` and the pause markers apply to all of it.
 `sentenceStream: true` and `textToSpeechStream()` still split a single-speaker
-text into sentences.
+text into sentences; `sentenceStreamLocale` and `sentenceStreamMaxChunkScalars`
+only apply there, and a MOSS request without `sentenceStream: true` rejects
+them.
 
 `seed` (engine default `1234`), `threads` and `backendsDir` work as on the
 other engines. MOSS runs on the CPU by default; `useGPU: true` or a non-zero
