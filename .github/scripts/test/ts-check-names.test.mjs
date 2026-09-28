@@ -175,7 +175,11 @@ test('on-pr-ts-nx triggers on everything on-pr-nx triggers on', () => {
     .filter((name) => /\.ya?ml$/.test(name) && name !== 'on-pr-ts-nx.yml')
     .filter((name) => /pr-head-ts-checks/.test(readFileSync(join(workflows, name), 'utf8')))
 
-  assert.ok(consumers.length >= 8, `expected at least 8 awaiting consumers, found ${consumers.length}`)
+  // Floor, not an exact count: it guards against the filter above silently
+  // matching nothing, which would make the loop below vacuous. Dropped from 8 to
+  // 3 when the per-addon on-pr-<pkg>.yml lanes were deleted, leaving on-pr-nx
+  // and the two carve-outs that keep their own orchestrators.
+  assert.ok(consumers.length >= 3, `expected at least 3 awaiting consumers, found ${consumers.length}`)
 
   const uncovered = []
   for (const name of consumers) {

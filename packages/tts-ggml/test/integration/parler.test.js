@@ -13,6 +13,7 @@ const test = require('brittle')
 const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
 const { ensureParlerModel } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -39,7 +40,11 @@ test(
 
     // Deliberately NO description/voice/emotion: the engine renders the
     // models' recommended fallback caption — everything works on defaults.
-    const model = await loadParlerTTS({ parlerModelPath: download.path, seed: 42 })
+    const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
+      parlerModelPath: download.path,
+      seed: 42
+    })
     try {
       const wavPath = isMobile ? undefined : path.join(baseDir, 'test', 'output', 'parler-en.wav')
       const text = 'The parler engine speaks with a voice controlled by a text description.'
@@ -100,7 +105,11 @@ test(
       return
     }
 
-    const model = await loadParlerTTS({ parlerModelPath: download.path, voice: 'Laura' })
+    const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
+      parlerModelPath: download.path,
+      voice: 'Laura'
+    })
     try {
       const response = await model.run({
         type: 'text',
@@ -143,6 +152,7 @@ test(
     t.exception(
       () =>
         new TTSGgml({
+          threads: TTS_TEST_THREADS,
           engine: TTSGgml.ENGINE_PARLER,
           files: { parlerModel: download.path },
           description: 'A calm female voice.',
@@ -157,6 +167,7 @@ test(
     t.exception(
       () =>
         new TTSGgml({
+          threads: TTS_TEST_THREADS,
           engine: TTSGgml.ENGINE_SUPERTONIC,
           files: { supertonicModel: download.path },
           emotion: 'happy'
@@ -167,6 +178,7 @@ test(
     t.exception(
       () =>
         new TTSGgml({
+          threads: TTS_TEST_THREADS,
           engine: TTSGgml.ENGINE_SUPERTONIC,
           files: { supertonicModel: download.path },
           pitch: 'high'
@@ -176,6 +188,7 @@ test(
     )
 
     const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       voice: 'Laura',
       seed: 42
@@ -218,6 +231,7 @@ test(
 
     // Constructor-level free-text description + per-call template rejects.
     const descModel = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       description: 'A calm female voice, very clear audio.',
       seed: 42
@@ -248,6 +262,7 @@ test(
     }
 
     const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       voice: 'Laura',
       seed: 42
@@ -295,6 +310,7 @@ test(
     }
 
     const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       voice: 'Laura',
       emotion: 'neutral',
@@ -340,6 +356,7 @@ test(
 
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: download.path },
       seed: 42,
@@ -392,6 +409,7 @@ test(
 
     async function synth(extra) {
       const model = new TTSGgml({
+        threads: TTS_TEST_THREADS,
         engine: TTSGgml.ENGINE_PARLER,
         files: { parlerModel: download.path },
         seed: 42,
@@ -481,6 +499,7 @@ test(
     }
 
     const model = await loadParlerTTS({
+      threads: TTS_TEST_THREADS,
       parlerModelPath: download.path,
       voice: 'Rohit',
       emotion: 'happy',
@@ -542,7 +561,12 @@ for (const { variant, quant } of PARLER_QUANT_MATRIX) {
       }
 
       const useGPU = isApple && !NO_GPU
-      const model = await loadParlerTTS({ parlerModelPath: download.path, seed: 42, useGPU })
+      const model = await loadParlerTTS({
+        threads: TTS_TEST_THREADS,
+        parlerModelPath: download.path,
+        seed: 42,
+        useGPU
+      })
       try {
         const text =
           variant === 'indic'

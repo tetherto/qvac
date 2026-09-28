@@ -56,7 +56,8 @@
           "nameTransform": "none",
           "repoName": "fabric",
           "testGateMode": "none",
-          "prebuildExtraDirs": ["include", "share"]
+          "prebuildExtraDirs": ["include", "share"],
+          "slicePlatformPackages": true
         }
       }
     }
