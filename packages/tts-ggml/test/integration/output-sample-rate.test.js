@@ -12,6 +12,7 @@ const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 
 const { ensureSupertonicModel, ensureParlerModel } = require('../utils/downloadModel')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -40,6 +41,7 @@ async function collect(model, text) {
 // JS half, which must forward the combination rather than reject it up front.
 test('CosyVoice3: enhancer + streaming forwards a non-native outputSampleRate', (t) => {
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_COSYVOICE3,
     files: {
       cosyvoiceModelDir: './models/cosyvoice3',
@@ -72,6 +74,7 @@ test(
     const text = 'Output rate selection resamples the synthesized audio.'
 
     const native = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: dl.path },
       voice: 'F1',
@@ -91,6 +94,7 @@ test(
     }
 
     const resampled = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: dl.path },
       voice: 'F1',
@@ -131,6 +135,7 @@ test(
     const text = 'Output rate selection resamples the synthesized audio.'
 
     const native = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: dl.path },
       voice: 'Laura',
@@ -150,6 +155,7 @@ test(
     }
 
     const resampled = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: dl.path },
       voice: 'Laura',

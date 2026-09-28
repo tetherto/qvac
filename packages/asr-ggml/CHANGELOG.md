@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-25
+
 ### Changed
 
 - Update the `@qvac/decoder-audio` development dependency to `^0.7.0` for the audio decoding examples.

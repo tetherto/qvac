@@ -17,6 +17,7 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
     }                                                                          \
   }
 
+  V("assessFit", qvac_lib_inference_addon_llama::assessFit)
   V("createInstance", qvac_lib_inference_addon_llama::createInstance)
   V("runJob", qvac_lib_inference_addon_llama::runJob)
 

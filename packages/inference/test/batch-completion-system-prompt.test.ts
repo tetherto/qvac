@@ -138,3 +138,53 @@ test('batchCompletionStream: keeps a prompt system message over the configured o
   unregisterModel(modelId)
   clearRegistry()
 })
+
+function deferredTool(name: string) {
+  return {
+    type: 'function',
+    name,
+    description: `Invoke ${name}.`,
+    deferLoading: true,
+    group: 'geometry',
+    parameters: {
+      type: 'object',
+      properties: { height: { type: 'integer', description: 'height' } },
+      required: ['height']
+    }
+  }
+}
+
+test('batchCompletionStream: a deferred tool sends a catalog, not its schema', async (t) => {
+  clearRegistry()
+
+  const modelId = `batch-defer-${Date.now()}`
+  const prompts: RecordedPrompt[] = []
+  registerRecordingBatchModel(modelId, prompts, { tools: true })
+
+  const handler = llmPlugin.handlers.batchCompletionStream.handler as unknown as LooseHandler
+  const gen = handler({
+    modelId,
+    requestId: `${modelId}-batch`,
+    stream: true,
+    prompts: [{ id: '0', history: [user('Area?')], tools: [deferredTool('calculate_area')] }]
+  })
+  for await (const _ of gen) void _
+
+  const toolEntries = prompts[0]!.messages.filter((msg) => msg.type === 'function')
+  t.alike(
+    toolEntries.map((msg) => msg.name),
+    ['tool_search'],
+    'only the search tool is declared'
+  )
+  t.absent(
+    JSON.stringify(prompts[0]!.messages).includes('"height"'),
+    'no deferred parameter schema reaches the prompt'
+  )
+  t.absent(
+    JSON.stringify(prompts[0]!.messages).includes('deferLoading'),
+    'registration-only fields are not rendered'
+  )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
