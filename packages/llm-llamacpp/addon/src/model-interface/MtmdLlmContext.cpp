@@ -2132,53 +2132,8 @@ bool MtmdLlmContext::rollbackFailedRequest() {
   return !cacheRequestActive_ || restorePreRequestCacheState();
 }
 
-bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
-  if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
-    return false;
-  }
-
-  size_t tokenCount = 0;
-  std::vector<llama_token> stateTokens(
-      cache::LEDGER_HEADER_WORDS +
-      cache::LEDGER_ENTRY_WORDS *
-          (static_cast<size_t>(llama_n_ctx(modelCtx_.lctx)) + 1));
-  const auto loadedBytes = llama_state_seq_load_file(
-      modelCtx_.lctx,
-      cacheKey.c_str(),
-      seqId_,
-      stateTokens.data(),
-      stateTokens.size(),
-      &tokenCount);
-  if (loadedBytes == 0) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        "MtmdLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
-  }
-
-  // `llama_state_seq_load_file` has already restored this sequence's KV cells.
-  // Every validation below runs after that restore, and the scheduler installs
-  // its per-slot cleanup guard only once this function returns, so any throw in
-  // between would strand the restored cells as orphan KV on the slot. Roll the
-  // sequence (and the metadata it stamped) back unless we reach the accept
-  // point, mirroring `TextLlmContext::loadCache` and `CacheManager::loadCache`.
-  ScopeGuard restoredKvGuard([this]() noexcept {
-    try {
-      clearSequenceMemory(modelCtx_.lctx);
-    } catch (...) {
-      QLOG_IF(
-          Priority::ERROR,
-          "[MtmdLlm] failed to clear sequence after invalid cache load\n");
-    }
-    current_ = {};
-    clearCacheReconciliationState();
-  });
-
-  stateTokens.resize(tokenCount);
-  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
-    clearCacheReconciliationState();
-    return false;
-  }
+void MtmdLlmContext::acceptRestoredState(
+    const std::vector<llama_token>& stateTokens, const std::string& cacheKey) {
   try {
     restoreCacheStateTokens(stateTokens);
   } catch (const std::exception& ex) {
@@ -2235,6 +2190,91 @@ bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
   }
 
   llama_memory_seq_rm(mem, seqId_, getNPast(), -1);
+}
+
+bool MtmdLlmContext::adoptResidentState(
+    const std::vector<llama_token>& stateTokens) {
+  // The sequence memory already holds the state (a slot kept resident across
+  // requests, or one just restored from the RAM tier); only the ledger has to
+  // be adopted. Same acceptance checks as a file load, and the same cleanup
+  // when they fail: the caller then falls back to the file.
+  ScopeGuard residentGuard([this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[MtmdLlm] failed to clear sequence after rejecting a resident "
+          "state\n");
+    }
+    current_ = {};
+    clearCacheReconciliationState();
+  });
+  try {
+    acceptRestoredState(stateTokens, "<resident>");
+  } catch (const std::exception& ex) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[MtmdLlm] rejected a resident cache state: %s\n", ex.what()));
+    return false;
+  }
+  residentGuard.dismiss();
+  return true;
+}
+
+std::vector<llama_token> MtmdLlmContext::residentStateTokens() const {
+  return cacheStateTokens();
+}
+
+bool MtmdLlmContext::loadCache(const std::string& cacheKey) {
+  if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
+    return false;
+  }
+
+  size_t tokenCount = 0;
+  std::vector<llama_token> stateTokens(
+      cache::LEDGER_HEADER_WORDS +
+      cache::LEDGER_ENTRY_WORDS *
+          (static_cast<size_t>(llama_n_ctx(modelCtx_.lctx)) + 1));
+  const auto loadedBytes = llama_state_seq_load_file(
+      modelCtx_.lctx,
+      cacheKey.c_str(),
+      seqId_,
+      stateTokens.data(),
+      stateTokens.size(),
+      &tokenCount);
+  if (loadedBytes == 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        "MtmdLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
+  }
+
+  // `llama_state_seq_load_file` has already restored this sequence's KV cells.
+  // Every validation below runs after that restore, and the scheduler installs
+  // its per-slot cleanup guard only once this function returns, so any throw in
+  // between would strand the restored cells as orphan KV on the slot. Roll the
+  // sequence (and the metadata it stamped) back unless we reach the accept
+  // point, mirroring `TextLlmContext::loadCache` and `CacheManager::loadCache`.
+  ScopeGuard restoredKvGuard([this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[MtmdLlm] failed to clear sequence after invalid cache load\n");
+    }
+    current_ = {};
+    clearCacheReconciliationState();
+  });
+
+  stateTokens.resize(tokenCount);
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+    clearCacheReconciliationState();
+    return false;
+  }
+  acceptRestoredState(stateTokens, cacheKey);
   restoredKvGuard.dismiss();
   return true;
 }

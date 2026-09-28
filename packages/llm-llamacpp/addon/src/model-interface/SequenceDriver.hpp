@@ -340,6 +340,22 @@ public:
   /// tokens at admit time.
   [[nodiscard]] virtual bool loadCache(const std::string& cacheKey) = 0;
 
+  /// The sequence memory already holds a state whose ledger is `stateTokens`
+  /// (a slot kept resident across requests, or one just restored from the
+  /// scheduler's RAM tier). Validates it like a file load and adopts the
+  /// ledger. On a mismatch it clears the sequence and returns false.
+  [[nodiscard]] virtual bool
+  adoptResidentState(const std::vector<llama_token>& stateTokens) {
+    (void)stateTokens;
+    return false;
+  }
+
+  /// The ledger words describing the committed state, in the format
+  /// `adoptResidentState` and the cache file use.
+  [[nodiscard]] virtual std::vector<llama_token> residentStateTokens() const {
+    return {};
+  }
+
   virtual void saveCache(const std::string& cacheKey) const = 0;
 
   /// Capture the post-`preparePrefill` cursor for `onCancel` rollback. The

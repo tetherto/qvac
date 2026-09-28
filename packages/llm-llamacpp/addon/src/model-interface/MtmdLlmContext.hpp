@@ -145,6 +145,9 @@ public:
 
   void captureHistoryCheckpoint(llama_pos pos) override;
 
+  bool adoptResidentState(const std::vector<llama_token>& stateTokens) override;
+  [[nodiscard]] std::vector<llama_token> residentStateTokens() const override;
+
   void adoptCheckpoints(
       qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) override {
     if (needsFullStateSnapshot_) {
@@ -365,6 +368,11 @@ private:
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
   void commitCacheRequest();
   bool restorePreRequestCacheState();
+  // Checks a state `loadCache` or `adoptResidentState` just put in memory
+  // against its ledger `stateTokens` and adopts the ledger; throws
+  // UnableToLoadSessionFile / ContextLengthExeeded naming `cacheKey`.
+  void acceptRestoredState(
+      const std::vector<llama_token>& stateTokens, const std::string& cacheKey);
   void appendResidentToken(llama_token token);
   /// Batch-path ledger bookkeeping. The scheduler decodes a sample only after
   /// `onLogitsReady` returns it, and reports the decode through

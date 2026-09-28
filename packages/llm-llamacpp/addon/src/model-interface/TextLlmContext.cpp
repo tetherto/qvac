@@ -1579,48 +1579,8 @@ void TextLlmContext::discardPendingResidentToken() {
   pendingResidentToken_ = LLAMA_TOKEN_NULL;
 }
 
-bool TextLlmContext::loadCache(const std::string& cacheKey) {
-  if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
-    return false;
-  }
-
-  size_t tokenCount = 0;
-  std::vector<llama_token> stateTokens(
-      cache::LEDGER_HEADER_WORDS +
-      cache::LEDGER_ENTRY_WORDS *
-          (static_cast<size_t>(llama_n_ctx(modelCtx_.lctx)) + 1));
-  const auto loadedBytes = llama_state_seq_load_file(
-      modelCtx_.lctx,
-      cacheKey.c_str(),
-      seqId_,
-      stateTokens.data(),
-      stateTokens.size(),
-      &tokenCount);
-  if (loadedBytes == 0) {
-    throw qvac_errors::StatusError(
-        ADDON_ID,
-        toString(UnableToLoadSessionFile),
-        "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
-  }
-
-  // load already wrote KV; roll back unless we accept
-  ScopeGuard restoredKvGuard([this]() noexcept {
-    try {
-      clearSequenceMemory(modelCtx_.lctx);
-    } catch (...) {
-      QLOG_IF(
-          Priority::ERROR,
-          "[TextLlm] failed to clear sequence after invalid cache load\n");
-    }
-    nPast_ = 0;
-    clearCacheReconciliationState();
-  });
-
-  stateTokens.resize(tokenCount);
-  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
-    clearCacheReconciliationState();
-    return false;
-  }
+void TextLlmContext::acceptRestoredState(
+    const std::vector<llama_token>& stateTokens, const std::string& cacheKey) {
   try {
     restoreCacheStateTokens(stateTokens);
   } catch (const std::exception& ex) {
@@ -1676,7 +1636,86 @@ bool TextLlmContext::loadCache(const std::string& cacheKey) {
             restoredCacheTokens,
             metadataCacheTokens));
   }
+}
 
+bool TextLlmContext::adoptResidentState(
+    const std::vector<llama_token>& stateTokens) {
+  // The sequence memory already holds the state (a slot kept resident across
+  // requests, or one just restored from the RAM tier); only the ledger has to
+  // be adopted. Same acceptance checks as a file load, and the same cleanup
+  // when they fail: the caller then falls back to the file.
+  ScopeGuard residentGuard([this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[TextLlm] failed to clear sequence after rejecting a resident "
+          "state\n");
+    }
+    nPast_ = 0;
+    clearCacheReconciliationState();
+  });
+  try {
+    acceptRestoredState(stateTokens, "<resident>");
+  } catch (const std::exception& ex) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[TextLlm] rejected a resident cache state: %s\n", ex.what()));
+    return false;
+  }
+  residentGuard.dismiss();
+  return true;
+}
+
+std::vector<llama_token> TextLlmContext::residentStateTokens() const {
+  return cacheStateTokens();
+}
+
+bool TextLlmContext::loadCache(const std::string& cacheKey) {
+  if (cacheKey.empty() || !isFileInitialized(cacheKey)) {
+    return false;
+  }
+
+  size_t tokenCount = 0;
+  std::vector<llama_token> stateTokens(
+      cache::LEDGER_HEADER_WORDS +
+      cache::LEDGER_ENTRY_WORDS *
+          (static_cast<size_t>(llama_n_ctx(modelCtx_.lctx)) + 1));
+  const auto loadedBytes = llama_state_seq_load_file(
+      modelCtx_.lctx,
+      cacheKey.c_str(),
+      seqId_,
+      stateTokens.data(),
+      stateTokens.size(),
+      &tokenCount);
+  if (loadedBytes == 0) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        "TextLlmContext::loadCache: failed to load cache '" + cacheKey + "'");
+  }
+
+  // load already wrote KV; roll back unless we accept
+  ScopeGuard restoredKvGuard([this]() noexcept {
+    try {
+      clearSequenceMemory(modelCtx_.lctx);
+    } catch (...) {
+      QLOG_IF(
+          Priority::ERROR,
+          "[TextLlm] failed to clear sequence after invalid cache load\n");
+    }
+    nPast_ = 0;
+    clearCacheReconciliationState();
+  });
+
+  stateTokens.resize(tokenCount);
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+    clearCacheReconciliationState();
+    return false;
+  }
+  acceptRestoredState(stateTokens, cacheKey);
   restoredKvGuard.dismiss();
   return true;
 }
