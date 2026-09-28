@@ -50,7 +50,7 @@ export interface AuditRun {
 
 export async function runAudit(options: AuditOptions): Promise<AuditRun> {
   const baselinePath = options.baselinePath
-    ?? join(options.root, 'scripts/code-quality/baseline.json')
+    ?? join(options.root, 'scripts/code-quality/accepted-baseline.json')
   const outputDirectory = options.outputDirectory
     ?? join(options.root, '.quality')
   const markdownPath = join(outputDirectory, 'report.md')

@@ -47,6 +47,29 @@ test('a missing baseline is explicitly treated as empty', async () => {
   assert.equal(result.result.resolved.length, 0)
 })
 
+test('audit reads the accepted debt baseline by default', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quality-cli-accepted-baseline-'))
+  const acceptedFinding = finding('src/accepted.ts')
+  const acceptedBaselinePath = join(
+    root,
+    'scripts/code-quality/accepted-baseline.json',
+  )
+  await mkdir(join(root, 'scripts/code-quality'), { recursive: true })
+  await writeFile(
+    acceptedBaselinePath,
+    `${JSON.stringify(createBaseline([acceptedFinding]), undefined, 2)}\n`,
+  )
+
+  const result = await runAudit({
+    root,
+    command: 'audit',
+    detectors: [fixedDetector([acceptedFinding])],
+  })
+
+  assert.equal(result.baselinePath, acceptedBaselinePath)
+  assert.equal(result.result.findings[0]?.status, 'existing')
+})
+
 test('baseline command replaces the tracked snapshot and later shows resolved debt', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quality-cli-baseline-'))
   const oldFinding = finding('src/old.ts')
@@ -73,7 +96,7 @@ test('baseline command replaces the tracked snapshot and later shows resolved de
 
 test('detector failures produce analysis errors and never replace the baseline', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quality-cli-detector-failure-'))
-  const baselinePath = join(root, 'scripts/code-quality/baseline.json')
+  const baselinePath = join(root, 'scripts/code-quality/accepted-baseline.json')
   await mkdir(join(root, 'scripts/code-quality'), { recursive: true })
   await writeFile(baselinePath, '{"sentinel":true}\n')
   const failingDetector: DetectorAdapter = {
@@ -94,7 +117,7 @@ test('detector failures produce analysis errors and never replace the baseline',
 
 test('analysis errors withhold resolutions from the machine report', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quality-cli-withheld-resolution-'))
-  const baselinePath = join(root, 'scripts/code-quality/baseline.json')
+  const baselinePath = join(root, 'scripts/code-quality/accepted-baseline.json')
   const omittedFinding = finding('src/omitted.ts', 'advisory', 'failing')
   await mkdir(join(root, 'scripts/code-quality'), { recursive: true })
   await writeFile(

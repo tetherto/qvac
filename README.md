@@ -329,8 +329,9 @@ existing findings so agents can measure progress.
 Findings are advisory, while parser, resolver, and detector errors make the
 command fail so an incomplete analysis cannot appear clean. When analysis is
 incomplete, resolution calculation is explicitly withheld. Existing debt is
-tracked by stable fingerprints in `scripts/code-quality/baseline.json`. After
-reviewing an intentional baseline change, replace it with
+tracked by stable fingerprints in
+`scripts/code-quality/accepted-baseline.json`. After reviewing an intentional
+baseline change, replace it with
 `pnpm quality:baseline`. Run `pnpm quality:test` and
 `pnpm quality:typecheck` when changing the audit itself. Thresholds, source
 profiles, and documented generated-import exemptions live in
