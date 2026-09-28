@@ -16,4 +16,4 @@ inline std::string resolveBackendsDir(const std::string& root) {
   return dir.string();
 }
 
-}  // namespace qvac::audiogenggml
+} // namespace qvac::audiogenggml

@@ -364,9 +364,10 @@ JSCATCH
 
 // ── assessFit ────────────────────────────────────────────────────────────
 
-inline std::string fitBackendsDir(const std::string& configured,
-                                  const std::string& requested) {
-  return resolveBackendsDir(configured.empty() ? requested : configured).string();
+inline std::string fitBackendsDir(const std::string &configured,
+                                  const std::string &requested) {
+  return resolveBackendsDir(configured.empty() ? requested : configured)
+      .string();
 }
 //
 // Projects one voice against the memory free right now. Args: [request], whose
