@@ -32,6 +32,7 @@ const {
   ensureParlerModel
 } = require('../utils/downloadModel')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -159,6 +160,13 @@ async function runAndCollect(model, text) {
   return { samples, sampleRate, stats: response.stats || null }
 }
 
+// A CPU engine keeps the denoiser on its scalar core, which runtimeStats
+// reports as CPU (denoiserBackendDevice 0, denoiserBackendId 0).
+function assertDenoiserOnCpu(t, stats, label) {
+  t.is(stats.denoiserBackendDevice, 0, `${label}: useGPU:false -> denoiser on CPU`)
+  t.is(stats.denoiserBackendId, 0, `${label}: denoiser backend reported as CPU`)
+}
+
 // Every chunk that carries audio must be tagged at the enhanced 48 kHz rate
 // rather than the engine's native rate — the mislabel this feature prevents.
 function assertStreamedChunksReportEnhancedRate(t, updates) {
@@ -202,6 +210,7 @@ function assertStreamTerminatesOnce(t, updates, terminal) {
 
 async function runParlerBatch(files) {
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_PARLER,
     files,
     voice: 'Laura',
@@ -225,6 +234,7 @@ test('Chatterbox: enhancer + streamChunkTokens constructs and forwards both', (t
   // construct and forward both knobs to the addon (which runs the streaming
   // enhancer per chunk).
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_CHATTERBOX,
     files: {
       t3Model: './models/chatterbox-t3-turbo.gguf',
@@ -247,6 +257,7 @@ test('Parler: enhancer + streamChunkTokens constructs and forwards both', (t) =>
   // Parler used to reject the enhancer outright; it now enhances both the batch
   // path and native chunk streaming (seam-free via the streaming enhancer).
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_PARLER,
     files: {
       parlerModel: './models/parler-mini-v1-q8_0.gguf',
@@ -266,6 +277,7 @@ test('Parler: enhancer + streamChunkTokens constructs and forwards both', (t) =>
 
 test('Parler: denoiser forwards on the batch path and is rejected while streaming', (t) => {
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_PARLER,
     files: {
       parlerModel: './models/parler-mini-v1-q8_0.gguf',
@@ -281,6 +293,7 @@ test('Parler: denoiser forwards on the batch path and is rejected while streamin
   t.exception(
     () =>
       new TTSGgml({
+        threads: TTS_TEST_THREADS,
         engine: TTSGgml.ENGINE_PARLER,
         files: {
           parlerModel: './models/parler-mini-v1-q8_0.gguf',
@@ -299,6 +312,7 @@ test('CosyVoice3: enhancer + streamChunkTokens constructs and forwards both', (t
   // batch path and on native chunk streaming, so both knobs must reach the
   // addon together.
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_COSYVOICE3,
     files: {
       cosyvoiceModelDir: './models/cosyvoice3',
@@ -318,6 +332,7 @@ test('CosyVoice3: enhancer + streamChunkTokens constructs and forwards both', (t
 
 test('CosyVoice3: denoiser is forwarded for batch but rejected with streaming', (t) => {
   const batch = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_COSYVOICE3,
     files: {
       cosyvoiceModelDir: './models/cosyvoice3',
@@ -334,6 +349,7 @@ test('CosyVoice3: denoiser is forwarded for batch but rejected with streaming', 
   t.exception(
     () =>
       new TTSGgml({
+        threads: TTS_TEST_THREADS,
         engine: TTSGgml.ENGINE_COSYVOICE3,
         files: {
           cosyvoiceModelDir: './models/cosyvoice3',
@@ -351,6 +367,7 @@ test('enhancer with an unknown type is rejected at construction', (t) => {
   t.exception(
     () =>
       new TTSGgml({
+        threads: TTS_TEST_THREADS,
         engine: TTSGgml.ENGINE_SUPERTONIC,
         files: {
           supertonicModel: './models/supertonic.gguf',
@@ -366,6 +383,7 @@ test('enhancer with an unknown type is rejected at construction', (t) => {
 
 test('enhancer block with no GGUF path leaves enhancement off (no throw)', (t) => {
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_SUPERTONIC,
     files: { supertonicModel: './models/supertonic.gguf' },
     enhancer: { type: 'lavasr' },
@@ -420,7 +438,12 @@ for (const [engineName, engine, files] of [
   ]
 ]) {
   test(`${engineName}: enhancer + useGPU:true forwards useGPU alongside the enhancer path`, (t) => {
-    const model = new TTSGgml({ engine, files, config: { language: 'en', useGPU: true } })
+    const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
+      engine,
+      files,
+      config: { language: 'en', useGPU: true }
+    })
     const params = model._buildTtsParams()
     t.is(params.useGPU, true, 'useGPU:true forwarded to the addon (drives EnhancerOptions.use_gpu)')
     t.is(
@@ -431,7 +454,12 @@ for (const [engineName, engine, files] of [
   })
 
   test(`${engineName}: enhancer + useGPU:false keeps the enhancer on CPU`, (t) => {
-    const model = new TTSGgml({ engine, files, config: { language: 'en', useGPU: false } })
+    const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
+      engine,
+      files,
+      config: { language: 'en', useGPU: false }
+    })
     const params = model._buildTtsParams()
     t.is(
       params.useGPU,
@@ -446,7 +474,13 @@ for (const [engineName, engine, files] of [
   })
 
   test(`${engineName}: enhancer + nGpuLayers!=0 forwards the GPU layer count`, (t) => {
-    const model = new TTSGgml({ engine, files, nGpuLayers: 99, config: { language: 'en' } })
+    const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
+      engine,
+      files,
+      nGpuLayers: 99,
+      config: { language: 'en' }
+    })
     const params = model._buildTtsParams()
     t.is(params.nGpuLayers, 99, 'nGpuLayers forwarded (non-zero => enhancer requests the GPU)')
     t.is(
@@ -479,6 +513,7 @@ test(
     }
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: dl.path, lavasrEnhancer: enh.path },
       voice: 'F1',
@@ -525,6 +560,7 @@ test(
     }
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: dl.path },
       voice: 'F1',
@@ -566,6 +602,7 @@ test(
     const dir = dl.targetDir || modelsDir
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_CHATTERBOX,
       files: {
         modelDir: dir,
@@ -615,6 +652,7 @@ test(
     const dir = dl.targetDir || modelsDir
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_CHATTERBOX,
       files: {
         modelDir: dir,
@@ -675,6 +713,7 @@ test(
     }
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: dl.path, lavasrEnhancer: enh.path },
       voice: 'Laura',
@@ -718,6 +757,7 @@ test(
     }
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: dl.path },
       voice: 'Laura',
@@ -731,6 +771,8 @@ test(
       t.ok(r.samples > 0, 'synthesis produced audio')
       t.ok(r.stats, 'runtimeStats returned (constructed with stats:true)')
       t.is(r.stats.enhancerBackendDevice, -1, 'no enhancer loaded -> enhancerBackendDevice=-1')
+      t.is(r.stats.denoiserBackendDevice, -1, 'no denoiser loaded -> denoiserBackendDevice=-1')
+      t.is(r.stats.denoiserBackendId, -1, 'no denoiser loaded -> denoiserBackendId=-1')
     } finally {
       try {
         await model.unload()
@@ -759,6 +801,7 @@ test(
     }
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: dl.path, lavasrEnhancer: enh.path },
       voice: 'Laura',
@@ -815,6 +858,7 @@ test(
     }
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: dl.path, lavasrEnhancer: enh.path },
       voice: 'Laura',
@@ -882,6 +926,7 @@ test(
       -1,
       'denoiser alone loads no enhancer (enhancerBackendDevice=-1)'
     )
+    assertDenoiserOnCpu(t, denoisedOnly.stats, 'denoiser alone')
 
     const enh = await ensureLavaSREnhancerGguf({
       targetDir: path.join(baseDir, 'models', 'lavasr')
@@ -909,6 +954,7 @@ test(
       0,
       'useGPU:false -> enhancer on CPU (enhancerBackendDevice=0)'
     )
+    assertDenoiserOnCpu(t, denoisedAndEnhanced.stats, 'denoiser + enhancer')
   }
 )
 
@@ -941,6 +987,7 @@ test(
     }
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: dl.path, lavasrEnhancer: enh.path },
       voice: 'F1',
@@ -956,6 +1003,59 @@ test(
       t.is(r.sampleRate, 48000, 'GPU-enhanced supertonic output reports 48 kHz')
       t.ok(r.samples > 0, 'GPU-enhanced synthesis produced audio')
       assertEnhancerGpuBackend(t, r.stats)
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
+  }
+)
+
+test(
+  'Supertonic + LavaSR denoiser on GPU (useGPU:true) runs the denoiser on the engine device',
+  { timeout: 600000, skip: NO_GPU },
+  async (t) => {
+    const baseDir = getBaseDir()
+    const den = await ensureLavaSRDenoiserGguf({
+      targetDir: path.join(baseDir, 'models', 'lavasr')
+    })
+    if (!den.success) {
+      t.comment('LavaSR denoiser GGUF not staged; skipping.')
+      t.pass('skipped — no denoiser GGUF')
+      return
+    }
+    const dl = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
+    if (!dl.success) {
+      t.fail('Supertonic GGUF not available — registry fetch failed.')
+      return
+    }
+
+    const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
+      engine: TTSGgml.ENGINE_SUPERTONIC,
+      files: { supertonicModel: dl.path, lavasrDenoiser: den.path },
+      voice: 'F1',
+      config: { language: 'en', useGPU: true },
+      opts: { stats: true }
+    })
+    await model.load()
+    try {
+      const r = await runAndCollect(model, 'The denoiser follows the engine onto the GPU.')
+      t.is(r.sampleRate, 44100, 'denoising preserves the native 44.1 kHz')
+      t.ok(r.samples > 0, 'denoised synthesis produced audio')
+      const { backendDevice, backendId, denoiserBackendDevice, denoiserBackendId } = r.stats
+      console.log(
+        `[denoiser/GPU] backendDevice=${backendDevice} denoiserBackendDevice=` +
+          `${denoiserBackendDevice} denoiserBackendId=${denoiserBackendId} ` +
+          `(${backendIdToName(denoiserBackendId)})`
+      )
+      t.not(denoiserBackendDevice, -1, 'denoiser was loaded (denoiserBackendDevice != -1)')
+      t.is(denoiserBackendDevice, backendDevice, 'denoiser runs on the engine device')
+      if (backendDevice === 1) {
+        t.is(denoiserBackendId, backendId, 'GPU denoiser uses the engine backend')
+      } else {
+        t.is(denoiserBackendId, 0, 'a CPU-fallback engine keeps the denoiser on CPU')
+      }
     } finally {
       try {
         await model.unload()
@@ -986,6 +1086,7 @@ test(
     const dir = dl.targetDir || modelsDir
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_CHATTERBOX,
       files: {
         modelDir: dir,

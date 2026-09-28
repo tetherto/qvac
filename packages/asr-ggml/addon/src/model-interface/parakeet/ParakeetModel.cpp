@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -49,6 +50,15 @@ enum BackendDeviceClass { DeviceCpu = 0, DeviceGpu = 1 };
 
 // n_gpu_layers value that offloads every layer to the GPU backend.
 constexpr int OFFLOAD_ALL_LAYERS_TO_GPU = 999;
+
+// speech-cpp's EnergyVad clamps its RMS window to this many samples (its
+// window buffer: 1 s at 16 kHz).
+constexpr int64_t ENERGY_VAD_MAX_WINDOW_SAMPLES = 16000;
+
+void throwInvalidConfig(const std::string& message) {
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument, message);
+}
 
 // Match by prefix: ggml_backend_name() returns indexed strings like "CUDA0"
 // / "Vulkan0" / "MTL0" on multi-GPU hosts. Metal reports as "MTL0" from
@@ -213,6 +223,7 @@ makeDiarizationTranscript(const pkt::StreamingDiarizationSegment& seg) {
   t.start = static_cast<float>(seg.start_s);
   t.end = static_cast<float>(seg.end_s);
   t.toAppend = true;
+  t.speakerId = seg.speaker_id;
   return t;
 }
 
@@ -238,8 +249,40 @@ std::string joinTranscriptText(
   return os.str();
 }
 
-pkt::EngineOptions
-buildEngineOptions(const ParakeetConfig& cfg, const fs::path& ggufPath) {
+} // namespace
+
+void ParakeetModel::validateConfig(const ParakeetConfig& cfg) {
+  // The energy-VAD window and hangover and the long-form frame counts are
+  // clamped inside speech-cpp, so only these need checking here.
+  if (!std::isfinite(cfg.diarizationThreshold) ||
+      cfg.diarizationThreshold > 1.0F) {
+    throwInvalidConfig(
+        "diarizationThreshold must be between 0 and 1 (negative keeps the "
+        "default)");
+  }
+  if (cfg.prewarm && (!std::isfinite(cfg.prewarmAudioSeconds) ||
+                      cfg.prewarmAudioSeconds <= 0.0F)) {
+    throwInvalidConfig("prewarmAudioSeconds must be greater than 0");
+  }
+  if (!std::isfinite(cfg.streamingEnergyVadThresholdDb)) {
+    throwInvalidConfig("streamingEnergyVadThresholdDb must be finite");
+  }
+}
+
+float ParakeetModel::resolveDiarizationThreshold(const ParakeetConfig& cfg) {
+  return cfg.diarizationThreshold >= 0.0F
+             ? cfg.diarizationThreshold
+             : ParakeetConfig::DEFAULT_DIARIZATION_THRESHOLD;
+}
+
+int ParakeetModel::resolveDiarizationMinSegmentMs(const ParakeetConfig& cfg) {
+  return cfg.diarizationMinSegmentMs >= 0
+             ? cfg.diarizationMinSegmentMs
+             : ParakeetConfig::DEFAULT_DIARIZATION_MIN_SEGMENT_MS;
+}
+
+pkt::EngineOptions ParakeetModel::buildEngineOptions(
+    const ParakeetConfig& cfg, const fs::path& ggufPath) {
   pkt::EngineOptions eopts;
   eopts.model_gguf_path = ggufPath.string();
   // n_threads = 0 lets ggml pick hardware_concurrency; maxThreads is honoured
@@ -261,21 +304,23 @@ buildEngineOptions(const ParakeetConfig& cfg, const fs::path& ggufPath) {
   }
   // Empty -> leave $GGML_OPENCL_CACHE_DIR alone (Android-only, read once).
   eopts.opencl_cache_dir = cfg.openclCacheDir;
+  eopts.prewarm = cfg.prewarm;
+  eopts.prewarm_audio_seconds = cfg.prewarmAudioSeconds;
+  eopts.long_form_window_frames = cfg.longFormWindowFrames;
+  eopts.long_form_context_frames = cfg.longFormContextFrames;
   return eopts;
 }
 
-pkt::SortformerStreamingOptions buildSortformerStreamingOptions(
-    const ParakeetConfig& cfg, int sampleRate, float onset,
-    float minDurationOn) {
+pkt::SortformerStreamingOptions ParakeetModel::buildSortformerStreamingOptions(
+    const ParakeetConfig& cfg, int sampleRate) {
   pkt::SortformerStreamingOptions opts;
   opts.sample_rate = sampleRate;
-  opts.chunk_ms = ParakeetModel::resolveStreamingChunkMs(
-      cfg.modelType, cfg.streamingChunkMs);
+  opts.chunk_ms = resolveStreamingChunkMs(cfg.modelType, cfg.streamingChunkMs);
   opts.history_ms = cfg.streamingHistoryMs > 0
                         ? cfg.streamingHistoryMs
                         : ParakeetConfig::DEFAULT_STREAMING_HISTORY_MS;
-  opts.threshold = onset;
-  opts.min_segment_ms = static_cast<int>(minDurationOn * 1000.0F);
+  opts.threshold = resolveDiarizationThreshold(cfg);
+  opts.min_segment_ms = resolveDiarizationMinSegmentMs(cfg);
   opts.emit_partials = cfg.streamingEmitPartials;
   // AOSC (v2.1+ Sortformer only); parakeet-cpp ignores it on v1/v2 GGUFs.
   opts.spkcache_enable = cfg.streamingSpkCacheEnable;
@@ -287,12 +332,11 @@ pkt::SortformerStreamingOptions buildSortformerStreamingOptions(
   return opts;
 }
 
-pkt::StreamingOptions
-buildAsrStreamingOptions(const ParakeetConfig& cfg, int sampleRate) {
+pkt::StreamingOptions ParakeetModel::buildAsrStreamingOptions(
+    const ParakeetConfig& cfg, int sampleRate) {
   pkt::StreamingOptions opts;
   opts.sample_rate = sampleRate;
-  opts.chunk_ms = ParakeetModel::resolveStreamingChunkMs(
-      cfg.modelType, cfg.streamingChunkMs);
+  opts.chunk_ms = resolveStreamingChunkMs(cfg.modelType, cfg.streamingChunkMs);
   if (cfg.streamingLeftContextMs > 0) {
     opts.left_context_ms = cfg.streamingLeftContextMs;
   }
@@ -301,12 +345,72 @@ buildAsrStreamingOptions(const ParakeetConfig& cfg, int sampleRate) {
   }
   opts.emit_partials = cfg.streamingEmitPartials;
   opts.enable_energy_vad = cfg.streamingEnergyVad;
+  opts.energy_vad_threshold_db = cfg.streamingEnergyVadThresholdDb;
+  opts.energy_vad_window_ms = cfg.streamingEnergyVadWindowMs;
+  opts.energy_vad_hangover_ms = cfg.streamingEnergyVadHangoverMs;
   return opts;
 }
 
-} // namespace
+pkt::DiarizationOptions
+ParakeetModel::buildDiarizationOptions(const ParakeetConfig& cfg) {
+  pkt::DiarizationOptions opts;
+  opts.threshold = resolveDiarizationThreshold(cfg);
+  opts.min_segment_ms = resolveDiarizationMinSegmentMs(cfg);
+  return opts;
+}
+
+std::optional<VadEvent>
+ParakeetModel::toVadEvent(const pkt::StreamEvent& event, VadSource source) {
+  if (event.type != pkt::StreamEventType::VadStateChanged ||
+      event.vad_state == pkt::VadState::Unknown) {
+    return std::nullopt;
+  }
+  VadEvent out;
+  out.speaking = event.vad_state == pkt::VadState::Speaking;
+  out.score = event.vad_score;
+  out.timestamp = event.timestamp_s;
+  out.speakerId = event.speaker_id;
+  out.source = source;
+  return out;
+}
+
+size_t ParakeetModel::energyVadFeedSliceSamples(
+    bool enabled, int windowMs, int sampleRate) {
+  if (!enabled)
+    return 0;
+  const int64_t samples = int64_t{std::max(windowMs, 1)} * sampleRate / 1000;
+  return static_cast<size_t>(
+      std::clamp<int64_t>(samples, 1, ENERGY_VAD_MAX_WINDOW_SAMPLES));
+}
+
+void ParakeetModel::feedInSlices(
+    pkt::StreamSession& session, const float* samples, size_t count,
+    size_t sliceSamples) {
+  const size_t step = sliceSamples > 0 ? sliceSamples : count;
+  for (size_t offset = 0; offset < count; offset += step) {
+    const size_t n = std::min(step, count - offset);
+    session.feed_pcm_f32(samples + offset, static_cast<int>(n));
+  }
+}
+
+void ParakeetModel::forwardStreamEvent(
+    const pkt::StreamEvent& event, VadSource source) {
+  if (!onVadEvent_)
+    return;
+  auto vad = toVadEvent(event, source);
+  if (!vad)
+    return;
+  {
+    std::lock_guard<std::mutex> lk(streaming_mutex_);
+    if (lastVadSpeaking_ == vad->speaking)
+      return;
+    lastVadSpeaking_ = vad->speaking;
+  }
+  onVadEvent_(*vad);
+}
 
 ParakeetModel::ParakeetModel(const ParakeetConfig& config) : cfg_(config) {
+  validateConfig(cfg_);
   if (cfg_.sampleRate != 0) {
     sample_rate_ = cfg_.sampleRate;
   }
@@ -439,6 +543,7 @@ void ParakeetModel::captureBackend() {
       captureBackendDescription(backend_id_, backend_device_);
   encoder_backend_ = engine_->encoder_backend();
   encoder_on_coreml_ = engine_->encoder_on_coreml() ? 1 : 0;
+  modelTypeName_ = engine_->model_type();
 
   QLOG(
       logger::Priority::INFO,
@@ -575,6 +680,8 @@ void ParakeetModel::reset() {
   output_.clear();
   stream_ended_ = false;
   processed_time_ = 0.0f;
+  jobEncoderCalls_ = 0;
+  jobCoremlEncoderCalls_ = 0;
   cancelGeneration_.store(0, std::memory_order_relaxed);
   activeGeneration_.store(0, std::memory_order_relaxed);
 }
@@ -610,6 +717,17 @@ bool ParakeetModel::isCancellationError(const std::exception& e) {
 void ParakeetModel::cancel() const {
   const auto active = activeGeneration_.load(std::memory_order_relaxed);
   cancelGeneration_.store(active, std::memory_order_relaxed);
+  // Stop an in-flight offline transcribe_samples() at the engine's next
+  // check (between long-form encoder windows); process() then reports the
+  // cancellation from the generation stored above. Every engine call resets
+  // the flag on entry. try_lock: the mutex is only held for long by
+  // load()/unload(), when there is no call to cancel.
+  {
+    std::unique_lock<std::mutex> lk(engine_mutex_, std::try_to_lock);
+    if (lk.owns_lock() && engine_) {
+      engine_->cancel();
+    }
+  }
   // cancel() may race with the open/close/unload lifecycle, so snapshot the
   // session pointers under session_mutex_ and invoke the engine's own
   // (thread-safe) cancel() outside the lock.
@@ -722,20 +840,26 @@ std::string ParakeetModel::runAsrProcess(const Input& input) {
 
   pkt::EngineResult result = engine->transcribe_samples(
       input.data(), static_cast<int>(input.size()), sample_rate_);
-  // Record per-stage timings verbatim; engines that don't report a stage
-  // record 0 rather than mis-attributing wall-clock across buckets.
-  encoderMs_ += static_cast<int64_t>(result.encoder_ms);
-  decoderMs_ += static_cast<int64_t>(result.decode_ms);
-  melSpecMs_ += static_cast<int64_t>(result.preprocess_ms);
-  totalEncodedFrames_ += result.encoder_frames;
-  totalTokens_ += static_cast<int64_t>(result.token_ids.size());
+  recordTranscriptionResult(result);
 
   if (result.text.empty())
     return ERR_NO_SPEECH;
   return result.text;
 }
 
-std::string ParakeetModel::runSortformerProcess(const Input& input) {
+void ParakeetModel::recordTranscriptionResult(const pkt::EngineResult& result) {
+  encoderMs_ += static_cast<int64_t>(result.encoder_ms);
+  decoderMs_ += static_cast<int64_t>(result.decode_ms);
+  melSpecMs_ += static_cast<int64_t>(result.preprocess_ms);
+  totalEncodedFrames_ += result.encoder_frames;
+  totalTokens_ += static_cast<int64_t>(result.token_ids.size());
+  ++jobEncoderCalls_;
+  if (result.encoder_used_coreml)
+    ++jobCoremlEncoderCalls_;
+}
+
+std::string ParakeetModel::runSortformerProcess(
+    const Input& input, std::vector<SpeakerSegment>& segmentsOut) {
   if (input.empty())
     return ERR_AUDIO_SHORT;
 
@@ -747,19 +871,26 @@ std::string ParakeetModel::runSortformerProcess(const Input& input) {
   if (!engine)
     return ERR_MODEL_NOT_LOADED;
 
-  pkt::DiarizationOptions dopts;
-  dopts.threshold = diarConfig_.onset;
-  dopts.min_segment_ms = static_cast<int>(diarConfig_.minDurationOn * 1000.0f);
-
-  pkt::DiarizationResult diar;
-  encoderMs_ += measureMs([&] {
-    diar = engine->diarize_samples(
-        input.data(), static_cast<int>(input.size()), sample_rate_, dopts);
-  });
+  const pkt::DiarizationOptions dopts = buildDiarizationOptions(cfg_);
+  const pkt::DiarizationResult diar = engine->diarize_samples(
+      input.data(), static_cast<int>(input.size()), sample_rate_, dopts);
+  // Same per-stage mapping as runAsrProcess.
+  melSpecMs_ += static_cast<int64_t>(diar.preprocess_ms);
+  encoderMs_ += static_cast<int64_t>(diar.encoder_ms);
+  decoderMs_ += static_cast<int64_t>(diar.decode_ms);
+  totalEncodedFrames_ += diar.n_frames;
 
   if (diar.segments.empty())
     return ERR_NO_SPEAKERS;
 
+  segmentsOut.reserve(diar.segments.size());
+  for (const auto& seg : diar.segments) {
+    SpeakerSegment out;
+    out.speakerId = seg.speaker_id;
+    out.start = static_cast<float>(seg.start_s);
+    out.end = static_cast<float>(seg.end_s);
+    segmentsOut.push_back(out);
+  }
   return formatDiarizationSegments(diar.segments);
 }
 
@@ -812,6 +943,7 @@ void ParakeetModel::openStreamingSession() {
   {
     std::lock_guard<std::mutex> lk(streaming_mutex_);
     pending_streaming_segments_.clear();
+    lastVadSpeaking_.reset();
   }
 
   if (cfg_.modelType == ModelType::SORTFORMER) {
@@ -822,8 +954,13 @@ void ParakeetModel::openStreamingSession() {
 }
 
 void ParakeetModel::openSortformerStreamingSession(pkt::Engine& engine) {
-  const pkt::SortformerStreamingOptions opts = buildSortformerStreamingOptions(
-      cfg_, sample_rate_, diarConfig_.onset, diarConfig_.minDurationOn);
+  pkt::SortformerStreamingOptions opts =
+      buildSortformerStreamingOptions(cfg_, sample_rate_);
+  if (cfg_.streamingSpeakerVad) {
+    opts.on_event = [this](const pkt::StreamEvent& event) {
+      forwardStreamEvent(event, VadSource::Sortformer);
+    };
+  }
   auto session = engine.diarize_start(
       opts, [this](const pkt::StreamingDiarizationSegment& seg) {
         // Negative speaker_id is the synthetic finalize terminator.
@@ -842,8 +979,13 @@ void ParakeetModel::openAsrStreamingSession(pkt::Engine& engine) {
         "streamingHistoryMs is Sortformer-only and is ignored for ASR "
         "streaming sessions");
   }
-  const pkt::StreamingOptions opts =
-      buildAsrStreamingOptions(cfg_, sample_rate_);
+  pkt::StreamingOptions opts = buildAsrStreamingOptions(cfg_, sample_rate_);
+  // speech-cpp only runs the energy detector when on_event is set.
+  if (cfg_.streamingEnergyVad) {
+    opts.on_event = [this](const pkt::StreamEvent& event) {
+      forwardStreamEvent(event, VadSource::Energy);
+    };
+  }
   auto session =
       engine.stream_start(opts, [this](const pkt::StreamingSegment& seg) {
         if (seg.text.empty() && !seg.is_eou_boundary)
@@ -920,11 +1062,18 @@ int64_t ParakeetModel::feedStreamingChunk(const Input& input) {
           diar_session_->finalize();
         } catch (...) {
         }
+        aoscActive_ = diar_session_->aosc_active() ? 1 : 0;
       }
     } else {
       if (asr_session_) {
-        asr_session_->feed_pcm_f32(
-            input.data(), static_cast<int>(input.size()));
+        feedInSlices(
+            *asr_session_,
+            input.data(),
+            input.size(),
+            energyVadFeedSliceSamples(
+                cfg_.streamingEnergyVad,
+                cfg_.streamingEnergyVadWindowMs,
+                sample_rate_));
         try {
           asr_session_->finalize();
         } catch (...) {
@@ -996,6 +1145,7 @@ void ParakeetModel::process(const Input& input) {
       static_cast<float>(input.size()) / static_cast<float>(SAMPLE_RATE);
 
   std::string text;
+  std::vector<SpeakerSegment> speakerSegments;
   bool streamed = false;
   const int64_t wall = measureMs([&] {
     if (!is_loaded_) {
@@ -1013,7 +1163,7 @@ void ParakeetModel::process(const Input& input) {
         text = runStreamingProcess(input);
         streamed = true;
       } else if (cfg_.modelType == ModelType::SORTFORMER) {
-        text = runSortformerProcess(input);
+        text = runSortformerProcess(input, speakerSegments);
       } else {
         text = runAsrProcess(input);
       }
@@ -1051,6 +1201,7 @@ void ParakeetModel::process(const Input& input) {
   transcript.start = startTime;
   transcript.end = startTime + duration;
   transcript.toAppend = true;
+  transcript.speakerSegments = std::move(speakerSegments);
 
   output_.push_back(transcript);
   ++totalTranscriptions_;
@@ -1123,10 +1274,17 @@ RuntimeStats ParakeetModel::runtimeStats() const {
   stats.emplace_back("backendId", static_cast<int64_t>(backend_id_));
   stats.emplace_back(
       "gpuUnsupported", static_cast<int64_t>(backend_gpu_unsupported_));
-  // 1 when the FastConformer encoder ran on the Apple Neural Engine (Core ML
-  // sidecar) instead of the ggml backend; 0 otherwise. Always 0 off Apple.
   stats.emplace_back(
       "encoderOnCoreml", static_cast<int64_t>(encoder_on_coreml_));
+  if (jobEncoderCalls_ > 0) {
+    stats.emplace_back(
+        "encoderUsedCoreml",
+        static_cast<int64_t>(
+            jobCoremlEncoderCalls_ == jobEncoderCalls_ ? 1 : 0));
+  }
+  if (isSortformer()) {
+    stats.emplace_back("aoscActive", aoscActive_);
+  }
 
   // audioDurationMs derived from samples / sample_rate
   const double sr = sample_rate_ > 0 ? static_cast<double>(sample_rate_)

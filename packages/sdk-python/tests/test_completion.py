@@ -164,6 +164,32 @@ async def test_tool_calls_get_invokable_handlers_and_no_cache_content():
     assert "handler" not in sent_tool
 
 
+async def test_deferred_tool_fields_survive_the_simplified_form():
+    transport = FakeTransport(
+        stream_items=[_chunk([_done(0, stopReason="eos")], done=True)]
+    )
+    run = completion(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "open an issue"}],
+        tools=[
+            {
+                "name": "create_issue",
+                "description": "Open a new issue on a repository",
+                "parameters": {"type": "object", "properties": {}},
+                "deferLoading": True,
+                "group": "github",
+            }
+        ],
+    )
+    await run.final
+
+    sent_tool = transport.sent["tools"][0]
+    assert sent_tool["type"] == "function"
+    assert sent_tool["deferLoading"] is True
+    assert sent_tool["group"] == "github"
+
+
 async def test_error_done_rejects_final_and_events_raise():
     transport = FakeTransport(
         stream_items=[
@@ -349,3 +375,50 @@ async def test_orchestrate_requires_handlers_for_every_tool():
             history=[{"role": "user", "content": "x"}],
             tools=[WEATHER_TOOL],
         )
+
+
+async def test_deferred_tool_fields_accept_the_snake_case_alias():
+    transport = FakeTransport(
+        stream_items=[_chunk([_done(0, stopReason="eos")], done=True)]
+    )
+    run = completion(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "open an issue"}],
+        tools=[
+            {
+                "name": "create_issue",
+                "description": "Open a new issue on a repository",
+                "parameters": {"type": "object", "properties": {}},
+                "defer_loading": True,
+            }
+        ],
+    )
+    await run.final
+
+    assert transport.sent["tools"][0]["deferLoading"] is True
+
+
+async def test_deferred_tool_alias_is_mapped_on_the_wire_form():
+    transport = FakeTransport(
+        stream_items=[_chunk([_done(0, stopReason="eos")], done=True)]
+    )
+    run = completion(
+        transport,
+        model_id="m-1",
+        history=[{"role": "user", "content": "open an issue"}],
+        tools=[
+            {
+                "type": "function",
+                "name": "create_issue",
+                "description": "Open a new issue on a repository",
+                "parameters": {"type": "object", "properties": {}},
+                "defer_loading": True,
+            }
+        ],
+    )
+    await run.final
+
+    sent_tool = transport.sent["tools"][0]
+    assert sent_tool["deferLoading"] is True
+    assert "defer_loading" not in sent_tool

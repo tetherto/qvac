@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.17.1] - 2026-09-26
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.3.0` -> `10549.4.0`:
+  - Fixed a scheduler re-reserve on every causal-attention toggle.
+  - Fixed WebGPU normalization and copy dispatches that exceeded the
+    dispatch limit on large tensors.
+  - Added Ternary Bonsai model support on CPU, Metal, CUDA and Vulkan.
+  - Added chunked GDN prefill for CUDA/HIP (CUTLASS tensorized MMA) and a
+    SIMD-group GDN prefill for Metal.
+  - Added fused BF16 NVFP4 MLP prefill for CUDA.
+
+### Fixed
+
+- Windows builds now ship the ggml backend modules
+  (`prebuilds/win32-x64/qvac__fabric/*.dll`) next to the runtime. Since the
+  `10549.3.0` port, Windows builds the CPU variants and GPU backends as
+  runtime-loaded modules, and `0.17.0` staged them only for Android and Linux,
+  so a Windows consumer registered no backend and every model load failed with
+  `no backends are loaded`.
+
 ## [0.17.0] - 2026-09-23
 
 ### Changed

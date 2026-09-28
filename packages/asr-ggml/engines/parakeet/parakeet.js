@@ -89,6 +89,11 @@ class ParakeetInterface {
         this._bufferedBytes = 0;
         this._handle = this._binding.createInstance(this, this._config, this._addonOutputCallback.bind(this), this._stateCallback);
     }
+    _looksLikeVadEvent(data) {
+        return (data !== null &&
+            typeof data === "object" &&
+            data.type === "vad");
+    }
     _looksLikeStats(data) {
         return (data !== null &&
             typeof data === "object" &&
@@ -112,6 +117,8 @@ class ParakeetInterface {
         }
         if (isError || eventStr.includes("Error"))
             return "Error";
+        if (this._looksLikeVadEvent(data))
+            return "VadState";
         if (eventStr.includes("RuntimeStats"))
             return "JobEnded";
         if (eventStr.includes("Output"))

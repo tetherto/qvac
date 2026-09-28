@@ -7,8 +7,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 #include <gtest/gtest.h>
 
@@ -20,6 +22,7 @@
 using qvac::ttsggml::supertonic::SupertonicConfig;
 using qvac::ttsggml::supertonic::SupertonicModel;
 using qvac::ttsggml::supertonic::detail::applyVulkanPipelineCache;
+using qvac::ttsggml::supertonic::detail::engineOptionsForTests;
 using qvac::ttsggml::supertonic::detail::validateNoPerCallControls;
 using qvac::ttsggml::supertonic::detail::VULKAN_PIPELINE_CACHE_DIR_ENV;
 using qvac::ttsggml::supertonic::detail::VULKAN_PREWARM_TEXT;
@@ -27,14 +30,38 @@ using qvac_errors::StatusError;
 
 namespace {
 
-std::filesystem::path testTempDir() {
-  return std::filesystem::temp_directory_path() / "qvac-tts-ggml-supertonic-tests";
+constexpr const char* TEST_DIR_PREFIX = "qvac-tts-ggml-supertonic-tests-";
+
+class TestTempDir {
+public:
+  TestTempDir() : path_(createUniqueDir()) {}
+  TestTempDir(const TestTempDir&) = delete;
+  TestTempDir& operator=(const TestTempDir&) = delete;
+  ~TestTempDir() {
+    std::error_code ignored;
+    std::filesystem::remove_all(path_, ignored);
+  }
+  const std::filesystem::path& path() const { return path_; }
+
+private:
+  static std::filesystem::path createUniqueDir() {
+    std::random_device entropy;
+    auto dir = std::filesystem::temp_directory_path() /
+               (std::string(TEST_DIR_PREFIX) + std::to_string(entropy()));
+    std::filesystem::create_directories(dir);
+    return dir;
+  }
+
+  std::filesystem::path path_;
+};
+
+const std::filesystem::path& testTempDir() {
+  static const TestTempDir dir;
+  return dir.path();
 }
 
 std::filesystem::path tempPath(const std::string& suffix) {
-  auto dir = testTempDir();
-  std::filesystem::create_directories(dir);
-  return dir / suffix;
+  return testTempDir() / suffix;
 }
 
 void writeStubFile(const std::filesystem::path& p,
@@ -204,6 +231,101 @@ TEST(SupertonicVulkanCache, DoesNotOverwriteCallerPrewarm) {
   EXPECT_EQ(
       opts.vulkan_env_overrides.at(VULKAN_PIPELINE_CACHE_DIR_ENV), "/data/vk");
   EXPECT_EQ(opts.prewarm_text, "caller sentence");
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  SupertonicConfig -> tts_cpp EngineOptions mapping.
+// ─────────────────────────────────────────────────────────────────────
+
+TEST(SupertonicEngineOptions, UnsetKnobsKeepEngineDefaults) {
+  const tts_cpp::supertonic::EngineOptions defaults;
+  const auto opts = engineOptionsForTests(SupertonicConfig{});
+  EXPECT_TRUE(opts.voice_json_path.empty());
+  EXPECT_TRUE(opts.prewarm_text.empty());
+  EXPECT_EQ(opts.vulkan_device, defaults.vulkan_device);
+  EXPECT_EQ(opts.stream_chunk_tokens, defaults.stream_chunk_tokens);
+  EXPECT_EQ(opts.stream_first_chunk_tokens, defaults.stream_first_chunk_tokens);
+  EXPECT_EQ(
+      opts.stream_chunk_tolerance_pct, defaults.stream_chunk_tolerance_pct);
+  EXPECT_EQ(opts.stream_min_chunk_tokens, defaults.stream_min_chunk_tokens);
+}
+
+TEST(SupertonicEngineOptions, VoiceDeviceAndStreamingForwarded) {
+  SupertonicConfig cfg;
+  cfg.voiceJsonPath = "/voices/cloned.json";
+  cfg.vulkanDevice = -1;
+  cfg.streamChunkTokens = 50;
+  cfg.streamFirstChunkTokens = 20;
+  cfg.streamChunkTolerancePct = 10;
+  cfg.streamMinChunkTokens = 25;
+  const auto opts = engineOptionsForTests(cfg);
+  EXPECT_EQ(opts.voice_json_path, "/voices/cloned.json");
+  EXPECT_EQ(opts.vulkan_device, -1);
+  EXPECT_EQ(opts.stream_chunk_tokens, 50);
+  EXPECT_EQ(opts.stream_first_chunk_tokens, 20);
+  EXPECT_EQ(opts.stream_chunk_tolerance_pct, 10);
+  EXPECT_EQ(opts.stream_min_chunk_tokens, 25);
+}
+
+// A caller pre-warm text wins over the vulkanCacheDir default sentence.
+TEST(SupertonicEngineOptions, PrewarmTextForwardedAndWinsOverCacheDefault) {
+  SupertonicConfig cfg;
+  cfg.prewarmText = "A representative production sentence.";
+  EXPECT_EQ(engineOptionsForTests(cfg).prewarm_text, cfg.prewarmText);
+
+  cfg.nGpuLayers = 99;
+  cfg.vulkanCacheDir = "/data/vk";
+  const auto opts = engineOptionsForTests(cfg);
+  EXPECT_EQ(opts.prewarm_text, cfg.prewarmText);
+  EXPECT_EQ(
+      opts.vulkan_env_overrides.at(VULKAN_PIPELINE_CACHE_DIR_ENV), "/data/vk");
+}
+
+TEST(SupertonicValidate, NonexistentVoiceJsonRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.voiceJsonPath = tempPath("does-not-exist.json").string();
+  EXPECT_THROW(SupertonicModel{cfg}, StatusError);
+}
+
+TEST(SupertonicValidate, VulkanDeviceBelowAutoRejected) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.vulkanDevice = -2;
+  EXPECT_THROW(SupertonicModel{cfg}, StatusError);
+  cfg.vulkanDevice = -1;
+  EXPECT_NO_THROW(SupertonicModel{cfg});
+}
+
+TEST(SupertonicValidate, NegativeStreamingValuesRejected) {
+  for (auto field :
+       {&SupertonicConfig::streamChunkTokens,
+        &SupertonicConfig::streamFirstChunkTokens,
+        &SupertonicConfig::streamChunkTolerancePct,
+        &SupertonicConfig::streamMinChunkTokens}) {
+    auto cfg = minimallyValidStubConfig();
+    cfg.*field = -1;
+    EXPECT_THROW(SupertonicModel{cfg}, StatusError);
+  }
+}
+
+TEST(SupertonicValidate, StreamingWithLavasrRejected) {
+  const auto stub = tempPath("lavasr-stub.gguf");
+  writeStubFile(stub);
+
+  auto enhanced = minimallyValidStubConfig();
+  enhanced.streamChunkTokens = 50;
+  enhanced.enhancerGgufPath = stub.string();
+  EXPECT_THROW(SupertonicModel{enhanced}, StatusError);
+
+  auto denoised = minimallyValidStubConfig();
+  denoised.streamChunkTokens = 50;
+  denoised.denoiserGgufPath = stub.string();
+  EXPECT_THROW(SupertonicModel{denoised}, StatusError);
+
+  // streamChunkTokens 0 means batch, so post-processing stays allowed.
+  auto batch = minimallyValidStubConfig();
+  batch.streamChunkTokens = 0;
+  batch.enhancerGgufPath = stub.string();
+  EXPECT_NO_THROW(SupertonicModel{batch});
 }
 
 // ─────────────────────────────────────────────────────────────────────

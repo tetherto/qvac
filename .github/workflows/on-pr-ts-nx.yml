@@ -1,4 +1,4 @@
-# Consolidates the 8 on-pr-<pkg>-ts.yml producers.
+# Consolidates the per-package PR-head TypeScript check producers.
 #
 # These run PR-head code, so they stay on pull_request (unprivileged, no
 # secrets) rather than moving into on-pr-nx, which is pull_request_target.
@@ -21,15 +21,16 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main, release-*, feature-*, tmp-*]
-    # Must be a superset of on-pr-nx's own trigger: if on-pr-nx can run, and it
-    # can select any package, then this workflow has to run too. Narrowing this
-    # to a package subset is what caused the original bug. Keep the list
-    # contiguous: ts-check-names.test.mjs stops at the first non-entry line.
+    # Must be a superset of EVERY workflow that awaits a ts-check, not just
+    # on-pr-nx: the per-addon on-pr-<pkg> lanes also trigger on
+    # .github/workflows/*<pkg>*.yml, so a workflow-only PR started a consumer
+    # while this producer stayed idle and the await burned its 25 minute
+    # timeout. Keep the list contiguous: ts-check-names.test.mjs stops at the
+    # first non-entry line.
     paths:
       - "packages/**"
       - "cmake/qvac-addon/**"
-      - ".github/workflows/on-pr-ts-nx.yml"
-      - ".github/workflows/reusable-ts-checks.yml"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
@@ -82,6 +83,13 @@ jobs:
     uses: ./.github/workflows/reusable-ts-checks.yml
     with:
       workdir: packages/embed-llamacpp
+
+  ggml-rpc-server-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'ggml-rpc-server')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/ggml-rpc-server
 
   llm-pr-head-ts-checks:
     needs: matrix

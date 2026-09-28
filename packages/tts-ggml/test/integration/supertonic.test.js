@@ -12,6 +12,7 @@ const test = require('brittle')
 const { loadSupertonicTTS, runSupertonicTTS } = require('../utils/runSupertonicTTS')
 const { ensureSupertonicModel } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -46,6 +47,7 @@ test(
     }
 
     const model = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: download.path,
       voice: 'F1',
       language: 'en',
@@ -140,6 +142,7 @@ test(
 
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: download.path },
       voice: 'F1',
@@ -197,6 +200,71 @@ test(
 )
 
 test(
+  'Supertonic TTS (ggml): native chunk streaming (streamChunkTokens) emits engine chunks',
+  { timeout: 600000 },
+  async (t) => {
+    const baseDir = getBaseDir()
+    const download = await ensureSupertonicModel({ targetDir: path.join(baseDir, 'models') })
+    if (!download.success) {
+      t.fail(
+        'Supertonic GGUF not available - registry fetch failed. Run `npm run download-models:registry` or stage models locally.'
+      )
+      return
+    }
+
+    const TTSGgml = require('@qvac/tts-ggml')
+    const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
+      engine: TTSGgml.ENGINE_SUPERTONIC,
+      files: { supertonicModel: download.path },
+      voice: 'F1',
+      streamChunkTokens: 40,
+      streamFirstChunkTokens: 30,
+      config: { language: 'en', useGPU: false },
+      opts: { stats: true }
+    })
+    await model.load()
+    try {
+      const text =
+        'Native streaming splits one request inside the engine. Each chunk is ' +
+        'synthesized and emitted as soon as it is ready, so playback can start ' +
+        'before the whole paragraph has been rendered.'
+      const response = await model.run({ type: 'text', input: text })
+      const chunkIndices = []
+      const isLastFlags = []
+      let totalSamples = 0
+      let lastSampleRate = null
+      await response
+        .onUpdate((d) => {
+          if (d && d.outputArray) {
+            chunkIndices.push(d.chunkIndex)
+            isLastFlags.push(!!d.isLast)
+            totalSamples += d.outputArray.length
+            if (d.sampleRate) lastSampleRate = d.sampleRate
+          }
+        })
+        .await()
+
+      t.ok(chunkIndices.length >= 2, `engine emitted multiple chunks (got ${chunkIndices.length})`)
+      for (let i = 0; i < chunkIndices.length; i++) {
+        t.is(chunkIndices[i], i, `chunk ${i} carries chunkIndex=${i}`)
+      }
+      t.is(isLastFlags.filter(Boolean).length, 1, 'exactly one isLast=true emitted')
+      t.is(isLastFlags[isLastFlags.length - 1], true, 'final chunk carries isLast=true')
+      t.is(lastSampleRate, 44100, 'native streaming chunks report 44.1 kHz')
+      t.ok(totalSamples > 0, 'stream produced audio samples')
+      if (response.stats) {
+        t.is(response.stats.totalSamples, totalSamples, 'stats count exactly the streamed samples')
+      }
+    } finally {
+      try {
+        await model.unload()
+      } catch (_e) {}
+    }
+  }
+)
+
+test(
   'Supertonic TTS (ggml): runStreaming with async iterator emits one job per yielded sentence',
   { timeout: 600000 },
   async (t) => {
@@ -211,6 +279,7 @@ test(
 
     const TTSGgml = require('@qvac/tts-ggml')
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: download.path },
       voice: 'F1',
@@ -265,6 +334,7 @@ test(
     }
 
     const model = await loadSupertonicTTS({
+      threads: TTS_TEST_THREADS,
       supertonicModelPath: download.path,
       voice: 'F1',
       steps: 4,

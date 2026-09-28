@@ -6,7 +6,7 @@
 # and MODEL_S3_BUCKET.
 #
 # Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
-# llm-llamacpp, nmtcpp, parakeet, tts-ggml,
+# ggml-rpc-server, llm-llamacpp, nmtcpp, parakeet, tts-ggml,
 # whispercpp. All prebuild workflows in the monorepo
 # now route through this reusable.
 name: "Prebuilds (reusable)"
@@ -31,6 +31,34 @@ on:
       # bundle prebuilds-<pkg>. Kept so an out-of-repo caller does not hard-fail.
       artifact-name-prefix:
         description: "Deprecated and ignored. Artifact names are derived from the package."
+        type: string
+        required: false
+        default: ""
+      matrix-include:
+        description: >-
+          JSON array of matrix combinations. Each entry requires os, runner_key,
+          platform, and arch; tags and flags are optional. os is also the runner
+          fallback when runner_key does not resolve. Defaults to the canonical
+          native package matrix and may be narrowed by packages with a smaller
+          support surface.
+        type: string
+        required: false
+        default: default
+      desktop-smoke-command:
+        description: Command to run against built prebuilds on desktop targets
+        type: string
+        required: false
+        default: ""
+      post-artifact-build-command:
+        description: >-
+          Optional validation build command run after the release artifact has
+          been uploaded. It may rebuild or replace local outputs without
+          changing the published prebuild.
+        type: string
+        required: false
+        default: ""
+      extra-strip-binary-name:
+        description: Extensionless executable basename to strip in addition to native libraries
         type: string
         required: false
         default: ""
@@ -163,6 +191,10 @@ on:
         type: string
         required: false
         default: ""
+    outputs:
+      reuse_hit:
+        description: Whether a prior matching prebuild artifact was reused
+        value: ${{ jobs.detect-reuse.outputs.reuse_hit }}
 
 permissions:
   contents: read
@@ -229,48 +261,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-22.04
-            platform: linux
-            arch: x64
-            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
-          - os: ubuntu-22.04-arm
-            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
-            platform: linux
-            arch: arm64
-          - os: ubuntu-24.04
-            runner: ${{ needs.runner_names.outputs.ubuntu_2404 }}
-            platform: android
-            arch: arm64
-          - os: macos-15
-            runner: ${{ needs.runner_names.outputs.macos_15 }}
-            platform: ios
-            arch: arm64
-          - os: macos-15
-            runner: ${{ needs.runner_names.outputs.macos_15 }}
-            platform: ios
-            arch: arm64
-            tags: -simulator
-            flags: --simulator
-          - os: macos-15
-            runner: ${{ needs.runner_names.outputs.macos_15 }}
-            platform: ios
-            arch: x64
-            tags: -simulator
-            flags: --simulator
-          - os: macos-15
-            runner: ${{ needs.runner_names.outputs.macos_15 }}
-            platform: darwin
-            arch: arm64
-          - os: macos-15-intel
-            runner: ${{ needs.runner_names.outputs.macos_15_intel }}
-            platform: darwin
-            arch: x64
-          - os: windows-2025
-            platform: win32
-            arch: x64
-            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
-    runs-on: ${{ matrix.runner || matrix.os }}
+        include: ${{ fromJSON(inputs.matrix-include == 'default' && '[{"os":"ubuntu-22.04","runner_key":"linux_ubuntu2204_x64","platform":"linux","arch":"x64"},{"os":"ubuntu-22.04-arm","runner_key":"ubuntu_2204_arm","platform":"linux","arch":"arm64"},{"os":"ubuntu-24.04","runner_key":"ubuntu_2404","platform":"android","arch":"arm64"},{"os":"macos-15","runner_key":"macos_15","platform":"ios","arch":"arm64"},{"os":"macos-15","runner_key":"macos_15","platform":"ios","arch":"arm64","tags":"-simulator","flags":"--simulator"},{"os":"macos-15","runner_key":"macos_15","platform":"ios","arch":"x64","tags":"-simulator","flags":"--simulator"},{"os":"macos-15","runner_key":"macos_15","platform":"darwin","arch":"arm64"},{"os":"macos-15-intel","runner_key":"macos_15_intel","platform":"darwin","arch":"x64"},{"os":"windows-2025","runner_key":"win_2025_x64","platform":"win32","arch":"x64"}]' || inputs.matrix-include) }}
+    runs-on: ${{ needs.runner_names.outputs[matrix.runner_key] || matrix.os }}
     environment: release
     name: ${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
 
@@ -526,6 +518,16 @@ jobs:
         shell: bash
         run: bare-make install
 
+      - name: Smoke-test desktop prebuild
+        if: >-
+          inputs.desktop-smoke-command != '' &&
+          (matrix.platform == 'linux' || matrix.platform == 'darwin' || matrix.platform == 'win32')
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          DESKTOP_SMOKE_COMMAND: ${{ inputs.desktop-smoke-command }}
+        run: bash -c "$DESKTOP_SMOKE_COMMAND"
+
       - name: Strip static libraries (.a) from prebuilds (Linux / MacOS)
         if: matrix.os != 'windows-2025'
         working-directory: ${{ env.WORKDIR }}
@@ -576,10 +578,11 @@ jobs:
           find prebuilds -maxdepth 1 -type d -print || true
 
       - name: Strip debug symbols
-        uses: tetherto/qvac/.github/actions/strip-prebuilds@6e8d3c306a462a58589396cda428d65e015f0d8b
+        uses: ./.github/actions/strip-prebuilds
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
+          extra-names: ${{ inputs.extra-strip-binary-name }}
 
       # Static guard: fail the prebuild if the addon module is left with
       # unresolvable engine symbols (the @qvac/tts-ggml@0.2.1 ggml_backend_is_cpu
@@ -593,8 +596,9 @@ jobs:
           workdir: ${{ env.WORKDIR }}
 
       # Guards against regressing the static-runtime build: addons must link the
-      # static MSVC runtime, so the shipped .bare/.dll must not import the dynamic
-      # Visual C++ runtime (vcruntime140.dll / msvcp140.dll / ucrtbase.dll / the
+      # static MSVC runtime, so shipped .bare/.dll/.exe files must not import
+      # the dynamic Visual C++ runtime (vcruntime140.dll / msvcp140.dll /
+      # ucrtbase.dll / the
       # api-ms-win-crt-* UCRT forwarders). Re-introducing msvcrt.lib or a
       # dynamic-CRT vcpkg triplet would make these appear and fail the build.
       - name: Verify no dynamic C/C++ runtime dependency (Windows)
@@ -642,9 +646,9 @@ jobs:
           # Dynamic C/C++ runtime import names that must never appear.
           $forbidden = 'vcruntime\d', 'msvcp\d', 'msvcr\d', 'msvcrt\.dll', 'ucrtbase', 'api-ms-win-crt', 'concrt\d'
 
-          $binaries = Get-ChildItem -Path "prebuilds" -Recurse -File -Include *.bare, *.dll
+          $binaries = Get-ChildItem -Path "prebuilds" -Recurse -File -Include *.bare, *.dll, *.exe
           if (-not $binaries) {
-            Write-Error "No .bare/.dll binaries found under prebuilds/"
+            Write-Error "No .bare/.dll/.exe binaries found under prebuilds/"
             exit 1
           }
 
@@ -673,6 +677,16 @@ jobs:
         with:
           name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.tags }}
           path: ${{ env.WORKDIR }}/prebuilds
+
+      - name: Run post-artifact validation build
+        if: inputs.post-artifact-build-command != ''
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          BUILD_PLATFORM: ${{ matrix.platform }}
+          BUILD_ARCH: ${{ matrix.arch }}
+          POST_ARTIFACT_BUILD_COMMAND: ${{ inputs.post-artifact-build-command }}
+        run: bash -c "$POST_ARTIFACT_BUILD_COMMAND"
 
   merge:
     runs-on: ubuntu-latest
@@ -720,7 +734,6 @@ jobs:
         with:
           name: prebuilds-${{ steps.pkg.outputs.name }}
           path: prebuilds
-
       # Tag this run so a later no-native-change push of the same PR can reuse the
       # prebuilds-<pkg> just uploaded. native_hash keeps the marker per-package.
       - name: Save prebuild reuse marker

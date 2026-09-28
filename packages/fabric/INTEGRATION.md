@@ -23,7 +23,7 @@ runtime:
   `llama_model_meta_from_file`), and the `common_*` / `string_*` /
   `json_schema_to_grammar` / cpu-params libcommon helpers; desktop consumers
   dynamically link against this
-- **ggml compute backends** — on **Linux and Android**, shipped as shared libraries
+- **ggml compute backends** — on **Linux, Android, and Windows**, shipped as shared libraries
   under `prebuilds/<platform>/qvac__fabric/`
 
 ### Desktop and mobile
@@ -34,12 +34,10 @@ addons link `qvac-fabric::headers` for compile-time includes and
 `include_bare_module`. llama/ggml/common symbols resolve at runtime from the
 shared `.bare`, so the runtime is loaded once per process.
 
-On **Linux**, ggml compute backends are separate `.so` files under
-`prebuilds/<platform>/qvac__fabric/` and load via
-`ggml_backend_load_all_from_path()`. On **macOS, Windows, and iOS** the backends
-are static inside `qvac__fabric.bare` and self-register on load. On **Android**
-the backends ship as shared libraries next to the companion runtime, same as
-Linux.
+On **Linux, Android, and Windows**, ggml compute backends are separate shared
+libraries under `prebuilds/<platform>/qvac__fabric/` and load via
+`ggml_backend_load_all_from_path()`. On **macOS and iOS** the backends are static
+inside `qvac__fabric.bare` and self-register on load.
 
 Consumer addons do **not** need `qvac-fabric` in their own `vcpkg.json`. The
 runtime comes bundled with `@qvac/fabric`.
@@ -124,7 +122,7 @@ target_link_libraries(${my-consumer-addon}_module PRIVATE ${qvac_fabric_target}_
 
 The shared runtime must sit next to the consumer's `.bare` so the dynamic linker
 resolves `qvac__fabric@0.bare` via RPATH. Also ship any ggml backend shared
-libraries that `@qvac/fabric` staged (**Linux and Android**); on macOS, Windows,
+libraries that `@qvac/fabric` staged (**Linux, Android, and Windows**); on macOS
 and iOS the backends are static inside the runtime, so the glob is empty.
 
 ```cmake
@@ -135,7 +133,7 @@ install(FILES $<TARGET_FILE:${qvac_fabric_target}_module>
   RENAME qvac__fabric@0.bare)
 
 file(GLOB _fabric_backends
-  "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${host}/qvac__fabric/*.so")
+  "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${host}/qvac__fabric/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
 if(_fabric_backends)
   install(FILES ${_fabric_backends} DESTINATION ${host}/${addon_name})
 endif()
@@ -148,9 +146,9 @@ endif()
 3. If `qvac__fabric@0.bare` is already loaded (by another addon) → reuses it
    (SONAME match).
 4. `llama_* / ggml_* / common_*` symbols resolve from the single loaded
-   instance. On macOS, Windows, and iOS the static ggml backends inside
-   `qvac__fabric.bare` self-register; on Linux and Android the staged `.so`
-   backends load via `ggml_backend_load_all_from_path()`.
+   instance. On macOS and iOS the static ggml backends inside
+   `qvac__fabric.bare` self-register; on Linux, Android, and Windows the staged
+   backend modules load via `ggml_backend_load_all_from_path()`.
 5. All fabric-based addons share one llama/ggml runtime in memory.
 
 ### CMake targets
@@ -220,9 +218,9 @@ headers are required, not the runtime symbols.
 
 The ggml backend loading path is unchanged: `LlamaLazyInitializeBackend` still
 calls `ggml_backend_load_all_from_path(backendsDir / BACKENDS_SUBDIR)`. On
-**Linux and Android** it loads the staged backend shared libraries; on **macOS,
-Windows, and iOS** the glob finds no `.so` files and the static backends inside
-`qvac__fabric@0.bare` self-register.
+**Linux, Android, and Windows** it loads the staged backend shared libraries;
+on **macOS and iOS** the static backends inside `qvac__fabric@0.bare`
+self-register.
 
 ---
 
@@ -249,7 +247,7 @@ readelf -d prebuilds/<host>/<addon>.bare | grep NEEDED   # → NEEDED qvac__fabr
 | 2 | `vcpkg.json` | `qvac-fabric` is **not** listed; `vk-profiling` feature removed; addon-specific deps remain |
 | 3 | `CMakeLists.txt` | `find_package(qvac-fabric ...)`; `qvac-fabric::headers` + `include_bare_module`; companion install |
 | 4 | `binding.js` | `require('@qvac/fabric')` **before** `require.addon()` |
-| 5 | Companion lib | `qvac__fabric@0.bare` installed in `prebuilds/<host>/<addon>/` (plus backend `.so` on Linux/Android) |
+| 5 | Companion lib | `qvac__fabric@0.bare` installed in `prebuilds/<host>/<addon>/` (plus backend modules on Linux/Android/Windows) |
 | 6 | Build | `npm run build` succeeds; `readelf -d` shows `NEEDED qvac__fabric@0.bare`; consumer `.bare` is small (no embedded ggml/llama) |
 
 ---

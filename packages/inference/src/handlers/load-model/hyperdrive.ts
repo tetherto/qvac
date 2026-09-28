@@ -17,7 +17,8 @@ import {
   checkShardCompleteness,
   measureChecksum,
   extractTensorsFromShards,
-  calculatePercentage
+  calculatePercentage,
+  joinWithinBase
 } from '@/utils/index'
 import { getModelBySrc } from '@/models/registry/index'
 import {
@@ -762,7 +763,7 @@ export async function downloadModelFromHyperdrive(
       const corestoreDir = getCorestoreDir(hyperdriveKey)
       const cacheDir = getModelsCacheDir()
       const sourceHash = generateShortHash(`${hyperdriveKey}/${modelFileName}`)
-      const modelPath = path.join(cacheDir, `${sourceHash}_${modelFileName}`)
+      const modelPath = joinWithinBase(cacheDir, `${sourceHash}_${modelFileName}`)
 
       // First, check if we already have a valid cached file (only if we have model metadata)
       if (model) {

@@ -19,6 +19,7 @@ const test = require('brittle')
 const { loadParlerTTS, runParlerTTS } = require('../utils/runParlerTTS')
 const { ensureParlerModel, ensureWhisperModel } = require('../utils/downloadModel')
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isDarwin = platform === 'darwin'
@@ -77,7 +78,12 @@ for (const { variant } of PARLER_WER_TIERS) {
       }
 
       const useGPU = isApple && !NO_GPU
-      const model = await loadParlerTTS({ parlerModelPath: download.path, seed: 42, useGPU })
+      const model = await loadParlerTTS({
+        threads: TTS_TEST_THREADS,
+        parlerModelPath: download.path,
+        seed: 42,
+        useGPU
+      })
       const entries = []
       try {
         for (const text of WER_SENTENCES) {

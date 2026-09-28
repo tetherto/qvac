@@ -5,7 +5,13 @@ const path = require('bare-path')
 const fs = require('bare-fs')
 const os = require('bare-os')
 const ASRGgml = require('../../index')
-const { ensureWhisperModel, getAssetPath, createAudioStream, isMobile } = require('./helpers.js')
+const {
+  ensureWhisperModel,
+  getAssetPath,
+  createAudioStream,
+  isMobile,
+  WHISPER_TEST_THREADS
+} = require('./helpers.js')
 
 // On mobile, runs fewer transcriptions to avoid memory pressure
 test(
@@ -61,7 +67,8 @@ test(
       engine: 'whisper',
       path: modelPath,
       whisperConfig: {
-        language: 'en'
+        language: 'en',
+        n_threads: WHISPER_TEST_THREADS
       }
     }
 

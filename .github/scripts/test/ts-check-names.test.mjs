@@ -166,23 +166,41 @@ test('each producer job is gated on the nx-affected list', () => {
 // close the name loop; this closes the trigger loop.
 test('on-pr-ts-nx triggers on everything on-pr-nx triggers on', () => {
   const producer = triggerPaths(readFileSync(producerPath, 'utf8'), 'pull_request')
-  const consumer = triggerPaths(
-    readFileSync(join(workflows, 'on-pr-nx.yml'), 'utf8'),
-    'pull_request_target'
-  )
-
   assert.ok(producer, 'on-pr-ts-nx has no pull_request trigger')
-  assert.ok(consumer, 'on-pr-nx has no pull_request_target trigger')
-  assert.ok(
-    consumer.length > 0,
-    'on-pr-nx now fires on every path, so on-pr-ts-nx cannot be a superset by paths alone'
-  )
 
-  const uncovered = consumer.filter((path) => !producer.some((glob) => covers(glob, path)))
+  // Every workflow that awaits a ts-check, not just on-pr-nx. The per-addon
+  // lanes trigger on .github/workflows/*<pkg>*.yml, so a workflow-only PR
+  // started one of them while the producer stayed idle and the await timed out.
+  const consumers = readdirSync(workflows)
+    .filter((name) => /\.ya?ml$/.test(name) && name !== 'on-pr-ts-nx.yml')
+    .filter((name) => /pr-head-ts-checks/.test(readFileSync(join(workflows, name), 'utf8')))
+
+  // Floor, not an exact count: it guards against the filter above silently
+  // matching nothing, which would make the loop below vacuous. Dropped from 8 to
+  // 3 when the per-addon on-pr-<pkg>.yml lanes were deleted, leaving on-pr-nx
+  // and the two carve-outs that keep their own orchestrators.
+  assert.ok(consumers.length >= 3, `expected at least 3 awaiting consumers, found ${consumers.length}`)
+
+  const uncovered = []
+  for (const name of consumers) {
+    const source = readFileSync(join(workflows, name), 'utf8')
+    for (const trigger of ['pull_request', 'pull_request_target']) {
+      const paths = triggerPaths(source, trigger)
+      if (!paths) continue
+      assert.ok(
+        paths.length > 0,
+        `${name} fires on every path, so on-pr-ts-nx cannot be a superset by paths alone`
+      )
+      for (const path of paths) {
+        if (!producer.some((glob) => covers(glob, path))) uncovered.push(`${name}: ${path}`)
+      }
+    }
+  }
+
   assert.deepEqual(
     uncovered,
     [],
-    'on-pr-nx triggers on these but on-pr-ts-nx does not, so the producer never ' +
-      'runs and every await times out:\n  ' + uncovered.join('\n  ')
+    'these trigger a ts-check await but on-pr-ts-nx does not run on them, so the ' +
+      'producer never runs and the await times out:\n  ' + uncovered.join('\n  ')
   )
 })
