@@ -80,7 +80,7 @@ public:
    * Members are destroyed in reverse order of declaration, ensuring
    * llmContext_ is destroyed before backendsHandle_.
    */
-  ~LlamaModel() override = default;
+  ~LlamaModel() override;
 
   std::string getName() const final { return "LlamaModel"; }
   void setWeightsForFile(
@@ -246,6 +246,10 @@ public:
       const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
 
 private:
+  /// Writes every conversation with unsaved turns to its `cacheKey` file:
+  /// the active single-prompt session, parked batch conversations and the
+  /// RAM tier. Run before the state is torn down (unload, reload).
+  void flushResidentCaches() noexcept;
   friend class LlamaFinetuner;
   // Unit tests reach internals (scheduler, single-prompt context) through this
   // peer instead of public `*ForTesting()` accessors. See
@@ -356,8 +360,11 @@ private:
     /// the single-prompt context and to every batch driver.
     qvac_lib_inference_addon_llama::cache::CheckpointPolicy
         cacheCheckpointPolicy_;
-    /// RAM tier budget for batch conversation states (`cache_ram_mib`).
+    /// RAM tier budget for conversation states (`cache_ram_mib`).
     uint64_t cacheRamBytes_ = 0;
+    /// The RAM tier itself, shared by the single-prompt cache and the batch
+    /// scheduler.
+    std::shared_ptr<batching::SlotStateCache> ramTier_;
 
     // configuration values parsed from configFilemap
     std::optional<load_fit_normalization::NormalizedFitSnapshot>

@@ -476,7 +476,11 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
     }
   }
   if (!isCacheLoaded && !key.empty()) {
-    if (std::optional<SlotStateCacheEntry> kept = ramTier_.take(key)) {
+    std::optional<SlotStateCacheEntry> kept;
+    if (ramTier_) {
+      kept = ramTier_->take(key);
+    }
+    if (kept.has_value()) {
       const bool usable =
           !(kept->activeCacheSavedToDisk &&
             persistedCacheBackingStoreMissing(key));
@@ -490,6 +494,7 @@ uint32_t ContinuousBatchScheduler::submitLocked(QueuedRequest&& queued) {
           driver->adoptResidentState(kept->ledgerWords)) {
         isCacheLoaded = true;
         activeCacheSavedToDisk = kept->activeCacheSavedToDisk;
+        adoptedDirtyState = kept->dirty;
         adoptedCheckpoints = std::move(kept->checkpoints);
         ++ramTierHits_;
       } else {
@@ -1593,7 +1598,6 @@ void ContinuousBatchScheduler::clearLocked() noexcept {
       clearSeqKv(seqId);
     }
   }
-  ramTier_.clear();
   cancelKeyDeferredLocked();
   busyKeys_.clear();
   checkpointStore_.clear();
@@ -1686,9 +1690,33 @@ void ContinuousBatchScheduler::cancelKeyDeferredLocked() noexcept {
   }
 }
 
-void ContinuousBatchScheduler::setCacheRamBudget(uint64_t bytes) {
+void ContinuousBatchScheduler::setRamTier(
+    std::shared_ptr<SlotStateCache> ramTier) {
   std::scoped_lock lock(mutex_);
-  ramTier_.setBudget(bytes);
+  ramTier_ = std::move(ramTier);
+}
+
+void ContinuousBatchScheduler::flushForUnload() {
+  std::scoped_lock lock(mutex_);
+  if (numActiveLocked() > 0) {
+    logTeardownFailureNoexcept(
+        "unload flush skipped: a batch request is still running");
+    return;
+  }
+  for (uint32_t seqId = 0; seqId < parked_.size(); ++seqId) {
+    auto& parked = parked_[seqId];
+    if (!parked.has_value() || !parked->dirty) {
+      continue;
+    }
+    if (parked->activeCacheSavedToDisk &&
+        persistedCacheBackingStoreMissing(parked->cacheKey)) {
+      continue;
+    }
+    if (writeStateToFileLocked(seqId, parked->cacheKey, parked->ledgerWords)) {
+      parked->dirty = false;
+      parked->activeCacheSavedToDisk = true;
+    }
+  }
 }
 
 std::vector<uint32_t> ContinuousBatchScheduler::parkedSeqIds() const {
@@ -1704,6 +1732,11 @@ std::vector<uint32_t> ContinuousBatchScheduler::parkedSeqIds() const {
 
 void ContinuousBatchScheduler::evictParked(uint32_t seqId) {
   std::scoped_lock lock(mutex_);
+  // A running slot may be mid-decode with the lock released; the sequence
+  // then cannot be touched safely (and is not parked anyway).
+  if (numActiveLocked() > 0) {
+    return;
+  }
   evictParkedLocked(seqId);
 }
 
@@ -1763,15 +1796,10 @@ void ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId) noexcept {
     // conversation; do not bring it back.
     const bool dropped = parked.activeCacheSavedToDisk &&
                          persistedCacheBackingStoreMissing(parked.cacheKey);
-    // Unsaved turns go to the file first, the same auto-save the
-    // single-prompt path does when it switches keys, so nothing is lost.
-    bool onDisk = !parked.dirty;
-    if (!dropped && parked.dirty) {
-      onDisk =
-          writeStateToFileLocked(seqId, parked.cacheKey, parked.ledgerWords);
-    }
+    // With the RAM tier on, the state moves there with its unsaved turns and
+    // reaches the file only when the tier lets it go or the model unloads.
     bool inRam = false;
-    if (!dropped && ramTier_.enabled()) {
+    if (!dropped && ramTier_ && ramTier_->enabled()) {
       const auto seq = static_cast<llama_seq_id>(seqId);
       const size_t size = llama_state_seq_get_size_ext(shared_.lctx, seq, 0);
       SlotStateCacheEntry entry;
@@ -1783,16 +1811,20 @@ void ContinuousBatchScheduler::evictParkedLocked(uint32_t seqId) noexcept {
       if (size > 0 && entry.state.size() == size &&
           llama_state_seq_get_data_ext(
               shared_.lctx, entry.state.data(), size, seq, 0) == size) {
-        entry.ledgerWords = std::move(parked.ledgerWords);
+        entry.ledgerWords = parked.ledgerWords;
         entry.checkpoints = std::move(parked.checkpoints);
-        entry.activeCacheSavedToDisk = onDisk;
-        inRam = ramTier_.insert(parked.cacheKey, std::move(entry));
+        entry.dirty = parked.dirty;
+        entry.activeCacheSavedToDisk = parked.activeCacheSavedToDisk;
+        inRam = ramTier_->insert(parked.cacheKey, std::move(entry));
         if (!inRam) {
-          // Too large for the whole budget: it stays on disk only, and
-          // keeps its checkpoints for the next load of that file.
           parked.checkpoints = std::move(entry.checkpoints);
         }
       }
+    }
+    // Otherwise unsaved turns go to the file now, the same auto-save the
+    // single-prompt path does when it switches keys, so nothing is lost.
+    if (!dropped && !inRam && parked.dirty) {
+      writeStateToFileLocked(seqId, parked.cacheKey, parked.ledgerWords);
     }
     if (!dropped && !inRam && !parked.checkpoints.empty()) {
       checkpointStore_[parked.cacheKey] = std::move(parked.checkpoints);

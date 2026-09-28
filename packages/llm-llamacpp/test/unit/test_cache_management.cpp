@@ -1862,3 +1862,188 @@ TEST(BatchedCacheResidencyTest, SameKeyPromptsRunInOrder) {
       << "the second prompt did not start from the first one's state";
   fs::remove(key);
 }
+
+namespace {
+
+std::unique_ptr<LlamaModel> loadSinglePromptModel(const char* cacheRamMib) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = "2048";
+  config["n_predict"] = "12";
+  config["temp"] = "0";
+  config["seed"] = "5";
+  if (cacheRamMib != nullptr) {
+    config["cache_ram_mib"] = cacheRamMib;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = test_common::BaseTestModelPath::get();
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::string(), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+struct SingleTurn {
+  std::string output;
+  size_t reuse = 0;
+};
+
+SingleTurn
+runSingle(LlamaModel& model, const std::string& input, const std::string& key) {
+  LlamaModel::Prompt prompt;
+  prompt.input = input;
+  prompt.cacheKey = key;
+  SingleTurn turn;
+  turn.output = model.processPrompt(prompt);
+  if (auto* text = dynamic_cast<TextLlmContext*>(
+          LlamaModelTestPeer::llmContext(model))) {
+    turn.reuse = text->lastCacheReuseForTesting();
+  }
+  return turn;
+}
+
+} // namespace
+
+// With `cache_ram_mib`, switching the single-prompt path between chats moves
+// the outgoing one to host RAM instead of writing its file, and switching
+// back restores it from there. Unsaved turns reach the files when the model
+// is unloaded.
+TEST(SinglePromptRamTierTest, KeySwitchesStayOffDiskUntilUnload) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string a = "single_ram_a.bin";
+  const std::string b = "single_ram_b.bin";
+  fs::remove(a);
+  fs::remove(b);
+  std::string firstA;
+  {
+    auto model = loadSinglePromptModel("512");
+    ASSERT_TRUE(model->isLoaded());
+    firstA = runSingle(*model, userTurns({"Say one word: apple."}), a).output;
+    runSingle(*model, userTurns({"Say one word: banana."}), b);
+    EXPECT_FALSE(fs::exists(a)) << "the switch wrote the file instead of RAM";
+
+    const SingleTurn back = runSingle(
+        *model, userTurns({"Say one word: apple.", firstA, "Again."}), a);
+    EXPECT_GT(back.reuse, 0u) << "switching back did not restore from RAM";
+    EXPECT_FALSE(fs::exists(a));
+    EXPECT_FALSE(fs::exists(b));
+  }
+  EXPECT_TRUE(fs::exists(a)) << "unload did not flush the active chat";
+  EXPECT_TRUE(fs::exists(b)) << "unload did not flush the RAM tier";
+
+  // The flushed files are ordinary cache files.
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const SingleTurn reloaded =
+      runSingle(*model, userTurns({"Say one word: banana.", "x", "Again."}), b);
+  EXPECT_GT(reloaded.reuse, 0u);
+  model.reset();
+  fs::remove(a);
+  fs::remove(b);
+}
+
+// Without the tier the old behaviour stays: a key switch writes the file.
+TEST(SinglePromptRamTierTest, WithoutTheTierAKeySwitchWritesTheFile) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string a = "single_noram_a.bin";
+  fs::remove(a);
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, userTurns({"Say one word: apple."}), a);
+  runSingle(*model, userTurns({"Say one word: banana."}), "single_noram_b.bin");
+  EXPECT_TRUE(fs::exists(a));
+  model.reset();
+  fs::remove(a);
+  fs::remove("single_noram_b.bin");
+}
+
+// A full budget pushes the oldest conversation out of RAM; its unsaved turns
+// are written to its file first, so it is never lost.
+TEST(SinglePromptRamTierTest, AFullBudgetWritesTheDroppedChatToItsFile) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "full_ram_a.bin", "full_ram_b.bin", "full_ram_c.bin"};
+  const auto removeKeys = [&] {
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+  };
+  // Long enough that one state spans a few MiB, so the budget can be sized
+  // for exactly one of them.
+  std::string filler;
+  for (int i = 0; i < 80; ++i) {
+    filler += "Note " + std::to_string(i) + " is kept. ";
+  }
+  const auto chat = [&](const char* word) {
+    return userTurns({filler + "Say one word: " + word + "."});
+  };
+
+  // Measure one stored conversation, then size the budget for one, not two.
+  removeKeys();
+  uint64_t oneEntry = 0;
+  {
+    auto probe = loadSinglePromptModel("512");
+    ASSERT_TRUE(probe->isLoaded());
+    runSingle(*probe, chat("apple"), keys[0]);
+    runSingle(*probe, chat("banana"), keys[1]);
+    ASSERT_EQ(LlamaModelTestPeer::ramTier(*probe)->size(), 1u);
+    oneEntry = LlamaModelTestPeer::ramTier(*probe)->totalBytes();
+  }
+  removeKeys();
+  const uint64_t mib = 1024ULL * 1024ULL;
+  const std::string budget = std::to_string((oneEntry * 3 / 2 + mib - 1) / mib);
+  ASSERT_LT((oneEntry * 3 / 2 + mib - 1) / mib * mib, oneEntry * 2)
+      << "entries too small to separate one from two at MiB granularity";
+
+  auto model = loadSinglePromptModel(budget.c_str());
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, chat("apple"), keys[0]);
+  runSingle(*model, chat("banana"), keys[1]);
+  EXPECT_FALSE(fs::exists(keys[0]));
+  runSingle(*model, chat("cherry"), keys[2]);
+  EXPECT_TRUE(fs::exists(keys[0])) << "the dropped chat was not written";
+  EXPECT_FALSE(fs::exists(keys[1])) << "the newer chat should still be in RAM";
+  model.reset();
+  removeKeys();
+}
+
+// Batch counterpart: with the tier on, an evicted conversation keeps its
+// unsaved turns in RAM instead of writing its file; unload writes them.
+TEST(BatchedCacheResidencyTest, RamTierDefersTheFileUntilUnload) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "defer_a.bin", "defer_b.bin", "defer_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadBatchedModel("512");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    const BatchedTurn a =
+        harness.run(userTurns({"Say one word: apple."}), keys[0]);
+    harness.run(userTurns({"Say one word: banana."}), keys[1]);
+    harness.run(userTurns({"Say one word: cherry."}), keys[2]);
+    EXPECT_FALSE(fs::exists(keys[0])) << "the eviction wrote through";
+    const BatchedTurn back = harness.run(
+        userTurns({"Say one word: apple.", a.output, "Again."}), keys[0]);
+    EXPECT_GT(back.reuse, 0u);
+    EXPECT_EQ(harness.scheduler().ramTierHitsForTesting(), 1u);
+    for (const auto& key : keys) {
+      EXPECT_FALSE(fs::exists(key)) << key;
+    }
+  }
+  for (const auto& key : keys) {
+    EXPECT_TRUE(fs::exists(key)) << key << " was not flushed at unload";
+    fs::remove(key);
+  }
+}

@@ -32,6 +32,13 @@ public:
     return model.state_ ? model.state_->batchScheduler_.get() : nullptr;
   }
 
+  /// The RAM tier shared by the single-prompt cache and the scheduler.
+  static qvac_lib_inference_addon_llama::batching::SlotStateCache*
+  ramTier(LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.state_ ? model.state_->ramTier_.get() : nullptr;
+  }
+
   /// The loaded single-prompt context, for driver-level accounting tests.
   /// Null before the model has loaded.
   static LlmContext* llmContext(LlamaModel& model) {

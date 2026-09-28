@@ -98,11 +98,53 @@ void LlamaModel::reload(
   setInitLoader(InitLoader::LOADER_TYPE::IMMEDIATE, newFinetuneOverrides);
 }
 
+LlamaModel::~LlamaModel() {
+  cancelInference();
+  std::unique_lock lock(stateMtx_);
+  flushResidentCaches();
+}
+
+void LlamaModel::flushResidentCaches() noexcept {
+  // Conversations kept in memory between requests have turns their files may
+  // not hold yet; a clean unload must not lose them. Order: the scheduler
+  // first (its parked sequences share the context with the single-prompt
+  // session), then the active session, then the RAM tier.
+  if (!state_) {
+    return;
+  }
+  try {
+    if (state_->batchScheduler_) {
+      state_->batchScheduler_->flushForUnload();
+    }
+    // The session lives in the shared context: only touch it when no job
+    // can still be decoding there.
+    if (state_->cacheManager_.has_value() && activeSingleJobs_.load() == 0 &&
+        activeBatchJobs_.load() == 0) {
+      state_->cacheManager_->flushForUnload();
+    }
+    if (state_->ramTier_) {
+      state_->ramTier_->flushDirty();
+    }
+  } catch (const std::exception& e) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "[LlamaModel] flushing cached conversations failed: %s\n",
+            e.what()));
+  } catch (...) {
+    QLOG_IF(
+        Priority::WARNING,
+        "[LlamaModel] flushing cached conversations failed\n");
+  }
+}
+
 void LlamaModel::setInitLoader(
     std::optional<InitLoader::LOADER_TYPE> loaderType,
     std::optional<FinetuneConfigOverrides> newFinetuneOverrides) {
   cancelInference();
   std::unique_lock lock(stateMtx_);
+  // A reload discards the contexts; keep what their conversations hold.
+  flushResidentCaches();
   // Unconditionally stop the old contexts before destroying them, regardless
   // of job counters. cancel() above only routes to active engines (counters >
   // 0), but reload() must clean up *any* residual state in the old context
@@ -265,6 +307,9 @@ void LlamaModel::init(bool acquireLock) {
     snap->cacheManager_.emplace(
         snap->llmContext_.get(),
         [this](bool resetStats) { this->resetState(resetStats); });
+    snap->ramTier_ =
+        std::make_shared<batching::SlotStateCache>(snap->cacheRamBytes_);
+    snap->cacheManager_->setRamTier(snap->ramTier_);
   }
 
   if (isMultiBatchActivated(*snap)) {
@@ -395,7 +440,7 @@ LlamaModel::initBatchScheduler(ReloadableState& state) {
             shared,
             state.llmContext_->visionContext(),
             state.cacheCheckpointPolicy_));
-    scheduler->setCacheRamBudget(state.cacheRamBytes_);
+    scheduler->setRamTier(state.ramTier_);
     return scheduler;
   } catch (const std::invalid_argument& e) {
     throw qvac_errors::StatusError(

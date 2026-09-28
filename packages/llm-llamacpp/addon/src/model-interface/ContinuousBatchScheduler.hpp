@@ -394,10 +394,14 @@ public:
   /// is running, for the same reason as `cancel(seqId)`.
   void clear();
 
-  /// Byte budget of the RAM tier that keeps conversation states moved out of
-  /// their slot (`cache_ram_mib`); 0 disables it. Resident slots do not
-  /// depend on it.
-  void setCacheRamBudget(uint64_t bytes);
+  /// RAM tier that keeps conversation states moved out of their slot
+  /// (`cache_ram_mib`), shared with the single-prompt path. Null or a zero
+  /// budget disables it. Resident slots do not depend on it.
+  void setRamTier(std::shared_ptr<SlotStateCache> ramTier);
+
+  /// Writes every parked conversation with unsaved turns to its `cacheKey`
+  /// file. Run when the model is unloaded; skipped while a slot is decoding.
+  void flushForUnload();
 
   /// Sequences that hold a parked conversation (a committed keyed request's
   /// state kept for the next request on its `cacheKey`).
@@ -739,7 +743,7 @@ private:
   };
   std::vector<std::optional<ParkedState>> parked_;
   uint64_t parkClock_ = 0;
-  SlotStateCache ramTier_;
+  std::shared_ptr<SlotStateCache> ramTier_;
   /// Keys with a request in a slot. A request on a busy key waits in
   /// `keyDeferred_` so each key is served in order and never forks.
   std::unordered_set<std::string> busyKeys_;
