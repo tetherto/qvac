@@ -138,7 +138,7 @@ export function mapAddonEvent(
 // packed bundle), so fall back to this addon's own prebuilds, where the mobile
 // packaging stages the backends. The native side appends BACKENDS_SUBDIR
 // ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir(): string {
+export function resolveBackendsDir(): string {
   try {
     const fabricPkg = require.resolve("@qvac/fabric/package");
     const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");

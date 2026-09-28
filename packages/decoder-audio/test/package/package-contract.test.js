@@ -145,3 +145,10 @@ test('production tarball install includes mobile runtime modules', () => {
     fs.rmSync(temporaryRoot, { recursive: true, force: true })
   }
 })
+
+test('generated output check keeps handwritten streaming examples', async () => {
+  const { isHandwritten } = await import('../../scripts/generated-paths.mjs')
+  assert.equal(isHandwritten('examples/stream-decode.js'), true)
+  assert.equal(isHandwritten('index.js'), false)
+  assert.equal(isHandwritten('utils/decode.js'), false)
+})

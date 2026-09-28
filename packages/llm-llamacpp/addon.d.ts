@@ -88,6 +88,7 @@ export type MappedAddonEvent = {
  * `FinetuneProgress`, or `null` to drop it.
  */
 export declare function mapAddonEvent(rawEvent: unknown, rawData: unknown, rawError: unknown): MappedAddonEvent | null;
+export declare function resolveBackendsDir(): string;
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */

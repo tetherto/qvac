@@ -799,6 +799,13 @@ test('every mobile dispatch offers the run-id route, or is a pinned exemption', 
   assert.deepEqual(missing, [], `incomplete prebuild_run_id wiring:\n${missing.join('\n')}`)
 })
 
+test('ggml-rpc-server skips same-run prebuilds for a pinned run and verifies the source', () => {
+  const source = read('.github/workflows/integration-mobile-test-ggml-rpc-server.yml')
+  assert.match(source, /prebuild-manual:\n\s+if: inputs\.platform != '' && inputs\.prebuild_run_id == ''/)
+  assert.match(source, /prebuild-run-id: \$\{\{ inputs\.prebuild_run_id \}\}/)
+  assert.match(source, /RESOLVED: \$\{\{ steps\.setup\.outputs\.prebuild-source-run-id \}\}/)
+})
+
 // The dispatch inputs are what people copy from, and the action rejects the
 // combination, so the descriptions must say so.
 test('the run-id input documents its precedence and the mutual exclusion', () => {
@@ -827,6 +834,10 @@ test('the run-id input documents its precedence and the mutual exclusion', () =>
 test('the documented route is the one docs/ci/MOBILE-ON-DEMAND.md tells people to use', () => {
   const docs = read('docs/ci/MOBILE-ON-DEMAND.md')
   assert.match(docs, /prebuild_run_id/, 'the docs must document the input')
+  const rpcDispatch = docs.split('### ggml-rpc-server dispatch\n')[1]?.split('### Quick start')[0]
+  assert.ok(rpcDispatch, 'the ggml-rpc-server dispatch example must exist')
+  assert.match(rpcDispatch, /--ref main -f ref="refs\/pull\/\$PR\/head"/,
+    'fork PRs must dispatch an upstream workflow that checks out the PR head')
   // The GPR pin stays documented for the cross-branch / published cases.
   assert.match(docs, /@tetherto\/<addon>-mono/)
 })

@@ -155,6 +155,7 @@ export interface ParakeetRuntimeStats extends RuntimeStatsCore {
   totalEncodedFrames: number;
   gpuUnsupported: number;
   encoderOnCoreml: number;
+  encoderUsedCoreml?: number;
   /** Sortformer only: 1 when the v2.1 AOSC speaker cache was active. */
   aoscActive?: number;
 }
