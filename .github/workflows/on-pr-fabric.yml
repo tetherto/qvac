@@ -193,6 +193,7 @@ jobs:
       # qvac-fabric[hip-backend]. pull_request_target loads this YAML from
       # main, so cpp-lint would otherwise fail at find_dependency(hip).
       include-rocm-sdk: true
+      linux-extra-packages: libibverbs-dev
 
   detect-fabric-stack:
     if: needs.authorize.outputs.allowed == 'true'
