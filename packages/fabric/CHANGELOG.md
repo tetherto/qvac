@@ -5,9 +5,15 @@
 ### Added
 
 - Linux platform packages now ship the RPC backend with RDMA auto-negotiation
-  and TCP fallback. Building requires `libibverbs-dev`; hosts using RPC must
-  provide `libibverbs.so.1`, and RDMA use also requires the provider package
-  for the host's hardware.
+  and TCP fallback. Building requires `libibverbs-dev`, and RDMA use requires
+  the provider package for the host's hardware.
+
+### Changed
+
+- The Linux RPC backend now links `libibverbs.so.1` (`libibverbs1` on
+  Debian/Ubuntu), so hosts that use RPC must provide it even when connections
+  fall back to TCP. Without it the RPC backend is skipped at load time and
+  consumers report no RPC backend. Other backends are unaffected.
 
 ## [0.18.0] - Unreleased
 
