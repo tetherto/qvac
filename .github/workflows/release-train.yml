@@ -288,6 +288,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Waits on build-sdk-python as well: tetherto-qvac-sdk ships at @qvac/sdk's
+  # version, so a stale generate.py or a version mismatch must stop npm too, as
+  # it does in publish-sdk.yml, not only PyPI after npm has shipped.
   publish-npm:
     name: Publish the train to npm
     needs:
@@ -295,9 +298,11 @@ jobs:
       - authorize
       - train
       - build
+      - build-sdk-python
     if: >-
       needs.authorize.outputs.allowed == 'true' &&
       needs.build.result == 'success' &&
+      needs.build-sdk-python.result == 'success' &&
       needs.train.result == 'success' &&
       !(github.event_name == 'workflow_dispatch' && inputs.publish_pypi_only == true)
     runs-on: ubuntu-latest
