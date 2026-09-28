@@ -6,32 +6,21 @@ import { makeWorkspace, readRepoFile, runBashStep, workflowStepRun } from '../li
 const WORKFLOW = 'pr-gate-merge.yml'
 const STEP = 'Build package lists'
 const STEP_ANCHOR = `- name: ${STEP}`
-const ALL_PACKAGES_KEY = 'ALL_PACKAGES: >-'
+const ALL_PACKAGES_LINE = /^\s*ALL_PACKAGES: '(.+)'$/
 const SHARED_CI_ONLY = '["shared-ci"]'
 const ONE_PACKAGE = '["tts-ggml","shared-ci"]'
 const OUTPUT_LINE = /^[a-z-]+=\S/
 const ONE_PACKAGE_PER_LINE = 1
 
-function indentOf(line) {
-  return line.length - line.trimStart().length
-}
-
-function linesAfter(lines, index, parentIndent) {
-  const body = []
-  for (let i = index + 1; i < lines.length && indentOf(lines[i]) > parentIndent; i++) {
-    body.push(lines[i])
-  }
-  return body
-}
-
 function allPackagesValue() {
   const lines = readRepoFile(`.github/workflows/${WORKFLOW}`).split('\n')
   const stepIndex = lines.findIndex((line) => line.trim() === STEP_ANCHOR)
-  const keyIndex = lines.findIndex((line, i) => i > stepIndex && line.trim() === ALL_PACKAGES_KEY)
-  assert.ok(stepIndex !== -1 && keyIndex !== -1, `${ALL_PACKAGES_KEY} not found under ${STEP}`)
-  const body = linesAfter(lines, keyIndex, indentOf(lines[keyIndex]))
-  const blockIndent = Math.min(...body.map(indentOf))
-  return body.map((line) => line.slice(blockIndent)).join('\n')
+  const match = lines
+    .slice(stepIndex + 1)
+    .map((line) => line.match(ALL_PACKAGES_LINE))
+    .find(Boolean)
+  assert.ok(stepIndex !== -1 && match, `ALL_PACKAGES not found under ${STEP}`)
+  return match[1]
 }
 
 function workflowPackages() {
