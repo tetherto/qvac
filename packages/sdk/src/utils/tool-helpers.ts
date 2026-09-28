@@ -17,6 +17,10 @@ export type ToolInput<T extends ZodObjectType = ZodObjectType> = {
   description: string
   parameters: T
   handler?: ToolHandler
+  /** Keep this tool's parameter schema out of the initial prompt; see `Tool.deferLoading`. */
+  deferLoading?: boolean
+  /** Heading this tool is listed under in the deferred catalog. */
+  group?: string
 }
 
 function zodTypeToJsonSchemaType(
@@ -110,6 +114,8 @@ export function convertToolInput(input: ToolInput): Tool {
     type: 'function',
     name: input.name,
     description: input.description,
+    ...(input.deferLoading !== undefined && { deferLoading: input.deferLoading }),
+    ...(input.group !== undefined && { group: input.group }),
     parameters: {
       type: 'object',
       properties,

@@ -138,6 +138,13 @@ export {
 } from '@/schemas/index'
 
 export { type ToolInput, type ToolHandler } from '@/utils/tool-helpers'
+export {
+  TOOL_SEARCH_NAME,
+  buildToolSearchTool,
+  executeToolSearch,
+  loadedToolNames,
+  searchDeferredTools
+} from '@/utils/tools/defer'
 
 // The full value-clean schema, profiling, and constant barrels: the @qvac/sdk client
 // and worker source every internal schema/const/profiling name from here, so it

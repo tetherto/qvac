@@ -21,6 +21,7 @@ auto qvac_audiogen_ggml_exports(js_env_t* env, js_value_t* exports) -> js_value_
   V("reload", qvac::audiogenggml::addon_js::reload)
   // Async load wrapper (deferred multi-stage GGUF parse on a worker thread).
   V("activate", qvac::audiogenggml::addon_js::activate)
+  V("assessFit", qvac::audiogenggml::addon_js::assessFit)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)

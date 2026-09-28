@@ -14,12 +14,20 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-25
+
 ### Changed
 
+- Update the `@qvac/decoder-audio` development dependency to `^0.7.0` for the audio decoding examples.
 - Raise the `ggml-speech` floor to `2026-09-23` and the `speech-cpp` floor to `2026-09-23#1`: the speech ggml now tracks upstream ggml 0.20.2 (was 0.10.2), and fixes a crash in CosyVoice3 GPU synthesis on NVIDIA GPUs with cooperative-matrix2 support. Same models, same GPU backends, no API change.
 
 ### Added
 
+- `RuntimeStats.encoderUsedCoreml` for Parakeet: `1` when every offline ASR
+  transcription in the job ran its encoder on the Core ML sidecar, `0` when any
+  fell back to ggml. `encoderOnCoreml` keeps reporting only that a sidecar
+  loaded. The field is absent after Sortformer diarization and streaming jobs,
+  where the engine does not report per-call routing.
 - Cache-aware streaming for `parakeet-unified-en-0.6b`. The engine keeps
   per-layer attention and convolution caches across steps instead of
   re-encoding a sliding window, so `streamingChunkMs` now selects a trained
@@ -32,17 +40,18 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 - Raise the `speech-cpp` floor to `2026-09-18#1`, keeping the speech packages on
   one engine stack. The pinned engine adds cache-aware streaming for the
-  Unified RNN-T model, on top of the optional Apple-only Core ML sidecar for
-  the Sortformer diarization encoder that the prebuilds keep disabled.
+  Unified RNN-T model; its streaming encoder stays on ggml even when a Core ML
+  sidecar is staged.
 - Raise the `speech-cpp` floor to `2026-09-18`, keeping the speech packages on
   one engine stack. The pinned engine adds an Apple-only Core ML sidecar for the
   Parakeet Unified RNN-T encoder, presence-driven on a compiled `.mlmodelc` next
   to the model file and falling back to ggml without it, so published behavior
   is unchanged unless that file is shipped.
 - Raise the `speech-cpp` floor to `2026-09-16`, keeping the speech packages on
-  one engine stack. The pinned engine adds an optional Apple-only Core ML
-  sidecar for the Sortformer diarization encoder; the prebuilds keep it
-  disabled, so published behavior is unchanged.
+  one engine stack. The pinned engine adds an Apple-only Core ML sidecar for
+  the Sortformer v2.1 diarization encoder (batch and AOSC), presence-driven on
+  compiled `.mlmodelc` files next to the model file, so published behavior is
+  unchanged unless those files are shipped.
 - Add Whisper `contextParams["main-gpu"]` / `contextParams.main_gpu` selection
   for raw ggml registry indices plus `dedicated` and `integrated` classes.
   The selector is mutually exclusive with `gpu_device`, does not enable GPU by

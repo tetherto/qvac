@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Tool } from '@qvac/sdk'
+import { TOOL_SEARCH_NAME, type Tool } from '@qvac/sdk'
 
 // ─── Wire-shape zod building blocks ────────────────────────────────────
 
@@ -39,9 +39,13 @@ export const toolDef = z
       .object({
         name: z.string(),
         description: z.string().optional(),
-        parameters: z.record(z.string(), z.unknown()).optional()
+        parameters: z.record(z.string(), z.unknown()).optional(),
+        defer_loading: z.boolean().optional(),
+        group: z.string().optional()
       })
-      .optional()
+      .optional(),
+    defer_loading: z.boolean().optional(),
+    group: z.string().optional()
   })
   .passthrough()
 
@@ -113,10 +117,16 @@ export type ResponseFormat =
 
 interface OpenAITool {
   type: string
+  // Accepted beside `function` as well, because clients that build the tool
+  // entry and the function body in different places put it in either.
+  defer_loading?: boolean
+  group?: string
   function?: {
     name: string
     description?: string
     parameters?: Record<string, unknown>
+    defer_loading?: boolean
+    group?: string
   }
 }
 
@@ -152,10 +162,14 @@ export function openaiToolsToSdk(tools: OpenAITool[] | undefined): Tool[] | unde
     .map((t): Tool | null => {
       if (t.type !== 'function' || !t.function) return null
       const fn = t.function
+      const deferLoading = fn.defer_loading ?? t.defer_loading
+      const group = fn.group ?? t.group
       return {
         type: 'function',
         name: fn.name,
         description: fn.description ?? '',
+        ...(deferLoading !== undefined && { deferLoading }),
+        ...(group !== undefined && { group }),
         parameters: normalizeToolParameters(
           fn.parameters ?? { type: 'object', properties: {} }
         ) as Tool['parameters']
@@ -224,9 +238,23 @@ export function extractToolChoice(
       `"tool_choice" ${JSON.stringify(choice)} requires at least one entry in "tools".`
     )
   }
-  if (choice !== 'required' && !tools.some((tool) => tool.name === choice)) {
+  if (choice === 'required') return choice
+
+  // `tool_search` is synthesised by the SDK rather than declared, so it is
+  // nameable exactly when the request defers something.
+  if (choice === TOOL_SEARCH_NAME && tools.some((tool) => tool.deferLoading === true)) {
+    return choice
+  }
+  const named = tools.find((tool) => tool.name === choice)
+  if (!named) {
     throw new InvalidToolChoiceError(
       `"tool_choice" names ${JSON.stringify(choice)}, which is not one of the declared tools.`
+    )
+  }
+  if (named.deferLoading === true) {
+    throw new InvalidToolChoiceError(
+      `"tool_choice" names ${JSON.stringify(choice)}, which sets "defer_loading". Its schema is ` +
+        `not in the prompt, so the call cannot be forced; use ${JSON.stringify(TOOL_SEARCH_NAME)} instead.`
     )
   }
   return choice
