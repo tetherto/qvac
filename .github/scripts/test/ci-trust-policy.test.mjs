@@ -941,13 +941,13 @@ test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
   );
 });
 
-test('Fabric CI installs the Linux RDMA build dependency', () => {
-  const prebuilds = read('.github/workflows/prebuilds-fabric.yml')
-  const pullRequest = read('.github/workflows/on-pr-fabric.yml')
+test("Fabric CI installs the Linux RDMA build dependency", () => {
+  const prebuilds = read(".github/workflows/prebuilds-fabric.yml");
+  const pullRequest = read(".github/workflows/on-pr-fabric.yml");
 
-  assert.match(prebuilds, /linux-extra-packages:\s*libibverbs-dev/)
-  assert.match(pullRequest, /linux-extra-packages:\s*libibverbs-dev/)
-})
+  assert.match(prebuilds, /linux-extra-packages:\s*libibverbs-dev/);
+  assert.match(pullRequest, /linux-extra-packages:\s*libibverbs-dev/);
+});
 
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
   const workflowDirectory = join(root, ".github/workflows");
