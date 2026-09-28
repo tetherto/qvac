@@ -183,11 +183,20 @@ TEST_F(TextLlmContextTest, LoadCacheClearsRowsWhenMetadataNPastMismatches) {
 
   const fs::path cachePath = uniqueTextCachePath("bad-npast-seq-cache");
   const std::string cachePathString = cachePath.string();
-  llama_token metadata[2] = {
-      static_cast<llama_token>(nPast + 1), static_cast<llama_token>(1)};
+  // A well-formed current ledger that claims one position more than the
+  // memory saved with it. (A pre-ledger file is a cold miss instead; see the
+  // test above.)
+  std::vector<llama_token> claimed(static_cast<size_t>(nPast) + 1, 1);
+  namespace cache = qvac_lib_inference_addon_llama::cache;
+  const std::vector<llama_token> metadata = cache::serialize(
+      cache::fromTokens(claimed), nPast + 1, nPast + 1);
   ASSERT_GT(
       llama_state_seq_save_file(
-          model->getContext(), cachePathString.c_str(), 0, metadata, 2),
+          model->getContext(),
+          cachePathString.c_str(),
+          0,
+          metadata.data(),
+          metadata.size()),
       0u);
 
   model->reset();
