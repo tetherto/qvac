@@ -9,26 +9,20 @@
  * A project whose release is a GitHub release is skipped — create-github-release
  * makes that tag itself.
  *
- * Idempotent: an existing tag is left alone, so re-running a train that
- * half-shipped does not fail and does not move a tag someone is depending on.
+ * Idempotent against origin: a tag already there at this commit is left alone,
+ * so re-running a train that half-shipped does not fail and does not move a tag
+ * someone is depending on. A tag there at another commit fails the run. See
+ * .github/scripts/lib/release-train-tags.mjs.
  *
  * Usage: node .github/scripts/tag-release-train.mjs <train> [--push]
  */
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
-import { postPublishPlan, readRepoFile, repoRoot, tagFor } from './lib/release-trains.mjs'
+import { planTags, parseLsRemote } from './lib/release-train-tags.mjs'
+import { postPublishPlan, readRepoFile, repoRoot } from './lib/release-trains.mjs'
 
 function git (args) {
   return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf-8' }).trim()
-}
-
-function tagExists (tag) {
-  try {
-    git(['rev-parse', '-q', '--verify', `refs/tags/${tag}`])
-    return true
-  } catch {
-    return false
-  }
 }
 
 function main () {
@@ -40,39 +34,39 @@ function main () {
     process.exit(2)
   }
 
-  const { tags } = postPublishPlan(name)
-  const created = []
+  const head = git(['rev-parse', 'HEAD'])
+  const plan = planTags(postPublishPlan(name).tags, {
+    versionOf: (dir) => JSON.parse(readRepoFile(join(dir, 'package.json'))).version,
+    remoteCommit: (tag) =>
+      parseLsRemote(git(['ls-remote', '--tags', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`]), tag),
+    head,
+  })
 
-  for (const target of tags) {
-    if (target.viaRelease) {
-      console.log(`${target.slug}: tagged by its GitHub release, skipping`)
-      continue
+  for (const slug of plan.viaRelease) console.log(`${slug}: tagged by its GitHub release, skipping`)
+  for (const tag of plan.existing) console.log(`${tag}: already on origin at ${head}, leaving it alone`)
+
+  if (plan.conflicts.length) {
+    for (const { tag, commit } of plan.conflicts) {
+      console.error(`::error::${tag} already exists on origin at ${commit}, expected ${head}`)
     }
-
-    const manifest = join(target.dir, 'package.json')
-    const { version } = JSON.parse(readRepoFile(manifest))
-    const tag = tagFor(target, version)
-
-    if (tagExists(tag)) {
-      console.log(`${tag}: already exists, leaving it alone`)
-      continue
-    }
-
-    git(['tag', '--annotate', tag, '--message', tag])
-    created.push(tag)
-    console.log(`${tag}: created`)
+    process.exit(1)
   }
 
-  if (!created.length) {
+  if (!plan.create.length) {
     console.log('no new tags')
     return
   }
 
+  for (const tag of plan.create) {
+    git(['tag', '--annotate', '--force', tag, '--message', tag])
+    console.log(`${tag}: created at ${head}`)
+  }
+
   if (push) {
-    git(['push', 'origin', ...created])
-    console.log(`pushed ${created.length} tag(s)`)
+    git(['push', 'origin', ...plan.create.map((tag) => `refs/tags/${tag}`)])
+    console.log(`pushed ${plan.create.length} tag(s)`)
   } else {
-    console.log(`--push not set; ${created.length} tag(s) left local`)
+    console.log(`--push not set; ${plan.create.length} tag(s) left local`)
   }
 }
 
