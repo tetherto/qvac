@@ -77,7 +77,7 @@ jobs:
           onpr = []
           for d in sel:
               pj = f'{d}/project.json'
-              if os.path.isfile(pj) and (json.load(open(pj)).get('targets', {}).get('on-pr', {}).get('options', {}).get('ci')):
+              if os.path.isfile(pj) and (json.load(open(pj)).get('targets', {}).get('on-pr', {}).get('options', {}).get('ci')) is not None:
                   onpr.append(man[d]['name'].replace('@qvac/', ''))
           print(json.dumps(sorted(onpr), separators=(',', ':')))
           PY
@@ -226,7 +226,7 @@ jobs:
           onpr = []
           for d in sel:
               pj = f'{d}/project.json'
-              if os.path.isfile(pj) and (json.load(open(pj)).get('targets', {}).get('on-pr', {}).get('options', {}).get('ci')):
+              if os.path.isfile(pj) and (json.load(open(pj)).get('targets', {}).get('on-pr', {}).get('options', {}).get('ci')) is not None:
                   onpr.append(man[d]['name'].replace('@qvac/', ''))
           print(json.dumps(sorted(onpr), separators=(',', ':')))
           PY
