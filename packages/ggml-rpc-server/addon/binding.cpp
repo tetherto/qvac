@@ -4,12 +4,15 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <fstream>
+#include <ios>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <new>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -422,6 +425,37 @@ RpcServerApi resolveRpcServerApi() {
   return api;
 }
 
+bool rpcBackendHasRdmaMarker(const std::string& backendsDir) {
+#if defined(__linux__) && !defined(__ANDROID__)
+  // Fabric compiles this transport banner into its RPC backend only when
+  // GGML_RPC_RDMA is enabled. Such a backend negotiates RDMA per connection
+  // with no switch to disable it, so the marker is the capability reported.
+  constexpr std::string_view rdmaSupportMarker = "RDMA auto-negotiate enabled";
+  // Same location ggml_backend_load_all_from_path() loads the module from.
+  std::filesystem::path modulePath = backendsDir;
+#ifdef BACKENDS_SUBDIR
+  modulePath /= BACKENDS_SUBDIR;
+#endif
+  modulePath /= "libqvac-ggml-rpc.so";
+  std::ifstream module(modulePath, std::ios::binary | std::ios::ate);
+  const std::streamoff size =
+      module ? static_cast<std::streamoff>(module.tellg()) : -1;
+  if (size <= 0) {
+    return false;
+  }
+  std::string contents(static_cast<size_t>(size), '\0');
+  module.seekg(0);
+  if (!module.read(contents.data(), size)) {
+    return false;
+  }
+  return contents.find(rdmaSupportMarker) != std::string::npos;
+#else
+  // RDMA is a Linux-only Fabric feature.
+  (void)backendsDir;
+  return false;
+#endif
+}
+
 std::string defaultCacheDirectory() {
   const char* explicitCache = std::getenv("LLAMA_CACHE");
   if (explicitCache != nullptr && *explicitCache != '\0') {
@@ -782,6 +816,35 @@ js_value_t* stopServer(js_env_t* env, js_callback_info_t* info) try {
   return nullptr;
 }
 
+js_value_t*
+rpcBackendSupportsRdma(js_env_t* env, js_callback_info_t* info) try {
+  size_t argc = 1;
+  std::array<js_value_t*, 1> argv{nullptr};
+  if (js_get_callback_info(env, info, &argc, argv.data(), nullptr, nullptr) !=
+      0) {
+    return nullptr;
+  }
+  if (argc != 1) {
+    js_throw_type_error(env, "InvalidArgument", "backend options are required");
+    return nullptr;
+  }
+  std::string backendsDir;
+  if (!readString(env, argv.front(), "backendsDir", true, &backendsDir)) {
+    return nullptr;
+  }
+  js_value_t* result = nullptr;
+  if (js_get_boolean(env, rpcBackendHasRdmaMarker(backendsDir), &result) != 0) {
+    return nullptr;
+  }
+  return result;
+} catch (const std::exception& error) {
+  js_throw_error(env, "RpcServerBackendError", error.what());
+  return nullptr;
+} catch (...) {
+  js_throw_error(env, "RpcServerBackendError", "unknown native error");
+  return nullptr;
+}
+
 js_value_t* rpcServerExports(js_env_t* env, js_value_t* target) {
 // Native export registration is intentionally expressed as the same compact
 // macro used by the neighboring Bare addons.
@@ -797,6 +860,7 @@ js_value_t* rpcServerExports(js_env_t* env, js_value_t* target) {
 
   V("startServer", startServer)
   V("stopServer", stopServer)
+  V("rpcBackendSupportsRdma", rpcBackendSupportsRdma)
 
 #undef V
   // NOLINTEND(cppcoreguidelines-macro-usage)

@@ -41,13 +41,14 @@ stream to capture.
 
 ## RDMA-capable builds
 
-Fabric supports building its Linux RPC backend with `GGML_RPC_RDMA`, but the
-currently required npm Fabric artifacts are TCP-only. Both the client and the
-Fabric backend used by this server must be published with RDMA support before
-the package can expose it.
+On Linux (not Android), `rdmaCapable` reports whether the installed
+`@qvac/fabric` RPC backend was built with RDMA. Such a backend negotiates RDMA
+with each client that also supports it and falls back to TCP otherwise, so
+`rdmaCapable: true` does not guarantee that a given connection uses RDMA. Other
+platforms always report `false`.
 
 To fail closed when RDMA is required, pass `expectRdma: true`. Startup rejects
-that option while the required Fabric artifact is TCP-only:
+with `RpcServerRdmaUnavailableError` when the installed backend lacks RDMA:
 
 ```js
 const server = await startRpcServer({
@@ -60,5 +61,5 @@ const server = await startRpcServer({
 console.log(server.rdmaCapable)
 ```
 
-Without `expectRdma`, the server starts over TCP and reports
-`rdmaCapable: false`.
+Without `expectRdma`, the server starts either way and reports the backend's
+capability in `rdmaCapable`.

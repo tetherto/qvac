@@ -19,6 +19,9 @@ const TRUSTED_LAN_WARNING_CODE = "QVAC_GGML_RPC_SERVER_TRUSTED_LAN";
 // Keep native handles alive until an explicit stop finishes. Otherwise their
 // finalizer can synchronously stop and join a live server during garbage collection.
 const activeServerHandles = new Set();
+// Fabric never unloads its RPC module, so its RDMA build cannot change within a
+// process. Cache the native check, which reads the module from disk.
+const rdmaSupportByBackendsDir = new Map();
 class RpcServerPortAllocationError extends Error {
   constructor(cause) {
     super("Failed to allocate a free port for ggml-rpc-server", { cause });
@@ -103,6 +106,14 @@ function validateThreads(threads) {
     throw new TypeError("threads must be a positive integer");
   }
 }
+function rpcBackendSupportsRdma(backendsDir) {
+  let supported = rdmaSupportByBackendsDir.get(backendsDir);
+  if (supported === undefined) {
+    supported = binding.rpcBackendSupportsRdma({ backendsDir });
+    rdmaSupportByBackendsDir.set(backendsDir, supported);
+  }
+  return supported;
+}
 function allocateFreePort(
   host = exports.DEFAULT_RPC_SERVER_HOST,
   options = {},
@@ -130,10 +141,15 @@ async function startRpcServer(options = {}) {
   assertSupportedHost(host);
   assertLoopbackHost(host, options.allowNonLoopbackHost);
   warnForTrustedLanHost(host, options.allowNonLoopbackHost);
-  if (options.expectRdma === true) {
+  validateThreads(options.threads);
+  // Packed mobile bundles do not retain a resolvable node_modules tree. Their
+  // packagers stage Fabric's backends beside this addon instead.
+  const backendsDir =
+    fabricBackends.resolveBackendsDir() ?? path.join(__dirname, "prebuilds");
+  const rdmaCapable = rpcBackendSupportsRdma(backendsDir);
+  if (options.expectRdma === true && !rdmaCapable) {
     throw new RpcServerRdmaUnavailableError("");
   }
-  validateThreads(options.threads);
   const port =
     options.port ??
     (await allocateFreePort(host, {
@@ -141,10 +157,6 @@ async function startRpcServer(options = {}) {
     }));
   validatePort(port);
   const device = normalizeDevice(options.device);
-  // Packed mobile bundles do not retain a resolvable node_modules tree. Their
-  // packagers stage Fabric's backends beside this addon instead.
-  const backendsDir =
-    fabricBackends.resolveBackendsDir() ?? path.join(__dirname, "prebuilds");
   const handle = await binding.startServer({
     endpoint: `${host}:${port}`,
     device,
@@ -160,7 +172,7 @@ async function startRpcServer(options = {}) {
     port,
     url: `${host}:${port}`,
     device,
-    rdmaCapable: false,
+    rdmaCapable,
     logs: () => "",
     stop: () => {
       stopPromise ??= binding.stopServer(handle).then(

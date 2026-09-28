@@ -27,7 +27,11 @@ export interface RpcServerProcess {
     readonly port: number;
     readonly url: string;
     readonly device?: string;
-    readonly rdmaCapable: false;
+    /**
+     * Whether the loaded Fabric RPC backend was built with RDMA. Such a backend
+     * negotiates RDMA with each RDMA-capable client and falls back to TCP otherwise.
+     */
+    readonly rdmaCapable: boolean;
     logs(): string;
     stop(): Promise<void>;
 }

@@ -1,36 +1,9 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { test } = require("node:test");
-const vm = require("node:vm");
-
-const packageDir = join(__dirname, "../..");
-const addonSource = readFileSync(join(packageDir, "index.js"), "utf8");
-
-function loadAddon(binding, resolveBackendsDir = () => packageDir) {
-  const module = { exports: {} };
-  vm.runInNewContext(
-    `${addonSource}\nmodule.exports.activeHandleCount = () => activeServerHandles.size;`,
-    {
-      __dirname: packageDir,
-      console,
-      exports: module.exports,
-      module,
-      require(name) {
-        if (name === "bare-net") return {};
-        if (name === "bare-path") return require("node:path");
-        if (name === "@qvac/fabric/backends") {
-          return { resolveBackendsDir };
-        }
-        if (name === "./binding") return binding;
-        throw new Error(`Unexpected mobile require: ${name}`);
-      },
-    },
-  );
-  return module.exports;
-}
+const { loadAddon, packageDir } = require("./load-addon.cjs");
 
 test("packed mobile bundles use the addon's staged prebuilds", async () => {
   let receivedOptions;

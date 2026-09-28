@@ -12,6 +12,9 @@ const TRUSTED_LAN_WARNING_CODE = 'QVAC_GGML_RPC_SERVER_TRUSTED_LAN'
 // Keep native handles alive until an explicit stop finishes. Otherwise their
 // finalizer can synchronously stop and join a live server during garbage collection.
 const activeServerHandles = new Set<object>()
+// Fabric never unloads its RPC module, so its RDMA build cannot change within a
+// process. Cache the native check, which reads the module from disk.
+const rdmaSupportByBackendsDir = new Map<string, boolean>()
 
 interface RpcServerBinding {
   startServer(options: {
@@ -22,6 +25,7 @@ interface RpcServerBinding {
     readonly backendsDir: string
   }): Promise<object>
   stopServer(handle: object): Promise<void>
+  rpcBackendSupportsRdma(options: { readonly backendsDir: string }): boolean
 }
 
 export class RpcServerPortAllocationError extends Error {
@@ -71,7 +75,11 @@ export interface RpcServerProcess {
   readonly port: number
   readonly url: string
   readonly device?: string
-  readonly rdmaCapable: false
+  /**
+   * Whether the loaded Fabric RPC backend was built with RDMA. Such a backend
+   * negotiates RDMA with each RDMA-capable client and falls back to TCP otherwise.
+   */
+  readonly rdmaCapable: boolean
   logs(): string
   stop(): Promise<void>
 }
@@ -138,6 +146,15 @@ function validateThreads(threads: number | undefined): void {
   }
 }
 
+function rpcBackendSupportsRdma(backendsDir: string): boolean {
+  let supported = rdmaSupportByBackendsDir.get(backendsDir)
+  if (supported === undefined) {
+    supported = binding.rpcBackendSupportsRdma({ backendsDir })
+    rdmaSupportByBackendsDir.set(backendsDir, supported)
+  }
+  return supported
+}
+
 export function allocateFreePort(
   host = DEFAULT_RPC_SERVER_HOST,
   options: AllocateFreePortOptions = {}
@@ -164,10 +181,15 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
   assertSupportedHost(host)
   assertLoopbackHost(host, options.allowNonLoopbackHost)
   warnForTrustedLanHost(host, options.allowNonLoopbackHost)
-  if (options.expectRdma === true) {
+  validateThreads(options.threads)
+  // Packed mobile bundles do not retain a resolvable node_modules tree. Their
+  // packagers stage Fabric's backends beside this addon instead.
+  const backendsDir =
+    fabricBackends.resolveBackendsDir() ?? path.join(__dirname, 'prebuilds')
+  const rdmaCapable = rpcBackendSupportsRdma(backendsDir)
+  if (options.expectRdma === true && !rdmaCapable) {
     throw new RpcServerRdmaUnavailableError('')
   }
-  validateThreads(options.threads)
   const port =
     options.port ??
     (await allocateFreePort(host, {
@@ -175,10 +197,6 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     }))
   validatePort(port)
   const device = normalizeDevice(options.device)
-  // Packed mobile bundles do not retain a resolvable node_modules tree. Their
-  // packagers stage Fabric's backends beside this addon instead.
-  const backendsDir =
-    fabricBackends.resolveBackendsDir() ?? path.join(__dirname, 'prebuilds')
   const handle = await binding.startServer({
     endpoint: `${host}:${port}`,
     device,
@@ -195,7 +213,7 @@ export async function startRpcServer(options: StartRpcServerOptions = {}): Promi
     port,
     url: `${host}:${port}`,
     device,
-    rdmaCapable: false,
+    rdmaCapable,
     logs: () => '',
     stop: () => {
       stopPromise ??= binding.stopServer(handle).then(
