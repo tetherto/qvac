@@ -94,11 +94,27 @@ function buildGguf({
     )
   }
 
+  const manifestNames = Array.from({ length: tensorCount }, (_, i) => `tensor.${i}`)
+  const manifestSources = Array.from({ length: tensorCount }, (_, i) => `source.${i}`)
+  const manifestChecksums = Array.from({ length: tensorCount }, (_, i) => `sha.${i}`)
+
   if (tensorManifest) {
-    const names = Array.from({ length: tensorCount }, (_, i) => ggufString(`tensor.${i}`))
     entries.push(
-      kv('supertonic.tensor_names', GGUF_VALUE_TYPE_ARRAY, array(GGUF_VALUE_TYPE_STRING, names)),
-      kv('supertonic.tensor_sha256', GGUF_VALUE_TYPE_ARRAY, array(GGUF_VALUE_TYPE_STRING, names))
+      kv(
+        'supertonic.tensor_names',
+        GGUF_VALUE_TYPE_ARRAY,
+        array(GGUF_VALUE_TYPE_STRING, manifestNames.map(ggufString))
+      ),
+      kv(
+        'supertonic.source_names',
+        GGUF_VALUE_TYPE_ARRAY,
+        array(GGUF_VALUE_TYPE_STRING, manifestSources.map(ggufString))
+      ),
+      kv(
+        'supertonic.tensor_sha256',
+        GGUF_VALUE_TYPE_ARRAY,
+        array(GGUF_VALUE_TYPE_STRING, manifestChecksums.map(ggufString))
+      )
     )
   }
 
@@ -141,10 +157,10 @@ function buildGguf({
     metadataLength: header.length + padding,
     vocabSize,
     embeddingLength,
-    tensorNames: [
-      'token_embd.weight',
-      ...Array.from({ length: tensorCount }, (_, i) => `tensor.${i}`)
-    ]
+    manifestNames,
+    manifestSources,
+    manifestChecksums,
+    tensorNames: ['token_embd.weight', ...manifestNames]
   }
 }
 
