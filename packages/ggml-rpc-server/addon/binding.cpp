@@ -384,11 +384,12 @@ std::vector<ggml_backend_dev_t> selectDevices(const std::string& requested) {
 RpcServerApi resolveRpcServerApi() {
   ggml_backend_reg_t rpcBackend = ggml_backend_reg_by_name("RPC");
   if (rpcBackend == nullptr) {
-#ifdef __linux__
+#if defined(__linux__) && !defined(__ANDROID__)
     throw std::runtime_error(
-        "RPC backend is not available; install the distribution package "
-        "providing libibverbs.so.1 (libibverbs1 on Debian/Ubuntu). RDMA also "
-        "requires the provider package for this host");
+        "RPC backend is not available; the RPC module may have failed to load "
+        "because libibverbs.so.1 is missing (install libibverbs1 on "
+        "Debian/Ubuntu). RDMA also requires the provider package for this "
+        "host");
 #else
     throw std::runtime_error("RPC backend is not available");
 #endif
