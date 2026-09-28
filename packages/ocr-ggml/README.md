@@ -149,7 +149,7 @@ bare examples/backend-device.js --backend metal
 | `params.lowConfidenceThreshold` | `number` | | `0.4` | retry threshold (`easyocr` only) |
 | `params.recognizerBatchSize` | `number` | | `32` | recognizer batch size (`easyocr` only) |
 | `params.nThreads` | `number` | | `0` (auto) | CPU thread count for GGML; `<0` leaves the GGML default |
-| `params.backendsDir` | `string` | | fabric backends root | directory holding `libggml-*.so` backend shared libs. On desktop, the root `@qvac/fabric/backends` resolves; on mobile, this package's `prebuilds/` |
+| `params.backendsDir` | `string` | | fabric backends root | directory holding `libqvac-ggml-*.so` backend shared libs. On desktop, the root `@qvac/fabric/backends` resolves; on mobile, this package's `prebuilds/` |
 | `params.backendDevice` | `'cpu'` \| `'vulkan'` \| `'metal'` \| `'opencl'` | | `'cpu'` | ggml backend device. `'vulkan'` (Linux/Windows/Android), `'metal'` (Apple) and `'opencl'` (Android/Adreno) opt in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan--metal--opencl) |
 | `params.main-gpu` / `params.main_gpu` | `number` \| `string` | | _prefer dedicated_ | Raw ggml registry index or strict GPU class; requires GPU `backendDevice`. See below. |
 | `params.gpuDevice` | `number` | | _prefer discrete_ | 0-based index into the matching GPU/iGPU devices for `'vulkan'`/`'metal'`/`'opencl'`; out-of-range → CPU fallback — see [Selecting a specific GPU](#selecting-a-specific-gpu-gpudevice) |

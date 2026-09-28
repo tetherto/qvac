@@ -69,7 +69,7 @@
 
 **Dependencies:**
 - inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler, runJob/activate/loadWeights/cancel/cancelJob/activeJobs/destroyInstance)
-- @qvac/fabric (^0.16.1): Shared llama.cpp/ggml/mtmd inference engine
+- @qvac/fabric (^0.18.0): Shared llama.cpp/ggml/mtmd inference engine. The runtime and backends ship in a `@qvac/fabric-<host>` platform package: optional dependencies on desktop, a direct dependency of the app on mobile
 - @qvac/infer-base: `createJobHandler` and `exclusiveRunQueue` helpers (job/response lifecycle + serialized admission)
 - @qvac/logging: `QvacLogger` wrapper
 - bare-process: runtime/process integration used by the JS package surface
@@ -131,7 +131,7 @@ graph TB
 | @qvac/infer-base | Framework | `createJobHandler`, `exclusiveRunQueue`, `QvacResponse` |
 | @qvac/logging | Framework | `QvacLogger` wrapper |
 | inference-addon-cpp | Native | C++ addon framework (multi-job scheduler) |
-| @qvac/fabric | Native | Shared llama.cpp/ggml/mtmd inference engine, dynamically linked as `qvac__fabric@0.bare` |
+| @qvac/fabric | Native | Shared llama.cpp/ggml/mtmd inference engine, dynamically linked as `qvac__fabric@0.bare` from the `@qvac/fabric-<host>` platform package |
 | bare-process | Runtime | Process/runtime integration |
 | Bare Runtime | Runtime | JavaScript execution |
 

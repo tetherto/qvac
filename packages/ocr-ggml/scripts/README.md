@@ -19,9 +19,9 @@ another Fabric backend folder.
 
 Sections it prints:
 
-1. **Shipped backend libraries** — `libggml-cpu.so`, `libggml-vulkan.so`,
-   `libggml-opencl.so`, … (whichever ones `@qvac/fabric` produced for this
-   triplet).
+1. **Shipped backend libraries** — `libqvac-ggml-cpu-<variant>.so`,
+   `libqvac-ggml-vulkan.so`, `libqvac-ggml-opencl.so`, … (whichever ones
+   `@qvac/fabric` produced for this triplet).
 2. **Linked dependencies (`ldd`)** — confirms what each shared lib pulls in
    from the host (e.g. `libvulkan.so.1`, `libOpenCL.so.1`).
 3. **Compile-time markers (`strings`)** — checks for canonical symbols:

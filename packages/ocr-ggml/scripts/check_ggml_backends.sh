@@ -8,7 +8,7 @@
 # of its `@qvac/fabric-<host>/addon` platform package.
 #
 # Outputs four sections:
-#   1. Shipped backend libraries — which `libggml-*.so` files were installed
+#   1. Shipped backend libraries — which `libqvac-ggml-*.so` files were installed
 #   2. Linked dependencies        — `ldd` on each, to spot system OpenBLAS /
 #                                   Vulkan / OpenCL libraries that they pull in
 #   3. Compile-time markers       — `strings` greps for canonical symbols:
@@ -20,13 +20,13 @@
 #
 # Headline interpretation:
 #   - llamafile/tinyBLAS is ENGAGED iff `llamafile_sgemm` appears in section 3.
-#   - External BLAS is REGISTERED iff `libggml-blas.so` is shipped in section 1
+#   - External BLAS is REGISTERED iff `libqvac-ggml-blas.so` is shipped in section 1
 #     AND `cblas_sgemm` appears in section 3. Whether it is *actually used* at
 #     runtime depends on whether Pipeline routes through the scheduler API,
 #     which (today, mirroring upstream) it does not — so external BLAS is
 #     usually REGISTERED but UNUSED.
-#   - Vulkan / OpenCL are AVAILABLE iff the corresponding `libggml-vulkan.so`
-#     / `libggml-opencl.so` is present AND the matching symbols appear. They
+#   - Vulkan / OpenCL are AVAILABLE iff the corresponding `libqvac-ggml-vulkan.so`
+#     / `libqvac-ggml-opencl.so` is present AND the matching symbols appear. They
 #     are only EXERCISED if the addon is loaded with `useGPU=true` and the
 #     host system has matching device drivers.
 
@@ -78,8 +78,8 @@ fi
 print_section "1. Shipped backend libraries"
 echo "Looking in: ${BACKENDS_DIR}"
 echo
-ls -lh "${BACKENDS_DIR}"/libggml-*.so 2>/dev/null || \
-    echo "(no libggml-*.so files — only the static CPU backend was linked)"
+ls -lh "${BACKENDS_DIR}"/libqvac-ggml-*.so 2>/dev/null || \
+    echo "(no libqvac-ggml-*.so files — only the static CPU backend was linked)"
 
 # Also show Fabric's shared bare runtime.
 echo
@@ -91,7 +91,7 @@ ls -lh "${BACKENDS_DIR}"/../qvac__fabric.bare 2>/dev/null || \
 # 2. Linked dependencies (ldd)
 # ----------------------------------------------------------------------------
 print_section "2. Linked dependencies (ldd)"
-for lib in "${BACKENDS_DIR}"/libggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare; do
+for lib in "${BACKENDS_DIR}"/libqvac-ggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare; do
     [[ -e "${lib}" ]] || continue
     echo
     echo "--- ${lib##*/} ---"
@@ -110,7 +110,9 @@ check_symbol() {
     local found=0
     for lib in "$@"; do
         [[ -e "${lib}" ]] || continue
-        if strings "${lib}" 2>/dev/null | grep -q -E "${pattern}"; then
+        # Not `grep -q`: its early exit SIGPIPEs `strings`, which pipefail
+        # reports as a miss.
+        if strings "${lib}" 2>/dev/null | grep -E "${pattern}" >/dev/null; then
             printf "  [%-6s] %s  %s\n" "FOUND" "${label}" "in ${lib##*/}"
             found=1
         fi
@@ -120,7 +122,7 @@ check_symbol() {
     fi
 }
 
-ALL_LIBS=("${BACKENDS_DIR}"/libggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare)
+ALL_LIBS=("${BACKENDS_DIR}"/libqvac-ggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare)
 check_symbol "tinyBLAS (GGML_LLAMAFILE=ON)" "llamafile_sgemm"  "${ALL_LIBS[@]}"
 check_symbol "external BLAS (GGML_BLAS)"    "cblas_sgemm"      "${ALL_LIBS[@]}"
 check_symbol "Vulkan backend"               "vkCreateInstance" "${ALL_LIBS[@]}"
