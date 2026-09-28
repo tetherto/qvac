@@ -47,3 +47,21 @@ export function validateAndJoinPath(basePath: string, ...components: string[]): 
 
   return resolved
 }
+
+/**
+ * Joins `name` under `basePath` without sanitizing it, so cache filenames stay
+ * byte-stable. Throws PathTraversalError on a null byte or a `..` segment.
+ */
+export function joinWithinBase(basePath: string, name: string): string {
+  if (name.includes('\0') || name.split(/[\\/]/).includes('..')) {
+    throw new PathTraversalError(name, basePath)
+  }
+
+  const joined = path.join(basePath, name)
+
+  if (!isPathWithinBase(basePath, joined)) {
+    throw new PathTraversalError(name, basePath)
+  }
+
+  return joined
+}
