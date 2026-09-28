@@ -61,7 +61,7 @@ function createLlmModel(
     const stripped = stripMultiGpuKeys(llmConfigStrings, true)
     if (stripped.length > 0) {
       getEngineLogger().warn(
-        `[${ModelType.llamacppCompletion}:${modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile (single-GPU device) — removing from config; model will load with single-GPU defaults`
+        `[${ModelType.llamacppCompletion}:${modelId}] Removing unsupported mobile parameters: ${stripped.join(', ')}`
       )
     }
   }

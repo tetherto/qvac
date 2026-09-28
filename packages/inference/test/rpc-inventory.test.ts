@@ -59,7 +59,7 @@ test('RPC aliases enumerate all devices before moving to the next endpoint', (t)
   t.alike(
     getRpcDeviceMap([first, second, first]),
     mapped,
-    'native endpoint registration deduplicates'
+    'the device map skips repeated candidates'
   )
   t.is(getRpcDeviceMap([second, first])[1]!.url, first.url)
   t.is(getRpcDeviceMap([second, first])[1]!.alias, 'RPC1')
@@ -68,6 +68,23 @@ test('RPC aliases enumerate all devices before moving to the next endpoint', (t)
     () => getRpcDeviceMap([{ ...first, devices: [{ ...device, index: 1 }] }]),
     /native device order/
   )
+})
+
+test('RPC aliases follow only the current load, including on reused workers', (t) => {
+  getRpcDeviceMap([first])
+  t.alike(
+    getRpcDeviceMap([second]).map(({ url, alias }) => ({ url, alias })),
+    [{ url: second.url, alias: 'RPC0' }]
+  )
+  t.alike(
+    getRpcDeviceMap([second, first]).map(({ url, alias }) => ({ url, alias })),
+    [
+      { url: second.url, alias: 'RPC0' },
+      { url: first.url, alias: 'RPC1' },
+      { url: first.url, alias: 'RPC2' }
+    ]
+  )
+  t.alike(getRpcDeviceMap([first, first, second]), getRpcDeviceMap([first, second]))
 })
 
 test('RPC inventory reads native device count and memory over fragmented TCP responses', async (t) => {

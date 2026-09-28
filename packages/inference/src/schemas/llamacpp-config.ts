@@ -128,16 +128,20 @@ export const llmConfigBaseSchema = z.object({
   'rpc-servers': z
     .string()
     .min(1)
+    .refine((value) => {
+      const endpoints = value.split(',').map((endpoint) => endpoint.trim())
+      return new Set(endpoints).size === endpoints.length
+    }, 'RPC server endpoints must be unique')
     .optional()
     .describe(
-      'Comma-separated native RPC host:port endpoints in device registration order. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.'
+      'Comma-separated unique native RPC host:port endpoints in device registration order for this load. Requires compatible RPC addon builds and a trusted private network; native traffic is unencrypted and unauthenticated.'
     ),
   devices: z
     .string()
     .min(1)
     .optional()
     .describe(
-      'Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device of each endpoint in first-registration order, persisting for the worker lifetime. Use getRpcDeviceMap with that order; tensor-split weights follow this device order.'
+      "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
     ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])

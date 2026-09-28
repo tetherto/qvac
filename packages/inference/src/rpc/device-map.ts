@@ -3,11 +3,11 @@ import type { RpcDevice, RpcServerCandidate } from '@/schemas/rpc-server'
 export type RpcDeviceMapping = RpcDevice & { url: string; alias: string }
 
 /**
- * Map every endpoint's devices in native first-registration order.
- * For a fresh worker, pass the chosen rpc-servers order. For a reused worker,
- * include all previously registered endpoints first, in their original order.
- * Discovery itself does not register native devices. Restarted servers require
- * a fresh worker if their inventory changed, because native registrations persist.
+ * Pass exactly this load's rpc-servers endpoints in the same order, even on
+ * reused workers. Aliases enumerate every device in that order, starting at RPC0
+ * for each load. Use the aliases to select devices; tensor-split weights follow
+ * the selected devices order. Repeated endpoints are skipped by this helper,
+ * but rpc-servers must contain unique endpoints. Discovery does not register devices.
  */
 export function getRpcDeviceMap(servers: readonly RpcServerCandidate[]): RpcDeviceMapping[] {
   const seen = new Set<string>()

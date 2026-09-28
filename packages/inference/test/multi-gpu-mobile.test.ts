@@ -66,3 +66,22 @@ test('LLM mobile RPC loads retain explicit split placement', (t) => {
   const local: Record<string, unknown> = { 'split-mode': 'layer', 'tensor-split': '1,1' }
   t.alike(stripMultiGpuKeys(local, true), ['split-mode', 'tensor-split'])
 })
+
+test('LLM mobile RPC loads remove main-gpu while retaining remote placement', (t) => {
+  const config: Record<string, unknown> = {
+    'rpc-servers': '10.0.0.2:50052',
+    devices: 'RPC0',
+    'main-gpu': '0',
+    'split-mode': 'layer',
+    'tensor-split': '1',
+    gpu_layers: '99'
+  }
+  t.alike(stripMultiGpuKeys(config, true), ['main-gpu'])
+  t.alike(config, {
+    'rpc-servers': '10.0.0.2:50052',
+    devices: 'RPC0',
+    'split-mode': 'layer',
+    'tensor-split': '1',
+    gpu_layers: '99'
+  })
+})
