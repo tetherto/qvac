@@ -140,15 +140,30 @@ function writeManifest (manifestPath, manifest) {
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, MANIFEST_INDENT) + '\n')
 }
 
-function listHostDirs (prebuildsDir) {
+function listHostDirs (prebuildsDir, keepDirs) {
   if (!fs.existsSync(prebuildsDir)) {
     throw new Error('No prebuilds directory at ' + prebuildsDir)
   }
   return fs
     .readdirSync(prebuildsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && !keepDirs.includes(entry.name))
     .map((entry) => entry.name)
     .sort()
+}
+
+// A kept dir is part of what the meta ships (fabric's C++ SDK under include/
+// and share/), so publishing without it is as broken as a binary-less slice.
+function assertKeepDirsPresent (prebuildsDir, keepDirs) {
+  const missing = keepDirs.filter((dir) => {
+    const dirPath = path.join(prebuildsDir, dir)
+    return !fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()
+  })
+  if (missing.length > 0) {
+    throw new Error(
+      'Merged prebuilds artifact is missing the meta package dirs: ' + missing.join(', ') +
+      '. Refusing to publish a meta package without them.'
+    )
+  }
 }
 
 function sliceDirName (metaManifest, definition) {
@@ -187,12 +202,12 @@ function moveHostDirs (hosts, prebuildsDir, addonPrebuildsDir) {
   }
 }
 
-function removeEmptiedPrebuildsDir (prebuildsDir) {
-  const leftovers = fs.readdirSync(prebuildsDir)
+function removeEmptiedPrebuildsDir (prebuildsDir, keepDirs) {
+  const leftovers = fs.readdirSync(prebuildsDir).filter((entry) => !keepDirs.includes(entry))
   if (leftovers.length > 0) {
     throw new Error('Unexpected leftover entries under ' + prebuildsDir + ': ' + leftovers.join(', '))
   }
-  fs.rmdirSync(prebuildsDir)
+  if (keepDirs.length === 0) fs.rmdirSync(prebuildsDir)
 }
 
 function directorySizeBytes (dir) {
@@ -216,19 +231,20 @@ function assertSliceSize (sliceDir, maxSliceMb) {
 }
 
 export function slicePlatformPackages (options) {
-  const { workdir, outDir, maxSliceMb = DEFAULT_MAX_SLICE_MB, log = () => {} } = options
+  const { workdir, outDir, maxSliceMb = DEFAULT_MAX_SLICE_MB, keepDirs = [], log = () => {} } = options
   const metaManifestPath = path.join(workdir, 'package.json')
   const metaManifest = readManifest(metaManifestPath)
   const prebuildsDir = path.join(workdir, 'prebuilds')
 
-  validateHostDirs(listHostDirs(prebuildsDir))
+  validateHostDirs(listHostDirs(prebuildsDir, keepDirs))
   assertAllHostAddonsPresent(prebuildsDir)
+  assertKeepDirsPresent(prebuildsDir, keepDirs)
   fs.mkdirSync(outDir, { recursive: true })
 
   const context = { metaManifest, workdir, outDir, prebuildsDir }
   const sliceDirs = stageAllSlices(context, maxSliceMb, log)
 
-  removeEmptiedPrebuildsDir(prebuildsDir)
+  removeEmptiedPrebuildsDir(prebuildsDir, keepDirs)
   metaManifest.optionalDependencies = buildOptionalDependencies(metaManifest, SLICE_DEFINITIONS)
   writeManifest(metaManifestPath, metaManifest)
   log(
@@ -260,10 +276,14 @@ function parseArgs (argv) {
     if (flag === '--workdir') options.workdir = value
     else if (flag === '--out-dir') options.outDir = value
     else if (flag === '--max-slice-mb') options.maxSliceMb = Number(value)
+    else if (flag === '--keep-dirs') options.keepDirs = value.split(/[\s,]+/).filter(Boolean)
     else throw new Error('Unknown option: ' + flag)
   }
   if (!options.workdir || !options.outDir) {
-    throw new Error('Usage: slice-platform-packages.mjs --workdir <dir> --out-dir <dir> [--max-slice-mb <n>]')
+    throw new Error(
+      'Usage: slice-platform-packages.mjs --workdir <dir> --out-dir <dir> ' +
+      '[--max-slice-mb <n>] [--keep-dirs "<dir> <dir>"]'
+    )
   }
   return options
 }
