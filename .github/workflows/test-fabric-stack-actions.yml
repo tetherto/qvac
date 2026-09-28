@@ -7,7 +7,9 @@ on:
       - ".github/actions/overlay-local-fabric/**"
       - ".github/actions/wait-and-download-fabric-prebuilds/**"
       - ".github/scripts/test/fixtures/fabric-actions/**"
+      - ".github/scripts/test/fabric-cmake-layout.sh"
       - ".github/workflows/test-fabric-stack-actions.yml"
+      - "cmake/qvac-addon/qvac-addon.cmake"
       # cpp-lint consumes the overlay too (QVAC-24913). It runs under
       # pull_request_target, which loads its YAML from the base branch, so a PR
       # editing it cannot exercise its own copy — the compile-visibility job
@@ -250,6 +252,29 @@ jobs:
             echo "::error::Docs-only packages/fabric change must not set fabric_stack, got $ACTUAL"
             exit 1
           fi
+
+  fabric-cmake-layout:
+    name: Fabric CMake runtime layout
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      # cmake-bare and cmake-npm come from fabric's own devDependencies, the
+      # same install its sanity checks run.
+      - name: Install fabric's CMake modules
+        working-directory: packages/fabric
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      # The overlay below writes the PR runtime into @qvac/fabric/prebuilds, so
+      # that tree has to keep winning over an installed platform package.
+      - name: Resolve the runtime across install layouts
+        run: .github/scripts/test/fabric-cmake-layout.sh packages/fabric/node_modules
 
   overlay-local-fabric:
     name: Overlay local fabric prebuilds

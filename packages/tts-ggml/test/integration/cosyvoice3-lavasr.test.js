@@ -24,6 +24,7 @@ const {
   ensureLavaSRDenoiserGguf,
   ensureCosyvoiceModel
 } = require('../utils/downloadModel')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -126,6 +127,7 @@ test(
     if (!dl) return
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: dl.modelDir, lavasrEnhancer: enh.path },
       config: { language: 'en', useGPU: false },
@@ -161,6 +163,7 @@ test(
     if (!dl) return
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: dl.modelDir, lavasrEnhancer: enh.path },
       streamChunkTokens: 25,
@@ -201,6 +204,7 @@ test(
     if (!dl) return
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: dl.modelDir, lavasrEnhancer: enh.path },
       streamChunkTokens: 25,
@@ -240,6 +244,7 @@ test(
 
     const synth = async (files) => {
       const model = new TTSGgml({
+        threads: TTS_TEST_THREADS,
         engine: TTSGgml.ENGINE_COSYVOICE3,
         files: Object.assign({ cosyvoiceModelDir: dl.modelDir }, files),
         config: { language: 'en', useGPU: false, seed: SEED },
@@ -292,6 +297,7 @@ test(
     fs.writeFileSync(badEnhancer, 'not a gguf')
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: dl.modelDir, lavasrEnhancer: badEnhancer },
       config: { language: 'en', useGPU: false },

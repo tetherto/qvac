@@ -52,6 +52,12 @@ public:
   std::any process(const std::any& input) override;
   qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats() const override;
 
+  static constexpr const char* COREML_BACKEND_PREFIX = "coreml";
+  static bool codecBackendIsCoreml(const std::string& backend);
+
+  void recordSynthesisResult(
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds);
+
   void cancel() const override;
 
   void load();
@@ -99,6 +105,15 @@ public:
       const Audio8Config& current, const Audio8Config& next, int nativeRate);
 
 private:
+  friend struct Audio8ModelTestPeer;
+
+  void completeSynthesis(
+      const std::shared_ptr<tts_cpp::audio8::Engine>& engine,
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds,
+      bool sidecarLoaded);
+  void recordSynthesisResultLocked(
+      const tts_cpp::audio8::SynthesisResult& result, double totalSeconds);
+
   Output synthesize(const AnyInput& input);
 
   void loadLocked();
@@ -130,6 +145,8 @@ private:
   int backendId_ = 0;
   std::string backendName_ = "CPU";
   bool gpuUnsupported_ = false;
+  bool codecSidecarLoaded_ = false;
+  bool codecOnCoreml_ = false;
 };
 
 } // namespace qvac::ttsggml::audio8

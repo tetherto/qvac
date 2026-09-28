@@ -1760,6 +1760,19 @@ class BatchCompletionStreamRequestPromptsItemToolsItem(GeneratedBaseModel):
     type: Literal["function"] = "function"
     name: str
     description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
     parameters: Annotated[
         BatchCompletionStreamRequestPromptsItemToolsItemParameters,
         Field(title="BatchCompletionStreamRequestPromptsItemToolsItemParameters"),
@@ -2318,6 +2331,110 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
     ] = None
 
 
+class BciTranscribeResponseDiagnosticsSelectedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class BciTranscribeResponseDiagnosticsGraphicsApi(Enum):
+    vulkan = "vulkan"
+    opencl = "opencl"
+    opengl = "opengl"
+    webgpu = "webgpu"
+    metal = "metal"
+    direct3d11 = "direct3d11"
+    direct3d12 = "direct3d12"
+    cuda = "cuda"
+    level_zero = "levelZero"
+    rocm = "rocm"
+
+
+class BciTranscribeResponseDiagnosticsDriver(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[str, Field(min_length=1)]
+    version: Annotated[str | None, Field(min_length=1)] = None
+
+
+class BciTranscribeResponseDiagnosticsFallbackRequestedDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class BciTranscribeResponseDiagnosticsFallback(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    requested_backend: Annotated[
+        str | None, Field(alias="requestedBackend", min_length=1)
+    ] = None
+    requested_device: Annotated[
+        BciTranscribeResponseDiagnosticsFallbackRequestedDevice | None,
+        Field(
+            alias="requestedDevice",
+            title="BciTranscribeResponseDiagnosticsFallbackRequestedDevice",
+        ),
+    ] = None
+    reason: Annotated[str, Field(min_length=1)]
+
+
+class BciTranscribeResponseDiagnosticsProbeStatus(Enum):
+    compatible = "compatible"
+    incompatible = "incompatible"
+    unknown = "unknown"
+
+
+class BciTranscribeResponseDiagnosticsProbe(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        BciTranscribeResponseDiagnosticsProbeStatus,
+        Field(title="BciTranscribeResponseDiagnosticsProbeStatus"),
+    ]
+    backend: Annotated[str, Field(min_length=1)]
+    reason: str | None = None
+
+
+class BciTranscribeResponseDiagnostics(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    selected_backend: Annotated[str, Field(alias="selectedBackend", min_length=1)]
+    selected_device: Annotated[
+        BciTranscribeResponseDiagnosticsSelectedDevice,
+        Field(
+            alias="selectedDevice",
+            title="BciTranscribeResponseDiagnosticsSelectedDevice",
+        ),
+    ]
+    graphics_api: Annotated[
+        BciTranscribeResponseDiagnosticsGraphicsApi | None,
+        Field(alias="graphicsApi", title="BciTranscribeResponseDiagnosticsGraphicsApi"),
+    ] = None
+    driver: Annotated[
+        BciTranscribeResponseDiagnosticsDriver | None,
+        Field(title="BciTranscribeResponseDiagnosticsDriver"),
+    ] = None
+    gpu_id: Annotated[
+        str | None,
+        Field(
+            alias="gpuId",
+            description="GPU ID from the current worker's resource collector; stable only for that collector's lifetime.",
+            min_length=1,
+        ),
+    ] = None
+    fallback: Annotated[
+        BciTranscribeResponseDiagnosticsFallback | None,
+        Field(title="BciTranscribeResponseDiagnosticsFallback"),
+    ] = None
+    probe: Annotated[
+        BciTranscribeResponseDiagnosticsProbe | None,
+        Field(title="BciTranscribeResponseDiagnosticsProbe"),
+    ] = None
+
+
 class BciTranscribeResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -2332,6 +2449,13 @@ class BciTranscribeResponse(GeneratedBaseModel):
         BciTranscribeResponseSegment | None, Field(title="BciTranscribeResponseSegment")
     ] = None
     type: Literal["bciTranscribe"] = "bciTranscribe"
+    diagnostics: Annotated[
+        BciTranscribeResponseDiagnostics | None,
+        Field(
+            description="Backend selection detail for the completed run, on the terminal frame. Carries the same payload the engine attaches to the internal diagnostics symbol, so an RPC client can read it.",
+            title="BciTranscribeResponseDiagnostics",
+        ),
+    ] = None
 
 
 class BciTranscribeStreamRequestStreamOptsEmit(Enum):
@@ -2511,6 +2635,15 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
         Field(
             alias="startsWord",
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+        ),
+    ] = None
+    window_start_timestep: Annotated[
+        int | None,
+        Field(
+            alias="windowStartTimestep",
+            description="Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
+            ge=0,
+            le=9007199254740991,
         ),
     ] = None
 
@@ -2705,6 +2838,19 @@ class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
     type: Literal["function"] = "function"
     name: str
     description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
     parameters: Annotated[
         CompletionOrchestrateRequestToolsItemParameters,
         Field(title="CompletionOrchestrateRequestToolsItemParameters"),
@@ -3253,6 +3399,19 @@ class CompletionStreamRequestToolsItem(GeneratedBaseModel):
     type: Literal["function"] = "function"
     name: str
     description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
     parameters: Annotated[
         CompletionStreamRequestToolsItemParameters,
         Field(title="CompletionStreamRequestToolsItemParameters"),
@@ -4727,6 +4886,149 @@ class LoadedModelInfoToolDialect(Enum):
     dsml = "dsml"
 
 
+class NativeProbeFitVerdict(Enum):
+    fit = "fit"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class NativeProbeFitPlan(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    n_ctx: Annotated[
+        int,
+        Field(
+            alias="nCtx",
+            description="Context the probe resolved for this load, in tokens.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_layers: Annotated[
+        int,
+        Field(
+            alias="nGpuLayers",
+            description="Layers the probe would offload.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_devices: Annotated[
+        int,
+        Field(
+            alias="nGpuDevices",
+            description="GPU devices the offload would span.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[
+        str, Field(description="Device name as the backend reports it, or `host`.")
+    ]
+    total_bytes: Annotated[
+        float,
+        Field(alias="totalBytes", description="Memory the device reports installed."),
+    ]
+    free_bytes: Annotated[
+        float,
+        Field(
+            alias="freeBytes",
+            description="Memory the device reports free, before the margin.",
+        ),
+    ]
+    margin_bytes: Annotated[
+        float,
+        Field(
+            alias="marginBytes",
+            description="Headroom the fitter withheld on this device.",
+        ),
+    ]
+    model_bytes: Annotated[
+        float,
+        Field(alias="modelBytes", description="Weights the load would place here."),
+    ]
+    context_bytes: Annotated[
+        float,
+        Field(
+            alias="contextBytes",
+            description="Context and cache the load would place here.",
+        ),
+    ]
+    compute_bytes: Annotated[
+        float,
+        Field(
+            alias="computeBytes",
+            description="Compute buffers the load would place here.",
+        ),
+    ]
+
+
+class NativeProbeFitProjection(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    devices: Annotated[
+        list[NativeProbeFitProjectionDevicesItem],
+        Field(description="Every device the load would touch."),
+    ]
+
+
+class NativeProbeFit(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    verdict: Annotated[
+        NativeProbeFitVerdict,
+        Field(
+            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+            title="NativeProbeFitVerdict",
+        ),
+    ]
+    basis: Annotated[
+        Literal["native-probe"],
+        Field(
+            description="Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+        ),
+    ] = "native-probe"
+    estimator_version: Annotated[
+        str,
+        Field(
+            alias="estimatorVersion",
+            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve.",
+        ),
+    ]
+    reason: Annotated[
+        str,
+        Field(
+            description="Machine-readable reason for the verdict. Never parsed out of log text."
+        ),
+    ]
+    message: Annotated[
+        str | None, Field(description="Human-readable detail, when the reason has any.")
+    ] = None
+    plan: Annotated[
+        NativeProbeFitPlan | None,
+        Field(
+            description="Placement the probe projected. Present wherever the fitter resolved one.",
+            title="NativeProbeFitPlan",
+        ),
+    ] = None
+    projection: Annotated[
+        NativeProbeFitProjection | None,
+        Field(
+            description="What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
+            title="NativeProbeFitProjection",
+        ),
+    ] = None
+
+
 class LoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4742,6 +5044,14 @@ class LoadedModelInfo(GeneratedBaseModel):
     tool_dialect: Annotated[
         LoadedModelInfoToolDialect | None,
         Field(alias="toolDialect", title="LoadedModelInfoToolDialect"),
+    ] = None
+    fit_probe: Annotated[
+        NativeProbeFit | None,
+        Field(
+            alias="fitProbe",
+            description="Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.",
+            title="NativeProbeFit",
+        ),
     ] = None
 
 
@@ -9486,7 +9796,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigWhisperConfig(
     detect_language: Annotated[
         bool | None,
         Field(
-            description="Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+            description="Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call."
         ),
     ] = None
     greedy_best_of: Annotated[

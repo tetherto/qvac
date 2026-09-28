@@ -1,0 +1,162 @@
+name: On PR Trigger (GGML RPC Server)
+
+# Device Farm runs follow the repository-wide on-demand policy. Dispatch
+# integration-mobile-test-ggml-rpc-server.yml directly when mobile coverage is
+# needed; the run-mobile-addon-tests label does not launch it from this workflow.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - ready_for_review
+    branches:
+      - main
+      - release-*
+      - feature-*
+      - tmp-*
+    paths:
+      - packages/ggml-rpc-server/**
+      - .github/workflows/*ggml-rpc-server*.yml
+  workflow_dispatch:
+
+permissions:
+  checks: read
+  contents: read
+  pull-requests: read
+  packages: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fork-approval:
+    permissions:
+      statuses: write
+    uses: ./.github/workflows/reusable-fork-approval.yml
+
+  ci-router:
+    name: CI Router (label detection)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+    steps:
+      - name: Checkout ci-router from the default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/ci-router
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Route CI stages
+        id: route
+        uses: ./.github/actions/ci-router
+
+  authorize:
+    needs: fork-approval
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      statuses: read
+    outputs:
+      allowed: ${{ steps.auth.outputs.allowed }}
+    steps:
+      - name: Checkout authorize-pr from the default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/actions/authorize-pr
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Authorize
+        id: auth
+        uses: ./.github/actions/authorize-pr
+        with:
+          github-token: ${{ github.token }}
+
+  await-ts-checks:
+    name: Await PR-head TypeScript checks
+    needs: [fork-approval, authorize]
+    if: github.event_name == 'pull_request_target' && needs.authorize.outputs.allowed == 'true'
+    uses: ./.github/workflows/reusable-await-ts-checks.yml
+    with:
+      check_name: 'ggml-rpc-server-pr-head-ts-checks / ts-checks'
+
+  cpp-lint:
+    needs: [fork-approval, authorize]
+    if: needs.authorize.outputs.allowed == 'true'
+    uses: ./.github/workflows/cpp-lint.yaml
+    secrets: inherit
+    with:
+      sha: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      workdir: packages/ggml-rpc-server
+
+  prebuild:
+    needs: [fork-approval, authorize, await-ts-checks, ci-router]
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.ci-router.outputs.run_prebuilds == 'true' &&
+      (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+      pull-requests: write
+      id-token: write
+    uses: ./.github/workflows/prebuilds-ggml-rpc-server.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      reuse-workflow-file: on-pr-ggml-rpc-server.yml
+
+  publish-prebuild-status:
+    needs: [fork-approval, authorize, await-ts-checks, prebuild, ci-router]
+    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Checkout prebuild-status scripts from the default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Publish prebuild status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PREBUILD_RESULT: ${{ needs.prebuild.result }}
+          REUSE_HIT: ${{ needs.prebuild.outputs.reuse_hit }}
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          RUN_PREBUILDS: ${{ needs.ci-router.outputs.run_prebuilds }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/prebuild-ggml-rpc-server
+        run: node .github/scripts/prebuild-status/publish.mjs
+
+  merge-guard:
+    needs: [fork-approval, authorize, await-ts-checks, cpp-lint, prebuild, ci-router]
+    if: always() && !cancelled()
+    uses: ./.github/workflows/public-pr.yml
+    with:
+      sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success') && needs.cpp-lint.result == 'success' }}
+      build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && needs.ci-router.result == 'success' && needs.ci-router.outputs.run_prebuilds == 'false')) }}

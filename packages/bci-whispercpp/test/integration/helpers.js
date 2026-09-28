@@ -9,6 +9,7 @@ const { roundTo } = require('./memory-usage.js')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
+const BCI_TEST_THREADS = 4
 
 // ---------------------------------------------------------------------------
 // Performance reporter — captures BCI inference stats and emits them through
@@ -324,6 +325,7 @@ async function* chunkify(bytes, chunkSize) {
 }
 
 module.exports = {
+  BCI_TEST_THREADS,
   isMobile,
   platform,
   getMobileAssetsDir,

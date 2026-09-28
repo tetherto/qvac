@@ -81,8 +81,8 @@ importers:
         version: 2.4.6
     devDependencies:
       '@qvac/decoder-audio':
-        specifier: ^0.5.0
-        version: 0.5.0(bare-abort-controller@1.1.2)
+        specifier: ^0.7.0
+        version: link:../decoder-audio
       '@qvac/registry-client':
         specifier: ^0.6.1
         version: 0.6.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-url@2.4.6)
@@ -439,8 +439,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@qvac/infer-base':
-        specifier: ^0.6.0
-        version: 0.6.1(bare-abort-controller@1.1.2)
+        specifier: ^0.6.2
+        version: 0.6.2(bare-abort-controller@1.1.2)
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -1832,8 +1832,8 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0(prettier@3.9.6)
       react-native-bare-kit:
-        specifier: ^0.14.0
-        version: 0.14.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
+        specifier: ^0.15.5
+        version: 0.15.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       tsc-alias:
         specifier: ^1.8.17
         version: 1.9.1
@@ -1925,9 +1925,6 @@ importers:
       bare-url:
         specifier: ^2.1.6
         version: 2.4.6
-      brittle:
-        specifier: ^3.4.0
-        version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
     devDependencies:
       '@qvac/registry-client':
         specifier: ^0.6.1
@@ -1941,6 +1938,9 @@ importers:
       bare-stream:
         specifier: ^2.7.0
         version: 2.13.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
+      brittle:
+        specifier: ^3.4.0
+        version: 3.19.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       cmake-bare:
         specifier: ^1.7.5
         version: 1.8.0
@@ -4216,9 +4216,6 @@ packages:
 
   '@qvac/infer-base@0.4.2':
     resolution: {integrity: sha512-Vm5V/3a0oMBdxjfUpZxXrV+xRMLHeXrnKjKwOJSh+y85nRi7Ux+8Iakj4QAsfbrsERWkSTxUQM34KlE9Rb4PdA==}
-
-  '@qvac/infer-base@0.6.1':
-    resolution: {integrity: sha512-6ostRCnmiWz5IM9EQHZisIuB2IAJ3K6mLHMiA2QNZqV03GnI3VsgtPDLzyNXODauJS3Q8eTch1I0khpZscGutA==}
 
   '@qvac/infer-base@0.6.2':
     resolution: {integrity: sha512-soUTI8227F0l2XYSeMHPEfwlZV1Cohe2rhZGiSYFMkm3Ak2N+JV4fufD5SBeNMFq0byrqgt8BWWlcbLSFCVqCw==}
@@ -9447,8 +9444,8 @@ packages:
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
 
-  react-native-bare-kit@0.14.5:
-    resolution: {integrity: sha512-AEHi23oGYiSGBnDu2XepLEPy4BquW1fJmtPDhkzo0GtkpNsfzsU60d8xPm30HCXBLdXVZfPzvOBbroHGOf7N1w==}
+  react-native-bare-kit@0.15.5:
+    resolution: {integrity: sha512-zrHPYcdyXDuWNIQpmPppx4bvV0CNa+1YhaGd4x7hjXbthMm5QKUY0/xDbOsZbb6XmhFVkKLAsAMk0cl/IT/XaA==}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -13355,13 +13352,6 @@ snapshots:
       bare-path: 3.1.1
     optionalDependencies:
       '@qvac/diagnostics': 0.1.2
-    transitivePeerDependencies:
-      - bare-abort-controller
-
-  '@qvac/infer-base@0.6.1(bare-abort-controller@1.1.2)':
-    dependencies:
-      bare-events: 2.9.1(bare-abort-controller@1.1.2)
-      bare-os: 3.9.3
     transitivePeerDependencies:
       - bare-abort-controller
 
@@ -21726,7 +21716,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-native-bare-kit@0.14.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
+  react-native-bare-kit@0.15.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
     dependencies:
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
       bare-link: 3.3.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))

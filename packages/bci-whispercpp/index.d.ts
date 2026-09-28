@@ -204,4 +204,6 @@ export declare class BCIWhispercpp {
     destroy(): Promise<void>;
 }
 export { computeWER };
+export { assessFit } from "./lib/fit";
+export type { BciFitRequest, BciFitResult, BciFitStatus } from "./lib/fit";
 export default BCIWhispercpp;

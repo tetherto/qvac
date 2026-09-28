@@ -16,6 +16,7 @@
 #include "model-interface/moss/MossConfig.hpp"
 #include "model-interface/moss/MossModel.hpp"
 
+using qvac::ttsggml::moss::MOSS_MAX_DURATION_TOKENS;
 using qvac::ttsggml::moss::MOSS_NATIVE_SAMPLE_RATE;
 using qvac::ttsggml::moss::MOSS_SAMPLES_PER_FRAME;
 using qvac::ttsggml::moss::MossConfig;
@@ -33,6 +34,8 @@ constexpr int STREAM_CHUNK_FRAMES = 12;
 constexpr int CONFIGURED_SEED = 7;
 constexpr int CONFIGURED_THREADS = 3;
 constexpr int DECODED_FRAMES = 101;
+constexpr int DURATION_TOKENS = 38;
+constexpr const char* BACKENDS_ROOT = "/opt/qvac/backends";
 constexpr const char* REAL_GGUF_TEXT = "Hello from MOSS running on device.";
 
 std::filesystem::path createStubDir() {
@@ -77,6 +80,14 @@ MossConfig minimallyValidStubConfig() {
   MossConfig cfg;
   cfg.backbonePath = stubFile("moss-backbone-stub.gguf");
   cfg.codecDecoderPath = stubFile("moss-decoder-stub.gguf");
+  return cfg;
+}
+
+MossConfig dialogueStubConfig() {
+  MossConfig cfg = minimallyValidStubConfig();
+  cfg.codecEncoderPath = stubFile("moss-encoder-stub.gguf");
+  cfg.dialogueReferences = {
+      stubFile("moss-speaker-1-stub.wav"), stubFile("moss-speaker-2-stub.wav")};
   return cfg;
 }
 
@@ -180,6 +191,48 @@ TEST(MossValidate, NonexistentReferenceAudioRejected) {
   EXPECT_THROW(MossModel{cfg}, StatusError);
 }
 
+TEST(MossValidate, DialogueConfigAccepted) {
+  EXPECT_NO_THROW(MossModel{dialogueStubConfig()});
+}
+
+TEST(MossValidate, DialogueReferencesNeedEncoder) {
+  auto cfg = dialogueStubConfig();
+  cfg.codecEncoderPath.clear();
+  EXPECT_THROW(MossModel{cfg}, StatusError);
+}
+
+TEST(MossValidate, DialogueAndSingleReferenceAreExclusive) {
+  auto cfg = dialogueStubConfig();
+  cfg.referenceAudio = stubFile("moss-reference-stub.wav");
+  EXPECT_THROW(MossModel{cfg}, StatusError);
+}
+
+TEST(MossValidate, MissingDialogueReferenceRejected) {
+  auto cfg = dialogueStubConfig();
+  cfg.dialogueReferences.push_back("/definitely/does/not/exist/speaker.wav");
+  EXPECT_THROW(MossModel{cfg}, StatusError);
+}
+
+TEST(MossValidate, EmptyDialogueReferenceRejected) {
+  auto cfg = dialogueStubConfig();
+  cfg.dialogueReferences.push_back("");
+  EXPECT_THROW(MossModel{cfg}, StatusError);
+}
+
+TEST(MossValidate, DurationTokensNonNegative) {
+  auto cfg = minimallyValidStubConfig();
+  cfg.durationTokens = -1;
+  EXPECT_THROW(MossModel{cfg}, StatusError);
+  cfg.durationTokens = 0;
+  EXPECT_NO_THROW(MossModel{cfg});
+  cfg.durationTokens = DURATION_TOKENS;
+  EXPECT_NO_THROW(MossModel{cfg});
+  cfg.durationTokens = MOSS_MAX_DURATION_TOKENS;
+  EXPECT_NO_THROW(MossModel{cfg});
+  cfg.durationTokens = MOSS_MAX_DURATION_TOKENS + 1;
+  EXPECT_THROW(MossModel{cfg}, StatusError);
+}
+
 TEST(MossValidate, ThreadsNonNegative) {
   auto cfg = minimallyValidStubConfig();
   cfg.threads = -1;
@@ -227,6 +280,9 @@ TEST(MossValidate, ConfigDefaultsAllUnset) {
   EXPECT_FALSE(cfg.streamChunkFrames.has_value());
   EXPECT_FALSE(cfg.nGpuLayers.has_value());
   EXPECT_FALSE(cfg.useGpu.has_value());
+  EXPECT_FALSE(cfg.durationTokens.has_value());
+  EXPECT_TRUE(cfg.dialogueReferences.empty());
+  EXPECT_TRUE(cfg.backendsDir.empty());
 }
 
 TEST(MossEngineOptions, UnsetFieldsKeepEngineDefaults) {
@@ -254,6 +310,24 @@ TEST(MossEngineOptions, ConfiguredFieldsReachTheEngine) {
   EXPECT_EQ(opts.seed, static_cast<uint32_t>(CONFIGURED_SEED));
   EXPECT_EQ(opts.n_threads, CONFIGURED_THREADS);
   EXPECT_EQ(opts.stream_chunk_frames, STREAM_CHUNK_FRAMES);
+}
+
+TEST(MossEngineOptions, DirectableAndDialogueFieldsReachTheEngine) {
+  auto cfg = dialogueStubConfig();
+  cfg.durationTokens = DURATION_TOKENS;
+  cfg.backendsDir = BACKENDS_ROOT;
+  const auto opts = MossModel::toEngineOptions(cfg);
+  EXPECT_EQ(opts.dialogue_reference_paths, cfg.dialogueReferences);
+  EXPECT_EQ(opts.duration_tokens, DURATION_TOKENS);
+  EXPECT_EQ(opts.backends_dir.rfind(BACKENDS_ROOT, 0), 0u);
+}
+
+TEST(MossEngineOptions, UnsetDirectableFieldsKeepEngineDefaults) {
+  const tts_cpp::moss::EngineOptions defaults;
+  const auto opts = MossModel::toEngineOptions(minimallyValidStubConfig());
+  EXPECT_TRUE(opts.dialogue_reference_paths.empty());
+  EXPECT_EQ(opts.duration_tokens, defaults.duration_tokens);
+  EXPECT_TRUE(opts.backends_dir.empty());
 }
 
 TEST(MossEngineOptions, ZeroThreadsKeepsTheEngineDefault) {

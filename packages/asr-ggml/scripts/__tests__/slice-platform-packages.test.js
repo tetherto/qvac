@@ -229,6 +229,57 @@ test('fails when the merged artifact is missing a host', async (t) => {
   assert.throws(() => slicePlatformPackages({ workdir, outDir }), /win32-x64/)
 })
 
+function addMetaDirs(workdir) {
+  const prebuildsDir = path.join(workdir, 'prebuilds')
+  fs.mkdirSync(path.join(prebuildsDir, 'include'), { recursive: true })
+  fs.writeFileSync(path.join(prebuildsDir, 'include', 'ggml.h'), '// header\n')
+  fs.mkdirSync(path.join(prebuildsDir, 'share', 'fake-ggml'), { recursive: true })
+  fs.writeFileSync(
+    path.join(prebuildsDir, 'share', 'fake-ggml', 'fake-ggml-config.cmake'),
+    '# config\n'
+  )
+}
+
+test('keeps the declared meta dirs in the meta package', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  addMetaDirs(workdir)
+
+  const sliceDirs = slicePlatformPackages({ workdir, outDir, keepDirs: ['include', 'share'] })
+
+  assert.equal(sliceDirs.length, EXPECTED_SLICE_SUFFIXES.length)
+  assert.deepEqual(fs.readdirSync(path.join(workdir, 'prebuilds')).sort(), ['include', 'share'])
+  assert.ok(fs.existsSync(path.join(workdir, 'prebuilds', 'include', 'ggml.h')))
+  for (const dir of sliceDirs) {
+    const prebuilds = fs.readdirSync(path.join(dir, 'addon', 'prebuilds'))
+    assert.ok(!prebuilds.includes('include'), path.basename(dir) + ' must not carry include/')
+    assert.ok(!prebuilds.includes('share'), path.basename(dir) + ' must not carry share/')
+  }
+})
+
+test('treats undeclared meta dirs as unmapped hosts', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  addMetaDirs(workdir)
+
+  assert.throws(() => slicePlatformPackages({ workdir, outDir }), /include, share/)
+})
+
+test('fails when a declared meta dir is missing from the artifact', async (t) => {
+  const { slicePlatformPackages } = await slicerPromise
+  const { root, workdir, outDir } = makeFixture(ALL_HOSTS)
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  addMetaDirs(workdir)
+  fs.rmSync(path.join(workdir, 'prebuilds', 'share'), { recursive: true })
+
+  assert.throws(
+    () => slicePlatformPackages({ workdir, outDir, keepDirs: ['include', 'share'] }),
+    /missing the meta package dirs: share/
+  )
+})
+
 test('fails when a slice exceeds the size budget', async (t) => {
   const { slicePlatformPackages } = await slicerPromise
   const { root, workdir, outDir } = makeFixture(ALL_HOSTS)

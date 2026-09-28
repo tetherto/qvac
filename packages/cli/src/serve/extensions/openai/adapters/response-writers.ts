@@ -2,10 +2,17 @@ import type { ServerResponse } from 'node:http'
 import type { CompletionRun, Tool } from '@qvac/sdk'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
 import {
+  accumulateUsage,
   drainCompletion,
-  formatToolErrors
+  formatToolErrors,
+  type DrainedCompletion
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
+import {
+  MAX_TOOL_SEARCH_ROUNDS,
+  foldToolSearch,
+  stripToolSearchCalls
+} from '@/serve/lib/tool-search'
 import type { GenerationParams, ResponseFormat } from '@/serve/extensions/openai/schemas/common'
 import {
   buildResponseObject,
@@ -27,6 +34,13 @@ export interface ResponseWriterContext {
   logger: ResponseWriterLogger
   responsesStore: ResponsesStore
 }
+
+/**
+ * Starts one generation over the given history. Each `tool_search` round calls
+ * it again with the search results appended, so the caller owns per-turn setup
+ * (cancellation binding in particular) rather than the writer.
+ */
+export type RunTurn = (history: Array<{ role: string; content: string }>) => CompletionRun
 
 export interface ResponsesHandlerParams {
   ctx: ResponseWriterContext
@@ -51,10 +65,31 @@ export interface ResponsesHandlerParams {
 export async function writeBlockingResponse(
   res: ServerResponse,
   p: ResponsesHandlerParams,
-  result: CompletionRun
+  runTurn: RunTurn
 ): Promise<Record<string, unknown>> {
-  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } =
-    await drainCompletion(result)
+  // `tool_search` is the SDK's own tool and no HTTP client has a handler for
+  // it, so it is answered here and the model asked again. Requests with no
+  // deferred tools leave the loop on the first pass.
+  let turnHistory = p.history
+  let drained
+  let total: DrainedCompletion | undefined
+  for (let round = 0; ; round++) {
+    drained = await drainCompletion(runTurn(turnHistory))
+    total = accumulateUsage(total, drained)
+    if (round >= MAX_TOOL_SEARCH_ROUNDS) break
+    const extended = foldToolSearch(
+      p.tools,
+      turnHistory,
+      drained.toolCalls,
+      drained.rawFullText ?? drained.text
+    )
+    if (!extended) break
+    turnHistory = extended
+  }
+  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+    p.tools,
+    total ?? drained
+  )
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -105,7 +140,7 @@ export async function writeBlockingResponse(
 export async function writeStreamingResponse(
   res: ServerResponse,
   p: ResponsesHandlerParams,
-  result: CompletionRun
+  runTurn: RunTurn
 ): Promise<Record<string, unknown>> {
   const msgId = messageId()
   let fullText = ''
@@ -136,19 +171,50 @@ export async function writeStreamingResponse(
     response_id: p.rid
   })
 
-  const { toolCalls, toolErrors, stats, stopReason, completionTokens } = await drainCompletion(
-    result,
-    (token) => {
+  // Every turn streams live. Tool-call syntax is framed into `toolCall` events
+  // by the normalizer, so a search turn emits no text deltas to withhold; what
+  // it can emit is a preamble, which is fine to show. Only the SSE stream is
+  // held open across a search round.
+  const sendDelta = (token: string) =>
+    sendSSE(res, {
+      type: 'response.output_text.delta',
+      item_id: msgId,
+      output_index: 0,
+      content_index: 0,
+      delta: token,
+      response_id: p.rid
+    })
+
+  let turnHistory = p.history
+  let drained
+  let total: DrainedCompletion | undefined
+  for (let round = 0; ; round++) {
+    // Only the answering turn's text belongs in the final response object; a
+    // search turn's preamble was streamed but is not part of the answer.
+    fullText = ''
+    drained = await drainCompletion(runTurn(turnHistory), (token) => {
       fullText += token
-      sendSSE(res, {
-        type: 'response.output_text.delta',
-        item_id: msgId,
-        output_index: 0,
-        content_index: 0,
-        delta: token,
-        response_id: p.rid
-      })
-    }
+      sendDelta(token)
+    })
+    total = accumulateUsage(total, drained)
+
+    const extended =
+      round >= MAX_TOOL_SEARCH_ROUNDS
+        ? null
+        : foldToolSearch(
+            p.tools,
+            turnHistory,
+            drained.toolCalls,
+            drained.rawFullText ?? drained.text
+          )
+    if (!extended) break
+    // The search turn loaded definitions; ask again with them in the history.
+    turnHistory = extended
+  }
+
+  const { toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+    p.tools,
+    total ?? drained
   )
   const hasToolCalls = toolCalls.length > 0
 

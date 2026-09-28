@@ -270,7 +270,7 @@ describe('writeBlockingResponse', () => {
       stats: { generatedTokens: 42, emittedTokens: 1 }
     })
 
-    const obj = await writeBlockingResponse(res, p, result)
+    const obj = await writeBlockingResponse(res, p, () => result)
     assert.equal(status, 200)
     assert.equal((obj['usage'] as { output_tokens: number }).output_tokens, 1)
     const parsed = JSON.parse(bodyStr) as { usage: { output_tokens: number } }
@@ -300,7 +300,7 @@ describe('writeBlockingResponse', () => {
       stats: { generatedTokens: 1 }
     })
 
-    const obj = await writeBlockingResponse(res, p, result)
+    const obj = await writeBlockingResponse(res, p, () => result)
     assert.equal(obj['status'], 'requires_action')
     assert.ok((obj['required_action'] as { submit_tool_outputs: unknown }).submit_tool_outputs)
     const parsed = JSON.parse(bodyStr) as {
