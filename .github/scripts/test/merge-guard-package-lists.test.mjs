@@ -10,6 +10,7 @@ const ALL_PACKAGES_KEY = 'ALL_PACKAGES: >-'
 const SHARED_CI_ONLY = '["shared-ci"]'
 const ONE_PACKAGE = '["tts-ggml","shared-ci"]'
 const OUTPUT_LINE = /^[a-z-]+=\S/
+const ONE_PACKAGE_PER_LINE = 1
 
 function indentOf(line) {
   return line.length - line.trimStart().length
@@ -33,12 +34,20 @@ function allPackagesValue() {
   return body.map((line) => line.slice(blockIndent)).join('\n')
 }
 
+function workflowPackages() {
+  return JSON.parse(allPackagesValue())
+}
+
+function multiLinePackages() {
+  return JSON.stringify(workflowPackages(), null, ONE_PACKAGE_PER_LINE)
+}
+
 function runPackageLists(changes) {
   const workspace = makeWorkspace()
   try {
     const result = runBashStep(workflowStepRun(WORKFLOW, STEP), {
       cwd: workspace.dir,
-      env: { CHANGES: changes, ALL_PACKAGES: allPackagesValue() }
+      env: { CHANGES: changes, ALL_PACKAGES: multiLinePackages() }
     })
     const raw = readFileSync(`${workspace.dir}/step-output.txt`, 'utf8')
     return { ...result, rawLines: raw.split('\n').filter((line) => line !== '') }
@@ -47,8 +56,8 @@ function runPackageLists(changes) {
   }
 }
 
-test('the all-packages list really spans several lines in the workflow', () => {
-  assert.ok(allPackagesValue().includes('\n'), 'the fixture no longer exercises a multi-line value')
+test('the fixture feeds the step a multi-line all-packages list', () => {
+  assert.ok(multiLinePackages().includes('\n'))
 })
 
 test('a shared-CI-only change writes one well-formed line per output', () => {
@@ -59,7 +68,7 @@ test('a shared-CI-only change writes one well-formed line per output', () => {
 
 test('a shared-CI-only change runs sanity-checks on every package', () => {
   const { outputs } = runPackageLists(SHARED_CI_ONLY)
-  const expected = JSON.parse(allPackagesValue())
+  const expected = workflowPackages()
   assert.deepEqual(JSON.parse(outputs['sanity-packages']), expected)
   assert.deepEqual(JSON.parse(outputs['packages-with-path']).map((entry) => entry.package), expected)
   assert.deepEqual(JSON.parse(outputs.packages), [])

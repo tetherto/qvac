@@ -153,7 +153,8 @@ jobs:
           # nothing verified.
           SANITY="$CHANGED"
           if [ "$SANITY" = "[]" ] && echo "$CHANGES" | jq -e 'index("shared-ci")' >/dev/null; then
-            SANITY=$(jq -c . <<<"$ALL_PACKAGES")
+            # Compacted: a multi-line value is an invalid $GITHUB_OUTPUT line.
+            SANITY=$(jq -c . <<< "$ALL_PACKAGES")
             echo "::notice::shared CI changed but no package path did; running sanity-checks across every addon"
           fi
           echo "sanity-packages=${SANITY}" >> "$GITHUB_OUTPUT"
