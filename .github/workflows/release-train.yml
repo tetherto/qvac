@@ -352,9 +352,10 @@ jobs:
           name: dist-${{ needs.train.outputs.name }}
 
       # One job, so one deployment and one approval. The script publishes one
-      # package per nx call, in dependency order, and stops at the first
-      # failure. An already-published version is skipped, so a half-shipped run
-      # can be re-run.
+      # package per nx call, in dependency order, waits until npm serves each
+      # version before the next, and stops at the first failure. An
+      # already-published version is skipped, so a half-shipped run can be
+      # re-run.
       #
       # pnpm 11 reads its settings from PNPM_CONFIG_* and ignores NPM_CONFIG_*.
       # Lifecycle scripts stay off so inference's `prepare` does not rebuild

@@ -120,9 +120,11 @@ Two approvals and a CODEOWNERS review, as for any release branch.
 2. runs the branch guard — anchor packages at the branch version, the anchor
    group sharing a major and minor, a changelog from every package whose
    manifest moved
-3. builds every package from the pnpm workspace, so nothing waits on npm
+3. builds the train's packages from the pnpm workspace, so no build waits on
+   npm
 4. **approval 1** — `environment: npm` — `release-train-publish.mjs` publishes
-   one package at a time in dependency order and stops at the first failure.
+   one package at a time in dependency order, waits until npm serves each
+   version before publishing the next, and stops at the first failure.
    Each package gets `latest`, or `release-<major>.<minor>` when it is older
    than npm's `latest` or a prerelease, unless `npm_tag` is given
 5. **approval 2** — `environment: pypi` — `tetherto-qvac-sdk`
@@ -137,7 +139,8 @@ As today.
 Re-run the workflow on the same branch. Every step is idempotent:
 
 - the publish step skips a version already on npm and publishes the rest
-- the tag job leaves an existing tag alone and never moves it
+- the tag job leaves a tag already at this commit alone, and fails rather
+  than move one that points at another commit
 - `create-github-release` and the fat-wheel build are unchanged from the
   single-package path
 
