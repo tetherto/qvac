@@ -314,6 +314,21 @@ jobs:
         if: ${{ always() && !cancelled() && matrix.os == 'ubuntu-24.04' }}
         working-directory: ${{ env.WORKDIR }}
         run: |
+          # The toolchain compiles with the newest clang-N it finds, but the
+          # unversioned llvm-profdata/llvm-cov on PATH can be an older LLVM that
+          # cannot read that compiler's raw profile. Use the compiler's own tools.
+          cxx=$(sed -n 's/^CMAKE_CXX_COMPILER:[A-Z]*=//p' build/CMakeCache.txt 2>/dev/null | head -n 1)
+          llvm_bin=""
+          if [ -n "$cxx" ]; then
+            llvm_bin=$(dirname "$(readlink -f "$cxx")")
+          fi
+          if [ -n "$llvm_bin" ] && [ -x "$llvm_bin/llvm-profdata" ] && [ -x "$llvm_bin/llvm-cov" ]; then
+            export PATH="$llvm_bin:$PATH"
+          else
+            echo "::warning::No llvm-profdata/llvm-cov next to '${cxx}'; using PATH"
+          fi
+          echo "compiler: ${cxx}"
+          llvm-profdata --version | head -n 2
           npm run coverage:cpp:report
           COVERAGE=$(grep 'TOTAL' build/test/unit/coverage-summary.txt | awk '{print $10}' || echo "0.0")
           echo "LINE_COVERAGE_PERCENTAGE=${COVERAGE}" >> $GITHUB_ENV
