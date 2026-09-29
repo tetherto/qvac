@@ -1,7 +1,8 @@
 {
   "default-registry": {
     "kind": "git",
-    "baseline": "dca20a940d85d6741285c888b53bd10da29c0723",
+    "baseline": "aaf9876933a4be94d881d2b048ad3439ac2833fd",
+    "reference": "QVAC-25377/moss-transcribe-hotwords",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git"
   },
   "registries": [
