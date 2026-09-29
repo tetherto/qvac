@@ -112,11 +112,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/utils/tool-helpers.ts",
-        "line": 37,
+        "line": 41,
         "column": 8
       },
       "measurement": {
-        "value": 66,
+        "value": 68,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -258,11 +258,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 1251,
+        "line": 1550,
         "column": 1
       },
       "measurement": {
-        "value": 69,
+        "value": 94,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -358,11 +358,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/ops/bci-transcribe.ts",
-        "line": 209,
+        "line": 226,
         "column": 8
       },
       "measurement": {
-        "value": 53,
+        "value": 55,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -383,7 +383,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/helpers.js",
-        "line": 798,
+        "line": 800,
         "column": 1
       },
       "measurement": {
@@ -507,7 +507,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/bci-whispercpp/src/index.ts",
-        "line": 294,
+        "line": 295,
         "column": 3
       },
       "measurement": {
@@ -708,7 +708,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/core/load-manager.test.ts",
         "line": 52,
-        "column": 29
+        "column": 26
       },
       "measurement": {
         "value": 155,
@@ -778,11 +778,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 2552,
+        "line": 3222,
         "column": 3
       },
       "measurement": {
-        "value": 51,
+        "value": 55,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -828,7 +828,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/hyperdrive.ts",
-        "line": 279,
+        "line": 280,
         "column": 1
       },
       "measurement": {
@@ -1004,13 +1004,38 @@
       "primaryLocation": {
         "path": "packages/cli/test/e2e/openai/tool-choice.test.ts",
         "line": 195,
-        "column": 48
+        "column": 45
       },
       "measurement": {
         "value": 184,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:0777b56935fe966f846229d3041ba47aad4207af573e058d7ae2906a30c70768",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/inference/src/resources/model-fit/native-probe/advisory-fit.ts",
+        "symbol": "runAdvisoryFitCheck#1"
+      },
+      "summary": "runAdvisoryFitCheck#1 in packages/inference/src/resources/model-fit/native-probe/advisory-fit.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/inference/src/resources/model-fit/native-probe/advisory-fit.ts",
+        "line": 352,
+        "column": 8
+      },
+      "measurement": {
+        "value": 55,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -1319,7 +1344,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image-flux2-fusion.test.js",
         "line": 39,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 126,
@@ -1344,7 +1369,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/registry.ts",
         "line": 277,
-        "column": 17
+        "column": 5
       },
       "measurement": {
         "value": 153,
@@ -1368,7 +1393,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/diffusion-cpp/src/index.ts",
-        "line": 433,
+        "line": 404,
         "column": 3
       },
       "measurement": {
@@ -1493,7 +1518,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/utils/archive.ts",
         "line": 111,
-        "column": 40
+        "column": 22
       },
       "measurement": {
         "value": 57,
@@ -1593,7 +1618,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/resources/model-fit/native-probe/run-isolated-fit.ts",
         "line": 223,
-        "column": 32
+        "column": 22
       },
       "measurement": {
         "value": 300,
@@ -1668,7 +1693,7 @@
       "primaryLocation": {
         "path": "packages/embed-llamacpp/test/integration/rag-id-map-index.test.js",
         "line": 74,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 138,
@@ -1742,7 +1767,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/videos.test.ts",
         "line": 433,
-        "column": 43
+        "column": 40
       },
       "measurement": {
         "value": 150,
@@ -1765,11 +1790,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/asr-ggml/src/engines/whisper/driver.ts",
-        "line": 353,
+        "line": 356,
         "column": 1
       },
       "measurement": {
-        "value": 528,
+        "value": 531,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -1801,6 +1826,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:0e0be0308e39dcc0639c47c7aa72166bc83a5e29dd62ef70735a76eba2e8cc35",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/inference/src/profiling/operation-metrics.ts",
+        "symbol": "bciGauges#1"
+      },
+      "summary": "bciGauges#1 in packages/inference/src/profiling/operation-metrics.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/inference/src/profiling/operation-metrics.ts",
+        "line": 225,
+        "column": 1
+      },
+      "measurement": {
+        "value": 22,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:0e1b80d65b896f99c38e2dda9753b1c5fdf1507232b3bd767bc6d844a2471473",
       "detector": "structure",
       "rule": "file-lines",
@@ -1814,11 +1864,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/asr-ggml/src/engines/parakeet/parakeet.ts",
-        "line": 342,
+        "line": 340,
         "column": 1
       },
       "measurement": {
-        "value": 702,
+        "value": 726,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -1865,7 +1915,7 @@
       "primaryLocation": {
         "path": "packages/rag/src/adapters/database/TurboVecAdapter.ts",
         "line": 830,
-        "column": 55
+        "column": 38
       },
       "measurement": {
         "value": 69,
@@ -1889,7 +1939,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 433,
+        "line": 442,
         "column": 3
       },
       "measurement": {
@@ -1989,7 +2039,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/hyperdrive.ts",
-        "line": 279,
+        "line": 280,
         "column": 1
       },
       "measurement": {
@@ -2214,7 +2264,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/e2e/model/real-model.test.ts",
         "line": 83,
-        "column": 44
+        "column": 41
       },
       "measurement": {
         "value": 103,
@@ -2241,7 +2291,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 880,
+        "value": 976,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -2262,7 +2312,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/helpers.js",
-        "line": 798,
+        "line": 800,
         "column": 1
       },
       "measurement": {
@@ -2337,7 +2387,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "scripts/code-quality/detectors/structure.ts",
-        "line": 242,
+        "line": 260,
         "column": 1
       },
       "measurement": {
@@ -2437,7 +2487,7 @@
       "primaryLocation": {
         "path": "packages/registry-server/lib/reseed-tracker.js",
         "line": 39,
-        "column": 24
+        "column": 21
       },
       "measurement": {
         "value": 75,
@@ -2487,7 +2537,7 @@
       "primaryLocation": {
         "path": "packages/asr-ggml/benchmarks/server/src/services/whisper.js",
         "line": 45,
-        "column": 36
+        "column": 20
       },
       "measurement": {
         "value": 115,
@@ -2605,13 +2655,13 @@
         "kind": "file",
         "path": "packages/sdk/e2e/tests/mobile/consumer.ts"
       },
-      "summary": "packages/sdk/e2e/tests/mobile/consumer.ts imports 37 local modules",
+      "summary": "packages/sdk/e2e/tests/mobile/consumer.ts imports 36 local modules",
       "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
       "primaryLocation": {
         "path": "packages/sdk/e2e/tests/mobile/consumer.ts"
       },
       "measurement": {
-        "value": 37,
+        "value": 36,
         "unit": "local modules",
         "advisoryThreshold": 25,
         "highThreshold": 40
@@ -2715,6 +2765,25 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:15b967eadf15df77aeabc6d06bcadb4aaa0f811f0b28925889635f52311172c1",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/diffusion-cpp/src/fit.ts",
+          "packages/diffusion-cpp/src/index.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/diffusion-cpp/src/fit.ts → packages/diffusion-cpp/src/index.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/diffusion-cpp/src/fit.ts"
       }
     },
     {
@@ -2898,7 +2967,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/responses.test.ts",
         "line": 14,
-        "column": 36
+        "column": 33
       },
       "measurement": {
         "value": 166,
@@ -3117,7 +3186,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts",
-        "line": 316,
+        "line": 317,
         "column": 1
       },
       "measurement": {
@@ -3171,7 +3240,7 @@
         "column": 8
       },
       "measurement": {
-        "value": 53,
+        "value": 54,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -3192,7 +3261,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/src/index.ts",
-        "line": 222,
+        "line": 230,
         "column": 3
       },
       "measurement": {
@@ -3268,7 +3337,7 @@
       "primaryLocation": {
         "path": "packages/cli/benchmarks/serve-openai-providers/coverage-report.test.ts",
         "line": 69,
-        "column": 54
+        "column": 51
       },
       "measurement": {
         "value": 192,
@@ -3318,7 +3387,7 @@
       "primaryLocation": {
         "path": "packages/sdk/src/client/rpc/node-rpc-client.ts",
         "line": 416,
-        "column": 37
+        "column": 34
       },
       "measurement": {
         "value": 60,
@@ -3567,7 +3636,7 @@
       "primaryLocation": {
         "path": "packages/sdk/test/commands-verify.test.ts",
         "line": 278,
-        "column": 40
+        "column": 37
       },
       "measurement": {
         "value": 390,
@@ -3838,11 +3907,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/inference/src/profiling/operation-metrics.ts",
-        "line": 346,
+        "line": 352,
         "column": 1
       },
       "measurement": {
-        "value": 373,
+        "value": 419,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -3914,7 +3983,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/schemas.test.ts",
         "line": 54,
-        "column": 40
+        "column": 37
       },
       "measurement": {
         "value": 212,
@@ -3939,7 +4008,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-video-ltx.test.js",
         "line": 233,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 177,
@@ -3963,7 +4032,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 2808,
+        "line": 3553,
         "column": 3
       },
       "measurement": {
@@ -3989,7 +4058,7 @@
       "primaryLocation": {
         "path": "packages/test-suite/templates/mobile-consumer/consumer-wrapper.tsx",
         "line": 164,
-        "column": 16
+        "column": 13
       },
       "measurement": {
         "value": 275,
@@ -4066,7 +4135,7 @@
         "column": 8
       },
       "measurement": {
-        "value": 149,
+        "value": 160,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -4137,7 +4206,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/hyperdrive.ts",
-        "line": 507,
+        "line": 508,
         "column": 1
       },
       "measurement": {
@@ -4145,6 +4214,31 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:2538a24fa37c88e4ef5bc9971a724de64c2bda269fefb3bdbdf0be705606546d",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/inference/src/errors/index.ts",
+          "packages/inference/src/schemas/index.ts",
+          "packages/inference/src/schemas/common.ts",
+          "packages/inference/src/schemas/batch-completion-stream.ts",
+          "packages/inference/src/schemas/completion-event.ts",
+          "packages/inference/src/schemas/completion-stream.ts",
+          "packages/inference/src/utils/tools/defer.ts",
+          "packages/inference/src/utils/tool-helpers.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/inference/src/errors/index.ts → packages/inference/src/schemas/index.ts → packages/inference/src/schemas/common.ts → packages/inference/src/schemas/batch-completion-stream.ts → packages/inference/src/schemas/completion-event.ts → packages/inference/src/schemas/completion-stream.ts → packages/inference/src/utils/tools/defer.ts → packages/inference/src/utils/tool-helpers.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/inference/src/errors/index.ts"
       }
     },
     {
@@ -4185,7 +4279,7 @@
       "primaryLocation": {
         "path": "plugins/opencode/src/spawn-host.ts",
         "line": 57,
-        "column": 40
+        "column": 22
       },
       "measurement": {
         "value": 59,
@@ -4360,13 +4454,38 @@
       "primaryLocation": {
         "path": "packages/cli/test/e2e/model/real-model.test.ts",
         "line": 592,
-        "column": 30
+        "column": 27
       },
       "measurement": {
         "value": 118,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:274e6b246109fe7d78249377d244e7b21e6a16cf3ef1f3d355e3a9b4ce6c3d34",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/inference/src/handlers/completion-orchestrate.ts",
+        "symbol": "orchestrateCompletion#1"
+      },
+      "summary": "orchestrateCompletion#1 in packages/inference/src/handlers/completion-orchestrate.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/inference/src/handlers/completion-orchestrate.ts",
+        "line": 134,
+        "column": 8
+      },
+      "measurement": {
+        "value": 17,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -4435,7 +4554,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/core/plugins/error-handler.ts",
         "line": 26,
-        "column": 75
+        "column": 57
       },
       "measurement": {
         "value": 99,
@@ -4560,7 +4679,7 @@
       "primaryLocation": {
         "path": "packages/bci-whispercpp/test/benchmark/rtf-benchmark.test.js",
         "line": 190,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 157,
@@ -4932,7 +5051,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/hyperdrive.ts",
-        "line": 388,
+        "line": 389,
         "column": 1
       },
       "measurement": {
@@ -5032,7 +5151,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 297,
+        "line": 304,
         "column": 24
       },
       "measurement": {
@@ -5241,7 +5360,7 @@
       "detector": "structure",
       "rule": "file-lines",
       "category": "size",
-      "severity": "advisory",
+      "severity": "high",
       "subject": {
         "kind": "file",
         "path": "packages/inference/test/completion-kvcache-tools.test.ts"
@@ -5254,7 +5373,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 995,
+        "value": 1074,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -5276,7 +5395,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/videos.test.ts",
         "line": 143,
-        "column": 41
+        "column": 38
       },
       "measurement": {
         "value": 120,
@@ -5499,7 +5618,7 @@
       "primaryLocation": {
         "path": "packages/vla-ggml/test/integration/pi05.test.js",
         "line": 375,
-        "column": 40
+        "column": 22
       },
       "measurement": {
         "value": 112,
@@ -5524,7 +5643,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/core/plugins/error-handler.ts",
         "line": 29,
-        "column": 55
+        "column": 23
       },
       "measurement": {
         "value": 83,
@@ -5722,7 +5841,7 @@
       "primaryLocation": {
         "path": "packages/ai-sdk-provider/test/provider.test.ts",
         "line": 267,
-        "column": 95
+        "column": 86
       },
       "measurement": {
         "value": 119,
@@ -5796,8 +5915,8 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 143,
-        "column": 24
+        "line": 150,
+        "column": 5
       },
       "measurement": {
         "value": 58,
@@ -5846,11 +5965,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/decoder-audio/src/index.ts",
-        "line": 334,
+        "line": 484,
         "column": 3
       },
       "measurement": {
-        "value": 56,
+        "value": 61,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -5876,6 +5995,31 @@
       },
       "measurement": {
         "value": 52,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:33356e2b99a19ec97abb9223b59c229d476de6c16cc5cdbfd0b4b12ca98024ad",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "TTSGgml > _assertEngineStreamingSupport#1"
+      },
+      "summary": "TTSGgml > _assertEngineStreamingSupport#1 in packages/tts-ggml/src/index.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 2389,
+        "column": 3
+      },
+      "measurement": {
+        "value": 53,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -5920,11 +6064,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts",
-        "line": 369,
+        "line": 370,
         "column": 1
       },
       "measurement": {
-        "value": 311,
+        "value": 334,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -5995,7 +6139,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/files.ts",
         "line": 53,
-        "column": 51
+        "column": 39
       },
       "measurement": {
         "value": 93,
@@ -6044,11 +6188,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/benchmark/parakeet-rtf-benchmark.test.js",
-        "line": 291,
-        "column": 93
+        "line": 292,
+        "column": 83
       },
       "measurement": {
-        "value": 344,
+        "value": 334,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -6069,11 +6213,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "line": 105,
+        "line": 140,
         "column": 8
       },
       "measurement": {
-        "value": 164,
+        "value": 185,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -6102,6 +6246,28 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:34dbedf7f8efc65201fb6c69a5a0f00e4ebc034afa67edd3d9fafe3b5b87b770",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/inference/src/errors/index.ts",
+          "packages/inference/src/schemas/index.ts",
+          "packages/inference/src/schemas/completion-stream.ts",
+          "packages/inference/src/utils/tools/defer.ts",
+          "packages/inference/src/utils/tool-helpers.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/inference/src/errors/index.ts → packages/inference/src/schemas/index.ts → packages/inference/src/schemas/completion-stream.ts → packages/inference/src/utils/tools/defer.ts → packages/inference/src/utils/tool-helpers.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/inference/src/errors/index.ts"
       }
     },
     {
@@ -6239,11 +6405,11 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts",
-        "line": 385,
+        "line": 386,
         "column": 8
       },
       "measurement": {
-        "value": 31,
+        "value": 36,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -6437,7 +6603,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/http.ts",
         "line": 536,
-        "column": 17
+        "column": 5
       },
       "measurement": {
         "value": 75,
@@ -6486,11 +6652,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "line": 259,
+        "line": 295,
         "column": 1
       },
       "measurement": {
-        "value": 63,
+        "value": 85,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -6562,7 +6728,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/models.ts",
         "line": 54,
-        "column": 51
+        "column": 39
       },
       "measurement": {
         "value": 56,
@@ -6805,7 +6971,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/ops/batch-completion-stream.ts",
-        "line": 145,
+        "line": 148,
         "column": 8
       },
       "measurement": {
@@ -7176,7 +7342,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "plugins/openclaw/src/provider-config.ts",
-        "line": 434,
+        "line": 435,
         "column": 1
       },
       "measurement": {
@@ -7201,7 +7367,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/tts-ggml/test/integration/addon.test.js",
-        "line": 45,
+        "line": 46,
         "column": 13
       },
       "measurement": {
@@ -7209,6 +7375,31 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
+      }
+    },
+    {
+      "fingerprint": "quality-v1:3d6434b042ca44f7d98646d866d3329f44526a261102c491ca2f3e804915749b",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "TTSGgml > _assignSynthesisOptions#1"
+      },
+      "summary": "TTSGgml > _assignSynthesisOptions#1 in packages/tts-ggml/src/index.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 2328,
+        "column": 3
+      },
+      "measurement": {
+        "value": 56,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -7277,7 +7468,7 @@
       "primaryLocation": {
         "path": "packages/model-fit/test/desktop/process.test.js",
         "line": 183,
-        "column": 75
+        "column": 65
       },
       "measurement": {
         "value": 121,
@@ -7550,7 +7741,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-video-wan.test.js",
         "line": 191,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 199,
@@ -7598,11 +7789,36 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/plugin.ts",
-        "line": 330,
+        "line": 338,
         "column": 7
       },
       "measurement": {
         "value": 33,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:41c1c976d2188a21a92feee9811419541df779cecbc3f099561fa8a3268fae21",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "TTSGgml > _sentenceStreamTextIterableDrive#1"
+      },
+      "summary": "TTSGgml > _sentenceStreamTextIterableDrive#1 in packages/tts-ggml/src/index.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 3222,
+        "column": 3
+      },
+      "measurement": {
+        "value": 16,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -7720,11 +7936,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/tts-ggml/test/integration/addon.test.js",
-        "line": 45,
-        "column": 13
+        "line": 46,
+        "column": 3
       },
       "measurement": {
-        "value": 156,
+        "value": 157,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -7818,7 +8034,7 @@
       "primaryLocation": {
         "path": "packages/llm-llamacpp/benchmarks/vlm-benchmark/harness.cjs",
         "line": 324,
-        "column": 98
+        "column": 90
       },
       "measurement": {
         "value": 108,
@@ -7914,7 +8130,7 @@
       "primaryLocation": {
         "path": "packages/llm-llamacpp/test/integration/qwen3-5-multimodal-cache-stress.test.js",
         "line": 429,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 144,
@@ -8208,7 +8424,7 @@
       "primaryLocation": {
         "path": "packages/inference/test/audio-edit-plugin.test.ts",
         "line": 136,
-        "column": 102
+        "column": 92
       },
       "measurement": {
         "value": 113,
@@ -8232,8 +8448,8 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/hyperdrive.ts",
-        "line": 735,
-        "column": 17
+        "line": 736,
+        "column": 5
       },
       "measurement": {
         "value": 70,
@@ -8258,7 +8474,7 @@
       "primaryLocation": {
         "path": "packages/test-suite/src/utils/report-generator.ts",
         "line": 809,
-        "column": 21
+        "column": 16
       },
       "measurement": {
         "value": 177,
@@ -8304,7 +8520,7 @@
       "primaryLocation": {
         "path": "packages/rag/src/adapters/database/HyperDBStorage.ts",
         "line": 317,
-        "column": 53
+        "column": 44
       },
       "measurement": {
         "value": 51,
@@ -8521,11 +8737,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/sdk/src/index.ts",
-        "line": 312,
+        "line": 309,
         "column": 1
       },
       "measurement": {
-        "value": 332,
+        "value": 337,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -8771,7 +8987,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 114,
+        "value": 110,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -8942,7 +9158,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/api/completion-stream.ts",
         "line": 190,
-        "column": 37
+        "column": 28
       },
       "measurement": {
         "value": 92,
@@ -9067,7 +9283,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image-flux2-i2i-large.test.js",
         "line": 39,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 123,
@@ -9116,7 +9332,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/core/model-catalog.test.ts",
         "line": 45,
-        "column": 30
+        "column": 27
       },
       "measurement": {
         "value": 109,
@@ -9318,7 +9534,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 610,
+        "value": 618,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -9365,7 +9581,7 @@
       "primaryLocation": {
         "path": "packages/cli/benchmarks/serve-openai-providers/harness.test.ts",
         "line": 138,
-        "column": 47
+        "column": 44
       },
       "measurement": {
         "value": 1311,
@@ -9454,7 +9670,7 @@
       "detector": "structure",
       "rule": "modified-complexity",
       "category": "complexity",
-      "severity": "high",
+      "severity": "advisory",
       "subject": {
         "kind": "function",
         "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
@@ -9464,11 +9680,11 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "line": 125,
+        "line": 126,
         "column": 24
       },
       "measurement": {
-        "value": 28,
+        "value": 22,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -9563,11 +9779,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/audio-ctx-chunking.test.js",
-        "line": 38,
-        "column": 96
+        "line": 44,
+        "column": 86
       },
       "measurement": {
-        "value": 140,
+        "value": 141,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -9736,7 +9952,7 @@
       "primaryLocation": {
         "path": "packages/sdk/test/commands-verify.test.ts",
         "line": 788,
-        "column": 31
+        "column": 28
       },
       "measurement": {
         "value": 131,
@@ -9978,7 +10194,7 @@
       "primaryLocation": {
         "path": "packages/dl-hyperdrive/src/HyperdriveProgressTracker.js",
         "line": 102,
-        "column": 43
+        "column": 25
       },
       "measurement": {
         "value": 51,
@@ -10103,7 +10319,7 @@
       "primaryLocation": {
         "path": "packages/asr-ggml/test/stand-alone/addon.reload.esraw.test.js",
         "line": 20,
-        "column": 92
+        "column": 82
       },
       "measurement": {
         "value": 153,
@@ -10178,7 +10394,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/schemas.test.ts",
         "line": 289,
-        "column": 33
+        "column": 30
       },
       "measurement": {
         "value": 151,
@@ -10494,11 +10710,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/plugin.ts",
-        "line": 155,
-        "column": 7
+        "line": 156,
+        "column": 16
       },
       "measurement": {
-        "value": 144,
+        "value": 149,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -10691,7 +10907,7 @@
       "primaryLocation": {
         "path": "docs/website/tests/changelog-parser.test.ts",
         "line": 387,
-        "column": 32
+        "column": 29
       },
       "measurement": {
         "value": 142,
@@ -10815,7 +11031,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/doctor/checks/hardware.ts",
         "line": 124,
-        "column": 50
+        "column": 44
       },
       "measurement": {
         "value": 58,
@@ -10840,7 +11056,7 @@
       "primaryLocation": {
         "path": "packages/vla-ggml/test/integration/groot.test.js",
         "line": 338,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 101,
@@ -11041,6 +11257,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:616d81504ac88660ac165b5af2950e304edb5dd8edd14b977967e713d73c91bf",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
+        "symbol": "runStreaming#1"
+      },
+      "summary": "runStreaming#1 in packages/cli/src/serve/extensions/openai/routes/chat.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
+        "line": 295,
+        "column": 1
+      },
+      "measurement": {
+        "value": 17,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:61cc3886945bb08fb16f60935e970c408f8b474fd974df40e7ebd91404925ce1",
       "detector": "structure",
       "rule": "function-lines",
@@ -11204,7 +11445,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "plugins/openclaw/src/provider-config.ts",
-        "line": 434,
+        "line": 435,
         "column": 1
       },
       "measurement": {
@@ -11230,7 +11471,7 @@
       "primaryLocation": {
         "path": "packages/sdk/test/batch-completion-client.test.ts",
         "line": 223,
-        "column": 95
+        "column": 85
       },
       "measurement": {
         "value": 152,
@@ -11410,6 +11651,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:64bf1cb769f048e2294682cdad2168a613b3b9e3a7fe97eebb220fe5f4e727bd",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/test/e2e/openai/audio-speech.test.ts",
+        "symbol": "describe \"serve: speech validation\" callback#1"
+      },
+      "summary": "describe \"serve: speech validation\" callback#1 in packages/cli/test/e2e/openai/audio-speech.test.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/test/e2e/openai/audio-speech.test.ts",
+        "line": 7,
+        "column": 38
+      },
+      "measurement": {
+        "value": 101,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
       "fingerprint": "quality-v1:64cc617d75f87ab7d51c8070a30b52e1e28835cc64a5ea59f5b7a23d312a6f37",
       "detector": "structure",
       "rule": "function-lines",
@@ -11435,6 +11701,30 @@
       }
     },
     {
+      "fingerprint": "quality-v1:64cf977503249feab60d8e8e0e8d52626ede6a0277a019a12dcb32fbd87b2d0c",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts"
+      },
+      "summary": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
+        "line": 337,
+        "column": 1
+      },
+      "measurement": {
+        "value": 306,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
+      }
+    },
+    {
       "fingerprint": "quality-v1:64fccf649a8293589989ef992c48b6cb4c4cfde768b58ca5d3de4321d52734b7",
       "detector": "structure",
       "rule": "function-lines",
@@ -11457,6 +11747,30 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:65bdb9c584d8b63f181f56347af15745f1778690dae24d367b3b6443e48084f0",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/inference/src/errors/index.ts",
+          "packages/inference/src/schemas/index.ts",
+          "packages/inference/src/schemas/batch-completion-stream.ts",
+          "packages/inference/src/schemas/completion-event.ts",
+          "packages/inference/src/schemas/completion-stream.ts",
+          "packages/inference/src/utils/tools/defer.ts",
+          "packages/inference/src/utils/tool-helpers.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/inference/src/errors/index.ts → packages/inference/src/schemas/index.ts → packages/inference/src/schemas/batch-completion-stream.ts → packages/inference/src/schemas/completion-event.ts → packages/inference/src/schemas/completion-stream.ts → packages/inference/src/utils/tools/defer.ts → packages/inference/src/utils/tool-helpers.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/inference/src/errors/index.ts"
       }
     },
     {
@@ -11500,7 +11814,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
         "line": 99,
-        "column": 51
+        "column": 39
       },
       "measurement": {
         "value": 347,
@@ -11818,7 +12132,7 @@
       "primaryLocation": {
         "path": "packages/llm-llamacpp/test/integration/finetuning-pause-resume.test.js",
         "line": 64,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 247,
@@ -11916,7 +12230,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image-sdxl.test.js",
         "line": 27,
-        "column": 93
+        "column": 83
       },
       "measurement": {
         "value": 109,
@@ -11990,7 +12304,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 177,
+        "line": 184,
         "column": 1
       },
       "measurement": {
@@ -12016,7 +12330,7 @@
       "primaryLocation": {
         "path": "packages/sdk/test/verify-resource-collectors-packaging.test.ts",
         "line": 120,
-        "column": 49
+        "column": 46
       },
       "measurement": {
         "value": 349,
@@ -12091,7 +12405,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/resources/model-fit/assess.ts",
         "line": 764,
-        "column": 1
+        "column": 8
       },
       "measurement": {
         "value": 54,
@@ -12139,7 +12453,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/config.ts",
-        "line": 54,
+        "line": 55,
         "column": 8
       },
       "measurement": {
@@ -12165,7 +12479,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/schemas.test.ts",
         "line": 1018,
-        "column": 48
+        "column": 45
       },
       "measurement": {
         "value": 108,
@@ -12190,7 +12504,7 @@
       "primaryLocation": {
         "path": "packages/test-suite/templates/mobile-consumer/plugins/withNetworkSecurityConfig.js",
         "line": 25,
-        "column": 20
+        "column": 5
       },
       "measurement": {
         "value": 56,
@@ -12239,7 +12553,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/e2e/model/real-model.test.ts",
         "line": 283,
-        "column": 61
+        "column": 58
       },
       "measurement": {
         "value": 109,
@@ -12357,7 +12671,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image.test.js",
         "line": 26,
-        "column": 94
+        "column": 84
       },
       "measurement": {
         "value": 137,
@@ -12457,7 +12771,7 @@
       "primaryLocation": {
         "path": "docs/website/tests/changelog-parser.test.ts",
         "line": 205,
-        "column": 34
+        "column": 31
       },
       "measurement": {
         "value": 154,
@@ -12675,13 +12989,33 @@
       "primaryLocation": {
         "path": "packages/inference/test/plugin-cancel-capability.test.ts",
         "line": 124,
-        "column": 91
+        "column": 81
       },
       "measurement": {
         "value": 108,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:6ef3a63d04e2d8ebee053389e0107c50f81994fd1deddc78ba4c56d179efe8dc",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/llm-llamacpp/src/addon.ts",
+          "packages/llm-llamacpp/src/index.ts",
+          "packages/llm-llamacpp/src/fit.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/llm-llamacpp/src/addon.ts → packages/llm-llamacpp/src/index.ts → packages/llm-llamacpp/src/fit.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/llm-llamacpp/src/addon.ts"
       }
     },
     {
@@ -12699,11 +13033,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/sdk/src/utils/tool-helpers.ts",
-        "line": 42,
+        "line": 46,
         "column": 8
       },
       "measurement": {
-        "value": 66,
+        "value": 68,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -12725,7 +13059,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/whispercpp-transcription/plugin.ts",
         "line": 153,
-        "column": 7
+        "column": 16
       },
       "measurement": {
         "value": 90,
@@ -12799,7 +13133,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/src/engines/whisper/driver.ts",
-        "line": 531,
+        "line": 537,
         "column": 3
       },
       "measurement": {
@@ -12934,31 +13268,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:710ca1bf53db4a05cd1dc63c90db9ebce6c5f69dcc37e1c4fac30f292ba72e34",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/diffusion-cpp/src/index.ts",
-        "symbol": "ImgStableDiffusion > _load#1"
-      },
-      "summary": "ImgStableDiffusion > _load#1 in packages/diffusion-cpp/src/index.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/diffusion-cpp/src/index.ts",
-        "line": 354,
-        "column": 3
-      },
-      "measurement": {
-        "value": 19,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
-      }
-    },
-    {
       "fingerprint": "quality-v1:712b8f2c8bf350dfbe85c92bd5e6b824a98c58e53bb9ccbc33651d93f117ddb9",
       "detector": "structure",
       "rule": "function-lines",
@@ -12978,6 +13287,31 @@
       },
       "measurement": {
         "value": 102,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:71610753525bd3eaa0fec7d0223703104d8ce2b65fafbba911f0e9be9acbe108",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/inference/src/resources/model-fit/fit-stub/resolve-load-from-stubs.ts",
+        "symbol": "resolveLoadFromStubs#1"
+      },
+      "summary": "resolveLoadFromStubs#1 in packages/inference/src/resources/model-fit/fit-stub/resolve-load-from-stubs.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/inference/src/resources/model-fit/fit-stub/resolve-load-from-stubs.ts",
+        "line": 79,
+        "column": 8
+      },
+      "measurement": {
+        "value": 67,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -13097,8 +13431,8 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 219,
-        "column": 24
+        "line": 226,
+        "column": 5
       },
       "measurement": {
         "value": 60,
@@ -13122,7 +13456,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/tts-ggml/test/utils/runCosyvoiceTTS.js",
-        "line": 67,
+        "line": 68,
         "column": 1
       },
       "measurement": {
@@ -13169,7 +13503,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/vector-stores-store.test.ts",
         "line": 51,
-        "column": 40
+        "column": 37
       },
       "measurement": {
         "value": 142,
@@ -13243,7 +13577,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 59,
+        "line": 66,
         "column": 1
       },
       "measurement": {
@@ -13269,7 +13603,7 @@
       "primaryLocation": {
         "path": "packages/test-suite/templates/mobile-consumer/consumer-wrapper.tsx",
         "line": 183,
-        "column": 16
+        "column": 7
       },
       "measurement": {
         "value": 241,
@@ -13319,7 +13653,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/http.ts",
         "line": 314,
-        "column": 43
+        "column": 25
       },
       "measurement": {
         "value": 61,
@@ -13342,11 +13676,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 525,
+        "line": 420,
         "column": 1
       },
       "measurement": {
-        "value": 2769,
+        "value": 3543,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -13367,8 +13701,8 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/addon.test.js",
-        "line": 408,
-        "column": 82
+        "line": 482,
+        "column": 72
       },
       "measurement": {
         "value": 102,
@@ -13517,14 +13851,38 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "plugins/openclaw/src/provider-config.ts",
-        "line": 622,
+        "line": 623,
         "column": 8
       },
       "measurement": {
-        "value": 54,
+        "value": 61,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:7651e6de159d495d2ed617f46a11a08b6003a403dad732733a5df94e7f2371ed",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/inference/src/schemas/completion-stream.ts"
+      },
+      "summary": "packages/inference/src/schemas/completion-stream.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/inference/src/schemas/completion-stream.ts",
+        "line": 365,
+        "column": 1
+      },
+      "measurement": {
+        "value": 320,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
       }
     },
     {
@@ -13550,6 +13908,30 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:771478045b146ddbc21bddb9340486f7351ab3ab4b72c031173f40b2d6f66a8b",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts"
+      },
+      "summary": "packages/cli/src/serve/extensions/openai/routes/chat.ts exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
+        "line": 358,
+        "column": 1
+      },
+      "measurement": {
+        "value": 336,
+        "unit": "code lines",
+        "advisoryThreshold": 300,
+        "highThreshold": 500
       }
     },
     {
@@ -13741,11 +14123,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "line": 336,
+        "line": 339,
         "column": 1
       },
       "measurement": {
-        "value": 305,
+        "value": 302,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -13789,11 +14171,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/asr-ggml/src/index.ts",
-        "line": 406,
+        "line": 405,
         "column": 1
       },
       "measurement": {
-        "value": 465,
+        "value": 484,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -13817,7 +14199,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 811,
+        "value": 813,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -13937,11 +14319,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "line": 109,
-        "column": 51
+        "line": 110,
+        "column": 39
       },
       "measurement": {
-        "value": 215,
+        "value": 211,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -14038,7 +14420,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/doctor/deep.ts",
         "line": 181,
-        "column": 32
+        "column": 22
       },
       "measurement": {
         "value": 52,
@@ -14063,7 +14445,7 @@
       "primaryLocation": {
         "path": "packages/asr-ggml/benchmarks/server/src/services/runLiveAudio.js",
         "line": 11,
-        "column": 38
+        "column": 22
       },
       "measurement": {
         "value": 111,
@@ -14087,11 +14469,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/ops/bci-transcribe.ts",
-        "line": 85,
+        "line": 96,
         "column": 8
       },
       "measurement": {
-        "value": 91,
+        "value": 93,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -14137,11 +14519,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/responses.ts",
-        "line": 125,
-        "column": 24
+        "line": 126,
+        "column": 5
       },
       "measurement": {
-        "value": 122,
+        "value": 118,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -14163,7 +14545,7 @@
       "primaryLocation": {
         "path": "packages/sdk/test/commands-verify.test.ts",
         "line": 1361,
-        "column": 42
+        "column": 39
       },
       "measurement": {
         "value": 313,
@@ -14283,7 +14665,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/http.ts",
         "line": 647,
-        "column": 17
+        "column": 5
       },
       "measurement": {
         "value": 102,
@@ -14308,7 +14690,7 @@
       "primaryLocation": {
         "path": "packages/inference/test/update-models-naming.test.ts",
         "line": 1209,
-        "column": 81
+        "column": 77
       },
       "measurement": {
         "value": 120,
@@ -14357,7 +14739,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 2808,
+        "line": 3553,
         "column": 3
       },
       "measurement": {
@@ -14435,7 +14817,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 1082,
+        "value": 1084,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -14526,7 +14908,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/http.ts",
         "line": 792,
-        "column": 17
+        "column": 5
       },
       "measurement": {
         "value": 105,
@@ -14551,7 +14933,7 @@
       "primaryLocation": {
         "path": "packages/sdk/test/check-resource-collectors-packaging.test.ts",
         "line": 97,
-        "column": 51
+        "column": 48
       },
       "measurement": {
         "value": 147,
@@ -14597,7 +14979,7 @@
       "primaryLocation": {
         "path": "packages/registry-server/lib/reseed-tracker.js",
         "line": 38,
-        "column": 42
+        "column": 24
       },
       "measurement": {
         "value": 80,
@@ -14661,7 +15043,7 @@
       "detector": "structure",
       "rule": "file-lines",
       "category": "size",
-      "severity": "advisory",
+      "severity": "high",
       "subject": {
         "kind": "file",
         "path": "packages/decoder-audio/src/index.ts"
@@ -14670,11 +15052,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/decoder-audio/src/index.ts",
-        "line": 421,
+        "line": 391,
         "column": 1
       },
       "measurement": {
-        "value": 373,
+        "value": 519,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -14720,7 +15102,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 774,
+        "line": 783,
         "column": 3
       },
       "measurement": {
@@ -14914,7 +15296,7 @@
       "primaryLocation": {
         "path": "packages/sdk/src/expo/plugins/withOpenCL.ts",
         "line": 61,
-        "column": 46
+        "column": 37
       },
       "measurement": {
         "value": 64,
@@ -15038,11 +15420,36 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/bci-whispercpp/src/index.ts",
-        "line": 640,
+        "line": 641,
         "column": 3
       },
       "measurement": {
         "value": 69,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:835255445a8879eb9652731cf8ec8cdde595cde26ed7ce6c68b64551f3e7d93a",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/inference/src/handlers/completion-orchestrate.ts",
+        "symbol": "orchestrateCompletion#1"
+      },
+      "summary": "orchestrateCompletion#1 in packages/inference/src/handlers/completion-orchestrate.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/inference/src/handlers/completion-orchestrate.ts",
+        "line": 134,
+        "column": 8
+      },
+      "measurement": {
+        "value": 53,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -15114,7 +15521,7 @@
       "primaryLocation": {
         "path": "packages/vla-ggml/test/integration/groot.test.js",
         "line": 589,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 297,
@@ -15139,7 +15546,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/parakeet-transcription/plugin.ts",
         "line": 153,
-        "column": 7
+        "column": 16
       },
       "measurement": {
         "value": 65,
@@ -15262,7 +15669,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image-flux2.test.js",
         "line": 38,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 126,
@@ -15338,6 +15745,31 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:86eab5206895d772b916c55d78b3be6712692c384ae67ac7d49656dcbc3fda44",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "detectEngineType#1"
+      },
+      "summary": "detectEngineType#1 in packages/tts-ggml/src/index.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 1647,
+        "column": 1
+      },
+      "measurement": {
+        "value": 51,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -15428,11 +15860,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts",
-        "line": 447,
+        "line": 445,
         "column": 1
       },
       "measurement": {
-        "value": 441,
+        "value": 448,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -15530,7 +15962,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 593,
+        "value": 597,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -15627,7 +16059,7 @@
       "primaryLocation": {
         "path": "packages/inference/test/batch-completion-client.test.ts",
         "line": 223,
-        "column": 95
+        "column": 85
       },
       "measurement": {
         "value": 152,
@@ -15676,7 +16108,7 @@
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/parakeet-multiple-transcriptions.test.js",
         "line": 85,
-        "column": 17
+        "column": 7
       },
       "measurement": {
         "value": 185,
@@ -15761,6 +16193,30 @@
       }
     },
     {
+      "fingerprint": "quality-v1:8a817a393d8252dc6c55eff62f37474d53a629008e16bb1d96353ec9f08382ba",
+      "detector": "structure",
+      "rule": "file-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/tts-ggml/test/unit/cosyvoice3.inference.test.js"
+      },
+      "summary": "packages/tts-ggml/test/unit/cosyvoice3.inference.test.js exceeds the file-lines threshold",
+      "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/test/unit/cosyvoice3.inference.test.js",
+        "line": 712,
+        "column": 1
+      },
+      "measurement": {
+        "value": 625,
+        "unit": "code lines",
+        "advisoryThreshold": 600,
+        "highThreshold": 1000
+      }
+    },
+    {
       "fingerprint": "quality-v1:8a824b14721804234dadb485ac7e9d2ed76bde477613f83ab80b007892b0708a",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -15801,7 +16257,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/responses-store.test.ts",
         "line": 5,
-        "column": 37
+        "column": 34
       },
       "measurement": {
         "value": 136,
@@ -15876,7 +16332,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/commands/param-schemas.test.ts",
         "line": 12,
-        "column": 41
+        "column": 38
       },
       "measurement": {
         "value": 167,
@@ -15901,13 +16357,38 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image-flux2-fusion-surjective.test.js",
         "line": 39,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 127,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:8c1a99fd0b686cb78aa85086e754dbc8f484c03663d6ea1fd0e2a0a0586180fe",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
+        "symbol": "runBlocking#1"
+      },
+      "summary": "runBlocking#1 in packages/cli/src/serve/extensions/openai/routes/chat.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
+        "line": 223,
+        "column": 1
+      },
+      "measurement": {
+        "value": 59,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -15975,11 +16456,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts",
-        "line": 385,
+        "line": 386,
         "column": 8
       },
       "measurement": {
-        "value": 183,
+        "value": 189,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -16249,7 +16730,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/ephemeral-files-store.test.ts",
         "line": 5,
-        "column": 42
+        "column": 39
       },
       "measurement": {
         "value": 137,
@@ -16273,7 +16754,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 433,
+        "line": 442,
         "column": 3
       },
       "measurement": {
@@ -16323,7 +16804,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 292,
+        "line": 299,
         "column": 1
       },
       "measurement": {
@@ -16331,6 +16812,31 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:8f02a488d6c7bafb11604595fffa1833ef292c62c2358ff4b6d77193730a51e8",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/extensions/openai/adapters/completion-result.ts",
+        "symbol": "drainCompletion#1"
+      },
+      "summary": "drainCompletion#1 in packages/cli/src/serve/extensions/openai/adapters/completion-result.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/extensions/openai/adapters/completion-result.ts",
+        "line": 54,
+        "column": 8
+      },
+      "measurement": {
+        "value": 17,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -16356,6 +16862,31 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:8fc2f45eac40a1e40fc5e79f32d32ed4adb37a98fcea2982bd723ec0a8416eae",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/diffusion-cpp/src/file-paths.ts",
+        "symbol": "toFilePaths#1"
+      },
+      "summary": "toFilePaths#1 in packages/diffusion-cpp/src/file-paths.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/diffusion-cpp/src/file-paths.ts",
+        "line": 76,
+        "column": 8
+      },
+      "measurement": {
+        "value": 17,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -16693,11 +17224,11 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/benchmark/parakeet-rtf-benchmark.test.js",
-        "line": 291,
+        "line": 292,
         "column": 93
       },
       "measurement": {
-        "value": 58,
+        "value": 55,
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
@@ -16744,7 +17275,7 @@
       "primaryLocation": {
         "path": "docs/website/tests/release-notes-append-patch.test.ts",
         "line": 198,
-        "column": 60
+        "column": 57
       },
       "measurement": {
         "value": 124,
@@ -16819,7 +17350,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image-sd3-i2i.test.js",
         "line": 33,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 126,
@@ -16843,7 +17374,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/plugin.ts",
-        "line": 155,
+        "line": 156,
         "column": 7
       },
       "measurement": {
@@ -16868,7 +17399,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/bci-whispercpp/src/index.ts",
-        "line": 504,
+        "line": 505,
         "column": 3
       },
       "measurement": {
@@ -16942,7 +17473,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/e2e/openai/audio-transcribe-translate.test.ts",
         "line": 207,
-        "column": 67
+        "column": 64
       },
       "measurement": {
         "value": 167,
@@ -17016,8 +17547,8 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/plugin.ts",
-        "line": 330,
-        "column": 7
+        "line": 338,
+        "column": 16
       },
       "measurement": {
         "value": 117,
@@ -17089,11 +17620,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": ".github/scripts/test/ci-trust-policy.test.mjs",
-        "line": 683,
+        "line": 687,
         "column": 1
       },
       "measurement": {
-        "value": 2074,
+        "value": 2439,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -17309,7 +17840,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/schemas.test.ts",
         "line": 609,
-        "column": 38
+        "column": 35
       },
       "measurement": {
         "value": 103,
@@ -17334,7 +17865,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/videos.ts",
         "line": 480,
-        "column": 51
+        "column": 39
       },
       "measurement": {
         "value": 157,
@@ -17408,7 +17939,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts",
-        "line": 293,
+        "line": 321,
         "column": 8
       },
       "measurement": {
@@ -17459,7 +17990,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/abot-world.test.js",
         "line": 528,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 143,
@@ -17561,7 +18092,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 1254,
+        "value": 1256,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -17631,11 +18162,11 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/utils/tool-helpers.ts",
-        "line": 37,
+        "line": 41,
         "column": 8
       },
       "measurement": {
-        "value": 22,
+        "value": 24,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -17657,7 +18188,7 @@
       "primaryLocation": {
         "path": "packages/sdk/test/commands-verify.test.ts",
         "line": 985,
-        "column": 67
+        "column": 64
       },
       "measurement": {
         "value": 172,
@@ -17806,7 +18337,7 @@
       "primaryLocation": {
         "path": "packages/embed-llamacpp/test/integration/_benchmark-perf.js",
         "line": 251,
-        "column": 15
+        "column": 5
       },
       "measurement": {
         "value": 113,
@@ -18191,7 +18722,7 @@
       "primaryLocation": {
         "path": "packages/cli/benchmarks/serve-openai-providers/harness.test.ts",
         "line": 1037,
-        "column": 83
+        "column": 80
       },
       "measurement": {
         "value": 122,
@@ -18214,11 +18745,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/addon.test.js",
-        "line": 703,
+        "line": 693,
         "column": 1
       },
       "measurement": {
-        "value": 652,
+        "value": 722,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -18254,7 +18785,7 @@
       "detector": "structure",
       "rule": "modified-complexity",
       "category": "complexity",
-      "severity": "advisory",
+      "severity": "high",
       "subject": {
         "kind": "function",
         "path": "packages/tts-ggml/src/index.ts",
@@ -18264,11 +18795,11 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 1323,
+        "line": 1647,
         "column": 1
       },
       "measurement": {
-        "value": 25,
+        "value": 34,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -18385,7 +18916,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/abot-world.test.js",
         "line": 407,
-        "column": 15
+        "column": 5
       },
       "measurement": {
         "value": 113,
@@ -18483,7 +19014,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 737,
+        "value": 742,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -18574,7 +19105,7 @@
       "primaryLocation": {
         "path": "packages/sdk/test/commands-verify.test.ts",
         "line": 1692,
-        "column": 43
+        "column": 40
       },
       "measurement": {
         "value": 197,
@@ -18645,7 +19176,7 @@
       "primaryLocation": {
         "path": "packages/tts-ggml/test/benchmark/rtf-benchmark.test.js",
         "line": 654,
-        "column": 78
+        "column": 68
       },
       "measurement": {
         "value": 439,
@@ -18794,7 +19325,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 3241,
+        "line": 4146,
         "column": 3
       },
       "measurement": {
@@ -18844,11 +19375,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 128,
-        "column": 51
+        "line": 135,
+        "column": 39
       },
       "measurement": {
-        "value": 349,
+        "value": 354,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -18954,6 +19485,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:a5c43f9a671371f80a1cb287fd9e7648b1ea1e9d0f585152a4651f76f942f36d",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "TTSGgml > _buildCosyvoiceParams#1"
+      },
+      "summary": "TTSGgml > _buildCosyvoiceParams#1 in packages/tts-ggml/src/index.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 3390,
+        "column": 3
+      },
+      "measurement": {
+        "value": 59,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:a5c7f178b66d75caaf3d4733217447b7867d7d86a6f0c72ef751a8ddb9504763",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -19018,7 +19574,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-video-wan.test.js",
         "line": 441,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 156,
@@ -19078,6 +19634,28 @@
       }
     },
     {
+      "fingerprint": "quality-v1:a80f3f8e7d6549e48c8997529e33259a0d08602892eb6ff260aa0964ee21571e",
+      "detector": "dependencies",
+      "rule": "local-fan-out",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "file",
+        "path": "packages/inference/src/plugins/builtin/llamacpp-completion/plugin.ts"
+      },
+      "summary": "packages/inference/src/plugins/builtin/llamacpp-completion/plugin.ts imports 21 local modules",
+      "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
+      "primaryLocation": {
+        "path": "packages/inference/src/plugins/builtin/llamacpp-completion/plugin.ts"
+      },
+      "measurement": {
+        "value": 21,
+        "unit": "local modules",
+        "advisoryThreshold": 20,
+        "highThreshold": 30
+      }
+    },
+    {
       "fingerprint": "quality-v1:a8249bb3b6ad0c428b0847c684c4c51fd3a9884d2ec22ff4e48130210b87099b",
       "detector": "structure",
       "rule": "function-lines",
@@ -19093,7 +19671,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/api/finetune.ts",
         "line": 180,
-        "column": 37
+        "column": 28
       },
       "measurement": {
         "value": 67,
@@ -20132,6 +20710,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:b3538359a7b4a933696b2c5b98ff753565f53019592079e392d493425d6ca825",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "TTSGgml > _buildChatterboxParams#1"
+      },
+      "summary": "TTSGgml > _buildChatterboxParams#1 in packages/tts-ggml/src/index.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 3451,
+        "column": 3
+      },
+      "measurement": {
+        "value": 62,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:b38157ac47840663856b5e92769fd0f5ca9d76674e7366ecba3e6c6c11f54135",
       "detector": "structure",
       "rule": "function-lines",
@@ -20247,7 +20850,7 @@
       "primaryLocation": {
         "path": "docs/website/src/components/ask-ai/use-ask-ai-chat.tsx",
         "line": 249,
-        "column": 28
+        "column": 5
       },
       "measurement": {
         "value": 117,
@@ -20450,6 +21053,31 @@
       },
       "measurement": {
         "value": 235,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:b6a7843d92cb940e02a4a358010332d23cfccebb8e5561efdd9ef0092f5789d1",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/registry-server/tests/helpers/gguf-fixture.js",
+        "symbol": "buildGguf#1"
+      },
+      "summary": "buildGguf#1 in packages/registry-server/tests/helpers/gguf-fixture.js exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/registry-server/tests/helpers/gguf-fixture.js",
+        "line": 49,
+        "column": 1
+      },
+      "measurement": {
+        "value": 108,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -20715,11 +21343,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/decoder-audio/src/index.ts",
-        "line": 427,
+        "line": 578,
         "column": 3
       },
       "measurement": {
-        "value": 67,
+        "value": 66,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -20741,7 +21369,7 @@
       "primaryLocation": {
         "path": "packages/test-suite/src/utils/report-generator.ts",
         "line": 690,
-        "column": 41
+        "column": 14
       },
       "measurement": {
         "value": 60,
@@ -20773,6 +21401,29 @@
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:b85f2df9bdaa4dec74c28b03a9116f77dec051b8f977f5298340f3a6a8b0c920",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/inference/src/errors/index.ts",
+          "packages/inference/src/schemas/index.ts",
+          "packages/inference/src/schemas/model-info.ts",
+          "packages/inference/src/schemas/completion-stream.ts",
+          "packages/inference/src/utils/tools/defer.ts",
+          "packages/inference/src/utils/tool-helpers.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/inference/src/errors/index.ts → packages/inference/src/schemas/index.ts → packages/inference/src/schemas/model-info.ts → packages/inference/src/schemas/completion-stream.ts → packages/inference/src/utils/tools/defer.ts → packages/inference/src/utils/tool-helpers.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/inference/src/errors/index.ts"
       }
     },
     {
@@ -20819,7 +21470,7 @@
         "column": 8
       },
       "measurement": {
-        "value": 59,
+        "value": 65,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -20900,31 +21551,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:b99c3d36514d4aa7ac8aff8053d8050cab02523f3ebc78a2fcd5814075839a48",
-      "detector": "structure",
-      "rule": "nesting-depth",
-      "category": "nesting",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/test-suite/src/utils/test-loader.ts",
-        "symbol": "loadTests#1"
-      },
-      "summary": "loadTests#1 in packages/test-suite/src/utils/test-loader.ts exceeds the nesting-depth threshold",
-      "remediation": "Use guard clauses or extract nested branches into named functions.",
-      "primaryLocation": {
-        "path": "packages/test-suite/src/utils/test-loader.ts",
-        "line": 79,
-        "column": 11
-      },
-      "measurement": {
-        "value": 5,
-        "unit": "levels",
-        "advisoryThreshold": 4,
-        "highThreshold": 6
-      }
-    },
-    {
       "fingerprint": "quality-v1:ba57a33a535893882ccc31fb115d233e6c11903fd0b20f1ebd076b966960423e",
       "detector": "structure",
       "rule": "function-lines",
@@ -20947,6 +21573,30 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:bac30a3066ba62ea9167040f02dff697cd281f21b314af40bcd253c4a7bcc4c5",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/inference/src/errors/index.ts",
+          "packages/inference/src/schemas/index.ts",
+          "packages/inference/src/schemas/common.ts",
+          "packages/inference/src/schemas/model-info.ts",
+          "packages/inference/src/schemas/completion-stream.ts",
+          "packages/inference/src/utils/tools/defer.ts",
+          "packages/inference/src/utils/tool-helpers.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/inference/src/errors/index.ts → packages/inference/src/schemas/index.ts → packages/inference/src/schemas/common.ts → packages/inference/src/schemas/model-info.ts → packages/inference/src/schemas/completion-stream.ts → packages/inference/src/utils/tools/defer.ts → packages/inference/src/utils/tool-helpers.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/inference/src/errors/index.ts"
       }
     },
     {
@@ -20990,7 +21640,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image-sd3.test.js",
         "line": 30,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 112,
@@ -21021,6 +21671,31 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
+      }
+    },
+    {
+      "fingerprint": "quality-v1:bc171c5f9dfab2eb8231172c9dca37c127c55d93e8870f7006d9bcc1c078da21",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
+        "symbol": "writeBlockingResponse#1"
+      },
+      "summary": "writeBlockingResponse#1 in packages/cli/src/serve/extensions/openai/adapters/response-writers.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
+        "line": 65,
+        "column": 8
+      },
+      "measurement": {
+        "value": 67,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -21136,7 +21811,7 @@
       "primaryLocation": {
         "path": "docs/website/tests/api-docs-rendering.test.ts",
         "line": 173,
-        "column": 37
+        "column": 34
       },
       "measurement": {
         "value": 113,
@@ -21184,11 +21859,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/plugin.ts",
-        "line": 352,
+        "line": 350,
         "column": 1
       },
       "measurement": {
-        "value": 457,
+        "value": 463,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -21235,7 +21910,7 @@
       "primaryLocation": {
         "path": ".github/actions/run-mobile-integration-tests/upload-to-devicefarm/wdio.template.js",
         "line": 59,
-        "column": 3
+        "column": 11
       },
       "measurement": {
         "value": 195,
@@ -21260,7 +21935,7 @@
       "primaryLocation": {
         "path": "packages/inference/src/api/batch-completion.ts",
         "line": 281,
-        "column": 37
+        "column": 28
       },
       "measurement": {
         "value": 61,
@@ -21558,7 +22233,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/bci-whispercpp/src/index.ts",
-        "line": 504,
+        "line": 505,
         "column": 3
       },
       "measurement": {
@@ -21608,7 +22283,7 @@
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/longES.test.js",
         "line": 20,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 106,
@@ -21802,7 +22477,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 800,
+        "value": 810,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -21897,7 +22572,7 @@
       "primaryLocation": {
         "path": "packages/sdk/src/client/rpc/node-rpc-client.ts",
         "line": 387,
-        "column": 46
+        "column": 28
       },
       "measurement": {
         "value": 86,
@@ -21995,7 +22670,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 3241,
+        "line": 4146,
         "column": 3
       },
       "measurement": {
@@ -22145,7 +22820,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/diffusion-cpp/src/index.ts",
-        "line": 433,
+        "line": 404,
         "column": 3
       },
       "measurement": {
@@ -22294,7 +22969,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 177,
+        "line": 184,
         "column": 1
       },
       "measurement": {
@@ -22441,7 +23116,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/images.ts",
         "line": 238,
-        "column": 51
+        "column": 39
       },
       "measurement": {
         "value": 94,
@@ -22541,7 +23216,7 @@
       "primaryLocation": {
         "path": "packages/rag/test/integration/rag.test.ts",
         "line": 658,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 111,
@@ -22566,13 +23241,38 @@
       "primaryLocation": {
         "path": "packages/llm-llamacpp/test/integration/qwen3-5.test.js",
         "line": 428,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 109,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:cbeeacc065f72db4e0ce237cd1f5bf46c44eb3709143a9e1e4729eb79b0fd002",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
+        "symbol": "writeStreamingResponse#1"
+      },
+      "summary": "writeStreamingResponse#1 in packages/cli/src/serve/extensions/openai/adapters/response-writers.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
+        "line": 140,
+        "column": 8
+      },
+      "measurement": {
+        "value": 16,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -22738,7 +23438,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/commands/verify-deps.test.ts",
         "line": 260,
-        "column": 39
+        "column": 36
       },
       "measurement": {
         "value": 136,
@@ -22921,31 +23621,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:ce4688e76d17fe35b061a87468a75b6c42da577af49ce2756edf79b68f0ff865",
-      "detector": "structure",
-      "rule": "nesting-depth",
-      "category": "nesting",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/inference/src/api/load-model.ts",
-        "symbol": "runLoadModel#1"
-      },
-      "summary": "runLoadModel#1 in packages/inference/src/api/load-model.ts exceeds the nesting-depth threshold",
-      "remediation": "Use guard clauses or extract nested branches into named functions.",
-      "primaryLocation": {
-        "path": "packages/inference/src/api/load-model.ts",
-        "line": 335,
-        "column": 11
-      },
-      "measurement": {
-        "value": 5,
-        "unit": "levels",
-        "advisoryThreshold": 4,
-        "highThreshold": 6
-      }
-    },
-    {
       "fingerprint": "quality-v1:ce8a736997a53ef5d4dd2503ce04947b8b06670b76e46f641fd6802b57c20975",
       "detector": "structure",
       "rule": "function-lines",
@@ -23042,6 +23717,31 @@
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
+      }
+    },
+    {
+      "fingerprint": "quality-v1:cf7b42985e45292eb8f39b3e7ac87244ba32c7974bc8c83ba827a4972a795e87",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "TTSGgml > _buildSupertonicParams#1"
+      },
+      "summary": "TTSGgml > _buildSupertonicParams#1 in packages/tts-ggml/src/index.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 3514,
+        "column": 3
+      },
+      "measurement": {
+        "value": 16,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -23178,7 +23878,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/schemas/common.ts",
-        "line": 293,
+        "line": 321,
         "column": 8
       },
       "measurement": {
@@ -23257,7 +23957,7 @@
         "column": 8
       },
       "measurement": {
-        "value": 71,
+        "value": 70,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -23304,7 +24004,7 @@
       "primaryLocation": {
         "path": "packages/sdk/src/client/api/batch-completion.ts",
         "line": 294,
-        "column": 37
+        "column": 28
       },
       "measurement": {
         "value": 61,
@@ -23426,7 +24126,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 774,
+        "line": 783,
         "column": 3
       },
       "measurement": {
@@ -23462,6 +24162,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:d38f38e9f5013a162aaee0e6cc806843393b0c5e96aebe97a0106688bbcec9ed",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "TTSGgml > _buildChatterboxParams#1"
+      },
+      "summary": "TTSGgml > _buildChatterboxParams#1 in packages/tts-ggml/src/index.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 3451,
+        "column": 3
+      },
+      "measurement": {
+        "value": 24,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
+      }
+    },
+    {
       "fingerprint": "quality-v1:d3ffc951d936db274e2e4c998db573801c24456368e63e34ddb93e2a04f7f21f",
       "detector": "structure",
       "rule": "function-lines",
@@ -23476,8 +24201,8 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/audio.ts",
-        "line": 297,
-        "column": 24
+        "line": 304,
+        "column": 5
       },
       "measurement": {
         "value": 166,
@@ -23509,6 +24234,29 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:d4b2d32e131ef51847ea8b80ceb7673ccb5d008cf34bc3194156144e3aea4854",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/inference/src/errors/index.ts",
+          "packages/inference/src/schemas/index.ts",
+          "packages/inference/src/schemas/completion-event.ts",
+          "packages/inference/src/schemas/completion-stream.ts",
+          "packages/inference/src/utils/tools/defer.ts",
+          "packages/inference/src/utils/tool-helpers.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/inference/src/errors/index.ts → packages/inference/src/schemas/index.ts → packages/inference/src/schemas/completion-event.ts → packages/inference/src/schemas/completion-stream.ts → packages/inference/src/utils/tools/defer.ts → packages/inference/src/utils/tool-helpers.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/inference/src/errors/index.ts"
       }
     },
     {
@@ -23576,7 +24324,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/lib/ffmpeg.ts",
         "line": 47,
-        "column": 54
+        "column": 36
       },
       "measurement": {
         "value": 57,
@@ -23626,7 +24374,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/commands/openai-spec-fetch.test.ts",
         "line": 24,
-        "column": 53
+        "column": 50
       },
       "measurement": {
         "value": 167,
@@ -23781,31 +24529,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:d7bda1be5c767be843e89606375eda8e0f58ab27d2da67810cc1d5fb54a94e92",
-      "detector": "structure",
-      "rule": "nesting-depth",
-      "category": "nesting",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/sdk/src/client/api/load-model.ts",
-        "symbol": "runLoadModel#1"
-      },
-      "summary": "runLoadModel#1 in packages/sdk/src/client/api/load-model.ts exceeds the nesting-depth threshold",
-      "remediation": "Use guard clauses or extract nested branches into named functions.",
-      "primaryLocation": {
-        "path": "packages/sdk/src/client/api/load-model.ts",
-        "line": 346,
-        "column": 11
-      },
-      "measurement": {
-        "value": 5,
-        "unit": "levels",
-        "advisoryThreshold": 4,
-        "highThreshold": 6
-      }
-    },
-    {
       "fingerprint": "quality-v1:d7c9bc0a592585e47d14fa2b925112c4334d652b1dcbe3711a21bd76cb13da9b",
       "detector": "structure",
       "rule": "function-lines",
@@ -23821,7 +24544,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/commands/doctor.test.ts",
         "line": 414,
-        "column": 39
+        "column": 36
       },
       "measurement": {
         "value": 403,
@@ -24019,11 +24742,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/index.ts",
-        "line": 415,
+        "line": 411,
         "column": 1
       },
       "measurement": {
-        "value": 936,
+        "value": 952,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -24294,7 +25017,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
         "line": 365,
-        "column": 24
+        "column": 5
       },
       "measurement": {
         "value": 95,
@@ -24511,7 +25234,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/ops/bci-transcribe.ts",
-        "line": 209,
+        "line": 226,
         "column": 8
       },
       "measurement": {
@@ -24614,7 +25337,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 655,
+        "value": 668,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -24759,7 +25482,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/helpers.js",
-        "line": 182,
+        "line": 184,
         "column": 1
       },
       "measurement": {
@@ -24861,7 +25584,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 686,
+        "value": 687,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -24883,7 +25606,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/e2e/openai/images-validation.test.ts",
         "line": 39,
-        "column": 47
+        "column": 44
       },
       "measurement": {
         "value": 120,
@@ -25053,11 +25776,11 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/ops/bci-transcribe.ts",
-        "line": 85,
+        "line": 96,
         "column": 8
       },
       "measurement": {
-        "value": 38,
+        "value": 39,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -25103,7 +25826,7 @@
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/cold-start-timing.test.js",
         "line": 103,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 105,
@@ -25300,7 +26023,7 @@
       "primaryLocation": {
         "path": "packages/diffusion-cpp/test/integration/generate-image-flux2-i2i.test.js",
         "line": 41,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 140,
@@ -25485,6 +26208,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:e6d6aa59b2ef85c70d027b67720017f3cb707cba6a590952408f8838e126a685",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/src/index.ts",
+        "symbol": "TTSGgml > _resolveEngineAndModelPaths#1"
+      },
+      "summary": "TTSGgml > _resolveEngineAndModelPaths#1 in packages/tts-ggml/src/index.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/src/index.ts",
+        "line": 2221,
+        "column": 3
+      },
+      "measurement": {
+        "value": 54,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:e6ed2a70e5270333da1a6533db7908b868afba97ee22e26e50e63b818904ef92",
       "detector": "structure",
       "rule": "function-lines",
@@ -25574,7 +26322,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/ocr-ggml/test/integration/utils.js",
-        "line": 930,
+        "line": 931,
         "column": 1
       },
       "measurement": {
@@ -25600,7 +26348,7 @@
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
         "line": 296,
-        "column": 24
+        "column": 5
       },
       "measurement": {
         "value": 52,
@@ -25760,6 +26508,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:e897187a2a00bae477328a718f24d80e3f1eabe031f9f09c8aa9aeba98684641",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": ".github/scripts/test/ci-trust-policy.test.mjs",
+        "symbol": "test \"RPC RDMA validation covers the server without replacing release artifacts\" callback#1"
+      },
+      "summary": "test \"RPC RDMA validation covers the server without replacing release artifacts\" callback#1 in .github/scripts/test/ci-trust-policy.test.mjs exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": ".github/scripts/test/ci-trust-policy.test.mjs",
+        "line": 1790,
+        "column": 83
+      },
+      "measurement": {
+        "value": 106,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
       "fingerprint": "quality-v1:e8fd8fedf3435ddec4392a33ea475c63ccda693503bc4965beb6b9642c60ab7c",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -25774,7 +26547,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/hyperdrive.ts",
-        "line": 507,
+        "line": 508,
         "column": 1
       },
       "measurement": {
@@ -26085,6 +26858,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:eb0617425e2bcff4ef068a07a5988617cf8e03185387ccad24e60b1d2922460c",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/extensions/openai/adapters/completion-result.ts",
+        "symbol": "drainCompletion#1"
+      },
+      "summary": "drainCompletion#1 in packages/cli/src/serve/extensions/openai/adapters/completion-result.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/extensions/openai/adapters/completion-result.ts",
+        "line": 54,
+        "column": 8
+      },
+      "measurement": {
+        "value": 55,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:eb54cbff721f7bf0b7cd1e35ec1009cb6e9ffec711212917538aa54aad543baa",
       "detector": "dependencies",
       "rule": "runtime-cycle",
@@ -26317,7 +27115,7 @@
       "primaryLocation": {
         "path": "docs/website/tests/changelog-parser.test.ts",
         "line": 963,
-        "column": 41
+        "column": 38
       },
       "measurement": {
         "value": 125,
@@ -26391,8 +27189,8 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/bci-whispercpp/src/index.ts",
-        "line": 650,
-        "column": 63
+        "line": 651,
+        "column": 45
       },
       "measurement": {
         "value": 58,
@@ -26486,7 +27284,7 @@
       "primaryLocation": {
         "path": "docs/website/tests/changelog-parser.test.ts",
         "line": 750,
-        "column": 37
+        "column": 34
       },
       "measurement": {
         "value": 119,
@@ -26654,7 +27452,7 @@
       "primaryLocation": {
         "path": "packages/sdk/src/client/api/completion-stream.ts",
         "line": 190,
-        "column": 37
+        "column": 28
       },
       "measurement": {
         "value": 92,
@@ -26752,11 +27550,11 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 2701,
+        "line": 3390,
         "column": 3
       },
       "measurement": {
-        "value": 18,
+        "value": 23,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -26963,6 +27761,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:f15344890e2d0cf60946a7095dfd788f3f5c21b9bd715697cd7abc5de48e745a",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/tts-ggml/test/integration/pocket.integration.test.js",
+        "symbol": "test \"Pocket native addon streams, cancels, recovers and resamples on reload\" callback#1"
+      },
+      "summary": "test \"Pocket native addon streams, cancels, recovers and resamples on reload\" callback#1 in packages/tts-ggml/test/integration/pocket.integration.test.js exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/tts-ggml/test/integration/pocket.integration.test.js",
+        "line": 13,
+        "column": 3
+      },
+      "measurement": {
+        "value": 135,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
       "fingerprint": "quality-v1:f161cbe006f2cd11dad18ea797e8139efa8a13fe247c5ca67724d5b128a7fccf",
       "detector": "structure",
       "rule": "function-lines",
@@ -27063,6 +27886,26 @@
       }
     },
     {
+      "fingerprint": "quality-v1:f24f58e2930827f4b54d50dc9066f0dbe14df5784eeae12bb2b89194204e3023",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/diffusion-cpp/src/file-paths.ts",
+          "packages/diffusion-cpp/src/index.ts",
+          "packages/diffusion-cpp/src/fit.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/diffusion-cpp/src/file-paths.ts → packages/diffusion-cpp/src/index.ts → packages/diffusion-cpp/src/fit.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/diffusion-cpp/src/file-paths.ts"
+      }
+    },
+    {
       "fingerprint": "quality-v1:f2549c8252522770c2508e7cd1f5e2dcc9e291b13c57a2ca7c470a93c5d896e4",
       "detector": "structure",
       "rule": "function-lines",
@@ -27078,13 +27921,38 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/commands/openai-coverage.test.ts",
         "line": 47,
-        "column": 54
+        "column": 51
       },
       "measurement": {
         "value": 123,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
+      }
+    },
+    {
+      "fingerprint": "quality-v1:f25a4576827615875fcd34ece5a49eb1640e92aa6705d9366911c00c6bcf9565",
+      "detector": "structure",
+      "rule": "modified-complexity",
+      "category": "complexity",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/inference/src/handlers/assess-model-fit.ts",
+        "symbol": "estimateTargetFor#1"
+      },
+      "summary": "estimateTargetFor#1 in packages/inference/src/handlers/assess-model-fit.ts exceeds the modified-complexity threshold",
+      "remediation": "Simplify conditions or extract independently testable decisions.",
+      "primaryLocation": {
+        "path": "packages/inference/src/handlers/assess-model-fit.ts",
+        "line": 124,
+        "column": 8
+      },
+      "measurement": {
+        "value": 19,
+        "unit": "branches",
+        "advisoryThreshold": 15,
+        "highThreshold": 25
       }
     },
     {
@@ -27152,7 +28020,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/helpers.js",
-        "line": 36,
+        "line": 38,
         "column": 31
       },
       "measurement": {
@@ -27178,7 +28046,7 @@
       "primaryLocation": {
         "path": "packages/llm-llamacpp/scripts/download-unit-test-models.js",
         "line": 73,
-        "column": 40
+        "column": 22
       },
       "measurement": {
         "value": 102,
@@ -27274,7 +28142,7 @@
       "primaryLocation": {
         "path": "packages/asr-ggml/test/stand-alone/seed-vulkan-gpu-speed.test.js",
         "line": 476,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 155,
@@ -27297,11 +28165,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/asr-ggml/src/engines/parakeet/driver.ts",
-        "line": 401,
+        "line": 434,
         "column": 1
       },
       "measurement": {
-        "value": 381,
+        "value": 423,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -27398,7 +28266,7 @@
       "primaryLocation": {
         "path": "packages/tts-ggml/test/benchmark/streaming-benchmark.test.js",
         "line": 436,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 190,
@@ -27545,11 +28413,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/diffusion-cpp/src/index.ts",
-        "line": 341,
+        "line": 343,
         "column": 1
       },
       "measurement": {
-        "value": 789,
+        "value": 771,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -27627,6 +28495,25 @@
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
+      }
+    },
+    {
+      "fingerprint": "quality-v1:f5f83dd2e58936d220f172ccaac13e0ea5683902e37dbd3f600297b3f7340a9e",
+      "detector": "dependencies",
+      "rule": "type-only-cycle",
+      "category": "dependency",
+      "severity": "advisory",
+      "subject": {
+        "kind": "cycle",
+        "members": [
+          "packages/diffusion-cpp/src/file-paths.ts",
+          "packages/diffusion-cpp/src/index.ts"
+        ]
+      },
+      "summary": "Compile-time dependency cycle: packages/diffusion-cpp/src/file-paths.ts → packages/diffusion-cpp/src/index.ts",
+      "remediation": "Choose a dependency direction and move the shared contract or behavior behind that boundary.",
+      "primaryLocation": {
+        "path": "packages/diffusion-cpp/src/file-paths.ts"
       }
     },
     {
@@ -27793,7 +28680,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/unit/extensions/openai/transcription-response.test.ts",
         "line": 14,
-        "column": 56
+        "column": 53
       },
       "measurement": {
         "value": 122,
@@ -27942,11 +28829,11 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/sdk/src/utils/tool-helpers.ts",
-        "line": 42,
+        "line": 46,
         "column": 8
       },
       "measurement": {
-        "value": 22,
+        "value": 24,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -27993,7 +28880,7 @@
       "primaryLocation": {
         "path": "packages/cli/test/e2e/model/real-model.test.ts",
         "line": 729,
-        "column": 30
+        "column": 27
       },
       "measurement": {
         "value": 140,
@@ -28093,7 +28980,7 @@
       "primaryLocation": {
         "path": "packages/test-suite/src/utils/report-generator.ts",
         "line": 1324,
-        "column": 14
+        "column": 10
       },
       "measurement": {
         "value": 59,
@@ -28284,11 +29171,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/tts-ggml/src/index.ts",
-        "line": 1730,
+        "line": 2130,
         "column": 3
       },
       "measurement": {
-        "value": 80,
+        "value": 89,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -28438,7 +29325,7 @@
         "column": 8
       },
       "measurement": {
-        "value": 59,
+        "value": 65,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -28609,7 +29496,7 @@
       "primaryLocation": {
         "path": "packages/asr-ggml/test/benchmark/rtf-benchmark.test.js",
         "line": 238,
-        "column": 13
+        "column": 3
       },
       "measurement": {
         "value": 254,
@@ -28683,7 +29570,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/handlers/load-model/hyperdrive.ts",
-        "line": 720,
+        "line": 721,
         "column": 8
       },
       "measurement": {
@@ -28733,7 +29620,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/ops/completion-stream.ts",
-        "line": 316,
+        "line": 317,
         "column": 1
       },
       "measurement": {
@@ -28809,7 +29696,7 @@
       "primaryLocation": {
         "path": "packages/sdk/src/client/api/finetune.ts",
         "line": 186,
-        "column": 37
+        "column": 28
       },
       "measurement": {
         "value": 68,
@@ -28931,7 +29818,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/bci-whispercpp/test/integration/helpers.js",
-        "line": 173,
+        "line": 174,
         "column": 1
       },
       "measurement": {

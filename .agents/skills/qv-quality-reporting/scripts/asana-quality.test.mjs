@@ -90,6 +90,41 @@ test("an existing exact group marker suppresses duplicate creation", async (t) =
   assert.equal(fake.requests.filter(({ method }) => method === "POST").length, 0);
 });
 
+test("a completed exact group marker does not suppress replacement creation", async (t) => {
+  const fake = await fakeAsana(t, {
+    tasks: [
+      {
+        gid: "completed-task",
+        name: "Completed quality task",
+        notes: "QVAC-QUALITY-GROUP: inference-consumer-wrapper",
+        completed: true,
+      },
+    ],
+  });
+
+  const result = await applyQualityProposals({
+    proposalBatch: batch([proposal()]),
+    report: triageReport(),
+    approvedIds: ["quality-001"],
+    apply: true,
+    config: asanaConfig(),
+    token: "test-token",
+    apiBase: fake.url,
+  });
+
+  assert.deepEqual(result.actions, [
+    {
+      id: "quality-001",
+      action: "create",
+      outcome: "created",
+      taskGid: "created-task",
+    },
+  ]);
+  const writes = fake.requests.filter(({ method }) => method === "POST");
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].path, "/tasks");
+});
+
 test("search reconciliation does not follow unsupported offset pagination", async (t) => {
   const fake = await fakeAsana(t, {
     taskPages: [
@@ -150,6 +185,38 @@ test("an approved regression adds a comment to the marked task", async (t) => {
   assert.equal(write.path, "/tasks/existing-task/stories");
   assert.match(write.body.data.text, /materially worsened/i);
   assert.match(write.body.data.text, /QVAC-QUALITY-GROUP: inference-consumer-wrapper/);
+});
+
+test("a completed exact group marker does not receive regression comments", async (t) => {
+  const fake = await fakeAsana(t, {
+    tasks: [
+      {
+        gid: "completed-task",
+        name: "Completed quality task",
+        notes: "QVAC-QUALITY-GROUP: inference-consumer-wrapper",
+        completed: true,
+      },
+    ],
+  });
+
+  const result = await applyQualityProposals({
+    proposalBatch: batch([proposal({ action: "comment" })]),
+    report: triageReport(),
+    approvedIds: ["quality-001"],
+    apply: true,
+    config: asanaConfig(),
+    token: "test-token",
+    apiBase: fake.url,
+  });
+
+  assert.deepEqual(result.actions, [
+    {
+      id: "quality-001",
+      action: "comment",
+      outcome: "missing-existing",
+    },
+  ]);
+  assert.equal(fake.requests.filter(({ method }) => method === "POST").length, 0);
 });
 
 test("stale proposals are rejected before any Asana request", async (t) => {

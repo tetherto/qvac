@@ -91,6 +91,108 @@ test('size measurements exclude blank and comment-only lines', async () => {
   )
 })
 
+test('same-line nested functions retain distinct structural identities', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quality-same-line-scope-'))
+  const path = 'src/same-line.ts'
+  await mkdir(join(root, 'src'), { recursive: true })
+  await writeFile(
+    join(root, path),
+    [
+      'export function outer(input: number) { const helper = () => {',
+      ...Array.from({ length: 20 }, (_, index) => {
+        return `if (input === ${index}) return ${index}`
+      }),
+      ...Array.from({ length: 50 }, (_, index) => {
+        return `const value${index} = ${index}`
+      }),
+      'return input',
+      '};',
+      ...Array.from({ length: 20 }, (_, index) => {
+        return `if (input === ${index + 20}) return ${index + 20}`
+      }),
+      'return helper()',
+      '}',
+    ].join('\n'),
+  )
+
+  const result = await analyzeStructure({ root, files: [path] })
+
+  assert.deepEqual(
+    result.findings
+      .filter(({ rule }) => rule === 'function-lines')
+      .map(({ subject, measurement, primaryLocation }) => ({
+        subject,
+        value: measurement?.value,
+        column: primaryLocation.column,
+      }))
+      .sort((left, right) => (left.column ?? 0) - (right.column ?? 0)),
+    [
+      {
+        subject: { kind: 'function', path, symbol: 'outer#1' },
+        value: 95,
+        column: 8,
+      },
+      {
+        subject: { kind: 'function', path, symbol: 'outer#1 > helper#1' },
+        value: 73,
+        column: 55,
+      },
+    ],
+  )
+  assert.deepEqual(
+    result.findings
+      .filter(({ rule }) => rule === 'modified-complexity')
+      .map(({ subject, measurement, primaryLocation }) => ({
+        subject,
+        value: measurement?.value,
+        column: primaryLocation.column,
+      }))
+      .sort((left, right) => (left.column ?? 0) - (right.column ?? 0)),
+    [
+      {
+        subject: { kind: 'function', path, symbol: 'outer#1' },
+        value: 21,
+        column: 8,
+      },
+      {
+        subject: { kind: 'function', path, symbol: 'outer#1 > helper#1' },
+        value: 21,
+        column: 58,
+      },
+    ],
+  )
+})
+
+test('inline ESLint directives cannot suppress structural findings', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quality-inline-config-'))
+  const path = 'src/disabled-complexity.ts'
+  await mkdir(join(root, 'src'), { recursive: true })
+  await writeFile(
+    join(root, path),
+    [
+      '/* eslint-disable complexity */',
+      'export function branchy(input: number) {',
+      ...Array.from({ length: 20 }, (_, index) => {
+        return `if (input === ${index}) return ${index}`
+      }),
+      'return input',
+      '}',
+    ].join('\n'),
+  )
+
+  const result = await analyzeStructure({ root, files: [path] })
+  const finding = result.findings.find(({ rule }) => {
+    return rule === 'modified-complexity'
+  })
+
+  assert.deepEqual(finding?.subject, {
+    kind: 'function',
+    path,
+    symbol: 'branchy#1',
+  })
+  assert.equal(finding?.measurement?.value, 21)
+})
+
 test('function fingerprints survive unrelated line insertions', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quality-function-id-'))
   const path = 'src/handler.ts'

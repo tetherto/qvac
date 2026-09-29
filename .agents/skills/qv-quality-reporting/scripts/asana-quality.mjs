@@ -346,7 +346,7 @@ async function findGroupMatches(client, config, groupKey) {
   const page = await client.requestEnvelope(
     `/workspaces/${encodeURIComponent(config.asana.workspace.gid)}/tasks/search?${query}`,
   );
-  const tasks = page.data || [];
+  const tasks = (page.data || []).filter(({ completed }) => completed !== true);
   return {
     exact: tasks.filter(({ notes = "" }) => notes.split("\n").includes(marker)),
     possible: tasks.filter(({ notes = "" }) => !notes.split("\n").includes(marker)),

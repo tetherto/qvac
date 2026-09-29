@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import * as tsParser from '@typescript-eslint/parser'
 import { Linter } from 'eslint'
 import type { Rule } from 'eslint'
-import tseslint from 'typescript-eslint'
 
 import {
   STRUCTURE_THRESHOLDS,
@@ -25,7 +25,9 @@ export interface StructureAnalysisContext {
 
 interface FunctionScope {
   readonly startLine: number
+  readonly startColumn: number
   readonly endLine: number
+  readonly endColumn: number
   readonly symbol: string
 }
 
@@ -40,8 +42,8 @@ interface RuleDefinition {
 }
 
 interface NodeLocation {
-  readonly start: { readonly line: number }
-  readonly end: { readonly line: number }
+  readonly start: { readonly line: number; readonly column: number }
+  readonly end: { readonly line: number; readonly column: number }
 }
 
 type SemanticNode = Rule.Node & {
@@ -55,6 +57,7 @@ type SemanticNode = Rule.Node & {
   readonly left?: { readonly name?: string | undefined }
   readonly name?: string | undefined
   readonly value?: unknown
+  readonly loc?: NodeLocation
 }
 
 type FunctionNode = SemanticNode & {
@@ -110,7 +113,7 @@ export async function analyzeStructure(
       const value = parseMeasurement(definition.rule, message.message)
       const scope = definition.rule === 'file-lines'
         ? undefined
-        : findContainingScope(scopes, message.line)
+        : findContainingScope(scopes, message.line, message.column)
       const finding = createFinding({
         definition,
         path,
@@ -155,10 +158,11 @@ function createLintConfig(
   return {
     files: ['**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}'],
     linterOptions: {
+      noInlineConfig: true,
       reportUnusedDisableDirectives: 'off',
     },
     languageOptions: {
-      parser: tseslint.parser,
+      parser: tsParser,
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
@@ -211,9 +215,12 @@ function createFunctionCollector(scopes: FunctionScope[]): Rule.RuleModule {
     const ordinal = (ordinals.get(scopedBaseName) ?? 0) + 1
     ordinals.set(scopedBaseName, ordinal)
     const symbol = `${scopedBaseName}#${ordinal}`
+    const start = functionScopeStart(functionNode)
     scopes.push({
-      startLine: functionNode.loc.start.line,
+      startLine: start.line,
+      startColumn: start.column,
       endLine: functionNode.loc.end.line,
+      endColumn: functionNode.loc.end.column,
       symbol,
     })
     scopeStack.push(symbol)
@@ -237,6 +244,17 @@ function createFunctionCollector(scopes: FunctionScope[]): Rule.RuleModule {
       'FunctionExpression:exit': leave,
     }),
   }
+}
+
+function functionScopeStart(node: FunctionNode): NodeLocation['start'] {
+  const parent = node.parent
+  if (
+    (parent?.type === 'MethodDefinition' || parent?.type === 'Property')
+    && parent.loc !== undefined
+  ) {
+    return parent.loc.start
+  }
+  return node.loc.start
 }
 
 function functionBaseName(node: FunctionNode): string {
@@ -415,13 +433,41 @@ function parseMeasurement(rule: string, message: string): number {
 function findContainingScope(
   scopes: readonly FunctionScope[],
   line: number,
+  column: number,
 ): FunctionScope | undefined {
+  const zeroBasedColumn = column - 1
   return scopes
-    .filter(({ startLine, endLine }) => startLine <= line && line <= endLine)
+    .filter((scope) => containsPosition(scope, line, zeroBasedColumn))
     .sort((left, right) => {
-      return (left.endLine - left.startLine) - (right.endLine - right.startLine)
+      const lineSpan = (left.endLine - left.startLine)
+        - (right.endLine - right.startLine)
+      if (lineSpan !== 0) {
+        return lineSpan
+      }
+      if (left.startLine !== right.startLine) {
+        return right.startLine - left.startLine
+      }
+      if (left.startColumn !== right.startColumn) {
+        return right.startColumn - left.startColumn
+      }
+      if (left.endLine !== right.endLine) {
+        return left.endLine - right.endLine
+      }
+      return left.endColumn - right.endColumn
     })
     .at(0)
+}
+
+function containsPosition(
+  scope: FunctionScope,
+  line: number,
+  column: number,
+): boolean {
+  const afterStart = line > scope.startLine
+    || (line === scope.startLine && column >= scope.startColumn)
+  const beforeEnd = line < scope.endLine
+    || (line === scope.endLine && column <= scope.endColumn)
+  return afterStart && beforeEnd
 }
 
 function createFinding(input: {
