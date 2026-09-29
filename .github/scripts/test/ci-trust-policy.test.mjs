@@ -1802,10 +1802,15 @@ test('ggml-rpc-server npm Fabric triggers activate with the server package layer
     fabricPackage,
     'fabric changes must run RPC server PR checks once the package exists',
   )
-  assert.match(
-    rpcMerge,
-    fabricPackage,
-    'fabric changes must rebuild the RPC server once the package exists',
+  const rpcMergeTrigger = rpcMerge.match(/^on:\n[\s\S]*?^permissions:/m)?.[0];
+  assert.ok(rpcMergeTrigger, 'the RPC release workflow must declare its triggers');
+  assert.doesNotMatch(
+    rpcMergeTrigger
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n'),
+    /packages\/fabric|cmake\/qvac-addon/,
+    'the RPC release build uses the published fabric, so fabric-only merges must not republish it',
   )
   assert.match(
     tsProducer,
