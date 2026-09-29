@@ -57,12 +57,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.sha }}
 
       - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: "22"
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
@@ -101,7 +101,7 @@ jobs:
           printf 'target_sha=%s\n' "$normalized_target_sha" >> "$GITHUB_OUTPUT"
 
       - name: Checkout target SHA
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ steps.resolve.outputs.target_sha }}
           persist-credentials: false
@@ -118,7 +118,7 @@ jobs:
           fi
 
       - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: "22"
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
@@ -143,13 +143,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout validated SHA
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.validate-target.outputs.target_sha }}
           persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: "22"
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
@@ -166,7 +166,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: openai-coverage-report-${{ github.run_id }}
           path: ${{ env.BENCH_DIR }}/results/coverage-preview/
@@ -190,13 +190,13 @@ jobs:
         working-directory: .
 
       - name: Checkout validated SHA
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ needs.validate-target.outputs.target_sha }}
           persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # 7.0.0
         with:
           node-version: "22"
           # packages/*/package-lock.json is gitignored in this monorepo — no npm cache path.
@@ -281,7 +281,7 @@ jobs:
 
       - name: Upload results
         if: always() && inputs.mode == 'full'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 7.0.1
         with:
           name: serve-openai-providers-${{ github.run_id }}
           path: ${{ env.BENCH_DIR }}/results/
