@@ -18,6 +18,10 @@ async function runEsrganBackendDeviceTest (options = {}) { // eslint-disable-lin
   return runIntegrationModule('../integration/esrgan-backend-device.test.js', options)
 }
 
+async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit.test.js', options)
+}
+
 async function runGenerateImageEsrganUpscaleTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/generate-image-esrgan-upscale.test.js', options)
 }
@@ -98,6 +102,7 @@ module.exports = {
   runAbotWorldTest,
   runApiBehaviorTest,
   runEsrganBackendDeviceTest,
+  runFitTest,
   runGenerateImageEsrganUpscaleTest,
   runGenerateImageFlux2FusionSurjectiveTest,
   runGenerateImageFlux2FusionTest,

@@ -80,7 +80,7 @@ export function computeFloor(input: FloorInput): FloorResult {
     return { bytes: artifactBytes, reasons, assumptions }
   }
 
-  let contextTokens = workload.contextTokens
+  let contextTokens = workload.contextTokens ?? facts.contextLength
   if (contextTokens > facts.contextLength) {
     assumptions.push(
       `requested ${workload.contextTokens} tokens exceeds the trained context of ${facts.contextLength}; clamped to the trained context`
@@ -97,7 +97,7 @@ export function computeFloor(input: FloorInput): FloorResult {
     element < 2
       ? 'the KV cache is floored at the q8_0 element width, the narrowest default the engine picks on any backend; a CPU load allocates an f16 cache above it'
       : `${facts.architecture} loads with flash attention off, so the KV cache is floored at f16 on every backend`,
-    'default KV-cache types are assumed; an explicit `cache-type-k`/`cache-type-v` in `modelConfig` is not expressible in a workload and would change these numbers'
+    'default KV-cache types are assumed; an explicit `cache-type-k`/`cache-type-v` in `modelConfig` is not read here and would change these numbers'
   )
   reasons.push(
     `KV cache floored for ${contextTokens} tokens at the narrowest default element width`

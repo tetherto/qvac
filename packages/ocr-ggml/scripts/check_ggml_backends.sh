@@ -4,10 +4,11 @@
 # Unlike upstream EasyOcr-ggml (which builds ggml as a submodule and inspects
 # build/third_party/ggml/...), this package consumes ggml from the
 # `@qvac/fabric` npm runtime. The runtime artefacts live under
-# `node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/`.
+# `prebuilds/<host>/qvac__fabric/` of `@qvac/fabric` itself (source builds) or
+# of its `@qvac/fabric-<host>/addon` platform package.
 #
 # Outputs four sections:
-#   1. Shipped backend libraries — which `libggml-*.so` files were installed
+#   1. Shipped backend libraries — which `libqvac-ggml-*.so` files were installed
 #   2. Linked dependencies        — `ldd` on each, to spot system OpenBLAS /
 #                                   Vulkan / OpenCL libraries that they pull in
 #   3. Compile-time markers       — `strings` greps for canonical symbols:
@@ -19,13 +20,13 @@
 #
 # Headline interpretation:
 #   - llamafile/tinyBLAS is ENGAGED iff `llamafile_sgemm` appears in section 3.
-#   - External BLAS is REGISTERED iff `libggml-blas.so` is shipped in section 1
+#   - External BLAS is REGISTERED iff `libqvac-ggml-blas.so` is shipped in section 1
 #     AND `cblas_sgemm` appears in section 3. Whether it is *actually used* at
 #     runtime depends on whether Pipeline routes through the scheduler API,
 #     which (today, mirroring upstream) it does not — so external BLAS is
 #     usually REGISTERED but UNUSED.
-#   - Vulkan / OpenCL are AVAILABLE iff the corresponding `libggml-vulkan.so`
-#     / `libggml-opencl.so` is present AND the matching symbols appear. They
+#   - Vulkan / OpenCL are AVAILABLE iff the corresponding `libqvac-ggml-vulkan.so`
+#     / `libqvac-ggml-opencl.so` is present AND the matching symbols appear. They
 #     are only EXERCISED if the addon is loaded with `useGPU=true` and the
 #     host system has matching device drivers.
 
@@ -33,11 +34,30 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Fabric backend path: node_modules/@qvac/fabric/prebuilds/<host>/qvac__fabric/
 # `host` is set by cmake-bare based on the runtime platform; on x64 Linux it
 # is `linux-x64`, on Apple Silicon `darwin-arm64`, etc.
 HOST_GUESS="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed -E 's/^x86_64$/x64/;s/^aarch64$/arm64/')"
-BACKENDS_DIR="${BACKENDS_DIR:-${REPO_ROOT}/node_modules/@qvac/fabric/prebuilds/${HOST_GUESS}/qvac__fabric}"
+
+# Follows @qvac/fabric/backends' order (@qvac/fabric itself, then the platform
+# package as a pnpm sibling, npm nested, or npm hoisted), but picks the first
+# candidate with a prebuilds/<host>/qvac__fabric directory, like cmake's
+# qvac_addon_fabric_layout, where backends.js checks for a resolvable .bare.
+default_backends_dir() {
+    local fabric="${REPO_ROOT}/node_modules/@qvac/fabric" real candidate
+    [[ -d "${fabric}" ]] || return 0
+    real="$(cd "${fabric}" && pwd -P)"
+    for candidate in \
+        "${real}/prebuilds" \
+        "$(dirname "${real}")/fabric-${HOST_GUESS}/addon/prebuilds" \
+        "${real}/node_modules/@qvac/fabric-${HOST_GUESS}/addon/prebuilds" \
+        "${REPO_ROOT}/node_modules/@qvac/fabric-${HOST_GUESS}/addon/prebuilds"; do
+        if [[ -d "${candidate}/${HOST_GUESS}/qvac__fabric" ]]; then
+            echo "${candidate}/${HOST_GUESS}/qvac__fabric"
+            return 0
+        fi
+    done
+}
+BACKENDS_DIR="${BACKENDS_DIR:-$(default_backends_dir)}"
 
 print_section() {
     echo
@@ -46,11 +66,11 @@ print_section() {
     echo "============================================================"
 }
 
-if [[ ! -d "${BACKENDS_DIR}" ]]; then
-    echo "error: backends directory not found: ${BACKENDS_DIR}" >&2
+if [[ -z "${BACKENDS_DIR}" || ! -d "${BACKENDS_DIR}" ]]; then
+    echo "error: no @qvac/fabric backends directory for ${HOST_GUESS}: ${BACKENDS_DIR:-(none found)}" >&2
     echo "" >&2
-    echo "Run 'npm install' to install @qvac/fabric," >&2
-    echo "or override BACKENDS_DIR=/abs/path/to/@qvac/fabric/prebuilds/<host>/qvac__fabric" >&2
+    echo "Run 'npm install' to install @qvac/fabric and @qvac/fabric-${HOST_GUESS}," >&2
+    echo "or override BACKENDS_DIR=/abs/path/to/prebuilds/<host>/qvac__fabric" >&2
     exit 1
 fi
 
@@ -60,8 +80,8 @@ fi
 print_section "1. Shipped backend libraries"
 echo "Looking in: ${BACKENDS_DIR}"
 echo
-ls -lh "${BACKENDS_DIR}"/libggml-*.so 2>/dev/null || \
-    echo "(no libggml-*.so files — only the static CPU backend was linked)"
+ls -lh "${BACKENDS_DIR}"/libqvac-ggml-*.so 2>/dev/null || \
+    echo "(no libqvac-ggml-*.so files — only the static CPU backend was linked)"
 
 # Also show Fabric's shared bare runtime.
 echo
@@ -73,7 +93,7 @@ ls -lh "${BACKENDS_DIR}"/../qvac__fabric.bare 2>/dev/null || \
 # 2. Linked dependencies (ldd)
 # ----------------------------------------------------------------------------
 print_section "2. Linked dependencies (ldd)"
-for lib in "${BACKENDS_DIR}"/libggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare; do
+for lib in "${BACKENDS_DIR}"/libqvac-ggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare; do
     [[ -e "${lib}" ]] || continue
     echo
     echo "--- ${lib##*/} ---"
@@ -92,7 +112,9 @@ check_symbol() {
     local found=0
     for lib in "$@"; do
         [[ -e "${lib}" ]] || continue
-        if strings "${lib}" 2>/dev/null | grep -q -E "${pattern}"; then
+        # Not `grep -q`: its early exit SIGPIPEs `strings`, which pipefail
+        # reports as a miss.
+        if strings "${lib}" 2>/dev/null | grep -E "${pattern}" >/dev/null; then
             printf "  [%-6s] %s  %s\n" "FOUND" "${label}" "in ${lib##*/}"
             found=1
         fi
@@ -102,7 +124,7 @@ check_symbol() {
     fi
 }
 
-ALL_LIBS=("${BACKENDS_DIR}"/libggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare)
+ALL_LIBS=("${BACKENDS_DIR}"/libqvac-ggml-*.so "${BACKENDS_DIR}"/../qvac__fabric.bare)
 check_symbol "tinyBLAS (GGML_LLAMAFILE=ON)" "llamafile_sgemm"  "${ALL_LIBS[@]}"
 check_symbol "external BLAS (GGML_BLAS)"    "cblas_sgemm"      "${ALL_LIBS[@]}"
 check_symbol "Vulkan backend"               "vkCreateInstance" "${ALL_LIBS[@]}"

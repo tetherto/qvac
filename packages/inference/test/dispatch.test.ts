@@ -9,6 +9,7 @@ import { ModelType } from '@/schemas'
 import type { Request, Response } from '@/schemas'
 import { PluginsNotRegisteredError, RequestValidationFailedError } from '@/errors'
 import { makeFakePlugin } from './fixtures/fake-plugin'
+import { TEST_CACHE_DIR } from './fixtures/test-cache'
 
 // Keep the storage-root lock out of the real home: the first `ensureReady`
 // reads HOME once (bare-env is the live module object the engine reads), so
@@ -84,7 +85,10 @@ test('concurrent first sends share one initialization', async function (t) {
   // `setGlobalLogLevel` outlives this test and would override the explicit
   // level of every logger a later test builds.
   const configPath = path.join(os.tmpdir(), `qvac-inference-config-${os.pid()}.json`)
-  fs.writeFileSync(configPath, JSON.stringify({ httpDownloadConcurrency: 3 }))
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify({ httpDownloadConcurrency: 3, cacheDirectory: TEST_CACHE_DIR })
+  )
   const previousConfigPath = env['QVAC_CONFIG_PATH']
   env['QVAC_CONFIG_PATH'] = configPath
 

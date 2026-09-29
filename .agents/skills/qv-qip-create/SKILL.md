@@ -47,12 +47,12 @@ Stop and ask rather than draft when the primary motivation, recommended directio
 - Explain why the chosen direction is preferable to the most credible alternative.
 - When transport, RPC, storage, authentication, sandboxing, plugin execution, model provenance, or another cross-process or cross-peer trust boundary changes, state the architectural security properties explicitly.
 - Call out observable behavior, public API or install-contract changes, migration needs, and expected release or versioning impact when they could affect approval. If an unchanged dimension is likely to concern reviewers, address it in one sentence rather than adding a boilerplate section.
-- Use a diagram only when a boundary is otherwise hard to understand. Link it or use a normal image reference; never embed base64 image data.
+- Prefer a compact diagram in the Solution when it explains responsibilities, trust boundaries, interactions, or state flow more clearly than prose. Keep prose for the decision and trade-offs, and omit a diagram that would merely repeat them. Link it or use a normal image reference; never embed base64 image data.
 - Move useful API sketches, protocols, failure-mode analysis, rollout notes, test strategy, phase breakdowns, and larger comparisons to an Appendix in the same QIP unless the detail is itself the decision. Omit file-level change lists unless they provide meaningful evidence.
 - Link external artifacts such as PoC PRs, source research, or separately maintained specifications from the Appendix and summarize why they matter; do not copy their full content.
 - Never claim human approval.
 
-Before keeping a paragraph in the core proposal, ask whether it helps a reviewer approve, reject, or reshape the direction. If not, remove it or move useful supporting detail to the Appendix. Keep the Appendix relevant and organized; use a separate technical document only when the material has an independent lifecycle or is too large for the QIP.
+Before keeping a paragraph in the core proposal, ask whether it helps a reviewer approve, reject, or reshape the direction. Before requiring more detail, ask whether its absence could materially change the recommendation or make approval irresponsible. Otherwise remove it, move useful supporting detail to the Appendix, or defer it explicitly. Keep the Appendix relevant and organized; use a separate technical document only when the material has an independent lifecycle or is too large for the QIP.
 
 ## Consultation
 
@@ -70,6 +70,6 @@ For a non-trivial or iterative draft, use the user's path or default to `arch/qi
 
 For a file-based draft, return the path, a brief summary, and the consultation note. Do not paste the QIP unless asked. For a chat-only draft, show the consultation note first and then the Canvas-ready QIP.
 
-After saving, re-read the draft and verify its word count, template structure, links, and absence of embedded image data.
+After saving, re-read the completed draft against the applicable decision-readiness and decision-brief-quality criteria in `qv-qip-review`. Fix clear problems with decision clarity, evidence, consistency, scope, organization, and unnecessary detail in place. If a material gap depends on information or a choice only the author can provide, stop and ask rather than inventing it. Treat this as authoring QA, not an independent review or human approval. Then verify the draft's word count, template structure, links, and absence of embedded image data.
 
 If the user asks whether the draft is ready to post, suggest `qv-qip-review`.

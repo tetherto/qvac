@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "audiogen-cpp/minimax/engine.h"
+#include "model-interface/BackendUtils.hpp"
 
 namespace qvac::audiogenggml::minimax {
 
@@ -101,16 +102,6 @@ MinimaxModel::Output convertPcm(const std::vector<float>& pcm) {
     output.push_back(f32ToI16(sample * gain));
   }
   return output;
-}
-
-std::string resolveBackendsDir(const std::string& root) {
-  if (root.empty())
-    return {};
-  std::filesystem::path path(root);
-#ifdef BACKENDS_SUBDIR
-  path = (path / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-  return path.string();
 }
 
 } // namespace

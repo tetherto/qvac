@@ -4,6 +4,26 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.26.0] - 2026-09-28
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.17.0` -> `^0.18.0`, which moves the
+  shared runtime and ggml backends into `@qvac/fabric-<host>` platform
+  packages. Desktop installs get theirs as an optional dependency of
+  `@qvac/fabric`, and the backends root now comes from
+  `@qvac/fabric/backends`. No API change.
+- Mobile apps must add `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` as direct dependencies at the same exact version.
+
+## [0.25.1] - 2026-09-25
+
+### Fixed
+
+- Reject malformed EasyOCR model tensor shapes, vocabulary indexes, and bias tensors, including prediction biases with extra dimensions, before unsafe reads or writes.
+
 ## [0.25.0] - 2026-09-23
 
 ### Added
