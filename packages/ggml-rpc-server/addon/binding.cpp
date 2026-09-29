@@ -916,6 +916,13 @@ rpcBackendSupportsRdma(js_env_t* env, js_callback_info_t* info) try {
 }
 
 js_value_t* rpcServerExports(js_env_t* env, js_value_t* target) {
+  // Windows delay-loads qvac__fabric@0.bare and resolves it through Bare's
+  // addon registry, which only answers while Bare is loading or initializing
+  // an addon on the calling thread. The first fabric call otherwise happens on
+  // the start worker thread and fails with 0xC06D007E, so resolve fabric here.
+  // The loader keeps the resolved module for every later call.
+  static_cast<void>(ggml_backend_reg_count());
+
 // Native export registration is intentionally expressed as the same compact
 // macro used by the neighboring Bare addons.
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
