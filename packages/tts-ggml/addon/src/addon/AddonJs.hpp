@@ -363,6 +363,12 @@ getVoiceControls(js_env_t* env, js_callback_info_t* /*info*/) try {
 JSCATCH
 
 // ── assessFit ────────────────────────────────────────────────────────────
+
+inline std::string
+fitBackendsDir(const std::string& configured, const std::string& requested) {
+  return resolveBackendsDir(configured.empty() ? requested : configured)
+      .string();
+}
 //
 // Projects one voice against the memory free right now. Args: [request], whose
 // `engineType` picks the fitter and whose remaining keys carry that engine's
@@ -531,8 +537,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     const auto cfg = adapter.buildSupertonicConfig(request, env);
     tts_cpp::supertonic::FitOptions options;
     options.model_gguf_path = cfg.modelGgufPath;
-    options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+    options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     if (cfg.vulkanDevice.has_value()) {
       options.vulkan_device = *cfg.vulkanDevice;
@@ -559,8 +564,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     const auto cfg = adapter.buildParlerConfig(request, env);
     tts_cpp::parler::FitOptions options;
     options.model_gguf_path = cfg.modelGgufPath;
-    options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+    options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     integer("descriptionTokens", options.description_tokens);
     integer("promptTokens", options.prompt_tokens);
@@ -576,8 +580,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     tts_cpp::chatterbox::FitOptions options;
     options.t3_gguf_path = cfg.t3ModelPath;
     options.s3gen_gguf_path = cfg.s3genModelPath;
-    options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+    options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     if (!cfg.kvCacheType.empty()) {
       options.kv_cache_type = cfg.kvCacheType;
@@ -599,8 +602,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     options.lm_gguf_path = cfg.lmModelPath;
     options.codec_decoder_gguf_path = cfg.codecDecoderPath;
     options.codec_encoder_gguf_path = cfg.codecEncoderPath;
-    options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+    options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     integer("promptTokens", options.prompt_tokens);
     integer("maxFrames", options.max_frames);
@@ -618,8 +620,7 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     options.flow_gguf_path = cfg.flowModelPath;
     options.hift_gguf_path = cfg.hiftModelPath;
     options.voice_gguf_path = cfg.voiceModelPath;
-    options.backends_dir =
-        cfg.backendsDir.empty() ? requestBackendsDir : cfg.backendsDir;
+    options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     if (cfg.vulkanDevice.has_value()) {
       options.vulkan_device = *cfg.vulkanDevice;
