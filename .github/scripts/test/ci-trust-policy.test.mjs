@@ -936,6 +936,15 @@ test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
   assert.doesNotMatch(source, /PR_HEAD_REF|env\.HEAD_REF/);
 });
 
+// Self-hosted legs (cpp-lint, linux-x64 prebuild) get libibverbs from the
+// runner image. This covers the GitHub-hosted legs on the PR path; the release
+// path reads linuxExtraPackages from packages/fabric/project.json.
+test("Fabric prebuilds install the Linux RDMA build dependency", () => {
+  const prebuilds = read(".github/workflows/prebuilds-fabric.yml");
+
+  assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs-dev$/m);
+});
+
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
   const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)

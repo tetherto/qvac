@@ -9,6 +9,10 @@
       "version>=": "10549.4.0",
       "features": [
         "hip-backend",
+        {
+          "name": "rpc-rdma",
+          "platform": "linux"
+        },
         "vector-index"
       ]
     },
