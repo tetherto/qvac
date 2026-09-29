@@ -73,7 +73,7 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   }
 
   // Context: never more than the model was trained for — llama.cpp clamps.
-  let contextTokens = workload.contextTokens
+  let contextTokens = workload.contextTokens ?? facts.contextLength
   if (contextTokens > facts.contextLength) {
     assumptions.push(
       `requested ${workload.contextTokens} tokens exceeds the trained context of ${facts.contextLength}; clamped to the trained context`
@@ -113,7 +113,7 @@ export function estimateLlm(input: EstimatorInput): EstimatorResult {
   }
 
   assumptions.push(
-    'default KV-cache types are assumed; an explicit `cache-type-k`/`cache-type-v` in `modelConfig` is not expressible in a workload and would change these numbers'
+    'default KV-cache types are assumed; an explicit `cache-type-k`/`cache-type-v` in `modelConfig` is not read here and would change these numbers'
   )
 
   return {
