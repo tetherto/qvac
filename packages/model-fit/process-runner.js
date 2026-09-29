@@ -13,15 +13,20 @@ const process = processModule;
 // `./index` at load time because that would load the native binding. The v2
 // llamaConfigFit path also cannot go through fitParams().
 function resolveBackendsDir() {
+    // fabric's resolver only checks that the platform package resolves, not that
+    // its prebuilds are on disk.
     const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null)
+    if (fabricRoot !== null && isDirectory(fabricRoot))
         return fabricRoot;
+    const packaged = path.join(__dirname, 'prebuilds');
+    return isDirectory(packaged) ? packaged : undefined;
+}
+function isDirectory(dir) {
     try {
-        const packaged = path.join(__dirname, 'prebuilds');
-        return fs.statSync(packaged).isDirectory() ? packaged : undefined;
+        return fs.statSync(dir).isDirectory();
     }
     catch {
-        return undefined;
+        return false;
     }
 }
 function exitAfterWriteError(error) {

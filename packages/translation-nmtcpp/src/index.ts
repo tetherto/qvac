@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
+import fs = require("bare-fs");
 import path = require("bare-path");
 import QvacLogger = require("@qvac/logging");
 import fabricBackends = require("@qvac/fabric/backends");
@@ -38,7 +39,11 @@ const BERGAMOT_TARGET_TOKEN_BY_PAIR: Record<string, string> = {
 // own prebuilds, where the mobile packaging stages the backends. The native side
 // appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 function resolveBackendsDir(): string {
-  return fabricBackends.resolveBackendsDir() ?? path.join(__dirname, "prebuilds");
+  // fabric's resolver only checks that the platform package resolves, not that
+  // its prebuilds are on disk.
+  const fabricRoot = fabricBackends.resolveBackendsDir();
+  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
+  return path.join(__dirname, "prebuilds");
 }
 
 interface QvacResponseHandlers {

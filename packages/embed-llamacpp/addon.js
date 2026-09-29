@@ -4,6 +4,7 @@ exports.BertInterface = void 0;
 exports.mapAddonEvent = mapAddonEvent;
 exports.resolveBackendsDir = resolveBackendsDir;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
+const fs = require("bare-fs");
 const path = require("bare-path");
 const fabricBackends = require("@qvac/fabric/backends");
 /**
@@ -47,7 +48,12 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
 // the mobile packaging stages the backends. The native side appends
 // BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 function resolveBackendsDir() {
-    return fabricBackends.resolveBackendsDir() ?? path.join(__dirname, "prebuilds");
+    // fabric's resolver only checks that the platform package resolves, not that
+    // its prebuilds are on disk.
+    const fabricRoot = fabricBackends.resolveBackendsDir();
+    if (fabricRoot !== null && fs.existsSync(fabricRoot))
+        return fabricRoot;
+    return path.join(__dirname, "prebuilds");
 }
 /** An interface between the Bare C++ addon and the JS runtime. */
 class BertInterface {

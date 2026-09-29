@@ -243,13 +243,19 @@ const binding = require('./binding') as FitBinding
 // ("<host>/qvac__fabric") to the root. Return undefined only when neither
 // directory exists, so a statically linked build still skips backendsDir.
 function resolveBackendsDir (): string | undefined {
+  // fabric's resolver only checks that the platform package resolves, not that
+  // its prebuilds are on disk.
   const fabricRoot = fabricBackends.resolveBackendsDir()
-  if (fabricRoot !== null) return fabricRoot
+  if (fabricRoot !== null && isDirectory(fabricRoot)) return fabricRoot
+  const packaged = path.join(__dirname, 'prebuilds')
+  return isDirectory(packaged) ? packaged : undefined
+}
+
+function isDirectory (dir: string): boolean {
   try {
-    const packaged = path.join(__dirname, 'prebuilds')
-    return fs.statSync(packaged).isDirectory() ? packaged : undefined
+    return fs.statSync(dir).isDirectory()
   } catch {
-    return undefined
+    return false
   }
 }
 
