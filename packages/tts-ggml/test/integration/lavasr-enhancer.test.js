@@ -33,6 +33,7 @@ const {
 } = require('../utils/downloadModel')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -632,7 +633,7 @@ test(
 
 test(
   'Chatterbox + LavaSR enhancer + native chunk streaming emits 48 kHz chunks',
-  { timeout: 900000 },
+  { timeout: 900000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const enh = await ensureLavaSREnhancerGguf({
@@ -662,7 +663,7 @@ test(
       },
       referenceAudio: resolveRefWavPath({}),
       streamChunkTokens: 25, // native chunk streaming + enhancer (the path)
-      config: { language: 'en', useGPU: false },
+      config: { language: 'en', useGPU: GPU_ONLY_USE_GPU },
       opts: { stats: true }
     })
     await model.load()
