@@ -1027,17 +1027,26 @@ test("RPC server desktop integration tests install the Linux RDMA runtime", () =
 
 // Without real simulator slices the mobile setup fills both slots with the
 // device build, and bare-link cannot merge two arm64 slices into one library.
+// The release path (prebuilds-ggml-rpc-server.yml) and the PR path (prebuilds-nx
+// with no matrixInclude, so reusable-prebuilds' default) must build the same legs.
 test("RPC server prebuilds build both iOS simulator slices", () => {
   const prebuilds = read(".github/workflows/prebuilds-ggml-rpc-server.yml");
+  const reusable = read(".github/workflows/reusable-prebuilds.yml");
   const matrix = JSON.parse(
     prebuilds.match(/matrix-include: >-\n\s+(\[.*\])$/m)[1],
   );
-  const simulators = matrix
-    .filter((leg) => leg.platform === "ios" && leg.tags === "-simulator")
-    .map((leg) => `${leg.arch}:${leg.flags}`)
-    .sort();
+  const defaultMatrix = JSON.parse(
+    reusable.match(/inputs\.matrix-include == 'default' && '(\[.*?\])'/)[1],
+  );
+  const simulators = (legs) =>
+    legs
+      .filter((leg) => leg.platform === "ios" && leg.tags === "-simulator")
+      .map((leg) => `${leg.arch}:${leg.flags}`)
+      .sort();
 
-  assert.deepEqual(simulators, ["arm64:--simulator", "x64:--simulator"]);
+  assert.deepEqual(simulators(matrix), ["arm64:--simulator", "x64:--simulator"]);
+  assert.equal(rpcServerProject().targets.build.options.ci.matrixInclude, undefined);
+  assert.deepEqual(defaultMatrix, matrix, "PR and release prebuilds must build the same legs");
 });
 
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
