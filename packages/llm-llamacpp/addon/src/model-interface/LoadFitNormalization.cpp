@@ -158,12 +158,12 @@ std::vector<std::string> registerRpcDevices(const std::string& servers) {
   ggml_backend_reg_t rpcReg = ggml_backend_reg_by_name("RPC");
   if (rpcReg == nullptr) {
 #if defined(__linux__) && !defined(__ANDROID__)
-    constexpr std::string_view K_RPC_LOAD_HINT =
+    constexpr std::string_view rpcLoadHint =
         " On Linux the RPC backend requires libibverbs.so.1 (libibverbs1 on "
         "Debian/Ubuntu); install it if the RPC module is present but failed "
         "to load.";
 #else
-    constexpr std::string_view K_RPC_LOAD_HINT = "";
+    constexpr std::string_view rpcLoadHint = "";
 #endif
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
@@ -171,7 +171,8 @@ std::vector<std::string> registerRpcDevices(const std::string& servers) {
             "%s: 'rpc-servers' was given but no RPC backend is registered. "
             "Either qvac-fabric was built without GGML_RPC or the RPC backend "
             "module failed to load.%s\n",
-            K_LEGACY_PARSER_NAME.data(), K_RPC_LOAD_HINT.data()));
+            K_LEGACY_PARSER_NAME.data(),
+            rpcLoadHint.data()));
   }
 
   using AddServerFn = ggml_backend_reg_t (*)(const char* endpoint);
