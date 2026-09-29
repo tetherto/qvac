@@ -18,14 +18,15 @@ from tetherto.qvac_sdk.schemas import (
 )
 
 
-async def test_managed_rpc_server_wire_contract():
+@pytest.mark.parametrize("rdma_capable", [False, True])
+async def test_managed_rpc_server_wire_contract(rdma_capable):
     transport = FakeTransport(
         {
             "type": "startRpcServer",
             "serverId": "owned",
             "url": "10.0.0.2:50052",
             "runtime": "in-process",
-            "rdmaCapable": False,
+            "rdmaCapable": rdma_capable,
         }
     )
     server = await start_rpc_server(
@@ -40,7 +41,7 @@ async def test_managed_rpc_server_wire_contract():
         ),
     )
     assert server.server_id == "owned"
-    assert server.rdma_capable is False
+    assert server.rdma_capable is rdma_capable
     assert transport.sent == {
         "type": "startRpcServer",
         "host": "10.0.0.2",

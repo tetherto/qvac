@@ -16,11 +16,11 @@ const { ensureChatterboxModels, ensureWhisperModel } = require('../utils/downloa
 const { loadWhisper, runWhisper } = require('../utils/runWhisper')
 const { recordTtsStats } = require('../utils/perf-helper')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { NO_GPU, GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
 const isDarwin = platform === 'darwin'
-const forceNoGpu = os.getEnv('NO_GPU') === 'true'
 
 const INPUT_SENTENCES = (isMobile ? 'short' : os.getEnv('INPUT_SENTENCES')) || 'short'
 const useSplit = INPUT_SENTENCES !== 'short'
@@ -42,7 +42,7 @@ function getEnglishSentences() {
 
 test(
   'Chatterbox TTS (ggml): English synthesis + optional WER verification',
-  { timeout: 1800000 },
+  { timeout: 1800000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const modelsDir = path.join(baseDir, 'models')
@@ -86,7 +86,8 @@ test(
     const model = await loadChatterboxTTS({
       threads: TTS_TEST_THREADS,
       modelDir: resolvedModelDir,
-      language: 'en'
+      language: 'en',
+      useGPU: GPU_ONLY_USE_GPU
     })
     t.ok(model, 'Chatterbox (ggml) model should be loaded')
 
@@ -254,7 +255,7 @@ test(
     const model = new TTSGgml({
       threads: TTS_TEST_THREADS,
       files: { modelDir: download.targetDir },
-      config: { language: 'en', ...(forceNoGpu ? { useGPU: false } : {}) },
+      config: { language: 'en', ...(NO_GPU ? { useGPU: false } : {}) },
       opts: { stats: true }
     })
 
@@ -315,7 +316,7 @@ test(
       threads: TTS_TEST_THREADS,
       files: { modelDir: download.targetDir },
       referenceAudio: resolveRefWavPath({}),
-      config: { language: 'en', outputSampleRate: 16000, ...(forceNoGpu ? { useGPU: false } : {}) },
+      config: { language: 'en', outputSampleRate: 16000, ...(NO_GPU ? { useGPU: false } : {}) },
       opts: { stats: true }
     })
     await model.load()
@@ -344,7 +345,7 @@ test(
 
 test(
   'Chatterbox TTS (ggml): native C++ chunk streaming via streamChunkTokens',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const modelsDir = path.join(baseDir, 'models')
@@ -371,7 +372,7 @@ test(
       streamChunkTokens: 25,
       streamFirstChunkTokens: 10,
       cfmSteps: 1,
-      config: { language: 'en', ...(forceNoGpu ? { useGPU: false } : {}) },
+      config: { language: 'en', useGPU: GPU_ONLY_USE_GPU },
       opts: { stats: true }
     })
     await model.load()

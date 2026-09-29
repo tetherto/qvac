@@ -71,14 +71,17 @@ export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
       for (const server of [first, second]) {
         if (
           server.runtime !== 'in-process' ||
-          server.rdmaCapable !== false ||
+          typeof server.rdmaCapable !== 'boolean' ||
           !server.url.startsWith('127.0.0.1:')
         )
           throw new Error('Unexpected server transport or loopback default')
         await stopRpcServer({ serverId: server.serverId })
         owned.delete(server.serverId)
       }
-      return ValidationHelpers.validate('distinct IDs; TCP only; stop confirmed', expectation)
+      return ValidationHelpers.validate(
+        'distinct IDs; transport reported; stop confirmed',
+        expectation
+      )
     } finally {
       await Promise.all([...owned].map((serverId) => stopRpcServer({ serverId })))
     }

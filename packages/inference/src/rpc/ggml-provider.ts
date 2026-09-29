@@ -14,18 +14,12 @@ export const ggmlRpcServerProvider: RpcServerProvider = {
         allowNonLoopbackHost: options.allowNonLoopbackHost
       })
     })
-    // The Bare export uses the in-process server on desktop and mobile.
-    const runtime: string = handle.runtime
-    if (runtime !== 'in-process' || handle.rdmaCapable) {
-      await handle.stop()
-      throw new Error('Inference requires the Bare in-process TCP RPC server')
-    }
     return {
       host: handle.host,
       port: handle.port,
       url: handle.url,
       runtime: 'in-process',
-      rdmaCapable: false,
+      rdmaCapable: handle.rdmaCapable,
       stop: () => handle.stop()
     }
   }

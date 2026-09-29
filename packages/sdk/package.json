@@ -188,7 +188,8 @@
     "!**/bun.lock",
     "LICENSE",
     "NOTICE",
-    "docs/system-resources-support-matrix.md"
+    "docs/system-resources-support-matrix.md",
+    "docs/rpc.md"
   ],
   "scripts": {
     "test:unit": "bun run scripts/run-unit-tests.ts",
@@ -216,20 +217,20 @@
   "dependencies": {
     "@qvac/asr-ggml": "^0.5.3",
     "@qvac/audiogen-ggml": "^0.4.0",
-    "@qvac/bci-whispercpp": "^0.9.1",
-    "@qvac/classification-ggml": "^0.26.1",
-    "@qvac/decoder-audio": "^0.6.0",
-    "@qvac/diffusion-cpp": "^0.24.0",
-    "@qvac/embed-llamacpp": "^0.41.1",
+    "@qvac/bci-whispercpp": "^0.10.0",
+    "@qvac/classification-ggml": "0.28.0",
+    "@qvac/decoder-audio": "^0.7.0",
+    "@qvac/diffusion-cpp": "^0.25.0",
+    "@qvac/embed-llamacpp": "0.43.0",
     "@qvac/error": "^0.1.1",
     "@qvac/inference": "^0.20.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.54.0",
+    "@qvac/llm-llamacpp": "0.55.0",
     "@qvac/logging": "^0.1.0",
-    "@qvac/ocr-ggml": "^0.24.1",
-    "@qvac/translation-nmtcpp": "^0.16.1",
+    "@qvac/ocr-ggml": "0.26.0",
+    "@qvac/translation-nmtcpp": "0.18.0",
     "@qvac/tts-ggml": "^0.9.1",
-    "@qvac/vla-ggml": "^0.27.1",
+    "@qvac/vla-ggml": "0.29.0",
     "bare-abort-controller": "^1.0.0",
     "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.0",
@@ -289,7 +290,8 @@
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
-    "@qvac/infer-base": "0.4.2"
+    "@qvac/infer-base": "0.4.2",
+    "@qvac/ggml-rpc-server": "0.1.0"
   },
   "peerDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
@@ -300,7 +302,8 @@
     "expo-modules-core": ">=3.0.0",
     "pear-pipe": ">=1.0.0",
     "react-native-bare-kit": "*",
-    "tsx": "*"
+    "tsx": "*",
+    "@qvac/ggml-rpc-server": "0.1.0"
   },
   "peerDependenciesMeta": {
     "@electron-forge/plugin-base": {
@@ -328,6 +331,9 @@
       "optional": true
     },
     "tsx": {
+      "optional": true
+    },
+    "@qvac/ggml-rpc-server": {
       "optional": true
     }
   },

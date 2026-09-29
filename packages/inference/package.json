@@ -171,7 +171,7 @@
   "dependencies": {
     "@qvac/error": "^0.1.1",
     "@qvac/logging": "^0.1.1",
-    "@qvac/model-fit": "^0.12.0",
+    "@qvac/model-fit": "0.14.0",
     "@qvac/rag": "^0.8.1",
     "@qvac/registry-client": "^0.7.0",
     "bare-abort-controller": "^1.1.2",
@@ -199,22 +199,24 @@
     "semver": "^7.8.5",
     "tar-stream": "^3.2.0",
     "which-runtime": "^1.2.1",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@qvac/fabric": "0.18.1"
   },
   "peerDependencies": {
     "@qvac/asr-ggml": "^0.5.3",
     "@qvac/audiogen-ggml": "^0.4.0",
-    "@qvac/bci-whispercpp": "^0.9.1",
-    "@qvac/classification-ggml": "^0.26.1",
-    "@qvac/decoder-audio": "^0.6.0",
-    "@qvac/diffusion-cpp": "^0.24.0",
-    "@qvac/embed-llamacpp": "^0.41.1",
+    "@qvac/bci-whispercpp": "^0.10.0",
+    "@qvac/classification-ggml": "0.28.0",
+    "@qvac/decoder-audio": "^0.7.0",
+    "@qvac/diffusion-cpp": "^0.25.0",
+    "@qvac/embed-llamacpp": "0.43.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.54.0",
-    "@qvac/ocr-ggml": "^0.24.1",
-    "@qvac/translation-nmtcpp": "^0.16.1",
+    "@qvac/llm-llamacpp": "0.55.0",
+    "@qvac/ocr-ggml": "0.26.0",
+    "@qvac/translation-nmtcpp": "0.18.0",
     "@qvac/tts-ggml": "^0.9.1",
-    "@qvac/vla-ggml": "^0.27.1"
+    "@qvac/vla-ggml": "0.29.0",
+    "@qvac/ggml-rpc-server": "0.1.0"
   },
   "peerDependenciesMeta": {
     "@qvac/asr-ggml": {
@@ -255,22 +257,25 @@
     },
     "@qvac/vla-ggml": {
       "optional": true
+    },
+    "@qvac/ggml-rpc-server": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@qvac/asr-ggml": "^0.5.3",
     "@qvac/audiogen-ggml": "^0.4.0",
-    "@qvac/bci-whispercpp": "^0.9.1",
-    "@qvac/classification-ggml": "^0.26.1",
-    "@qvac/decoder-audio": "^0.6.0",
-    "@qvac/diffusion-cpp": "^0.24.0",
-    "@qvac/embed-llamacpp": "^0.41.1",
+    "@qvac/bci-whispercpp": "^0.10.0",
+    "@qvac/classification-ggml": "0.28.0",
+    "@qvac/decoder-audio": "^0.7.0",
+    "@qvac/diffusion-cpp": "^0.25.0",
+    "@qvac/embed-llamacpp": "0.43.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.54.0",
-    "@qvac/ocr-ggml": "^0.24.1",
-    "@qvac/translation-nmtcpp": "^0.16.1",
+    "@qvac/llm-llamacpp": "0.55.0",
+    "@qvac/ocr-ggml": "0.26.0",
+    "@qvac/translation-nmtcpp": "0.18.0",
     "@qvac/tts-ggml": "^0.9.1",
-    "@qvac/vla-ggml": "^0.27.1",
+    "@qvac/vla-ggml": "0.29.0",
     "@types/brittle": "^3.5.0",
     "bare": "*",
     "bare-console": "*",
@@ -282,6 +287,7 @@
     "prettier": "^3.9.4",
     "prettier-config-holepunch": "^2.0.0",
     "tsc-alias": "^1.8.17",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@qvac/ggml-rpc-server": "0.1.0"
   }
 }

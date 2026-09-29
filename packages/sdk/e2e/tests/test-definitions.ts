@@ -17,6 +17,7 @@ import { kvCacheTests } from './kv-cache-tests.js'
 import { kvCacheRestartTests } from './kv-cache-restart-tests.js'
 import { errorTests } from './error-tests.js'
 import { toolsTests } from './tools-tests.js'
+import { deferredToolsTests } from './deferred-tools-tests.js'
 import { ocrTests } from './ocr-tests.js'
 import { classificationTests } from './classification-tests.js'
 import { ttsTests } from './tts-tests.js'
@@ -308,6 +309,7 @@ export const tests = [
 
   // Tools tests
   ...toolsTests,
+  ...deferredToolsTests,
 
   // OCR tests
   ...ocrTests,

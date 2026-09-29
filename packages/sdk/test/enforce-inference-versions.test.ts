@@ -97,6 +97,32 @@ describe('checkSharedMajorMinor', () => {
 })
 
 describe('checkAddonRanges', () => {
+  it('accepts an opt-in server peer only with matching SDK development coverage', () => {
+    const addons = { '@qvac/ggml-rpc-server': '0.1.0' }
+    const sdk: Manifest = {
+      ...sdkManifest('0.20.1', '^0.20.0'),
+      peerDependencies: addons,
+      peerDependenciesMeta: { '@qvac/ggml-rpc-server': { optional: true } },
+      devDependencies: addons
+    }
+    assert.deepEqual(checkAddonRanges(inferenceManifest(addons), sdk), [])
+    assert.match(
+      checkAddonRanges(inferenceManifest(addons), { ...sdk, devDependencies: {} })[0],
+      /SDK devDependencies must match/
+    )
+    assert.match(
+      checkAddonRanges(inferenceManifest(addons), { ...sdk, peerDependenciesMeta: {} })[0],
+      /SDK is missing it/
+    )
+    assert.match(
+      checkAddonRanges(inferenceManifest(addons), {
+        ...sdk,
+        peerDependencies: { '@qvac/ggml-rpc-server': '0.2.0' }
+      })[0],
+      /SDK has 0.2.0/
+    )
+  })
+
   it('accepts addon ranges identical across all three lists', () => {
     assert.deepEqual(
       checkAddonRanges(

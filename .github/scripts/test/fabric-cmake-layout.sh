@@ -162,12 +162,12 @@ write_consumer missing-android android-arm64
 write_meta missing-android/node_modules/@qvac/fabric "$SPLIT_VERSION"
 write_slice "missing-android/node_modules/@qvac/fabric-$HOST"
 expect_fatal "cross-built runtime not installed (android)" missing-android \
-  "os/cpu filters; add \"@qvac/fabric-android-arm64\": \"$SPLIT_VERSION\" to devDependencies."
+  "os/cpu filters; add \"@qvac/fabric-android-arm64\": \"^$SPLIT_VERSION\" to devDependencies."
 
 write_consumer missing-ios ios-arm64-simulator
 write_meta missing-ios/node_modules/@qvac/fabric "$SPLIT_VERSION"
 expect_fatal "cross-built runtime not installed (ios)" missing-ios \
-  "\"@qvac/fabric-ios\": \"$SPLIT_VERSION\" to devDependencies"
+  "\"@qvac/fabric-ios\": \"^$SPLIT_VERSION\" to devDependencies"
 
 if [ "$failures" -gt 0 ]; then
   echo "::error::$failures fabric CMake layout case(s) failed"

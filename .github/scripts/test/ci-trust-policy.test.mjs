@@ -936,6 +936,39 @@ test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
   assert.doesNotMatch(source, /PR_HEAD_REF|env\.HEAD_REF/);
 });
 
+// Self-hosted legs (cpp-lint, linux-x64 prebuild) get libibverbs from the
+// runner image. This covers the GitHub-hosted legs on the PR path; the release
+// path reads linuxExtraPackages from packages/fabric/project.json.
+test("Fabric prebuilds install the Linux RDMA build dependency", () => {
+  const prebuilds = read(".github/workflows/prebuilds-fabric.yml");
+
+  assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs-dev$/m);
+});
+
+// The RPC server smoke test loads Fabric's RPC backend, which needs the
+// libibverbs runtime on the GitHub-hosted linux-arm64 leg.
+test("RPC server prebuilds install the Linux RDMA runtime dependency", () => {
+  const prebuilds = read(".github/workflows/prebuilds-ggml-rpc-server.yml");
+
+  assert.match(prebuilds, /desktop-smoke-command:/);
+  assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs1$/m);
+});
+
+// Without real simulator slices the mobile setup fills both slots with the
+// device build, and bare-link cannot merge two arm64 slices into one library.
+test("RPC server prebuilds build both iOS simulator slices", () => {
+  const prebuilds = read(".github/workflows/prebuilds-ggml-rpc-server.yml");
+  const matrix = JSON.parse(
+    prebuilds.match(/matrix-include: >-\n\s+(\[.*\])$/m)[1],
+  );
+  const simulators = matrix
+    .filter((leg) => leg.platform === "ios" && leg.tags === "-simulator")
+    .map((leg) => `${leg.arch}:${leg.flags}`)
+    .sort();
+
+  assert.deepEqual(simulators, ["arm64:--simulator", "x64:--simulator"]);
+});
+
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
   const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)
@@ -1751,40 +1784,59 @@ test('ggml-rpc-server TypeScript checks run on PR head without privileged cache 
   )
 });
 
-test('ggml-rpc-server overlay triggers wait for the server package layer', () => {
+test('ggml-rpc-server npm Fabric triggers activate with the server package layer', () => {
   const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml');
   const rpcMerge = read('.github/workflows/on-merge-ggml-rpc-server.yml');
+  const tsProducer = read('.github/workflows/on-pr-ts-nx.yml');
   const mergeGate = read('.github/workflows/pr-gate-merge.yml');
-  const fabricOverlay = /vcpkg-overlays\/ports\/qvac-fabric/;
+  const rpcProject = JSON.parse(
+    read('packages/ggml-rpc-server/project.json'),
+  );
+  const fabricPackage = /packages\/fabric/;
   const rpcGate = mergeGate.match(
     /^ {12}ggml-rpc-server:\n(?:^ {14}- .+\n?)+/m,
   )?.[0];
 
-  assert.doesNotMatch(
+  assert.match(
     rpcPr,
-    fabricOverlay,
-    'the RPC workflow must not await package checks before the server package exists',
+    fabricPackage,
+    'fabric changes must run RPC server PR checks once the package exists',
   )
+  const rpcMergeTrigger = rpcMerge.match(/^on:\n[\s\S]*?^permissions:/m)?.[0];
+  assert.ok(rpcMergeTrigger, 'the RPC release workflow must declare its triggers');
   assert.doesNotMatch(
-    rpcMerge,
-    fabricOverlay,
-    'the RPC release workflow must not build before the server package exists',
+    rpcMergeTrigger
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n'),
+    /packages\/fabric|cmake\/qvac-addon/,
+    'the RPC release build uses the published fabric, so fabric-only merges must not republish it',
+  )
+  assert.match(
+    tsProducer,
+    /packages\/\*\*/,
+    'the unprivileged TS-check producer must run whenever the RPC consumer runs',
   )
   assert.ok(rpcGate, 'the merge gate must retain its ggml-rpc-server mapping');
-  assert.doesNotMatch(
+  assert.match(
     rpcGate,
-    fabricOverlay,
-    'the merge gate must not require an RPC prebuild before the server package exists',
+    fabricPackage,
+    'fabric changes must require the RPC server prebuild once the package exists',
   )
+  assert.ok(
+    rpcProject.targets['on-pr'].inputs.includes(
+      '{workspaceRoot}/packages/fabric/**',
+    ),
+    'Nx must mark ggml-rpc-server affected for fabric-overlay-only changes',
+  );
 });
 
-test('RPC RDMA validation covers the server without replacing release artifacts', () => {
+test('RPC server prebuilds consume PR-built npm Fabric artifacts', () => {
   const reusable = read('.github/workflows/reusable-prebuilds.yml')
   const nxPrebuilds = read('.github/workflows/prebuilds-nx.yml')
   const rpcPrebuilds = read('.github/workflows/prebuilds-ggml-rpc-server.yml')
   const rpcPr = read('.github/workflows/on-pr-ggml-rpc-server.yml')
   const stripAction = read('.github/actions/strip-prebuilds/action.yml')
-  const validation = read('.github/scripts/validate-rpc-rdma-build.sh')
   const uploadIndex = reusable.indexOf(
     'name: prebuild-${{ steps.pkg.outputs.name }}-${{ matrix.platform }}-${{ matrix.arch }}',
   )
@@ -1793,11 +1845,6 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
   assert.ok(
     validationIndex > uploadIndex,
     'the optional validation rebuild must run only after the release artifact is captured',
-  )
-  assert.match(
-    validation,
-    /ABI_INFO=\$\(find build\/_vcpkg[^\n]+\|\| true\)/,
-    'a missing ABI metadata directory must reach the explicit validation error',
   )
   assert.match(stripAction, /extra-names:/)
   assert.match(
@@ -1852,18 +1899,19 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
   )
   assert.match(
     rpcPr,
-    /reuse-workflow-file:\s*on-pr-ggml-rpc-server\.yml/,
+    /reuse-workflow-file:\s*\$\{\{ needs\.detect-fabric-stack\.outputs\.fabric_stack != 'true' && 'on-pr-ggml-rpc-server\.yml' \|\| '' \}\}/,
   )
   assert.match(
     rpcPr,
     /REUSE_HIT:\s*\$\{\{ needs\.prebuild\.outputs\.reuse_hit \}\}/,
   )
 
-  assert.match(rpcPrebuilds, /linux-extra-packages:\s*libibverbs-dev/)
   assert.match(
     rpcPrebuilds,
-    /post-artifact-build-command:\s*bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
+    /fabric-overlay-artifact:\s*\$\{\{ inputs\.fabric-overlay-artifact \}\}/,
   )
+  assert.match(rpcPr, /detect-fabric-stack:/)
+  assert.match(rpcPr, /wait-and-download-fabric-prebuilds/)
 
   const mobile = read('.github/workflows/integration-mobile-test-ggml-rpc-server.yml')
   assert.match(

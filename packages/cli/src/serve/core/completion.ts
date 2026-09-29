@@ -1,0 +1,170 @@
+import type { CompletionRun, CompletionStats, ToolCall, ToolCallError } from '@qvac/sdk'
+import { HttpError } from '@/serve/lib/http-error'
+
+export interface DrainedCompletion {
+  text: string
+  /** Concatenated `thinkingDelta` text; empty when the SDK captured no reasoning. */
+  thinking: string
+  toolCalls: ToolCall[]
+  /**
+   * Tool-call regions the addon emitted but could not parse or validate. Routes
+   * log them (see `formatToolErrors`) — without that line an empty response
+   * looks like the model simply chose not to call a tool.
+   */
+  toolErrors: ToolCallError[]
+  stats: CompletionStats | undefined
+  /**
+   * Terminal reason from the SDK `completionDone` event (`eos` / `length` /
+   * `stopSequence` / `cancelled`), or undefined if the stream ended without
+   * one. `error` and `cancelled` are never present here — `drainCompletion`
+   * throws on both (502 for error, `InferenceCancelledError` for cancelled).
+   */
+  stopReason: string | undefined
+  /** See `completionTokensFromStats`. */
+  completionTokens: number
+  /**
+   * The turn's output exactly as the model emitted it, tool-call markup
+   * included, when the addon reported it. Replaying a tool-call turn needs
+   * this rather than `text`: the model has to see its own call syntax.
+   */
+  rawFullText: string | undefined
+}
+
+/**
+ * Single-pass consumer of an SDK completion run, shared by every
+ * chat-category route. Draining `result.events` once yields content text,
+ * tool calls, stats and the terminal `stopReason` together, so token
+ * accounting is derived in one place instead of drifting per route.
+ *
+ * Pass `onToken` to stream content deltas as they arrive (SSE paths); omit
+ * it for blocking responses. Pass `onThinking` to stream reasoning deltas the
+ * same way — only produced when the caller enabled `captureThinking` on the
+ * SDK request.
+ */
+export async function drainCompletion(
+  result: CompletionRun,
+  onToken?: (token: string) => void,
+  onThinking?: (token: string) => void
+): Promise<DrainedCompletion> {
+  let text = ''
+  let thinking = ''
+  const toolCalls: ToolCall[] = []
+  const toolErrors: ToolCallError[] = []
+  let stats: CompletionStats | undefined
+  let stopReason: string | undefined
+  let rawFullText: string | undefined
+
+  for await (const event of result.events) {
+    if (event.type === 'contentDelta') {
+      text += event.text
+      onToken?.(event.text)
+    } else if (event.type === 'thinkingDelta') {
+      thinking += event.text
+      onThinking?.(event.text)
+    } else if (event.type === 'toolCall') {
+      toolCalls.push(event.call)
+    } else if (event.type === 'toolError') {
+      toolErrors.push(event.error)
+    } else if (event.type === 'completionStats') {
+      stats = event.stats
+    } else if (event.type === 'completionDone') {
+      if ('raw' in event && event.raw) {
+        rawFullText = event.raw.fullText
+      }
+      if (event.stopReason === 'error') {
+        throw new HttpError(502, 'inference_failed', 'Inference failed mid-stream.')
+      }
+      if (event.stopReason !== undefined) {
+        stopReason = event.stopReason
+      }
+    }
+  }
+
+  if (stopReason === 'cancelled') {
+    await result.final
+  }
+
+  return {
+    text,
+    thinking,
+    toolCalls,
+    toolErrors,
+    stats,
+    stopReason,
+    completionTokens: completionTokensFromStats(text, stats),
+    rawFullText
+  }
+}
+
+const SUMMED_STAT_KEYS = [
+  'promptTokens',
+  'cacheTokens',
+  'generatedTokens',
+  'emittedTokens'
+] as const
+
+function sumStat(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined) return b
+  if (b === undefined) return a
+  return a + b
+}
+
+/**
+ * Fold one turn of a multi-round request into the running total, so `usage`
+ * covers every round the request ran, not only the last. Token counts are
+ * summed; rates and timings are the latest turn's.
+ */
+export function accumulateUsage<T extends DrainedCompletion>(
+  previous: DrainedCompletion | undefined,
+  next: T
+): T {
+  if (!previous) return next
+  let stats = next.stats
+  if (previous.stats || next.stats) {
+    stats = { ...previous.stats, ...next.stats }
+    for (const key of SUMMED_STAT_KEYS) {
+      const total = sumStat(previous.stats?.[key], next.stats?.[key])
+      if (total !== undefined) stats[key] = total
+    }
+  }
+  return {
+    ...next,
+    stats,
+    completionTokens: previous.completionTokens + next.completionTokens
+  }
+}
+
+/**
+ * Render drained tool-call failures for the request log: a count plus each
+ * distinct error code, e.g. ` toolerrors=2 (PARSE_ERROR)`. Empty string when
+ * the run produced none, so it appends cleanly to an existing log line.
+ */
+export function formatToolErrors(toolErrors: ToolCallError[]): string {
+  if (toolErrors.length === 0) {
+    return ''
+  }
+  const codes = [...new Set(toolErrors.map((err) => err.code))].join(',')
+  return ` toolerrors=${toolErrors.length} (${codes})`
+}
+
+/**
+ * Completion token count for a drained run (OpenAI `usage.completion_tokens`).
+ *
+ * Prefer SDK `emittedTokens` (non-empty addon stream pieces) over
+ * `generatedTokens` (`llama_perf` `n_eval`), which can equal the predict /
+ * `max_tokens` budget when fewer tokens were streamed. Normalized
+ * `contentDelta` / `thinkingDelta` event counts are not used — those are
+ * chunk boundaries, not tokenizer tokens.
+ */
+export function completionTokensFromStats(
+  text: string,
+  stats: CompletionStats | undefined
+): number {
+  if (typeof stats?.emittedTokens === 'number' && Number.isFinite(stats.emittedTokens)) {
+    return stats.emittedTokens
+  }
+  if (typeof stats?.generatedTokens === 'number' && Number.isFinite(stats.generatedTokens)) {
+    return stats.generatedTokens
+  }
+  return text ? text.split(/\s+/).filter(Boolean).length : 0
+}

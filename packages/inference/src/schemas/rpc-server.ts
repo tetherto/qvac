@@ -39,7 +39,11 @@ export const rpcServerInfoSchema = z.object({
   serverId: z.string().min(1),
   url: z.string().min(1),
   runtime: z.literal('in-process'),
-  rdmaCapable: z.literal(false)
+  rdmaCapable: z
+    .boolean()
+    .describe(
+      'Whether the native backend supports RDMA. It falls back to TCP for clients without RDMA.'
+    )
 })
 export const startRpcServerRequestSchema = startRpcServerOptionsSchema.extend({
   type: z.literal('startRpcServer'),
@@ -104,7 +108,7 @@ export interface RpcServerHandle {
   port: number
   url: string
   runtime: 'in-process'
-  rdmaCapable: false
+  rdmaCapable: boolean
   stop(): Promise<void>
 }
 

@@ -5,7 +5,7 @@ export const rpcServerLifecycle = {
   params: {},
   expectation: {
     validation: 'contains-all',
-    contains: ['distinct IDs', 'TCP only', 'stop confirmed']
+    contains: ['distinct IDs', 'transport reported', 'stop confirmed']
   },
   metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 20000 }
 } as const satisfies TestDefinition

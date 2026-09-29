@@ -11,7 +11,7 @@ import { decoratePromise } from '@/utils/decorate-promise'
 import { generateRequestId } from '@/runtime/request-id'
 
 /**
- * Start a worker-owned native TCP server. Non-loopback binding and advertising require explicit opt-in.
+ * Start a worker-owned native RPC server. Non-loopback binding and advertising require explicit opt-in.
  * Cancel a pending start with its promise.requestId.
  */
 export function startRpcServer(
