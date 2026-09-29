@@ -411,6 +411,36 @@ jobs:
           CONTEXT: qvac/prebuild-vla
         run: node .github/scripts/prebuild-status/publish.mjs
 
+  publish-cpp-test-status:
+    # Posts qvac/cpp-tests-vla for Merge Guard's verify-cpp-tests.
+    needs: [cpp-tests, ci-router]
+    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Checkout prebuild-status scripts (default branch)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Publish C++ test status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CPP_TEST_RESULT: ${{ needs.cpp-tests.result }}
+          REUSE_HIT: ''
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          RUN_CPP_TESTS: ${{ needs.ci-router.outputs.run_cpp_tests }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/cpp-tests-vla
+          KIND: cpp-tests
+        run: node .github/scripts/prebuild-status/publish.mjs
+
   merge-guard:
     # run-mobile-integration-tests removed — mobile is on-demand only now.
     needs:

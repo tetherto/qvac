@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { bundleSdk, resolveDeferredModules } from '@/commands/bundle'
+import { extractBarePackHeader, extractPackedString } from '@/commands/bundle/manifest'
 import { ConfigValidationFailedError } from '@/utils/errors-client'
 import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
 import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
@@ -330,7 +331,17 @@ describe('bundleSdk worker entries', () => {
       hosts: [`${process.platform}-${process.arch}`],
       quiet: true
     })
-    assert.ok(fs.existsSync(path.join(outputDir, 'worker.bundle.js')))
+    const bundle = fs.readFileSync(path.join(outputDir, 'worker.bundle.js'), 'utf8')
+    const header = extractBarePackHeader(extractPackedString(bundle))
+    const pluginEntry = Object.entries(header.resolutions ?? {}).find(([url]) =>
+      url.endsWith('/dist/llm-plugin.js')
+    )
+    assert.ok(pluginEntry, 'bundle retains the plugin that imports the decoder')
+    assert.deepEqual(
+      (pluginEntry[1] as Record<string, unknown>)['@qvac/decoder-audio'],
+      'deferred:@qvac/decoder-audio',
+      'raw-only bundle defers decoder resolution until runtime'
+    )
     const manifest = JSON.parse(
       fs.readFileSync(path.join(outputDir, 'addons.manifest.json'), 'utf8')
     )

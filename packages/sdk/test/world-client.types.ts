@@ -1,6 +1,26 @@
 import type { WorldSceneClientParams } from '@qvac/inference/surface'
 import type { WorldSceneResult, WorldSceneResultWithPack } from '@/client/api/world-result'
 import { worldCreateScene } from '@/client/api/world'
+import type { LoadModelOptions } from '@/index'
+
+// The walk memory controls are part of the public load surface.
+const streamedWorld: LoadModelOptions = {
+  modelType: 'sdcpp-generation',
+  modelSrc: '/models/abot-world-dit.gguf',
+  modelConfig: {
+    mode: 'world',
+    taehvModelSrc: '/models/taew2_2.gguf',
+    sceneSrc: '/worlds/forest.safetensors',
+    world: {
+      paramsBackend: 'diffusion=cpu,vae=cpu',
+      maxVram: 'cuda0=-1',
+      streamLayers: true,
+      kvCache: true,
+      verbosity: 3
+    }
+  }
+}
+void streamedWorld
 
 const base = {
   modelId: 'model-1',

@@ -143,16 +143,16 @@ initialized, the event omits the resource block.
 ## Pre-download model fit assessment
 
 Use `assessModelFit` to check, before downloading anything, whether models are
-likely to fit in this device's memory. It reads generated catalog metadata plus a
-fresh memory sample, and for a single candidate the registry's weightless
-description of the artifact, so the engine's own fitter can answer — no weights,
-no load:
+likely to fit in this device's memory. Each candidate is described as `loadModel`
+takes it. It reads generated catalog metadata plus a fresh memory sample, and for
+a single candidate the registry's weightless description of the artifact, so the
+engine's own fitter can answer — no weights, no load:
 
 ```ts
 import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
 
 const result = await assessModelFit({
-  models: [{ model: QWEN3_8B_INST_Q4_K_M, workload: { kind: 'llm', contextTokens: 8192 } }],
+  models: [{ modelSrc: QWEN3_8B_INST_Q4_K_M, modelType: 'llm', modelConfig: { ctx_size: 8192 } }],
   execution: 'sequential',
   policy: 'interactive-v1'
 })

@@ -27,7 +27,9 @@ const {
   setupJsLogger,
   getTestPaths,
   loadGgufOrSkip,
-  isMobile
+  isMobile,
+  NO_GPU,
+  GPU_ONLY_USE_GPU
 } = require('./parakeet-helpers.js')
 
 const platform = detectPlatform()
@@ -279,82 +281,88 @@ test('Rapid chunk feeding: stress test with no delay', { timeout: 300000 }, asyn
   }
 })
 
-test('Variable chunk sizes: small to large chunks', { timeout: 300000 }, async (t) => {
-  const loggerBinding = setupJsLogger(binding)
+test(
+  'Variable chunk sizes: small to large chunks',
+  { timeout: 300000, skip: NO_GPU },
+  async (t) => {
+    const loggerBinding = setupJsLogger(binding)
 
-  console.log('\n' + '='.repeat(60))
-  console.log('VARIABLE CHUNK SIZE TEST')
-  console.log('Testing with different chunk sizes')
-  console.log('='.repeat(60) + '\n')
+    console.log('\n' + '='.repeat(60))
+    console.log('VARIABLE CHUNK SIZE TEST')
+    console.log('Testing with different chunk sizes')
+    console.log('='.repeat(60) + '\n')
 
-  const stagedGguf = await loadGgufOrSkip(t)
-  if (!stagedGguf) return
+    const stagedGguf = await loadGgufOrSkip(t)
+    if (!stagedGguf) return
 
-  const samplePath = path.join(samplesDir, 'sample.raw')
-  if (!fs.existsSync(samplePath)) {
-    loggerBinding.releaseLogger()
-    t.pass('Test skipped - sample audio not found')
-    return
-  }
+    const samplePath = path.join(samplesDir, 'sample.raw')
+    if (!fs.existsSync(samplePath)) {
+      loggerBinding.releaseLogger()
+      t.pass('Test skipped - sample audio not found')
+      return
+    }
 
-  const audioData = loadAudio(samplePath)
-  const CHUNK_SIZES_MS = [100, 500, 1000, 2000]
-  const results = []
+    const audioData = loadAudio(samplePath)
+    const CHUNK_SIZES_MS = [100, 500, 1000, 2000]
+    const results = []
 
-  for (const chunkSizeMs of CHUNK_SIZES_MS) {
-    console.log(`\n--- Testing ${chunkSizeMs}ms chunks ---`)
-    const model = new ASRGgml({
-      files: { model: stagedGguf },
-      config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: false } }
-    })
-    try {
-      await model.load()
-      const { chunksFed, segments, feedDurationMs } = await streamAudio(
-        model,
-        audioData,
-        chunkSizeMs,
-        0
-      )
-      const fullText = segments
-        .map((s) => s.text)
-        .join(' ')
-        .trim()
-      results.push({
-        chunkSizeMs,
-        chunksFed,
-        feedTime: feedDurationMs,
-        segments: segments.length,
-        textLength: fullText.length
+    for (const chunkSizeMs of CHUNK_SIZES_MS) {
+      console.log(`\n--- Testing ${chunkSizeMs}ms chunks ---`)
+      const model = new ASRGgml({
+        files: { model: stagedGguf },
+        config: { engine: 'parakeet', parakeetConfig: { maxThreads: 4, useGPU: GPU_ONLY_USE_GPU } }
       })
-      console.log(`  Chunks: ${chunksFed}, Time: ${feedDurationMs}ms, Segments: ${segments.length}`)
-    } finally {
       try {
-        await model.unload()
-      } catch (e) {
-        /* ignore */
+        await model.load()
+        const { chunksFed, segments, feedDurationMs } = await streamAudio(
+          model,
+          audioData,
+          chunkSizeMs,
+          0
+        )
+        const fullText = segments
+          .map((s) => s.text)
+          .join(' ')
+          .trim()
+        results.push({
+          chunkSizeMs,
+          chunksFed,
+          feedTime: feedDurationMs,
+          segments: segments.length,
+          textLength: fullText.length
+        })
+        console.log(
+          `  Chunks: ${chunksFed}, Time: ${feedDurationMs}ms, Segments: ${segments.length}`
+        )
+      } finally {
+        try {
+          await model.unload()
+        } catch (e) {
+          /* ignore */
+        }
       }
     }
-  }
 
-  console.log('\n' + '='.repeat(60))
-  console.log('📊 VARIABLE CHUNK SIZE SUMMARY')
-  console.log('='.repeat(60))
-  for (const result of results) {
-    console.log(
-      `  ${result.chunkSizeMs}ms chunks: ${result.chunksFed} chunks, ${result.feedTime}ms, ${result.segments} segments`
+    console.log('\n' + '='.repeat(60))
+    console.log('📊 VARIABLE CHUNK SIZE SUMMARY')
+    console.log('='.repeat(60))
+    for (const result of results) {
+      console.log(
+        `  ${result.chunkSizeMs}ms chunks: ${result.chunksFed} chunks, ${result.feedTime}ms, ${result.segments} segments`
+      )
+    }
+    console.log('='.repeat(60) + '\n')
+
+    t.ok(results.length === CHUNK_SIZES_MS.length, 'Should test all chunk sizes')
+    t.ok(
+      results.every((r) => r.segments > 0),
+      'All chunk sizes should produce output'
     )
-  }
-  console.log('='.repeat(60) + '\n')
 
-  t.ok(results.length === CHUNK_SIZES_MS.length, 'Should test all chunk sizes')
-  t.ok(
-    results.every((r) => r.segments > 0),
-    'All chunk sizes should produce output'
-  )
-
-  try {
-    loggerBinding.releaseLogger()
-  } catch (e) {
-    /* ignore */
+    try {
+      loggerBinding.releaseLogger()
+    } catch (e) {
+      /* ignore */
+    }
   }
-})
+)

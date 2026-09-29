@@ -5,7 +5,8 @@
 //   1. N back-to-back run() on the SAME loaded instance (engine reuse).
 //   2. A fresh instance per run (app-restart simulation).
 //   3. unload() + load() between runs (reload) preserves stability.
-// Durations are kept short to bound wall-clock across the CI matrix.
+// Each concern runs several generations, so the suite runs on the GPU only and
+// is skipped on CPU-only runners (NO_GPU=true).
 
 const test = require('brittle')
 const path = require('bare-path')
@@ -33,7 +34,7 @@ function shortRun(gen, caption) {
 
 test(
   'multiple sequential runs reuse the same engine instance',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -46,7 +47,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 
@@ -60,7 +61,7 @@ test(
 
 test(
   'fresh instance per run (app-restart simulation)',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -74,7 +75,7 @@ test(
       const gen = await loadAudioGen({
         modelDir: download.modelDir,
         ditVariant: VARIANT,
-        useGPU: !NO_GPU
+        useGPU: true
       })
       try {
         const { data } = await shortRun(gen, caption)
@@ -88,7 +89,7 @@ test(
 
 test(
   'unload() + load() between runs preserves stability',
-  { timeout: INTEGRATION_TIMEOUT_MS },
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
     if (!download.success) {
@@ -101,7 +102,7 @@ test(
     const gen = await loadAudioGen({
       modelDir: download.modelDir,
       ditVariant: VARIANT,
-      useGPU: !NO_GPU
+      useGPU: true
     })
     t.teardown(() => gen.destroy())
 

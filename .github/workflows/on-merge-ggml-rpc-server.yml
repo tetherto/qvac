@@ -3,10 +3,10 @@ name: On Merge Trigger (GGML RPC Server)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
+    # No packages/fabric/** or cmake/qvac-addon/**: this build installs the
+    # published @qvac/fabric (no PR overlay exists on merge), and a change to
+    # either alone carries no ggml-rpc-server version bump to publish.
     paths:
       - packages/ggml-rpc-server/**
       - .github/workflows/*ggml-rpc-server*.yml
@@ -112,10 +112,6 @@ jobs:
           name: prebuilds-ggml-rpc-server
           path: packages/ggml-rpc-server/prebuilds
 
-      - name: Restore RPC server executable permissions
-        shell: bash
-        run: find packages/ggml-rpc-server/prebuilds -type f -name ggml-rpc-server -exec chmod +x {} +
-
       - name: Publish to GitHub Package Registry
         uses: ./.github/actions/publish-library-to-gpr
         with:
@@ -148,10 +144,6 @@ jobs:
         with:
           name: prebuilds-ggml-rpc-server
           path: packages/ggml-rpc-server/prebuilds
-
-      - name: Restore RPC server executable permissions
-        shell: bash
-        run: find packages/ggml-rpc-server/prebuilds -type f -name ggml-rpc-server -exec chmod +x {} +
 
       - name: Determine dist-tag
         id: dist-tag

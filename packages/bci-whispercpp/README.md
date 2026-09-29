@@ -360,9 +360,14 @@ A model the fitter cannot read is `status: "error"`; a broken request, or a host
 |--------|---------|
 | `npm run test:unit` | JS unit tests (`brittle-bare test/unit/*.test.js`) — no model required |
 | `npm run test:integration` | JS integration tests against the native addon — requires `WHISPER_MODEL_PATH` |
+| `npm run test:integration:smoke` | Only the addon suite (`test/integration/addon.test.js`); the darwin-x64 CI leg runs this instead of the full suite |
 | `npm run test:cpp` | C++ unit tests (GoogleTest); `bare-make` rebuilds the addon with `BUILD_TESTING=ON` |
 | `npm run test:dts` | Type-checks the published `index.d.ts` |
 | `npm test` | Runs `test:unit` + `test:integration` |
+
+On CPU the integration suite runs only brief inference, one decode per test.
+The WER sweep, the multi-window streaming tests and the accuracy regression
+run on the GPU and are skipped when `NO_GPU=true`.
 
 ```bash
 # JS unit tests
