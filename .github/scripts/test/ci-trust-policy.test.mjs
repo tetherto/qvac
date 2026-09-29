@@ -945,6 +945,15 @@ test("Fabric prebuilds install the Linux RDMA build dependency", () => {
   assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs-dev$/m);
 });
 
+// The RPC server smoke test loads Fabric's RPC backend, which needs the
+// libibverbs runtime on the GitHub-hosted linux-arm64 leg.
+test("RPC server prebuilds install the Linux RDMA runtime dependency", () => {
+  const prebuilds = read(".github/workflows/prebuilds-ggml-rpc-server.yml");
+
+  assert.match(prebuilds, /desktop-smoke-command:/);
+  assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs1$/m);
+});
+
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
   const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)

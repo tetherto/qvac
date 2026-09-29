@@ -42,6 +42,14 @@ Native server output is written to the host application's platform log;
 `logs()` returns an empty string because there is no child-process stdout
 stream to capture.
 
+## Linux requirements
+
+The Linux RPC backend in `@qvac/fabric` links `libibverbs.so.1`, so Linux
+hosts must provide it (`libibverbs1` on Debian/Ubuntu) even when connections
+use TCP. Without it, `startRpcServer()` rejects with an error whose `code` is
+`RpcServerStartError`.
+RDMA also requires the provider package for the host's hardware.
+
 ## RDMA-capable builds
 
 On Linux (not Android), `rdmaCapable` reports whether the installed
