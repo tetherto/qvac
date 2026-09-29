@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Raise the `speech-cpp` floor to `2026-09-28`. `assessFit` on a Supertonic,
+  Chatterbox or CosyVoice voice no longer aborts the process on hosts whose GPU
+  does not run the whole graph; the projection is priced on the primary backend
+  and returns a verdict. Synthesis is unchanged.
 - `assessFit` now resolves the backends directory the same way a load does
   (`prebuilds/<platform>-<arch>/<module>`), so a fit projection finds the ggml
   backend modules on the split-backend layouts (Linux, macOS, Android) instead
