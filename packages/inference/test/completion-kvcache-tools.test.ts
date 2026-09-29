@@ -1343,6 +1343,8 @@ test('completion: loading a deferred tool leaves the prefix block untouched', as
   )
   t.alike(toolNames(before), ['tool_search'], 'the cold turn declared only the search tool')
   t.is(new Set(cachePaths).size, 1, 'loading a definition does not open a second cache file')
+  t.is(before.toolChoice, undefined, 'nothing loaded yet: the tool grammar stays on')
+  t.is(after.toolChoice, 'none', 'the loaded tool is outside the grammar, so it is turned off')
 
   unregisterModel(modelId)
   clearRegistry()
