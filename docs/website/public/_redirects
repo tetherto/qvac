@@ -287,23 +287,19 @@
 # ======================================================================
 # SOFTWARE INVENTORY VERSIONS
 # ----------------------------------------------------------------------
-# Every inventory version is a dotted final segment, for the same reason a
-# line index is: the version-less path belongs to the package index, so no
-# version is ever served bare and all of them need these rules.
+# None, while the inventory is built but unpublished and its pages wait
+# under `content/_unpublished/ecosystem/inventory/`. A rule here would
+# rewrite to a file the export does not emit.
 #
-# Written with a placeholder rather than listed, which is the opposite of
-# the choice above. A line index is one URL per collection and a cut is
-# worth seeing in the diff; here the pattern is scoped to one package's
-# folder, where every first-level path IS a version, so it claims nothing
-# it should not — and documenting a release stays two edits.
-/ecosystem/inventory/sdk/:version/               /ecosystem/inventory/sdk/:version/index.html               200
-/ecosystem/inventory/sdk/:version                /ecosystem/inventory/sdk/:version/                          301
-/ecosystem/inventory/sdk-python/:version/        /ecosystem/inventory/sdk-python/:version/index.html        200
-/ecosystem/inventory/sdk-python/:version         /ecosystem/inventory/sdk-python/:version/                   301
-/ecosystem/inventory/cli/:version/               /ecosystem/inventory/cli/:version/index.html               200
-/ecosystem/inventory/cli/:version                /ecosystem/inventory/cli/:version/                          301
-/ecosystem/inventory/ai-sdk-provider/:version/   /ecosystem/inventory/ai-sdk-provider/:version/index.html   200
-/ecosystem/inventory/ai-sdk-provider/:version    /ecosystem/inventory/ai-sdk-provider/:version/              301
+# Restore one pair per package when it is published. Every inventory
+# version is a dotted final segment, for the same reason a line index is:
+# the version-less path belongs to the package index, so no version is ever
+# served bare and all of them need these rules. Write them with a
+# placeholder rather than listed, which is the opposite of the choice
+# above. A line index is one URL per collection and a cut is worth seeing
+# in the diff; here the pattern is scoped to one package's folder, where
+# every first-level path IS a version, so it claims nothing it should not
+# — and documenting a release stays two edits.
 
 # ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE

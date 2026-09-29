@@ -124,10 +124,16 @@ line's index pair — the broken-link check is told to ignore line indexes, and
 the redirect replay reads the built output rather than the CDN's matcher — so
 read that rule back yourself.
 
-Documenting an inventory release is the same shape one level down: add
-`content/docs/ecosystem/inventory/<pkg>/v<major>.<minor>/index.md` with the
-README as released, add the row to that package's index, add the manifest entry.
-The `:version` rules in `public/_redirects` already cover the new folder.
+The Software Inventory is built but not published. Its pages wait under
+`content/_unpublished/ecosystem/inventory/`, the manifest lists no package, and
+`public/_redirects` carries no `:version` rules for it. Everything the inventory
+needs is derived from the manifest, so publishing it is moving that folder back
+under `content/docs/`, listing its packages again, and restoring one pair of
+redirect rules per package — the comment in `_redirects` says how to write them.
+Once published, documenting a release is the same shape one level down from a
+line cut: add `content/docs/ecosystem/inventory/<pkg>/v<major>.<minor>/index.md`
+with the README as released, add the row to that package's index, add the
+manifest entry. The `:version` rules then already cover the new folder.
 
 ## CDN configuration (Sevalla)
 

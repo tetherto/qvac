@@ -116,14 +116,14 @@ const EXPECTED_TRAILS: { page: string; leadsTo: string; depth: number }[] = [
   { page: 'cli/http-server', leadsTo: '/cli/', depth: 2 },
   { page: 'cli/v0.12/http-server', leadsTo: '/cli/v0.12', depth: 2 },
   { page: 'ecosystem/addons/llm-llamacpp', leadsTo: '/ecosystem/', depth: 3 },
-  { page: 'ecosystem/inventory/sdk', leadsTo: '/ecosystem/', depth: 3 },
   { page: 'resources/tutorials/electron', leadsTo: '/resources/', depth: 2 },
 ];
 
 /**
- * Pages that must carry no trail: every collection index, a cut line's index,
- * and an inventory package version — which is a root in its own right, and so
- * is its own index.
+ * Pages that must carry no trail: every collection index and a cut line's
+ * index. An inventory package version belongs here too — it is a root in its
+ * own right, and so is its own index — but the inventory is built and not
+ * published, so none exists to name.
  */
 const TRAILLESS = [
   'sdk',
@@ -132,7 +132,6 @@ const TRAILLESS = [
   'resources',
   'sdk/v0.18',
   'cli/v0.12',
-  'ecosystem/inventory/sdk/v0.20',
 ];
 
 /** The span of a built page between its article and its heading. */

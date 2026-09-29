@@ -16,6 +16,12 @@
  * Inventory packages declare no current version. Their version-less path
  * belongs to the package index, so every README sits at a versioned path and
  * no folder group appears anywhere in the inventory.
+ *
+ * No package is listed below: the Software Inventory is built but not
+ * published in this release, and its pages wait under
+ * `content/_unpublished/ecosystem/inventory/`. Everything the inventory needs
+ * is derived from the entries here, so publishing it is moving that folder
+ * back and listing its packages again — no other edit.
  */
 
 /** A documentation line or package version: major and minor, never a patch. */
@@ -51,12 +57,18 @@ export interface DocumentedSoftware {
  * `@qvac/cli`. Each is named after the package its lines follow, so the thing
  * being versioned and the thing being named are the same.
  *
- * The inventory publishes at least the two most recent releases of each
- * package and never drops one it has published, so an entry only grows. The
- * Python client carries no version of its own — `pyproject.toml` stamps it
- * from `packages/sdk/package.json` — so it takes the SDK's numbers.
+ * Only collections are listed while the inventory is unpublished. When a
+ * package is listed again it publishes at least the two most recent releases
+ * and never drops one it has published, so an entry only grows. The Python
+ * client carries no version of its own — `pyproject.toml` stamps it from
+ * `packages/sdk/package.json` — so it takes the SDK's numbers.
+ *
+ * Annotated rather than inferred, so which kinds exist stays a fact about the
+ * type and not about today's list. Inferred, a list holding one kind would
+ * narrow `kind` to it and make every test of the other a type error, and the
+ * manifest would dictate the vocabulary instead of drawing on it.
  */
-export const DOCUMENTED_SOFTWARE = [
+export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] = [
   {
     package: '@qvac/sdk',
     kind: 'collection',
@@ -77,46 +89,7 @@ export const DOCUMENTED_SOFTWARE = [
       { version: 'v0.12', folder: 'v0.12' },
     ],
   },
-  {
-    package: '@qvac/sdk',
-    kind: 'package',
-    path: '/ecosystem/inventory/sdk',
-    versions: [
-      { version: 'v0.20', folder: 'v0.20' },
-      { version: 'v0.19', folder: 'v0.19' },
-      { version: 'v0.18', folder: 'v0.18' },
-    ],
-  },
-  {
-    package: 'tetherto-qvac-sdk',
-    kind: 'package',
-    path: '/ecosystem/inventory/sdk-python',
-    versions: [
-      { version: 'v0.20', folder: 'v0.20' },
-      { version: 'v0.19', folder: 'v0.19' },
-      { version: 'v0.18', folder: 'v0.18' },
-    ],
-  },
-  {
-    package: '@qvac/cli',
-    kind: 'package',
-    path: '/ecosystem/inventory/cli',
-    versions: [
-      { version: 'v0.14', folder: 'v0.14' },
-      { version: 'v0.13', folder: 'v0.13' },
-      { version: 'v0.12', folder: 'v0.12' },
-    ],
-  },
-  {
-    package: '@qvac/ai-sdk-provider',
-    kind: 'package',
-    path: '/ecosystem/inventory/ai-sdk-provider',
-    versions: [
-      { version: 'v0.7', folder: 'v0.7' },
-      { version: 'v0.6', folder: 'v0.6' },
-    ],
-  },
-] as const satisfies readonly DocumentedSoftware[];
+];
 
 /** True when the folder is written as a Fumadocs folder group. */
 export function isCurrentLineFolder(folder: string): boolean {

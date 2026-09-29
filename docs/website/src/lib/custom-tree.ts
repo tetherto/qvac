@@ -59,7 +59,14 @@ function inventoryChildren(): Node[] {
   }));
 }
 
-/** The inventory's place in the Platform navigation. */
+/**
+ * The inventory's place in the Platform navigation.
+ *
+ * Named only when the manifest lists a package. The inventory is built but
+ * unpublished, so the manifest lists none and this entry is left out of
+ * Ecosystem below: a folder whose index addresses a page the site does not
+ * serve would be a dead entry in the sidebar.
+ */
 const inventoryFolder: Node = {
   name: 'Software inventory',
   type: 'folder',
@@ -187,7 +194,7 @@ const ecosystemChildren: Node[] = [
       { name: 'diffusion-cpp', url: '/ecosystem/addons/diffusion-cpp', type: 'page' },
     ],
   },
-  inventoryFolder,
+  ...(inventoryChildren().length > 0 ? [inventoryFolder] : []),
   {
     type: 'separator',
     name: 'Research',
