@@ -46,9 +46,9 @@ skip the platform package and fail at require time with an error naming it.
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
 and optional-dependency filtering can never select them. Mobile applications
-must declare the target's fabric platform package as a direct dependency,
-pinned to the exact `@qvac/fabric` version that `@qvac/translation-nmtcpp`
-installs:
+must declare `@qvac/fabric` and the target's fabric platform package as direct
+dependencies at the same exact version, one that satisfies the `@qvac/fabric`
+range `@qvac/translation-nmtcpp` declares:
 
 | Target                    | Package                      |
 | ------------------------- | ---------------------------- |
@@ -59,6 +59,7 @@ installs:
 {
   "dependencies": {
     "@qvac/translation-nmtcpp": "x.y.z",
+    "@qvac/fabric": "a.b.c",
     "@qvac/fabric-android-arm64": "a.b.c"
   }
 }

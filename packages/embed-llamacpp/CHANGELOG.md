@@ -19,9 +19,8 @@
   packages. Desktop installs get theirs as an optional dependency of
   `@qvac/fabric`, and `resolveBackendsDir()` now takes the root from
   `@qvac/fabric/backends`. No API change.
-- Mobile apps must add `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as a
-  direct dependency pinned to the installed `@qvac/fabric` version, like the
-  other split addons.
+- Mobile apps must add `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` as direct dependencies at the same exact version.
 
 ## [0.42.0] - 2026-09-23
 

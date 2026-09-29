@@ -45,7 +45,7 @@ BitNet models require special backend handling on Adreno GPUs. When a BitNet mod
 
 **Dependencies:**
 - inference-addon-cpp (≥1.3.3): C++ addon framework (multi-job scheduler)
-- @qvac/fabric (^0.18.0): Shared llama.cpp/ggml/mtmd inference engine. The desktop runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, so install without `--omit=optional` and keep both present before `bare-make generate`/`build`. Android and iOS apps add `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as a direct dependency pinned to the installed `@qvac/fabric` version.
+- @qvac/fabric (^0.18.0): Shared llama.cpp/ggml/mtmd inference engine. The desktop runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, so install without `--omit=optional` and keep both present before `bare-make generate`/`build`. Android and iOS apps add `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` as direct dependencies at the same exact version.
 - Bare Runtime (≥1.24.0): JavaScript runtime
 - Linux requires Clang/LLVM 22 with libc++
 ## Installation
