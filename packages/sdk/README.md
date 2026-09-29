@@ -196,6 +196,11 @@ available for TDT 0.6B v3, Unified English 0.6B, EOU 120M v1, and streaming
 Sortformer v2.1. The download includes the sidecar weights, so first load takes
 more time and disk space. Other platforms download only the GGUF. If the
 sidecar is unavailable or cannot load, inference uses the GGUF encoder.
+Sortformer v2.1 also needs a GGUF with the
+`parakeet.model_variant=sortformer-streaming-v2.1-aosc` metadata. Caching both
+sidecars alone does not activate Core ML. See
+[`examples/asr/parakeet-sortformer-coreml.ts`](examples/asr/parakeet-sortformer-coreml.ts)
+for a local check of the GGUF and bundles.
 
 ## Examples
 
