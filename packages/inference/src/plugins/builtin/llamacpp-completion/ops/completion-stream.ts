@@ -28,7 +28,7 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
 import type { DisposableScope } from '@/runtime/disposable-scope'
 import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integration'
-import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
+import { resolveDeferredTools, toWireTool, withDeferredToolChoice } from '@/utils/tools/defer'
 import { parseToolCalls } from '@/utils/tools/index'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import { toolChoiceDemandsCall } from '@/schemas/completion-stream'
@@ -443,6 +443,10 @@ export async function* completion(
       }
     }
   }
+  mergedGenerationParams = withDeferredToolChoice(
+    mergedGenerationParams,
+    toolsActive ? deferred : null
+  )
 
   const model = getModel(modelId)
 

@@ -26,7 +26,9 @@ consumer guide.
   `ggml_backend_load_all_from_path()`. On **macOS and iOS** the backends
   are linked statically inside `qvac__fabric.bare` and self-register on load.
   On **linux-x64** this includes the ROCm/HIP backend (`libqvac-ggml-hip.so`,
-  gfx1151) alongside Vulkan; the DL loader skips it on non-AMD hosts.
+  gfx1151) alongside Vulkan; the DL loader skips it on non-AMD hosts. Linux
+  packages also include an RPC backend with RDMA auto-negotiation and TCP
+  fallback.
 
 ## Platform packages
 
@@ -112,17 +114,25 @@ npm install
 npm run build   # bare-make generate && bare-make build && bare-make install
 ```
 
-On **linux-x64** a ROCm/TheRock SDK is required, discovered via `ROCM_PATH` or
-`/opt/rocm`. The `hip` port is deterministic — it hard-fails rather than
-installing empty, so that the vcpkg binary cache cannot conflate a no-HIP build
-with a real one under the same ABI hash. Other platforms need nothing extra; the
-`hip` dependency is gated on `linux & x64`.
+Linux builds require the libibverbs development package (`libibverbs-dev` on
+Debian/Ubuntu). On **linux-x64** a ROCm/TheRock SDK is also required, discovered
+via `ROCM_PATH` or `/opt/rocm`. The `hip` port is deterministic — it hard-fails
+rather than installing empty, so that the vcpkg binary cache cannot conflate a
+no-HIP build with a real one under the same ABI hash. The `hip` dependency is
+gated on `linux & x64`.
+
+Linux hosts that use the RPC backend must provide `libibverbs.so.1`
+(`libibverbs1` on Debian/Ubuntu). RDMA use also requires the provider package
+for the host's hardware. The library is required even when the connection
+falls back to TCP because the dynamic loader resolves it before loading the RPC
+backend. Other Fabric backends remain available when the RPC backend cannot be
+loaded.
 
 ## Supported platforms
 
 | Platform | Triplet | Backends |
 |----------|---------|----------|
-| Linux | `x64-linux`, `arm64-linux` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` (x64 also ships ROCm/HIP) |
+| Linux | `x64-linux`, `arm64-linux` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` (RPC with RDMA auto-negotiation; x64 also ships ROCm/HIP) |
 | macOS | `arm64-osx` | static (CPU, Metal) inside `.bare` |
 | Windows | (default MSVC) | dynamic `.dll` under `prebuilds/<platform>/qvac__fabric/` |
 | Android | `arm64-android` | shared `.so` under `prebuilds/<platform>/qvac__fabric/` |

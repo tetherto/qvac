@@ -936,6 +936,15 @@ test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
   assert.doesNotMatch(source, /PR_HEAD_REF|env\.HEAD_REF/);
 });
 
+// Self-hosted legs (cpp-lint, linux-x64 prebuild) get libibverbs from the
+// runner image. This covers the GitHub-hosted legs on the PR path; the release
+// path reads linuxExtraPackages from packages/fabric/project.json.
+test("Fabric prebuilds install the Linux RDMA build dependency", () => {
+  const prebuilds = read(".github/workflows/prebuilds-fabric.yml");
+
+  assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs-dev$/m);
+});
+
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
   const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)
@@ -1862,7 +1871,13 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
   assert.match(rpcPrebuilds, /linux-extra-packages:\s*libibverbs-dev/)
   assert.match(
     rpcPrebuilds,
-    /post-artifact-build-command:\s*bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
+    /post-artifact-build-command:[\s\S]*?if \[ -f \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh \]; then[\s\S]*?bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
+    'the base workflow must retain RDMA validation while the legacy script exists',
+  )
+  assert.match(
+    rpcPrebuilds,
+    /desktop-smoke-command:[\s\S]*?if \[ -f test\/node\/prebuild-smoke\.cjs \]; then[\s\S]*?node test\/node\/prebuild-smoke\.cjs[\s\S]*?node scripts\/smoke-packaged\.cjs/,
+    'the base workflow must smoke both the legacy executable and in-process package layouts',
   )
 
   const mobile = read('.github/workflows/integration-mobile-test-ggml-rpc-server.yml')
