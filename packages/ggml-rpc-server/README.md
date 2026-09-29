@@ -7,9 +7,9 @@ through a native addon. It does not bundle or launch llama.cpp's
 `ggml-rpc-server` CLI executable.
 
 Prebuild artifacts are produced for macOS arm64/x64, Linux arm64/x64, Windows
-x64, Android arm64, and iOS arm64. Desktop prebuild jobs smoke-test both the
-in-process lifecycle path; Android/iOS jobs cross-build the same addon for
-their physical ARM64 targets.
+x64, Android arm64, iOS arm64, and the iOS simulator on arm64/x64. Desktop
+prebuild jobs smoke-test both the in-process lifecycle path; Android/iOS jobs
+cross-build the same addon for their targets.
 
 ```js
 const { startRpcServer } = require('@qvac/ggml-rpc-server')

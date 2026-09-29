@@ -954,6 +954,21 @@ test("RPC server prebuilds install the Linux RDMA runtime dependency", () => {
   assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs1$/m);
 });
 
+// Without real simulator slices the mobile setup fills both slots with the
+// device build, and bare-link cannot merge two arm64 slices into one library.
+test("RPC server prebuilds build both iOS simulator slices", () => {
+  const prebuilds = read(".github/workflows/prebuilds-ggml-rpc-server.yml");
+  const matrix = JSON.parse(
+    prebuilds.match(/matrix-include: >-\n\s+(\[.*\])$/m)[1],
+  );
+  const simulators = matrix
+    .filter((leg) => leg.platform === "ios" && leg.tags === "-simulator")
+    .map((leg) => `${leg.arch}:${leg.flags}`)
+    .sort();
+
+  assert.deepEqual(simulators, ["arm64:--simulator", "x64:--simulator"]);
+});
+
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
   const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)
