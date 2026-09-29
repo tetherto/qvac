@@ -297,7 +297,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -716,7 +716,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -964,14 +964,14 @@ importers:
         specifier: ^0.4.0
         version: 0.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/bci-whispercpp':
-        specifier: ^0.9.1
-        version: 0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.10.0
+        version: link:../bci-whispercpp
       '@qvac/classification-ggml':
         specifier: ^0.26.1
         version: 0.26.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.6.0
-        version: 0.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.7.0
+        version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.24.0
         version: 0.24.0(bare-abort-controller@1.1.2)
@@ -1059,7 +1059,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -1163,7 +1163,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       bare-fs:
         specifier: ^4.5.1
         version: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1227,7 +1227,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -1618,14 +1618,14 @@ importers:
         specifier: ^0.4.0
         version: 0.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/bci-whispercpp':
-        specifier: ^0.9.1
-        version: 0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.10.0
+        version: link:../bci-whispercpp
       '@qvac/classification-ggml':
         specifier: ^0.26.1
         version: 0.26.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.6.0
-        version: 0.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.7.0
+        version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.24.0
         version: 0.24.0(bare-abort-controller@1.1.2)
@@ -1903,7 +1903,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -2067,7 +2067,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.17.0
-        version: link:../fabric
+        version: 0.17.0
       '@qvac/infer-base':
         specifier: ^0.6.2
         version: 0.6.2(bare-abort-controller@1.1.2)
@@ -4249,16 +4249,9 @@ packages:
     engines: {bare: '>=1.19.0'}
     hasBin: true
 
-  '@qvac/bci-whispercpp@0.9.1':
-    resolution: {integrity: sha512-eGtya7/9VrxGjCiEWUp/oV7mOAuCLJk+91/gLM8gAxFK+MfE45I9hklQKrmfpeHH4kJAskV0OQMulNGvftA/EQ==}
-    engines: {bare: '>=1.24.0'}
-
   '@qvac/classification-ggml@0.26.3':
     resolution: {integrity: sha512-y7kL/DHwG4AmZs67lBUuwoQwIQUg4iVSRLwmCmHGFKSDdrDb5xNhugnX5FXdIsgGcr50sOYxRdfMn2Ev7zoc4g==}
     engines: {bare: '>=1.24.0'}
-
-  '@qvac/decoder-audio@0.6.0':
-    resolution: {integrity: sha512-tAlH5C3fIsggD90OqPViw/8fh71Ixd53GHKr02wDF1Y8bWPeh0kZeufeP4NPXyBLdUtgkDsIxPpnuj0tvqxR0g==}
 
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
@@ -4284,6 +4277,10 @@ packages:
 
   '@qvac/fabric@0.16.1':
     resolution: {integrity: sha512-sw/PNip8N/vioJ6tJaJ2BNFCB7e6kqv9wMFbMvEvhU/mmK4yCPNpim7jGDmzCfsrmNlp2/rwe1NFDx5e4m0PlA==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric@0.17.0':
+    resolution: {integrity: sha512-yFaPaVFrGxkRB6veQJi5GY3968cgBKj0RNEWYRWWu+vC1jF8FFj8Nj2ux0LLUr9m1cRhRJT0GowfXDLqjuQdKg==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/infer-base@0.1.1':
@@ -13428,18 +13425,6 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/bci-whispercpp@0.9.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
-      - react-native-b4a
-
   '@qvac/classification-ggml@0.26.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))':
     dependencies:
       '@qvac/fabric': 0.16.1
@@ -13458,20 +13443,6 @@ snapshots:
       - bare-events
       - bare-pipe
       - bare-tcp
-      - react-native-b4a
-
-  '@qvac/decoder-audio@0.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
-    dependencies:
-      '@qvac/error': 0.1.1
-      '@qvac/infer-base': 0.6.2(bare-abort-controller@1.1.2)
-      '@qvac/logging': 0.1.1
-      bare-ffmpeg: 1.5.0
-      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
-      bare-path: 3.1.1
-      bare-url: 2.5.4
-    transitivePeerDependencies:
-      - bare-abort-controller
-      - bare-buffer
       - react-native-b4a
 
   '@qvac/diagnostics@0.1.2':
@@ -13528,6 +13499,8 @@ snapshots:
   '@qvac/error@0.1.1': {}
 
   '@qvac/fabric@0.16.1': {}
+
+  '@qvac/fabric@0.17.0': {}
 
   '@qvac/infer-base@0.1.1(@qvac/dl-hyperdrive@0.1.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))':
     dependencies:

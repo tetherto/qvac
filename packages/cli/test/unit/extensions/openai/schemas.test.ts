@@ -28,7 +28,7 @@ import {
 import {
   vectorStoreToOpenAI,
   searchResultsToOpenAI
-} from '@/serve/extensions/openai/adapters/vector-stores-store'
+} from '@/serve/extensions/openai/adapters/vector-stores-shape'
 import {
   sdkToolCallsToOpenai,
   sdkToolCallsToOpenaiDeltas
@@ -49,7 +49,7 @@ import {
   legacyPromptToHistory,
   InvalidPromptError
 } from '@/serve/extensions/openai/schemas/completions'
-import type { VectorStoreMeta } from '@/serve/extensions/openai/adapters/vector-stores-store'
+import type { VectorStoreMeta } from '@/serve/core/stores/vector-stores'
 
 describe('openaiMessagesToHistory', () => {
   it('converts simple user/assistant messages', () => {
