@@ -132,6 +132,41 @@ test('nearest tsconfig aliases resolve while unavailable external packages are o
   assert.deepEqual(result.diagnostics, [])
 })
 
+test('package import type targets resolve in the combined graph without becoming runtime edges', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'quality-dependencies-package-import-'))
+  const sources = {
+    'package/src/index.ts': "import shim from '#shim'\nexport const value = shim\n",
+    'package/src/shim.ts': "import { value } from './index.js'\nexport default value\n",
+  }
+  await writeSources(root, sources)
+  await writeFile(
+    join(root, 'package/package.json'),
+    `${JSON.stringify({
+      name: 'quality-package-import-test',
+      type: 'module',
+      imports: {
+        '#shim': {
+          types: './src/shim.ts',
+          node: 'node:crypto',
+          default: './dist/shim.js',
+        },
+      },
+    })}\n`,
+  )
+
+  const result = await analyzeDependencies({
+    root,
+    files: ['package/src/index.ts'],
+  })
+
+  assert.deepEqual(result.diagnostics, [])
+  assert.equal(result.coverage[0]?.modulesAnalyzed, 2)
+  assert.deepEqual(
+    result.findings.filter(({ rule }) => rule === 'runtime-cycle'),
+    [],
+  )
+})
+
 test('documented generated-module imports are exempted and counted', async () => {
   const root = await mkdtemp(join(tmpdir(), 'quality-dependencies-exemption-'))
   const sources = {

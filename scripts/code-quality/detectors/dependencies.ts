@@ -125,6 +125,13 @@ async function cruiseGroup(
       tsPreCompilationDeps: dependencyMode === 'combined' ? 'specify' : false,
       exclude: SOURCE_PATH_EXCLUSION_PATTERN,
       extraExtensionsToScan: ['.json'],
+      ...(dependencyMode === 'combined'
+        ? {
+          enhancedResolveOptions: {
+            conditionNames: ['types', 'import', 'require', 'node', 'default'],
+          },
+        }
+        : {}),
       ...(group.tsConfig === undefined
         ? {}
         : { tsConfig: { fileName: join(baseDir, group.tsConfig) } }),
