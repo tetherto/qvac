@@ -27,8 +27,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Use registry `speech-cpp` `2026-09-29#1` for Nemotron 3 Diarization and
-  remove the package-local speech port overlay.
+- Raise the `speech-cpp` minimum to `2026-09-29#1` for Nemotron 3
+  Diarization support.
 
 ## [0.7.0] - 2026-09-29
 

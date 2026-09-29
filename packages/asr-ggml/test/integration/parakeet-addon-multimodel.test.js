@@ -39,6 +39,40 @@ async function transcribe(model, audio) {
   return segments
 }
 
+async function* singleAudioChunk(audio) {
+  yield audio
+}
+
+async function collectStreamingSegments(model, audio) {
+  const segments = []
+  const response = await model.runStreaming(singleAudioChunk(audio))
+  await response
+    .onUpdate((out) => {
+      const items = Array.isArray(out) ? out : [out]
+      appendSpeakerUpdates(segments, items)
+    })
+    .await()
+  return segments
+}
+
+function appendSpeakerUpdates(segments, updates) {
+  for (const update of updates) {
+    if (update && update.text && update.speakerId >= 0) segments.push(update)
+  }
+}
+
+function checkStreamingSpeakerSegments(t, segments, pathName) {
+  t.ok(segments.length > 0, `${pathName} returns speaker segments`)
+  t.ok(
+    segments.every(
+      (segment) =>
+        segment.speakerId < NEMOTRON_SPEAKER_COUNT &&
+        segment.text.includes(`Speaker ${segment.speakerId}:`)
+    ),
+    `${pathName} preserves structured speaker IDs and labels`
+  )
+}
+
 // The offline diarization transcript lists its turns in speakerSegments,
 // one per "Speaker N: start - end" line of the text.
 function checkSpeakerSegments(t, segments) {
@@ -222,6 +256,47 @@ test(
       )
     } finally {
       loggerBinding.releaseLogger()
+    }
+  }
+)
+
+test(
+  'Nemotron 3 desktop integration — framework and duplex streaming diarization',
+  { timeout: 600000 },
+  async (t) => {
+    const modelPath = process.env.QVAC_TEST_NEMOTRON_DIARIZATION_GGUF
+    if (!modelPath || !fs.existsSync(modelPath)) {
+      t.pass('Set QVAC_TEST_NEMOTRON_DIARIZATION_GGUF to run this model test')
+      return
+    }
+    const audio = loadAudioSample()
+    if (!audio) {
+      t.pass('sample.raw not found — skipping')
+      return
+    }
+    const model = new ASRGgml({
+      files: { model: modelPath },
+      config: {
+        engine: 'parakeet',
+        parakeetConfig: { streaming: true, maxThreads: 4, useGPU: false }
+      }
+    })
+    const loggerBinding = setupJsLogger(binding)
+    try {
+      await model.load()
+      t.is(model.getBackendInfo().modelType, 'nemotron-diarization')
+      checkStreamingSpeakerSegments(t, await transcribe(model, audio), 'framework streaming')
+      checkStreamingSpeakerSegments(
+        t,
+        await collectStreamingSegments(model, audio),
+        'duplex streaming'
+      )
+    } finally {
+      try {
+        await model.unload()
+      } finally {
+        loggerBinding.releaseLogger()
+      }
     }
   }
 )

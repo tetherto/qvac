@@ -82,11 +82,11 @@ export interface ParakeetConfig {
     /** AOSC FIFO-overflow pop-out count (default: 144). */
     streamingSpkCacheUpdatePeriod?: number;
     /**
-     * Sortformer speaker-activity threshold, 0..1, for offline and streaming
-     * diarization (default: 0.641).
+     * Speaker-activity threshold, 0..1, for offline and streaming diarization
+     * (default: 0.641 for Sortformer, 0.5 for Nemotron 3 Diarization).
      */
     diarizationThreshold?: number;
-    /** Shortest Sortformer segment reported, in ms (default: 510). */
+    /** Shortest diarization segment reported, in ms (default: 510 for Sortformer, 200 for Nemotron 3 Diarization). */
     diarizationMinSegmentMs?: number;
     /**
      * Run one synthetic encoder pass at load so the first request does not pay

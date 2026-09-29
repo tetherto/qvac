@@ -449,7 +449,7 @@ const fit = ASRGgml.assessFit({
 
 fit.status // 'fits' | 'does-not-fit' | 'error'
 fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
-fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer'
+fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer' | 'nemotron-diarization'
 fit.deviceName
 fit.deviceBytes
 fit.weightsBytes
