@@ -1,0 +1,68 @@
+# @qvac/ggml-rpc-server
+
+Managed in-process GGML RPC server for Bare applications.
+
+The package loads the RPC backend supplied by `@qvac/fabric` and starts it
+through a native addon. It does not bundle or launch llama.cpp's
+`ggml-rpc-server` CLI executable.
+
+Prebuild artifacts are produced for macOS arm64/x64, Linux arm64/x64, Windows
+x64, Android arm64, and iOS arm64. Desktop prebuild jobs smoke-test both the
+in-process lifecycle path; Android/iOS jobs cross-build the same addon for
+their physical ARM64 targets.
+
+```js
+const { startRpcServer } = require('@qvac/ggml-rpc-server')
+
+const server = await startRpcServer({ device: 'Vulkan0' })
+
+try {
+  console.log(server.url)
+  console.log(server.runtime) // 'in-process'
+  console.log(server.rdmaCapable)
+} finally {
+  await server.stop()
+}
+```
+
+The listener accepts IPv4 addresses; `localhost` is normalized to `127.0.0.1`.
+The default host is `127.0.0.1`, but loopback is not private to the host
+application: other local processes (including apps with local TCP access on
+Android and iOS) can connect. The underlying RPC listener has no authentication
+and serves one client at a time, so another local client can occupy the server
+and block the intended client. Start it only when needed, stop it after use,
+and do not treat loopback binding as an access-control boundary. Non-loopback
+hosts are rejected unless `allowNonLoopbackHost: true` is passed; use them only
+on a trusted/private network with external access controls.
+
+Like a listening `net.Server`, a running server keeps the process alive until
+`stop()` resolves, so a standalone worker can start it and wait for clients.
+
+Native server output is written to the host application's platform log;
+`logs()` returns an empty string because there is no child-process stdout
+stream to capture.
+
+## RDMA-capable builds
+
+On Linux (not Android), `rdmaCapable` reports whether the installed
+`@qvac/fabric` RPC backend was built with RDMA. Such a backend negotiates RDMA
+with each client that also supports it and falls back to TCP otherwise, so
+`rdmaCapable: true` does not guarantee that a given connection uses RDMA. Other
+platforms always report `false`.
+
+To fail closed when RDMA is required, pass `expectRdma: true`. Startup rejects
+with `RpcServerRdmaUnavailableError` when the installed backend lacks RDMA:
+
+```js
+const server = await startRpcServer({
+  device: 'Vulkan0',
+  host: '10.10.10.2',
+  expectRdma: true,
+  allowNonLoopbackHost: true
+})
+
+console.log(server.rdmaCapable)
+```
+
+Without `expectRdma`, the server starts either way and reports the backend's
+capability in `rdmaCapable`.
