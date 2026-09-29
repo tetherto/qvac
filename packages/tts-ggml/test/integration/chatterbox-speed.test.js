@@ -12,6 +12,7 @@ const path = require('bare-path')
 const { loadChatterboxTTS, runChatterboxTTS } = require('../utils/runChatterboxTTS')
 const { ensureChatterboxModels } = require('../utils/downloadModel')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { NO_GPU, GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 function getBaseDir() {
   const platform = os.platform()
@@ -30,7 +31,7 @@ const EXPECTATION = {
 
 test(
   'Chatterbox TTS (ggml): speed config adjusts duration, preserves backward compat',
-  { timeout: 1800000 },
+  { timeout: 1800000, skip: NO_GPU },
   async (t) => {
     const modelsDir = path.join(getBaseDir(), 'models')
 
@@ -52,7 +53,8 @@ test(
         threads: TTS_TEST_THREADS,
         modelDir,
         language: 'en',
-        speed
+        speed,
+        useGPU: GPU_ONLY_USE_GPU
       })
       try {
         const r = await runChatterboxTTS(model, { text: TEXT }, EXPECTATION)

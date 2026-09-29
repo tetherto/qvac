@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
 import fs = require('bare-fs')
 import path = require('bare-path')
+import fabricBackends = require('@qvac/fabric/backends')
 import processModule = require('bare-process')
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -39,18 +40,19 @@ const process = processModule as unknown as RunnerProcess
 // `./index` at load time because that would load the native binding. The v2
 // llamaConfigFit path also cannot go through fitParams().
 function resolveBackendsDir (): string | undefined {
+  // fabric's resolver only checks that the platform package resolves, not that
+  // its prebuilds are on disk.
+  const fabricRoot = fabricBackends.resolveBackendsDir()
+  if (fabricRoot !== null && isDirectory(fabricRoot)) return fabricRoot
+  const packaged = path.join(__dirname, 'prebuilds')
+  return isDirectory(packaged) ? packaged : undefined
+}
+
+function isDirectory (dir: string): boolean {
   try {
-    const fabricPkg = require.resolve('@qvac/fabric/package')
-    const fabricPrebuilds = path.join(path.dirname(fabricPkg), 'prebuilds')
-    if (fs.statSync(fabricPrebuilds).isDirectory()) return fabricPrebuilds
+    return fs.statSync(dir).isDirectory()
   } catch {
-    // Mobile worklets cannot resolve the @qvac/fabric package tree.
-  }
-  try {
-    const packaged = path.join(__dirname, 'prebuilds')
-    return fs.statSync(packaged).isDirectory() ? packaged : undefined
-  } catch {
-    return undefined
+    return false
   }
 }
 
