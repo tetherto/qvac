@@ -39,5 +39,7 @@ minimumReleaseAgeExclude:
   - '@qvac/asr-ggml-linux-x64@0.5.3'
   - '@qvac/asr-ggml-win32-x64@0.5.3'
   - '@qvac/asr-ggml@0.5.3'
+  - '@qvac/fabric-android-arm64@0.18.0'
+  - '@qvac/fabric-ios@0.18.0'
   - '@qvac/fabric-android-arm64@0.18.1'
   - '@qvac/fabric-ios@0.18.1'

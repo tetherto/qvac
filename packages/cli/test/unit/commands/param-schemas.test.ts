@@ -10,6 +10,24 @@ import {
 import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
+  it('exposes and validates World memory controls in the nested editor', () => {
+    const schema = configSchemaForAddon('diffusion')
+    assert.ok(schema)
+    const world = paramFields(schema).find((field) => field.name === 'world')
+    assert.ok(world?.objectFields)
+    for (const name of ['paramsBackend', 'maxVram', 'streamLayers', 'verbosity']) {
+      const field = world.objectFields.find((field) => field.name === name)
+      assert.ok(field, `${name} is editable`)
+      assert.ok(field.description)
+    }
+    const budget = world.objectFields.find((field) => field.name === 'maxVram')!
+    assert.equal(validateParam(budget, '-1'), true)
+    assert.equal(validateParam(budget, 'cuda0=2'), true)
+    const streaming = world.objectFields.find((field) => field.name === 'streamLayers')!
+    assert.equal(validateParam(streaming, 'true'), true)
+    assert.notEqual(validateParam(streaming, 'yes'), true)
+  })
+
   it('exposes and validates H3 backend and memory controls from the SDK', () => {
     const schema = configSchemaForAddon('diffusion')
     assert.ok(schema)

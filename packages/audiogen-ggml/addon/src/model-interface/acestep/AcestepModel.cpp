@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "audiogen-cpp/acestep/engine.h"
+#include "model-interface/BackendUtils.hpp"
 
 namespace qvac::audiogenggml::acestep {
 
@@ -133,14 +134,7 @@ void AcestepModel::loadLocked() {
   // qvac/packages/tts-ggml's ChatterboxModel.cpp. Empty `backendsDir` -> leave
   // `opts.backends_dir` empty so the engine relies on ggml's built-in search
   // path (fine for static desktop / Apple builds).
-  if (!cfg_.backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(cfg_.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath = (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR))
-                          .lexically_normal();
-#endif
-    opts.backends_dir = backendsDirPath.string();
-  }
+  opts.backends_dir = resolveBackendsDir(cfg_.backendsDir);
 
   engine_ = tts_cpp::acestep::Engine::create(opts);
   if (!engine_) {

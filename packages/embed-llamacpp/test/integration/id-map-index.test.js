@@ -83,8 +83,11 @@ function expectDisposedFilter(t, filter, message) {
 function probeModuleGraph(body) {
   const script = `
     const root = ${JSON.stringify(PACKAGE_ROOT)}
+    // Only this package's own files: dependencies have an index.js and a
+    // binding.js too (fabric's platform package loads its index.js).
+    const ownPrefix = ${JSON.stringify(PACKAGE_ROOT.split(path.sep).join('/') + '/')}
     const loaded = (name) =>
-      Object.keys(require.cache).some((key) => key.endsWith('/' + name))
+      Object.keys(require.cache).some((key) => decodeURIComponent(key).endsWith(ownPrefix + name))
     const snapshot = () => ({
       idMapIndex: loaded('idMapIndex.js'),
       binding: loaded('binding.js'),

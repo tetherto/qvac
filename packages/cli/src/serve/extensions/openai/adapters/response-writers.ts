@@ -1,11 +1,10 @@
 import type { ServerResponse } from 'node:http'
 import type { CompletionRun, Tool } from '@qvac/sdk'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
+import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
 import {
-  accumulateUsage,
   drainCompletion,
-  formatToolErrors,
-  type DrainedCompletion
+  type DrainedOpenAICompletion
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
 import {
@@ -72,7 +71,7 @@ export async function writeBlockingResponse(
   // deferred tools leave the loop on the first pass.
   let turnHistory = p.history
   let drained
-  let total: DrainedCompletion | undefined
+  let total: DrainedOpenAICompletion | undefined
   for (let round = 0; ; round++) {
     drained = await drainCompletion(runTurn(turnHistory))
     total = accumulateUsage(total, drained)
@@ -187,7 +186,7 @@ export async function writeStreamingResponse(
 
   let turnHistory = p.history
   let drained
-  let total: DrainedCompletion | undefined
+  let total: DrainedOpenAICompletion | undefined
   for (let round = 0; ; round++) {
     // Only the answering turn's text belongs in the final response object; a
     // search turn's preamble was streamed but is not part of the answer.

@@ -56,8 +56,9 @@ runtime with the CMake template and the ggml backends with
 
 Mobile targets are cross-built, so no install host ever matches their `os`,
 and `optionalDependencies` filtering can never select them. Mobile
-applications must declare the target's platform package as a direct
-dependency, pinned to the exact `@qvac/fabric` version their addons resolve:
+applications must declare `@qvac/fabric` and the target's platform package as
+direct dependencies at the same exact version, one that satisfies the
+`@qvac/fabric` range their addons declare:
 
 | Target | Package |
 | --- | --- |
