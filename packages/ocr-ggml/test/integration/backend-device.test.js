@@ -36,7 +36,11 @@ const shouldSkip = isMobile || !vulkanBackendLib
 
 function nativeBackendsDir() {
   if (isMobile) return PREBUILDS_DIR
-  return require('@qvac/fabric/backends').resolveBackendsDir()
+  const dir = require('@qvac/fabric/backends').resolveBackendsDir()
+  if (dir === null) {
+    throw new Error('@qvac/fabric backends not found; is @qvac/fabric-<host> installed?')
+  }
+  return dir
 }
 
 for (const key of ['main-gpu', 'main_gpu']) {
