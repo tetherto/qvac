@@ -218,6 +218,75 @@ test('an npm-nested fabric install is selected from the addon that depends on it
   }
 })
 
+test('installed copies of one package at different versions fail the selection', () => {
+  const copies = [splitAddon('@qvac/fabric', '0.18.1'), splitAddon('@qvac/fabric', '0.18.0')]
+
+  assert.throws(
+    () => selectMobilePlatformPackages('android', copies, {}),
+    /@qvac\/fabric disagree on version: 0\.18\.1 at .* and 0\.18\.0 at .*@qvac\/fabric-android-arm64/
+  )
+})
+
+test('installed copies of one package at the same version select it once', () => {
+  const copies = [splitAddon('@qvac/fabric', '0.18.0'), splitAddon('@qvac/fabric', '0.18.0')]
+
+  assert.deepEqual(selectMobilePlatformPackages('android', copies, {}), {
+    '@qvac/fabric-android-arm64': '0.18.0',
+    '@qvac/fabric': '0.18.0'
+  })
+})
+
+test('a consumer pin settles which of two installed versions gets its slice', () => {
+  const copies = [splitAddon('@qvac/fabric', '0.18.1'), splitAddon('@qvac/fabric', '0.18.0')]
+
+  assert.deepEqual(selectMobilePlatformPackages('android', copies, { '@qvac/fabric': '0.18.1' }), {
+    '@qvac/fabric-android-arm64': '0.18.1'
+  })
+})
+
+test('a hoisted and a nested fabric at different versions are both found and rejected', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-mobile-conflict-'))
+  try {
+    const configDir = path.join(root, 'app')
+    const modules = path.join(configDir, 'node_modules', '@qvac')
+    writePackage(path.join(modules, 'llm-llamacpp'), {
+      name: '@qvac/llm-llamacpp',
+      version: '0.55.0',
+      dependencies: { '@qvac/fabric': '^0.18.1' }
+    })
+    writePackage(path.join(modules, 'fabric'), {
+      name: '@qvac/fabric',
+      version: '0.18.1',
+      imports: { '#host-addon': hostAddonMap('@qvac/fabric') }
+    })
+    const embedDir = path.join(modules, 'embed-llamacpp')
+    writePackage(embedDir, {
+      name: '@qvac/embed-llamacpp',
+      version: '0.43.0',
+      dependencies: { '@qvac/fabric': '0.18.0' }
+    })
+    writePackage(path.join(embedDir, 'node_modules', '@qvac', 'fabric'), {
+      name: '@qvac/fabric',
+      version: '0.18.0',
+      imports: { '#host-addon': hostAddonMap('@qvac/fabric') }
+    })
+
+    const found = collectHostAddonPackages(configDir)
+    assert.deepEqual(
+      found.map((addon) => addon.packageRoot),
+      [...found.map((addon) => addon.packageRoot)].sort(),
+      'the walk returns copies in a stable order'
+    )
+    assert.deepEqual(found.map((addon) => addon.version).sort(), ['0.18.0', '0.18.1'])
+    assert.throws(
+      () => selectMobilePlatformPackages('android', found, {}),
+      /@qvac\/fabric disagree on version/
+    )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
 function writePackage(dir, manifest) {
   fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(manifest))

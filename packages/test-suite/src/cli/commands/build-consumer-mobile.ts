@@ -1124,8 +1124,12 @@ export function selectMobilePlatformPackages(
   declared: Record<string, string>
 ): Record<string, string> {
   const additions: Record<string, string> = {}
+  const selected = new Map<string, HostAddonPackage>()
   for (const addon of addons) {
-    collectAddonPlatformEntries(addon, platform, declared, additions)
+    const platformPackage = collectAddonPlatformEntries(addon, platform, declared, additions)
+    if (platformPackage === null) continue
+    assertSingleSelectedVersion(selected.get(addon.name), addon, platformPackage)
+    selected.set(addon.name, addon)
   }
   return additions
 }
@@ -1135,16 +1139,37 @@ function collectAddonPlatformEntries(
   platform: MobilePlatform,
   declared: Record<string, string>,
   additions: Record<string, string>
-): void {
+): string | null {
   const platformPackage = resolvePlatformPackageName(addon.hostAddon, platform)
-  if (!platformPackage || !platformPackage.startsWith(`${addon.name}-`)) return
-  if (!ownsAddonVersion(declared[addon.name], addon.version)) return
-  if (hasLocalPrebuild(addon.packageRoot, platform)) return
+  if (!platformPackage || !platformPackage.startsWith(`${addon.name}-`)) return null
+  if (!ownsAddonVersion(declared[addon.name], addon.version)) return null
+  if (hasLocalPrebuild(addon.packageRoot, platform)) return null
 
   // The slice ships a `.bare` built against its meta package's JS layer, so the
   // pair must install as one unit; nothing downstream compares the two versions.
   addUnlessDeclared(additions, declared, platformPackage, addon.version)
   addUnlessDeclared(additions, declared, addon.name, addon.version)
+  return platformPackage
+}
+
+/**
+ * The generated manifest can declare one version of a package, so installed
+ * copies that disagree (one hoisted, one nested under an addon that pins
+ * another range) have no correct selection.
+ */
+function assertSingleSelectedVersion(
+  previous: HostAddonPackage | undefined,
+  addon: HostAddonPackage,
+  platformPackage: string
+): void {
+  if (previous === undefined || previous.version === addon.version) return
+  throw new Error(
+    `Installed copies of ${addon.name} disagree on version: ` +
+      `${previous.version} at ${previous.packageRoot} and ${addon.version} at ${addon.packageRoot}. ` +
+      `A mobile app can declare only one ${platformPackage}. Align the addons on one ` +
+      `${addon.name} version, or declare ${addon.name} and ${platformPackage} at the same ` +
+      'exact version in the consumer dependencies.'
+  )
 }
 
 /**
@@ -1238,7 +1263,14 @@ export function collectHostAddonPackages(configDir: string): HostAddonPackage[] 
       if (resolved !== null) queue.push(resolved)
     }
   }
-  return found
+  return found.sort(
+    (a, b) => compareStrings(a.name, b.name) || compareStrings(a.packageRoot, b.packageRoot)
+  )
+}
+
+function compareStrings(a: string, b: string): number {
+  if (a === b) return 0
+  return a < b ? -1 : 1
 }
 
 function packageIdentity(packageRoot: string): string {
