@@ -13,25 +13,20 @@
 //   3. anything else under tests/ reaches testIds only through the import graph,
 //      resolved by finding which executors transitively import it.
 //   4. a changed line inside a consumer's `resources.define('<id>', …)` reaches
-//      the tests whose metadata depends on `<id>`, and those of every executor
-//      loading `<id>` by name.
+//      the tests whose metadata depends on `<id>`.
 //   5. an inference engine directory reaches testIds through the models it
 //      serves: directory name -> `engine` in the SDK contract -> the resource
 //      constants naming those models -> the tests depending on those resources.
-//      A helper directory without a plugin reaches them through the engines
-//      importing it.
 //   6. a changed addon dependency line in the inference or SDK manifest reaches
 //      them through the engines importing that addon.
 //   7. a changed line in an inference schema reaches them through the names its
-//      statement feeds — within the file, through other schema files and the
-//      barrel — and the engines importing one of those names.
+//      statement feeds, across schema files, and the engines importing one.
 //   8. an SDK api file reaches testIds through the functions it exports and the
 //      executors importing them.
 //   9. a registered inference handler reaches them the same way, via the
 //      operation registry.ts binds it to.
 //
-// 1-4 are scoped to the e2e tree; 5-9 reach into the engine directories, the
-// manifests, the schemas, the SDK api surface and the handler modules. Source
+// 1-4 are scoped to the e2e tree; 5-9 reach into inference and the SDK. Source
 // with no declared link to a test stays out of scope rather than being guessed
 // at.
 //
@@ -77,40 +72,28 @@ const CONTRACT_MODELS = path.resolve(E2E_ROOT, '..', 'contract', 'models.json')
 const RESOURCE_DEFINE_RE = /resources\.define\(\s*['"]([^'"]+)['"]\s*,\s*\{/g
 const RESOURCE_CONSTANT_RE = /(?:^|[\s,{])constant:\s*([A-Za-z0-9_]+)/m
 const RESOURCE_TYPE_RE = /(?:^|[\s,{])type:\s*['"]([^'"]+)['"]/m
-// An executor loading a resource by name rather than through test metadata.
-const RESOURCE_LOAD_RE = /\.(?:ensureLoaded|getModelId|evict)\(\s*['"]([^'"]+)['"]/g
 
-// Addon relation. Inference's `peerDependencies` is the addon set it loads, and
-// each plugin names its addon by importing it — a wrong name fails the build.
-// Package and engine directory names often differ (`ggml-ocr` imports
-// `@qvac/ocr-ggml`), so the import is the only link that does not need a table.
+// Addon relation: inference's `peerDependencies`, linked to engines by the
+// plugins' imports, since package and directory names differ.
 const INFERENCE_SRC_DIR = path.resolve(E2E_ROOT, '..', '..', 'inference', 'src')
 const INFERENCE_MANIFEST = path.resolve(INFERENCE_SRC_DIR, '..', 'package.json')
-const INFERENCE_MANIFEST_PATH = 'packages/inference/package.json'
-const ADDON_MANIFESTS = new Set([INFERENCE_MANIFEST_PATH, 'packages/sdk/package.json'])
+const ADDON_MANIFESTS = new Set(['packages/inference/package.json', 'packages/sdk/package.json'])
 const MANIFEST_DEPENDENCY_RE = /^\s*"(@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*)"\s*:/
 const ENGINE_DIR = path.join(INFERENCE_SRC_DIR, 'plugins', 'builtin')
-// A directory is an engine when it holds a plugin; one without (`asr-ggml`) is
-// a helper that engines import, and reaches tests only through them.
+// A directory without one (`asr-ggml`) is a helper the engines import.
 const ENGINE_ENTRY = 'plugin.ts'
-// Every module a file names: `import`/`export … from` with its clause, and bare,
-// dynamic and `require` imports without one. A package specifier is cut to the
-// package name, so `@qvac/tts-ggml/addonLogging` is still `@qvac/tts-ggml`.
+// The clause of an `import`/`export … from` stops at the next top-level statement.
 const MODULE_SPECIFIER_RE =
   /\b(?:(?:import|export)\s+((?:type\s+)?(?:[^'";()=\n]|\n(?![A-Za-z_$]))*?)\s*from\s*|import\s*\(?\s*|require\(\s*)['"]([^'"]+)['"]/g
 const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 
-// Schema relation. Every plugin reaches every schema through the `index`
-// barrel, so a file-level import names no engine in particular. A changed line
-// resolves instead through the top-level statement it sits in, then through the
-// names that statement feeds — within the file, into other schema files that
-// import or re-export them, and finally into the plugins importing one.
+// Schema relation. Every plugin imports the `index` barrel, so a file-level link
+// names no engine; a changed line is followed through the names it feeds.
 const SCHEMA_ROOT = 'packages/inference/src/schemas'
 const SCHEMA_FILE_RE = new RegExp(`^${SCHEMA_ROOT}/([A-Za-z0-9][A-Za-z0-9._-]*)\\.ts$`)
 const SCHEMA_DIR = path.join(INFERENCE_SRC_DIR, 'schemas')
 const ALIAS_PREFIX = '@/'
-// A top-level statement starts at column 0 with neither a closing bracket nor
-// a comment; everything indented below it, up to the next one, is its body.
+// A top-level statement starts at column 0; indented lines below belong to it.
 const STATEMENT_START_RE = /^[A-Za-z_$]/
 const DECLARATION_RE =
   /^(export\s+)?(?:declare\s+)?(?:async\s+)?(?:abstract\s+)?(?:const\s+enum|const|let|var|function\*?|type|interface|enum|class)\s+([A-Za-z0-9_$]+)/
@@ -216,15 +199,10 @@ function isConsumerFile(file) {
   return path.basename(file) === 'consumer.ts'
 }
 
-/**
- * A consumer's `resources.define` blocks: the id, the 1-based lines from
- * `resources.define(` to the closing brace, and the object literal's own fields.
- */
 function readResourceBlocks(text) {
   const blocks = []
   const newlines = []
   for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) newlines.push(i)
-  // 1 + the number of newlines before `offset`.
   const lineAt = (offset) => {
     let low = 0
     let high = newlines.length
@@ -319,32 +297,16 @@ function readIdsByEngine(catalog) {
   return ids
 }
 
-/** The testIds whose metadata depends on the resource `id`. */
 function idsDependingOn(catalog, id) {
   return catalog.filter((test) => testDependencies(test).includes(id)).map((test) => test.testId)
 }
 
-/**
- * The addon packages inference loads, its `peerDependencies`, before and after
- * `hunks` (the change to the inference manifest, if any); null without the
- * manifest. An addon the change drops is still an addon for its removed lines.
- */
-function readAddonPackages(hunks) {
+function readAddonPackages() {
   if (!existsSync(INFERENCE_MANIFEST)) return null
-  const text = readFileSync(INFERENCE_MANIFEST, 'utf8')
-  const peersOf = (json) => Object.keys(JSON.parse(json).peerDependencies ?? {})
-  const names = new Set(peersOf(text))
-  if (hunks.length > 0) {
-    try {
-      for (const name of peersOf(textBefore(text, hunks))) names.add(name)
-    } catch {
-      // A patch that does not match the checkout; the current peers still apply.
-    }
-  }
-  return names
+  const peers = JSON.parse(readFileSync(INFERENCE_MANIFEST, 'utf8')).peerDependencies
+  return new Set(Object.keys(peers ?? {}))
 }
 
-/** An inference module specifier, relative or `@/`, resolved to a file; null otherwise. */
 function resolveInferenceModule(fromFile, specifier) {
   if (specifier.startsWith(ALIAS_PREFIX)) {
     return resolveFile(path.join(INFERENCE_SRC_DIR, specifier.slice(ALIAS_PREFIX.length)))
@@ -352,78 +314,13 @@ function resolveInferenceModule(fromFile, specifier) {
   return specifier.startsWith('.') ? resolveRelative(fromFile, specifier) : null
 }
 
-/** The schema a resolved file is, by file name without `.ts`, or null. */
 function schemaNameOf(file) {
   return file && path.dirname(file) === SCHEMA_DIR ? path.basename(file, '.ts') : null
 }
 
-/**
- * `text` without its line and block comments, so a note inside an import list
- * is not read as a name. String, template and regex literals are kept whole, so
- * a URL, a glob or a pattern holding `//`, `/*` or a quote is not mistaken for
- * a comment or a string. Newlines inside a comment are kept, so line-anchored
- * patterns still see line starts.
- */
-function stripComments(text) {
-  let out = ''
-  let quote = null
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]
-    const regex = char === '/' && !quote ? regexLiteralAt(text, i, out) : 0
-    if (regex > 0) {
-      out += text.slice(i, i + regex)
-      i += regex - 1
-    } else if (quote) {
-      out += char
-      if (char === '\\') out += text[++i] ?? ''
-      else if (char === quote) quote = null
-    } else if (char === "'" || char === '"' || char === '`') {
-      quote = char
-      out += char
-    } else if (char === '/' && text[i + 1] === '/') {
-      while (i < text.length && text[i] !== '\n') i++
-      out += '\n'
-    } else if (char === '/' && text[i + 1] === '*') {
-      const end = text.indexOf('*/', i + 2)
-      const comment = text.slice(i, end === -1 ? text.length : end + 2)
-      out += comment.replace(/[^\n]/g, '')
-      i += comment.length - 1
-    } else {
-      out += char
-    }
-  }
-  return out
-}
-
-/**
- * The length of the regex literal opening at `text[i]`, or 0 when that `/` is
- * division or a comment. A regex can only follow an operator, an opening
- * bracket, a separator or a keyword; `before` is the text already scanned.
- */
-function regexLiteralAt(text, i, before) {
-  if (text[i + 1] === '/' || text[i + 1] === '*') return 0
-  // The last token before the `/`, at most a keyword long.
-  let end = before.length
-  while (end > 0 && /\s/.test(before[end - 1])) end--
-  const previous = before.slice(Math.max(0, end - 6), end)
-  if (end > 0 && !/(?:[(,=:[!&|?{};+\-*%<>~^]|\breturn|\btypeof|\bcase)$/.test(previous)) {
-    return 0
-  }
-  let inClass = false
-  for (let j = i + 1; j < text.length; j++) {
-    const char = text[j]
-    if (char === '\n') return 0
-    if (char === '\\') j++
-    else if (char === '[') inClass = true
-    else if (char === ']') inClass = false
-    else if (char === '/' && !inClass) return j - i + 1
-  }
-  return 0
-}
-
-/** `a, type b, c as d` -> [['a', 'a'], ['b', 'b'], ['c', 'd']]. */
 function parseNameList(list) {
-  return stripComments(list)
+  return list
+    .replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '')
     .split(',')
     .map((entry) => entry.trim().replace(/^type\s+/, ''))
     .filter(Boolean)
@@ -434,29 +331,19 @@ function parseNameList(list) {
     .filter(([name, alias]) => IDENTIFIER_RE.test(name) && IDENTIFIER_RE.test(alias))
 }
 
-/**
- * The engines, and what each one imports: its packages, and the schema exports
- * it names as `<schema>:<name>` (`<schema>:*` when it takes the whole module),
- * plus the engines reaching each builtin file.
- * An engine's own files count, and so does every builtin file they reach, so a
- * helper directory's imports belong to the engines that use it.
- */
+// Imports per engine, helper files included; schema exports as `<schema>:<name>`.
 function readEngineImports() {
   const engines = []
   const enginesByPackage = new Map()
   const enginesBySchemaExport = new Map()
-  const enginesByFile = new Map()
-  if (!existsSync(ENGINE_DIR)) {
-    return { engines, enginesByPackage, enginesBySchemaExport, enginesByFile }
-  }
+  if (!existsSync(ENGINE_DIR)) return { engines, enginesByPackage, enginesBySchemaExport }
 
   const linksByFile = new Map()
   const linksOf = (file) => {
     if (linksByFile.has(file)) return linksByFile.get(file)
     const links = { packages: new Set(), schemaExports: new Set(), files: new Set() }
     linksByFile.set(file, links)
-    const text = stripComments(readFileSync(file, 'utf8'))
-    for (const match of text.matchAll(MODULE_SPECIFIER_RE)) {
+    for (const match of readFileSync(file, 'utf8').matchAll(MODULE_SPECIFIER_RE)) {
       const [, clause, specifier] = match
       if (specifier.startsWith('@') && !specifier.startsWith(ALIAS_PREFIX)) {
         const name = /^@[^/]+\/[^/]+/.exec(specifier)?.[0]
@@ -466,8 +353,7 @@ function readEngineImports() {
       const target = resolveInferenceModule(file, specifier)
       const schema = schemaNameOf(target)
       if (schema) {
-        // Only a name list can be narrowed; a namespace, a star, a default or a
-        // dynamic import takes everything the schema exports.
+        // Without a name list the import takes the whole schema.
         const names = /\{([^}]*)\}/.exec(clause ?? '')
         for (const [name] of names ? parseNameList(names[1]) : [['*']]) {
           links.schemaExports.add(`${schema}:${name}`)
@@ -500,21 +386,14 @@ function readEngineImports() {
         stack.push(file)
       }
     }
-    for (const file of seen) add(enginesByFile, file, entry.name)
   }
-  // A reformat would silently resolve nothing, and fail-open would report that
-  // as coverage. Fail instead, so the comment says the analysis was unavailable.
+  // Fail rather than report a parse that found nothing as coverage.
   if (engines.length === 0 || enginesByPackage.size === 0) {
     throw new Error(`No engine plugins or package imports parsed from ${ENGINE_DIR}`)
   }
-  return { engines, enginesByPackage, enginesBySchemaExport, enginesByFile }
+  return { engines, enginesByPackage, enginesBySchemaExport }
 }
 
-/**
- * A module's top-level statements as 1-based line spans. A comment directly
- * above a statement belongs to it; text before the first statement belongs to
- * none. `code` is the statement without that comment.
- */
 function readTopLevelStatements(text) {
   const lines = text.split('\n')
   const starts = []
@@ -535,11 +414,6 @@ function readTopLevelStatements(text) {
   })
 }
 
-/**
- * A schema file's statements, each with the names it declares or binds
- * (`locals`), the `[local, exported]` pairs it exports, and what it imports or
- * re-exports from other schema files. `*` stands for a whole module.
- */
 function readSchemaModule(file, text) {
   const statements = readTopLevelStatements(text)
   for (const statement of statements) {
@@ -547,7 +421,7 @@ function readSchemaModule(file, text) {
     statement.exports = []
     statement.imports = []
     statement.reexports = []
-    const code = stripComments(statement.code)
+    const { code } = statement
     const declaration = DECLARATION_RE.exec(code)
     const imported = IMPORT_STATEMENT_RE.exec(code)
     const listed = EXPORT_LIST_RE.exec(code)
@@ -581,10 +455,6 @@ function readSchemaModule(file, text) {
   return { statements }
 }
 
-/**
- * Every schema file's module, and who uses each export: the schema files
- * importing it as a local name, and those re-exporting it.
- */
 function readSchemaGraph() {
   const modules = new Map()
   const importers = new Map()
@@ -611,19 +481,15 @@ function readSchemaGraph() {
   return { modules, importers, reexporters }
 }
 
-/** Whether `text` mentions the identifier `name` as a whole word. */
 function mentions(text, name) {
-  if (!IDENTIFIER_RE.test(name)) return false
-  return new RegExp(`(?<![A-Za-z0-9_$])${name.replace(/\$/g, '\\$')}(?![A-Za-z0-9_$])`).test(text)
+  const isNamePart = (char) => char !== undefined && /[A-Za-z0-9_$]/.test(char)
+  for (let at = text.indexOf(name); at !== -1; at = text.indexOf(name, at + 1)) {
+    if (!isNamePart(text[at - 1]) && !isNamePart(text[at + name.length])) return true
+  }
+  return false
 }
 
-/**
- * The engines a set of schema names reaches. A local name reaches the exports
- * it is exported as and the declarations mentioning it; an export reaches the
- * plugins importing it, the schema files importing it, and those re-exporting
- * it. `override` (`{ schema, module }`) replaces the graph's copy of one schema,
- * so a removed line can be followed through the file as it was.
- */
+// `override` swaps in one schema's pre-change module, for removed lines.
 function reachEngines(seeds, graph, enginesBySchemaExport, override) {
   const moduleOf = (schema) =>
     override?.schema === schema ? override.module : graph.modules.get(schema)
@@ -667,11 +533,6 @@ function reachEngines(seeds, graph, enginesBySchemaExport, override) {
   return engines
 }
 
-/**
- * The engines a schema file's changed lines reach, and whether every change
- * reached one. An added line is located in the file as it is, a removed line in
- * the file as it was before the patch.
- */
 function schemaChangeEngines(schema, file, text, hunks, graph, enginesBySchemaExport) {
   const { added, removed } = changedLines(hunks)
   const sides = [{ module: graph.modules.get(schema), lines: added }]
@@ -686,7 +547,6 @@ function schemaChangeEngines(schema, file, text, hunks, graph, enginesBySchemaEx
     for (const { line } of lines) {
       const statement = module?.statements.find((s) => s.startLine <= line && line <= s.endLine)
       if (!statement) {
-        // The file header: nothing a plugin imports.
         complete = false
         continue
       }
@@ -694,7 +554,6 @@ function schemaChangeEngines(schema, file, text, hunks, graph, enginesBySchemaEx
         const seeds = [
           ...statement.locals.map((name) => ({ kind: 'local', schema, name })),
           ...statement.exports.map(([, name]) => ({ kind: 'export', schema, name })),
-          // A star re-export names nothing to follow.
           ...statement.reexports
             .filter((entry) => entry.as !== '*')
             .map((entry) => ({ kind: 'export', schema, name: entry.as }))
@@ -711,15 +570,10 @@ function schemaChangeEngines(schema, file, text, hunks, graph, enginesBySchemaEx
   return { engines, complete }
 }
 
-/**
- * A unified-diff patch's hunks: each `-`, `+` and context line in order, and the
- * old and new line numbers the hunk starts at. `N,0` — lines added or removed
- * without context — counts from the line after N.
- */
+// `N,0` in a hunk header counts from the line after N.
 function parsePatch(patch) {
   const hunks = []
   let hunk = null
-  // `git diff` output ends with a newline; the empty string after it is not a line.
   for (const text of patch.replace(/\n$/, '').split('\n')) {
     const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(text)
     if (header) {
@@ -732,20 +586,13 @@ function parsePatch(patch) {
     } else if (hunk && /^[-+ ]/.test(text)) {
       hunk.lines.push({ kind: text[0], text: text.slice(1) })
     } else if (hunk && text === '') {
-      // A blank context line whose leading space was stripped.
+      // A blank context line with its leading space stripped.
       hunk.lines.push({ kind: ' ', text: '' })
     }
-    // Anything else is git's own file header before the first hunk, or a
-    // `\ No newline at end of file` marker.
   }
   return hunks
 }
 
-/**
- * The non-blank lines a patch changes: added ones by their line in the file as
- * it is, removed ones by their line in the file as it was. Blank lines change no
- * behaviour, so spacing between two definitions attributes to neither.
- */
 function changedLines(hunks) {
   const added = []
   const removed = []
@@ -769,7 +616,6 @@ function changedLines(hunks) {
   return { added, removed }
 }
 
-/** The file as it was before the patch, rebuilt from its current text. */
 function textBefore(text, hunks) {
   const lines = text.split('\n')
   const before = []
@@ -1010,18 +856,13 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
   )
   const unmapped = []
 
-  // A manifest is in scope only for its addon dependency lines: a version,
-  // script or non-addon dependency change there reaches no test. Both sides
-  // count, so a swapped addon names the one removed as well as the one added.
+  // A manifest is in scope only for its addon dependency lines.
   const changedManifests = traversalFree.filter((file) => ADDON_MANIFESTS.has(file))
-  const addonPackages =
-    changedManifests.length > 0 ? readAddonPackages(hunksOf(INFERENCE_MANIFEST_PATH)) : null
+  const addonPackages = changedManifests.length > 0 ? readAddonPackages() : null
   const changedAddons = new Set()
   const addonManifests = new Set()
   for (const file of changedManifests) {
-    // No patch (a diff too large for the files API), or no inference manifest
-    // in the checkout to tell addons apart, leaves the dependency lines
-    // unknown, so the manifest is listed rather than dropped.
+    // Without a patch or the peer list the addon lines are unknown.
     if (!patches.has(file) || !addonPackages) {
       addonManifests.add(file)
       unmapped.push(file)
@@ -1093,8 +934,7 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
   }
   let engineImports = null
   const engineImportsOf = () => (engineImports ??= readEngineImports())
-  // An engine among several that no test loads is listed on its own, so it
-  // does not vanish behind the ones that resolved.
+  // An untested engine next to tested ones is listed rather than hidden.
   const resolveEngines = (engines) => {
     const ids = idsOfEngines(engines)
     if (ids.length > 0) {
@@ -1106,19 +946,7 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
   }
   for (const engine of changedEngines) {
     const directory = `${ENGINE_ROOT}/${engine}`
-    const absoluteDir = path.join(ENGINE_DIR, engine)
-    // A helper directory holds no plugin, so it reaches tests through the
-    // engines whose files import it.
-    const helper = existsSync(absoluteDir) && !existsSync(path.join(absoluteDir, ENGINE_ENTRY))
-    let ids = idsOfEngines([engine])
-    if (helper) {
-      const engines = new Set()
-      for (const [file, users] of engineImportsOf().enginesByFile) {
-        if (file.startsWith(`${absoluteDir}${path.sep}`))
-          for (const user of users) engines.add(user)
-      }
-      ids = resolveEngines(engines)
-    }
+    const ids = idsOfEngines([engine])
     if (ids.length === 0) {
       // An engine no e2e resource loads. Reported rather than dropped so the
       // gap is visible the first time someone changes that plugin.
@@ -1129,14 +957,11 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
     attribution.push({ file: directory, via: 'inference engine', tests: ids.length })
   }
 
-  // Addons and schemas resolve to engines, then reuse the engine relation.
   const changedSchemas = changedInScope.filter((file) => SCHEMA_FILE_RE.test(file))
-  // Per package, not per manifest: a bump usually lands in both manifests.
+  // One row per package: a bump usually lands in both manifests.
   for (const name of changedAddons) {
     const ids = resolveEngines(engineImportsOf().enginesByPackage.get(name) ?? [])
     if (ids.length === 0) {
-      // No plugin imports it (it is loaded elsewhere in inference), or no e2e
-      // resource loads the engines that do.
       unmapped.push(name)
       continue
     }
@@ -1147,7 +972,6 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
   for (const file of changedSchemas) {
     const schema = SCHEMA_FILE_RE.exec(file)[1]
     const absolute = path.join(repoRoot, file)
-    // A deleted schema has no lines left to attribute; it is left for a human.
     const { engines, complete } = existsSync(absolute)
       ? schemaChangeEngines(
           schema,
@@ -1163,9 +987,7 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
       for (const id of ids) affected.add(id)
       attribution.push({ file, via: 'inference schema', tests: ids.length })
     }
-    // A change no plugin import reaches (the file header, a star re-export, a
-    // name only handlers or the SDK use) is not attributable, so the file is
-    // listed even when its other changes resolved.
+    // Listed as well when only some of its changes resolved.
     if (!complete || ids.length === 0) unmapped.push(file)
   }
 
@@ -1193,26 +1015,6 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
     }
     for (const module of changedHandlers) resolve(module, sdk.byHandler, 'sdk handler')
     for (const file of changedApiFiles) resolve(file, sdk.byApiFile, 'sdk api')
-  }
-
-  // Resource id -> the tests of every executor loading it by name.
-  let idsByLoadedResource = null
-  const idsForResource = (id) => {
-    if (!idsByLoadedResource) {
-      idsByLoadedResource = new Map()
-      for (const [executor, deps] of executorDeps) {
-        for (const file of [executor, ...deps]) {
-          for (const match of readFileSync(file, 'utf8').matchAll(RESOURCE_LOAD_RE)) {
-            if (!idsByLoadedResource.has(match[1])) idsByLoadedResource.set(match[1], new Set())
-            for (const testId of idsByExecutor.get(executor)) {
-              idsByLoadedResource.get(match[1]).add(testId)
-            }
-          }
-        }
-      }
-    }
-    const ids = new Set([...idsDependingOn(catalog, id), ...(idsByLoadedResource.get(id) ?? [])])
-    return allIds.filter((testId) => ids.has(testId))
   }
 
   for (const relativeFile of changedInScope) {
@@ -1254,14 +1056,11 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
       continue
     }
 
-    // A consumer change formally touches every test on its platform, so only
-    // the lines inside a resource definition are attributed. Any other change
-    // leaves the file unmapped for a human look.
+    // Only lines inside a resource definition are attributed.
     if (isConsumerFile(absolute) && absolute.startsWith(`${TESTS_DIR}${path.sep}`)) {
       const hunks = existsSync(absolute) ? hunksOf(relativeFile) : []
       const { added, removed } = changedLines(hunks)
       const text = added.length + removed.length > 0 ? readFileSync(absolute, 'utf8') : ''
-      // A removed line is located in the file as it was before the patch.
       const sides = [
         { blocks: added.length > 0 ? readResourceBlocks(text) : [], lines: added },
         {
@@ -1279,11 +1078,10 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFil
         }
       }
       for (const id of resources) {
-        const ids = idsForResource(id)
+        const ids = idsDependingOn(catalog, id)
         // The id becomes part of a path the comment echoes.
         const key = SAFE_TEST_ID.test(id) ? `${relativeFile}#${id}` : relativeFile
         if (ids.length === 0) {
-          // A resource no test depends on. Reported rather than dropped.
           unmapped.push(key)
           continue
         }
@@ -1400,7 +1198,7 @@ async function main() {
     changed = execFileSync(
       'git',
       ['-C', repoRoot, 'diff', '--name-only', `${args.base}...${args.head}`],
-      { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
+      { encoding: 'utf8' }
     )
       .split('\n')
       .map((line) => line.trim())
@@ -1411,8 +1209,7 @@ async function main() {
         execFileSync(
           'git',
           ['-C', repoRoot, 'diff', '--unified=0', `${args.base}...${args.head}`, '--', file],
-          // A generated file's diff easily outgrows the 1 MB default.
-          { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
+          { encoding: 'utf8' }
         )
       )
     }

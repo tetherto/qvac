@@ -98,8 +98,7 @@ jobs:
       - name: Test agent setup migration safety
         run: bash scripts/ci/test-agent-setup.sh
 
-  # The SDK e2e impact mapper is fail-open, so a relation that breaks makes
-  # test-e2e-smoke quietly add fewer tests instead of failing anything.
+  # The impact mapper is fail-open, so nothing else fails when it breaks.
   sdk-e2e-impact-mapper-tests:
     name: SDK e2e impact mapper unit tests
     runs-on: ubuntu-latest
@@ -108,8 +107,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          # The tests check the mapper's output against the report action's
-          # filters, so both are needed.
           sparse-checkout: |
             packages/sdk/e2e/scripts
             .github/actions/sdk-e2e-report-impacted
@@ -118,7 +115,6 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-      # The same pin resolve-impacted uses in on-pr-test-sdk.yml.
       - name: Install esbuild
         run: npm install --no-save --no-fund --no-audit --prefix "$RUNNER_TEMP/mapper" esbuild@0.27.0
       - name: Run impact mapper unit tests

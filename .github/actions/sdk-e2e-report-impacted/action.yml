@@ -30,8 +30,7 @@ runs:
 
           const MARKER = '<!-- sdk-e2e-impacted -->';
           const E2E_PREFIX = 'packages/sdk/e2e/';
-          // A path, an addon package name (`@qvac/tts-ggml`), or a consumer path
-          // naming one resource definition (`…/consumer.ts#llm`).
+          // A path, a package name, or `consumer.ts#<resource id>`.
           const SAFE_PATH = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[A-Za-z0-9._/-]+(?:#[A-Za-z0-9._-]+)?)$/;
           const SAFE_TEST_ID = /^[A-Za-z0-9._-]+$/;
           const KNOWN_VIA = new Set([
@@ -130,7 +129,7 @@ runs:
               entry && typeof entry.file === 'string' && SAFE_PATH.test(entry.file) && KNOWN_VIA.has(entry.via)
           );
           if (attribution.length > 0) {
-            lines.push('| Changed | Matched via | Tests |', '| --- | --- | --- |');
+            lines.push('| Changed file | Matched via | Tests |', '| --- | --- | --- |');
             for (const entry of attribution) {
               const file = entry.file.startsWith(E2E_PREFIX) ? entry.file.slice(E2E_PREFIX.length) : entry.file;
               lines.push(`| \`${file}\` | ${entry.via} | ${count(entry.tests)} |`);
@@ -156,7 +155,7 @@ runs:
 
           if (unmapped.length > 0) {
             lines.push(
-              'These changes map to no test, so nothing was added for them — review by hand ' +
+              'These changed files map to no test, so nothing was added for them — review by hand ' +
               'if they affect behaviour:',
               ...unmapped.map((file) => `- \`${file}\``),
               ''

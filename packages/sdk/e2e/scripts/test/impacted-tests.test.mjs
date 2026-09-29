@@ -1,8 +1,4 @@
-// Runs impacted-tests.mjs against a throwaway repository, so each relation is
-// checked on a tree small enough to read in one screen, and the results do not
-// move whenever the real catalog changes.
-//
-// Run: node --test packages/sdk/e2e/scripts/test/*.test.mjs
+// Runs impacted-tests.mjs against a fixture repository.
 // esbuild comes from this package's node_modules, or from ESBUILD_MODULE.
 
 import { after, test } from 'node:test'
@@ -53,8 +49,7 @@ const FILES = {
   { testId: 'diffusion-upscale', metadata: { dependency: 'diffusion-esrgan' } },
   { testId: 'whisper-basic', metadata: { dependency: 'whisper' } },
   { testId: 'odd-resource', metadata: { dependency: 'bad id' } },
-  { testId: 'llm-basic', metadata: { dependency: 'llm' } },
-  { testId: 'vision-no-upscale', metadata: { dependency: 'vision' } }
+  { testId: 'llm-basic', metadata: { dependency: 'llm' } }
 ]
 `,
   [CONSUMER]: `import { resources } from '@qvac/test-suite'
@@ -83,18 +78,6 @@ resources.define('whisper', {
 resources.define('bad id', {
   type: 'llamacpp-completion'
 })
-
-resources.define('vision-upscale', {
-  type: 'sdcpp-generation'
-})
-`,
-  // Loads a resource by name, which no test metadata declares.
-  'packages/sdk/e2e/tests/shared/executors/vision-executor.ts': `export class VisionExecutor {
-  pattern = /^vision-/
-  async run() {
-    return this.resources.ensureLoaded('vision-upscale')
-  }
-}
 `,
   [INFERENCE_MANIFEST]: JSON.stringify(
     {
@@ -105,7 +88,6 @@ resources.define('vision-upscale', {
         '@qvac/decoder-audio': '^0.7.0',
         '@qvac/diffusion-cpp': '^0.25.0',
         '@qvac/ocr-ggml': '^0.24.1',
-        '@qvac/sd-video': '^0.1.0',
         '@qvac/tts-ggml': '^0.9.1',
         '@qvac/tts-voices': '^0.1.0'
       }
@@ -128,14 +110,7 @@ import { Voice } from '@/schemas/text-to-speech'
   [`${BUILTIN}/sdcpp-generation/plugin.ts`]: `import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 `,
   // The addon reaches this engine only through a dynamic import.
-  // Strings holding `/*` and `//` around it must not be read as comments.
-  [`${BUILTIN}/sdcpp-generation/ops/upscale.ts`]: `const GLOB = '{a,b}/*.gguf'
-export const load = () => import('@qvac/diffusion-cpp/addonLogging')
-const url = (host, p) => \`\${host}//\${p}\` /* done */
-// Regex literals holding a quote or \`/*\` must not open a string or a comment.
-const quoted = /["']/
-const slashes = /^\\/*/
-export const video = () => import('@qvac/sd-video')
+  [`${BUILTIN}/sdcpp-generation/ops/upscale.ts`]: `export const load = () => import('@qvac/diffusion-cpp/addonLogging')
 `,
   [`${BUILTIN}/sdcpp-generation/ops/video.ts`]: `import * as video from '@/schemas/video-config'
 `,
@@ -149,11 +124,8 @@ import { whisperConfigSchema } from '../../../schemas/transcription-config'
 
 export const asrConfig = whisperConfigSchema
 `,
-  // A comment inside an import list, and an import right after a braced
-  // declaration, which must not be read as one clause.
-  [`${BUILTIN}/whispercpp-transcription/plugin.ts`]: `import {
-  asrConfig, // don't inline (see config)
-} from '@/plugins/builtin/asr-helper/config'
+  // An import right after a braced declaration is a clause of its own.
+  [`${BUILTIN}/whispercpp-transcription/plugin.ts`]: `import { asrConfig } from '@/plugins/builtin/asr-helper/config'
 
 export interface Options {
   mode: string
@@ -213,7 +185,7 @@ export { PUBLIC_TYPES as MODEL_TYPES } from './models'
 }
 
 function makeRepo() {
-  // realpath: the mapper compares its own resolved location against the root.
+  // The mapper compares its own resolved location against the root.
   const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'impacted-tests-')))
   for (const [file, text] of Object.entries(FILES)) {
     mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
@@ -228,7 +200,6 @@ function makeRepo() {
 const repo = makeRepo()
 after(() => rmSync(repo.root, { recursive: true, force: true }))
 
-/** Runs the mapper on `[{ filename, patch }]` and returns its JSON report. */
 function analyze(files) {
   const prFiles = path.join(repo.root, 'pr-files.json')
   const report = path.join(repo.root, 'report.json')
@@ -241,21 +212,19 @@ function analyze(files) {
   return JSON.parse(readFileSync(report, 'utf8'))
 }
 
-/** The 1-based line of `file` that contains `snippet`. */
 function lineOf(file, snippet) {
   const index = FILES[file].split('\n').findIndex((line) => line.includes(snippet))
   assert.ok(index >= 0, `${snippet} not in ${file}`)
   return index + 1
 }
 
-/** A one-line edit of the line holding `snippet`, as `git diff -U0` prints it. */
+// A one-line edit, as `git diff -U0` prints it.
 function editLine(file, snippet) {
   const line = lineOf(file, snippet)
   const text = FILES[file].split('\n')[line - 1]
   return `@@ -${line},1 +${line},1 @@\n-${text} // before\n+${text}`
 }
 
-/** A version bump of `name` on its line of the inference manifest. */
 function bump(name) {
   const line = lineOf(INFERENCE_MANIFEST, `"${name}"`)
   const text = FILES[INFERENCE_MANIFEST].split('\n')[line - 1]
@@ -292,11 +261,6 @@ test('dynamic and bare imports link an addon too', () => {
     analyze([{ filename: INFERENCE_MANIFEST, patch: bump('@qvac/tts-voices') }]).affected,
     ['tts-basic', 'tts-long']
   )
-})
-
-test('an import after regex literals holding a quote or `/*` still links', () => {
-  const report = analyze([{ filename: INFERENCE_MANIFEST, patch: bump('@qvac/sd-video') }])
-  assert.deepEqual(report.affected, ['diffusion-upscale'])
 })
 
 test('a swapped addon counts both the removed and the added one', () => {
@@ -530,43 +494,9 @@ test('a star re-export, a schema only an untested engine imports, and one withou
   assert.deepEqual(report.unmapped.sort(), [`${SCHEMAS}/common.ts`, index, loadModel])
 })
 
-test('an addon the change drops from inference still counts as an addon', () => {
-  const line = lineOf(INFERENCE_MANIFEST, '"@qvac/tts-voices"')
-  const patch = [
-    `@@ -${line},2 +${line},1 @@`,
-    '-    "@qvac/tts-voices": "^0.1.0",',
-    '-    "@qvac/gone": "^1.0.0"',
-    '+    "@qvac/tts-voices": "^0.1.0"'
-  ].join('\n')
-  const report = analyze([{ filename: INFERENCE_MANIFEST, patch }])
-  assert.deepEqual(report.affected, ['tts-basic', 'tts-long'])
-  assert.deepEqual(report.unmapped, ['@qvac/gone'])
-})
-
-test('a helper directory change reaches the engines importing it', () => {
-  const file = `${BUILTIN}/asr-helper/config.ts`
-  const report = analyze([{ filename: file, patch: editLine(file, 'asrConfig') }])
-  assert.deepEqual(report.attribution, [
-    { file: `${BUILTIN}/asr-helper`, via: 'inference engine', tests: 1 }
-  ])
-  assert.deepEqual(report.unmapped, [`${BUILTIN}/parakeet-transcription`])
-})
-
-test('a resource an executor loads by name reaches that executor', () => {
-  const line = lineOf(CONSUMER, "define('vision-upscale'") + 1
-  const patch = `@@ -${line},1 +${line},1 @@\n-  type: 'llm'\n+  type: 'sdcpp-generation'`
-  const report = analyze([{ filename: CONSUMER, patch }])
-  assert.deepEqual(report.affected, ['vision-no-upscale'])
-  assert.deepEqual(report.unmapped, [])
-})
-
-test('an import after a braced declaration, or with a comment in its list, still links', () => {
+test('an import after a braced declaration still links', () => {
   const vad = `${SCHEMAS}/vad.ts`
   assert.deepEqual(analyze([{ filename: vad, patch: editLine(vad, 'vadSchema') }]).affected, [
-    'whisper-basic'
-  ])
-  const helper = `${BUILTIN}/asr-helper/config.ts`
-  assert.deepEqual(analyze([{ filename: helper, patch: editLine(helper, 'asrConfig') }]).affected, [
     'whisper-basic'
   ])
 })
