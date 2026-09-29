@@ -233,7 +233,15 @@ export const qvacConfigSchema = z.object({
    * Inert: we have no bundling or ABI-verification step, so this field is
    * unused. Carried over from the bundle-time config schema.
    */
-  bareRuntimeVersion: z.string().optional()
+  bareRuntimeVersion: z.string().optional(),
+
+  /**
+   * Whether generated worker bundles include the optional FFmpeg-backed audio
+   * decoder. Defaults to true so encoded file-path inputs keep working. Set
+   * this to false only when the app uses raw PCM/base64 audio exclusively; the
+   * bundler then defers @qvac/decoder-audio and its native dependency.
+   */
+  includeAudioDecoder: z.boolean().optional()
 })
 
 export type QvacConfig = z.infer<typeof qvacConfigSchema>

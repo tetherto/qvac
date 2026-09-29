@@ -1,8 +1,17 @@
-import { qvacConfigSchema, type QvacConfig } from '@qvac/inference/surface'
+import { qvacConfigSchema, type QvacConfig as InferenceQvacConfig } from '@qvac/inference/surface'
 import { ConfigValidationFailedError } from '@/utils/errors-client'
 import { formatZodError } from '@/utils/zod-error'
+import { z } from 'zod'
 
-export type { QvacConfig }
+/** Bundler options; runtime support is checked against the SDK being bundled. */
+// Remove this schema extension once the SDK requires an inference release that includes the key.
+const bundlerConfigSchema = z.object({
+  includeAudioDecoder: z.boolean().optional()
+})
+
+export type QvacConfig = InferenceQvacConfig & {
+  includeAudioDecoder?: boolean | undefined
+}
 
 export function validateConfig(config: unknown): QvacConfig {
   const result = qvacConfigSchema.safeParse(config)
@@ -11,7 +20,17 @@ export function validateConfig(config: unknown): QvacConfig {
     throw new ConfigValidationFailedError(formatZodError(result.error))
   }
 
-  return result.data
+  const bundlerResult = bundlerConfigSchema.safeParse(config)
+  if (!bundlerResult.success) {
+    throw new ConfigValidationFailedError(formatZodError(bundlerResult.error))
+  }
+
+  return {
+    ...result.data,
+    ...(bundlerResult.data.includeAudioDecoder !== undefined && {
+      includeAudioDecoder: bundlerResult.data.includeAudioDecoder
+    })
+  }
 }
 
 export function parseJsonConfig(content: string, filePath: string): unknown {

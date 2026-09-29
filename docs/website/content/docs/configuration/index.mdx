@@ -61,6 +61,7 @@ The following table lists all supported configuration options for `qvac.config.*
 | Option | Description | Type | Required | Default |
 | --- | --- | --- | --- | --- |
 | [`plugins`](/configuration/plugins) | Plugin specifiers to bundle (built-in and/or custom). | `string[]` | No | [All built-in plugins](/configuration/plugins#built-in) |
+| `includeAudioDecoder` | Include the FFmpeg audio decoder in generated worker bundles. Set to `false` only when audio input is raw PCM, supplied as files or base64. Requires an inference runtime with optional audio decoder support; unsupported opt-outs are rejected before bundling. Rebuild the bundle after changing this option. | `boolean` | No | `true` |
 | `loggerConsoleOutput` | Enable or disable console output for SDK loggers. | `boolean` | No | `true` |
 | `loggerLevel` | Global log level for all SDK loggers. | `"error" \| "warn" \| "info" \| "debug"` | No | `"info"` |
 | `swarmRelays` | Hyperswarm relay public keys (hex strings) for improved P2P connectivity (blind relays). | `string[]` | No | — |
