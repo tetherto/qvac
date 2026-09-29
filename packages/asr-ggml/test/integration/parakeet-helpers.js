@@ -11,6 +11,8 @@ const { linkOrCopySync } = require('./_link-or-copy.js')
 const platform = os.platform()
 const arch = os.arch()
 const isMobile = platform === 'ios' || platform === 'android'
+const NO_GPU = process.env && process.env.NO_GPU === 'true'
+const GPU_ONLY_USE_GPU = !isMobile
 const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
 let _mobileModelManifest = null
 
@@ -1455,6 +1457,8 @@ module.exports = {
   canonicalModelType,
   testGgufEnvKey,
   isMobile,
+  NO_GPU,
+  GPU_ONLY_USE_GPU,
   platform,
   arch,
   MODEL_CONFIGS,

@@ -47,7 +47,9 @@ const {
   ASRGgml,
   setupJsLogger,
   getTestPaths,
-  loadGgufOrSkip
+  loadGgufOrSkip,
+  NO_GPU,
+  GPU_ONLY_USE_GPU
 } = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
@@ -170,7 +172,7 @@ async function runDuplexStreamingTest(t, modelType) {
           streaming: true,
           streamingChunkMs: STREAM_CHUNK_MS,
           maxThreads: 4,
-          useGPU: false
+          useGPU: GPU_ONLY_USE_GPU
         }
       }
     })
@@ -291,7 +293,7 @@ function streamingTdt(modelPath, extra = {}) {
         streaming: true,
         streamingChunkMs: STREAM_CHUNK_MS,
         maxThreads: 4,
-        useGPU: false,
+        useGPU: GPU_ONLY_USE_GPU,
         ...extra
       }
     }
@@ -322,7 +324,7 @@ function transcriptOf(updates) {
 // on the same streaming instance loses all but the last sentence.
 test(
   'TDT energy VAD — duplex and framework streaming surface speech/silence transitions',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const loggerBinding = setupJsLogger(binding)
     try {
@@ -365,12 +367,12 @@ test(
 
 test(
   'TDT runStreaming — duplex feed surfaces transcripts incrementally and resolves cleanly',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   (t) => runDuplexStreamingTest(t, 'tdt')
 )
 
 test(
   'Unified runStreaming — duplex feed surfaces transcripts incrementally and resolves cleanly',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   (t) => runDuplexStreamingTest(t, 'unified')
 )

@@ -3,8 +3,10 @@
 // CosyVoice3 engine integration smoke: real synthesis in the desktop
 // `run-integration-tests` lane.  Mirrors parler.test.js (download model → build
 // TTSGgml → run → assert) but for the directory-consuming CosyVoice3 engine
-// (Qwen2 speech LM + DiT flow + CausalHiFT vocoder; native 24 kHz, CPU-only).
-// Text is kept SHORT to bound CPU LM-decode time in CI.
+// (Qwen2 speech LM + DiT flow + CausalHiFT vocoder; native 24 kHz).
+// Even one short CPU synthesis costs minutes on the CPU-only runners, so these
+// tests run on the GPU only and are skipped there (NO_GPU=true); the CPU crash
+// check is the CosyVoice3 CPU smoke in gpu-smoke.test.js.
 
 const os = require('bare-os')
 const path = require('bare-path')
@@ -13,6 +15,7 @@ const test = require('brittle')
 const { loadCosyvoiceTTS, runCosyvoiceTTS } = require('../utils/runCosyvoiceTTS')
 const { ensureCosyvoiceModel } = require('../utils/downloadModel')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { NO_GPU, GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -27,7 +30,7 @@ const MODEL_MISSING =
 
 test(
   'CosyVoice3 TTS (ggml): outputSampleRate=16000 resamples and reports 16 kHz',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureCosyvoiceModel({
@@ -43,7 +46,8 @@ test(
     const model = await loadCosyvoiceTTS({
       threads: TTS_TEST_THREADS,
       cosyvoiceModelDir: download.modelDir,
-      outputSampleRate: 16000
+      outputSampleRate: 16000,
+      useGPU: GPU_ONLY_USE_GPU
     })
     try {
       const text = 'Hello from CosyVoice.'
@@ -70,7 +74,7 @@ function samplesEqual(a, b) {
 
 test(
   'CosyVoice3 TTS (ggml): emotion changes the audio; per-call switch needs no reload',
-  { timeout: 900000 },
+  { timeout: 900000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureCosyvoiceModel({
@@ -87,7 +91,8 @@ test(
     const model = await loadCosyvoiceTTS({
       threads: TTS_TEST_THREADS,
       cosyvoiceModelDir: download.modelDir,
-      seed: 42
+      seed: 42,
+      useGPU: GPU_ONLY_USE_GPU
     })
     try {
       const text = 'Hello from CosyVoice.'
@@ -172,7 +177,7 @@ test(
 
 test(
   'CosyVoice3 TTS (ggml): instruct conditioning produces audio',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const download = await ensureCosyvoiceModel({
@@ -186,7 +191,8 @@ test(
     const model = await loadCosyvoiceTTS({
       threads: TTS_TEST_THREADS,
       cosyvoiceModelDir: download.modelDir,
-      emotion: 'happy'
+      emotion: 'happy',
+      useGPU: GPU_ONLY_USE_GPU
     })
     try {
       const text = 'Hello from CosyVoice.'

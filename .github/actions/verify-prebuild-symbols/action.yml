@@ -52,13 +52,14 @@ runs:
         if [ -d "$FABRIC" ]; then
           FABRIC_REAL="$(cd "$FABRIC" && pwd -P)"
           shopt -s nullglob
-          declare -A SEEN=()
+          # A newline-delimited list, not `declare -A`: macOS runners' /bin/bash is 3.2.
+          SEEN=$'\n'
           for dir in "$FABRIC_REAL/prebuilds" "$(dirname "$FABRIC_REAL")"/fabric-*/addon/prebuilds \
             "$FABRIC_REAL"/node_modules/@qvac/fabric-*/addon/prebuilds node_modules/@qvac/fabric-*/addon/prebuilds; do
             [ -d "$dir" ] || continue
             real="$(cd "$dir" && pwd -P)"
-            [ -z "${SEEN[$real]:-}" ] || continue
-            SEEN[$real]=1
+            case "$SEEN" in *$'\n'"$real"$'\n'*) continue ;; esac
+            SEEN="$SEEN$real"$'\n'
             EXTRA="$EXTRA --provider-dir $real"
           done
         fi
@@ -87,13 +88,14 @@ runs:
         if [ -d "$FABRIC" ]; then
           FABRIC_REAL="$(cd "$FABRIC" && pwd -P)"
           shopt -s nullglob
-          declare -A SEEN=()
+          # A newline-delimited list, not `declare -A`: macOS runners' /bin/bash is 3.2.
+          SEEN=$'\n'
           for dir in "$FABRIC_REAL/prebuilds" "$(dirname "$FABRIC_REAL")"/fabric-*/addon/prebuilds \
             "$FABRIC_REAL"/node_modules/@qvac/fabric-*/addon/prebuilds node_modules/@qvac/fabric-*/addon/prebuilds; do
             [ -d "$dir" ] || continue
             real="$(cd "$dir" && pwd -P)"
-            [ -z "${SEEN[$real]:-}" ] || continue
-            SEEN[$real]=1
+            case "$SEEN" in *$'\n'"$real"$'\n'*) continue ;; esac
+            SEEN="$SEEN$real"$'\n'
             EXTRA="$EXTRA --provider-dir $real"
           done
         fi

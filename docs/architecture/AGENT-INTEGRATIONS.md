@@ -43,7 +43,7 @@ The design rule is: keep general OpenAI-compatible behavior in `@qvac/cli`, gene
 | Package / area | Path | Public package | Primary role |
 | --- | --- | --- | --- |
 | SDK | `packages/sdk` | `@qvac/sdk` | Canonical QVAC API: model loading, completion, tool-call parsing, registry integration, cancellation primitives, native addon RPC. |
-| CLI OpenAI server | `packages/cli/src/serve` | `@qvac/cli` | Runs `qvac serve --openai`. `serve/core` owns model alias routing, auth/CORS, cancellation, queueing, and lifecycle for loaded models; `serve/extensions/openai` owns the OpenAI-compatible routes and request/response translation. |
+| CLI OpenAI server | `packages/cli/src/serve` | `@qvac/cli` | Runs `qvac serve --openai`. `serve/core` owns model alias routing, auth/CORS, cancellation, queueing, lifecycle for loaded models, completion draining, and the in-memory file, vector-store, and job stores; `serve/extensions/openai` owns the OpenAI-compatible routes and request/response translation. |
 | AI SDK provider | `packages/ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider wrapper. Owns `createQvac`, external/managed modes, typed model metadata exports, friendly catalog ids, and managed serve reuse/lifecycle. |
 | OpenCode plugin | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode-specific turnkey setup. Starts a host process, injects a `qvac` provider into OpenCode config, selects project model defaults, applies temporary OpenAI-compat shims, and tears down on exit. |
 | OpenClaw plugin | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw provider plugin: managed local `qvac serve` via OpenClaw `localService`, static catalog from `@qvac/ai-sdk-provider/models`. |

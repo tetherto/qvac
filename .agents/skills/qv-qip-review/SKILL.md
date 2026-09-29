@@ -27,7 +27,7 @@ Do not infer approval, commitments, current behavior, or implementation feasibil
 - Decision-relevant trust-boundary, compatibility, migration, and release effects are explicit.
 - Likely scope misunderstandings are excluded explicitly, and the approvers table is preserved.
 
-An unclear or absent recommended direction or approval ask is a blocker. Do not use length as a proxy for this check.
+An unclear or absent recommended direction or approval ask is a blocker. For another gap, first state how its answer could materially change the recommendation or why approval without it would be irresponsible. Explicitly deferred implementation detail is acceptable when the architectural direction, boundaries, responsibilities, and accepted trade-offs remain clear; require production-level detail only when the decision or its feasibility and risk claims depend on it. Do not use length or a preference for greater specificity as a proxy for readiness.
 
 ### Decision-brief quality
 
@@ -45,8 +45,8 @@ If consultation context is provided, check coverage of the owning team lead, Lea
 
 Separate:
 
-- **Blockers:** the decision cannot responsibly be approved, such as no clear approval ask, an unsupported material claim, an unresolved architectural contradiction, or missing impact that could change the decision.
-- **Clarifying questions:** answers would improve confidence but may not require restructuring the proposal.
+- **Blockers:** the decision cannot responsibly be approved. State the approval risk before using this category; examples include no clear approval ask, an unsupported material claim, an unresolved architectural contradiction, or missing impact that could materially change the decision.
+- **Clarifying questions:** answers would improve confidence but are not shown to prevent responsible approval or require restructuring the proposal.
 - **Suggested edits:** concision, organization, Appendix moves, and other improvements that do not block the decision.
 
 Lead with findings ordered by approval risk and use line-specific references when possible:
