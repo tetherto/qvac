@@ -9,7 +9,7 @@
  */
 import { spawnSync } from 'node:child_process'
 import { parseArgs } from 'node:util'
-import { publishTrain } from './lib/release-train-publish.mjs'
+import { publishTrain, SERVE_WAIT } from './lib/release-train-publish.mjs'
 import { readRepoFile, repoRoot } from './lib/release-trains.mjs'
 
 function run (command, args, options = {}) {
@@ -49,7 +49,11 @@ function main () {
     console.log(`${verb} ${entry.name}@${entry.version} (${entry.tag})`)
   }
   if (result.failed) {
-    console.error(`::error::${result.failed.name}@${result.failed.version} failed to publish`)
+    const { name, version, reason } = result.failed
+    const waited = (SERVE_WAIT.attempts - 1) * SERVE_WAIT.intervalMs / 1000
+    console.error(reason === 'not-served'
+      ? `::error::${name}@${version} was published, but npm did not serve it within ${waited}s`
+      : `::error::${name}@${version} failed to publish`)
     for (const entry of result.notAttempted) {
       console.error(`::error::${entry.name}@${entry.version} was not attempted`)
     }

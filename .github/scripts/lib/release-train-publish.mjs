@@ -83,9 +83,11 @@ export function resolveDistTag ({ version, latest, requested }) {
 /**
  * `npm view <spec> <field> --json`; null when npm answers E404, which it does
  * both for a package never published and for a version it does not have.
+ * `--prefer-online` revalidates npm's metadata cache, which would otherwise
+ * answer a just-published version with a cached 404.
  */
 function npmView (spec, field, run) {
-  const result = run('npm', ['view', spec, field, '--json'])
+  const result = run('npm', ['view', spec, field, '--json', '--prefer-online'])
   if (result.status !== 0) {
     let code
     try {
@@ -108,15 +110,36 @@ export function isPublished (name, version, run) {
   return npmView(`${name}@${version}`, 'version', run) !== null
 }
 
+function sleepSync (ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+export const SERVE_WAIT = { attempts: 30, intervalMs: 10_000 }
+
+/**
+ * Polls npm until it serves `name@version`. A publish returns once npm accepts
+ * the upload, which can be before its metadata answers for the version; a
+ * dependent published in that window can be installed while its dependency
+ * does not resolve.
+ */
+export function waitUntilServed (name, version, run, { attempts, intervalMs } = SERVE_WAIT, sleep = sleepSync) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    if (isPublished(name, version, run)) return true
+    if (attempt < attempts) sleep(intervalMs)
+  }
+  return false
+}
+
 /**
  * Reads every tag and whether each version is already on npm first, so a
  * registry error stops the run before anything is published, then publishes
- * in dependency order and stops at the first failure. Re-running publishes
- * the rest: the executor skips a version already on npm under the same tag.
- * `alreadyPublished` is read before the executor runs, so the report can say
- * which versions this run added.
+ * in dependency order. After each publish it waits until npm serves the new
+ * version before publishing the next package, and stops at the first failure
+ * or timeout. Re-running publishes the rest: the executor skips a version
+ * already on npm under the same tag. `alreadyPublished` is read before the
+ * executor runs, so the report can say which versions this run added.
  */
-export function publishTrain ({ train, requestedTag = '', dryRun = false, readManifest, run, log = console.log, catalog }) {
+export function publishTrain ({ train, requestedTag = '', dryRun = false, readManifest, run, log = console.log, catalog, serveWait = SERVE_WAIT, sleep = sleepSync }) {
   const plan = planPublish(train, readManifest, catalog).map((entry) => ({
     ...entry,
     tag: resolveDistTag({ version: entry.version, latest: readLatest(entry.name, run), requested: requestedTag }),
@@ -135,10 +158,15 @@ export function publishTrain ({ train, requestedTag = '', dryRun = false, readMa
     ]
     if (dryRun) args.push('--dry-run')
     const result = run('pnpm', args, { stdio: 'inherit' })
-    if (result.status !== 0) {
+    const failure = result.status !== 0
+      ? 'publish'
+      : !dryRun && !entry.alreadyPublished && !waitUntilServed(entry.name, entry.version, run, serveWait, sleep)
+          ? 'not-served'
+          : null
+    if (failure) {
       return {
         completed,
-        failed: entry,
+        failed: { ...entry, reason: failure },
         notAttempted: plan.slice(index + 1)
       }
     }

@@ -48,25 +48,49 @@ function readManifest (manifests = MANIFESTS) {
 
 const E404 = { status: 1, stdout: '{"error":{"code":"E404"}}', stderr: '' }
 
-// `onNpm` lists the exact versions npm already has, as "name@version".
-function fakeRun ({ latest = {}, onNpm = [], failPublishOf = null, viewFails = false } = {}) {
+// `onNpm` lists the exact versions npm already has, as "name@version". A
+// package the fake publishes is served after `servedAfter[name]` version
+// lookups (default 1, the first one), or never when it is in `neverServed`.
+function fakeRun ({ latest = {}, onNpm = [], failPublishOf = null, viewFails = false, servedAfter = {}, neverServed = [] } = {}) {
   const calls = []
+  const pending = new Map()
+  const served = new Set(onNpm.map((spec) => spec.slice(0, spec.lastIndexOf('@'))))
   const run = (command, args) => {
     calls.push([command, ...args])
     if (command === 'npm') {
       if (viewFails) return { status: 1, stdout: '{"error":{"code":"ETIMEDOUT"}}', stderr: 'timeout' }
       const [, spec, field] = args
       if (field === 'version') {
-        if (!onNpm.includes(spec)) return E404
+        const name = spec.slice(0, spec.lastIndexOf('@'))
+        if (pending.has(name)) {
+          const left = pending.get(name) - 1
+          if (left <= 0) {
+            pending.delete(name)
+            served.add(name)
+          } else {
+            pending.set(name, left)
+          }
+        }
+        if (!served.has(name)) return E404
         return { status: 0, stdout: JSON.stringify(spec.slice(spec.lastIndexOf('@') + 1)), stderr: '' }
       }
       if (!(spec in latest)) return E404
       return { status: 0, stdout: JSON.stringify(latest[spec]), stderr: '' }
     }
     const project = args.find((a) => a.startsWith('--projects=')).slice('--projects='.length)
-    return { status: project === failPublishOf ? 1 : 0, stdout: '', stderr: '' }
+    if (project === failPublishOf) return { status: 1, stdout: '', stderr: '' }
+    if (!args.includes('--dry-run') && !served.has(project) && !neverServed.includes(project)) {
+      pending.set(project, servedAfter[project] ?? 1)
+    }
+    return { status: 0, stdout: '', stderr: '' }
   }
   return { run, calls }
+}
+
+const NO_WAIT = { attempts: 3, intervalMs: 0 }
+
+function versionLookups (calls, name) {
+  return calls.filter(([command, , spec, field]) => command === 'npm' && field === 'version' && spec.startsWith(`${name}@`)).length
 }
 
 function publishCalls (calls) {
@@ -161,6 +185,44 @@ test('marks a version npm already has, and still hands it to nx', () => {
     [['@qvac/inference', true], ['@qvac/sdk', false], ['@qvac/cli', false], ['@qvac/plugin', false]],
   )
   assert.equal(publishCalls(calls).length, 4)
+})
+
+test('publishes the next package only after npm serves the previous one', () => {
+  const { run, calls } = fakeRun({ servedAfter: { '@qvac/inference': 3 } })
+  const result = publishTrain({ train: 'sdk', readManifest: readManifest(), run, log: () => {}, catalog: CATALOG, serveWait: NO_WAIT, sleep: () => {} })
+
+  assert.equal(result.failed, null)
+  const sdkPublish = calls.findIndex((c) => c[0] === 'pnpm' && c.includes('--projects=@qvac/sdk'))
+  // One lookup while planning, then three polls until the third one answers.
+  assert.equal(versionLookups(calls.slice(0, sdkPublish), '@qvac/inference'), 4)
+})
+
+test('stops when npm never serves a version it accepted', () => {
+  const sleeps = []
+  const { run, calls } = fakeRun({ neverServed: ['@qvac/sdk'] })
+  const result = publishTrain({
+    train: 'sdk', readManifest: readManifest(), run, log: () => {}, catalog: CATALOG,
+    serveWait: { attempts: 3, intervalMs: 5 }, sleep: (ms) => sleeps.push(ms),
+  })
+
+  assert.equal(result.failed.name, '@qvac/sdk')
+  assert.equal(result.failed.reason, 'not-served')
+  assert.deepEqual(result.completed.map((p) => p.name), ['@qvac/inference'])
+  assert.deepEqual(result.notAttempted.map((p) => p.name), ['@qvac/cli', '@qvac/plugin'])
+  assert.equal(publishCalls(calls).length, 2)
+  assert.deepEqual(sleeps, [5, 5])
+})
+
+test('does not wait for a version already on npm, nor on a dry run', () => {
+  const onNpm = ['@qvac/inference@0.21.0', '@qvac/sdk@0.21.0', '@qvac/cli@0.15.0', '@qvac/plugin@0.4.0']
+  const already = fakeRun({ onNpm })
+  publishTrain({ train: 'sdk', readManifest: readManifest(), run: already.run, log: () => {}, catalog: CATALOG, serveWait: NO_WAIT, sleep: () => {} })
+  assert.equal(versionLookups(already.calls, '@qvac/sdk'), 1)
+
+  const dry = fakeRun()
+  const result = publishTrain({ train: 'sdk', dryRun: true, readManifest: readManifest(), run: dry.run, log: () => {}, catalog: CATALOG, serveWait: NO_WAIT, sleep: () => {} })
+  assert.equal(result.failed, null)
+  assert.equal(versionLookups(dry.calls, '@qvac/sdk'), 1)
 })
 
 test('a registry error stops the run before anything is published', () => {
