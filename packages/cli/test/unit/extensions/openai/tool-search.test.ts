@@ -7,10 +7,8 @@ import {
   InvalidToolChoiceError
 } from '@/serve/extensions/openai/schemas/common'
 import { foldToolSearch, stripToolSearchCalls } from '@/serve/lib/tool-search'
-import {
-  accumulateUsage,
-  type DrainedCompletion
-} from '@/serve/extensions/openai/adapters/completion-result'
+import { accumulateUsage } from '@/serve/core/completion'
+import type { DrainedOpenAICompletion } from '@/serve/extensions/openai/adapters/completion-result'
 
 const DEFERRED_WIRE = {
   type: 'function',
@@ -187,9 +185,9 @@ describe('stripToolSearchCalls', () => {
 describe('accumulateUsage', () => {
   function turn(
     completionTokens: number,
-    stats: DrainedCompletion['stats'],
+    stats: DrainedOpenAICompletion['stats'],
     text = ''
-  ): DrainedCompletion {
+  ): DrainedOpenAICompletion {
     return {
       text,
       thinking: '',

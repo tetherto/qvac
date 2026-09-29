@@ -288,7 +288,7 @@ const backendSettings = {
   use_gpu: true,              // Enable GPU inference (default: false → CPU-only)
   gpu_backend: 'vulkan',      // Optional: pick a specific backend by name substring
   gpu_device: 0,              // Optional: ordinal within matching devices (default: 0)
-  backendsDir: './prebuilds', // Optional: dir where libqvac-ggml-*.so / *.dll live
+  backendsDir: './prebuilds', // Optional override of the fabric backends root
   openclCacheDir: '/path/ok'  // Optional (Android only): OpenCL kernel-cache dir
 }
 ```
@@ -300,7 +300,7 @@ The three GPU control keys each accept a camelCase alias alongside the snake_cas
 | `use_gpu` | `useGPU` | boolean | Enable GPU inference. When `false` (default), only the CPU backend is used. Bergamot is CPU-only by design — this flag is effectively a no-op for Bergamot. |
 | `gpu_backend` | `gpuBackend` | string | Case-insensitive **substring** match against eligible Vulkan, Metal, OpenCL, or CUDA device names (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When unset, the default gated selection runs (see [Backends](#backends)). Any explicit selector that resolves to OpenCL bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
 | `gpu_device` | `gpuDevice` | int | Ordinal within the matching devices. Defaults to `0` (first match). Example: `{gpu_backend: "vulkan", gpu_device: 1}` picks the second Vulkan adapter. |
-| `backendsDir` | — | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). Defaults to `<package>/prebuilds` when unset, which is where `npm install` places the shipped prebuilds. Must be an absolute path; paths with `..` segments or unresolvable symlinks are rejected with a warning and fall back to the default prebuilds directory. |
+| `backendsDir` | — | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). Defaults to the root `@qvac/fabric/backends` resolves on desktop, falling back to this package's `prebuilds/` on mobile, where the package tree isn't resolvable from the packed worklet. Must be an absolute path when set; paths with `..` segments or unresolvable symlinks are rejected with a warning and fall back to that default. |
 | `openclCacheDir` | — | string | **Android only.** Writable directory the OpenCL backend uses for its JIT kernel cache (forwarded via `GGML_OPENCL_CACHE_DIR`). Must be an absolute path; paths with `..` segments are rejected. The OpenCL backend falls back to a non-writable relative path if this is unset, which `ggml_abort()`s during init inside the app sandbox — always provide an app-writable path when exercising OpenCL on Android. |
 
 GPU execution is limited to Vulkan, Metal/MTL, OpenCL, and CUDA devices reported as GPU or integrated GPU. RPC, ROCm/HIP, SYCL, MUSA, and unknown backend families fall back to CPU — RPC because translation has no split-mode support and cannot execute over it. CUDA is admitted ahead of its planned Fabric build so that build does not require another selector change. An explicit selector only narrows this eligible set; it cannot enable an unsupported family.

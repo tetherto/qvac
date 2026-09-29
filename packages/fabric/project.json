@@ -22,7 +22,8 @@
         "ci": {
           "artifactNamePrefix": "fabric-",
           "includeVulkanSdk": true,
-          "includeRocm": true
+          "includeRocm": true,
+          "linuxExtraPackages": "libibverbs-dev"
         }
       },
       "inputs": [
