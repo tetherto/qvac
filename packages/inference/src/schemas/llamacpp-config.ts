@@ -43,7 +43,9 @@ export const llmConfigBaseSchema = z.object({
   gpu_layers: z
     .number()
     .optional()
-    .describe('Number of model layers to offload to the GPU. Default 99 (offload all).'),
+    .describe(
+      'Number of model layers to offload to the GPU. Unset by default, which lets the runtime fit the placement to free device memory (offloading every layer when it fits). Setting it pins the layer count and disables that fit.'
+    ),
   lora: z
     .string()
     .optional()
@@ -249,7 +251,7 @@ export const llmConfigBaseSchema = z.object({
     .boolean()
     .optional()
     .describe(
-      'Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting this field releases the `gpu_layers` default so fit can choose it, which offloads every layer rather than 99 if fit then gives up; setting `gpu_layers` alongside it pins the value and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.'
+      'Adjust the arguments left unset so the model fits device memory. Default true. It chooses layer offload, tensor split and tensor buffer overrides, and the context size only when `ctx_size` is 0. Setting `gpu_layers` pins the layer count and makes fit abort, leaving every argument unchanged. Incompatible with `split-mode: tensor`, which disables it.'
     ),
   'fit-target': z
     .union([z.number().int().min(0), z.string().regex(/^\d+(,\d+)*$/)])
@@ -306,28 +308,23 @@ export const llmConfigBaseSchema = z.object({
 export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>
 
 // Default values - typed as partial of the config
+//
+// gpu_layers carries no default: any value reads as user intent to qvac-fabric,
+// which then aborts its fit instead of placing layers to free device memory.
+// Absent emits no `--gpu-layers`, so the addon keeps fabric's own -1 — already
+// "every layer" whenever the fit does not run.
 export const LLM_CONFIG_DEFAULTS = {
   ctx_size: 1024,
-  gpu_layers: 99,
   device: 'gpu',
   system_prompt: 'You are a helpful assistant.',
   image_tile_mode: 'sequential'
 } as const satisfies Partial<LlmConfigInput>
 
-/**
- * `llama_model_default_params().n_gpu_layers`. Fabric's fit aborts and rolls
- * back every argument it had computed when `n_gpu_layers` holds any other
- * value, so a caller opting into `fit` gets this in place of the default above.
- */
-const LLAMA_GPU_LAYERS_DEFAULT = -1
-
 // Full schema - applies defaults via transform (no duplication)
-export const llmConfigSchema = llmConfigBaseSchema.transform((data) => {
-  const merged = { ...LLM_CONFIG_DEFAULTS, ...data }
-  return data.fit !== undefined && data.gpu_layers === undefined
-    ? { ...merged, gpu_layers: LLAMA_GPU_LAYERS_DEFAULT }
-    : merged
-})
+export const llmConfigSchema = llmConfigBaseSchema.transform((data) => ({
+  ...LLM_CONFIG_DEFAULTS,
+  ...data
+}))
 
 export type LlmConfig = z.infer<typeof llmConfigSchema>
 

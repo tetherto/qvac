@@ -141,7 +141,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/diffusion-cpp",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "scope-rewrite",
           "repoName": "diffusion-cpp",

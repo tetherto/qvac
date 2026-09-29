@@ -2,8 +2,7 @@
 
 const { OcrGgml } = require('../..')
 const test = require('brittle')
-const path = require('bare-path')
-const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('../../lib/main-gpu')
+const { MIN_MAIN_GPU_INDEX, MAX_MAIN_GPU_INDEX } = require('@qvac/ocr-ggml/lib/main-gpu')
 const {
   isMobile,
   platform,
@@ -20,8 +19,9 @@ const {
 // (covered by the rest of the suite), so this test only exercises the Vulkan
 // opt-in path.
 //
-// The Vulkan execution path can only be validated where a `libggml-vulkan`
-// backend shared library was shipped into prebuilds/. We gate on that file so
+// The Vulkan execution path can only be validated where a `libqvac-ggml-vulkan`
+// backend shared library ships, which on desktop is next to the @qvac/fabric
+// runtime rather than in this package's prebuilds/. We gate on that file so
 // the test skips cleanly on hosts that never built the Vulkan backend (e.g.
 // plain desktop CI) instead of failing. On a host that ships the lib but has
 // no Vulkan-capable GPU, the selection falls back to CPU and we assert the
@@ -29,7 +29,11 @@ const {
 
 const TEST_TIMEOUT = 120 * 1000
 
-const vulkanBackendLib = findVulkanBackendLib(PREBUILDS_DIR)
+const vulkanBackendLib = findVulkanBackendLib(
+  isMobile
+    ? PREBUILDS_DIR
+    : (require('@qvac/fabric/backends').resolveBackendsDir() ?? PREBUILDS_DIR)
+)
 
 // Skip on mobile (prebuilds layout / device provisioning differ) and on any
 // host that did not ship a Vulkan backend lib.
@@ -37,7 +41,11 @@ const shouldSkip = isMobile || !vulkanBackendLib
 
 function nativeBackendsDir() {
   if (isMobile) return PREBUILDS_DIR
-  return path.join(path.dirname(require.resolve('@qvac/fabric/package')), 'prebuilds')
+  const dir = require('@qvac/fabric/backends').resolveBackendsDir()
+  if (dir === null) {
+    throw new Error('@qvac/fabric backends not found; is @qvac/fabric-<host> installed?')
+  }
+  return dir
 }
 
 for (const key of ['main-gpu', 'main_gpu']) {

@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [0.14.0] - 2026-09-28
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.17.0` -> `^0.18.0`, which moves the
+  shared runtime and ggml backends into `@qvac/fabric-<host>` platform
+  packages. Desktop installs get theirs as an optional dependency of
+  `@qvac/fabric`, and the backends root now comes from
+  `@qvac/fabric/backends`. No API change.
+- Mobile apps must add `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` as direct dependencies at the same exact version.
+
+## [0.13.0] - 2026-09-23
 
 ### Added
 
@@ -14,6 +26,13 @@
   surviving `{arch}.vocab_size`. The `projection` probe, a second no_alloc load
   that reports failure as an absent projection rather than an error, is asserted
   on the same files. No API change.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.1` -> `^0.17.0`, carrying
+  `qvac-fabric` `10549.1.0` -> `10549.3.0`. The fit cleanup and parameter
+  reporting fixes preserve caller settings and complement the fit-stub support
+  documented above. No API change beyond that existing unreleased work.
 
 ## [0.12.2] - 2026-09-18
 

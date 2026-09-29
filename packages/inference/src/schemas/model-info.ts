@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { toolDialectSchema } from '@/schemas/completion-stream'
+import { nativeProbeFitSchema } from '@/schemas/assess-model-fit'
 
 // ============== Model info (catalog) ==============
 
@@ -135,7 +136,12 @@ export const loadedModelInfoSchema = z
     loadedAt: z.coerce.date(),
     name: z.string().optional(),
     path: z.string().optional(),
-    toolDialect: toolDialectSchema.optional()
+    toolDialect: toolDialectSchema.optional(),
+    fitProbe: nativeProbeFitSchema
+      .optional()
+      .describe(
+        'Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.'
+      )
   })
   .meta({ title: 'LoadedModelInfo' })
 

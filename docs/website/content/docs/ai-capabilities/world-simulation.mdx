@@ -11,7 +11,7 @@ World simulation runs on a **customized Diffusion engine** ([`qvac-ext-stable-di
 The session runs on the machine hosting the worker; there is no remote route.
 
 <Callout type="warn">
-World simulation is hardware-intensive. The default **832×480** tier needs **≥20 GB** of video memory (a 24 GB card in practice). Pass **448×256** to use the low-VRAM tier, which runs on ~6 GB cards well below interactive frame rates.
+World simulation is hardware-intensive. With weights held in video memory (the default), the **832×480** tier needs **≥20 GB** (a 24 GB card in practice). [Layer streaming](#fitting-the-walk-into-less-video-memory) changes where weights live, and a minimum for a streamed 832×480 walk has not been measured yet. Pass **448×256** to use the low-VRAM tier, which runs on ~6 GB cards well below interactive frame rates.
 </Callout>
 
 ## Functions
@@ -83,6 +83,29 @@ const modelId = await loadModel({
 Set `world.numFramePerBlock` to control the block size; the SDK caps it at 64.
 
 For models available as constants, see [SDK — Models](/introduction#models).
+
+The weights are a GGML conversion of the [ABot-World project](https://github.com/amap-cvlab/ABot-World)'s [published models](https://huggingface.co/acvlab/ABot-World-0-5B-LF), used under the Apache-2.0 licence.
+
+## Fitting the walk into less video memory
+
+Four further `world` fields trade throughput for VRAM, so a session can run on a card that cannot hold the transformer outright:
+
+```ts
+world: {
+  paramsBackend: "diffusion=cpu",
+  maxVram: 2,
+  streamLayers: true,
+  kvCache: true,
+  verbosity: 3,
+},
+```
+
+- `paramsBackend` — where weights live, independently of where graphs run. `diffusion` is the walk transformer, `vae` the streaming decoder. `"diffusion=cpu"` stages transformer weights from system RAM; `"diffusion=disk"` reads them from the model file on demand. Disk is never chosen automatically, and `vae=disk` is refused because the decoder keeps its prepared weights between steps.
+- `maxVram` — the video-memory budget for the transformer graph, in GiB or per device (`"cuda0=6,vulkan0=4"`). Negative values reserve that much headroom out of free memory; `0` turns budgeting off. This is **not** a cap on total video memory: the attention history, the decoder and the scene allocate on top of it.
+- `streamLayers` — keeps the leading transformer segments inside the budget and transfers the rest from system RAM. It needs all three of CPU-backed transformer weights, GPU execution and a nonzero `maxVram`; with any one missing it does nothing.
+- `verbosity` — the engine log level, `0` (errors) to `3` (debug). Use `3` to see the chosen budget and which layers are being streamed.
+
+These live under `world` rather than at the top level. The flat `params_backend`, `max_vram`, `stream_layers` and `verbosity` accepted by image and video generation do not reach a walk session, so passing one in world mode fails at `loadModel()` and names the `world.*` field to use instead.
 
 ## Example
 

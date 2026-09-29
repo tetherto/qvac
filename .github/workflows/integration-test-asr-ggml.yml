@@ -173,9 +173,10 @@ jobs:
 
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Job-wide GPU gate. Governs the parakeet suites (parakeet-gpu-smoke,
-      # parakeet-multiple-transcriptions). The whisper-only GPU step overrides
-      # it with matrix.no_gpu_whisper where the two parents differed.
+      # Job-wide GPU gate. NO_GPU=true skips the tests that run longer
+      # inference on the GPU only, leaving brief CPU inference. The whisper-only
+      # GPU step overrides it with matrix.no_gpu_whisper where the two parents
+      # differed.
       NO_GPU: ${{ matrix.no_gpu || 'false' }}
 
     permissions:
@@ -473,7 +474,7 @@ jobs:
         run: npm run test:integration
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          INTEGRATION_TEST_TIMEOUT: ${{ matrix.platform == 'win32' && '1800' || '600' }}
+          INTEGRATION_TEST_TIMEOUT: '1800'
           # ggml backend .so/.dylib files load transitively from the prebuilds
           # dir (parakeet's transitive-.so gotcha) — keep for the merged addon.
           # matrix.cuda_libs additionally resolves the CUDA module's

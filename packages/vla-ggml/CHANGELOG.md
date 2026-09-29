@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.29.0] - 2026-09-28
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.17.0` -> `^0.18.0`, which moves the
+  shared runtime and ggml backends into `@qvac/fabric-<host>` platform
+  packages. Desktop installs get theirs as an optional dependency of
+  `@qvac/fabric`, and the backends root now comes from
+  `@qvac/fabric/backends`. No API change.
+- Mobile apps must add `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` as direct dependencies at the same exact version.
+
+## [0.28.0] - 2026-09-23
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.16.1` -> `^0.17.0`, carrying
+  `qvac-fabric` `10549.1.0` -> `10549.3.0`. This includes the managed RPC
+  lifecycle, distributed-load improvements, MTP and fit correctness fixes,
+  Windows backend loading fixes, and CUDA FP4 optimizations. No API change for
+  this package.
+
 ## [0.27.3] - 2026-09-18
 
 ### Changed

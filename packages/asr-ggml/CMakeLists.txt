@@ -411,10 +411,12 @@ if(BUILD_TESTING)
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_whisper_lifecycle.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_whisper_segment_fields.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/AddonCppTest.cpp
     # parakeet suite
     ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_config_and_audio.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/parakeet_test_fabric_options.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/ParakeetAddonCppTest.cpp
     # engine cores recompiled for coverage instrumentation (tts-ggml pattern)
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/StreamingProcessor.cpp

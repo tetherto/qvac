@@ -10,24 +10,31 @@ import Buffer from 'bare-buffer'
 import { getEngineLogger } from '@/logging/index'
 import { TranscriptionFailedError } from '@/errors/index'
 import { nowMs } from '@/profiling/index'
-import { buildStreamResult } from '@/profiling/model-execution'
+import { buildStreamResult, type StreamResult } from '@/profiling/model-execution'
+import { buildAsrBackendDiagnostics } from '@/utils/asr-diagnostics'
+import type { InferenceBackendDiagnostics } from '@/schemas/index'
 import { toTranscribeSegment, type AsrAddonSegment } from '@/utils/transcribe-metadata'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
 
 interface BciAddonResponse {
   iterate(): AsyncIterable<AsrAddonSegment[] | AsrAddonSegment>
+  /**
+   * The stats `BCIModel.cpp` emits. Its `totalTime` is left out: the addon
+   * reports it in seconds, while the shared schema field is milliseconds, and
+   * `totalWallMs` already carries the same measurement in ms.
+   */
   stats?: {
     tokensPerSecond?: number
     totalTokens?: number
     totalSegments?: number
-    audioDurationMs?: number
-    realTimeFactor?: number
+    totalWallMs?: number
+    processCalls?: number
     whisperEncodeMs?: number
     whisperDecodeMs?: number
-    encoderMs?: number
-    decoderMs?: number
-    melSpecMs?: number
+    whisperSampleMs?: number
+    whisperBatchdMs?: number
+    whisperPromptMs?: number
     backendDevice?: number
     backendId?: number
     gpuMemTotalMb?: number
@@ -72,7 +79,11 @@ async function runBci(model: BciTranscribableModel, input: NeuralInput): Promise
   }
 }
 
-type BciTranscribeReturn = { modelExecutionMs: number; stats?: TranscribeStats }
+type BciTranscribeReturn = {
+  modelExecutionMs: number
+  stats?: TranscribeStats
+  diagnostics?: InferenceBackendDiagnostics
+}
 
 export function bciTranscribe(
   params: BciTranscribeParams & { metadata: true },
@@ -145,12 +156,6 @@ export async function* bciTranscribe(
   const modelExecutionMs = nowMs() - modelStart
 
   const stats: TranscribeStats = {
-    ...(response.stats?.audioDurationMs !== undefined && {
-      audioDuration: response.stats.audioDurationMs
-    }),
-    ...(response.stats?.realTimeFactor !== undefined && {
-      realTimeFactor: response.stats.realTimeFactor
-    }),
     ...(response.stats?.tokensPerSecond !== undefined && {
       tokensPerSecond: response.stats.tokensPerSecond
     }),
@@ -166,14 +171,18 @@ export async function* bciTranscribe(
     ...(response.stats?.whisperDecodeMs !== undefined && {
       whisperDecodeTime: response.stats.whisperDecodeMs
     }),
-    ...(response.stats?.encoderMs !== undefined && {
-      encoderTime: response.stats.encoderMs
+    ...(response.stats?.whisperSampleMs !== undefined && {
+      whisperSampleMs: response.stats.whisperSampleMs
     }),
-    ...(response.stats?.decoderMs !== undefined && {
-      decoderTime: response.stats.decoderMs
+    ...(response.stats?.whisperBatchdMs !== undefined && {
+      whisperBatchdMs: response.stats.whisperBatchdMs
     }),
-    ...(response.stats?.melSpecMs !== undefined && {
-      melSpecTime: response.stats.melSpecMs
+    ...(response.stats?.whisperPromptMs !== undefined && {
+      whisperPromptMs: response.stats.whisperPromptMs
+    }),
+    ...(response.stats?.totalWallMs !== undefined && { totalWallMs: response.stats.totalWallMs }),
+    ...(response.stats?.processCalls !== undefined && {
+      processCalls: response.stats.processCalls
     }),
     ...(response.stats?.backendDevice !== undefined && {
       backendDevice: response.stats.backendDevice
@@ -189,8 +198,16 @@ export async function* bciTranscribe(
     })
   }
 
-  return buildStreamResult(modelExecutionMs, stats)
+  const diagnostics = buildAsrBackendDiagnostics(stats)
+  return {
+    ...buildStreamResult(modelExecutionMs, stats),
+    ...(diagnostics && { diagnostics })
+  }
 }
+
+// The addon reports no `stats` for a stream, so the return carries only the
+// locally measured execution time — which the profiling layer needs either way.
+type BciStreamReturn = StreamResult
 
 export function bciTranscribeStream(
   modelId: string,
@@ -198,21 +215,21 @@ export function bciTranscribeStream(
   metadata: true,
   opts?: BciStreamOpts,
   requestId?: string
-): AsyncGenerator<TranscribeSegment, void, void>
+): AsyncGenerator<TranscribeSegment, BciStreamReturn, void>
 export function bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata?: boolean,
   opts?: BciStreamOpts,
   requestId?: string
-): AsyncGenerator<string, void, void>
+): AsyncGenerator<string, BciStreamReturn, void>
 export async function* bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata?: boolean,
   opts?: BciStreamOpts,
   requestId?: string
-): AsyncGenerator<string | TranscribeSegment, void, void> {
+): AsyncGenerator<string | TranscribeSegment, BciStreamReturn, void> {
   // Same `kind: "transcribe"` as the unary BCI variant — the registry
   // doesn't distinguish streaming vs non-streaming variants of the same
   // operation, so `cancel({ modelId, kind: "transcribe" })` cancels
@@ -253,6 +270,7 @@ export async function* bciTranscribeStream(
     ...(opts?.emit !== undefined && { emit: opts.emit })
   }
 
+  const modelStart = nowMs()
   const response = await model.transcribeStream(neuralStream, streamOpts)
 
   for await (const output of response.iterate()) {
@@ -274,4 +292,6 @@ export async function* bciTranscribeStream(
       yield text
     }
   }
+
+  return buildStreamResult(nowMs() - modelStart)
 }

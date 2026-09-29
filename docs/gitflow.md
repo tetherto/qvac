@@ -79,9 +79,15 @@ This repo assumes a **fork-first** workflow:
    If you need commits from `main` in a release line, you **cherry-pick locally in your fork** and PR into the release branch.
 
 3) **Publishing happens on merge to upstream**  
-   - Merge to `main` can publish **dev** builds (GitHub Packages) when package paths changed.
    - Merge to `release-*` can publish to **NPM** for that package/version.
-   - Merge to `feature-*` / `tmp-*` can publish **feature/temp** builds (GitHub Packages).
+   - Merge to `main` can publish **dev** builds (GitHub Packages) when package paths changed.
+   - `feature-*` / `tmp-*` publish **feature/temp** builds (GitHub Packages).
+   - **Native addons publish on `release-*` pushes only.** Their
+     `on-merge-nx.yml` pipeline (and `on-merge-model-fit.yml`,
+     `on-merge-ggml-rpc-server.yml`) does not push-trigger on `main`, `feature-*` or
+     `tmp-*`, because a push to a `feature-*`/`tmp-*` branch would start a 9-platform
+     matrix off an open PR's branch. Every non-release addon build is started with
+     `workflow_dispatch` on the branch.
 
 ### One-time fork setup (recommended)
 
@@ -120,9 +126,31 @@ git push -u origin feature-<package>-<short-desc>
 | Branch type | Pattern | Created in upstream by | Purpose | Publishes to | Notes |
 |---|---|---:|---|---|---|
 | Main | `main` | Maintainers | All active development | GitHub Packages (**dev**) | Default integration branch |
-| Release | `release-<package>-<x.y.z>` | Maintainers | Versioned release line | **NPM** | Stable releases only |
-| Feature | `feature-<package>-*` | Optional (maintainers) | Share a dev build for a large/isolated effort | GitHub Packages (**feature**) | Never publish to NPM |
-| Temp | `tmp-<package>-*` | Optional (maintainers) | Experiments / QA previews | GitHub Packages (**temp**) | Never publish to NPM |
+| Release | `release-<package>-<x.y.z>` | Maintainers | Versioned release line | **NPM** | Stable releases only. `<package>` is the **directory name** under `packages/`, see below |
+| Feature | `feature-<package>-*` | Optional (maintainers) | Share a dev build for a large/isolated effort | GitHub Packages (**feature**) | Never publish to NPM. Addons: dispatch only |
+| Temp | `tmp-<package>-*` | Optional (maintainers) | Experiments / QA previews | GitHub Packages (**temp**) | Never publish to NPM. Addons: dispatch only |
+
+For native addons, any non-`release-*` build — `main` included — is started by
+running `on-merge-nx.yml` with `workflow_dispatch` on that branch; pushing to the
+branch does not start one. The dist-tag follows the branch (`feature`/`temp`)
+unless the dispatch `tag` input overrides it, and `on-merge-model-fit.yml`
+defaults that input to `dev`, so pin the exact version rather than the tag. See
+[MOBILE-ON-DEMAND.md](ci/MOBILE-ON-DEMAND.md#testing-unmerged--unpublished-native-code).
+
+**Release branch names use the package directory name**
+
+`<package>` in `release-<package>-<x.y.z>` must be a directory under `packages/`.
+Use `release-llm-llamacpp-0.53.1`, not the short `release-llm-0.53.1` some older
+branches used. Same for `vla-ggml`, `ocr-ggml`, `embed-llamacpp`, `diffusion-cpp`,
+`classification-ggml` and `translation-nmtcpp`.
+
+The 13 native addons publish from one workflow rather than one file each, so the
+branch name is what selects which package reaches NPM. `on-merge-nx.yml` checks it
+twice, both against the directory name: `packages/<package>/project.json` must
+exist, and the package the run selected must be exactly that one. A name it cannot
+resolve fails the run rather than guessing, since a wrong guess would publish the
+wrong package. Nothing is published either way, but the release is blocked until
+the branch is recut under the right name.
 
 **Publishing semantics**
 

@@ -380,10 +380,10 @@ TEST_F(BackendSelectionTest, PreferredCPUAlwaysReturnsCPU) {
   expectChosen(mockBackend, BackendType::CPU, "none");
 }
 
-TEST_F(BackendSelectionTest, RpcBackendIsEligible) {
+TEST_F(BackendSelectionTest, RpcBackendIsNotAutoSelected) {
   mockBackend.addDevice(
       MockDevice("remote", "RPC0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
-  expectChosen(mockBackend, BackendType::GPU, "rpc0");
+  expectChosen(mockBackend, BackendType::CPU, "none");
 }
 
 // An RPC device's description is its endpoint string, so it never contributes

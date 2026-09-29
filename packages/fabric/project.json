@@ -22,7 +22,8 @@
         "ci": {
           "artifactNamePrefix": "fabric-",
           "includeVulkanSdk": true,
-          "includeRocm": true
+          "includeRocm": true,
+          "linuxExtraPackages": "libibverbs-dev"
         }
       },
       "inputs": [
@@ -53,11 +54,11 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/fabric",
         "ci": {
-          "buildStep": "none",
           "nameTransform": "none",
           "repoName": "fabric",
           "testGateMode": "none",
-          "prebuildExtraDirs": ["include", "share"]
+          "prebuildExtraDirs": ["include", "share"],
+          "slicePlatformPackages": true
         }
       }
     }

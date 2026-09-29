@@ -1,7 +1,7 @@
 import type {
   AssessModelFitResult,
   ModelFitBasis,
-  ModelFitCandidate,
+  ModelFitEstimateTarget,
   ModelFitEvidence,
   ModelFitExecution,
   ModelFitModelResult,
@@ -72,7 +72,7 @@ type Evaluation =
   | Extract<EstimatorResult, { kind: 'unknown' }>
 
 export interface AssessModelFitOptions {
-  models: readonly ModelFitCandidate[]
+  models: readonly ModelFitEstimateTarget[]
   execution: ModelFitExecution
   resources: SystemResources
   /**
@@ -375,7 +375,7 @@ function nativeModelResult(
  * told (an AMD APU on linux), fails it: the weights may live where the budget
  * cannot see them.
  */
-function boundBySystemMemory(
+export function boundBySystemMemory(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined
 ): boolean {
@@ -395,14 +395,14 @@ function boundBySystemMemory(
  * a floor.
  */
 function evaluate(
-  candidate: ModelFitCandidate,
+  candidate: ModelFitEstimateTarget,
   platform: ModelFitPlatform | undefined,
   calibration: PlatformCalibration | undefined,
   resources: SystemResources,
   resolveProfile: ProfileResolver,
   gpuMode: boolean,
   floorApplies: boolean
-): { candidate: ModelFitCandidate; result: Evaluation } {
+): { candidate: ModelFitEstimateTarget; result: Evaluation } {
   const profile = resolveProfile(candidate.model.sha256Checksum)
   if (!profile) {
     return { candidate, result: unknown('no resource profile in the catalog for this checksum') }
@@ -437,7 +437,7 @@ function unknown(reason: string): Extract<EstimatorResult, { kind: 'unknown' }> 
 
 /** Runs the calibrated estimator for a candidate, or says why it cannot. */
 function estimate(
-  candidate: ModelFitCandidate,
+  candidate: ModelFitEstimateTarget,
   profile: ModelResourceProfile,
   extraArtifactBytes: number,
   platform: ModelFitPlatform | undefined,
@@ -482,7 +482,7 @@ function estimate(
  *   an incomplete artifact set must not be silently under-counted.
  */
 function extraArtifactBytes(
-  candidate: ModelFitCandidate,
+  candidate: ModelFitEstimateTarget,
   resolveProfile: ProfileResolver
 ): number | undefined {
   if (!candidate.artifacts || candidate.artifacts.length === 0) return 0
@@ -741,7 +741,7 @@ function worst(a: ModelFitVerdict, b: ModelFitVerdict): ModelFitVerdict {
  * per-process cap, so it deliberately keeps the system basis with the mobile
  * reserve.
  */
-function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
+export function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
   return platform === 'ios-arm64' ? 'process-memory' : 'system-memory'
 }
 
@@ -761,7 +761,7 @@ function basisEvidence(basis: ModelFitBasis) {
  * relation the OS enforces — so every budget field keeps the same meaning
  * under either basis.
  */
-function resolveBudget(
+export function resolveBudget(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined,
   basis: ModelFitBasis,
@@ -917,7 +917,7 @@ function compare(estimate: ByteRange, budget: number): ModelFitVerdict {
 }
 
 function toModelResult(
-  candidate: ModelFitCandidate,
+  candidate: ModelFitEstimateTarget,
   result: Evaluation,
   budget: AssessModelFitResult['budget'],
   /** Every candidate GPU budget, when the host has more than one. */

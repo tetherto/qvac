@@ -123,7 +123,7 @@ Reads existing NOTICE files across all packages (no scanning, no tokens needed) 
 | Type | What | Tool |
 |------|------|------|
 | Models | Model attributions from `models.prod.json` | Direct JSON parsing |
-| JS | Production npm dependencies | `license-checker` (auto-installed via npx) |
+| JS | Production npm dependencies (no peers / extraneous) | `npm install --omit=dev --omit=peer` + `license-checker`, intersected with `npm ls` |
 | Python | Benchmark/script Python deps | `pip-licenses` (auto-installed in temp virtualenv) |
 | C++ | vcpkg native dependencies | GitHub API + local portfile parsing |
 
