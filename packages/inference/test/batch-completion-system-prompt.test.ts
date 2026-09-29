@@ -19,6 +19,7 @@ type LooseHandler = (request: unknown) => AsyncGenerator<unknown, unknown, unkno
 type RecordedPrompt = {
   id?: string
   messages: { role?: string; type?: string; name?: string; content?: string }[]
+  toolChoice?: string | undefined
 }
 
 function registerRecordingBatchModel(
@@ -32,9 +33,14 @@ function registerRecordingBatchModel(
         const received = addonPrompts as Array<{
           id?: string
           prompt: RecordedPrompt['messages']
+          runOptions?: { generationParams?: { tool_choice?: string } }
         }>
         for (const [index, entry] of received.entries()) {
-          prompts.push({ id: entry.id ?? String(index), messages: entry.prompt })
+          prompts.push({
+            id: entry.id ?? String(index),
+            messages: entry.prompt,
+            toolChoice: entry.runOptions?.generationParams?.tool_choice
+          })
         }
         const ids = received.map((prompt, index) => prompt.id ?? String(index))
         return Promise.resolve({
@@ -184,6 +190,53 @@ test('batchCompletionStream: a deferred tool sends a catalog, not its schema', a
     JSON.stringify(prompts[0]!.messages).includes('deferLoading'),
     'registration-only fields are not rendered'
   )
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('batchCompletionStream: a prompt with a loaded deferred tool runs without the tool grammar', async (t) => {
+  clearRegistry()
+
+  const modelId = `batch-defer-choice-${Date.now()}`
+  const prompts: RecordedPrompt[] = []
+  registerRecordingBatchModel(modelId, prompts, { tools: true })
+
+  const tools = [deferredTool('calculate_area')]
+  const { executeToolSearch } = await import('@/utils/tools/defer')
+  const loaded = [
+    user('Area?'),
+    { role: 'assistant', content: '<call tool_search>', attachments: [] as never[] },
+    {
+      role: 'tool',
+      content: executeToolSearch(tools as never, { query: 'calculate_area' }, []),
+      attachments: [] as never[]
+    }
+  ]
+
+  const handler = llmPlugin.handlers.batchCompletionStream.handler as unknown as LooseHandler
+  const gen = handler({
+    modelId,
+    requestId: `${modelId}-batch`,
+    stream: true,
+    prompts: [
+      { id: 'fresh', history: [user('Area?')], tools },
+      { id: 'loaded', history: loaded, tools },
+      { id: 'auto', history: loaded, tools, generationParams: { tool_choice: 'auto' } },
+      { id: 'caller', history: loaded, tools, generationParams: { tool_choice: 'required' } }
+    ]
+  })
+  for await (const _ of gen) void _
+
+  const byId = new Map(prompts.map((prompt) => [prompt.id, prompt]))
+  t.is(byId.get('fresh')!.toolChoice, undefined, 'nothing loaded: the grammar stays on')
+  t.is(byId.get('loaded')!.toolChoice, 'none', 'a loaded tool turns the grammar off')
+  t.is(
+    byId.get('auto')!.toolChoice,
+    'none',
+    'an explicit "auto" is the default and is treated the same'
+  )
+  t.is(byId.get('caller')!.toolChoice, 'required', 'a stronger caller choice is kept')
 
   unregisterModel(modelId)
   clearRegistry()
