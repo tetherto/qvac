@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.43.0] - 2026-09-28
+
+### Added
+
+- `assessFit` projects an embedding load's memory demand against the memory
+  free right now, without loading weights. It reads GGUF metadata only and
+  applies the embedding load's own normalization: the micro-batch follows
+  `batch-size`, a single sequence uses a unified KV cache, and the context is
+  pinned to the model's trained context or capped at it. Exported from the
+  package root with `EmbedFitRequest`, `EmbedFitResult`, `EmbedFitStatus` and
+  `EmbedFitDevice` types ([#4664](https://github.com/tetherto/qvac/pull/4664)).
+
 ## [0.42.0] - 2026-09-23
 
 ### Changed
