@@ -173,6 +173,18 @@ test('isRunFresh: each carved-out package trusts only its own orchestrator', () 
   }
 })
 
+test('isRunFresh: ggml-rpc-server trusts only on-pr-nx', () => {
+  const threshold = Math.floor(Date.parse('2026-08-10T12:00:00Z') / 1000)
+  const at = '2026-08-10T12:00:05Z'
+
+  assert.equal(CARVED_OUT_PRODUCERS['ggml-rpc-server'], undefined)
+  assert.equal(isRunFresh({ path: NX_PRODUCER, created_at: at }, 'ggml-rpc-server', threshold), true)
+  assert.equal(
+    isRunFresh({ path: '.github/workflows/on-pr-ggml-rpc-server.yml', created_at: at }, 'ggml-rpc-server', threshold),
+    false,
+  )
+})
+
 test('isRunFresh: every carved-out key is a real PREBUILD_KEYS entry', () => {
   // A typo ('vla-ggml' for 'vla') would silently fall back to the nx producer.
   for (const pkg of Object.keys(CARVED_OUT_PRODUCERS)) {
