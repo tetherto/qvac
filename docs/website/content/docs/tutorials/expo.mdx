@@ -158,7 +158,7 @@ Speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) ship Android and iOS bin
 }
 ```
 
-iOS uses `@qvac/tts-ggml-ios` instead of `@qvac/tts-ggml-android-arm64`. Llama does not need an extra package. `npx expo prebuild` names the missing pin if you forget.
+iOS uses `@qvac/tts-ggml-ios` instead of `@qvac/tts-ggml-android-arm64`. Every app, including this one, also needs `@qvac/fabric` and `@qvac/fabric-android-arm64` (iOS uses `@qvac/fabric-ios`) at the same exact version, one that satisfies the `@qvac/fabric` range `@qvac/llm-llamacpp` declares: the LLM plugin and the SDK's memory-fit check load their native runtime from it. `npx expo prebuild` names the missing pin if you forget.
 </Step>
 
 <Step>
