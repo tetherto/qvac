@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   backend modules on the split-backend layouts (Linux, macOS, Android) instead
   of reporting `no-backend-device`.
 
+### Changed
+
+- Raise the `ggml-speech` floor to `2026-09-28` and the `speech-cpp` floor to
+  `2026-09-25#1`. The OpenCL backend no longer crashes on Adreno GPUs when a
+  buffer type is queried before the backend is initialized. Same models, same
+  backends, no API change.
+
 ## [0.5.0] - 2026-09-25
 
 ### Changed
