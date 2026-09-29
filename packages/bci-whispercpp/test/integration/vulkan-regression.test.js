@@ -2,7 +2,7 @@
 
 // End-to-end accuracy regression for the desktop GPU (Vulkan) path: every
 // fixture must transcribe at least as well as the WER recorded in the manifest.
-// Runs with use_gpu=true and falls back to CPU where no GPU is present. Set
+// Runs with use_gpu=true and is skipped on CPU-only runners (NO_GPU=true). Set
 // QVAC_BCI_WER_RELAX=1 to downgrade a bound miss to a warning.
 
 const fs = require('bare-fs')
@@ -15,7 +15,8 @@ const {
   getModelPath,
   computeWER,
   detectPlatform,
-  BCI_TEST_THREADS
+  BCI_TEST_THREADS,
+  NO_GPU
 } = require('./helpers')
 const { flattenSegments } = require('@qvac/bci-whispercpp/util')
 
@@ -98,7 +99,7 @@ async function transcribeSampleOnGpu(sample) {
 
 test(
   '[BCI][Vulkan-desktop] transcription accuracy has not regressed',
-  { skip: !hasModel, timeout: 180000 },
+  { skip: !hasModel || NO_GPU, timeout: 180000 },
   async (t) => {
     t.ok(manifest.samples.length > 0, 'Manifest must contain at least one sample')
     t.comment('Platform: ' + label + '   Model: ' + MODEL_PATH)
@@ -201,7 +202,7 @@ test(
 // the same output. Both failure modes are caught here.
 test(
   '[BCI][Vulkan-desktop] neural mel is injected and consumed by whisper',
-  { skip: !hasModel, timeout: 180000 },
+  { skip: !hasModel || NO_GPU, timeout: 180000 },
   async (t) => {
     const pair = pickTwoDistinctSamples(manifest.samples)
     t.ok(pair, 'Manifest must contain two fixtures with different expected text')

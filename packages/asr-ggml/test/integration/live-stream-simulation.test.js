@@ -12,7 +12,9 @@ const {
   getTestPaths,
   createAudioStream,
   isMobile,
-  WHISPER_TEST_THREADS
+  WHISPER_TEST_THREADS,
+  NO_GPU,
+  WHISPER_GPU_CONTEXT_PARAMS
 } = require('./helpers.js')
 
 // Create a pushable Readable to simulate a live input source.
@@ -47,7 +49,7 @@ async function feedStreamLive({ readable, filePath, chunkBytes, bytesPerSecond }
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test(
   'Live stream simulation using pushable Readable with model.run()',
-  { timeout: 180000, skip: isMobile },
+  { timeout: 180000, skip: isMobile || NO_GPU },
   async (t) => {
     // Use standardized test paths from helpers
     const { modelPath } = getTestPaths()
@@ -72,6 +74,7 @@ test(
     const config = {
       engine: 'whisper',
       path: modelPath,
+      contextParams: WHISPER_GPU_CONTEXT_PARAMS,
       whisperConfig: {
         language: 'en',
         audio_format: 's16le',
@@ -163,7 +166,7 @@ test(
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test(
   'Live segmented loop: repeated model.run per 3s chunk (no model teardown until end)',
-  { timeout: 180000, skip: isMobile },
+  { timeout: 180000, skip: isMobile || NO_GPU },
   async (t) => {
     // Use standardized test paths from helpers
     const { modelPath } = getTestPaths()
@@ -186,6 +189,7 @@ test(
     const config = {
       engine: 'whisper',
       path: modelPath,
+      contextParams: WHISPER_GPU_CONTEXT_PARAMS,
       whisperConfig: {
         language: 'en',
         audio_format: 's16le',

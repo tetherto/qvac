@@ -11,6 +11,7 @@ const { recordTtsStats } = require('../utils/perf-helper')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { readWavAsFloat32, createWav, resampleLinear } = require('../utils/wav-helper')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { NO_GPU, GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const MOSS_SAMPLE_RATE = 24000
 const MOSS_STREAM_FRAMES = 10
@@ -34,7 +35,6 @@ const GPU_DEVICE = 1
 
 const modelDir = (proc.env && proc.env[MODEL_DIR_ENV]) || ''
 const skipWithoutModels = modelDir === ''
-const noGpu = proc.env && proc.env.NO_GPU === 'true'
 
 function createMossModel(extra = {}, useGPU = false) {
   return new TTSGgml({
@@ -184,7 +184,7 @@ test(
 
 test(
   'MOSS TTS: useGPU=true synthesizes on a GPU backend',
-  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels || noGpu },
+  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels || NO_GPU },
   async (t) => {
     await withLoadedModel(
       {},
@@ -231,25 +231,29 @@ test(
 
 test(
   'MOSS TTS: durationTokens steers the length of the synthesized speech',
-  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
+  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels || NO_GPU },
   async (t) => {
-    await withLoadedModel({ durationTokens: SHORT_DURATION_TOKENS, seed: 7 }, async (model) => {
-      const short = await synthesize(model, SYNTHESIS_TEXT)
-      assertAudio(t, 'MOSS short target', short)
-      await model.reload({ durationTokens: LONG_DURATION_TOKENS })
-      const long = await synthesize(model, SYNTHESIS_TEXT)
-      assertAudio(t, 'MOSS long target', long)
-      t.ok(
-        long.samples.length > short.samples.length,
-        `a longer target yields longer speech (${short.samples.length} -> ${long.samples.length} samples)`
-      )
-    })
+    await withLoadedModel(
+      { durationTokens: SHORT_DURATION_TOKENS, seed: 7 },
+      async (model) => {
+        const short = await synthesize(model, SYNTHESIS_TEXT)
+        assertAudio(t, 'MOSS short target', short)
+        await model.reload({ durationTokens: LONG_DURATION_TOKENS })
+        const long = await synthesize(model, SYNTHESIS_TEXT)
+        assertAudio(t, 'MOSS long target', long)
+        t.ok(
+          long.samples.length > short.samples.length,
+          `a longer target yields longer speech (${short.samples.length} -> ${long.samples.length} samples)`
+        )
+      },
+      GPU_ONLY_USE_GPU
+    )
   }
 )
 
 test(
   'MOSS TTS: dialogue synthesis clones one reference per speaker',
-  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels },
+  { timeout: TEST_TIMEOUT_MS, skip: skipWithoutModels || NO_GPU },
   async (t) => {
     if (!hasDialogueBackbone() || !hasEncoder()) {
       t.comment(`skipping: the TTSD backbone or the codec encoder is not in ${modelDir}`)
@@ -273,7 +277,8 @@ test(
           const result = await synthesize(model, DIALOGUE_TEXT)
           assertAudio(t, 'MOSS dialogue', result)
           recordMoss(t, 'moss dialogue', result, Date.now() - started)
-        }
+        },
+        GPU_ONLY_USE_GPU
       )
     } finally {
       removeFiles(references)
