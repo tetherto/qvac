@@ -30,7 +30,9 @@ const {
 const TEST_TIMEOUT = 120 * 1000
 
 const vulkanBackendLib = findVulkanBackendLib(
-  isMobile ? PREBUILDS_DIR : require('@qvac/fabric/backends').resolveBackendsDir() ?? PREBUILDS_DIR
+  isMobile
+    ? PREBUILDS_DIR
+    : (require('@qvac/fabric/backends').resolveBackendsDir() ?? PREBUILDS_DIR)
 )
 
 // Skip on mobile (prebuilds layout / device provisioning differ) and on any
