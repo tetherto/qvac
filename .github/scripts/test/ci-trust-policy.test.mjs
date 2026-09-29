@@ -1871,7 +1871,13 @@ test('RPC RDMA validation covers the server without replacing release artifacts'
   assert.match(rpcPrebuilds, /linux-extra-packages:\s*libibverbs-dev/)
   assert.match(
     rpcPrebuilds,
-    /post-artifact-build-command:\s*bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
+    /post-artifact-build-command:[\s\S]*?if \[ -f \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh \]; then[\s\S]*?bash \.\.\/\.\.\/\.github\/scripts\/validate-rpc-rdma-build\.sh/,
+    'the base workflow must retain RDMA validation while the legacy script exists',
+  )
+  assert.match(
+    rpcPrebuilds,
+    /desktop-smoke-command:[\s\S]*?if \[ -f test\/node\/prebuild-smoke\.cjs \]; then[\s\S]*?node test\/node\/prebuild-smoke\.cjs[\s\S]*?node scripts\/smoke-packaged\.cjs/,
+    'the base workflow must smoke both the legacy executable and in-process package layouts',
   )
 
   const mobile = read('.github/workflows/integration-mobile-test-ggml-rpc-server.yml')
