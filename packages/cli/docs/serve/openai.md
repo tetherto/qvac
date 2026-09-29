@@ -166,8 +166,8 @@ Consequences worth knowing:
   searches again on your next request.
 - `usage` counts every round the request ran, search rounds included.
 - The round after a search runs without the tool-call grammar unless the
-  request sets `tool_choice`: the grammar only knows the tools in the prompt,
-  and the loaded definitions sit in the conversation.
+  request sets a `tool_choice` other than `auto`: the grammar only knows the
+  tools in the prompt, and the loaded definitions sit in the conversation.
 - `tool_choice` naming a deferred tool is rejected with `400`
   `invalid_tool_choice` — its schema is not in the prompt, so the call cannot be
   forced. Name `tool_search` instead.

@@ -208,8 +208,6 @@ export interface DeferredToolsParams {
   // Query of the tool_search call placed in the history.
   searchQuery?: string
   expectedToolCall: { name: string; argKeys?: string[] }
-  // Second chat for the kvCache isolation test: same inventory, nothing loaded.
-  otherUserPrompt?: string
   resourceKey?: string
   toolDialect?: ToolDialect
 }
@@ -278,14 +276,11 @@ export const deferredToolsReopenedChat = createDeferredToolsTest(
   { estimatedDurationMs: 90000 }
 )
 
-// Two chats on one model with different kvCache keys: a tool loaded in one is
-// not callable from the other.
+// Two chats on one model with different kvCache keys ask the same question: a
+// tool loaded in one is not callable from the other.
 export const deferredToolsKvCacheIsolation = createDeferredToolsTest(
   'deferred-tools-kv-cache-isolation',
-  {
-    ...HOROSCOPE,
-    otherUserPrompt: HOROSCOPE.userPrompt
-  },
+  HOROSCOPE,
   { estimatedDurationMs: 60000 }
 )
 

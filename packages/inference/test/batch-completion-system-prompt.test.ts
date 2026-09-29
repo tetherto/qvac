@@ -222,7 +222,8 @@ test('batchCompletionStream: a prompt with a loaded deferred tool runs without t
     prompts: [
       { id: 'fresh', history: [user('Area?')], tools },
       { id: 'loaded', history: loaded, tools },
-      { id: 'caller', history: loaded, tools, generationParams: { tool_choice: 'auto' } }
+      { id: 'auto', history: loaded, tools, generationParams: { tool_choice: 'auto' } },
+      { id: 'caller', history: loaded, tools, generationParams: { tool_choice: 'required' } }
     ]
   })
   for await (const _ of gen) void _
@@ -230,7 +231,12 @@ test('batchCompletionStream: a prompt with a loaded deferred tool runs without t
   const byId = new Map(prompts.map((prompt) => [prompt.id, prompt]))
   t.is(byId.get('fresh')!.toolChoice, undefined, 'nothing loaded: the grammar stays on')
   t.is(byId.get('loaded')!.toolChoice, 'none', 'a loaded tool turns the grammar off')
-  t.is(byId.get('caller')!.toolChoice, 'auto', 'a caller tool_choice is kept')
+  t.is(
+    byId.get('auto')!.toolChoice,
+    'none',
+    'an explicit "auto" is the default and is treated the same'
+  )
+  t.is(byId.get('caller')!.toolChoice, 'required', 'a stronger caller choice is kept')
 
   unregisterModel(modelId)
   clearRegistry()

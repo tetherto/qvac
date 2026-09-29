@@ -299,20 +299,25 @@ export function resolveDeferredTools(
 }
 
 /**
- * The `tool_choice` to send once the history has loaded deferred definitions.
+ * Generation params for a turn whose history may have loaded deferred definitions.
  *
  * The addon builds its tool-call grammar from the rendered tools only, and a
  * loaded definition lives in the history rather than that block, so under the
- * default grammar the model can never produce the name it just loaded. With no
- * caller choice, those turns run with the grammar off and the parser, which
- * does accept loaded names, validates the call.
+ * default grammar the model can never produce the name it just loaded. Unless
+ * the caller asked for more than the default, those turns run with the grammar
+ * off and the parser, which does accept loaded names, validates the call.
  */
-export function deferredToolChoice(
-  resolution: DeferredResolution | null,
-  toolChoice: string | undefined
-): string | undefined {
-  if (toolChoice !== undefined || !resolution) return toolChoice
-  return resolution.callableTools.length > resolution.toolsToRender.length ? 'none' : undefined
+export function withDeferredToolChoice<T extends { tool_choice?: string | undefined }>(
+  generationParams: T | undefined,
+  resolution: DeferredResolution | null
+): T | undefined {
+  const toolChoice = generationParams?.tool_choice
+  // An explicit "auto" is the default, which is exactly the grammar that cannot reach a loaded tool.
+  if (toolChoice !== undefined && toolChoice !== 'auto') return generationParams
+  if (!resolution || resolution.callableTools.length === resolution.toolsToRender.length) {
+    return generationParams
+  }
+  return { ...(generationParams ?? ({} as T)), tool_choice: 'none' }
 }
 
 /**

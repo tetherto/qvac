@@ -129,10 +129,10 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     }
   }
 
-  private baseHistory(p: DeferredToolsParams, userPrompt = p.userPrompt): ChatMessage[] {
+  private baseHistory(p: DeferredToolsParams): ChatMessage[] {
     return [
       { role: 'system', content: p.systemPrompt },
-      { role: 'user', content: userPrompt }
+      { role: 'user', content: p.userPrompt }
     ]
   }
 
@@ -327,7 +327,7 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
       await this.resetCache(freshKey)
 
       const loadedHistory = this.withSearch(this.baseHistory(p), p, p.searchQuery!)
-      const freshHistory = this.baseHistory(p, p.otherUserPrompt)
+      const freshHistory = this.baseHistory(p)
       const [loaded, fresh] = await Promise.all([
         this.run(modelId, loadedHistory, p, { kvCache: loadedKey }),
         this.run(modelId, freshHistory, p, { kvCache: freshKey })
