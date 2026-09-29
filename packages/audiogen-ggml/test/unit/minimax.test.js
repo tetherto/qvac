@@ -272,3 +272,58 @@ test('AudioGen rejects out-of-range MiniMax constructor controls', (t) => {
     /threads must be between 0 and 2147483647/
   )
 })
+
+test('AudioGen forwards the MiniMax compute device', (t) => {
+  for (const device of ['cpu', 'gpu', 'auto']) {
+    const { gen } = createHarness({ config: { device } })
+    t.is(gen._configuration.device, device)
+  }
+  const { gen } = createHarness()
+  t.is(gen._configuration.device, undefined, 'useGPU keeps deciding without a device')
+})
+
+test('AudioGen rejects an invalid or conflicting MiniMax device', (t) => {
+  t.exception(() => createHarness({ config: { device: 'metal' } }), /device must be one of/)
+  t.exception(
+    () => createHarness({ config: { device: 'gpu', useGPU: true } }),
+    /either useGPU or device, not both/
+  )
+  t.exception(
+    () => new AudioGen({ files: { modelDir: '/models/acestep' }, config: { device: 'gpu' } }),
+    /ACE-Step does not accept device/
+  )
+})
+
+test('AudioGen rejects the ACE-Step shift for MiniMax runs', async (t) => {
+  const { gen } = createHarness()
+  await t.exception(() => gen.run('test', { shift: 3 }), /MiniMax does not accept shift/)
+})
+
+test('AudioGen surfaces the MiniMax stage timings and emitted frames', async (t) => {
+  const gen = new AudioGen({ engine: ENGINE_MINIMAX, files: { modelDir: '/models/minimax' } })
+  const nativeStats = {
+    totalTimeMs: 9000,
+    audioDurationMs: 4000,
+    emittedFrames: 100,
+    arMs: 4100,
+    conditionMs: 300,
+    flowMs: 3600,
+    vocoderMs: 700
+  }
+  gen.addon = {
+    runJob() {
+      gen._addonOutputCallback(null, null, nativeStats, null)
+      return Promise.resolve(true)
+    },
+    cancel: () => Promise.resolve(),
+    destroyInstance: () => Promise.resolve()
+  }
+
+  const response = await gen.run('four seconds of lo-fi', { duration: 4 })
+  const stats = await response.await()
+  t.is(stats.emittedFrames, 100)
+  t.is(stats.arMs, 4100)
+  t.is(stats.conditionMs, 300)
+  t.is(stats.flowMs, 3600)
+  t.is(stats.vocoderMs, 700)
+})

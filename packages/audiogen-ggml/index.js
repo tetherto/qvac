@@ -31,10 +31,11 @@ const SUPPORTED_ENGINES = [exports.ENGINE_ACESTEP, exports.ENGINE_MINIMAX];
 exports.MINIMAX_FRAMES_PER_SECOND = 25;
 exports.MINIMAX_DEFAULT_MAX_FRAMES = 300;
 const MINIMAX_MIN_FRAMES = 1;
-const MINIMAX_MAX_INFERENCE_STEPS = 1000;
+const MAX_INFERENCE_STEPS = 1000;
 const INT32_MAX = 2147483647;
 const FLOAT32_MAX = 3.4028234663852886e38;
 const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45;
+const MINIMAX_DEVICES = ['cpu', 'gpu', 'auto'];
 /** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
 exports.AUDIOGEN_BACKEND_NAMES = {
     0: 'cpu',
@@ -96,12 +97,20 @@ function requireSafeInteger(value, name) {
     }
     return value;
 }
-function requireMinimaxInferenceSteps(value) {
+function requireInferenceSteps(value) {
     const steps = requireSafeInteger(value, 'inferenceSteps');
-    if (steps < 0 || steps > MINIMAX_MAX_INFERENCE_STEPS) {
-        throw invalidInput(`inferenceSteps must be between 0 and ${MINIMAX_MAX_INFERENCE_STEPS}`);
+    if (steps < 0 || steps > MAX_INFERENCE_STEPS) {
+        throw invalidInput(`inferenceSteps must be between 0 and ${MAX_INFERENCE_STEPS}`);
     }
     return steps;
+}
+// ACE-Step DiT timestep shift; 0 = auto (turbo 3.0, base/sft 1.0).
+function requireShift(value) {
+    const shift = requireFiniteNumber(value, 'shift');
+    if (shift < 0 || shift > FLOAT32_MAX) {
+        throw invalidInput('shift must be 0 or a positive float32 value');
+    }
+    return shift;
 }
 function requireNonNegativeInt32(value, name) {
     const integer = requireSafeInteger(value, name);
@@ -281,7 +290,8 @@ const ACESTEP_GENERATE_KEYS = [
     'coverNoiseStrength',
     'generateLrc',
     'computeQualityScore',
-    'rewriteQuery'
+    'rewriteQuery',
+    'shift'
 ];
 function hasAnyFile(files, keys) {
     return keys.some((key) => files[key] !== undefined);
@@ -325,6 +335,9 @@ function validateAcestepOptions(files, config) {
     if (config.cfgScale !== undefined) {
         throw invalidInput('ACE-Step does not accept cfgScale');
     }
+    if (config.device !== undefined) {
+        throw invalidInput('ACE-Step does not accept device (use useGPU and nGpuLayers)');
+    }
 }
 function validateMinimaxConfig(config) {
     if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
@@ -332,6 +345,14 @@ function validateMinimaxConfig(config) {
     }
     if (config.shift !== undefined || config.nGpuLayers !== undefined) {
         throw invalidInput('MiniMax does not accept shift or nGpuLayers');
+    }
+    if (config.device !== undefined) {
+        if (typeof config.device !== 'string' || !MINIMAX_DEVICES.includes(config.device)) {
+            throw invalidInput(`device must be one of ${MINIMAX_DEVICES.join('|')}`);
+        }
+        if (config.useGPU !== undefined) {
+            throw invalidInput('MiniMax accepts either useGPU or device, not both');
+        }
     }
 }
 function assertNoAcestepGenerateOptions(options) {
@@ -342,10 +363,8 @@ function assertNoAcestepGenerateOptions(options) {
     }
 }
 function assertNoMinimaxGenerateOptions(options) {
-    if (options.maxFrames !== undefined ||
-        options.inferenceSteps !== undefined ||
-        options.cfgScale !== undefined) {
-        throw invalidInput('ACE-Step does not accept maxFrames, inferenceSteps, or cfgScale per run');
+    if (options.maxFrames !== undefined || options.cfgScale !== undefined) {
+        throw invalidInput('ACE-Step does not accept maxFrames or cfgScale per run');
     }
 }
 function resolveMinimaxMaxFrames(options) {
@@ -370,6 +389,34 @@ function resolveMinimaxMaxFrames(options) {
 function isMobilePlatform() {
     const platform = os.platform();
     return platform === 'android' || platform === 'ios';
+}
+function optionalBoolean(value, name) {
+    if (value !== undefined && typeof value !== 'boolean') {
+        throw invalidInput(`${name} must be a boolean`);
+    }
+    return value;
+}
+function optionalString(value, name) {
+    if (value !== undefined && typeof value !== 'string') {
+        throw invalidInput(`${name} must be a string`);
+    }
+    return value;
+}
+function requireEditRunOptions(options) {
+    return {
+        seed: optionalFiniteNumber(options.seed, 'edit.seed', true),
+        referenceAudio: optionalStereoPcm(options.referenceAudio, 'edit.referenceAudio'),
+        vocalLanguage: optionalString(options.vocalLanguage, 'edit.vocalLanguage'),
+        bpm: options.bpm === undefined ? undefined : requireNonNegativeInt32(options.bpm, 'edit.bpm'),
+        keyscale: optionalString(options.keyscale, 'edit.keyscale'),
+        timesignature: optionalString(options.timesignature, 'edit.timesignature'),
+        augmentCaptionWithMetadata: optionalBoolean(options.augmentCaptionWithMetadata, 'edit.augmentCaptionWithMetadata'),
+        dcwEnabled: optionalBoolean(options.dcwEnabled, 'edit.dcwEnabled'),
+        dcwScaler: optionalFiniteNumber(options.dcwScaler, 'edit.dcwScaler'),
+        dcwHighScaler: optionalFiniteNumber(options.dcwHighScaler, 'edit.dcwHighScaler'),
+        inferenceSteps: options.inferenceSteps === undefined ? undefined : requireInferenceSteps(options.inferenceSteps),
+        shift: options.shift === undefined ? undefined : requireShift(options.shift)
+    };
 }
 /**
  * Fluent, ordered edit pipeline. Every call appends one operation; operations
@@ -463,9 +510,9 @@ class AudioEditSession {
         if (typeof options !== 'object' || options === null) {
             throw invalidInput('edit session run options must be an object');
         }
-        const seed = optionalFiniteNumber(options.seed, 'edit.seed', true);
+        const runOptions = requireEditRunOptions(options);
         this._started = true;
-        return this._runner(this._source, this._operations, { seed });
+        return this._runner(this._source, this._operations, runOptions);
     }
 }
 exports.AudioEditSession = AudioEditSession;
@@ -496,6 +543,7 @@ class AudioGen {
     _lastLrc;
     _cancelTerminalResolve;
     _lastUnderstand;
+    _lastMetadata;
     constructor(options = {}) {
         this._logger = new QvacLogger(options.logger);
         const files = options.files ?? {};
@@ -510,7 +558,7 @@ class AudioGen {
             }
             validateMinimaxFiles(files);
             validateMinimaxConfig(config);
-            this._defaultInferenceSteps = requireMinimaxInferenceSteps(config.inferenceSteps ?? 0);
+            this._defaultInferenceSteps = requireInferenceSteps(config.inferenceSteps ?? 0);
             this._defaultCfgScale = requireMinimaxCfgScale(config.cfgScale ?? 0);
             this._configuration = {
                 engineType: exports.ENGINE_MINIMAX,
@@ -519,6 +567,7 @@ class AudioGen {
                 synthModelPath: files.synthModel,
                 threads,
                 useGPU: config.useGPU ?? false,
+                device: config.device,
                 backendsDir
             };
         }
@@ -666,7 +715,7 @@ class AudioGen {
             input: '',
             sourceAudio,
             editOperations: [...operations],
-            seed: options.seed
+            ...options
         };
         const revision = this._lifecycleRevision;
         return new Promise((resolve, reject) => {
@@ -681,6 +730,7 @@ class AudioGen {
         const addon = this._requireAddon();
         this._lastLrc = undefined;
         this._lastUnderstand = undefined;
+        this._lastMetadata = undefined;
         const response = this._job.start();
         let accepted;
         try {
@@ -728,7 +778,7 @@ class AudioGen {
             maxFrames: resolveMinimaxMaxFrames(opts),
             inferenceSteps: opts.inferenceSteps === undefined
                 ? this._defaultInferenceSteps
-                : requireMinimaxInferenceSteps(opts.inferenceSteps),
+                : requireInferenceSteps(opts.inferenceSteps),
             cfgScale: opts.cfgScale === undefined ? this._defaultCfgScale : requireMinimaxCfgScale(opts.cfgScale)
         };
     }
@@ -855,7 +905,9 @@ class AudioGen {
             track: opts.track,
             guidanceScale,
             audioCoverStrength: optionalFiniteNumber(opts.audioCoverStrength, 'audioCoverStrength'),
-            coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength')
+            coverNoiseStrength: optionalFiniteNumber(opts.coverNoiseStrength, 'coverNoiseStrength'),
+            inferenceSteps: opts.inferenceSteps === undefined ? undefined : requireInferenceSteps(opts.inferenceSteps),
+            shift: opts.shift === undefined ? undefined : requireShift(opts.shift)
         };
     }
     async cancel() {
@@ -1000,11 +1052,14 @@ class AudioGen {
         }
         if (d.outputArray) {
             this._lastLrc = typeof d.lrc === 'string' ? d.lrc : undefined;
+            this._lastMetadata =
+                typeof d.metadata === 'object' && d.metadata !== null ? d.metadata : undefined;
             this._job.output({
                 outputArray: d.outputArray,
                 sampleRate: d.sampleRate ?? 0,
                 channels: d.channels ?? 0,
-                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {})
+                ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
+                ...(this._lastMetadata !== undefined ? { metadata: this._lastMetadata } : {})
             });
             return;
         }
@@ -1016,7 +1071,8 @@ class AudioGen {
                 keyscale: d.keyscale ?? '',
                 timesignature: d.timesignature ?? '',
                 vocalLanguage: d.vocalLanguage ?? '',
-                audioCodes: d.audioCodes
+                audioCodes: d.audioCodes,
+                seed: d.seed ?? 0
             };
             this._lastUnderstand = understood;
             this._job.output({ understand: understood });
@@ -1032,10 +1088,16 @@ class AudioGen {
                 ...(typeof d.gpuFallbackReason === 'number'
                     ? { gpuFallbackReason: d.gpuFallbackReason }
                     : {}),
+                ...(typeof d.emittedFrames === 'number' ? { emittedFrames: d.emittedFrames } : {}),
+                ...(typeof d.arMs === 'number' ? { arMs: d.arMs } : {}),
+                ...(typeof d.conditionMs === 'number' ? { conditionMs: d.conditionMs } : {}),
+                ...(typeof d.flowMs === 'number' ? { flowMs: d.flowMs } : {}),
+                ...(typeof d.vocoderMs === 'number' ? { vocoderMs: d.vocoderMs } : {}),
                 ...(typeof d.lyricsScore === 'number' ? { lyricsScore: d.lyricsScore } : {}),
                 ...(this._lastLrc !== undefined ? { lrc: this._lastLrc } : {}),
                 ...(typeof d.qualityScore === 'number' ? { qualityScore: d.qualityScore } : {}),
-                ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {})
+                ...(this._lastUnderstand !== undefined ? { understand: this._lastUnderstand } : {}),
+                ...(this._lastMetadata !== undefined ? { metadata: this._lastMetadata } : {})
             };
             this._job.end(stats, stats);
         }

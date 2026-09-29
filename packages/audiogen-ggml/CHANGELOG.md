@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Engine options and results that the speech fabric's audiogen engines already
+  provided but the addon did not expose:
+  - ACE-Step generation metadata: a text generation reports what it rendered on
+    the PCM item and as `stats.metadata` — the caption and lyrics (LM-composed
+    under Simple Mode / Query Rewriting), `bpm`, `keyscale`, the
+    `timesignature` numerator, `vocalLanguage`, `codeFrames`, the `seed` it used
+    (so an unseeded take can be replayed), and `qualityReport` with
+    `computeQualityScore`.
+  - ACE-Step per-run `inferenceSteps` and `shift` on `run()` and on an edit
+    session's `run()`; both used to be fixed at load time.
+  - Edit sessions: `run()` takes a timbre `referenceAudio`, the `vocalLanguage`
+    / `bpm` / `keyscale` / `timesignature` / `augmentCaptionWithMetadata`
+    prompt metadata, and the Repaint DCW controls (`dcwEnabled`, `dcwScaler`,
+    `dcwHighScaler`). The engine read all of them; only the seed reached it.
+  - `understand()` reports the `seed` the LM decode used.
+  - MiniMax-Music3: the engine's stage timings (`arMs`, `conditionMs`,
+    `flowMs`, `vocoderMs`) and `emittedFrames` in the stats, and
+    `config.device: 'gpu'` to fail `load()` instead of falling back to the CPU
+    when no GPU is usable.
+
 ## [0.5.1] - 2026-09-29
 
 ### Fixed

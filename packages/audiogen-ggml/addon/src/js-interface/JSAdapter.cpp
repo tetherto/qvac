@@ -196,6 +196,13 @@ JSAdapter::buildMinimaxConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "synthModelPath");
   cfg.threads = readRequiredNonNegativeInt(configurationParams, env, "threads");
   cfg.useGpu = readRequiredBool(configurationParams, env, "useGPU");
+  cfg.device = readOptionalString(configurationParams, env, "device");
+  if (!cfg.device.empty() && cfg.device != "cpu" && cfg.device != "gpu" &&
+      cfg.device != "auto") {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "device must be 'cpu', 'gpu' or 'auto' (got '" + cfg.device + "')");
+  }
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }

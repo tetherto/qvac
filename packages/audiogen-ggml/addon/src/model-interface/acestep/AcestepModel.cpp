@@ -225,6 +225,7 @@ AcestepModel::understandAudio(const AnyInput& in) {
   realTimeFactor_ =
       audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
   hasQualityScore_ = false;
+  metadata_.reset();
 
   UnderstandOutput out;
   out.caption = std::move(result.caption);
@@ -234,6 +235,7 @@ AcestepModel::understandAudio(const AnyInput& in) {
   out.timesignature = std::move(result.timesignature);
   out.vocalLanguage = std::move(result.vocal_language);
   out.audioCodes = std::move(result.audio_codes);
+  out.seed = result.seed;
   return out;
 }
 
@@ -242,6 +244,7 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   if (cancelRequested_.load()) {
     throw std::runtime_error("ACE-Step generation cancelled");
   }
+  metadata_.reset();
   const auto t0 = std::chrono::steady_clock::now();
 
   std::shared_ptr<tts_cpp::acestep::Engine> engine = acquireEngine();
@@ -316,8 +319,8 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   // 0 = auto: the engine resolves steps/shift from the DiT model type
   // (turbo -> 8 / shift 3.0, base/sft -> 50 / shift 1.0). Forcing 8/3.0 here
   // would make a base/sft model render with turbo settings and sound wrong.
-  params.inference_steps = cfg_.inferenceSteps;
-  params.shift = cfg_.shift;
+  params.inference_steps = in.inferenceSteps.value_or(cfg_.inferenceSteps);
+  params.shift = in.shift.value_or(cfg_.shift);
 
   auto progress =
       [this](const std::string& stage, int step, int total) -> bool {
@@ -335,6 +338,23 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   lrc_ = result.metadata.lrc;
   hasQualityScore_ = in.computeQualityScore;
   qualityScore_ = result.metadata.quality_score;
+  // The engine fills GenerateMetadata on the text generation path only.
+  if (in.editOperations.empty()) {
+    const auto& meta = result.metadata;
+    GenerationMetadata metadata;
+    metadata.caption = meta.caption;
+    metadata.lyrics = meta.lyrics;
+    metadata.keyscale = meta.keyscale;
+    metadata.vocalLanguage = meta.vocal_language;
+    metadata.bpm = meta.bpm;
+    metadata.timesignature = meta.timesignature;
+    metadata.seed = meta.seed;
+    metadata.codeFrames = meta.n_codes;
+    if (in.computeQualityScore) {
+      metadata.qualityReport = meta.quality_report;
+    }
+    metadata_ = std::move(metadata);
+  }
 
   // Peak-normalise before the int16 quantisation, exactly like the music CLI's
   // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float

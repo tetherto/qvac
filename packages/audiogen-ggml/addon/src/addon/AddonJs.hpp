@@ -41,7 +41,7 @@ using minimax::MinimaxModel;
 #endif
 
 inline constexpr double K_MAXIMUM_SAFE_INTEGER = 9007199254740991.0;
-inline constexpr int K_MAXIMUM_MINIMAX_INFERENCE_STEPS = 1000;
+inline constexpr int K_MAXIMUM_INFERENCE_STEPS = 1000;
 
 inline std::optional<double>
 readOptionalNumber(js::Object object, js_env_t* env, const char* name) {
@@ -77,14 +77,25 @@ inline int64_t checkedPositiveSafeInteger(double value, const char* name) {
   return integer;
 }
 
-inline int checkedMinimaxInferenceSteps(double value) {
+inline int checkedInferenceSteps(double value) {
   const int64_t integer = checkedSafeInteger(value, "inferenceSteps");
-  if (integer < 0 || integer > K_MAXIMUM_MINIMAX_INFERENCE_STEPS) {
+  if (integer < 0 || integer > K_MAXIMUM_INFERENCE_STEPS) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "inferenceSteps must be between 0 and 1000");
   }
   return static_cast<int>(integer);
+}
+
+// ACE-Step DiT timestep shift; 0 = auto (turbo 3.0, base/sft 1.0).
+inline float checkedShift(double value) {
+  const double maximum = std::numeric_limits<float>::max();
+  if (!std::isfinite(value) || value < 0.0 || value > maximum) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "shift must be 0 or a positive float32 value");
+  }
+  return static_cast<float>(value);
 }
 
 inline float checkedMinimaxCfgScale(double value) {
@@ -169,7 +180,7 @@ buildMinimaxInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
     modelInput.maxFrames = checkedPositiveSafeInteger(*value, "maxFrames");
   }
   if (auto value = readOptionalNumber(jobObject, env, "inferenceSteps")) {
-    modelInput.inferenceSteps = checkedMinimaxInferenceSteps(*value);
+    modelInput.inferenceSteps = checkedInferenceSteps(*value);
   }
   if (auto value = readOptionalNumber(jobObject, env, "cfgScale")) {
     modelInput.cfgScale = checkedMinimaxCfgScale(*value);
@@ -250,6 +261,10 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
   if (auto value =
           readOptionalAcestepNumber(jobObject, env, "coverNoiseStrength"))
     modelInput.coverNoiseStrength = static_cast<float>(*value);
+  if (auto value = readOptionalNumber(jobObject, env, "inferenceSteps"))
+    modelInput.inferenceSteps = checkedInferenceSteps(*value);
+  if (auto value = readOptionalNumber(jobObject, env, "shift"))
+    modelInput.shift = checkedShift(*value);
   return modelInput;
 }
 
@@ -357,16 +372,43 @@ parseEditOperations(js_env_t* env, js::Array& operations) {
   return result;
 }
 
+inline js_value_t* createGenerationMetadata(
+    js_env_t* env, const AcestepModel::GenerationMetadata& metadata) {
+  auto result = js::Object::create(env);
+  auto setText = [&](const char* name, const std::string& value) {
+    result.setProperty(env, name, js::String::create(env, value));
+  };
+  auto setNumber = [&](const char* name, double value) {
+    result.setProperty(env, name, js::Number::create(env, value));
+  };
+  setText("caption", metadata.caption);
+  setText("lyrics", metadata.lyrics);
+  setText("keyscale", metadata.keyscale);
+  setText("vocalLanguage", metadata.vocalLanguage);
+  setNumber("bpm", metadata.bpm);
+  setNumber("timesignature", metadata.timesignature);
+  setNumber("seed", static_cast<double>(metadata.seed));
+  setNumber("codeFrames", metadata.codeFrames);
+  if (metadata.qualityReport) {
+    setText("qualityReport", *metadata.qualityReport);
+  }
+  return result;
+}
+
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
+  using MetadataFn =
+      std::function<std::optional<AcestepModel::GenerationMetadata>()>;
+
   JsAudioOutputHandler(
       std::function<int()> sampleRate, std::function<int()> channels,
-      std::function<std::string()> lrc = nullptr)
+      std::function<std::string()> lrc = nullptr, MetadataFn metadata = nullptr)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>(
             [this, sampleRate = std::move(sampleRate),
-             channels = std::move(channels), lrc = std::move(lrc)](
+             channels = std::move(channels), lrc = std::move(lrc),
+             metadata = std::move(metadata)](
                 const std::vector<int16_t>& data) -> js_value_t* {
               auto result = js::Object::create(this->env_);
               std::span<const int16_t> outputSpan(data.data(), data.size());
@@ -386,6 +428,14 @@ struct JsAudioOutputHandler
                 if (!text.empty()) {
                   result.setProperty(
                       this->env_, "lrc", js::String::create(this->env_, text));
+                }
+              }
+              if (metadata) {
+                if (auto resolved = metadata()) {
+                  result.setProperty(
+                      this->env_,
+                      "metadata",
+                      createGenerationMetadata(this->env_, *resolved));
                 }
               }
               return result;
@@ -430,6 +480,10 @@ struct JsUnderstandOutputHandler
                   this->env_,
                   "audioCodes",
                   js::TypedArray<int32_t>::create(this->env_, codesSpan));
+              result.setProperty(
+                  this->env_,
+                  "seed",
+                  js::Number::create(this->env_, static_cast<double>(u.seed)));
               return result;
             }) {}
 };
@@ -472,6 +526,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   function<int()> channels;
   function<void(function<void(const AudioGenProgress&)>)> setProgressSink;
   function<std::string()> lrcText;
+  JsAudioOutputHandler::MetadataFn generationMetadata;
 
   if (engineType == EngineType::Minimax) {
 #ifdef AUDIOGEN_HAS_MINIMAX
@@ -496,6 +551,9 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     sampleRate = [modelPtr]() { return modelPtr->sampleRate(); };
     channels = [modelPtr]() { return modelPtr->channels(); };
     lrcText = [modelPtr]() { return modelPtr->lrcText(); };
+    generationMetadata = [modelPtr]() {
+      return modelPtr->generationMetadata();
+    };
     setProgressSink = [modelPtr](function<void(const AudioGenProgress&)> sink) {
       modelPtr->setProgressSink(std::move(sink));
     };
@@ -505,7 +563,10 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(
       make_shared<JsAudioOutputHandler>(
-          std::move(sampleRate), std::move(channels), std::move(lrcText)));
+          std::move(sampleRate),
+          std::move(channels),
+          std::move(lrcText),
+          std::move(generationMetadata)));
   outHandlers.add(make_shared<JsUnderstandOutputHandler>());
   outHandlers.add(make_shared<JsProgressOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(

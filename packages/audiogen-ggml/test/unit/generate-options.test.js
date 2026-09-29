@@ -717,3 +717,150 @@ test('AudioGen.run requires finite coverNoiseStrength', async (t) => {
     /coverNoiseStrength must be a finite number/
   )
 })
+
+test('AudioGen.run forwards per-run ACE-Step inferenceSteps and shift', async (t) => {
+  const { gen, received } = createHarness()
+
+  const response = await gen.run('slow ambient pad', { inferenceSteps: 12, shift: 2.5 })
+  await response.await()
+  t.is(received().inferenceSteps, 12)
+  t.is(received().shift, 2.5)
+
+  const auto = await gen.run('slow ambient pad', { inferenceSteps: 0, shift: 0 })
+  await auto.await()
+  t.is(received().inferenceSteps, 0, 'zero keeps the engine auto value')
+  t.is(received().shift, 0, 'zero keeps the engine auto value')
+
+  const unset = await gen.run('slow ambient pad')
+  await unset.await()
+  t.is(received().inferenceSteps, undefined, 'omitted steps keep the load-time config')
+  t.is(received().shift, undefined, 'omitted shift keeps the load-time config')
+})
+
+test('AudioGen.run rejects out-of-range per-run ACE-Step inferenceSteps and shift', async (t) => {
+  const { gen } = createHarness()
+  await t.exception(() => gen.run('test', { inferenceSteps: 1001 }), /between 0 and 1000/)
+  await t.exception(() => gen.run('test', { inferenceSteps: -1 }), /between 0 and 1000/)
+  await t.exception(() => gen.run('test', { inferenceSteps: 1.5 }), /must be an integer/)
+  await t.exception(() => gen.run('test', { shift: -0.5 }), /shift must be 0 or a positive/)
+  await t.exception(
+    () => gen.run('test', { shift: Number.POSITIVE_INFINITY }),
+    /shift must be a finite number/
+  )
+})
+
+test('AudioGen.run surfaces the rendered generation metadata', async (t) => {
+  const metadata = {
+    caption: 'a bright synth-pop anthem',
+    lyrics: '[verse]\nneon lights',
+    bpm: 120,
+    keyscale: 'E minor',
+    timesignature: 4,
+    vocalLanguage: 'en',
+    seed: 3141592653,
+    codeFrames: 50,
+    qualityReport: 'caption 0.71 | lyrics 0.64'
+  }
+  let emitMetadata = true
+  const gen = new AudioGen({})
+  gen.addon = {
+    runJob() {
+      gen._addonOutputCallback(
+        null,
+        null,
+        {
+          outputArray: new Int16Array([1, 2]),
+          sampleRate: 48000,
+          channels: 2,
+          ...(emitMetadata ? { metadata } : {})
+        },
+        null
+      )
+      gen._addonOutputCallback(null, null, { totalTimeMs: 1 }, null)
+      return Promise.resolve(true)
+    },
+    cancel: () => Promise.resolve(),
+    destroyInstance: () => Promise.resolve()
+  }
+
+  const response = await gen.run('synth pop', { simpleMode: true, computeQualityScore: true })
+  const chunks = []
+  for await (const item of response.iterate()) {
+    if (item.outputArray) chunks.push(item)
+  }
+  const stats = await response.await()
+  t.is(chunks.length, 1)
+  t.alike(chunks[0].metadata, metadata, 'the PCM chunk carries the metadata')
+  t.alike(stats.metadata, metadata, 'the stats repeat the metadata')
+
+  emitMetadata = false
+  const next = await gen.run('another take')
+  const nextStats = await next.await()
+  t.is(nextStats.metadata, undefined, 'a run without metadata carries no stale copy')
+})
+
+test('AudioGen.edit forwards conditioning, DCW and schedule run options', async (t) => {
+  const { gen, received } = createHarness()
+  const source = stereoSource(2, 0.1)
+  const referenceAudio = new Float32Array(EDIT_SAMPLE_RATE * EDIT_CHANNELS).fill(0.2)
+
+  const response = await gen
+    .edit(source)
+    .repaint({ caption: 'brass stab', start: 0.5, end: 1.5 })
+    .run({
+      seed: 11,
+      referenceAudio,
+      vocalLanguage: 'es',
+      bpm: 96,
+      keyscale: 'D major',
+      timesignature: '3/4',
+      augmentCaptionWithMetadata: true,
+      dcwEnabled: false,
+      dcwScaler: 0,
+      dcwHighScaler: 0.01,
+      inferenceSteps: 30,
+      shift: 1.5
+    })
+  await response.await()
+
+  const job = received()
+  t.is(job.type, 'edit')
+  t.is(job.seed, 11)
+  t.is(job.referenceAudio, referenceAudio, 'the reference PCM reaches native unchanged')
+  t.is(job.vocalLanguage, 'es')
+  t.is(job.bpm, 96)
+  t.is(job.keyscale, 'D major')
+  t.is(job.timesignature, '3/4')
+  t.is(job.augmentCaptionWithMetadata, true)
+  t.is(job.dcwEnabled, false, 'false DCW flag is preserved')
+  t.is(job.dcwScaler, 0, 'zero low-frequency scaler is preserved')
+  t.is(job.dcwHighScaler, 0.01)
+  t.is(job.inferenceSteps, 30)
+  t.is(job.shift, 1.5)
+  t.is(job.editOperations.length, 1)
+})
+
+test('AudioGen.edit validates its run options before native dispatch', async (t) => {
+  const { gen } = createHarness()
+  const source = stereoSource(1)
+  const run = (options) => gen.edit(source).repaint({ caption: 'test', start: 0 }).run(options)
+
+  await t.exception(
+    () => run({ referenceAudio: new Float32Array(3) }),
+    /edit.referenceAudio must be interleaved stereo/
+  )
+  await t.exception(
+    () => run({ referenceAudio: [0.1, 0.2] }),
+    /edit.referenceAudio must be a Float32Array/
+  )
+  await t.exception(() => run({ dcwEnabled: 'no' }), /edit.dcwEnabled must be a boolean/)
+  await t.exception(
+    () => run({ augmentCaptionWithMetadata: 1 }),
+    /edit.augmentCaptionWithMetadata must be a boolean/
+  )
+  await t.exception(() => run({ vocalLanguage: 7 }), /edit.vocalLanguage must be a string/)
+  await t.exception(() => run({ bpm: -1 }), /edit.bpm must be between 0 and/)
+  await t.exception(() => run({ dcwScaler: Number.NaN }), /edit.dcwScaler must be a finite number/)
+  await t.exception(() => run({ inferenceSteps: 5000 }), /between 0 and 1000/)
+  await t.exception(() => run({ shift: -1 }), /shift must be 0 or a positive/)
+})

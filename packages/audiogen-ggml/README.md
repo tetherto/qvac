@@ -148,7 +148,11 @@ controls such as BPM, DiT shift, frozen semantic codes, cover audio, and
 `nGpuLayers`. Set `config.useGPU: true` to run the whole model pair on a GPU
 backend (CUDA, Vulkan, Metal — ~22 GB of device memory for the f16 pair); the
 engine falls back to CPU when no usable GPU exists and `stats.backendDevice`
-reports the backend actually used. See
+reports the backend actually used. Pass `config.device: 'gpu'` instead to make
+`load()` fail when no GPU is usable rather than run on the CPU. The stats split
+the engine time into `arMs`, `conditionMs`, `flowMs` and `vocoderMs`, and
+`emittedFrames` counts the semantic frames generated: fewer than the cap when
+the song ended on its own. See
 [`examples/generate-music-minimax.js`](examples/generate-music-minimax.js).
 
 ### 1. Simplest case — an instrumental
@@ -188,6 +192,7 @@ const stats = await response.await()
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
 // lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
 // qualityScore:      [0, 1], present only when the run set computeQualityScore
+// metadata:          what the run rendered (see below), ACE-Step text runs only
 
 await gen.destroy()
 ```
@@ -204,6 +209,21 @@ await gen.destroy()
 > every attempt to initialise it failed. Name it with
 > `audiogenGpuFallbackReason(stats.gpuFallbackReason)`.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
+
+An ACE-Step text generation also reports what it rendered once the LM filled in
+whatever the request left unset, on the PCM item and again as `stats.metadata`:
+
+```js
+// { caption, lyrics, bpm, keyscale, timesignature, vocalLanguage, seed,
+//   codeFrames, qualityReport? }
+const { seed, lyrics } = stats.metadata
+```
+
+`seed` is the one the run used, so an unseeded take can be replayed by passing
+it back. Under Simple Mode or Query Rewriting, `caption` and `lyrics` are the
+LM-composed ones. `timesignature` is the numerator only (`4` for `4/4`);
+`qualityReport` is the per-condition breakdown of `stats.qualityScore` and is
+present only with `computeQualityScore`. Audio edits report no metadata.
 
 ### 2. A song with lyrics + rhythm
 
@@ -425,14 +445,15 @@ layout `sourceAudio` uses:
 const response = await gen.understand(pcm, { seed: 42 })
 const stats = await response.await()
 const heard = stats.understand
-// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes }
+// { caption, bpm, duration, keyscale, timesignature, vocalLanguage, audioCodes, seed }
 ```
 
 The description streams as an `understand` output item (progress ticks report
 the `source`, `tok`, and `understand` stages) and is repeated on the terminal
 stats. `audioCodes` are the recovered semantic codes — pass them back as a
 generation's `audioCodes` to re-synthesize or remix the clip. A
-`vocalLanguage` hint forces the language field instead of the LM's guess.
+`vocalLanguage` hint forces the language field instead of the LM's guess, and
+`seed` is the one the LM decode used.
 End to end from the repo (generates a clip, then describes it):
 
 ```bash
@@ -488,6 +509,12 @@ and span at least one latent frame (`1/25` s). Omitting `end` repaints through
 the end of the source. Flow-Edit is turbo DiT only (`turbo-q4`, `turbo-q8`) and
 changes musical/lyrical conditioning over its `nMin`/`nMax` diffusion window.
 Repainting an entire track is supported with `start: 0` and no `end`.
+
+`run()` also takes the conditioning shared by every operation: a timbre
+`referenceAudio` (same layout as the source), the `vocalLanguage` / `bpm` /
+`keyscale` / `timesignature` / `augmentCaptionWithMetadata` prompt metadata, the
+Repaint DCW sampler controls (`dcwEnabled`, `dcwScaler`, `dcwHighScaler`), and a
+per-run `inferenceSteps` / `shift`.
 
 ### Turning PCM into a file
 
@@ -578,7 +605,8 @@ runnable end-to-end script (`npm run example`).
 | Option | Meaning |
 |--------|---------|
 | `useGPU` | Run on GPU (Metal / CUDA / Vulkan, including Android Mali); falls back to CPU. |
-| `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. |
+| `device` | MiniMax only, instead of `useGPU`: `gpu` fails `load()` without a usable GPU, `auto` falls back to the CPU, `cpu` never uses a GPU. |
+| `inferenceSteps` / `shift` | Advanced; leave unset to auto-tune per DiT. `run()` can override both per call. |
 | `cfgScale` | Default MiniMax flow guidance scale; `0` uses the model default. |
 | `nGpuLayers` | GPU layers to offload when `useGPU` is set (99 = all). |
 | `threads` | CPU thread count (0 / unset = hardware default). |
@@ -599,7 +627,9 @@ wrapped by a level-gated `QvacLogger`.
 | `augmentCaptionWithMetadata` | Append BPM/tempo, time signature, and key guidance to the internal conditioning caption; defaults to `false`. |
 | `duration` | Target length in seconds; omit to let the LM decide. |
 | `maxFrames` | MiniMax semantic-frame cap; cannot be combined with `duration`. |
-| `inferenceSteps` / `cfgScale` | Per-run MiniMax flow controls. |
+| `inferenceSteps` | Per-run diffusion steps (`0`–`1000`); omit to keep `config.inferenceSteps`. |
+| `shift` | ACE-Step per-run DiT timestep shift; omit to keep `config.shift`. |
+| `cfgScale` | Per-run MiniMax flow guidance scale. |
 | `seed` | RNG seed for reproducible generation. |
 | `lmTemperature` / `lmTopP` / `lmTopK` / `lmCfgScale` | LM sampling controls. |
 | `lmPhase1` | Allow the LM to infer missing metadata before generating semantic codes. |

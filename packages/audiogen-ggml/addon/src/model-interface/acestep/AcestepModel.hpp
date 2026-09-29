@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -102,6 +103,10 @@ public:
     float guidanceScale = 0.0F;
     float audioCoverStrength = 1.0F;
     float coverNoiseStrength = 0.0F;
+    // Per-run DiT schedule overrides; unset keeps the load-time config value.
+    // 0 = auto (turbo 8 steps / shift 3.0, base/sft 50 / 1.0).
+    std::optional<int> inferenceSteps;
+    std::optional<float> shift;
     std::vector<AudioEditOperationInput> editOperations;
     // Reverse pipeline: describe the sourceAudio instead of generating.
     bool understand = false;
@@ -117,6 +122,24 @@ public:
     std::string timesignature;
     std::string vocalLanguage;
     std::vector<int> audioCodes;
+    long long seed = 0; // the seed the LM decode used (resolved when random)
+  };
+
+  // The request the engine actually rendered (tts_cpp::acestep::
+  // GenerateMetadata): the LM-completed caption, lyrics and metadata, plus
+  // the resolved seed. Filled by text generation runs only; audio edits
+  // report none.
+  struct GenerationMetadata {
+    std::string caption;
+    std::string lyrics;
+    std::string keyscale;
+    std::string vocalLanguage;
+    int bpm = 0;
+    int timesignature = 0; // numerator only, e.g. 4 for "4/4"; 0 = unset
+    long long seed = 0;
+    int codeFrames = 0;
+    // Set only when the run requested computeQualityScore.
+    std::optional<std::string> qualityReport;
   };
 
   explicit AcestepModel(AcestepConfig config);
@@ -155,6 +178,9 @@ public:
   int sampleRate() const { return sampleRate_; }
   int channels() const { return channels_; }
   std::string lrcText() const { return lrc_; }
+  std::optional<GenerationMetadata> generationMetadata() const {
+    return metadata_;
+  }
 
 private:
   Output generate(const AnyInput& in);
@@ -178,6 +204,7 @@ private:
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
   std::string lrc_; // synchronized lyric timestamps of the last run
+  std::optional<GenerationMetadata> metadata_; // set per text generation run
   double lyricsScore_ = 0.0;
   bool hasLyricsScore_ = false; // set per run; gates the lyricsScore stat
   double qualityScore_ = 0.0;

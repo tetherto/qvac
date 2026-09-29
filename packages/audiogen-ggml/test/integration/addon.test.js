@@ -477,6 +477,7 @@ test(
       'streamed understand progress'
     )
     t.is(stats.understand.caption, understood.understand.caption, 'stats repeat the description')
+    t.is(understood.understand.seed, 42, 'the LM decode reports the seed it used')
 
     const hinted = await gen.understand(pcm, { seed: 42, vocalLanguage: 'es' })
     const hintedStats = await hinted.await()
@@ -693,5 +694,128 @@ test(
     await runFlowEditVariants(t, gen, source)
     await runFlowThenRepaint(t, gen, source)
     await runRepaintThenFlow(t, gen, source)
+  }
+)
+
+function samePcm(a, b) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
+function concatChunks(chunks) {
+  let total = 0
+  for (const chunk of chunks) total += chunk.length
+  const pcm = new Int16Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    pcm.set(chunk, offset)
+    offset += chunk.length
+  }
+  return pcm
+}
+
+test(
+  'AudioGen (ggml): generation metadata reports the resolved seed under a per-run schedule',
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: true
+    })
+    t.teardown(() => gen.destroy())
+
+    const caption = 'dreamy synthwave, arpeggiated bass, gated drums'
+    const opts = {
+      lyrics: '[Instrumental]',
+      duration: 4,
+      bpm: 110,
+      keyscale: 'F minor',
+      timesignature: '4/4',
+      inferenceSteps: COVER_STEPS,
+      shift: COVER_SHIFT
+    }
+    const unseeded = await runAudioGen(gen, { caption, opts })
+    const metadata = unseeded.data.stats.metadata
+    t.ok(metadata, 'stats carry the generation metadata')
+    t.is(unseeded.data.stageTotals.dit, COVER_STEPS, 'the per-run step count drives the DiT')
+    t.ok(
+      Number.isInteger(metadata.seed) && metadata.seed >= 0 && metadata.seed <= 0xffffffff,
+      `an unseeded run reports the uint32 seed it drew (${metadata.seed})`
+    )
+    t.is(metadata.caption, caption, 'the caller caption is echoed')
+    t.is(metadata.bpm, 110, 'the requested bpm is echoed')
+    t.is(metadata.keyscale, 'F minor', 'the requested key is echoed')
+    t.is(metadata.timesignature, 4, 'the time-signature numerator is reported')
+    t.ok(metadata.codeFrames > 0, `the LM produced ${metadata.codeFrames} code frames`)
+    t.is(metadata.qualityReport, undefined, 'no quality report unless requested')
+
+    const reseeded = await runAudioGen(gen, {
+      caption,
+      opts: { ...opts, seed: metadata.seed, computeQualityScore: true }
+    })
+    const replay = reseeded.data.stats.metadata
+    t.is(replay.seed, metadata.seed, 'an explicit seed is echoed')
+    t.is(replay.codeFrames, metadata.codeFrames, 'the reported seed replays the LM codes')
+    t.ok(
+      samePcm(concatChunks(reseeded.data.chunks), concatChunks(unseeded.data.chunks)),
+      'the reported seed reproduces the unseeded take'
+    )
+    t.ok(
+      typeof replay.qualityReport === 'string' && replay.qualityReport.length > 0,
+      'computeQualityScore adds the quality breakdown'
+    )
+    t.ok(typeof reseeded.data.stats.qualityScore === 'number', 'the quality score is reported')
+  }
+)
+
+test(
+  'AudioGen (ggml): edit run options reach the native edit plan',
+  { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
+  async (t) => {
+    const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
+    if (!download.success) {
+      t.fail('ACE-Step models unavailable')
+      return
+    }
+
+    const gen = await loadAudioGen({
+      modelDir: download.modelDir,
+      ditVariant: VARIANT,
+      useGPU: true
+    })
+    t.teardown(() => gen.destroy())
+
+    const source = makeCoverPcm(EDIT_SECONDS)
+    const response = await gen
+      .edit({ pcm: source, sampleRate: COVER_SAMPLE_RATE, channels: COVER_CHANNELS })
+      .repaint({ caption: 'bright brass stab', start: 0.5, end: 1.5 })
+      .run({
+        seed: COVER_SEED,
+        referenceAudio: makeCoverPcm(),
+        vocalLanguage: 'en',
+        bpm: 120,
+        keyscale: 'C major',
+        timesignature: '4/4',
+        augmentCaptionWithMetadata: true,
+        dcwEnabled: false,
+        inferenceSteps: COVER_STEPS,
+        shift: COVER_SHIFT
+      })
+    const { data } = await collectAudioGenResponse(response)
+
+    t.ok(data.stages.includes('reference'), 'the reference audio was encoded')
+    t.is(data.stageTotals.repaint, COVER_STEPS, 'the per-run step count drives the repaint')
+    t.is(data.sampleCount, source.length, 'the edit returns the source length')
+    t.is(data.stats.metadata, undefined, 'edits report no generation metadata')
   }
 )
