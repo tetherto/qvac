@@ -8911,5 +8911,38 @@
     "tags": ["tts", "moss-tts", "delay", "llm", "multilingual", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PQ2_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2 27B PQ2_0 model",
+    "quantization": "pq2_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Ternary weights stored in 2-bit slots (2.13 bits/weight); faster prompt processing than PTQ1_0. Pair with the Q8_0 mmproj entry for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2 27B PTQ1_0 model",
+    "quantization": "ptq1_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Densely packed ternary weights (1.75 bits/weight); smallest footprint. Pair with the Q8_0 mmproj entry for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Ternary Bonsai 2 27B",
+    "quantization": "q8_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Required for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
   }
 ]
