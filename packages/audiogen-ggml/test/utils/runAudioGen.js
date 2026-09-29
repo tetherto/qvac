@@ -8,8 +8,9 @@
 const proc = require('bare-process')
 const { AudioGen } = require('@qvac/audiogen-ggml')
 
-// GPU gating: CI sets NO_GPU=true on the CPU-only matrix entries; the tests then
-// force useGPU:false so a GPU-requested run never hits a machine with no GPU.
+// GPU gating: CI sets NO_GPU=true on the CPU-only matrix entries. Tests that run
+// more than one brief generation skip there; the rest force useGPU:false so a
+// GPU-requested run never hits a machine with no GPU.
 const NO_GPU = proc.env.NO_GPU === 'true'
 
 // Per-test timeout (ms). Music generation (model load + DiT diffusion) is heavy,

@@ -5,10 +5,11 @@ name: General CI/CD (native addons, nx)
 on:
   push:
     branches:
-      - main
+      # release-* only. A push to main, feature-* or tmp-* used to start a
+      # publish, and those branches can be an open PR's head, so pushing to your
+      # own PR ran the prebuild matrix and published a GPR build off it. Every
+      # non-release build is a deliberate workflow_dispatch now.
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - "packages/asr-ggml/**"
       - "packages/audiogen-ggml/**"

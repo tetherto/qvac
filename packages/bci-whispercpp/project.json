@@ -135,6 +135,8 @@
               "platform": "darwin",
               "arch": "x64",
               "noGpu": true,
+              "timeoutMinutes": 30,
+              "testScript": "test:integration:smoke",
               "benchmarkMatrixJson": [
                 {
                   "useGPU": false,

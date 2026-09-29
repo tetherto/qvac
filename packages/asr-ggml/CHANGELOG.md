@@ -25,6 +25,15 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 - Nemotron 3 Diarization GGUF support in the Parakeet engine for offline and
   streaming speaker segments with up to eight speakers.
 
+### Changed
+
+- Use registry `speech-cpp` `2026-09-29#1` for Nemotron 3 Diarization and
+  remove the package-local speech port overlay.
+
+## [0.7.0] - 2026-09-29
+
+### Added
+
 - Parakeet voice-activity events. `streamingEnergyVad` / `emitEnergyVad` now
   delivers `{ type: 'vad', source: 'energy' }` events on each speech/silence
   change; before, the detector was enabled but its events never reached JS.
@@ -54,8 +63,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
-- Use registry `speech-cpp` `2026-09-29#1` for Nemotron 3 Diarization and
-  remove the package-local speech port overlay.
+- Raise the `ggml-speech` floor to `2026-09-28` and the `speech-cpp` floor to
+  `2026-09-25#1`. The OpenCL backend no longer crashes on Adreno GPUs when a
+  buffer type is queried before the backend is initialized, which made the
+  second transcription on a Samsung Galaxy S25 Ultra fail with a segmentation
+  fault since the `2026-09-23` engine. Same models, same backends, no API change.
 - Parakeet `cancel()` now stops an offline `run()` between long-form encoder
   windows instead of after the whole call.
 - speech-cpp's own Parakeet log lines now reach the JS logger instead of

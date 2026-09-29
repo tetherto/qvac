@@ -900,6 +900,9 @@ specialized models, hardware, timing conditions, or toolchains:
 `test:integration:parakeet:gpu`, and `test:cpp`.
 The Parakeet GPU command is manual; ASR CI keeps
 `test:integration:gpu` Whisper-only.
+On CPU the standard suites run only brief inference, one short transcription
+per test. Multi-run, long-audio and paced streaming tests run on the GPU and
+are skipped when `NO_GPU=true`, as on the CPU-only CI rows.
 `test:integration:live-stream-simulation` runs only the long-lived Whisper
 stream test; the misspelled `test:integration:live-stream-simultion` remains
 as a temporary alias.

@@ -4,8 +4,7 @@ name: Verify Generated Wrappers
 #
 # Separate from the sanity-checks copy of this check because sanity-checks only
 # runs on pull_request_target, while on-merge-*.yml also publishes on
-# workflow_dispatch and on pushes to release-*/feature-*/tmp-* -- events that
-# never open a PR.
+# workflow_dispatch and on pushes to release-* -- events that never open a PR.
 #
 # The privileges below are deliberately minimal: everything this runs is
 # untrusted third-party code, which is the whole reason it does not live in the
