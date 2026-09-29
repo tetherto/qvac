@@ -10,6 +10,7 @@ import {
   detectPackageManager,
   installArgs,
   isPackageManagerName,
+  isWorkspaceMember,
   runPackageManager,
   type PackageManagerName
 } from '@/commands/host-prebuilds/package-manager'
@@ -28,7 +29,10 @@ export interface EnsureHostPrebuildsOptions {
   projectRoot: string
   /** Bare hosts to cover. Only mobile hosts (`android-*`, `ios-*`) can need an install. */
   hosts: string[]
-  /** Addon package names to cover. Defaults to every addon under `<projectRoot>/node_modules`. */
+  /**
+   * Addon package names to cover. Defaults to every addon installed for the
+   * project: in its own node_modules or in that of a workspace root listing it.
+   */
   addons?: string[] | undefined
   /** Install with this package manager instead of detecting the project's own. */
   packageManager?: PackageManagerName | undefined
@@ -252,22 +256,27 @@ async function resolveAddons(projectRoot: string, names: string[] | undefined, l
 
 /**
  * Every modules directory a package installed for `projectRoot` can sit in,
- * nearest first: the `node_modules` of the project and of each directory above
- * it (npm, Yarn, and bun hoist workspace dependencies to the root), plus the
- * views pnpm (`.pnpm/node_modules`) and bun's isolated layout
- * (`.bun/node_modules`) keep of the packages that are not direct dependencies.
+ * nearest first: the project's `node_modules` and that of each workspace root
+ * above it that lists the project (npm, Yarn, and bun hoist workspace
+ * dependencies to the root), plus the views pnpm (`.pnpm/node_modules`) and
+ * bun's isolated layout (`.bun/node_modules`) keep of the packages that are not
+ * direct dependencies. Any other enclosing project installed its node_modules
+ * for itself, so its addons do not belong to this one.
  */
 async function reachableModuleDirs(projectRoot: string) {
+  const start = path.resolve(projectRoot)
   const dirs: string[] = []
-  let dir = path.resolve(projectRoot)
+  let dir = start
   for (;;) {
-    const nodeModules = path.join(dir, 'node_modules')
-    for (const candidate of [
-      nodeModules,
-      path.join(nodeModules, '.pnpm', 'node_modules'),
-      path.join(nodeModules, '.bun', 'node_modules')
-    ]) {
-      if (await isDirectory(candidate)) dirs.push(candidate)
+    if (dir === start || (await isWorkspaceMember(dir, start))) {
+      const nodeModules = path.join(dir, 'node_modules')
+      for (const candidate of [
+        nodeModules,
+        path.join(nodeModules, '.pnpm', 'node_modules'),
+        path.join(nodeModules, '.bun', 'node_modules')
+      ]) {
+        if (await isDirectory(candidate)) dirs.push(candidate)
+      }
     }
     const parent = path.dirname(dir)
     if (parent === dir) return dirs

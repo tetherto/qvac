@@ -619,6 +619,27 @@ describe('ensureHostPrebuilds', () => {
     })
   })
 
+  it('ignores addons of an enclosing project that is not its workspace', async () => {
+    await withTempDir(async (dir) => {
+      writeJson(path.join(dir, 'package.json'), { name: 'outer' })
+      fs.writeFileSync(path.join(dir, 'package-lock.json'), '')
+      writeSplitAddon(dir, '@qvac/tts-ggml', '0.9.2')
+      const app = path.join(dir, 'examples', 'app')
+      writeJson(path.join(app, 'package.json'), { name: 'app' })
+      fs.writeFileSync(path.join(app, 'package-lock.json'), '')
+
+      for (const addons of [undefined, ['@qvac/tts-ggml']]) {
+        const result = await ensureHostPrebuilds({
+          projectRoot: app,
+          hosts: ['android-arm64'],
+          addons,
+          quiet: true
+        })
+        assert.deepEqual(result, { installed: [], packageManager: null })
+      }
+    })
+  })
+
   for (const [manager, lockfile, store] of [
     ['pnpm', 'pnpm-lock.yaml', '.pnpm'],
     ['bun', 'bun.lock', '.bun']

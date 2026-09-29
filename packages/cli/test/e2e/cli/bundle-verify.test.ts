@@ -77,7 +77,13 @@ describe('cli: bundle sdk addon platform packages', () => {
     assert.equal(bundle.code, 0, `bundle sdk failed:\n${bundle.output}`)
     assert.match(bundle.output, /Cannot install the addon platform packages automatically/)
     assert.match(bundle.output, /"@qvac\/tts-ggml-android-arm64": "\d+\.\d+\.\d+"/)
+    assert.match(bundle.output, /Bundled without installing them/)
+    assert.doesNotMatch(bundle.output, /Bundling again/, 'a refused install bundles once')
     assert.ok(await exists(join(dir, 'qvac', 'worker.bundle.js')), 'expected qvac/worker.bundle.js')
+    assert.ok(
+      await exists(join(dir, 'qvac', 'addons.manifest.json')),
+      'expected qvac/addons.manifest.json'
+    )
     assert.ok(!(await exists(join(dir, 'package.json'))), 'package.json must not be created')
   })
 

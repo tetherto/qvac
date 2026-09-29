@@ -7,7 +7,10 @@ import {
   resolveConfigForProject
 } from '@/client/config-loader/resolve-config.node'
 import { createCommandLogger } from '@/commands/command-logger'
-import { BareImportsMapNotFoundError } from '@/utils/errors-client'
+import {
+  BareImportsMapNotFoundError,
+  HostPrebuildsInstallRefusedError
+} from '@/utils/errors-client'
 import { resolvePluginSpecifiers, parseBuiltinSpecifier } from '@/commands/bundle/plugins'
 import { generateWorkerEntries } from '@/commands/bundle/entry-gen'
 import { runBarePack } from '@/commands/bundle/bare-pack'
@@ -33,7 +36,9 @@ export interface BundleSdkOptions {
    * Install the addon platform packages the bundle needs for its mobile hosts
    * with the project's package manager (see `ensureHostPrebuilds`), then
    * bundle again. Off by default: without it, bundling never changes
-   * package.json or node_modules.
+   * package.json or node_modules. When the install is refused, the bundle and
+   * its manifest are still written before `HostPrebuildsInstallRefusedError`
+   * is thrown.
    */
   installMissingPrebuilds?: boolean | undefined
 }
@@ -156,6 +161,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   }
 
   let installedPrebuilds: HostPrebuildPackage[] = []
+  let installRefused: HostPrebuildsInstallRefusedError | undefined
   try {
     await fsp.writeFile(bundleEntryPath, bundleEntry, 'utf8')
     const barePackOptions = {
@@ -170,20 +176,27 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     await runBarePack(barePackOptions)
 
     if (options.installMissingPrebuilds === true) {
-      const { installed } = await installMissingHostPrebuilds({
-        projectRoot,
-        hosts,
-        addons: await collectAddonsFromBundle({ bundlePath, projectRoot, hosts }),
-        quiet: options.quiet === true,
-        logger
-      })
-      installedPrebuilds = installed
-      // Where a platform package was missing, bare-pack resolved the addon's
-      // `#host-addon` import to its fallback module; bundle again to pick up
-      // the installed package.
-      if (installed.length > 0) {
-        logger.info('\n🔨 Bundling again with the installed platform packages...')
-        await runBarePack(barePackOptions)
+      try {
+        const { installed } = await installMissingHostPrebuilds({
+          projectRoot,
+          hosts,
+          addons: await collectAddonsFromBundle({ bundlePath, projectRoot, hosts }),
+          quiet: options.quiet === true,
+          logger
+        })
+        installedPrebuilds = installed
+        // Where a platform package was missing, bare-pack resolved the addon's
+        // `#host-addon` import to its fallback module; bundle again to pick up
+        // the installed package.
+        if (installed.length > 0) {
+          logger.info('\n🔨 Bundling again with the installed platform packages...')
+          await runBarePack(barePackOptions)
+        }
+      } catch (error: unknown) {
+        if (!(error instanceof HostPrebuildsInstallRefusedError)) throw error
+        // A refusal happens before anything is installed, so the bundle
+        // already written is final and only its manifest is left to write.
+        installRefused = error
       }
     }
   } finally {
@@ -201,6 +214,8 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     projectRoot,
     logger
   })
+
+  if (installRefused !== undefined) throw installRefused
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)
   logger.info(`\n🎉 Done in ${elapsed}s!\n`)

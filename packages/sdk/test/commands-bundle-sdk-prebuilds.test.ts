@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { bundleSdk } from '@/commands/bundle'
+import { HostPrebuildsInstallRefusedError } from '@/utils/errors-client'
 import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
 import {
   SPLIT_ADDON,
@@ -69,6 +72,34 @@ describe('bundleSdk installMissingPrebuilds', () => {
         hosts: ['android-arm64']
       }
     ])
+  })
+
+  it('writes the bundle and manifest before refusing the install', async (t) => {
+    const { projectRoot, sdkPath, configPath } = splitAddonProject(t)
+    // A second lockfile beside the fixture's pnpm one: no package manager can be chosen.
+    fs.writeFileSync(path.join(projectRoot, 'package-lock.json'), '')
+
+    await assert.rejects(
+      bundleSdk({
+        projectRoot,
+        sdkPath,
+        configPath,
+        hosts: ['android-arm64'],
+        quiet: true,
+        installMissingPrebuilds: true
+      }),
+      (error: unknown) =>
+        error instanceof HostPrebuildsInstallRefusedError &&
+        error.dependencies[SPLIT_ADDON_ANDROID_PACKAGE] === SPLIT_ADDON_VERSION
+    )
+
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(projectRoot, 'qvac', 'addons.manifest.json'), 'utf8')
+    ) as { addons: string[] }
+    assert.deepEqual(manifest.addons, [SPLIT_ADDON])
+    assert.ok(
+      bundledModules(projectRoot).some((key) => key.endsWith('fake-ggml/addon-unavailable.js'))
+    )
   })
 
   it('does not reinstall once the platform package is present', posixOnly, async (t) => {
