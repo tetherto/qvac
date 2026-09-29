@@ -192,7 +192,7 @@ TEST_F(ParakeetModelTest, NemotronMetadataSelectsNormalAsrModel) {
 TEST_F(ParakeetModelTest, NemotronDiarizationMetadataSelectsDiarization) {
   const ModelType detected = ParakeetModel::modelTypeFromMetadata(
       "nemotron-diarization", ModelType::TDT);
-  EXPECT_EQ(detected, ModelType::NEMOTRON_DIARIZATION);
+  EXPECT_EQ(detected, ModelType::NemotronDiarization);
   ParakeetConfig diarConfig = cfg;
   diarConfig.modelType = detected;
   ParakeetModel model(diarConfig);

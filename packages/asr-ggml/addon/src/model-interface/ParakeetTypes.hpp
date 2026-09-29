@@ -70,7 +70,7 @@ enum class ModelType : std::uint8_t {
   SORTFORMER, // Speaker diarization (up to 4 speakers)
   RNNT,
   NEMOTRON, // Locale-conditioned cache-aware streaming RNN-T
-  NEMOTRON_DIARIZATION
+  NemotronDiarization
 };
 
 /**

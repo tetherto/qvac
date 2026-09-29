@@ -171,7 +171,7 @@ public:
   }
   bool isSortformer() const { return cfg_.modelType == ModelType::SORTFORMER; }
   bool isDiarization() const {
-    return isSortformer() || cfg_.modelType == ModelType::NEMOTRON_DIARIZATION;
+    return isSortformer() || cfg_.modelType == ModelType::NemotronDiarization;
   }
   bool isNemotron() const { return cfg_.modelType == ModelType::NEMOTRON; }
   // Sortformer segmentation knobs with the addon defaults applied.

@@ -272,7 +272,7 @@ void ParakeetModel::validateConfig(const ParakeetConfig& cfg) {
 float ParakeetModel::resolveDiarizationThreshold(const ParakeetConfig& cfg) {
   if (cfg.diarizationThreshold >= 0.0F)
     return cfg.diarizationThreshold;
-  return cfg.modelType == ModelType::NEMOTRON_DIARIZATION
+  return cfg.modelType == ModelType::NemotronDiarization
              ? ParakeetConfig::DEFAULT_NEMOTRON_DIARIZATION_THRESHOLD
              : ParakeetConfig::DEFAULT_DIARIZATION_THRESHOLD;
 }
@@ -280,7 +280,7 @@ float ParakeetModel::resolveDiarizationThreshold(const ParakeetConfig& cfg) {
 int ParakeetModel::resolveDiarizationMinSegmentMs(const ParakeetConfig& cfg) {
   if (cfg.diarizationMinSegmentMs >= 0)
     return cfg.diarizationMinSegmentMs;
-  return cfg.modelType == ModelType::NEMOTRON_DIARIZATION
+  return cfg.modelType == ModelType::NemotronDiarization
              ? ParakeetConfig::DEFAULT_NEMOTRON_DIARIZATION_MIN_SEGMENT_MS
              : ParakeetConfig::DEFAULT_DIARIZATION_MIN_SEGMENT_MS;
 }
@@ -516,7 +516,7 @@ ModelType ParakeetModel::modelTypeFromMetadata(
   if (detected == "sortformer")
     return ModelType::SORTFORMER;
   if (detected == "nemotron-diarization")
-    return ModelType::NEMOTRON_DIARIZATION;
+    return ModelType::NemotronDiarization;
   if (detected == "rnnt")
     return ModelType::RNNT;
   if (detected == "nemotron")
