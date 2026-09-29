@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.18.1] - 2026-09-29
+
+### Added
+
+- Linux platform packages now ship the RPC backend with RDMA auto-negotiation
+  and TCP fallback. Building requires `libibverbs-dev`, and RDMA use requires
+  the provider package for the host's hardware.
+
+### Changed
+
+- The Linux RPC backend now links `libibverbs.so.1` (`libibverbs1` on
+  Debian/Ubuntu), so hosts that use RPC must provide it even when connections
+  fall back to TCP. Without it the RPC backend is skipped at load time and
+  consumers report no RPC backend. Other backends are unaffected.
+
+### Pull Requests
+
+- [#4750](https://github.com/tetherto/qvac/pull/4750) - Enable RDMA for Linux
+  RPC
+
 ## [0.18.0] - Unreleased
 
 ### Breaking
