@@ -5,6 +5,8 @@ const assert = require('node:assert/strict')
 const { evaluate } = require('./helpers')
 const { PREBUILT_HOSTS, hostPlatformPackage } = require('../../backends.js')
 const packageJson = require('../../package.json')
+const projectJson = require('../../project.json')
+const vcpkgJson = require('../../vcpkg.json')
 
 const ADDON_UNAVAILABLE = './addon-unavailable.js'
 
@@ -51,6 +53,23 @@ test('the imports map routes unpublished hosts to the actionable error', () => {
 
 test('optionalDependencies are injected at publish, not declared in the source manifest', () => {
   assert.equal(packageJson.optionalDependencies, undefined)
+})
+
+test('Linux prebuilds enable RDMA and install its build dependency', () => {
+  const fabric = vcpkgJson.dependencies.find(
+    (dependency) => dependency.name === 'qvac-fabric'
+  )
+  assert.ok(fabric)
+  assert.ok(
+    fabric.features.some(
+      (feature) =>
+        feature.name === 'rpc-rdma' && feature.platform === 'linux'
+    )
+  )
+  assert.match(
+    projectJson.targets.build.options.ci.linuxExtraPackages,
+    /(?:^|\s)libibverbs-dev(?:\s|$)/
+  )
 })
 
 test('the meta package publishes the loader, the helper, and the C++ SDK', () => {
