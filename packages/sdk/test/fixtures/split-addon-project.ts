@@ -7,6 +7,21 @@ export const SPLIT_ADDON = '@qvac/fake-ggml'
 export const SPLIT_ADDON_VERSION = '1.2.3'
 export const SPLIT_ADDON_ANDROID_PACKAGE = `${SPLIT_ADDON}-android-arm64`
 export const SPLIT_ADDON_IOS_PACKAGE = `${SPLIT_ADDON}-ios`
+/** A split addon that `SPLIT_ADDON` depends on, the way the ggml addons depend on `@qvac/fabric`. */
+export const RUNTIME_ADDON = '@qvac/fake-runtime'
+export const RUNTIME_ADDON_VERSION = '0.4.0'
+export const RUNTIME_ADDON_ANDROID_PACKAGE = `${RUNTIME_ADDON}-android-arm64`
+
+export interface SplitAddonProjectOptions {
+  layout?: 'hoisted' | 'pnpm'
+  /**
+   * Make `SPLIT_ADDON` require `RUNTIME_ADDON`. The project never lists the
+   * runtime: under pnpm it is linked beside the addon in the store and in
+   * `.pnpm/node_modules`, and in the hoisted layout it is nested in the
+   * addon's own node_modules.
+   */
+  withRuntime?: boolean
+}
 
 function writeFile(filePath: string, content: string) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
@@ -34,7 +49,8 @@ function link(target: string, linkPath: string) {
  * changes into the project the way running from the app does. `cleanup`
  * restores the working directory and removes the project.
  */
-export function createSplitAddonProject(sdkDir: string, layout: 'hoisted' | 'pnpm' = 'hoisted') {
+export function createSplitAddonProject(sdkDir: string, options: SplitAddonProjectOptions = {}) {
+  const { layout = 'hoisted', withRuntime = false } = options
   const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-split-addon-')))
   const originalCwd = process.cwd()
   process.chdir(projectRoot)
@@ -78,36 +94,24 @@ export function createSplitAddonProject(sdkDir: string, layout: 'hoisted' | 'pnp
     `import addon from '${SPLIT_ADDON}'\nexport const llmPlugin = { addon }\n`
   )
 
-  writeFile(
-    path.join(addonRoot, 'package.json'),
-    JSON.stringify({
-      name: SPLIT_ADDON,
-      version: SPLIT_ADDON_VERSION,
-      addon: true,
-      main: 'index.js',
-      imports: {
-        '#host-addon': {
-          android: {
-            arm64: [SPLIT_ADDON_ANDROID_PACKAGE, './addon-unavailable.js'],
-            default: './addon-unavailable.js'
-          },
-          ios: [SPLIT_ADDON_IOS_PACKAGE, './addon-unavailable.js'],
-          default: './addon-unavailable.js'
-        }
-      }
-    })
-  )
-  writeFile(
-    path.join(addonRoot, 'index.js'),
-    'let addon\n' +
-      'try {\n' +
-      '  addon = require.addon()\n' +
-      '} catch {\n' +
-      "  addon = require('#host-addon')\n" +
-      '}\n' +
-      'module.exports = addon\n'
-  )
-  writeFile(path.join(addonRoot, 'addon-unavailable.js'), 'module.exports = null\n')
+  writeSplitAddon(addonRoot, SPLIT_ADDON, SPLIT_ADDON_VERSION, withRuntime ? RUNTIME_ADDON : null)
+
+  if (withRuntime) {
+    const runtimeRoot =
+      layout === 'pnpm'
+        ? path.join(
+            store,
+            `@qvac+fake-runtime@${RUNTIME_ADDON_VERSION}`,
+            'node_modules',
+            ...RUNTIME_ADDON.split('/')
+          )
+        : path.join(addonRoot, 'node_modules', ...RUNTIME_ADDON.split('/'))
+    writeSplitAddon(runtimeRoot, RUNTIME_ADDON, RUNTIME_ADDON_VERSION, null)
+    if (layout === 'pnpm') {
+      link(runtimeRoot, path.join(addonStoreDir, ...RUNTIME_ADDON.split('/')))
+      link(runtimeRoot, path.join(store, 'node_modules', ...RUNTIME_ADDON.split('/')))
+    }
+  }
 
   if (layout === 'pnpm') {
     link(sdkRoot, sdkPath)
@@ -129,6 +133,45 @@ export function createSplitAddonProject(sdkDir: string, layout: 'hoisted' | 'pnp
       fs.rmSync(projectRoot, { recursive: true, force: true })
     }
   }
+}
+
+/**
+ * A package that ships no prebuilds and names its platform packages in a
+ * `#host-addon` map, loading `dependency` first when one is given.
+ */
+function writeSplitAddon(root: string, name: string, version: string, dependency: string | null) {
+  writeFile(
+    path.join(root, 'package.json'),
+    JSON.stringify({
+      name,
+      version,
+      addon: true,
+      main: 'index.js',
+      ...(dependency !== null ? { dependencies: { [dependency]: '*' } } : {}),
+      imports: {
+        '#host-addon': {
+          android: {
+            arm64: [`${name}-android-arm64`, './addon-unavailable.js'],
+            default: './addon-unavailable.js'
+          },
+          ios: [`${name}-ios`, './addon-unavailable.js'],
+          default: './addon-unavailable.js'
+        }
+      }
+    })
+  )
+  writeFile(
+    path.join(root, 'index.js'),
+    (dependency !== null ? `require('${dependency}')\n` : '') +
+      'let addon\n' +
+      'try {\n' +
+      '  addon = require.addon()\n' +
+      '} catch {\n' +
+      "  addon = require('#host-addon')\n" +
+      '}\n' +
+      'module.exports = addon\n'
+  )
+  writeFile(path.join(root, 'addon-unavailable.js'), 'module.exports = null\n')
 }
 
 /** The module keys in the header of the project's `qvac/worker.bundle.js`. */

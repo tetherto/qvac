@@ -19,6 +19,8 @@ import {
 import { BundleVerificationFailedError } from '@/utils/errors-client'
 import { installFakePackageManager, withPath } from './fixtures/fake-package-manager'
 import {
+  RUNTIME_ADDON_ANDROID_PACKAGE,
+  RUNTIME_ADDON_VERSION,
   SPLIT_ADDON_ANDROID_PACKAGE,
   SPLIT_ADDON_VERSION,
   createSplitAddonProject
@@ -273,7 +275,9 @@ test(
   'buildMobileBundle: installMissingPrebuilds finds the SDK addon in a pnpm store',
   posixOnly,
   async (t) => {
-    const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'), 'pnpm')
+    const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'), {
+      layout: 'pnpm'
+    })
     t.teardown(project.cleanup)
     t.absent(
       existsSync(join(project.projectRoot, 'node_modules', '@qvac', 'fake-ggml')),
@@ -293,6 +297,43 @@ test(
     ])
   }
 )
+
+for (const layout of ['pnpm', 'hoisted'] as const) {
+  test(
+    `buildMobileBundle: installMissingPrebuilds covers an addon's split-addon dependency (${layout})`,
+    posixOnly,
+    async (t) => {
+      const project = createSplitAddonProject(join('node_modules', '@qvac', 'sdk'), {
+        layout,
+        withRuntime: true
+      })
+      t.teardown(project.cleanup)
+      t.absent(
+        existsSync(join(project.projectRoot, 'node_modules', '@qvac', 'fake-runtime')),
+        'the dependency is not in the top-level node_modules'
+      )
+      const pm = installFakePackageManager(project.projectRoot, 'pnpm')
+
+      await withPath(pm.binDir, () =>
+        buildMobileBundle(androidPrebuildMod(project.projectRoot), {
+          installMissingPrebuilds: true
+        })
+      )
+
+      t.alike(pm.calls(), [
+        {
+          cwd: project.projectRoot,
+          args: [
+            'add',
+            '--save-exact',
+            `${SPLIT_ADDON_ANDROID_PACKAGE}@${SPLIT_ADDON_VERSION}`,
+            `${RUNTIME_ADDON_ANDROID_PACKAGE}@${RUNTIME_ADDON_VERSION}`
+          ]
+        }
+      ])
+    }
+  )
+}
 
 function hostAddonMap(metaName: string) {
   return {
