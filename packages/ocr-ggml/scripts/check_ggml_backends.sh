@@ -38,8 +38,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # is `linux-x64`, on Apple Silicon `darwin-arm64`, etc.
 HOST_GUESS="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed -E 's/^x86_64$/x64/;s/^aarch64$/arm64/')"
 
-# Same precedence as @qvac/fabric/backends: a runtime in @qvac/fabric itself
-# wins, then the platform package as a pnpm sibling, npm nested, or npm hoisted.
+# Follows @qvac/fabric/backends' order (@qvac/fabric itself, then the platform
+# package as a pnpm sibling, npm nested, or npm hoisted), but picks the first
+# candidate with a prebuilds/<host>/qvac__fabric directory, like cmake's
+# qvac_addon_fabric_layout, where backends.js checks for a resolvable .bare.
 default_backends_dir() {
     local fabric="${REPO_ROOT}/node_modules/@qvac/fabric" real candidate
     [[ -d "${fabric}" ]] || return 0
