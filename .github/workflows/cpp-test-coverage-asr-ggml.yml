@@ -216,6 +216,25 @@ jobs:
         if: matrix.coverage
         working-directory: ${{ env.WORKDIR }}
         run: |
+          # bare-make's toolchain picks the compiler (npm llvm-runtime from
+          # bare-make 2, else the newest system clang-N), so the llvm-profdata/
+          # llvm-cov on PATH can be an older LLVM that cannot read its raw
+          # profile. Use the tools shipped next to the compiler it cached.
+          cxx=$(sed -n 's/^clang++:FILEPATH=//p' build/CMakeCache.txt 2>/dev/null | head -n 1)
+          llvm_bin=""
+          if [ -n "$cxx" ]; then
+            llvm_bin=$(dirname "$(readlink -f "$cxx")")
+          fi
+          if [ -n "$llvm_bin" ] && [ -f "$llvm_bin/llvm-profdata" ] && [ -f "$llvm_bin/llvm-cov" ]; then
+            for tool in llvm-profdata llvm-cov; do
+              [ -x "$llvm_bin/$tool" ] || chmod +x "$llvm_bin/$tool"
+            done
+            export PATH="$llvm_bin:$PATH"
+          else
+            echo "::warning::No llvm-profdata/llvm-cov next to '${cxx}'; using PATH"
+          fi
+          echo "compiler: ${cxx}"
+          llvm-profdata --version | head -n 2
           npm run coverage:cpp:report
           # Extract percentage
           COVERAGE=$(grep 'TOTAL' build/addon/tests/coverage-summary.txt | awk '{print $10}')
