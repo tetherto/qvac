@@ -1156,21 +1156,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'tts-ggml',
     artifactBytes: 262241216
   },
-  '406bd5983096cc49e1019e9c295e1b011d7b17ccae9e066266eb1734a4743bf7': {
-    schemaVersion: 1,
-    engine: 'llamacpp-completion',
-    artifactBytes: 807691648,
-    ggufFacts: {
-      architecture: 'llama',
-      blockCount: 16,
-      headCount: 32,
-      headCountKv: 8,
-      keyLength: 64,
-      valueLength: 64,
-      embeddingLength: 2048,
-      contextLength: 131072
-    }
-  },
   '40767965cbc4289fccc7a8dc34fa6d4700ccc0ff36ba382a85acc943fb1b0c03': {
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
@@ -2001,6 +1986,21 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'nmtcpp-translation',
     artifactBytes: 193106987
+  },
+  '6a13da69b498c560965ad15b5eede6dffacd5eb985759070a5b35575ed6a801c': {
+    schemaVersion: 1,
+    engine: 'llamacpp-completion',
+    artifactBytes: 807692320,
+    ggufFacts: {
+      architecture: 'llama',
+      blockCount: 16,
+      headCount: 32,
+      headCountKv: 8,
+      keyLength: 64,
+      valueLength: 64,
+      embeddingLength: 2048,
+      contextLength: 131072
+    }
   },
   '6a154ec41e390aaaaf579f6e891042cee03f22ced96f6027182565cb64d298f5': {
     schemaVersion: 1,

@@ -3089,21 +3089,21 @@ LLAMA_3_2_1B_INST_Q4_0_TENSORS = ModelConstant(
     params="1B",
 )
 
-LLAMA_TOOL_CALLING_1B_INST_Q4_K = ModelConstant(
-    name="LLAMA_TOOL_CALLING_1B_INST_Q4_K",
-    src="registry://hf/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
-    registry_path="mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
+LLAMA_TOOL_CALLING_1B_INST_Q4_K_M = ModelConstant(
+    name="LLAMA_TOOL_CALLING_1B_INST_Q4_K_M",
+    src="registry://hf/mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/resolve/a8d3114d7b68df89b92f04372231d348e4f91753/Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
+    registry_path="mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/resolve/a8d3114d7b68df89b92f04372231d348e4f91753/Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
     registry_source="hf",
-    blob_core_key="6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-    blob_block_offset=529475,
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=313380,
     blob_block_length=12325,
-    blob_byte_offset=34696195331,
-    model_id="llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
-    expected_size=807691648,
-    sha256_checksum="406bd5983096cc49e1019e9c295e1b011d7b17ccae9e066266eb1734a4743bf7",
+    blob_byte_offset=20537541760,
+    model_id="Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
+    expected_size=807692320,
+    sha256_checksum="6a13da69b498c560965ad15b5eede6dffacd5eb985759070a5b35575ed6a801c",
     addon="llm",
     engine="llamacpp-completion",
-    quantization="q4_k",
+    quantization="q4_k_m",
     params="1B",
 )
 
@@ -8031,7 +8031,7 @@ __all__ = [
     "LLAMA_3_2_1B_INST_Q4_0",
     "LLAMA_3_2_1B_INST_Q4_0_SHARD",
     "LLAMA_3_2_1B_INST_Q4_0_TENSORS",
-    "LLAMA_TOOL_CALLING_1B_INST_Q4_K",
+    "LLAMA_TOOL_CALLING_1B_INST_Q4_K_M",
     "LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS",
     "LTX_2_3_22B_Q2_K",
     "LTX_2_3_22B_Q5_K_M",

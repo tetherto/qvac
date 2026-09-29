@@ -1142,24 +1142,6 @@ export const allModels = [
     endpointCategory: "chat"
   } as const,
   {
-    name: "LLAMA_TOOL_CALLING_1B_INST_Q4_K",
-    src: `registry://hf/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf`,
-    registryPath: "mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
-    registrySource: "hf",
-    blobCoreKey: "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-    blobBlockOffset: 529475,
-    blobBlockLength: 12325,
-    blobByteOffset: 34696195331,
-    modelId: "llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
-    addon: "llm",
-    expectedSize: 807691648,
-    sha256Checksum: "406bd5983096cc49e1019e9c295e1b011d7b17ccae9e066266eb1734a4743bf7",
-    engine: "llamacpp-completion",
-    quantization: "q4_k",
-    params: "1B",
-    endpointCategory: "chat"
-  } as const,
-  {
     name: "AFRICAN_4B_TRANSLATION_Q4_K_M",
     src: `registry://hf/mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf`,
     registryPath: "mradermacher/AfriqueGemma-4B-GGUF/blob/e1324d25db75de68b604093e527272f6c5aba69f/AfriqueGemma-4B.Q4_K_M.gguf",
@@ -1175,6 +1157,24 @@ export const allModels = [
     engine: "llamacpp-completion",
     quantization: "Q4_K_M",
     params: "4B",
+    endpointCategory: "chat"
+  } as const,
+  {
+    name: "LLAMA_TOOL_CALLING_1B_INST_Q4_K_M",
+    src: `registry://hf/mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/resolve/a8d3114d7b68df89b92f04372231d348e4f91753/Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf`,
+    registryPath: "mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/resolve/a8d3114d7b68df89b92f04372231d348e4f91753/Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
+    registrySource: "hf",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 313380,
+    blobBlockLength: 12325,
+    blobByteOffset: 20537541760,
+    modelId: "Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
+    addon: "llm",
+    expectedSize: 807692320,
+    sha256Checksum: "6a13da69b498c560965ad15b5eede6dffacd5eb985759070a5b35575ed6a801c",
+    engine: "llamacpp-completion",
+    quantization: "q4_k_m",
+    params: "1B",
     endpointCategory: "chat"
   } as const,
   {
@@ -13326,8 +13326,8 @@ export const SMOLVLM2_500M_MULTIMODAL_F16: ModelConstant<"chat"> = allModels[59]
 export const SMOLVLM2_500M_MULTIMODAL_Q8_0: ModelConstant<"chat"> = allModels[60];
 export const SMOLLM2_360M_INST_Q8: ModelConstant<"chat"> = allModels[61];
 export const LASER_DOLPHIN_2X7B_INST_Q2_K: ModelConstant<"chat"> = allModels[62];
-export const LLAMA_TOOL_CALLING_1B_INST_Q4_K: ModelConstant<"chat"> = allModels[63];
-export const AFRICAN_4B_TRANSLATION_Q4_K_M: ModelConstant<"chat"> = allModels[64];
+export const AFRICAN_4B_TRANSLATION_Q4_K_M: ModelConstant<"chat"> = allModels[63];
+export const LLAMA_TOOL_CALLING_1B_INST_Q4_K_M: ModelConstant<"chat"> = allModels[64];
 export const MMPROJ_QWEN3_5_0_8B_MULTIMODAL_Q8_0: ModelConstant<"chat"> = allModels[65];
 export const MMPROJ_QWEN3_5_2B_MULTIMODAL_Q8_0: ModelConstant<"chat"> = allModels[66];
 export const MMPROJ_QWEN3_5_4B_MULTIMODAL_Q8_0: ModelConstant<"chat"> = allModels[67];
