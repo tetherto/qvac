@@ -14,7 +14,8 @@ const {
   splitHeaderAndBody,
   buildSignal,
   chunkify,
-  BCI_TEST_THREADS
+  BCI_TEST_THREADS,
+  NO_GPU
 } = require('./helpers')
 const { flattenSegments } = require('@qvac/bci-whispercpp/util')
 
@@ -122,7 +123,7 @@ test(
 
 test(
   '[BCI] WER measurement across all test samples',
-  { skip: !hasModel, timeout: 180000 },
+  { skip: !hasModel || NO_GPU, timeout: 180000 },
   async (t) => {
     t.ok(manifest.samples.length > 0, 'Manifest must contain at least one sample')
 
@@ -256,7 +257,7 @@ test(
 
 test(
   '[BCI] streaming transcription triggers multiple sliding windows on long signal',
-  { skip: !hasModel, timeout: 180000 },
+  { skip: !hasModel || NO_GPU, timeout: 180000 },
   async (t) => {
     t.ok(manifest.samples.length > 0, 'Manifest must contain at least one sample')
 
@@ -323,7 +324,7 @@ test(
 
 test(
   '[BCI] streaming emits incrementally before the input ends',
-  { skip: !hasModel, timeout: 180000 },
+  { skip: !hasModel || NO_GPU, timeout: 180000 },
   async (t) => {
     const sample = manifest.samples[0]
     const samplePath = getSamplePath(sample.file)
