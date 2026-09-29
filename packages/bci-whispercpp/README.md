@@ -365,6 +365,10 @@ A model the fitter cannot read is `status: "error"`; a broken request, or a host
 | `npm run test:dts` | Type-checks the published `index.d.ts` |
 | `npm test` | Runs `test:unit` + `test:integration` |
 
+On CPU the integration suite runs only brief inference, one decode per test.
+The WER sweep, the multi-window streaming tests and the accuracy regression
+run on the GPU and are skipped when `NO_GPU=true`.
+
 ```bash
 # JS unit tests
 npm run test:unit
