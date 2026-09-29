@@ -4,7 +4,7 @@
 // real one — adding a package to a train must not need a test edit.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { checkReleaseTrain, movedProjects } from '../lib/release-train-guard.mjs'
+import { alreadyOnNpm, checkReleaseTrain, movedProjects } from '../lib/release-train-guard.mjs'
 import { parseBranch } from '../lib/release-trains.mjs'
 
 const CATALOG = {
@@ -133,9 +133,25 @@ test('lists the packages whose version moved, with the version they moved to', (
     head: AT_0_21_0,
   })
   assert.deepEqual(movedProjects('release-train-sdk-0.21.0', 'base', 'head', read, CATALOG), [
-    { slug: 'inference', version: '0.21.0', changelog: 'packages/inference/CHANGELOG.md' },
-    { slug: 'sdk', version: '0.21.0', changelog: 'packages/sdk/CHANGELOG.md' },
+    { name: '@qvac/inference', slug: 'inference', version: '0.21.0', changelog: 'packages/inference/CHANGELOG.md' },
+    { name: '@qvac/sdk', slug: 'sdk', version: '0.21.0', changelog: 'packages/sdk/CHANGELOG.md' },
   ])
+})
+
+test('flags only the moved versions npm already has', () => {
+  const moved = [
+    { name: '@qvac/inference', version: '0.21.0' },
+    { name: '@qvac/openclaw-plugin', version: '0.3.3' },
+  ]
+  const onNpm = new Set(['@qvac/openclaw-plugin@0.3.3'])
+  const lookups = []
+  const taken = alreadyOnNpm(moved, (name, version) => {
+    lookups.push(`${name}@${version}`)
+    return onNpm.has(`${name}@${version}`)
+  })
+  assert.deepEqual(taken, [{ name: '@qvac/openclaw-plugin', version: '0.3.3' }])
+  assert.deepEqual(lookups, ['@qvac/inference@0.21.0', '@qvac/openclaw-plugin@0.3.3'])
+  assert.deepEqual(alreadyOnNpm([], () => true), [])
 })
 
 test('counts a package new to the branch as moved, and refuses one missing at head', () => {

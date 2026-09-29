@@ -132,10 +132,22 @@ export function movedProjects (ref, baseSha, headSha, readManifestAt, catalog) {
     const base = readManifestAt(baseSha, manifestPath)
     const baseVersion = base === null ? null : JSON.parse(base).version
     if (headVersion !== baseVersion) {
-      moved.push({ slug: project.slug, version: headVersion, changelog: `${project.dir}/CHANGELOG.md` })
+      moved.push({ name: project.name, slug: project.slug, version: headVersion, changelog: `${project.dir}/CHANGELOG.md` })
     }
   }
   return moved
+}
+
+/**
+ * The moved packages whose new version npm already has. The publish step skips
+ * a version npm already has, so the train would ship without that package's
+ * changes while its changelog and tag describe them.
+ *
+ * @param {Array<{ name: string, version: string }>} moved   from movedProjects
+ * @param {(name: string, version: string) => boolean} isPublished
+ */
+export function alreadyOnNpm (moved, isPublished) {
+  return moved.filter((project) => isPublished(project.name, project.version))
 }
 
 export { parseBranch, trainNames }

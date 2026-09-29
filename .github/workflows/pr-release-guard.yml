@@ -8,8 +8,9 @@ name: PR Release Guard (SDK Pod)
 #
 # A release train PR (base release-train-<train>-x.y.z) gets the checks
 # release-train.yml runs on push — validate-release-trains.mjs and
-# validate-release-train.mjs — plus the "## [x.y.z]" section check for every
-# train package whose version moved.
+# validate-release-train.mjs — plus, for every train package whose version
+# moved, the "## [x.y.z]" section check and a check that npm does not have the
+# version yet.
 #
 # Uses pull_request (not pull_request_target): the job needs no secrets or write
 # token, only reads PR git content, so it must not run with elevated privilege.
@@ -107,6 +108,14 @@ jobs:
           node .github/scripts/validate-release-train.mjs "$BASE_REF" "$MERGE_BASE" "$HEAD_SHA"
           MOVED=$(node .github/scripts/release-train-moved.mjs "$BASE_REF" "$MERGE_BASE" "$HEAD_SHA")
           echo "moved=$MOVED" >> "$GITHUB_OUTPUT"
+
+      # Only versions this PR moves: a follow-up PR onto a half-shipped train
+      # moves none, so the re-run that finishes it is not blocked here.
+      - name: Check the moved versions are not on npm yet
+        if: steps.pkg.outputs.is_train == 'true'
+        env:
+          MOVED: ${{ steps.train.outputs.moved }}
+        run: node .github/scripts/release-train-unpublished.mjs "$MOVED"
 
       - name: Validate release branch, version bump and changelog
         if: steps.pkg.outputs.is_sdk_pod_package == 'true'

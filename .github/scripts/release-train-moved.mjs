@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Print, as JSON, the train packages whose version moved between two commits:
- * [{ "slug", "version", "changelog" }]. pr-release-guard.yml checks each one's
- * changelog section before a release train PR merges.
+ * [{ "name", "slug", "version", "changelog" }]. pr-release-guard.yml checks
+ * each one's changelog section, and that npm does not have the version yet,
+ * before a release train PR merges.
  *
  * Usage: node .github/scripts/release-train-moved.mjs <ref> <base-sha> <head-sha>
  */
