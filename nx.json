@@ -5,5 +5,10 @@
     "build": {
       "dependsOn": ["^build"]
     }
+  },
+  "pluginsConfig": {
+    "@nx/js": {
+      "projectsAffectedByDependencyUpdates": []
+    }
   }
 }
