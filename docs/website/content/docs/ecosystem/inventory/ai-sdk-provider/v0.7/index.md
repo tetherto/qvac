@@ -15,8 +15,6 @@ The provider is OpenAI-compatible by construction: the OpenAI-compatible transpo
 >
 > - **External** (default): the package wraps a `qvac serve --openai` HTTP endpoint that you run yourself.
 > - **Managed** (`mode: 'managed'`): the provider synthesizes an ephemeral config from a model list, then spawns (or reuses) a shared `qvac serve` on a free port and keeps it alive for as long as anything is using it, reaping it automatically once everyone is done. See [Managed mode](#managed-mode) below. Requires the optional [`@qvac/cli`](https://www.npmjs.com/package/@qvac/cli) peer dependency.
->
-> See the [QVAC-19194 epic](https://app.asana.com/1/45238840754660/task/1214968611313049).
 
 ---
 
