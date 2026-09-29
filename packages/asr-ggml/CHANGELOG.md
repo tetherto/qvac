@@ -54,6 +54,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Use registry `speech-cpp` `2026-09-29#1` for Nemotron 3 Diarization and
+  remove the package-local speech port overlay.
 - Parakeet `cancel()` now stops an offline `run()` between long-form encoder
   windows instead of after the whole call.
 - speech-cpp's own Parakeet log lines now reach the JS logger instead of

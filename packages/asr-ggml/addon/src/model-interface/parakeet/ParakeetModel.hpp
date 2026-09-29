@@ -1,23 +1,5 @@
 #pragma once
 
-// Pure-ggml backend for the Parakeet binding (sourced from qvac-parakeet.cpp).
-//
-// This class used to host four ggml sessions (preprocessor + encoder
-// + decoder + ctc/sortformer) plus a hand-rolled mel-spectrogram, CMVN,
-// chunked-limited streaming state machine for EOU, and a Sortformer
-// post-processing pipeline. All of that has been replaced by a single
-// `pkt::Engine` from `parakeet-cpp` (vcpkg overlay port). The
-// engine internally handles mel + encoder + decoder + diarization for any
-// of the model types (CTC, TDT, RNN-T, EOU, Sortformer) given a single GGUF
-// file, so the binding's job is reduced to:
-//
-//   1. accumulate GGUF bytes from `setWeightsForFile()` into a temp file,
-//   2. open `pkt::Engine` against that path,
-//   3. dispatch `process()` to either `transcribe_samples()` (CTC / TDT /
-//      RNN-T / EOU) or `diarize_samples()` (Sortformer),
-//   4. wrap the engine result in `Transcript` and fire the on-segment
-//      callback.
-
 #include <atomic>
 #include <cstdint>
 #include <filesystem>
