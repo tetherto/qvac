@@ -41,8 +41,11 @@ function main () {
     run,
   })
 
-  const verb = values['dry-run'] ? 'would publish' : 'published'
-  for (const entry of result.published) {
+  const dryRun = values['dry-run']
+  for (const entry of result.completed) {
+    const verb = entry.alreadyPublished
+      ? (dryRun ? 'would skip, already on npm:' : 'skipped, already on npm:')
+      : (dryRun ? 'would publish' : 'published')
     console.log(`${verb} ${entry.name}@${entry.version} (${entry.tag})`)
   }
   if (result.failed) {

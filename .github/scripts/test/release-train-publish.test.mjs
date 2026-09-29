@@ -46,15 +46,22 @@ function readManifest (manifests = MANIFESTS) {
   }
 }
 
-function fakeRun ({ latest = {}, failPublishOf = null, viewFails = false } = {}) {
+const E404 = { status: 1, stdout: '{"error":{"code":"E404"}}', stderr: '' }
+
+// `onNpm` lists the exact versions npm already has, as "name@version".
+function fakeRun ({ latest = {}, onNpm = [], failPublishOf = null, viewFails = false } = {}) {
   const calls = []
   const run = (command, args) => {
     calls.push([command, ...args])
     if (command === 'npm') {
       if (viewFails) return { status: 1, stdout: '{"error":{"code":"ETIMEDOUT"}}', stderr: 'timeout' }
-      const name = args[1]
-      if (!(name in latest)) return { status: 1, stdout: '{"error":{"code":"E404"}}', stderr: '' }
-      return { status: 0, stdout: JSON.stringify(latest[name]), stderr: '' }
+      const [, spec, field] = args
+      if (field === 'version') {
+        if (!onNpm.includes(spec)) return E404
+        return { status: 0, stdout: JSON.stringify(spec.slice(spec.lastIndexOf('@') + 1)), stderr: '' }
+      }
+      if (!(spec in latest)) return E404
+      return { status: 0, stdout: JSON.stringify(latest[spec]), stderr: '' }
     }
     const project = args.find((a) => a.startsWith('--projects=')).slice('--projects='.length)
     return { status: project === failPublishOf ? 1 : 0, stdout: '', stderr: '' }
@@ -139,10 +146,21 @@ test('stops at the first failure and reports what was not attempted', () => {
   const { run, calls } = fakeRun({ failPublishOf: '@qvac/sdk' })
   const result = publishTrain({ train: 'sdk', readManifest: readManifest(), run, log: () => {}, catalog: CATALOG })
 
-  assert.deepEqual(result.published.map((p) => p.name), ['@qvac/inference'])
+  assert.deepEqual(result.completed.map((p) => p.name), ['@qvac/inference'])
   assert.equal(result.failed.name, '@qvac/sdk')
   assert.deepEqual(result.notAttempted.map((p) => p.name), ['@qvac/cli', '@qvac/plugin'])
   assert.equal(publishCalls(calls).length, 2)
+})
+
+test('marks a version npm already has, and still hands it to nx', () => {
+  const { run, calls } = fakeRun({ latest: { '@qvac/inference': '0.21.0' }, onNpm: ['@qvac/inference@0.21.0'] })
+  const result = publishTrain({ train: 'sdk', readManifest: readManifest(), run, log: () => {}, catalog: CATALOG })
+
+  assert.deepEqual(
+    result.completed.map((p) => [p.name, p.alreadyPublished]),
+    [['@qvac/inference', true], ['@qvac/sdk', false], ['@qvac/cli', false], ['@qvac/plugin', false]],
+  )
+  assert.equal(publishCalls(calls).length, 4)
 })
 
 test('a registry error stops the run before anything is published', () => {

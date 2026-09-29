@@ -80,38 +80,54 @@ export function resolveDistTag ({ version, latest, requested }) {
   return !version.includes('-') && atOrAbove ? 'latest' : `release-${a}.${b}`
 }
 
-/** npm's current `latest` for a package; 0.0.0 when it was never published. */
-export function readLatest (name, run) {
-  const result = run('npm', ['view', name, 'dist-tags.latest', '--json'])
+/**
+ * `npm view <spec> <field> --json`; null when npm answers E404, which it does
+ * both for a package never published and for a version it does not have.
+ */
+function npmView (spec, field, run) {
+  const result = run('npm', ['view', spec, field, '--json'])
   if (result.status !== 0) {
     let code
     try {
       code = JSON.parse(result.stdout).error?.code
     } catch {}
-    if (code === 'E404') return '0.0.0'
-    throw new Error(`npm view ${name} failed (exit ${result.status}): ${result.stderr || result.stdout}`)
+    if (code === 'E404') return null
+    throw new Error(`npm view ${spec} failed (exit ${result.status}): ${result.stderr || result.stdout}`)
   }
   const out = result.stdout.trim()
-  return out ? JSON.parse(out) : '0.0.0'
+  return out ? JSON.parse(out) : null
+}
+
+/** npm's current `latest` for a package; 0.0.0 when it was never published. */
+export function readLatest (name, run) {
+  return npmView(name, 'dist-tags.latest', run) ?? '0.0.0'
+}
+
+/** Whether npm already has this exact version. */
+export function isPublished (name, version, run) {
+  return npmView(`${name}@${version}`, 'version', run) !== null
 }
 
 /**
- * Resolves every tag first, so a registry error stops the run before anything
- * is published, then publishes in dependency order and stops at the first
- * failure. Re-running publishes the rest: the executor skips a version
- * already on npm under the same tag.
+ * Reads every tag and whether each version is already on npm first, so a
+ * registry error stops the run before anything is published, then publishes
+ * in dependency order and stops at the first failure. Re-running publishes
+ * the rest: the executor skips a version already on npm under the same tag.
+ * `alreadyPublished` is read before the executor runs, so the report can say
+ * which versions this run added.
  */
 export function publishTrain ({ train, requestedTag = '', dryRun = false, readManifest, run, log = console.log, catalog }) {
   const plan = planPublish(train, readManifest, catalog).map((entry) => ({
     ...entry,
-    tag: resolveDistTag({ version: entry.version, latest: readLatest(entry.name, run), requested: requestedTag })
+    tag: resolveDistTag({ version: entry.version, latest: readLatest(entry.name, run), requested: requestedTag }),
+    alreadyPublished: isPublished(entry.name, entry.version, run)
   }))
 
   for (const entry of plan) {
-    log(`${entry.name}@${entry.version} -> ${entry.tag}`)
+    log(`${entry.name}@${entry.version} -> ${entry.tag}${entry.alreadyPublished ? ' (already on npm)' : ''}`)
   }
 
-  const published = []
+  const completed = []
   for (const [index, entry] of plan.entries()) {
     const args = [
       'exec', 'nx', 'run-many', '-t', 'nx-release-publish',
@@ -121,12 +137,12 @@ export function publishTrain ({ train, requestedTag = '', dryRun = false, readMa
     const result = run('pnpm', args, { stdio: 'inherit' })
     if (result.status !== 0) {
       return {
-        published,
+        completed,
         failed: entry,
         notAttempted: plan.slice(index + 1)
       }
     }
-    published.push(entry)
+    completed.push(entry)
   }
-  return { published, failed: null, notAttempted: [] }
+  return { completed, failed: null, notAttempted: [] }
 }
