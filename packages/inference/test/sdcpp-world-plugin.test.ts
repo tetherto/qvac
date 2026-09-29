@@ -13,6 +13,38 @@ const WORLD_BASE = {
   vaeModelSrc: 'registry://hf/wan2.2_vae_f16.gguf'
 }
 
+test('sdcpp plugin resolveConfig: world memory controls reach the addon unchanged', async (t) => {
+  const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
+
+  const world = {
+    paramsBackend: 'diffusion=cpu,vae=cpu',
+    maxVram: 'cuda0=-1',
+    streamLayers: true,
+    kvCache: true,
+    verbosity: 3 as const
+  }
+  const resolved = await diffusionPlugin.resolveConfig!({ ...WORLD_BASE, world }, resolveCtx)
+
+  t.alike(resolved.config.world, world, 'forwarded verbatim; the engine owns the grammar')
+})
+
+test('sdcpp plugin resolveConfig: flat memory options name their world equivalent', async (t) => {
+  const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
+
+  for (const [flat, value, nested] of [
+    ['params_backend', 'diffusion=cpu', 'paramsBackend'],
+    ['max_vram', 2, 'maxVram'],
+    ['stream_layers', true, 'streamLayers'],
+    ['verbosity', 3, 'verbosity']
+  ] as const) {
+    await t.exception(
+      diffusionPlugin.resolveConfig!({ ...WORLD_BASE, [flat]: value }, resolveCtx),
+      new RegExp(`world\\.${nested}`),
+      `${flat} points at world.${nested} rather than being silently dropped`
+    )
+  }
+})
+
 test('sdcpp plugin resolveConfig: world resolves taehv + scene and strips *Src', async (t) => {
   const { diffusionPlugin } = await import('@/plugins/builtin/sdcpp-generation/plugin')
 
@@ -152,7 +184,7 @@ test('sdcpp plugin resolveConfig: world rejects every unsupported top-level fiel
   await t.exception(
     diffusionPlugin.resolveConfig!({ ...WORLD_BASE, verbosity: 2 }, resolveCtx),
     /verbosity does not reach the ABot-World session/,
-    'verbosity only reaches the ESRGAN path, so world must not appear to honour it'
+    'flat verbosity is refused; the walk session reads world.verbosity instead'
   )
 
   // The allow-list is what makes this hold for fields nobody has added yet, so

@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.43.0] - 2026-09-28
+
+### Added
+
+- `assessFit` projects an embedding load's memory demand against the memory
+  free right now, without loading weights. It reads GGUF metadata only and
+  applies the embedding load's own normalization: the micro-batch follows
+  `batch-size`, a single sequence uses a unified KV cache, and the context is
+  pinned to the model's trained context or capped at it. Exported from the
+  package root with `EmbedFitRequest`, `EmbedFitResult`, `EmbedFitStatus` and
+  `EmbedFitDevice` types ([#4664](https://github.com/tetherto/qvac/pull/4664)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.17.0` -> `^0.18.0`, which moves the
+  shared runtime and ggml backends into `@qvac/fabric-<host>` platform
+  packages. Desktop installs get theirs as an optional dependency of
+  `@qvac/fabric`, and `resolveBackendsDir()` now takes the root from
+  `@qvac/fabric/backends`. No API change.
+- Mobile apps must add `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` as direct dependencies at the same exact version.
+
 ## [0.42.0] - 2026-09-23
 
 ### Changed
