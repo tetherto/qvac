@@ -171,6 +171,7 @@ test('documented generated-module imports are exempted and counted', async () =>
   const root = await mkdtemp(join(tmpdir(), 'quality-dependencies-exemption-'))
   const sources = {
     'packages/asr-ggml/src/index.ts': "const binding = require('./binding')\nexport { binding }\n",
+    'packages/ggml-rpc-server/src/index.ts': "const binding = require('./binding')\nexport { binding }\n",
     'packages/asr-ggml/src/lib/error.ts': "import manifest from '../package.json'\nexport { manifest }\n",
   }
   await writeSources(root, sources)
@@ -181,7 +182,7 @@ test('documented generated-module imports are exempted and counted', async () =>
   })
 
   assert.deepEqual(result.diagnostics, [])
-  assert.equal(result.coverage[0]?.unresolvedImportsExempted, 2)
+  assert.equal(result.coverage[0]?.unresolvedImportsExempted, 3)
 })
 
 async function writeSources(

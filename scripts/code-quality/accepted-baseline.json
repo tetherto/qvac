@@ -383,11 +383,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/helpers.js",
-        "line": 800,
+        "line": 802,
         "column": 1
       },
       "measurement": {
-        "value": 213,
+        "value": 214,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -1272,7 +1272,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 1047,
+        "value": 1143,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -2291,7 +2291,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 976,
+        "value": 977,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -2312,39 +2312,14 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/helpers.js",
-        "line": 800,
+        "line": 802,
         "column": 1
       },
       "measurement": {
-        "value": 64,
+        "value": 65,
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:123e7073a5cd3038440affd72a001a8232327262d28af3b653b0568b5a4fe6e5",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/ephemeral-files-store.ts",
-        "symbol": "createEphemeralFilesStore#1"
-      },
-      "summary": "createEphemeralFilesStore#1 in packages/cli/src/serve/extensions/openai/adapters/ephemeral-files-store.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/ephemeral-files-store.ts",
-        "line": 46,
-        "column": 8
-      },
-      "measurement": {
-        "value": 70,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -2655,13 +2630,13 @@
         "kind": "file",
         "path": "packages/sdk/e2e/tests/mobile/consumer.ts"
       },
-      "summary": "packages/sdk/e2e/tests/mobile/consumer.ts imports 36 local modules",
+      "summary": "packages/sdk/e2e/tests/mobile/consumer.ts imports 37 local modules",
       "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
       "primaryLocation": {
         "path": "packages/sdk/e2e/tests/mobile/consumer.ts"
       },
       "measurement": {
-        "value": 36,
+        "value": 37,
         "unit": "local modules",
         "advisoryThreshold": 25,
         "highThreshold": 40
@@ -3794,6 +3769,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:209393e11b2f42ffb547485b06c0223d107d0469da3830919463e016f2cdc64d",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/test/unit/core/stores/ephemeral-files.test.ts",
+        "symbol": "describe \"createEphemeralFilesStore\" callback#1"
+      },
+      "summary": "describe \"createEphemeralFilesStore\" callback#1 in packages/cli/test/unit/core/stores/ephemeral-files.test.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/test/unit/core/stores/ephemeral-files.test.ts",
+        "line": 5,
+        "column": 39
+      },
+      "measurement": {
+        "value": 137,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
       "fingerprint": "quality-v1:2095976a2ccc90858cac90f40baa816353340df1a01edfa7ae7752255db29816",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -4106,7 +4106,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/translation-nmtcpp/src/index.ts",
-        "line": 396,
+        "line": 394,
         "column": 3
       },
       "measurement": {
@@ -5280,7 +5280,7 @@
         "column": 3
       },
       "measurement": {
-        "value": 206,
+        "value": 210,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -5373,7 +5373,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 1074,
+        "value": 1076,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -5678,6 +5678,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:315f013ffb0b5a377da06514ff8a57f6600c4fb7289b05d745c14daa2d73c47f",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/core/stores/vector-stores.ts",
+        "symbol": "createVectorStoresStore#1"
+      },
+      "summary": "createVectorStoresStore#1 in packages/cli/src/serve/core/stores/vector-stores.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/core/stores/vector-stores.ts",
+        "line": 113,
+        "column": 8
+      },
+      "measurement": {
+        "value": 73,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
+      }
+    },
+    {
       "fingerprint": "quality-v1:319c9efbb79f7883164f0e4e4494c7e15937906446a83bb2e89dfa5daf436445",
       "detector": "structure",
       "rule": "file-lines",
@@ -5890,7 +5915,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/schemas/sdcpp-config.ts",
-        "line": 1012,
+        "line": 1055,
         "column": 1
       },
       "measurement": {
@@ -6213,7 +6238,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "line": 140,
+        "line": 139,
         "column": 8
       },
       "measurement": {
@@ -6359,11 +6384,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/vla-ggml/src/index.ts",
-        "line": 414,
+        "line": 416,
         "column": 1
       },
       "measurement": {
-        "value": 762,
+        "value": 760,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -6409,7 +6434,7 @@
         "column": 8
       },
       "measurement": {
-        "value": 36,
+        "value": 37,
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
@@ -6429,11 +6454,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/sdcpp-generation/plugin.ts",
-        "line": 365,
+        "line": 364,
         "column": 1
       },
       "measurement": {
-        "value": 522,
+        "value": 526,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -6652,7 +6677,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "line": 295,
+        "line": 294,
         "column": 1
       },
       "measurement": {
@@ -6971,7 +6996,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/llamacpp-completion/ops/batch-completion-stream.ts",
-        "line": 148,
+        "line": 156,
         "column": 8
       },
       "measurement": {
@@ -7859,13 +7884,13 @@
         "kind": "file",
         "path": "packages/sdk/e2e/tests/electron/consumer.ts"
       },
-      "summary": "packages/sdk/e2e/tests/electron/consumer.ts imports 39 local modules",
+      "summary": "packages/sdk/e2e/tests/electron/consumer.ts imports 40 local modules",
       "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
       "primaryLocation": {
         "path": "packages/sdk/e2e/tests/electron/consumer.ts"
       },
       "measurement": {
-        "value": 39,
+        "value": 40,
         "unit": "local modules",
         "advisoryThreshold": 25,
         "highThreshold": 40
@@ -7940,7 +7965,7 @@
         "column": 3
       },
       "measurement": {
-        "value": 157,
+        "value": 158,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -8058,7 +8083,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/addon.ts",
-        "line": 125,
+        "line": 126,
         "column": 8
       },
       "measurement": {
@@ -8332,7 +8357,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 1522,
+        "value": 1563,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -8863,7 +8888,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 602,
+        "value": 608,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -9779,11 +9804,11 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/audio-ctx-chunking.test.js",
-        "line": 44,
-        "column": 86
+        "line": 49,
+        "column": 3
       },
       "measurement": {
-        "value": 141,
+        "value": 142,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -10031,31 +10056,6 @@
       },
       "measurement": {
         "value": 51,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:5758d47c9ed4b2b13456a211b1ea223c1453eb05218efee2e080938235b617c1",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/video-jobs-store.ts",
-        "symbol": "createVideoJobsStore#1"
-      },
-      "summary": "createVideoJobsStore#1 in packages/cli/src/serve/extensions/openai/video-jobs-store.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/video-jobs-store.ts",
-        "line": 104,
-        "column": 8
-      },
-      "measurement": {
-        "value": 82,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -10664,7 +10664,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 651,
+        "value": 653,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -11151,7 +11151,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/sdcpp-generation/plugin.ts",
-        "line": 363,
+        "line": 367,
         "column": 3
       },
       "measurement": {
@@ -11271,7 +11271,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "line": 295,
+        "line": 294,
         "column": 1
       },
       "measurement": {
@@ -11718,7 +11718,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 306,
+        "value": 305,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -11813,7 +11813,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "line": 99,
+        "line": 101,
         "column": 39
       },
       "measurement": {
@@ -12625,7 +12625,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 670,
+        "value": 673,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -12703,6 +12703,31 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:6c3764d5a4d6ac6b9b2f373cd50a26e3fc9e279fe6c484706d9ff07e1cad1469",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/core/stores/jobs.ts",
+        "symbol": "createJobsStore#1"
+      },
+      "summary": "createJobsStore#1 in packages/cli/src/serve/core/stores/jobs.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/core/stores/jobs.ts",
+        "line": 39,
+        "column": 8
+      },
+      "measurement": {
+        "value": 58,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -12913,11 +12938,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/ocr-ggml/src/index.ts",
-        "line": 491,
+        "line": 493,
         "column": 1
       },
       "measurement": {
-        "value": 460,
+        "value": 457,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -13488,31 +13513,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:73453d17297d9abad7b706e6979bde96ba55bfcc3e25b13ca94986bbe96de39d",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/test/unit/extensions/openai/vector-stores-store.test.ts",
-        "symbol": "describe \"createVectorStoresStore\" callback#1"
-      },
-      "summary": "describe \"createVectorStoresStore\" callback#1 in packages/cli/test/unit/extensions/openai/vector-stores-store.test.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/test/unit/extensions/openai/vector-stores-store.test.ts",
-        "line": 51,
-        "column": 37
-      },
-      "measurement": {
-        "value": 142,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:74150eab7bcfea404c565c01031926cafc58f8a684adc2a6c828a63339654397",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -13552,7 +13552,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/llm-llamacpp/src/addon.ts",
-        "line": 125,
+        "line": 126,
         "column": 8
       },
       "measurement": {
@@ -13701,7 +13701,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/addon.test.js",
-        "line": 482,
+        "line": 484,
         "column": 72
       },
       "measurement": {
@@ -13928,7 +13928,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 336,
+        "value": 335,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -13974,7 +13974,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/ocr-ggml/src/index.ts",
-        "line": 300,
+        "line": 298,
         "column": 3
       },
       "measurement": {
@@ -14199,7 +14199,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 813,
+        "value": 818,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -15077,7 +15077,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/parakeet-helpers.js",
-        "line": 1243,
+        "line": 1245,
         "column": 1
       },
       "measurement": {
@@ -15647,7 +15647,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 603,
+        "value": 605,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -15864,7 +15864,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 448,
+        "value": 452,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -16107,7 +16107,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/parakeet-multiple-transcriptions.test.js",
-        "line": 85,
+        "line": 81,
         "column": 7
       },
       "measurement": {
@@ -16335,7 +16335,7 @@
         "column": 38
       },
       "measurement": {
-        "value": 167,
+        "value": 184,
         "unit": "code lines",
         "advisoryThreshold": 100,
         "highThreshold": 200
@@ -16381,7 +16381,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/chat.ts",
-        "line": 223,
+        "line": 222,
         "column": 1
       },
       "measurement": {
@@ -16460,7 +16460,7 @@
         "column": 8
       },
       "measurement": {
-        "value": 189,
+        "value": 193,
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
@@ -16715,31 +16715,6 @@
       }
     },
     {
-      "fingerprint": "quality-v1:8e80bc4567accdefe8dd02d25a4059ae76ebac4db03c4a92fb2716bb2ee7250b",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/test/unit/extensions/openai/ephemeral-files-store.test.ts",
-        "symbol": "describe \"createEphemeralFilesStore\" callback#1"
-      },
-      "summary": "describe \"createEphemeralFilesStore\" callback#1 in packages/cli/test/unit/extensions/openai/ephemeral-files-store.test.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/test/unit/extensions/openai/ephemeral-files-store.test.ts",
-        "line": 5,
-        "column": 39
-      },
-      "measurement": {
-        "value": 137,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
-      }
-    },
-    {
       "fingerprint": "quality-v1:8eb9e7c3d42affefa6ac83fffba1f197eff1c7fe0305bc368df4247d332edb4e",
       "detector": "structure",
       "rule": "modified-complexity",
@@ -16812,31 +16787,6 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:8f02a488d6c7bafb11604595fffa1833ef292c62c2358ff4b6d77193730a51e8",
-      "detector": "structure",
-      "rule": "modified-complexity",
-      "category": "complexity",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/completion-result.ts",
-        "symbol": "drainCompletion#1"
-      },
-      "summary": "drainCompletion#1 in packages/cli/src/serve/extensions/openai/adapters/completion-result.ts exceeds the modified-complexity threshold",
-      "remediation": "Simplify conditions or extract independently testable decisions.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/completion-result.ts",
-        "line": 54,
-        "column": 8
-      },
-      "measurement": {
-        "value": 17,
-        "unit": "branches",
-        "advisoryThreshold": 15,
-        "highThreshold": 25
       }
     },
     {
@@ -17335,6 +17285,31 @@
       }
     },
     {
+      "fingerprint": "quality-v1:93efe5da2ff64c2215567d711308fbad73eb56bf8732fc198a6f998855d95629",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/test/unit/core/stores/vector-stores.test.ts",
+        "symbol": "describe \"createVectorStoresStore\" callback#1"
+      },
+      "summary": "describe \"createVectorStoresStore\" callback#1 in packages/cli/test/unit/core/stores/vector-stores.test.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/test/unit/core/stores/vector-stores.test.ts",
+        "line": 51,
+        "column": 37
+      },
+      "measurement": {
+        "value": 142,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
+      }
+    },
+    {
       "fingerprint": "quality-v1:93fe8b6bc687e3e3cca23abb4d1a7c37cc54cd74f4dae8f2710fabc2523ec1cb",
       "detector": "structure",
       "rule": "function-lines",
@@ -17624,7 +17599,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 2439,
+        "value": 2465,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -17698,6 +17673,31 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
+      }
+    },
+    {
+      "fingerprint": "quality-v1:9772e46336e8f648281f83e6062825540096b005a76555830a95b80062480815",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": ".github/scripts/test/ci-trust-policy.test.mjs",
+        "symbol": "test \"RPC server prebuilds consume PR-built npm Fabric artifacts\" callback#1"
+      },
+      "summary": "test \"RPC server prebuilds consume PR-built npm Fabric artifacts\" callback#1 in .github/scripts/test/ci-trust-policy.test.mjs exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": ".github/scripts/test/ci-trust-policy.test.mjs",
+        "line": 1829,
+        "column": 68
+      },
+      "measurement": {
+        "value": 101,
+        "unit": "code lines",
+        "advisoryThreshold": 100,
+        "highThreshold": 200
       }
     },
     {
@@ -18137,7 +18137,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/ocr-ggml/src/index.ts",
-        "line": 594,
+        "line": 592,
         "column": 3
       },
       "measurement": {
@@ -18749,7 +18749,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 722,
+        "value": 729,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -19250,7 +19250,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/test-suite/src/cli/commands/build-consumer-mobile.ts",
-        "line": 1316,
+        "line": 1441,
         "column": 1
       },
       "measurement": {
@@ -19275,7 +19275,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/parakeet-helpers.js",
-        "line": 1243,
+        "line": 1245,
         "column": 1
       },
       "measurement": {
@@ -19532,6 +19532,31 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:a62c4972819e95cde2245d004837e1f38138f6e06dbe305d475af9fd95806f86",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/core/stores/ephemeral-files.ts",
+        "symbol": "createEphemeralFilesStore#1"
+      },
+      "summary": "createEphemeralFilesStore#1 in packages/cli/src/serve/core/stores/ephemeral-files.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/core/stores/ephemeral-files.ts",
+        "line": 46,
+        "column": 8
+      },
+      "measurement": {
+        "value": 70,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -19827,31 +19852,6 @@
         "unit": "branches",
         "advisoryThreshold": 20,
         "highThreshold": 35
-      }
-    },
-    {
-      "fingerprint": "quality-v1:a9ae11b1e5fdef6c601e62ade615c4d3eb14f252ac5826daceb2b6d4fcc33651",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/vector-stores-store.ts",
-        "symbol": "createVectorStoresStore#1"
-      },
-      "summary": "createVectorStoresStore#1 in packages/cli/src/serve/extensions/openai/adapters/vector-stores-store.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/vector-stores-store.ts",
-        "line": 109,
-        "column": 8
-      },
-      "measurement": {
-        "value": 73,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -20354,7 +20354,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/parakeet-helpers.js",
-        "line": 774,
+        "line": 776,
         "column": 1
       },
       "measurement": {
@@ -21688,7 +21688,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "line": 65,
+        "line": 64,
         "column": 8
       },
       "measurement": {
@@ -22323,13 +22323,13 @@
         "kind": "file",
         "path": "packages/sdk/e2e/tests/desktop/consumer.ts"
       },
-      "summary": "packages/sdk/e2e/tests/desktop/consumer.ts imports 44 local modules",
+      "summary": "packages/sdk/e2e/tests/desktop/consumer.ts imports 45 local modules",
       "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
       "primaryLocation": {
         "path": "packages/sdk/e2e/tests/desktop/consumer.ts"
       },
       "measurement": {
-        "value": 44,
+        "value": 45,
         "unit": "local modules",
         "advisoryThreshold": 25,
         "highThreshold": 40
@@ -23140,7 +23140,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/parakeet-helpers.js",
-        "line": 774,
+        "line": 776,
         "column": 1
       },
       "measurement": {
@@ -23265,7 +23265,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/adapters/response-writers.ts",
-        "line": 140,
+        "line": 139,
         "column": 8
       },
       "measurement": {
@@ -23314,7 +23314,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/ocr-ggml/src/index.ts",
-        "line": 300,
+        "line": 298,
         "column": 3
       },
       "measurement": {
@@ -23886,6 +23886,31 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
+      }
+    },
+    {
+      "fingerprint": "quality-v1:d0e25688076c714f9be4fbcf283c0c62364d32c57373b5768bba19afb3c3f513",
+      "detector": "structure",
+      "rule": "function-lines",
+      "category": "size",
+      "severity": "advisory",
+      "subject": {
+        "kind": "function",
+        "path": "packages/cli/src/serve/core/completion.ts",
+        "symbol": "drainCompletion#1"
+      },
+      "summary": "drainCompletion#1 in packages/cli/src/serve/core/completion.ts exceeds the function-lines threshold",
+      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
+      "primaryLocation": {
+        "path": "packages/cli/src/serve/core/completion.ts",
+        "line": 44,
+        "column": 8
+      },
+      "measurement": {
+        "value": 51,
+        "unit": "code lines",
+        "advisoryThreshold": 50,
+        "highThreshold": 100
       }
     },
     {
@@ -24472,7 +24497,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/model-fit/src/index.ts",
-        "line": 344,
+        "line": 346,
         "column": 1
       },
       "measurement": {
@@ -24618,7 +24643,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/plugins/builtin/sdcpp-generation/plugin.ts",
-        "line": 363,
+        "line": 367,
         "column": 3
       },
       "measurement": {
@@ -24767,7 +24792,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/parakeet-helpers.js",
-        "line": 202,
+        "line": 204,
         "column": 1
       },
       "measurement": {
@@ -25016,7 +25041,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "line": 365,
+        "line": 367,
         "column": 5
       },
       "measurement": {
@@ -25457,7 +25482,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/parakeet-helpers.js",
-        "line": 52,
+        "line": 54,
         "column": 31
       },
       "measurement": {
@@ -25482,7 +25507,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/helpers.js",
-        "line": 184,
+        "line": 186,
         "column": 1
       },
       "measurement": {
@@ -25532,7 +25557,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/ocr-ggml/src/index.ts",
-        "line": 513,
+        "line": 511,
         "column": 3
       },
       "measurement": {
@@ -25629,11 +25654,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "line": 330,
+        "line": 329,
         "column": 1
       },
       "measurement": {
-        "value": 635,
+        "value": 637,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -26347,7 +26372,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/cli/src/serve/extensions/openai/routes/vector-stores.ts",
-        "line": 296,
+        "line": 298,
         "column": 5
       },
       "measurement": {
@@ -26505,31 +26530,6 @@
         "unit": "code lines",
         "advisoryThreshold": 50,
         "highThreshold": 100
-      }
-    },
-    {
-      "fingerprint": "quality-v1:e897187a2a00bae477328a718f24d80e3f1eabe031f9f09c8aa9aeba98684641",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": ".github/scripts/test/ci-trust-policy.test.mjs",
-        "symbol": "test \"RPC RDMA validation covers the server without replacing release artifacts\" callback#1"
-      },
-      "summary": "test \"RPC RDMA validation covers the server without replacing release artifacts\" callback#1 in .github/scripts/test/ci-trust-policy.test.mjs exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": ".github/scripts/test/ci-trust-policy.test.mjs",
-        "line": 1790,
-        "column": 83
-      },
-      "measurement": {
-        "value": 106,
-        "unit": "code lines",
-        "advisoryThreshold": 100,
-        "highThreshold": 200
       }
     },
     {
@@ -26855,31 +26855,6 @@
         "unit": "branches",
         "advisoryThreshold": 15,
         "highThreshold": 25
-      }
-    },
-    {
-      "fingerprint": "quality-v1:eb0617425e2bcff4ef068a07a5988617cf8e03185387ccad24e60b1d2922460c",
-      "detector": "structure",
-      "rule": "function-lines",
-      "category": "size",
-      "severity": "advisory",
-      "subject": {
-        "kind": "function",
-        "path": "packages/cli/src/serve/extensions/openai/adapters/completion-result.ts",
-        "symbol": "drainCompletion#1"
-      },
-      "summary": "drainCompletion#1 in packages/cli/src/serve/extensions/openai/adapters/completion-result.ts exceeds the function-lines threshold",
-      "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
-      "primaryLocation": {
-        "path": "packages/cli/src/serve/extensions/openai/adapters/completion-result.ts",
-        "line": 54,
-        "column": 8
-      },
-      "measurement": {
-        "value": 55,
-        "unit": "code lines",
-        "advisoryThreshold": 50,
-        "highThreshold": 100
       }
     },
     {
@@ -27850,7 +27825,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/inference/src/schemas/sdcpp-config.ts",
-        "line": 1012,
+        "line": 1055,
         "column": 1
       },
       "measurement": {
@@ -28020,7 +27995,7 @@
       "remediation": "Extract named steps or separate responsibilities without obscuring control flow.",
       "primaryLocation": {
         "path": "packages/asr-ggml/test/integration/helpers.js",
-        "line": 38,
+        "line": 40,
         "column": 31
       },
       "measurement": {
@@ -28579,11 +28554,11 @@
       "remediation": "Split the file along cohesive responsibilities while preserving its public contract.",
       "primaryLocation": {
         "path": "packages/translation-nmtcpp/src/index.ts",
-        "line": 464,
+        "line": 465,
         "column": 1
       },
       "measurement": {
-        "value": 531,
+        "value": 528,
         "unit": "code lines",
         "advisoryThreshold": 300,
         "highThreshold": 500
@@ -28954,7 +28929,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/translation-nmtcpp/src/index.ts",
-        "line": 396,
+        "line": 394,
         "column": 3
       },
       "measurement": {
@@ -29079,7 +29054,7 @@
         "column": 1
       },
       "measurement": {
-        "value": 1033,
+        "value": 1037,
         "unit": "code lines",
         "advisoryThreshold": 600,
         "highThreshold": 1000
@@ -29144,13 +29119,13 @@
         "kind": "file",
         "path": "packages/sdk/e2e/tests/test-definitions.ts"
       },
-      "summary": "packages/sdk/e2e/tests/test-definitions.ts imports 44 local modules",
+      "summary": "packages/sdk/e2e/tests/test-definitions.ts imports 45 local modules",
       "remediation": "Introduce a cohesive boundary or split the module by responsibility; do not hide imports behind a barrel solely to lower the count.",
       "primaryLocation": {
         "path": "packages/sdk/e2e/tests/test-definitions.ts"
       },
       "measurement": {
-        "value": 44,
+        "value": 45,
         "unit": "local modules",
         "advisoryThreshold": 25,
         "highThreshold": 40
@@ -29818,7 +29793,7 @@
       "remediation": "Simplify conditions or extract independently testable decisions.",
       "primaryLocation": {
         "path": "packages/bci-whispercpp/test/integration/helpers.js",
-        "line": 174,
+        "line": 175,
         "column": 1
       },
       "measurement": {

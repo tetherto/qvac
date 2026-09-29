@@ -44,7 +44,7 @@ export interface UnresolvedImportExemption {
 
 export const UNRESOLVED_IMPORT_EXEMPTIONS: readonly UnresolvedImportExemption[] = [
   {
-    importer: /^packages\/(?:asr-ggml|audiogen-ggml|bci-whispercpp|classification-ggml|diffusion-cpp|embed-llamacpp|llm-llamacpp|model-fit|ocr-ggml|translation-nmtcpp|tts-ggml|vla-ggml)\/src\//,
+    importer: /^packages\/(?:asr-ggml|audiogen-ggml|bci-whispercpp|classification-ggml|diffusion-cpp|embed-llamacpp|ggml-rpc-server|llm-llamacpp|model-fit|ocr-ggml|translation-nmtcpp|tts-ggml|vla-ggml)\/src\//,
     specifier: /^(?:\.\.\/)*(?:\.\/)?binding(?:-internal)?(?:\.js)?$/,
     reason: 'Native addon bindings are resolved after TypeScript output is moved to the package root.',
   },
