@@ -16,10 +16,10 @@ export interface ListJobsOptions {
 }
 
 export interface JobsPage<T> {
-  data: T[]
-  first_id: string | null
-  last_id: string | null
-  has_more: boolean
+  items: T[]
+  firstId: string | null
+  lastId: string | null
+  hasMore: boolean
 }
 
 export interface JobsStore<T extends { id: string }> {
@@ -90,10 +90,10 @@ export function createJobsStore<T extends { id: string }>(
       }
       const slice = all.slice(start, start + limit)
       return {
-        data: slice,
-        first_id: slice[0]?.id ?? null,
-        last_id: slice[slice.length - 1]?.id ?? null,
-        has_more: start + slice.length < all.length
+        items: slice,
+        firstId: slice[0]?.id ?? null,
+        lastId: slice[slice.length - 1]?.id ?? null,
+        hasMore: start + slice.length < all.length
       }
     },
 

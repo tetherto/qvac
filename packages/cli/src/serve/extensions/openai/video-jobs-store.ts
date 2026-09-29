@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto'
 import {
   createJobsStore,
   type JobEvictReason,
-  type JobsPage,
   type ListJobsOptions
 } from '@/serve/core/stores/jobs'
 
@@ -72,6 +71,14 @@ export interface VideoJobsStoreOptions {
 
 export type ListVideoJobsOptions = ListJobsOptions
 
+/** OpenAI list-envelope cursor fields for `GET /v1/videos`. */
+export interface VideoJobsPage {
+  data: VideoJob[]
+  first_id: string | null
+  last_id: string | null
+  has_more: boolean
+}
+
 export interface VideoJobsStore {
   create: (input: {
     model: string
@@ -85,7 +92,7 @@ export interface VideoJobsStore {
   ) => VideoJob | undefined
   get: (id: string) => VideoJob | undefined
   delete: (id: string) => boolean
-  list: (opts?: ListVideoJobsOptions) => JobsPage<VideoJob>
+  list: (opts?: ListVideoJobsOptions) => VideoJobsPage
   size: () => number
   bannerLine: () => string
 }
@@ -129,7 +136,15 @@ export function createVideoJobsStore(options: VideoJobsStoreOptions = {}): Video
     update: jobs.update,
     get: jobs.get,
     delete: jobs.delete,
-    list: jobs.list,
+    list(opts): VideoJobsPage {
+      const page = jobs.list(opts)
+      return {
+        data: page.items,
+        first_id: page.firstId,
+        last_id: page.lastId,
+        has_more: page.hasMore
+      }
+    },
     size: jobs.size,
     bannerLine(): string {
       return `videos: in-memory only — job IDs and rendered bytes are lost on restart, max ${jobs.maxEntries} entries`
