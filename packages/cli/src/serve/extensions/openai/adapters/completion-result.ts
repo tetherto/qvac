@@ -11,7 +11,7 @@ export interface DrainedOpenAICompletion extends DrainedCompletion {
   finishReason: OpenAiFinishReason
 }
 
-export function toOpenAiFinishReason(
+function toOpenAiFinishReason(
   drained: Pick<DrainedCompletion, 'toolCalls' | 'stopReason'>
 ): OpenAiFinishReason {
   if (drained.toolCalls.length > 0) return 'tool_calls'
