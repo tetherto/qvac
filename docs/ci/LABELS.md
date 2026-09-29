@@ -107,25 +107,31 @@ cd packages/sdk/e2e
 node scripts/impacted-tests.mjs --base main --head HEAD
 ```
 
-Six relations connect a changed file to testIds:
+Nine relations connect a changed file to testIds:
 
 | Changed file | Resolved via |
 |---|---|
 | `tests/*-tests.ts`, `tests/test-definitions.ts` | the testIds it declares — narrowed to the changed lines when they name tests, widened to the whole file otherwise |
 | `tests/**/executors/*.ts` | the executor's `pattern` regex |
+| `tests/*/consumer.ts`, inside a `resources.define('<id>', …)` block | the tests depending on `<id>` through their metadata, and the tests of every executor that loads `<id>` by name |
 | anything else under `tests/` | the import graph, via the executors that reach it |
-| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the SDK model contract → the resource constants naming those models → the tests depending on those resources |
+| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the SDK model contract → the resource constants naming those models → the tests depending on those resources. A helper directory without a plugin resolves through the engines importing it |
+| an addon dependency line in `packages/inference/package.json` or `packages/sdk/package.json` | the engines importing that addon, then the engine relation. An addon is a package in inference's `peerDependencies`; other dependency, version, and script changes in a manifest map to nothing |
+| `packages/inference/src/schemas/*.ts` | the top-level statement each changed line sits in → the names it feeds, within the file and through the schema files importing or re-exporting them, the `@/schemas/index` barrel included → the engines importing one of those names → the engine relation |
 | `packages/sdk/src/client/api/*.ts` | the functions it exports, and the executors importing them |
 | a handler module registered in `packages/inference/src/registry.ts` | the same way, via the operation the registry binds it to. Operations dispatched to a plugin rather than a module are left to the engine relation |
 
-The last three relations are the only ones that reach outside `packages/sdk/e2e/`. It needs no table: the plugin directory name *is* the engine id the SDK loads by, the contract is regenerated and checked by `contract:check`, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper.
+The last five relations are the only ones that reach outside `packages/sdk/e2e/`. They need no table: the plugin directory name *is* the engine id the SDK loads by, a plugin importing the wrong addon or schema name fails the build, the contract is regenerated and checked by `contract:check`, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper. Package and engine directory names often differ (`ggml-ocr` loads `@qvac/ocr-ggml`), which is why the addon relation reads the plugin's import rather than matching names.
+
+An engine is a `plugins/builtin/<engine>/` directory holding a `plugin.ts`. Its imports include those of every builtin file it reaches, so a helper directory without a plugin, such as one that several transcription engines share, counts for each engine that uses it — for its own changes as for the addons and schemas it imports. A removed line is located in the file as it was before the change, which the mapper rebuilds from the patch.
 
 Deliberate limits:
 
-- **Source with no declared link to a test is out of scope.** A PR touching only `packages/sdk/src/**` or the parts of inference that are neither an engine nor a registered handler maps to nothing and gets a plain smoke run. Inventing a link — a hand-kept `path -> category` table — would rot without anything failing.
+- **Source with no declared link to a test is out of scope.** A PR touching only `packages/sdk/src/**` or the parts of inference that are neither an engine, a schema, nor a registered handler maps to nothing and gets a plain smoke run. Inventing a link — a hand-kept `path -> category` table — would rot without anything failing.
+- **Schemas resolve through plugins and other schemas only.** Every plugin imports the `@/schemas/index` barrel, so a schema file as a whole names no engine; each changed line is followed through the names it feeds instead. The mapper reads only the plugins and the schemas, so a name that reaches a plugin only through another module, such as a helper under `@/utils` or a handler, is not followed there. A change that reaches no engine — the file header, a star re-export line, a name only handlers or the SDK use — leaves the file in the unmapped list, even when its other changes resolved.
 - **Lifecycle handlers legitimately pull in most of the catalog.** Changing `unload-model` or `cancelHandler` resolves to ~500 tests, because every test loads and cancels. That is real coverage rather than a bug, and it is still bounded by `test-e2e-full`; the comment reports the size so it is never a surprise.
-- **An engine or handler nothing exercises is reported, not silently empty.** It appears in the comment's unmapped list, so the gap shows up the first time someone changes it.
-- **Unattributable files are reported, not expanded.** `tests/*/consumer.ts`, `fixtures/`, and `assets/` map to no single test — a consumer change formally touches every test on its platform. The comment lists these files so they get a human look, and nothing is added for them.
+- **An engine, handler, addon, or resource nothing exercises is reported, not silently empty.** It appears in the comment's unmapped list — an addon under its package name, a resource as `consumer.ts#<id>` — so the gap shows up the first time someone changes it. An addon that no plugin imports, such as one inference loads outside a plugin, is listed the same way, and so is an untested engine that an addon or schema reaches alongside tested ones. A manifest whose patch the files API omitted, or that the checkout has no inference manifest to read against, is listed too, since its addon lines are unknown.
+- **Unattributable files are reported, not expanded.** A `tests/*/consumer.ts` change outside every resource definition, `fixtures/`, and `assets/` map to no single test — a consumer change formally touches every test on its platform. The comment lists these files so they get a human look, and nothing is added for them. Blank lines are never attributed, so spacing between two resource definitions does not list the consumer; a patch that changes only blank lines still lists it.
 - **The impact set is never truncated.** It is bounded by the catalog, so extending a smoke run can never cost more than `test-e2e-full` would; capping it would only reduce coverage while pushing the author to the more expensive option. The comment states the added runtime so a broad change is visible.
 - **The mapper never blocks e2e.** If it fails, the smoke run proceeds unchanged and the comment says the analysis was unavailable.
 

@@ -5,27 +5,38 @@
 // Reads the TypeScript sources, not dist/: no build is needed, and dist is
 // routinely stale relative to the working tree.
 //
-// Six relations connect a changed file to testIds:
+// Nine relations connect a changed file to testIds:
 //   1. tests/*-tests.ts and tests/test-definitions.ts declare them directly.
 //      Attribution is per changed line where a testId literal can be located,
 //      widening to the whole file otherwise.
 //   2. tests/**/executors/*.ts route by `pattern = /^prefix-/`.
 //   3. anything else under tests/ reaches testIds only through the import graph,
 //      resolved by finding which executors transitively import it.
-//   4. an inference engine directory reaches testIds through the models it
+//   4. a changed line inside a consumer's `resources.define('<id>', …)` reaches
+//      the tests whose metadata depends on `<id>`, and those of every executor
+//      loading `<id>` by name.
+//   5. an inference engine directory reaches testIds through the models it
 //      serves: directory name -> `engine` in the SDK contract -> the resource
 //      constants naming those models -> the tests depending on those resources.
-//   5. an SDK api file reaches testIds through the functions it exports and the
+//      A helper directory without a plugin reaches them through the engines
+//      importing it.
+//   6. a changed addon dependency line in the inference or SDK manifest reaches
+//      them through the engines importing that addon.
+//   7. a changed line in an inference schema reaches them through the names its
+//      statement feeds — within the file, through other schema files and the
+//      barrel — and the engines importing one of those names.
+//   8. an SDK api file reaches testIds through the functions it exports and the
 //      executors importing them.
-//   6. a registered inference handler reaches them the same way, via the
+//   9. a registered inference handler reaches them the same way, via the
 //      operation registry.ts binds it to.
 //
-// 1-3 are scoped to the e2e tree; 4-6 reach into the engine directories, the SDK
-// api surface and the handler modules. Source with no declared link to a test
-// stays out of scope rather than being guessed at.
+// 1-4 are scoped to the e2e tree; 5-9 reach into the engine directories, the
+// manifests, the schemas, the SDK api surface and the handler modules. Source
+// with no declared link to a test stays out of scope rather than being guessed
+// at.
 //
-// Files that map to nothing — notably the per-platform consumer.ts and the
-// fixtures/assets trees — are reported as unmapped rather than dropped.
+// Files that map to nothing — a consumer change outside any resource definition,
+// and the fixtures/assets trees — are reported as unmapped rather than dropped.
 //
 // Usage:
 //   --pr-files <path>          [{ filename, patch }] from the PR files API (CI)
@@ -66,6 +77,48 @@ const CONTRACT_MODELS = path.resolve(E2E_ROOT, '..', 'contract', 'models.json')
 const RESOURCE_DEFINE_RE = /resources\.define\(\s*['"]([^'"]+)['"]\s*,\s*\{/g
 const RESOURCE_CONSTANT_RE = /(?:^|[\s,{])constant:\s*([A-Za-z0-9_]+)/m
 const RESOURCE_TYPE_RE = /(?:^|[\s,{])type:\s*['"]([^'"]+)['"]/m
+// An executor loading a resource by name rather than through test metadata.
+const RESOURCE_LOAD_RE = /\.(?:ensureLoaded|getModelId|evict)\(\s*['"]([^'"]+)['"]/g
+
+// Addon relation. Inference's `peerDependencies` is the addon set it loads, and
+// each plugin names its addon by importing it — a wrong name fails the build.
+// Package and engine directory names often differ (`ggml-ocr` imports
+// `@qvac/ocr-ggml`), so the import is the only link that does not need a table.
+const INFERENCE_SRC_DIR = path.resolve(E2E_ROOT, '..', '..', 'inference', 'src')
+const INFERENCE_MANIFEST = path.resolve(INFERENCE_SRC_DIR, '..', 'package.json')
+const INFERENCE_MANIFEST_PATH = 'packages/inference/package.json'
+const ADDON_MANIFESTS = new Set([INFERENCE_MANIFEST_PATH, 'packages/sdk/package.json'])
+const MANIFEST_DEPENDENCY_RE = /^\s*"(@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*)"\s*:/
+const ENGINE_DIR = path.join(INFERENCE_SRC_DIR, 'plugins', 'builtin')
+// A directory is an engine when it holds a plugin; one without (`asr-ggml`) is
+// a helper that engines import, and reaches tests only through them.
+const ENGINE_ENTRY = 'plugin.ts'
+// Every module a file names: `import`/`export … from` with its clause, and bare,
+// dynamic and `require` imports without one. A package specifier is cut to the
+// package name, so `@qvac/tts-ggml/addonLogging` is still `@qvac/tts-ggml`.
+const MODULE_SPECIFIER_RE =
+  /\b(?:(?:import|export)\s+((?:type\s+)?(?:[^'";()=\n]|\n(?![A-Za-z_$]))*?)\s*from\s*|import\s*\(?\s*|require\(\s*)['"]([^'"]+)['"]/g
+const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+
+// Schema relation. Every plugin reaches every schema through the `index`
+// barrel, so a file-level import names no engine in particular. A changed line
+// resolves instead through the top-level statement it sits in, then through the
+// names that statement feeds — within the file, into other schema files that
+// import or re-export them, and finally into the plugins importing one.
+const SCHEMA_ROOT = 'packages/inference/src/schemas'
+const SCHEMA_FILE_RE = new RegExp(`^${SCHEMA_ROOT}/([A-Za-z0-9][A-Za-z0-9._-]*)\\.ts$`)
+const SCHEMA_DIR = path.join(INFERENCE_SRC_DIR, 'schemas')
+const ALIAS_PREFIX = '@/'
+// A top-level statement starts at column 0 with neither a closing bracket nor
+// a comment; everything indented below it, up to the next one, is its body.
+const STATEMENT_START_RE = /^[A-Za-z_$]/
+const DECLARATION_RE =
+  /^(export\s+)?(?:declare\s+)?(?:async\s+)?(?:abstract\s+)?(?:const\s+enum|const|let|var|function\*?|type|interface|enum|class)\s+([A-Za-z0-9_$]+)/
+const IMPORT_STATEMENT_RE =
+  /^import\s+(?:type\s+)?(?:([A-Za-z0-9_$]+)\s*,?\s*)?(?:\{([^}]*)\}|\*\s+as\s+([A-Za-z0-9_$]+))?\s*from\s*['"]([^'"]+)['"]/
+const EXPORT_LIST_RE = /^export\s+(?:type\s+)?\{([^}]*)\}\s*(?:from\s*['"]([^'"]+)['"])?/
+const EXPORT_STAR_RE = /^export\s+\*\s+from\s*['"]([^'"]+)['"]/
+const COMMENT_LINE_RE = /^\s*(?:\/\/|\/\*|\*)/
 
 // Handler relation. Inference dispatches a request by its operation name, and
 // `registry.ts` binds each name to either a handler module or a plugin call.
@@ -159,6 +212,54 @@ function ownFields(body) {
   return out
 }
 
+function isConsumerFile(file) {
+  return path.basename(file) === 'consumer.ts'
+}
+
+/**
+ * A consumer's `resources.define` blocks: the id, the 1-based lines from
+ * `resources.define(` to the closing brace, and the object literal's own fields.
+ */
+function readResourceBlocks(text) {
+  const blocks = []
+  const newlines = []
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) newlines.push(i)
+  // 1 + the number of newlines before `offset`.
+  const lineAt = (offset) => {
+    let low = 0
+    let high = newlines.length
+    while (low < high) {
+      const mid = (low + high) >> 1
+      if (newlines[mid] < offset) low = mid + 1
+      else high = mid
+    }
+    return low + 1
+  }
+  for (const match of text.matchAll(RESOURCE_DEFINE_RE)) {
+    // Walk braces from the `{` the pattern ended on, so a nested `config: {}`
+    // does not truncate the object literal.
+    let depth = 0
+    let index = match.index + match[0].length - 1
+    const start = index
+    for (; index < text.length; index++) {
+      if (text[index] === '{') depth++
+      else if (text[index] === '}' && --depth === 0) break
+    }
+    // Unbalanced: the slice would run into the next definition and read its
+    // fields as this one's. Skip rather than attribute the wrong engine.
+    if (depth !== 0) continue
+    blocks.push({
+      id: match[1],
+      startLine: lineAt(match.index),
+      endLine: lineAt(index),
+      // Own fields only — `config` nests its own `type`, which would otherwise
+      // win whenever it is declared first.
+      body: ownFields(text.slice(start, index + 1))
+    })
+  }
+  return blocks
+}
+
 /**
  * Resource id -> engine ids, from every consumer's `resources.define`.
  *
@@ -174,27 +275,11 @@ function readResourceEngines(enginesByConstant) {
     engines.get(resource).add(engine)
   }
 
-  for (const file of listFiles(TESTS_DIR, (f) => path.basename(f) === 'consumer.ts')) {
-    const text = readFileSync(file, 'utf8')
-    for (const match of text.matchAll(RESOURCE_DEFINE_RE)) {
-      // Walk braces from the `{` the pattern ended on, so a nested `config: {}`
-      // does not truncate the object literal.
-      let depth = 0
-      let index = match.index + match[0].length - 1
-      const start = index
-      for (; index < text.length; index++) {
-        if (text[index] === '{') depth++
-        else if (text[index] === '}' && --depth === 0) break
-      }
-      // Unbalanced: the slice would run into the next definition and read its
-      // fields as this one's. Skip rather than attribute the wrong engine.
-      if (depth !== 0) continue
-      // Own fields only — `config` nests its own `type`, which would otherwise
-      // win whenever it is declared first.
-      const body = ownFields(text.slice(start, index + 1))
-      const constant = RESOURCE_CONSTANT_RE.exec(body)?.[1]
-      add(match[1], constant && enginesByConstant.get(constant))
-      add(match[1], RESOURCE_TYPE_RE.exec(body)?.[1])
+  for (const file of listFiles(TESTS_DIR, isConsumerFile)) {
+    for (const block of readResourceBlocks(readFileSync(file, 'utf8'))) {
+      const constant = RESOURCE_CONSTANT_RE.exec(block.body)?.[1]
+      add(block.id, constant && enginesByConstant.get(constant))
+      add(block.id, RESOURCE_TYPE_RE.exec(block.body)?.[1])
     }
   }
   return engines
@@ -232,6 +317,476 @@ function readIdsByEngine(catalog) {
     }
   }
   return ids
+}
+
+/** The testIds whose metadata depends on the resource `id`. */
+function idsDependingOn(catalog, id) {
+  return catalog.filter((test) => testDependencies(test).includes(id)).map((test) => test.testId)
+}
+
+/**
+ * The addon packages inference loads, its `peerDependencies`, before and after
+ * `hunks` (the change to the inference manifest, if any); null without the
+ * manifest. An addon the change drops is still an addon for its removed lines.
+ */
+function readAddonPackages(hunks) {
+  if (!existsSync(INFERENCE_MANIFEST)) return null
+  const text = readFileSync(INFERENCE_MANIFEST, 'utf8')
+  const peersOf = (json) => Object.keys(JSON.parse(json).peerDependencies ?? {})
+  const names = new Set(peersOf(text))
+  if (hunks.length > 0) {
+    try {
+      for (const name of peersOf(textBefore(text, hunks))) names.add(name)
+    } catch {
+      // A patch that does not match the checkout; the current peers still apply.
+    }
+  }
+  return names
+}
+
+/** An inference module specifier, relative or `@/`, resolved to a file; null otherwise. */
+function resolveInferenceModule(fromFile, specifier) {
+  if (specifier.startsWith(ALIAS_PREFIX)) {
+    return resolveFile(path.join(INFERENCE_SRC_DIR, specifier.slice(ALIAS_PREFIX.length)))
+  }
+  return specifier.startsWith('.') ? resolveRelative(fromFile, specifier) : null
+}
+
+/** The schema a resolved file is, by file name without `.ts`, or null. */
+function schemaNameOf(file) {
+  return file && path.dirname(file) === SCHEMA_DIR ? path.basename(file, '.ts') : null
+}
+
+/**
+ * `text` without its line and block comments, so a note inside an import list
+ * is not read as a name. String, template and regex literals are kept whole, so
+ * a URL, a glob or a pattern holding `//`, `/*` or a quote is not mistaken for
+ * a comment or a string. Newlines inside a comment are kept, so line-anchored
+ * patterns still see line starts.
+ */
+function stripComments(text) {
+  let out = ''
+  let quote = null
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    const regex = char === '/' && !quote ? regexLiteralAt(text, i, out) : 0
+    if (regex > 0) {
+      out += text.slice(i, i + regex)
+      i += regex - 1
+    } else if (quote) {
+      out += char
+      if (char === '\\') out += text[++i] ?? ''
+      else if (char === quote) quote = null
+    } else if (char === "'" || char === '"' || char === '`') {
+      quote = char
+      out += char
+    } else if (char === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i++
+      out += '\n'
+    } else if (char === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2)
+      const comment = text.slice(i, end === -1 ? text.length : end + 2)
+      out += comment.replace(/[^\n]/g, '')
+      i += comment.length - 1
+    } else {
+      out += char
+    }
+  }
+  return out
+}
+
+/**
+ * The length of the regex literal opening at `text[i]`, or 0 when that `/` is
+ * division or a comment. A regex can only follow an operator, an opening
+ * bracket, a separator or a keyword; `before` is the text already scanned.
+ */
+function regexLiteralAt(text, i, before) {
+  if (text[i + 1] === '/' || text[i + 1] === '*') return 0
+  // The last token before the `/`, at most a keyword long.
+  let end = before.length
+  while (end > 0 && /\s/.test(before[end - 1])) end--
+  const previous = before.slice(Math.max(0, end - 6), end)
+  if (end > 0 && !/(?:[(,=:[!&|?{};+\-*%<>~^]|\breturn|\btypeof|\bcase)$/.test(previous)) {
+    return 0
+  }
+  let inClass = false
+  for (let j = i + 1; j < text.length; j++) {
+    const char = text[j]
+    if (char === '\n') return 0
+    if (char === '\\') j++
+    else if (char === '[') inClass = true
+    else if (char === ']') inClass = false
+    else if (char === '/' && !inClass) return j - i + 1
+  }
+  return 0
+}
+
+/** `a, type b, c as d` -> [['a', 'a'], ['b', 'b'], ['c', 'd']]. */
+function parseNameList(list) {
+  return stripComments(list)
+    .split(',')
+    .map((entry) => entry.trim().replace(/^type\s+/, ''))
+    .filter(Boolean)
+    .map((entry) => {
+      const [name, alias] = entry.split(/\s+as\s+/)
+      return [name.trim(), (alias ?? name).trim()]
+    })
+    .filter(([name, alias]) => IDENTIFIER_RE.test(name) && IDENTIFIER_RE.test(alias))
+}
+
+/**
+ * The engines, and what each one imports: its packages, and the schema exports
+ * it names as `<schema>:<name>` (`<schema>:*` when it takes the whole module),
+ * plus the engines reaching each builtin file.
+ * An engine's own files count, and so does every builtin file they reach, so a
+ * helper directory's imports belong to the engines that use it.
+ */
+function readEngineImports() {
+  const engines = []
+  const enginesByPackage = new Map()
+  const enginesBySchemaExport = new Map()
+  const enginesByFile = new Map()
+  if (!existsSync(ENGINE_DIR)) {
+    return { engines, enginesByPackage, enginesBySchemaExport, enginesByFile }
+  }
+
+  const linksByFile = new Map()
+  const linksOf = (file) => {
+    if (linksByFile.has(file)) return linksByFile.get(file)
+    const links = { packages: new Set(), schemaExports: new Set(), files: new Set() }
+    linksByFile.set(file, links)
+    const text = stripComments(readFileSync(file, 'utf8'))
+    for (const match of text.matchAll(MODULE_SPECIFIER_RE)) {
+      const [, clause, specifier] = match
+      if (specifier.startsWith('@') && !specifier.startsWith(ALIAS_PREFIX)) {
+        const name = /^@[^/]+\/[^/]+/.exec(specifier)?.[0]
+        if (name) links.packages.add(name)
+        continue
+      }
+      const target = resolveInferenceModule(file, specifier)
+      const schema = schemaNameOf(target)
+      if (schema) {
+        // Only a name list can be narrowed; a namespace, a star, a default or a
+        // dynamic import takes everything the schema exports.
+        const names = /\{([^}]*)\}/.exec(clause ?? '')
+        for (const [name] of names ? parseNameList(names[1]) : [['*']]) {
+          links.schemaExports.add(`${schema}:${name}`)
+        }
+      } else if (target?.startsWith(`${ENGINE_DIR}${path.sep}`)) {
+        links.files.add(target)
+      }
+    }
+    return links
+  }
+
+  const add = (index, key, engine) => {
+    if (!index.has(key)) index.set(key, new Set())
+    index.get(key).add(engine)
+  }
+  for (const entry of readdirSync(ENGINE_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const dir = path.join(ENGINE_DIR, entry.name)
+    if (!existsSync(path.join(dir, ENGINE_ENTRY))) continue
+    engines.push(entry.name)
+    const seen = new Set(listFiles(dir, (f) => f.endsWith('.ts')))
+    const stack = [...seen]
+    while (stack.length > 0) {
+      const links = linksOf(stack.pop())
+      for (const name of links.packages) add(enginesByPackage, name, entry.name)
+      for (const key of links.schemaExports) add(enginesBySchemaExport, key, entry.name)
+      for (const file of links.files) {
+        if (seen.has(file)) continue
+        seen.add(file)
+        stack.push(file)
+      }
+    }
+    for (const file of seen) add(enginesByFile, file, entry.name)
+  }
+  // A reformat would silently resolve nothing, and fail-open would report that
+  // as coverage. Fail instead, so the comment says the analysis was unavailable.
+  if (engines.length === 0 || enginesByPackage.size === 0) {
+    throw new Error(`No engine plugins or package imports parsed from ${ENGINE_DIR}`)
+  }
+  return { engines, enginesByPackage, enginesBySchemaExport, enginesByFile }
+}
+
+/**
+ * A module's top-level statements as 1-based line spans. A comment directly
+ * above a statement belongs to it; text before the first statement belongs to
+ * none. `code` is the statement without that comment.
+ */
+function readTopLevelStatements(text) {
+  const lines = text.split('\n')
+  const starts = []
+  for (let i = 0; i < lines.length; i++) {
+    if (!STATEMENT_START_RE.test(lines[i])) continue
+    let first = i
+    while (first > 0 && COMMENT_LINE_RE.test(lines[first - 1])) first--
+    starts.push({ first, start: i })
+  }
+  return starts.map(({ first, start }, k) => {
+    const last = k + 1 < starts.length ? starts[k + 1].first - 1 : lines.length - 1
+    return {
+      startLine: first + 1,
+      endLine: last + 1,
+      text: lines.slice(first, last + 1).join('\n'),
+      code: lines.slice(start, last + 1).join('\n')
+    }
+  })
+}
+
+/**
+ * A schema file's statements, each with the names it declares or binds
+ * (`locals`), the `[local, exported]` pairs it exports, and what it imports or
+ * re-exports from other schema files. `*` stands for a whole module.
+ */
+function readSchemaModule(file, text) {
+  const statements = readTopLevelStatements(text)
+  for (const statement of statements) {
+    statement.locals = []
+    statement.exports = []
+    statement.imports = []
+    statement.reexports = []
+    const code = stripComments(statement.code)
+    const declaration = DECLARATION_RE.exec(code)
+    const imported = IMPORT_STATEMENT_RE.exec(code)
+    const listed = EXPORT_LIST_RE.exec(code)
+    const starred = EXPORT_STAR_RE.exec(code)
+    if (declaration) {
+      statement.locals.push(declaration[2])
+      if (declaration[1]) statement.exports.push([declaration[2], declaration[2]])
+    } else if (imported) {
+      const [, fallback, names, namespace, specifier] = imported
+      const bindings = [
+        ...(fallback ? [['default', fallback]] : []),
+        ...(names ? parseNameList(names) : []),
+        ...(namespace ? [['*', namespace]] : [])
+      ]
+      const schema = schemaNameOf(resolveInferenceModule(file, specifier))
+      for (const [name, local] of bindings) {
+        statement.locals.push(local)
+        if (schema) statement.imports.push({ schema, name, local })
+      }
+    } else if (listed) {
+      const schema = listed[2] ? schemaNameOf(resolveInferenceModule(file, listed[2])) : null
+      for (const [name, as] of parseNameList(listed[1])) {
+        if (!listed[2]) statement.exports.push([name, as])
+        else if (schema) statement.reexports.push({ schema, name, as })
+      }
+    } else if (starred) {
+      const schema = schemaNameOf(resolveInferenceModule(file, starred[1]))
+      if (schema) statement.reexports.push({ schema, name: '*', as: '*' })
+    }
+  }
+  return { statements }
+}
+
+/**
+ * Every schema file's module, and who uses each export: the schema files
+ * importing it as a local name, and those re-exporting it.
+ */
+function readSchemaGraph() {
+  const modules = new Map()
+  const importers = new Map()
+  const reexporters = new Map()
+  const add = (index, key, value) => {
+    if (!index.has(key)) index.set(key, [])
+    index.get(key).push(value)
+  }
+  for (const name of existsSync(SCHEMA_DIR) ? readdirSync(SCHEMA_DIR) : []) {
+    if (!name.endsWith('.ts')) continue
+    const file = path.join(SCHEMA_DIR, name)
+    const schema = path.basename(name, '.ts')
+    const module = readSchemaModule(file, readFileSync(file, 'utf8'))
+    modules.set(schema, module)
+    for (const statement of module.statements) {
+      for (const { schema: from, name: imported, local } of statement.imports) {
+        add(importers, `${from}:${imported}`, { schema, local })
+      }
+      for (const { schema: from, name: exported, as } of statement.reexports) {
+        add(reexporters, `${from}:${exported}`, { schema, as })
+      }
+    }
+  }
+  return { modules, importers, reexporters }
+}
+
+/** Whether `text` mentions the identifier `name` as a whole word. */
+function mentions(text, name) {
+  if (!IDENTIFIER_RE.test(name)) return false
+  return new RegExp(`(?<![A-Za-z0-9_$])${name.replace(/\$/g, '\\$')}(?![A-Za-z0-9_$])`).test(text)
+}
+
+/**
+ * The engines a set of schema names reaches. A local name reaches the exports
+ * it is exported as and the declarations mentioning it; an export reaches the
+ * plugins importing it, the schema files importing it, and those re-exporting
+ * it. `override` (`{ schema, module }`) replaces the graph's copy of one schema,
+ * so a removed line can be followed through the file as it was.
+ */
+function reachEngines(seeds, graph, enginesBySchemaExport, override) {
+  const moduleOf = (schema) =>
+    override?.schema === schema ? override.module : graph.modules.get(schema)
+  const engines = new Set()
+  const seen = new Set()
+  const queue = [...seeds]
+  while (queue.length > 0) {
+    const item = queue.pop()
+    const key = `${item.kind}:${item.schema}:${item.name}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const { schema, name } = item
+
+    if (item.kind === 'local') {
+      for (const statement of moduleOf(schema)?.statements ?? []) {
+        for (const [local, exported] of statement.exports) {
+          if (local === name) queue.push({ kind: 'export', schema, name: exported })
+        }
+        if (statement.imports.length > 0 || statement.locals.includes(name)) continue
+        if (statement.locals.length > 0 && mentions(statement.text, name)) {
+          for (const local of statement.locals) queue.push({ kind: 'local', schema, name: local })
+        }
+      }
+      continue
+    }
+
+    for (const engine of enginesBySchemaExport.get(`${schema}:${name}`) ?? []) engines.add(engine)
+    for (const engine of enginesBySchemaExport.get(`${schema}:*`) ?? []) engines.add(engine)
+    for (const imported of [name, '*']) {
+      for (const user of graph.importers.get(`${schema}:${imported}`) ?? []) {
+        queue.push({ kind: 'local', schema: user.schema, name: user.local })
+      }
+    }
+    for (const user of graph.reexporters.get(`${schema}:${name}`) ?? []) {
+      queue.push({ kind: 'export', schema: user.schema, name: user.as })
+    }
+    for (const user of graph.reexporters.get(`${schema}:*`) ?? []) {
+      queue.push({ kind: 'export', schema: user.schema, name })
+    }
+  }
+  return engines
+}
+
+/**
+ * The engines a schema file's changed lines reach, and whether every change
+ * reached one. An added line is located in the file as it is, a removed line in
+ * the file as it was before the patch.
+ */
+function schemaChangeEngines(schema, file, text, hunks, graph, enginesBySchemaExport) {
+  const { added, removed } = changedLines(hunks)
+  const sides = [{ module: graph.modules.get(schema), lines: added }]
+  if (removed.length > 0) {
+    sides.push({ module: readSchemaModule(file, textBefore(text, hunks)), lines: removed })
+  }
+
+  const engines = new Set()
+  let complete = added.length + removed.length > 0
+  for (const { module, lines } of sides) {
+    const resolved = new Map()
+    for (const { line } of lines) {
+      const statement = module?.statements.find((s) => s.startLine <= line && line <= s.endLine)
+      if (!statement) {
+        // The file header: nothing a plugin imports.
+        complete = false
+        continue
+      }
+      if (!resolved.has(statement)) {
+        const seeds = [
+          ...statement.locals.map((name) => ({ kind: 'local', schema, name })),
+          ...statement.exports.map(([, name]) => ({ kind: 'export', schema, name })),
+          // A star re-export names nothing to follow.
+          ...statement.reexports
+            .filter((entry) => entry.as !== '*')
+            .map((entry) => ({ kind: 'export', schema, name: entry.as }))
+        ]
+        resolved.set(
+          statement,
+          reachEngines(seeds, graph, enginesBySchemaExport, { schema, module })
+        )
+      }
+      if (resolved.get(statement).size === 0) complete = false
+      for (const engine of resolved.get(statement)) engines.add(engine)
+    }
+  }
+  return { engines, complete }
+}
+
+/**
+ * A unified-diff patch's hunks: each `-`, `+` and context line in order, and the
+ * old and new line numbers the hunk starts at. `N,0` — lines added or removed
+ * without context — counts from the line after N.
+ */
+function parsePatch(patch) {
+  const hunks = []
+  let hunk = null
+  // `git diff` output ends with a newline; the empty string after it is not a line.
+  for (const text of patch.replace(/\n$/, '').split('\n')) {
+    const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(text)
+    if (header) {
+      hunk = {
+        oldStart: Number(header[1]) + (header[2] === '0' ? 1 : 0),
+        newStart: Number(header[3]) + (header[4] === '0' ? 1 : 0),
+        lines: []
+      }
+      hunks.push(hunk)
+    } else if (hunk && /^[-+ ]/.test(text)) {
+      hunk.lines.push({ kind: text[0], text: text.slice(1) })
+    } else if (hunk && text === '') {
+      // A blank context line whose leading space was stripped.
+      hunk.lines.push({ kind: ' ', text: '' })
+    }
+    // Anything else is git's own file header before the first hunk, or a
+    // `\ No newline at end of file` marker.
+  }
+  return hunks
+}
+
+/**
+ * The non-blank lines a patch changes: added ones by their line in the file as
+ * it is, removed ones by their line in the file as it was. Blank lines change no
+ * behaviour, so spacing between two definitions attributes to neither.
+ */
+function changedLines(hunks) {
+  const added = []
+  const removed = []
+  for (const hunk of hunks) {
+    let oldLine = hunk.oldStart
+    let newLine = hunk.newStart
+    for (const { kind, text } of hunk.lines) {
+      const blank = text.trim() === ''
+      if (kind === '+') {
+        if (!blank) added.push({ line: newLine, text })
+        newLine++
+      } else if (kind === '-') {
+        if (!blank) removed.push({ line: oldLine, text })
+        oldLine++
+      } else {
+        oldLine++
+        newLine++
+      }
+    }
+  }
+  return { added, removed }
+}
+
+/** The file as it was before the patch, rebuilt from its current text. */
+function textBefore(text, hunks) {
+  const lines = text.split('\n')
+  const before = []
+  let next = 1
+  for (const hunk of hunks) {
+    for (; next < hunk.newStart && next <= lines.length; next++) before.push(lines[next - 1])
+    for (const { kind, text: line } of hunk.lines) {
+      if (kind === '-') {
+        before.push(line)
+        continue
+      }
+      if (kind === ' ') before.push(line)
+      next++
+    }
+  }
+  for (; next <= lines.length; next++) before.push(lines[next - 1])
+  return before.join('\n')
 }
 
 /** Operation name -> the handler module that serves it, from inference's registry. */
@@ -360,7 +915,10 @@ function readExecutorPattern(file) {
 }
 
 function resolveRelative(fromFile, specifier) {
-  const base = path.resolve(path.dirname(fromFile), specifier)
+  return resolveFile(path.resolve(path.dirname(fromFile), specifier))
+}
+
+function resolveFile(base) {
   // TS ESM sources import with a .js extension that resolves to .ts on disk.
   for (const candidate of [
     base.replace(/\.js$/, '.ts'),
@@ -425,12 +983,12 @@ function idsOnChangedLines(file, fileIds, ranges) {
 }
 
 /**
- * Resolves the changed files against the four relations.
+ * Resolves the changed files against the relations.
  *
  * `catalog` and `idsByDefinitionFile` come from the test definitions, which only
  * esbuild can load; everything else is read straight from the repository.
  */
-function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile }) {
+function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFile }) {
   // Changed paths are resolved against repoRoot while the relations are scanned
   // from this script's own tree. If the two disagree nothing matches, which is
   // indistinguishable from "the PR changed no tests".
@@ -438,7 +996,8 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
     throw new Error(`repo root ${repoRoot} does not contain ${E2E_ROOT}`)
   }
 
-  const hunks = hunksByFile ?? new Map()
+  const patches = patchesByFile ?? new Map()
+  const hunksOf = (file) => (patches.has(file) ? parsePatch(patches.get(file)) : [])
   const allIds = catalog.map((test) => test.testId)
   const smokeIds = new Set(
     catalog.filter((test) => test.suites?.includes('smoke')).map((test) => test.testId)
@@ -449,11 +1008,38 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
   const traversalFree = changed.filter(
     (file) => !file.split('/').some((segment) => segment === '.' || segment === '..')
   )
+  const unmapped = []
 
-  // Engine directories, handler modules and SDK api files are in scope; the
-  // rest of inference and the SDK are not, since listing files no relation can
-  // reach would be noise. A handler module is a file or a directory, so both
-  // spellings match.
+  // A manifest is in scope only for its addon dependency lines: a version,
+  // script or non-addon dependency change there reaches no test. Both sides
+  // count, so a swapped addon names the one removed as well as the one added.
+  const changedManifests = traversalFree.filter((file) => ADDON_MANIFESTS.has(file))
+  const addonPackages =
+    changedManifests.length > 0 ? readAddonPackages(hunksOf(INFERENCE_MANIFEST_PATH)) : null
+  const changedAddons = new Set()
+  const addonManifests = new Set()
+  for (const file of changedManifests) {
+    // No patch (a diff too large for the files API), or no inference manifest
+    // in the checkout to tell addons apart, leaves the dependency lines
+    // unknown, so the manifest is listed rather than dropped.
+    if (!patches.has(file) || !addonPackages) {
+      addonManifests.add(file)
+      unmapped.push(file)
+      continue
+    }
+    const { added, removed } = changedLines(hunksOf(file))
+    for (const { text } of [...added, ...removed]) {
+      const name = MANIFEST_DEPENDENCY_RE.exec(text)?.[1]
+      if (!name || !addonPackages.has(name)) continue
+      changedAddons.add(name)
+      addonManifests.add(file)
+    }
+  }
+
+  // Engine directories, addon manifests, schemas, handler modules and SDK api
+  // files are in scope; the rest of inference and the SDK are not, since listing
+  // files no relation can reach would be noise. A handler module is a file or a
+  // directory, so both spellings match.
   const scopedPrefixes = SCOPED_DIRS.map((dir) => `${toPosix(path.relative(repoRoot, dir))}/`)
   const handlerModules = readHandlerModules()
   const handlerPaths = new Set(handlerModules.values())
@@ -468,6 +1054,8 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
     (file) =>
       scopedPrefixes.some((p) => file.startsWith(p)) ||
       ENGINE_DIR_RE.test(file) ||
+      addonManifests.has(file) ||
+      SCHEMA_FILE_RE.test(file) ||
       isApiFile(file) ||
       handlerOf(file) !== null
   )
@@ -488,7 +1076,6 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
 
   const affected = new Set()
   const attribution = []
-  const unmapped = []
 
   // Per engine, not per file: every file in one engine directory yields the
   // same tests, so a row each would repeat the same number.
@@ -497,10 +1084,41 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
     const engine = ENGINE_DIR_RE.exec(file)?.[1]
     if (engine) changedEngines.add(engine)
   }
-  const idsByEngine = changedEngines.size > 0 ? readIdsByEngine(catalog) : new Map()
+  let idsByEngine = null
+  const idsOfEngines = (engines) => {
+    idsByEngine ??= readIdsByEngine(catalog)
+    const ids = new Set()
+    for (const engine of engines) for (const id of idsByEngine.get(engine) ?? []) ids.add(id)
+    return [...ids]
+  }
+  let engineImports = null
+  const engineImportsOf = () => (engineImports ??= readEngineImports())
+  // An engine among several that no test loads is listed on its own, so it
+  // does not vanish behind the ones that resolved.
+  const resolveEngines = (engines) => {
+    const ids = idsOfEngines(engines)
+    if (ids.length > 0) {
+      for (const engine of engines) {
+        if (idsOfEngines([engine]).length === 0) unmapped.push(`${ENGINE_ROOT}/${engine}`)
+      }
+    }
+    return ids
+  }
   for (const engine of changedEngines) {
-    const ids = [...(idsByEngine.get(engine) ?? [])]
     const directory = `${ENGINE_ROOT}/${engine}`
+    const absoluteDir = path.join(ENGINE_DIR, engine)
+    // A helper directory holds no plugin, so it reaches tests through the
+    // engines whose files import it.
+    const helper = existsSync(absoluteDir) && !existsSync(path.join(absoluteDir, ENGINE_ENTRY))
+    let ids = idsOfEngines([engine])
+    if (helper) {
+      const engines = new Set()
+      for (const [file, users] of engineImportsOf().enginesByFile) {
+        if (file.startsWith(`${absoluteDir}${path.sep}`))
+          for (const user of users) engines.add(user)
+      }
+      ids = resolveEngines(engines)
+    }
     if (ids.length === 0) {
       // An engine no e2e resource loads. Reported rather than dropped so the
       // gap is visible the first time someone changes that plugin.
@@ -509,6 +1127,46 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
     }
     for (const id of ids) affected.add(id)
     attribution.push({ file: directory, via: 'inference engine', tests: ids.length })
+  }
+
+  // Addons and schemas resolve to engines, then reuse the engine relation.
+  const changedSchemas = changedInScope.filter((file) => SCHEMA_FILE_RE.test(file))
+  // Per package, not per manifest: a bump usually lands in both manifests.
+  for (const name of changedAddons) {
+    const ids = resolveEngines(engineImportsOf().enginesByPackage.get(name) ?? [])
+    if (ids.length === 0) {
+      // No plugin imports it (it is loaded elsewhere in inference), or no e2e
+      // resource loads the engines that do.
+      unmapped.push(name)
+      continue
+    }
+    for (const id of ids) affected.add(id)
+    attribution.push({ file: name, via: 'addon dependency', tests: ids.length })
+  }
+  const schemaGraph = changedSchemas.length > 0 ? readSchemaGraph() : null
+  for (const file of changedSchemas) {
+    const schema = SCHEMA_FILE_RE.exec(file)[1]
+    const absolute = path.join(repoRoot, file)
+    // A deleted schema has no lines left to attribute; it is left for a human.
+    const { engines, complete } = existsSync(absolute)
+      ? schemaChangeEngines(
+          schema,
+          absolute,
+          readFileSync(absolute, 'utf8'),
+          hunksOf(file),
+          schemaGraph,
+          engineImportsOf().enginesBySchemaExport
+        )
+      : { engines: new Set(), complete: false }
+    const ids = resolveEngines(engines)
+    if (ids.length > 0) {
+      for (const id of ids) affected.add(id)
+      attribution.push({ file, via: 'inference schema', tests: ids.length })
+    }
+    // A change no plugin import reaches (the file header, a star re-export, a
+    // name only handlers or the SDK use) is not attributable, so the file is
+    // listed even when its other changes resolved.
+    if (!complete || ids.length === 0) unmapped.push(file)
   }
 
   // Handler modules aggregate like engines — one row per module, not per file.
@@ -537,8 +1195,34 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
     for (const file of changedApiFiles) resolve(file, sdk.byApiFile, 'sdk api')
   }
 
+  // Resource id -> the tests of every executor loading it by name.
+  let idsByLoadedResource = null
+  const idsForResource = (id) => {
+    if (!idsByLoadedResource) {
+      idsByLoadedResource = new Map()
+      for (const [executor, deps] of executorDeps) {
+        for (const file of [executor, ...deps]) {
+          for (const match of readFileSync(file, 'utf8').matchAll(RESOURCE_LOAD_RE)) {
+            if (!idsByLoadedResource.has(match[1])) idsByLoadedResource.set(match[1], new Set())
+            for (const testId of idsByExecutor.get(executor)) {
+              idsByLoadedResource.get(match[1]).add(testId)
+            }
+          }
+        }
+      }
+    }
+    const ids = new Set([...idsDependingOn(catalog, id), ...(idsByLoadedResource.get(id) ?? [])])
+    return allIds.filter((testId) => ids.has(testId))
+  }
+
   for (const relativeFile of changedInScope) {
-    if (ENGINE_DIR_RE.test(relativeFile) || handlerOf(relativeFile) || isApiFile(relativeFile)) {
+    if (
+      ENGINE_DIR_RE.test(relativeFile) ||
+      addonManifests.has(relativeFile) ||
+      SCHEMA_FILE_RE.test(relativeFile) ||
+      handlerOf(relativeFile) ||
+      isApiFile(relativeFile)
+    ) {
       continue
     }
     const absolute = path.join(repoRoot, relativeFile)
@@ -547,7 +1231,10 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
       const fileIds = idsByDefinitionFile.get(absolute)
       let ids = fileIds
       let via = 'definitions (whole file)'
-      const ranges = existsSync(absolute) ? (hunks.get(relativeFile) ?? []) : []
+      const ranges =
+        existsSync(absolute) && patches.has(relativeFile)
+          ? parseHunkRanges(patches.get(relativeFile))
+          : []
       if (ranges.length > 0) {
         const { touched, sawUnattributableChange } = idsOnChangedLines(absolute, fileIds, ranges)
         if (touched.size > 0 && !sawUnattributableChange) {
@@ -564,6 +1251,46 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
       const ids = idsByExecutor.get(absolute)
       for (const id of ids) affected.add(id)
       attribution.push({ file: relativeFile, via: 'executor pattern', tests: ids.length })
+      continue
+    }
+
+    // A consumer change formally touches every test on its platform, so only
+    // the lines inside a resource definition are attributed. Any other change
+    // leaves the file unmapped for a human look.
+    if (isConsumerFile(absolute) && absolute.startsWith(`${TESTS_DIR}${path.sep}`)) {
+      const hunks = existsSync(absolute) ? hunksOf(relativeFile) : []
+      const { added, removed } = changedLines(hunks)
+      const text = added.length + removed.length > 0 ? readFileSync(absolute, 'utf8') : ''
+      // A removed line is located in the file as it was before the patch.
+      const sides = [
+        { blocks: added.length > 0 ? readResourceBlocks(text) : [], lines: added },
+        {
+          blocks: removed.length > 0 ? readResourceBlocks(textBefore(text, hunks)) : [],
+          lines: removed
+        }
+      ]
+      const resources = new Set()
+      let outside = added.length + removed.length === 0
+      for (const { blocks, lines } of sides) {
+        for (const { line } of lines) {
+          const block = blocks.find((b) => b.startLine <= line && line <= b.endLine)
+          if (block) resources.add(block.id)
+          else outside = true
+        }
+      }
+      for (const id of resources) {
+        const ids = idsForResource(id)
+        // The id becomes part of a path the comment echoes.
+        const key = SAFE_TEST_ID.test(id) ? `${relativeFile}#${id}` : relativeFile
+        if (ids.length === 0) {
+          // A resource no test depends on. Reported rather than dropped.
+          unmapped.push(key)
+          continue
+        }
+        for (const testId of ids) affected.add(testId)
+        attribution.push({ file: key, via: 'resource definition', tests: ids.length })
+      }
+      if (outside) unmapped.push(relativeFile)
       continue
     }
 
@@ -602,7 +1329,7 @@ function analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile 
     addedMinutes,
     rejectedIds,
     attribution,
-    unmapped
+    unmapped: [...new Set(unmapped)]
   }
 }
 
@@ -657,7 +1384,7 @@ async function main() {
         encoding: 'utf8'
       }).trim()
 
-  const hunksByFile = new Map()
+  const patchesByFile = new Map()
   let changed
 
   if (args.prFiles) {
@@ -666,27 +1393,26 @@ async function main() {
     for (const entry of entries) {
       // `patch` is absent for binary or very large diffs; those widen to whole-file.
       if (entry.filename && typeof entry.patch === 'string') {
-        hunksByFile.set(entry.filename, parseHunkRanges(entry.patch))
+        patchesByFile.set(entry.filename, entry.patch)
       }
     }
   } else if (args.base && args.head) {
     changed = execFileSync(
       'git',
       ['-C', repoRoot, 'diff', '--name-only', `${args.base}...${args.head}`],
-      { encoding: 'utf8' }
+      { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
     )
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
     for (const file of changed) {
-      hunksByFile.set(
+      patchesByFile.set(
         file,
-        parseHunkRanges(
-          execFileSync(
-            'git',
-            ['-C', repoRoot, 'diff', '--unified=0', `${args.base}...${args.head}`, '--', file],
-            { encoding: 'utf8' }
-          )
+        execFileSync(
+          'git',
+          ['-C', repoRoot, 'diff', '--unified=0', `${args.base}...${args.head}`, '--', file],
+          // A generated file's diff easily outgrows the 1 MB default.
+          { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }
         )
       )
     }
@@ -716,7 +1442,7 @@ async function main() {
     idsByDefinitionFile.set(path.join(TESTS_DIR, 'test-definitions.ts'), inlineIds)
   }
 
-  const report = analyze({ repoRoot, catalog, idsByDefinitionFile, changed, hunksByFile })
+  const report = analyze({ repoRoot, catalog, idsByDefinitionFile, changed, patchesByFile })
 
   if (args.json) writeFileSync(args.json, `${JSON.stringify(report, null, 2)}\n`)
   if (args.githubOutput) {

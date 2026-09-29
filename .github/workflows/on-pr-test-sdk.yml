@@ -215,11 +215,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           # contract/models.json carries the model -> engine link the engine
           # relation resolves through; without it that relation is a no-op.
+          # The plugins, the inference manifest and the schemas are read as text
+          # for the addon and schema relations, never loaded.
           sparse-checkout: |
             packages/sdk/e2e
             packages/sdk/contract
             packages/sdk/src/client/api
+            packages/inference/package.json
             packages/inference/src/registry.ts
+            packages/inference/src/plugins/builtin
+            packages/inference/src/schemas
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
