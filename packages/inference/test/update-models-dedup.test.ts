@@ -42,6 +42,27 @@ test('deduplicateModels: keeps empty-checksum entries as-is', (t) => {
   t.is(result.length, 2, 'neither is dropped when checksum is empty')
 })
 
+test('deduplicateModels: preserves companion-only files with shared checksums', (t) => {
+  const first = makeModel({
+    registryPath: 'parakeet/first.mlmodelc/coremldata.bin',
+    sha256Checksum: 'shared-sha',
+    isCompanionOnly: true
+  })
+  const second = makeModel({
+    registryPath: 'parakeet/second.mlmodelc/coremldata.bin',
+    sha256Checksum: 'shared-sha',
+    isCompanionOnly: true
+  })
+
+  const result = deduplicateModels([first, second], false)
+
+  t.is(result.length, 2)
+  t.alike(
+    result.map((model) => model.registryPath),
+    [first.registryPath, second.registryPath]
+  )
+})
+
 // ---------------------------------------------------------------------------
 // Regression: QVAC-18420 — Bergamot shared vocabs
 // ---------------------------------------------------------------------------

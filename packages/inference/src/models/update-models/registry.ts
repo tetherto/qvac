@@ -71,7 +71,9 @@ export function deduplicateModels(
 
     if (seenChecksums.has(model.sha256Checksum)) {
       const pathKey = `${model.registrySource}:${model.registryPath}`
-      if (companionReferencedPaths.has(pathKey)) {
+      // Companion-only files still need their own registry paths in the
+      // generated catalog, even when small bundle components share a hash.
+      if (model.isCompanionOnly || companionReferencedPaths.has(pathKey)) {
         dedupedModels.push(model)
         continue
       }

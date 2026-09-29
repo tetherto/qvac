@@ -67,6 +67,23 @@
     "quantization": "Q4_K_M",
     "params": "4B"
   },
+  "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_BF16": {
+    "name": "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_BF16",
+    "src": "registry://s3/qvac_models_compiled/ggml/audiogen/2026-09-18/acestep-5Hz-lm-0.6B-BF16.gguf",
+    "registryPath": "qvac_models_compiled/ggml/audiogen/2026-09-18/acestep-5Hz-lm-0.6B-BF16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3567265,
+    "blobBlockLength": 20312,
+    "blobByteOffset": 233766000614,
+    "modelId": "acestep-5Hz-lm-0.6B-BF16.gguf",
+    "expectedSize": 1331108128,
+    "sha256Checksum": "8bc3e1de50fc91751ab893965c78c17589323bf4d2a9c1be2750ada7c7fabfaa",
+    "addon": "audiogen",
+    "engine": "audiogen-ggml",
+    "quantization": "bf16",
+    "params": "0.6B"
+  },
   "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0": {
     "name": "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
     "src": "registry://s3/qvac_models_compiled/ggml/acestep/2026-07-22/acestep-5Hz-lm-0.6B-Q8_0.gguf",
@@ -83,6 +100,23 @@
     "engine": "audiogen-ggml",
     "quantization": "q8_0",
     "params": "0.6B"
+  },
+  "AUDIOGEN_ACESTEP_V15_BASE_Q4_K_M": {
+    "name": "AUDIOGEN_ACESTEP_V15_BASE_Q4_K_M",
+    "src": "registry://s3/qvac_models_compiled/ggml/audiogen/2026-09-18/acestep-v15-base-Q4_K_M.gguf",
+    "registryPath": "qvac_models_compiled/ggml/audiogen/2026-09-18/acestep-v15-base-Q4_K_M.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3587578,
+    "blobBlockLength": 22060,
+    "blobByteOffset": 235097133894,
+    "modelId": "acestep-v15-base-Q4_K_M.gguf",
+    "expectedSize": 1445710208,
+    "sha256Checksum": "942ec6a7bc11a40809af5f337063f2af2acc63e4fcd4a92b0cb42dc2bc7c41e8",
+    "addon": "audiogen",
+    "engine": "audiogen-ggml",
+    "quantization": "q4_k_m",
+    "params": ""
   },
   "AUDIOGEN_ACESTEP_V15_SFT_Q8_0": {
     "name": "AUDIOGEN_ACESTEP_V15_SFT_Q8_0",
@@ -1937,8 +1971,8 @@
     "quantization": "",
     "params": ""
   },
-  "BITNET_0_7B_INST_TQ2_0": {
-    "name": "BITNET_0_7B_INST_TQ2_0",
+  "BITNET_0_7B_BASE_TQ2_0": {
+    "name": "BITNET_0_7B_BASE_TQ2_0",
     "src": "registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     "registryPath": "qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
     "registrySource": "s3",
@@ -1954,8 +1988,8 @@
     "quantization": "TQ2_0",
     "params": "0.7B"
   },
-  "BITNET_1B_INST_TQ2_0": {
-    "name": "BITNET_1B_INST_TQ2_0",
+  "BITNET_1B_BASE_TQ2_0": {
+    "name": "BITNET_1B_BASE_TQ2_0",
     "src": "registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     "registryPath": "qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf",
     "registrySource": "s3",
@@ -1971,8 +2005,8 @@
     "quantization": "TQ2_0",
     "params": "1B"
   },
-  "BITNET_B1_58_3B_INST_TQ2_0": {
-    "name": "BITNET_B1_58_3B_INST_TQ2_0",
+  "BITNET_B1_58_3B_BASE_TQ2_0": {
+    "name": "BITNET_B1_58_3B_BASE_TQ2_0",
     "src": "registry://s3/qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     "registryPath": "qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf",
     "registrySource": "s3",
@@ -2855,21 +2889,21 @@
     "quantization": "q4_0",
     "params": "1B"
   },
-  "LLAMA_TOOL_CALLING_1B_INST_Q4_K": {
-    "name": "LLAMA_TOOL_CALLING_1B_INST_Q4_K",
-    "src": "registry://hf/mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
-    "registryPath": "mav23/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/blob/main/llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
+  "LLAMA_TOOL_CALLING_1B_INST_Q4_K_M": {
+    "name": "LLAMA_TOOL_CALLING_1B_INST_Q4_K_M",
+    "src": "registry://hf/mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/resolve/a8d3114d7b68df89b92f04372231d348e4f91753/Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
+    "registryPath": "mradermacher/Llama_3.2_1B_Intruct_Tool_Calling_V2-GGUF/resolve/a8d3114d7b68df89b92f04372231d348e4f91753/Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
     "registrySource": "hf",
-    "blobCoreKey": "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-    "blobBlockOffset": 529475,
+    "blobCoreKey": "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    "blobBlockOffset": 313380,
     "blobBlockLength": 12325,
-    "blobByteOffset": 34696195331,
-    "modelId": "llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf",
-    "expectedSize": 807691648,
-    "sha256Checksum": "406bd5983096cc49e1019e9c295e1b011d7b17ccae9e066266eb1734a4743bf7",
+    "blobByteOffset": 20537541760,
+    "modelId": "Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf",
+    "expectedSize": 807692320,
+    "sha256Checksum": "6a13da69b498c560965ad15b5eede6dffacd5eb985759070a5b35575ed6a801c",
     "addon": "llm",
     "engine": "llamacpp-completion",
-    "quantization": "q4_k",
+    "quantization": "q4_k_m",
     "params": "1B"
   },
   "LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS": {
@@ -5320,6 +5354,23 @@
     "quantization": "q8_0",
     "params": "0.6B"
   },
+  "TTS_CODEC_DECODER_MOSS_TTS_F16": {
+    "name": "TTS_CODEC_DECODER_MOSS_TTS_F16",
+    "src": "registry://s3/qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-decoder-f16.gguf",
+    "registryPath": "qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-decoder-f16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    "blobBlockOffset": 0,
+    "blobBlockLength": 27096,
+    "blobByteOffset": 0,
+    "modelId": "moss-codec-decoder-f16.gguf",
+    "expectedSize": 1775741696,
+    "sha256Checksum": "ad07149bc5cdc58c54ea656a14ae1fd881fde924bc6a6d53bca24c949e98c425",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "f16",
+    "params": ""
+  },
   "TTS_CODEC_ENCODER_AUDIO8_FP16": {
     "name": "TTS_CODEC_ENCODER_AUDIO8_FP16",
     "src": "registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-encoder-f16.gguf",
@@ -5354,6 +5405,23 @@
     "quantization": "q8_0",
     "params": "0.6B"
   },
+  "TTS_CODEC_ENCODER_MOSS_TTS_F16": {
+    "name": "TTS_CODEC_ENCODER_MOSS_TTS_F16",
+    "src": "registry://s3/qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-encoder-f16.gguf",
+    "registryPath": "qvac_models_compiled/ggml/openmoss/2026-09-25/moss-codec-encoder-f16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    "blobBlockOffset": 27097,
+    "blobBlockLength": 27100,
+    "blobByteOffset": 1775798816,
+    "modelId": "moss-codec-encoder-f16.gguf",
+    "expectedSize": 1776008736,
+    "sha256Checksum": "ad5e9af512cd65642f1a21d32db371d6fb242fff18f23970cdf122166d663ab9",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "f16",
+    "params": ""
+  },
   "TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32": {
     "name": "TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32",
     "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-08-14/cosyvoice3-campplus-f32.gguf",
@@ -5371,6 +5439,40 @@
     "quantization": "fp32",
     "params": ""
   },
+  "TTS_COSYVOICE3_FLOW_COSYVOICE_BF16": {
+    "name": "TTS_COSYVOICE3_FLOW_COSYVOICE_BF16",
+    "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-bf16.gguf",
+    "registryPath": "qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-bf16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3609684,
+    "blobBlockLength": 10223,
+    "blobByteOffset": 236544275622,
+    "modelId": "cosyvoice3-flow-bf16.gguf",
+    "expectedSize": 669940640,
+    "sha256Checksum": "d1ebadd4c44804436156408bd47dbb58002ba3e9934c2fdcf6fb8fc6085d8b6a",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "bf16",
+    "params": "0.5B"
+  },
+  "TTS_COSYVOICE3_FLOW_COSYVOICE_FP16": {
+    "name": "TTS_COSYVOICE3_FLOW_COSYVOICE_FP16",
+    "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-f16.gguf",
+    "registryPath": "qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-f16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3619908,
+    "blobBlockLength": 10223,
+    "blobByteOffset": 237214240038,
+    "modelId": "cosyvoice3-flow-f16.gguf",
+    "expectedSize": 669940640,
+    "sha256Checksum": "ea45cdab0faf551f06ab51e8b1aff40d7a9cfcd0bdb651054bf52b5876de70f1",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "fp16",
+    "params": "0.5B"
+  },
   "TTS_COSYVOICE3_FLOW_COSYVOICE_FP32": {
     "name": "TTS_COSYVOICE3_FLOW_COSYVOICE_FP32",
     "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-flow-f32.gguf",
@@ -5386,6 +5488,57 @@
     "addon": "tts",
     "engine": "tts-ggml",
     "quantization": "fp32",
+    "params": "0.5B"
+  },
+  "TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0": {
+    "name": "TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0",
+    "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-q4_0.gguf",
+    "registryPath": "qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-q4_0.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3630132,
+    "blobBlockLength": 3212,
+    "blobByteOffset": 237884204454,
+    "modelId": "cosyvoice3-flow-q4_0.gguf",
+    "expectedSize": 210497024,
+    "sha256Checksum": "4db3f5dfb43e873cfeead18ea461a9a2e5b6dbab0087aa246ca530e61fa22789",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "q4_0",
+    "params": "0.5B"
+  },
+  "TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0": {
+    "name": "TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0",
+    "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-q8_0.gguf",
+    "registryPath": "qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-flow-q8_0.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3633345,
+    "blobBlockLength": 5706,
+    "blobByteOffset": 238094725254,
+    "modelId": "cosyvoice3-flow-q8_0.gguf",
+    "expectedSize": 373894144,
+    "sha256Checksum": "a03f3acc16ef995e517b891aff83f155a256e817d62cdd6f5b03dbe59bbf0250",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "q8_0",
+    "params": "0.5B"
+  },
+  "TTS_COSYVOICE3_HIFT_COSYVOICE_FP16": {
+    "name": "TTS_COSYVOICE3_HIFT_COSYVOICE_FP16",
+    "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-hift-f16.gguf",
+    "registryPath": "qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-hift-f16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3639052,
+    "blobBlockLength": 736,
+    "blobByteOffset": 238468643174,
+    "modelId": "cosyvoice3-hift-f16.gguf",
+    "expectedSize": 48220512,
+    "sha256Checksum": "79052285fdcb2876312bf914afe6d654f4d07c68c1c243a5e3aaf43895761abc",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "fp16",
     "params": "0.5B"
   },
   "TTS_COSYVOICE3_HIFT_COSYVOICE_FP32": {
@@ -5405,6 +5558,23 @@
     "quantization": "fp32",
     "params": "0.5B"
   },
+  "TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0": {
+    "name": "TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0",
+    "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q4_0.gguf",
+    "registryPath": "qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q4_0.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3639789,
+    "blobBlockLength": 12125,
+    "blobByteOffset": 238516881766,
+    "modelId": "cosyvoice3-llm-q4_0.gguf",
+    "expectedSize": 794582720,
+    "sha256Checksum": "caa552d3369ea37f03fadf7d706cc4ad54660ba7ec7f18ce089c2635ef221ea5",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "q4_0",
+    "params": "0.5B"
+  },
   "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0": {
     "name": "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0",
     "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-07-23/cosyvoice3-llm-q8_0.gguf",
@@ -5417,6 +5587,23 @@
     "modelId": "cosyvoice3-llm-q8_0.gguf",
     "expectedSize": 973496000,
     "sha256Checksum": "1baeea863cc7796d56fe409dbb0b9ddd4cb50b82336054c0df419e3ec96a852e",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "q8_0",
+    "params": "0.5B"
+  },
+  "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1": {
+    "name": "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1",
+    "src": "registry://s3/qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf",
+    "registryPath": "qvac_models_compiled/ggml/cosy_voice/2026-09-21/cosyvoice3-llm-q8_0-fused.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    "blobBlockOffset": 3651915,
+    "blobBlockLength": 14855,
+    "blobByteOffset": 239311482118,
+    "modelId": "cosyvoice3-llm-q8_0-fused.gguf",
+    "expectedSize": 973490560,
+    "sha256Checksum": "a1a4b925359719fae8e3ff021014dc917b999ba6a1b4b1376caef6be959e8b02",
     "addon": "tts",
     "engine": "tts-ggml",
     "quantization": "q8_0",
@@ -5557,6 +5744,23 @@
     "engine": "tts-ggml",
     "quantization": "",
     "params": ""
+  },
+  "TTS_DELAY_LLM_MOSS_TTS_F16": {
+    "name": "TTS_DELAY_LLM_MOSS_TTS_F16",
+    "src": "registry://s3/qvac_models_compiled/ggml/openmoss/2026-09-25/moss-tts-delay-f16.gguf",
+    "registryPath": "qvac_models_compiled/ggml/openmoss/2026-09-25/moss-tts-delay-f16.gguf",
+    "registrySource": "s3",
+    "blobCoreKey": "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    "blobBlockOffset": 54198,
+    "blobBlockLength": 259181,
+    "blobByteOffset": 3551869568,
+    "modelId": "moss-tts-delay-f16.gguf",
+    "expectedSize": 16985643392,
+    "sha256Checksum": "a71d83078764dc86445e310cd7a4aa0aea841047f6ee03ab2cb73917405df858",
+    "addon": "tts",
+    "engine": "tts-ggml",
+    "quantization": "f16",
+    "params": "8B"
   },
   "TTS_DENOISER_LAVASR_FP16": {
     "name": "TTS_DENOISER_LAVASR_FP16",
