@@ -1,7 +1,9 @@
 import type { FastifyReply, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify'
+import { WorkerStartupError } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { resolveModelAlias } from '@/serve/core/config/models'
 import { ModelLoadTimeoutError } from '@/serve/core/load-manager'
+import { formatErrorChain } from '@/serve/core/lifecycle'
 import type { ModelEntry } from '@/serve/core/model-registry'
 import type { ResolvedModelEntry } from '@/serve/core/config/types'
 import type { QvacContext, QvacRequestModel } from '@/serve/core/context'
@@ -88,7 +90,8 @@ export async function ensureReady(
     if (err instanceof ModelLoadTimeoutError) {
       throw new HttpError(503, 'model_load_timeout', err.message)
     }
-    const message = err instanceof Error ? err.message : String(err)
+    ctx.logger.error(`Failed to load "${modelName}": ${formatErrorChain(err)}`)
+    const message = modelLoadFailureMessage(err)
     throw new HttpError(503, 'model_load_failed', `Model "${modelName}" failed to load: ${message}`)
   } finally {
     disconnect?.dispose()
@@ -99,6 +102,22 @@ export async function ensureReady(
     throw new HttpError(503, 'model_not_ready', `Model "${modelName}" is not loaded yet.`)
   }
   return entry
+}
+
+function modelLoadFailureMessage(err: unknown): string {
+  const startup = err instanceof Error && err.cause instanceof WorkerStartupError ? err.cause : null
+  if (!startup) return err instanceof Error ? err.message : String(err)
+
+  // The outer SDK error can say "timeout" even when the worker exited early.
+  // Reconstruct only known diagnostics: startup.message includes raw stderr.
+  if (!startup.workerExited) return 'Worker did not establish IPC before the startup timeout'
+  const details = [
+    startup.exitCode !== null ? `code ${startup.exitCode}` : '',
+    startup.exitSignal !== null ? `signal ${startup.exitSignal}` : ''
+  ]
+    .filter(Boolean)
+    .join(', ')
+  return `Worker process exited${details ? ` (${details})` : ''} before IPC was established`
 }
 
 // Aborts if the client disconnects before the load finishes: `reply.raw` closes
