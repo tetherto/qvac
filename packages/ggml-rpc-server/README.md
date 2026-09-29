@@ -35,6 +35,9 @@ and do not treat loopback binding as an access-control boundary. Non-loopback
 hosts are rejected unless `allowNonLoopbackHost: true` is passed; use them only
 on a trusted/private network with external access controls.
 
+Like a listening `net.Server`, a running server keeps the process alive until
+`stop()` resolves, so a standalone worker can start it and wait for clients.
+
 Native server output is written to the host application's platform log;
 `logs()` returns an empty string because there is no child-process stdout
 stream to capture.

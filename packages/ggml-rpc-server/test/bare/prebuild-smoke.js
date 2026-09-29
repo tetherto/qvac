@@ -2,6 +2,10 @@ const net = require("bare-net");
 const { startRpcServer } = require("../../index");
 const { probeRpcServerProtocol } = require("../mobile/rpc-protocol.cjs");
 
+// Fail unless main() runs to completion. If a running server stopped keeping
+// the event loop alive, Bare would exit mid-check with this code still set.
+Bare.exitCode = 1;
+
 async function main() {
   const server = await startRpcServer({ device: "CPU" });
   try {
@@ -21,9 +25,32 @@ async function main() {
       throw error;
     }
   }
+
+  // Only the running server can keep the process alive until this unref'd
+  // timer fires, as it must for a standalone worker that just waits.
+  const idleServer = await startRpcServer({ device: "CPU" });
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        probeRpcServerProtocol(net, idleServer.host, idleServer.port).then(
+          resolve,
+          reject,
+        );
+      }, 500);
+      timer.unref();
+    });
+    console.log("in-process ggml-rpc-server kept the process alive while idle");
+  } finally {
+    await idleServer.stop();
+  }
 }
 
-main().catch((error) => {
-  console.error(error);
-  Bare.exitCode = 1;
-});
+main().then(
+  () => {
+    Bare.exitCode = 0;
+  },
+  (error) => {
+    console.error(error);
+    Bare.exitCode = 1;
+  },
+);

@@ -46,6 +46,15 @@ struct RpcServerApi {
   FreeFn free;
 };
 
+// The server runs on a std::thread that libuv cannot see, so a running server
+// holds one active handle to keep the Bare event loop, and the process, alive
+// until it is stopped. Only the JS thread touches this state.
+struct KeepAlive {
+  js_env_t* env = nullptr;
+  uv_async_t* handle = nullptr;
+  bool teardownRegistered = false;
+};
+
 struct ServerHandle {
   ServerHandle(ggml_backend_rpc_server_t value, RpcServerApi functions)
       : server(value), api(functions) {
@@ -77,9 +86,63 @@ struct ServerHandle {
   RpcServerApi api;
   std::thread worker;
   std::mutex stopMutex;
+  KeepAlive keepAlive;
 };
 
 using ServerHandleRef = std::shared_ptr<ServerHandle>;
+
+void onKeepAliveClosed(uv_handle_t* handle) {
+  // libuv embeds uv_handle_t as the first member of every concrete handle.
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  std::unique_ptr<uv_async_t> owner(reinterpret_cast<uv_async_t*>(handle));
+}
+
+void onKeepAliveSignal(uv_async_t* /*unused*/) {}
+
+void onKeepAliveTeardown(void* data);
+
+void releaseKeepAlive(ServerHandle& server) {
+  KeepAlive& keepAlive = server.keepAlive;
+  if (keepAlive.handle == nullptr) {
+    return;
+  }
+  if (keepAlive.teardownRegistered) {
+    js_remove_teardown_callback(keepAlive.env, onKeepAliveTeardown, &server);
+    keepAlive.teardownRegistered = false;
+  }
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+  uv_close(reinterpret_cast<uv_handle_t*>(keepAlive.handle), onKeepAliveClosed);
+  keepAlive.handle = nullptr;
+}
+
+void onKeepAliveTeardown(void* data) {
+  auto* server = static_cast<ServerHandle*>(data);
+  // Teardown consumes the registration, so there is nothing left to remove.
+  server->keepAlive.teardownRegistered = false;
+  releaseKeepAlive(*server);
+}
+
+void attachKeepAlive(js_env_t* env, ServerHandle& server) {
+  uv_loop_t* loop = nullptr;
+  if (js_get_env_loop(env, &loop) != 0) {
+    return;
+  }
+  std::unique_ptr<uv_async_t> handle(new (std::nothrow) uv_async_t());
+  if (handle == nullptr ||
+      uv_async_init(loop, handle.get(), onKeepAliveSignal) != 0) {
+    return;
+  }
+  KeepAlive& keepAlive = server.keepAlive;
+  keepAlive.env = env;
+  keepAlive.handle = handle.release();
+  // Without the teardown hook, Bare.exit() with a running server would wait
+  // on this handle forever, so only keep it when the hook is in place.
+  keepAlive.teardownRegistered =
+      js_add_teardown_callback(env, onKeepAliveTeardown, &server) == 0;
+  if (!keepAlive.teardownRegistered) {
+    releaseKeepAlive(server);
+  }
+}
 
 class StartError : public std::runtime_error {
 public:
@@ -165,6 +228,11 @@ void rejectStopTask(StopTask* task, const char* message) {
 
 void completeStopTask(uv_async_t* asyncHandle) {
   auto* task = static_cast<StopTask*>(asyncHandle->data);
+  // A stopped server no longer holds the loop open. After a failed stop the
+  // server may still be running, so its handle stays.
+  if (task->envAlive && task->error == nullptr) {
+    releaseKeepAlive(*task->holder);
+  }
   task->holder.reset();
 
   if (task->envAlive) {
@@ -245,6 +313,7 @@ js_value_t* stopServerAsync(js_env_t* env, ServerHandleRef holder) {
 
 void finalizeServer(js_env_t* /*env*/, void* data, void* /*hint*/) {
   std::unique_ptr<ServerHandleRef> holder(static_cast<ServerHandleRef*>(data));
+  releaseKeepAlive(**holder);
 }
 
 bool getOptionalProperty(
@@ -616,6 +685,7 @@ void resolveStartTask(StartTask* task) {
   // The JS external now owns this shared reference until finalizeServer runs.
   [[maybe_unused]] auto* jsOwnedHolder = externalHolder.release();
   if (js_resolve_deferred(task->env, task->deferred, external) == 0) {
+    attachKeepAlive(task->env, *task->holder);
     task->holder.reset();
   }
 }
