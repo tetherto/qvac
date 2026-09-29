@@ -46,8 +46,8 @@ The desktop packages are `os`/`cpu` filtered `optionalDependencies` of the meta
 package, so npm 7+, pnpm, bun and Yarn Berry install the right one. Yarn v1 and
 `--omit=optional` install none. `@qvac/fabric-android-arm64` and
 `@qvac/fabric-ios` are cross-built, and no install host selects them, so a mobile
-application declares the one it targets as a direct dependency pinned to the exact
-`@qvac/fabric` version. `qvac verify prebuilds` and the SDK Expo plugin name the
+application declares `@qvac/fabric` and the one it targets as direct dependencies
+at the same exact version. `qvac verify prebuilds` and the SDK Expo plugin name the
 missing pin.
 
 A runtime in `@qvac/fabric/prebuilds/<host>` always wins over the platform
