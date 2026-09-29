@@ -71,8 +71,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.18.0",
-    "@qvac/fabric-ios": "0.18.0",
+    "@qvac/fabric-android-arm64": "^0.18.0",
+    "@qvac/fabric-ios": "^0.18.0",
     "@types/node": "^24.2.1",
     "cmake-bare": "^1.7.5",
     "cmake-vcpkg": "^1.1.0",

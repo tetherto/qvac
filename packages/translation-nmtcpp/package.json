@@ -78,8 +78,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.18.0",
-    "@qvac/fabric-ios": "0.18.0",
+    "@qvac/fabric-android-arm64": "^0.18.0",
+    "@qvac/fabric-ios": "^0.18.0",
     "@qvac/registry-client": "^0.6.1",
     "@types/node": "^24.2.1",
     "bare-fetch": "^3.0.1",

@@ -72,8 +72,8 @@
     "bare-path": "^3.0.0"
   },
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.18.0",
-    "@qvac/fabric-ios": "0.18.0",
+    "@qvac/fabric-android-arm64": "^0.18.0",
+    "@qvac/fabric-ios": "^0.18.0",
     "@types/node": "^24.2.1",
     "brittle": "^3.16.5",
     "cmake-bare": "^1.7.5",

@@ -59,8 +59,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://github.com/tetherto/qvac/tree/main/packages/model-fit#readme",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.18.0",
-    "@qvac/fabric-ios": "0.18.0",
+    "@qvac/fabric-android-arm64": "^0.18.0",
+    "@qvac/fabric-ios": "^0.18.0",
     "@types/node": "^24.2.1",
     "bare-subprocess": "^6.1.0",
     "bare-url": "^2.1.6",
