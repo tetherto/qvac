@@ -3,10 +3,7 @@ name: On Merge Trigger (GGML RPC Server)
 on:
   push:
     branches:
-      - main
       - release-*
-      - feature-*
-      - tmp-*
     paths:
       - packages/ggml-rpc-server/**
       - packages/fabric/**
