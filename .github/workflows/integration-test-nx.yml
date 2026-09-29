@@ -505,6 +505,7 @@ jobs:
           QVAC_PERF_RUNS: ${{ matrix.qvacPerfRuns }}
           QVAC_PERF_WARMUP_RUNS: ${{ matrix.qvacPerfWarmupRuns }}
           QVAC_TEST_ENV: ${{ toJSON(matrix.testEnv) }}
+          TEST_SCRIPT: ${{ matrix.testScript || 'test:integration' }}
         run: |
           [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
           # options.ci.testEnv, settable per platform row; @sh quotes the values.
@@ -515,7 +516,7 @@ jobs:
             npm run test:integration:generate
           fi
           set +e
-          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} 2>&1 | tee test-output.log
+          npm run "$TEST_SCRIPT" ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} 2>&1 | tee test-output.log
           EXIT=${PIPESTATUS[0]}
           if [ "$EXIT" -eq 0 ]; then exit 0; fi
           # options.ci.tolerateSigsegv: known ggml/Vulkan static-destructor crash
@@ -534,6 +535,7 @@ jobs:
           QVAC_PERF_RUNS: ${{ matrix.qvacPerfRuns }}
           QVAC_PERF_WARMUP_RUNS: ${{ matrix.qvacPerfWarmupRuns }}
           QVAC_TEST_ENV: ${{ toJSON(matrix.testEnv) }}
+          TEST_SCRIPT: ${{ matrix.testScript || 'test:integration' }}
         # A bare pipe returns the tee's status, not the test's, so a failing run
         # reads as green. Capture $LASTEXITCODE after each stage and propagate it.
         run: |
@@ -548,7 +550,7 @@ jobs:
             $generateExit = $LASTEXITCODE
             if ($generateExit -ne 0) { exit $generateExit }
           }
-          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} 2>&1 | Tee-Object test-output.log -Append
+          npm run $env:TEST_SCRIPT ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }} 2>&1 | Tee-Object test-output.log -Append
           $testExit = $LASTEXITCODE
           Write-Host "Windows integration test exit code: $testExit"
           exit $testExit
@@ -559,10 +561,11 @@ jobs:
         env:
           QVAC_ENV_NAME: ${{ matrix.envVarName }}
           QVAC_ENV_VALUE: ${{ matrix.envSecretName && secrets[matrix.envSecretName] }}
+          TEST_SCRIPT: ${{ matrix.testScript || 'test:integration' }}
         shell: bash
         run: |
           [ -n "${QVAC_ENV_NAME:-}" ] && export "${QVAC_ENV_NAME}=${QVAC_ENV_VALUE}"
-          npm run test:integration ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }}
+          npm run "$TEST_SCRIPT" ${{ matrix.testCommandSuffix && format('{0}-{1}', matrix.platform, matrix.arch) || '' }}
 
       - name: Upload performance report
         if: always() && !cancelled()

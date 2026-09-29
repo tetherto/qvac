@@ -205,6 +205,10 @@ Notes:
 * `generationParams.tool_choice` cannot name a deferred tool — its schema is not
   in the prompt, so the call cannot be constrained. Force `"tool_search"`
   instead.
+* Once the conversation has loaded a deferred tool, turns with no `tool_choice`
+  or `"auto"` run without the tool-call grammar, which only knows the tools in
+  the prompt. The call is still parsed and checked against the loaded
+  definitions.
 * On the worker-orchestrated loop the SDK runs `tool_search` itself; your
   handlers are never called for it.
 

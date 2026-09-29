@@ -1275,9 +1275,10 @@ the demos still run and write the concatenated wav.
 ## Testing
 
 ```bash
-npm run test:unit          # mocked binding; fast
-npm run test:integration   # spins up the real engine; needs models
-npm run test               # both
+npm run test:unit               # mocked binding; fast
+npm run test:integration        # spins up the real engine; needs models
+npm run test:integration:smoke  # Supertonic suite only; the darwin-x64 CI leg runs this
+npm run test                    # both
 ```
 
 Integration tests scan a few candidate `models/` directories for the

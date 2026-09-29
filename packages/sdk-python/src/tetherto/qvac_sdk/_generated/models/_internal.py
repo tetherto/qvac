@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import ConfigDict, Field, RootModel
@@ -21,20 +21,59 @@ class FieldQvacSdkWireContract(RootModel[Any]):
     ]
 
 
-class AssessModelFitRequestModelsItemModel(GeneratedBaseModel):
-    name: Annotated[str, Field(description="Catalog name of the model entry.")]
-    sha256_checksum: Annotated[
+class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class AssessModelFitRequestModelsItemModelSrc(GeneratedBaseModel):
+    src: Annotated[
         str,
         Field(
-            alias="sha256Checksum",
-            description="Expected SHA-256 checksum of the model file.",
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
         ),
     ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
     registry_path: Annotated[
         str | None,
         Field(
             alias="registryPath",
-            description="Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
+            description="Registry-relative path to the model (set for registry-backed models).",
         ),
     ] = None
     registry_source: Annotated[
@@ -44,82 +83,110 @@ class AssessModelFitRequestModelsItemModel(GeneratedBaseModel):
             description="Registry source identifier, e.g. `huggingface`.",
         ),
     ] = None
-
-
-class AssessModelFitRequestModelsItemArtifactsItem(GeneratedBaseModel):
-    name: Annotated[str, Field(description="Catalog name of the model entry.")]
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
     sha256_checksum: Annotated[
-        str,
+        str | None,
         Field(
             alias="sha256Checksum",
             description="Expected SHA-256 checksum of the model file.",
         ),
-    ]
-    registry_path: Annotated[
-        str | None,
-        Field(
-            alias="registryPath",
-            description="Registry coordinates. Present on a catalog constant; without them no fit stub can be resolved and the assessment falls back to calibration.",
-        ),
     ] = None
-    registry_source: Annotated[
-        str | None,
+    addon: Annotated[
+        AssessModelFitRequestModelsItemModelSrcAddon | Literal["vad"] | None,
         Field(
-            alias="registrySource",
-            description="Registry source identifier, e.g. `huggingface`.",
+            description="Inference addon / capability category this model belongs to."
         ),
     ] = None
 
 
-class AssessModelFitRequestModelsItemWorkloadLlm(GeneratedBaseModel):
-    kind: Literal["llm"] = "llm"
-    context_tokens: Annotated[
-        int,
-        Field(
-            alias="contextTokens",
-            description="Context window the caller intends to use, in tokens.",
-            gt=0,
-            le=9007199254740991,
-        ),
-    ]
+class AssessModelFitRequestModelsItemModelType(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
 
 
-class AssessModelFitRequestModelsItemWorkloadAudio(GeneratedBaseModel):
-    kind: Literal["audio"] = "audio"
-    window_ms: Annotated[
-        float,
+class AssessModelFitRequestModelsItemModelConfig(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
         Field(
-            alias="windowMs",
-            description="Audio window handed to the engine per call, in milliseconds.",
-            gt=0.0,
+            description="The config `loadModel` would be given, including any companion model sources.",
+            title="AssessModelFitRequestModelsItemModelConfig",
         ),
     ]
-    streaming: Annotated[
-        bool, Field(description="Whether the caller streams continuously.")
-    ]
-    batch: Annotated[
-        int | None,
-        Field(description="Concurrent windows per call.", gt=0, le=9007199254740991),
-    ] = None
 
 
 class AssessModelFitRequestModelsItem(GeneratedBaseModel):
-    model: Annotated[
-        AssessModelFitRequestModelsItemModel,
+    model_src: Annotated[
+        str | AssessModelFitRequestModelsItemModelSrc | None,
         Field(
-            description="Catalog model constant to assess.",
-            title="AssessModelFitRequestModelsItemModel",
+            alias="modelSrc",
+            description="The model to assess, as `loadModel` takes it. Optional for the loads `loadModel` also takes without one, where every source is a config field.",
+        ),
+    ] = None
+    model_type: Annotated[
+        AssessModelFitRequestModelsItemModelType,
+        Field(
+            alias="modelType",
+            description="Engine that would run the load.",
+            title="AssessModelFitRequestModelsItemModelType",
         ),
     ]
-    artifacts: Annotated[
-        list[AssessModelFitRequestModelsItemArtifactsItem] | None,
-        Field(description="Additional catalog constants this load also requires."),
+    model_config_: Annotated[
+        AssessModelFitRequestModelsItemModelConfig | None,
+        Field(
+            alias="modelConfig",
+            description="The config `loadModel` would be given, including any companion model sources.",
+            title="AssessModelFitRequestModelsItemModelConfig",
+        ),
     ] = None
-    workload: Annotated[
-        AssessModelFitRequestModelsItemWorkloadLlm
-        | AssessModelFitRequestModelsItemWorkloadAudio,
-        Field(description="Workload the caller intends to run."),
-    ]
 
 
 class AssessModelFitRequestExecution(Enum):
@@ -131,7 +198,7 @@ class AssessModelFitRequest(GeneratedBaseModel):
     models: Annotated[
         list[AssessModelFitRequestModelsItem],
         Field(
-            description="Candidates to assess together under one memory budget.",
+            description="Models to assess together under one memory budget.",
             min_length=1,
         ),
     ]
@@ -4886,6 +4953,149 @@ class LoadedModelInfoToolDialect(Enum):
     dsml = "dsml"
 
 
+class NativeProbeFitVerdict(Enum):
+    fit = "fit"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class NativeProbeFitPlan(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    n_ctx: Annotated[
+        int,
+        Field(
+            alias="nCtx",
+            description="Context the probe resolved for this load, in tokens.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_layers: Annotated[
+        int,
+        Field(
+            alias="nGpuLayers",
+            description="Layers the probe would offload.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+    n_gpu_devices: Annotated[
+        int,
+        Field(
+            alias="nGpuDevices",
+            description="GPU devices the offload would span.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    name: Annotated[
+        str, Field(description="Device name as the backend reports it, or `host`.")
+    ]
+    total_bytes: Annotated[
+        float,
+        Field(alias="totalBytes", description="Memory the device reports installed."),
+    ]
+    free_bytes: Annotated[
+        float,
+        Field(
+            alias="freeBytes",
+            description="Memory the device reports free, before the margin.",
+        ),
+    ]
+    margin_bytes: Annotated[
+        float,
+        Field(
+            alias="marginBytes",
+            description="Headroom the fitter withheld on this device.",
+        ),
+    ]
+    model_bytes: Annotated[
+        float,
+        Field(alias="modelBytes", description="Weights the load would place here."),
+    ]
+    context_bytes: Annotated[
+        float,
+        Field(
+            alias="contextBytes",
+            description="Context and cache the load would place here.",
+        ),
+    ]
+    compute_bytes: Annotated[
+        float,
+        Field(
+            alias="computeBytes",
+            description="Compute buffers the load would place here.",
+        ),
+    ]
+
+
+class NativeProbeFitProjection(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    devices: Annotated[
+        list[NativeProbeFitProjectionDevicesItem],
+        Field(description="Every device the load would touch."),
+    ]
+
+
+class NativeProbeFit(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    verdict: Annotated[
+        NativeProbeFitVerdict,
+        Field(
+            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the child produced no usable answer.",
+            title="NativeProbeFitVerdict",
+        ),
+    ]
+    basis: Annotated[
+        Literal["native-probe"],
+        Field(
+            description="Evidence class: a disposable llama.cpp child that read the model file and the resolved load settings."
+        ),
+    ] = "native-probe"
+    estimator_version: Annotated[
+        str,
+        Field(
+            alias="estimatorVersion",
+            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the fitter withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve.",
+        ),
+    ]
+    reason: Annotated[
+        str,
+        Field(
+            description="Machine-readable reason for the verdict. Never parsed out of log text."
+        ),
+    ]
+    message: Annotated[
+        str | None, Field(description="Human-readable detail, when the reason has any.")
+    ] = None
+    plan: Annotated[
+        NativeProbeFitPlan | None,
+        Field(
+            description="Placement the probe projected. Present wherever the fitter resolved one.",
+            title="NativeProbeFitPlan",
+        ),
+    ] = None
+    projection: Annotated[
+        NativeProbeFitProjection | None,
+        Field(
+            description="What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
+            title="NativeProbeFitProjection",
+        ),
+    ] = None
+
+
 class LoadedModelInfo(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4901,6 +5111,14 @@ class LoadedModelInfo(GeneratedBaseModel):
     tool_dialect: Annotated[
         LoadedModelInfoToolDialect | None,
         Field(alias="toolDialect", title="LoadedModelInfoToolDialect"),
+    ] = None
+    fit_probe: Annotated[
+        NativeProbeFit | None,
+        Field(
+            alias="fitProbe",
+            description="Outcome of the advisory fit check that ran ahead of this load. Advisory throughout: the load proceeded whatever the verdict. Absent when the check is disabled.",
+            title="NativeProbeFit",
+        ),
     ] = None
 
 
@@ -16046,6 +16264,13 @@ class Threads(RootModel[int]):
     ]
 
 
+class Verbosity1(IntEnum):
+    integer_0 = 0
+    integer_1 = 1
+    integer_2 = 2
+    integer_3 = 3
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -16088,6 +16313,34 @@ class LoadModelSrcRequestSdcppGenerationModelConfigWorld(GeneratedBaseModel):
         Field(
             alias="offloadParamsToCpu",
             description="Keep weights in CPU memory and offload during GPU compute.",
+        ),
+    ] = None
+    params_backend: Annotated[
+        str | None,
+        Field(
+            alias="paramsBackend",
+            description="Parameter residency for the walk session, independent of graph execution. 'diffusion' is the walk DiT and 'vae' the taehv decoder. 'diffusion=cpu' stages DiT weights from CPU RAM; 'diffusion=disk' reads them from the model file on demand. Disk is never selected automatically, and 'vae=disk' is rejected natively because taehv retains its prepared weights across steps. Explicit assignments override offloadParamsToCpu for those modules.",
+            max_length=4096,
+        ),
+    ] = None
+    max_vram: Annotated[
+        float | str | None,
+        Field(
+            alias="maxVram",
+            description="VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
+        ),
+    ] = None
+    stream_layers: Annotated[
+        bool | None,
+        Field(
+            alias="streamLayers",
+            description="Prefetch and evict DiT layers from CPU RAM. Only takes effect with GPU execution, graph cutting enabled by maxVram, and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
+        ),
+    ] = None
+    verbosity: Annotated[
+        Verbosity1 | None,
+        Field(
+            description="Native log level while the session is alive: 0=ERROR, 1=WARN, 2=INFO, 3=DEBUG. The level is process-wide and restored on unload."
         ),
     ] = None
     frame_jpeg_quality: Annotated[
@@ -16282,7 +16535,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     mode: Annotated[
         LoadModelSrcRequestSdcppGenerationModelConfigMode | None,
         Field(
-            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU with at least 20 GB free VRAM.",
+            description="Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` + `audioVaeModelSrc` selects MiniMax-H3 text-to-audio-video; otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
             title="LoadModelSrcRequestSdcppGenerationModelConfigMode",
         ),
     ] = "diffusion"
