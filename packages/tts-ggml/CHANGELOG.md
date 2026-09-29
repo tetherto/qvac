@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `assessFit` now resolves the backends directory the same way a load does
+  (`prebuilds/<platform>-<arch>/<module>`), so a fit projection finds the ggml
+  backend modules on the split-backend layouts (Linux, macOS, Android) instead
+  of reporting `no-backend-device` or measuring against whatever an earlier
+  load happened to leave in the process.
+
 ### Changed
 
 - Raise the `ggml-speech` floor to `2026-09-28` and the `speech-cpp` floor to
