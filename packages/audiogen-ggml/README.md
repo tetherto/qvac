@@ -192,7 +192,7 @@ const stats = await response.await()
 // gpuFallbackReason: 0 = none, 1 = not requested, 2 = no devices, 3 = init failed
 // lyricsScore + lrc: alignment confidence and LRC text, only with generateLrc
 // qualityScore:      [0, 1], present only when the run set computeQualityScore
-// metadata:          what the run rendered (see below), ACE-Step text runs only
+// metadata:          what the run rendered (see below), ACE-Step only
 
 await gen.destroy()
 ```
@@ -210,20 +210,23 @@ await gen.destroy()
 > `audiogenGpuFallbackReason(stats.gpuFallbackReason)`.
 > [`examples/generate-music.js`](examples/generate-music.js) shows the pattern.
 
-An ACE-Step text generation also reports what it rendered once the LM filled in
-whatever the request left unset, on the PCM item and again as `stats.metadata`:
+An ACE-Step run also reports what it rendered once the LM filled in whatever
+the request left unset, on the PCM item and again as `stats.metadata`:
 
 ```js
-// { caption, lyrics, bpm, keyscale, timesignature, vocalLanguage, seed,
+// { caption, lyrics, bpm, keyscale, beatsPerBar, vocalLanguage, seed,
 //   codeFrames, qualityReport? }
 const { seed, lyrics } = stats.metadata
 ```
 
 `seed` is the one the run used, so an unseeded take can be replayed by passing
 it back. Under Simple Mode or Query Rewriting, `caption` and `lyrics` are the
-LM-composed ones. `timesignature` is the numerator only (`4` for `4/4`);
-`qualityReport` is the per-condition breakdown of `stats.qualityScore` and is
-present only with `computeQualityScore`. Audio edits report no metadata.
+LM-composed ones (with `augmentCaptionWithMetadata`, `caption` stays yours).
+`beatsPerBar` is the time-signature numerator (`4` for `4/4`), the only part
+the engine reports. `qualityReport` is the per-condition breakdown of
+`stats.qualityScore` and is present only with `computeQualityScore`. An edit
+run reports its base seed and prompt metadata; its `caption` is empty and
+`codeFrames` is 0.
 
 ### 2. A song with lyrics + rhythm
 

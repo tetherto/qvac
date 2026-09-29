@@ -11,12 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Engine options and results that the speech fabric's audiogen engines already
   provided but the addon did not expose:
-  - ACE-Step generation metadata: a text generation reports what it rendered on
-    the PCM item and as `stats.metadata` — the caption and lyrics (LM-composed
-    under Simple Mode / Query Rewriting), `bpm`, `keyscale`, the
-    `timesignature` numerator, `vocalLanguage`, `codeFrames`, the `seed` it used
-    (so an unseeded take can be replayed), and `qualityReport` with
-    `computeQualityScore`.
+  - ACE-Step generation metadata: a run reports what it rendered on the PCM
+    item and as `stats.metadata` — the caption and lyrics (LM-composed
+    under Simple Mode / Query Rewriting), `bpm`, `keyscale`, `beatsPerBar` (the
+    time-signature numerator), `vocalLanguage`, `codeFrames`, the `seed` it
+    used (so an unseeded take or edit can be replayed), and `qualityReport`
+    with `computeQualityScore`.
   - ACE-Step per-run `inferenceSteps` and `shift` on `run()` and on an edit
     session's `run()`; both used to be fixed at load time.
   - Edit sessions: `run()` takes a timbre `referenceAudio`, the `vocalLanguage`
@@ -28,6 +28,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `flowMs`, `vocoderMs`) and `emittedFrames` in the stats, and
     `config.device: 'gpu'` to fail `load()` instead of falling back to the CPU
     when no GPU is usable.
+
+### Changed
+
+- ACE-Step `config.inferenceSteps` must be an integer from 0 to 1000 and
+  `config.shift` must be non-negative, the same rules as the new per-run
+  values; out-of-range values used to load. The engine already read 0 and
+  below as "auto".
+- The ACE-Step options `run()` shares with edit runs are validated the same way
+  on both: `seed` must be a safe integer, `bpm` a non-negative int32,
+  `vocalLanguage` / `keyscale` / `timesignature` strings and the DCW scalers
+  within the float32 range. The native parser range-checks `seed`, `bpm` and
+  the DCW scalers before casting them.
+- A positive `shift` too small for a float32 is rejected instead of rounding to
+  0 and silently selecting the automatic shift.
+
+### Fixed
+
+- `understand()` no longer repeats the previous run's `lyricsScore` in its
+  stats after a `generateLrc` generation.
 
 ## [0.5.1] - 2026-09-29
 

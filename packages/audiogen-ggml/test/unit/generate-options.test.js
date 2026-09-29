@@ -744,6 +744,11 @@ test('AudioGen.run rejects out-of-range per-run ACE-Step inferenceSteps and shif
   await t.exception(() => gen.run('test', { inferenceSteps: 1.5 }), /must be an integer/)
   await t.exception(() => gen.run('test', { shift: -0.5 }), /shift must be 0 or a positive/)
   await t.exception(
+    () => gen.run('test', { shift: 1e-50 }),
+    /shift must be 0 or a positive float32/,
+    'a shift that rounds to a float32 zero would silently select auto'
+  )
+  await t.exception(
     () => gen.run('test', { shift: Number.POSITIVE_INFINITY }),
     /shift must be a finite number/
   )
@@ -755,7 +760,7 @@ test('AudioGen.run surfaces the rendered generation metadata', async (t) => {
     lyrics: '[verse]\nneon lights',
     bpm: 120,
     keyscale: 'E minor',
-    timesignature: 4,
+    beatsPerBar: 4,
     vocalLanguage: 'en',
     seed: 3141592653,
     codeFrames: 50,
@@ -861,6 +866,28 @@ test('AudioGen.edit validates its run options before native dispatch', async (t)
   await t.exception(() => run({ vocalLanguage: 7 }), /edit.vocalLanguage must be a string/)
   await t.exception(() => run({ bpm: -1 }), /edit.bpm must be between 0 and/)
   await t.exception(() => run({ dcwScaler: Number.NaN }), /edit.dcwScaler must be a finite number/)
-  await t.exception(() => run({ inferenceSteps: 5000 }), /between 0 and 1000/)
-  await t.exception(() => run({ shift: -1 }), /shift must be 0 or a positive/)
+  await t.exception(() => run({ dcwHighScaler: 1e300 }), /edit.dcwHighScaler must be within/)
+  await t.exception(() => run({ seed: 1e300 }), /edit.seed must be a safe integer/)
+  await t.exception(() => run({ inferenceSteps: 5000 }), /edit.inferenceSteps must be between/)
+  await t.exception(() => run({ shift: -1 }), /edit.shift must be 0 or a positive/)
+})
+
+test('AudioGen.run validates the options it shares with edit runs', async (t) => {
+  const { gen } = createHarness()
+  await t.exception(() => gen.run('test', { bpm: -1 }), /bpm must be between 0 and/)
+  await t.exception(() => gen.run('test', { seed: 1e300 }), /seed must be a safe integer/)
+  await t.exception(() => gen.run('test', { dcwScaler: 1e300 }), /dcwScaler must be within/)
+  await t.exception(() => gen.run('test', { keyscale: 7 }), /keyscale must be a string/)
+  await t.exception(
+    () => gen.run('test', { augmentCaptionWithMetadata: 'yes' }),
+    /augmentCaptionWithMetadata must be a boolean/
+  )
+})
+
+test('AudioGen range-checks the ACE-Step load-time inferenceSteps and shift', (t) => {
+  const load = (config) => new AudioGen({ files: { modelDir: '/models/acestep' }, config })
+  t.exception(() => load({ inferenceSteps: 1001 }), /inferenceSteps must be between 0 and 1000/)
+  t.exception(() => load({ inferenceSteps: -1 }), /inferenceSteps must be between 0 and 1000/)
+  t.exception(() => load({ shift: -2 }), /shift must be 0 or a positive/)
+  t.is(load({ inferenceSteps: 50, shift: 1 })._configuration.inferenceSteps, 50)
 })

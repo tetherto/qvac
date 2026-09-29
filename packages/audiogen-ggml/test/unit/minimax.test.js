@@ -283,7 +283,10 @@ test('AudioGen forwards the MiniMax compute device', (t) => {
 })
 
 test('AudioGen rejects an invalid or conflicting MiniMax device', (t) => {
-  t.exception(() => createHarness({ config: { device: 'metal' } }), /device must be one of/)
+  t.exception(
+    () => createHarness({ config: { device: 'metal' } }),
+    /device must be 'cpu', 'gpu' or 'auto'/
+  )
   t.exception(
     () => createHarness({ config: { device: 'gpu', useGPU: true } }),
     /either useGPU or device, not both/

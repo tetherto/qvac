@@ -77,6 +77,27 @@ inline int64_t checkedPositiveSafeInteger(double value, const char* name) {
   return integer;
 }
 
+inline int checkedInt32(double value, const char* name) {
+  const int64_t integer = checkedSafeInteger(value, name);
+  if (integer < std::numeric_limits<int>::min() ||
+      integer > std::numeric_limits<int>::max()) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string(name) + " must be an int32 integer");
+  }
+  return static_cast<int>(integer);
+}
+
+inline float checkedFloat32(double value, const char* name) {
+  const double maximum = std::numeric_limits<float>::max();
+  if (!std::isfinite(value) || std::fabs(value) > maximum) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        std::string(name) + " must be a finite float32 number");
+  }
+  return static_cast<float>(value);
+}
+
 inline int checkedInferenceSteps(double value) {
   const int64_t integer = checkedSafeInteger(value, "inferenceSteps");
   if (integer < 0 || integer > K_MAXIMUM_INFERENCE_STEPS) {
@@ -87,10 +108,13 @@ inline int checkedInferenceSteps(double value) {
   return static_cast<int>(integer);
 }
 
-// ACE-Step DiT timestep shift; 0 = auto (turbo 3.0, base/sft 1.0).
-inline float checkedShift(double value) {
+// ACE-Step DiT timestep shift; 0 = auto (turbo 3.0, base/sft 1.0). A positive
+// value that rounds to a float32 zero would silently select auto instead.
+inline float checkedAcestepShift(double value) {
   const double maximum = std::numeric_limits<float>::max();
-  if (!std::isfinite(value) || value < 0.0 || value > maximum) {
+  const double minimum = std::numeric_limits<float>::denorm_min();
+  if (!std::isfinite(value) || value < 0.0 || value > maximum ||
+      (value > 0.0 && value < minimum)) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "shift must be 0 or a positive float32 value");
@@ -201,10 +225,13 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
     modelInput.keyscale = *value;
   if (auto value = readOptionalString(jobObject, env, "timesignature"))
     modelInput.timesignature = *value;
+  // The keys shared by generation and edit runs are range-checked before the
+  // cast; the remaining generation-only keys keep the lenient
+  // readOptionalAcestepNumber + cast (a non-number is ignored).
   if (auto value = readOptionalAcestepNumber(jobObject, env, "seed"))
-    modelInput.seed = static_cast<long long>(*value);
+    modelInput.seed = checkedSafeInteger(*value, "seed");
   if (auto value = readOptionalAcestepNumber(jobObject, env, "bpm"))
-    modelInput.bpm = static_cast<int>(*value);
+    modelInput.bpm = checkedInt32(*value, "bpm");
   if (auto value =
           readOptionalBoolean(jobObject, env, "augmentCaptionWithMetadata"))
     modelInput.augmentCaptionWithMetadata = *value;
@@ -233,9 +260,9 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
   if (auto value = readOptionalBoolean(jobObject, env, "dcwEnabled"))
     modelInput.dcwEnabled = *value;
   if (auto value = readOptionalAcestepNumber(jobObject, env, "dcwScaler"))
-    modelInput.dcwScaler = static_cast<float>(*value);
+    modelInput.dcwScaler = checkedFloat32(*value, "dcwScaler");
   if (auto value = readOptionalAcestepNumber(jobObject, env, "dcwHighScaler"))
-    modelInput.dcwHighScaler = static_cast<float>(*value);
+    modelInput.dcwHighScaler = checkedFloat32(*value, "dcwHighScaler");
   if (auto codes = jobObject.getOptionalProperty<js::TypedArray<int32_t>>(
           env, "audioCodes")) {
     modelInput.audioCodes = copyAudioCodes(env, *codes);
@@ -264,7 +291,7 @@ buildAcestepInput(js_env_t* env, js::Object jobObject, js_value_t* input) {
   if (auto value = readOptionalNumber(jobObject, env, "inferenceSteps"))
     modelInput.inferenceSteps = checkedInferenceSteps(*value);
   if (auto value = readOptionalNumber(jobObject, env, "shift"))
-    modelInput.shift = checkedShift(*value);
+    modelInput.shift = checkedAcestepShift(*value);
   return modelInput;
 }
 
@@ -386,7 +413,7 @@ inline js_value_t* createGenerationMetadata(
   setText("keyscale", metadata.keyscale);
   setText("vocalLanguage", metadata.vocalLanguage);
   setNumber("bpm", metadata.bpm);
-  setNumber("timesignature", metadata.timesignature);
+  setNumber("beatsPerBar", metadata.beatsPerBar);
   setNumber("seed", static_cast<double>(metadata.seed));
   setNumber("codeFrames", metadata.codeFrames);
   if (metadata.qualityReport) {
@@ -395,48 +422,52 @@ inline js_value_t* createGenerationMetadata(
   return result;
 }
 
+inline js::Object createPcmChunk(
+    js_env_t* env, const std::vector<int16_t>& pcm, int sampleRate,
+    int channels) {
+  auto result = js::Object::create(env);
+  std::span<const int16_t> outputSpan(pcm.data(), pcm.size());
+  result.setProperty(
+      env, "outputArray", js::TypedArray<int16_t>::create(env, outputSpan));
+  result.setProperty(env, "sampleRate", js::Number::create(env, sampleRate));
+  result.setProperty(env, "channels", js::Number::create(env, channels));
+  return result;
+}
+
+// MiniMax PCM: the sample rate and channel count come from the model.
 struct JsAudioOutputHandler
     : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
           std::vector<int16_t>> {
-  using MetadataFn =
-      std::function<std::optional<AcestepModel::GenerationMetadata>()>;
-
   JsAudioOutputHandler(
-      std::function<int()> sampleRate, std::function<int()> channels,
-      std::function<std::string()> lrc = nullptr, MetadataFn metadata = nullptr)
+      std::function<int()> sampleRate, std::function<int()> channels)
       : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
             std::vector<int16_t>>(
             [this, sampleRate = std::move(sampleRate),
-             channels = std::move(channels), lrc = std::move(lrc),
-             metadata = std::move(metadata)](
+             channels = std::move(channels)](
                 const std::vector<int16_t>& data) -> js_value_t* {
-              auto result = js::Object::create(this->env_);
-              std::span<const int16_t> outputSpan(data.data(), data.size());
-              auto typedArray =
-                  js::TypedArray<int16_t>::create(this->env_, outputSpan);
-              result.setProperty(this->env_, "outputArray", typedArray);
-              result.setProperty(
-                  this->env_,
-                  "sampleRate",
-                  js::Number::create(this->env_, sampleRate()));
-              result.setProperty(
-                  this->env_,
-                  "channels",
-                  js::Number::create(this->env_, channels()));
-              if (lrc) {
-                const std::string text = lrc();
-                if (!text.empty()) {
-                  result.setProperty(
-                      this->env_, "lrc", js::String::create(this->env_, text));
-                }
+              return createPcmChunk(this->env_, data, sampleRate(), channels());
+            }) {}
+};
+
+// ACE-Step PCM with the LRC text and generation metadata of the same job.
+struct JsGenerationOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          AcestepModel::Output> {
+  JsGenerationOutputHandler()
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            AcestepModel::Output>(
+            [this](const AcestepModel::Output& out) -> js_value_t* {
+              auto result = createPcmChunk(
+                  this->env_, out.pcm, out.sampleRate, out.channels);
+              if (!out.lrc.empty()) {
+                result.setProperty(
+                    this->env_, "lrc", js::String::create(this->env_, out.lrc));
               }
-              if (metadata) {
-                if (auto resolved = metadata()) {
-                  result.setProperty(
-                      this->env_,
-                      "metadata",
-                      createGenerationMetadata(this->env_, *resolved));
-                }
+              if (out.metadata) {
+                result.setProperty(
+                    this->env_,
+                    "metadata",
+                    createGenerationMetadata(this->env_, *out.metadata));
               }
               return result;
             }) {}
@@ -522,19 +553,18 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   const EngineType engineType =
       adapter.readEngineType(configurationParams, env);
   unique_ptr<model::IModel> model;
-  function<int()> sampleRate;
-  function<int()> channels;
   function<void(function<void(const AudioGenProgress&)>)> setProgressSink;
-  function<std::string()> lrcText;
-  JsAudioOutputHandler::MetadataFn generationMetadata;
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
 
   if (engineType == EngineType::Minimax) {
 #ifdef AUDIOGEN_HAS_MINIMAX
     auto minimaxModel = make_unique<MinimaxModel>(
         adapter.buildMinimaxConfig(configurationParams, env));
     MinimaxModel* modelPtr = minimaxModel.get();
-    sampleRate = [modelPtr]() { return modelPtr->sampleRate(); };
-    channels = [modelPtr]() { return modelPtr->channels(); };
+    outHandlers.add(
+        make_shared<JsAudioOutputHandler>(
+            [modelPtr]() { return modelPtr->sampleRate(); },
+            [modelPtr]() { return modelPtr->channels(); }));
     setProgressSink = [modelPtr](function<void(const AudioGenProgress&)> sink) {
       modelPtr->setProgressSink(std::move(sink));
     };
@@ -548,26 +578,14 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
     auto acestepModel = make_unique<AcestepModel>(
         adapter.buildAcestepConfig(configurationParams, env));
     AcestepModel* modelPtr = acestepModel.get();
-    sampleRate = [modelPtr]() { return modelPtr->sampleRate(); };
-    channels = [modelPtr]() { return modelPtr->channels(); };
-    lrcText = [modelPtr]() { return modelPtr->lrcText(); };
-    generationMetadata = [modelPtr]() {
-      return modelPtr->generationMetadata();
-    };
+    outHandlers.add(make_shared<JsGenerationOutputHandler>());
+    outHandlers.add(make_shared<JsUnderstandOutputHandler>());
     setProgressSink = [modelPtr](function<void(const AudioGenProgress&)> sink) {
       modelPtr->setProgressSink(std::move(sink));
     };
     model = std::move(acestepModel);
   }
 
-  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(
-      make_shared<JsAudioOutputHandler>(
-          std::move(sampleRate),
-          std::move(channels),
-          std::move(lrcText),
-          std::move(generationMetadata)));
-  outHandlers.add(make_shared<JsUnderstandOutputHandler>());
   outHandlers.add(make_shared<JsProgressOutputHandler>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,

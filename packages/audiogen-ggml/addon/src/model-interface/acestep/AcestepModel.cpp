@@ -224,8 +224,8 @@ AcestepModel::understandAudio(const AnyInput& in) {
           : 0.0;
   realTimeFactor_ =
       audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
+  hasLyricsScore_ = false;
   hasQualityScore_ = false;
-  metadata_.reset();
 
   UnderstandOutput out;
   out.caption = std::move(result.caption);
@@ -244,7 +244,6 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   if (cancelRequested_.load()) {
     throw std::runtime_error("ACE-Step generation cancelled");
   }
-  metadata_.reset();
   const auto t0 = std::chrono::steady_clock::now();
 
   std::shared_ptr<tts_cpp::acestep::Engine> engine = acquireEngine();
@@ -335,11 +334,14 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   }
   hasLyricsScore_ = in.generateLrc;
   lyricsScore_ = result.metadata.lyrics_score;
-  lrc_ = result.metadata.lrc;
   hasQualityScore_ = in.computeQualityScore;
   qualityScore_ = result.metadata.quality_score;
-  // The engine fills GenerateMetadata on the text generation path only.
-  if (in.editOperations.empty()) {
+
+  Output out;
+  out.lrc = result.metadata.lrc;
+  // Text generations and edit plans both fill GenerateMetadata; an empty
+  // result (an engine-side cancel) carries only defaults, so report none.
+  if (!result.pcm.empty()) {
     const auto& meta = result.metadata;
     GenerationMetadata metadata;
     metadata.caption = meta.caption;
@@ -347,13 +349,13 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
     metadata.keyscale = meta.keyscale;
     metadata.vocalLanguage = meta.vocal_language;
     metadata.bpm = meta.bpm;
-    metadata.timesignature = meta.timesignature;
+    metadata.beatsPerBar = meta.timesignature;
     metadata.seed = meta.seed;
     metadata.codeFrames = meta.n_codes;
     if (in.computeQualityScore) {
       metadata.qualityReport = meta.quality_report;
     }
-    metadata_ = std::move(metadata);
+    out.metadata = std::move(metadata);
   }
 
   // Peak-normalise before the int16 quantisation, exactly like the music CLI's
@@ -379,14 +381,15 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   const float gain =
       in.editOperations.empty() && peak > kMinNormPeak ? 0.9F / peak : 1.0F;
 
-  Output pcm;
-  pcm.reserve(result.pcm.size());
+  out.pcm.reserve(result.pcm.size());
   for (float s : result.pcm)
-    pcm.push_back(f32ToI16(s * gain, !in.editOperations.empty()));
+    out.pcm.push_back(f32ToI16(s * gain, !in.editOperations.empty()));
+  out.sampleRate = result.sample_rate;
+  out.channels = result.channels;
 
   const auto t1 = std::chrono::steady_clock::now();
   totalTime_ = std::chrono::duration<double, std::milli>(t1 - t0).count();
-  totalSamples_ = static_cast<int64_t>(pcm.size());
+  totalSamples_ = static_cast<int64_t>(out.pcm.size());
   sampleRate_ = result.sample_rate;
   channels_ = result.channels;
   audioDurationMs_ =
@@ -397,7 +400,7 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
   realTimeFactor_ =
       audioDurationMs_ > 0.0 ? totalTime_ / audioDurationMs_ : 0.0;
 
-  return pcm;
+  return out;
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats AcestepModel::runtimeStats() const {

@@ -301,15 +301,17 @@ export interface AudiogenProgress {
     total: number;
 }
 /**
- * The request an ACE-Step text generation actually rendered, after the LM
- * filled in what the caller left unset (Phase 1, Simple Mode, Query
- * Rewriting). Audio edits and MiniMax runs report none.
+ * The request an ACE-Step run actually rendered, after the LM filled in what
+ * the caller left unset (Phase 1, Simple Mode, Query Rewriting). An edit run
+ * reports its base seed and the prompt metadata it was given; its caption is
+ * empty (each operation carries its own) and `codeFrames` is 0. MiniMax runs
+ * report none.
  */
 export interface AudiogenGenerationMetadata {
     /**
      * The caption the run used: the LM-composed one under Simple Mode or Query
-     * Rewriting; the caller's caption before the metadata suffix when
-     * `augmentCaptionWithMetadata` is set.
+     * Rewriting. With `augmentCaptionWithMetadata` set it is always the caller's
+     * own caption (before the metadata suffix), even under those modes.
      */
     caption: string;
     /** The lyrics the run used (LM-written under Simple Mode). */
@@ -317,12 +319,15 @@ export interface AudiogenGenerationMetadata {
     /** Beats per minute; 0 when unresolved. */
     bpm: number;
     keyscale: string;
-    /** Time-signature numerator (beats per bar), e.g. 4 for "4/4"; 0 when unresolved. */
-    timesignature: number;
+    /** Beats per bar, the time-signature numerator (4 for "4/4"); 0 when unresolved. */
+    beatsPerBar: number;
     vocalLanguage: string;
     /** The seed the run used: the engine-drawn one when no `seed` was passed. */
     seed: number;
-    /** 5 Hz semantic code frames the DiT was conditioned on; 0 on cover tasks. */
+    /**
+     * 5 Hz semantic code frames the DiT was conditioned on; 0 when the LM and
+     * detokenizer are skipped (cover-nofsq, lego, edits).
+     */
     codeFrames: number;
     /** Per-condition breakdown of `stats.qualityScore`; present only with `computeQualityScore`. */
     qualityReport?: string;
@@ -334,7 +339,7 @@ export interface AudiogenPcmChunk {
     channels: number;
     /** LRC-formatted lyric timestamps; present only when the run set `generateLrc`. */
     lrc?: string;
-    /** What an ACE-Step text generation rendered; absent for edits and MiniMax. */
+    /** What an ACE-Step run rendered; absent for MiniMax. */
     metadata?: AudiogenGenerationMetadata;
 }
 /** A progress tick delivered through the run's output stream. */
@@ -418,8 +423,8 @@ export interface AudiogenStats {
      */
     understand?: AudiogenUnderstandResult;
     /**
-     * What an ACE-Step text generation rendered, repeated from the PCM chunk
-     * (`AudiogenPcmChunk.metadata`). Absent for edits, `understand()` and MiniMax.
+     * What an ACE-Step run rendered, repeated from the PCM chunk
+     * (`AudiogenPcmChunk.metadata`). Absent for `understand()` and MiniMax.
      */
     metadata?: AudiogenGenerationMetadata;
 }

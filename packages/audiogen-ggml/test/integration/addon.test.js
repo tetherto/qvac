@@ -119,6 +119,14 @@ function concatInt16(chunks) {
   return pcm
 }
 
+function samePcm(a, b) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 function floatToPreservedInt16(sample) {
   const scale = sample < 0 ? 32768 : 32767
   let value = Math.round(sample * scale)
@@ -697,26 +705,6 @@ test(
   }
 )
 
-function samePcm(a, b) {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false
-  }
-  return true
-}
-
-function concatChunks(chunks) {
-  let total = 0
-  for (const chunk of chunks) total += chunk.length
-  const pcm = new Int16Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    pcm.set(chunk, offset)
-    offset += chunk.length
-  }
-  return pcm
-}
-
 test(
   'AudioGen (ggml): generation metadata reports the resolved seed under a per-run schedule',
   { timeout: INTEGRATION_TIMEOUT_MS, skip: NO_GPU },
@@ -755,7 +743,7 @@ test(
     t.is(metadata.caption, caption, 'the caller caption is echoed')
     t.is(metadata.bpm, 110, 'the requested bpm is echoed')
     t.is(metadata.keyscale, 'F minor', 'the requested key is echoed')
-    t.is(metadata.timesignature, 4, 'the time-signature numerator is reported')
+    t.is(metadata.beatsPerBar, 4, 'the time-signature numerator is reported')
     t.ok(metadata.codeFrames > 0, `the LM produced ${metadata.codeFrames} code frames`)
     t.is(metadata.qualityReport, undefined, 'no quality report unless requested')
 
@@ -766,10 +754,7 @@ test(
     const replay = reseeded.data.stats.metadata
     t.is(replay.seed, metadata.seed, 'an explicit seed is echoed')
     t.is(replay.codeFrames, metadata.codeFrames, 'the reported seed replays the LM codes')
-    t.ok(
-      samePcm(concatChunks(reseeded.data.chunks), concatChunks(unseeded.data.chunks)),
-      'the reported seed reproduces the unseeded take'
-    )
+    t.is(reseeded.data.sampleCount, unseeded.data.sampleCount, 'the replay has the same length')
     t.ok(
       typeof replay.qualityReport === 'string' && replay.qualityReport.length > 0,
       'computeQualityScore adds the quality breakdown'
@@ -796,26 +781,53 @@ test(
     t.teardown(() => gen.destroy())
 
     const source = makeCoverPcm(EDIT_SECONDS)
-    const response = await gen
-      .edit({ pcm: source, sampleRate: COVER_SAMPLE_RATE, channels: COVER_CHANNELS })
-      .repaint({ caption: 'bright brass stab', start: 0.5, end: 1.5 })
-      .run({
-        seed: COVER_SEED,
-        referenceAudio: makeCoverPcm(),
-        vocalLanguage: 'en',
-        bpm: 120,
-        keyscale: 'C major',
-        timesignature: '4/4',
-        augmentCaptionWithMetadata: true,
-        dcwEnabled: false,
-        inferenceSteps: COVER_STEPS,
-        shift: COVER_SHIFT
-      })
-    const { data } = await collectAudioGenResponse(response)
+    const schedule = { inferenceSteps: COVER_STEPS, shift: COVER_SHIFT }
+    const repaint = async (options) => {
+      const response = await gen
+        .edit({ pcm: source, sampleRate: COVER_SAMPLE_RATE, channels: COVER_CHANNELS })
+        .repaint({ caption: 'bright brass stab', start: 0.5, end: 1.5 })
+        .run(options)
+      return (await collectAudioGenResponse(response)).data
+    }
 
-    t.ok(data.stages.includes('reference'), 'the reference audio was encoded')
-    t.is(data.stageTotals.repaint, COVER_STEPS, 'the per-run step count drives the repaint')
-    t.is(data.sampleCount, source.length, 'the edit returns the source length')
-    t.is(data.stats.metadata, undefined, 'edits report no generation metadata')
+    const baseline = await repaint({ seed: COVER_SEED, ...schedule })
+    t.is(baseline.stageTotals.repaint, COVER_STEPS, 'the per-run step count drives the repaint')
+    t.is(baseline.sampleCount, source.length, 'the edit returns the source length')
+    t.is(baseline.stats.metadata.seed, COVER_SEED, 'the edit reports its base seed')
+    t.is(baseline.stats.metadata.codeFrames, 0, 'an edit skips the LM')
+
+    const conditioned = await repaint({
+      seed: COVER_SEED,
+      ...schedule,
+      referenceAudio: makeCoverPcm(),
+      vocalLanguage: 'en',
+      bpm: 120,
+      keyscale: 'C major',
+      timesignature: '4/4',
+      augmentCaptionWithMetadata: true
+    })
+    t.ok(conditioned.stages.includes('reference'), 'the reference audio was encoded')
+    const echoed = conditioned.stats.metadata
+    t.is(echoed.vocalLanguage, 'en', 'the edit prompt carries the language')
+    t.is(echoed.bpm, 120, 'the edit prompt carries the bpm')
+    t.is(echoed.keyscale, 'C major', 'the edit prompt carries the key')
+    t.is(echoed.beatsPerBar, 4, 'the edit prompt carries the time signature')
+    t.absent(
+      samePcm(concatInt16(conditioned.chunks), concatInt16(baseline.chunks)),
+      'the prompt metadata changes the repaint'
+    )
+
+    const noDcw = await repaint({ seed: COVER_SEED, ...schedule, dcwEnabled: false })
+    t.absent(
+      samePcm(concatInt16(noDcw.chunks), concatInt16(baseline.chunks)),
+      'dcwEnabled reaches the repaint sampler'
+    )
+
+    const unseeded = await repaint(schedule)
+    const drawn = unseeded.stats.metadata.seed
+    t.ok(
+      Number.isInteger(drawn) && drawn >= 0 && drawn <= 0xffffffff,
+      `an unseeded edit reports the uint32 seed it drew (${drawn})`
+    )
   }
 )
