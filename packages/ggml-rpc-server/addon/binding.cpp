@@ -1,18 +1,14 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdlib>
 #include <exception>
 #include <filesystem>
-#include <fstream>
-#include <ios>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <new>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -23,7 +19,11 @@
 #include <js.h>
 #include <uv.h>
 
+#include "rpc-server-core.hpp"
+
 namespace {
+
+using rpc_server::RpcServerApi;
 
 constexpr uint64_t SERVER_MAGIC = UINT64_C(0x5156525043535256);
 constexpr size_t MAX_OPTION_STRING_LENGTH = 4096;
@@ -32,19 +32,6 @@ std::mutex& startMutex() {
   static std::mutex mutex;
   return mutex;
 }
-
-struct RpcServerApi {
-  using CreateFn = ggml_backend_rpc_server_t (*)(
-      const char*, const char*, size_t, size_t, ggml_backend_dev_t*);
-  using RunFn = void (*)(ggml_backend_rpc_server_t);
-  using StopFn = void (*)(ggml_backend_rpc_server_t);
-  using FreeFn = void (*)(ggml_backend_rpc_server_t);
-
-  CreateFn create;
-  RunFn run;
-  StopFn stop;
-  FreeFn free;
-};
 
 // The server runs on a std::thread that libuv cannot see, so a running server
 // holds one active handle to keep the Bare event loop, and the process, alive
@@ -56,36 +43,13 @@ struct KeepAlive {
 };
 
 struct ServerHandle {
-  ServerHandle(ggml_backend_rpc_server_t value, RpcServerApi functions)
-      : server(value), api(functions) {
-    worker = std::thread([this] { api.run(server); });
-  }
+  ServerHandle(ggml_backend_rpc_server_t server, RpcServerApi api)
+      : runner(server, api) {}
 
-  ~ServerHandle() { stop(); }
-
-  ServerHandle(const ServerHandle&) = delete;
-  ServerHandle& operator=(const ServerHandle&) = delete;
-  ServerHandle(ServerHandle&&) = delete;
-  ServerHandle& operator=(ServerHandle&&) = delete;
-
-  void stop() {
-    std::scoped_lock lock(stopMutex);
-    if (server == nullptr) {
-      return;
-    }
-    api.stop(server);
-    if (worker.joinable()) {
-      worker.join();
-    }
-    api.free(server);
-    server = nullptr;
-  }
+  void stop() { runner.stop(); }
 
   uint64_t magic = SERVER_MAGIC;
-  ggml_backend_rpc_server_t server;
-  RpcServerApi api;
-  std::thread worker;
-  std::mutex stopMutex;
+  rpc_server::ServerRunner runner;
   KeepAlive keepAlive;
 };
 
@@ -413,141 +377,13 @@ bool readBoolean(
   return true;
 }
 
-std::vector<ggml_backend_dev_t> selectDevices(const std::string& requested) {
-  std::vector<ggml_backend_dev_t> devices;
-  if (!requested.empty()) {
-    size_t begin = 0;
-    while (begin <= requested.size()) {
-      const size_t end = requested.find_first_of(",/", begin);
-      const std::string name = requested.substr(begin, end - begin);
-      if (name.empty()) {
-        return {};
-      }
-      ggml_backend_dev_t device = ggml_backend_dev_by_name(name.c_str());
-      if (device == nullptr) {
-        return {};
-      }
-      devices.push_back(device);
-      if (end == std::string::npos) {
-        break;
-      }
-      begin = end + 1;
-    }
-  }
-
-  if (devices.empty() && requested.empty()) {
-    for (size_t index = 0; index < ggml_backend_dev_count(); ++index) {
-      ggml_backend_dev_t device = ggml_backend_dev_get(index);
-      if (ggml_backend_dev_type(device) != GGML_BACKEND_DEVICE_TYPE_CPU) {
-        devices.push_back(device);
-      }
-    }
-  }
-  if (devices.empty() && requested.empty()) {
-    ggml_backend_dev_t cpu =
-        ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
-    if (cpu != nullptr) {
-      devices.push_back(cpu);
-    }
-  }
-  return devices;
-}
-
-RpcServerApi resolveRpcServerApi() {
-  ggml_backend_reg_t rpcBackend = ggml_backend_reg_by_name("RPC");
-  if (rpcBackend == nullptr) {
-#if defined(__linux__) && !defined(__ANDROID__)
-    throw std::runtime_error(
-        "RPC backend is not available; the RPC module may have failed to load "
-        "because libibverbs.so.1 is missing (install libibverbs1 on "
-        "Debian/Ubuntu). RDMA also requires the provider package for this "
-        "host");
-#else
-    throw std::runtime_error("RPC backend is not available");
-#endif
-  }
-
-  RpcServerApi api{
-      // The ggml backend procedure API returns untyped function addresses.
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      .create = reinterpret_cast<RpcServerApi::CreateFn>(
-          ggml_backend_reg_get_proc_address(
-              rpcBackend, "ggml_backend_rpc_server_create")),
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      .run = reinterpret_cast<RpcServerApi::RunFn>(
-          ggml_backend_reg_get_proc_address(
-              rpcBackend, "ggml_backend_rpc_server_run")),
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      .stop = reinterpret_cast<RpcServerApi::StopFn>(
-          ggml_backend_reg_get_proc_address(
-              rpcBackend, "ggml_backend_rpc_server_stop")),
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      .free = reinterpret_cast<RpcServerApi::FreeFn>(
-          ggml_backend_reg_get_proc_address(
-              rpcBackend, "ggml_backend_rpc_server_free")),
-  };
-  if (api.create == nullptr || api.run == nullptr || api.stop == nullptr ||
-      api.free == nullptr) {
-    throw std::runtime_error(
-        "RPC backend does not provide managed server lifecycle functions");
-  }
-  return api;
-}
-
 bool rpcBackendHasRdmaMarker(const std::string& backendsDir) {
-#if defined(__linux__) && !defined(__ANDROID__)
-  // Fabric compiles this transport banner into its RPC backend only when
-  // GGML_RPC_RDMA is enabled. Such a backend negotiates RDMA per connection
-  // with no switch to disable it, so the marker is the capability reported.
-  constexpr std::string_view rdmaSupportMarker = "RDMA auto-negotiate enabled";
   // Same location ggml_backend_load_all_from_path() loads the module from.
-  std::filesystem::path modulePath = backendsDir;
+  std::filesystem::path moduleDir = backendsDir;
 #ifdef BACKENDS_SUBDIR
-  modulePath /= BACKENDS_SUBDIR;
+  moduleDir /= BACKENDS_SUBDIR;
 #endif
-  modulePath /= "libqvac-ggml-rpc.so";
-  std::ifstream module(modulePath, std::ios::binary | std::ios::ate);
-  const std::streamoff size =
-      module ? static_cast<std::streamoff>(module.tellg()) : -1;
-  if (size <= 0) {
-    return false;
-  }
-  std::string contents(static_cast<size_t>(size), '\0');
-  module.seekg(0);
-  if (!module.read(contents.data(), size)) {
-    return false;
-  }
-  return contents.find(rdmaSupportMarker) != std::string::npos;
-#else
-  // RDMA is a Linux-only Fabric feature.
-  (void)backendsDir;
-  return false;
-#endif
-}
-
-std::string defaultCacheDirectory() {
-  const char* explicitCache = std::getenv("LLAMA_CACHE");
-  if (explicitCache != nullptr && *explicitCache != '\0') {
-    return (std::filesystem::path(explicitCache) / "rpc").string();
-  }
-#ifdef _WIN32
-  const char* home = std::getenv("LOCALAPPDATA");
-#else
-  const char* home = std::getenv("HOME");
-#endif
-  if (home == nullptr || *home == '\0') {
-    return {};
-  }
-#ifdef __APPLE__
-  return (std::filesystem::path(home) / "Library" / "Caches" / "llama.cpp" /
-          "rpc")
-      .string();
-#elif defined(_WIN32)
-  return (std::filesystem::path(home) / "llama.cpp" / "rpc").string();
-#else
-  return (std::filesystem::path(home) / ".cache" / "llama.cpp" / "rpc")
-      .string();
-#endif
+  return rpc_server::rpcBackendHasRdmaMarker(moduleDir);
 }
 
 ServerHandleRef* unwrapServer(js_env_t* env, js_value_t* value) {
@@ -573,9 +409,10 @@ ServerHandleRef createServerOnWorker(const StartTask& task) {
   backendPath /= BACKENDS_SUBDIR;
 #endif
   ggml_backend_load_all_from_path(backendPath.string().c_str());
-  const RpcServerApi rpcApi = resolveRpcServerApi();
+  const RpcServerApi rpcApi = rpc_server::resolveRpcServerApi();
 
-  std::vector<ggml_backend_dev_t> devices = selectDevices(task.devices);
+  std::vector<ggml_backend_dev_t> devices =
+      rpc_server::selectDevices(task.devices);
   if (devices.empty()) {
     throw StartError(
         "RpcServerDeviceError",
@@ -586,7 +423,7 @@ ServerHandleRef createServerOnWorker(const StartTask& task) {
   std::string cacheDirectory;
   const char* cachePath = nullptr;
   if (task.cache) {
-    cacheDirectory = defaultCacheDirectory();
+    cacheDirectory = rpc_server::defaultCacheDirectory();
     if (cacheDirectory.empty()) {
       throw StartError(
           "RpcServerCacheError",

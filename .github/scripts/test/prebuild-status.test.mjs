@@ -274,8 +274,9 @@ test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
 })
 
 test('CPP_TEST_KEYS covers C++-test packages and uses the vla merge-guard key', () => {
-  assert.equal(CPP_TEST_KEYS.length, 9)
+  assert.equal(CPP_TEST_KEYS.length, 10)
   assert.ok(CPP_TEST_KEYS.includes('audiogen-ggml'))
+  assert.ok(CPP_TEST_KEYS.includes('ggml-rpc-server'))
   assert.ok(CPP_TEST_KEYS.includes('vla'))
   assert.ok(!CPP_TEST_KEYS.includes('fabric'))
   assert.ok(!CPP_TEST_KEYS.includes('vla-ggml'))

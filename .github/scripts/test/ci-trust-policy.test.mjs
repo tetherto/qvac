@@ -954,6 +954,50 @@ test("RPC server prebuilds install the Linux RDMA runtime dependency", () => {
   assert.match(prebuilds, /^\s+linux-extra-packages:\s*libibverbs1$/m);
 });
 
+// ci-router turns both routes on for a manual dispatch, so a dispatched run
+// always executes both suites; a PR runs each only with its label.
+test("RPC server C++ and desktop integration tests are label-gated", () => {
+  const pr = read(".github/workflows/on-pr-ggml-rpc-server.yml");
+  const router = jobBlock(pr, "ci-router");
+  const cppTests = jobBlock(pr, "cpp-tests");
+  const integration = jobBlock(pr, "integration-tests");
+  const mergeGuard = jobBlock(pr, "merge-guard");
+
+  assert.match(router, /run_cpp_tests:\s*\$\{\{ steps\.route\.outputs\.run_cpp_tests \}\}/);
+  assert.match(router, /run_desktop:\s*\$\{\{ steps\.route\.outputs\.run_desktop \}\}/);
+
+  assert.match(cppTests, /needs\.ci-router\.outputs\.run_cpp_tests == 'true'/);
+  assert.match(cppTests, /uses:\s*\.\/\.github\/workflows\/cpp-tests-ggml-rpc-server\.yml/);
+
+  assert.match(integration, /needs\.ci-router\.outputs\.run_desktop == 'true'/);
+  assert.match(integration, /needs\.prebuild\.result == 'success'/);
+  assert.match(integration, /uses:\s*\.\/\.github\/workflows\/integration-test-ggml-rpc-server\.yml/);
+
+  for (const job of ["cpp-tests", "integration-tests"]) {
+    assert.match(mergeGuard, new RegExp(`^\\s+- ${job}$`, "m"), `merge-guard needs ${job}`);
+  }
+  // A skip passes only when ci-router chose not to run the suite.
+  assert.match(
+    mergeGuard,
+    /cpp-tests-status:\s*\$\{\{ needs\.cpp-tests\.result == 'success' \|\| \(needs\.cpp-tests\.result == 'skipped' && needs\.ci-router\.result == 'success' && needs\.ci-router\.outputs\.run_cpp_tests != 'true'\) \}\}/,
+  );
+  assert.match(
+    mergeGuard,
+    /integration-tests-status:\s*\$\{\{ needs\.integration-tests\.result == 'success' \|\| \(needs\.integration-tests\.result == 'skipped' && needs\.ci-router\.result == 'success' && needs\.ci-router\.outputs\.run_desktop != 'true'\) \}\}/,
+  );
+});
+
+test("RPC server desktop integration tests install the Linux RDMA runtime", () => {
+  const integration = read(".github/workflows/integration-test-ggml-rpc-server.yml");
+
+  assert.match(
+    integration,
+    /if: matrix\.platform == 'linux' && runner\.environment == 'github-hosted'\n\s+shell: bash\n\s+run: \|\n\s+sudo apt-get update\n\s+sudo apt-get install -y libibverbs1/,
+  );
+  assert.match(integration, /name: prebuilds-ggml-rpc-server/);
+  assert.match(integration, /run:\s*npm run test:integration/);
+});
+
 test("on-pr context outputs resolve PR ref from head SHA, never head.ref", () => {
   const workflowDirectory = join(root, ".github/workflows");
   const offenders = readdirSync(workflowDirectory)

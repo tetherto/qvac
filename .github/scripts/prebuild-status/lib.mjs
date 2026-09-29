@@ -39,6 +39,7 @@ export const CPP_TEST_KEYS = [
   'classification-ggml',
   'diffusion-cpp',
   'embed-llamacpp',
+  'ggml-rpc-server',
   'llm-llamacpp',
   'model-fit',
   'translation-nmtcpp',

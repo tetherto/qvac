@@ -1,0 +1,167 @@
+name: Integration Tests (GGML RPC Server)
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "ref"
+        type: string
+        required: false
+      repository:
+        type: string
+        required: false
+      fabric-overlay-artifact:
+        description: >-
+          Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
+          skips the overlay (published npm baseline).
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch/tag/SHA) to test; defaults to the ref used to launch the workflow"
+        type: string
+        required: false
+      prebuild_run_id:
+        description: "Run id whose prebuilds-ggml-rpc-server artifact to test"
+        type: string
+        required: true
+
+concurrency:
+  group: integration-test-ggml-rpc-server-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  run-integration-tests:
+    needs: runner_names
+    timeout-minutes: 30
+    runs-on: ${{ matrix.runner || matrix.os }}
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-integration-tests
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # The desktop legs of prebuilds-ggml-rpc-server.yml, on the same runners.
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
+          - os: ubuntu-22.04-arm
+            platform: linux
+            arch: arm64
+            runner: ${{ needs.runner_names.outputs.ubuntu_2204_arm }}
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+            runner: ${{ needs.runner_names.outputs.macos_15 }}
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.macos_15_intel }}
+          - os: windows-2025
+            platform: win32
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.win_2025_x64 }}
+
+    env:
+      WORKDIR: packages/ggml-rpc-server
+
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      # Fabric's RPC backend links libibverbs.so.1. Self-hosted images ship it;
+      # GitHub-hosted Linux images do not.
+      - name: Install the RDMA runtime (GitHub-hosted Linux)
+        if: matrix.platform == 'linux' && runner.environment == 'github-hosted'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libibverbs1
+
+      # Same Vulkan loader path the prebuild smoke test runs with.
+      - name: Set Vulkan SDK path (Windows)
+        if: matrix.platform == 'win32'
+        shell: powershell
+        run: |
+          "VULKAN_SDK=C:\VulkanSDK" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          "C:\VulkanSDK\Bin" | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: npm install
+
+      - name: Download fabric-prebuilds for overlay
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: ${{ inputs.fabric-overlay-artifact }}
+          path: ${{ runner.temp }}/fabric-prebuilds
+
+      - name: Overlay PR @qvac/fabric prebuilds
+        if: ${{ inputs.fabric-overlay-artifact != '' }}
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        with:
+          workdir: ${{ env.WORKDIR }}
+          prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
+          platform: ${{ matrix.platform }}
+          arch: ${{ matrix.arch }}
+
+      - name: Install bare
+        run: npm install -g --force bare
+
+      # The merged bundle exists whether this run built the prebuilds or
+      # re-published a prior run's, and unpacks to prebuilds/<platform>-<arch>/.
+      - name: Download prebuilds
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: prebuilds-ggml-rpc-server
+          path: ${{ env.WORKDIR }}/prebuilds
+          run-id: ${{ inputs.prebuild_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Check this platform's prebuild
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          HOST: ${{ matrix.platform }}-${{ matrix.arch }}
+        run: |
+          if [ ! -f "prebuilds/$HOST/qvac__ggml-rpc-server.bare" ]; then
+            echo "::error::prebuilds-ggml-rpc-server has no $HOST build"
+            ls -R prebuilds
+            exit 1
+          fi
+
+      - name: Run integration tests
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: npm run test:integration

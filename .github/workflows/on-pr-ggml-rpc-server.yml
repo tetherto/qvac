@@ -50,6 +50,8 @@ jobs:
       pull-requests: read
     outputs:
       run_prebuilds: ${{ steps.route.outputs.run_prebuilds }}
+      run_cpp_tests: ${{ steps.route.outputs.run_cpp_tests }}
+      run_desktop: ${{ steps.route.outputs.run_desktop }}
     steps:
       - name: Checkout ci-router from the default branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -189,6 +191,59 @@ jobs:
       reuse-workflow-file: ${{ needs.detect-fabric-stack.outputs.fabric_stack != 'true' && 'on-pr-ggml-rpc-server.yml' || '' }}
       fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
 
+  # Label-gated: run-cpp-addon-tests on a PR; every stage on a manual dispatch.
+  cpp-tests:
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_cpp_tests == 'true' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    uses: ./.github/workflows/cpp-tests-ggml-rpc-server.yml
+    secrets: inherit
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
+
+  # Label-gated: run-desktop-addon-tests on a PR, which also routes the
+  # prebuilds these tests install; every stage on a manual dispatch.
+  integration-tests:
+    needs:
+      - fork-approval
+      - authorize
+      - ci-router
+      - detect-fabric-stack
+      - resolve-fabric-prebuilds
+      - prebuild
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.authorize.outputs.allowed == 'true' &&
+      needs.detect-fabric-stack.result == 'success' &&
+      needs.ci-router.outputs.run_desktop == 'true' &&
+      needs.prebuild.result == 'success' &&
+      (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success')
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/integration-test-ggml-rpc-server.yml
+    with:
+      repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      fabric-overlay-artifact: ${{ needs.detect-fabric-stack.outputs.needs_fabric_artifact == 'true' && 'fabric-prebuilds' || '' }}
+
   publish-prebuild-status:
     needs: [fork-approval, authorize, await-ts-checks, prebuild, ci-router]
     if: always() && !cancelled() && github.event_name == 'pull_request_target'
@@ -218,6 +273,37 @@ jobs:
           CONTEXT: qvac/prebuild-ggml-rpc-server
         run: node .github/scripts/prebuild-status/publish.mjs
 
+  publish-cpp-test-status:
+    # Posts qvac/cpp-tests-ggml-rpc-server for Merge Guard's verify-cpp-tests.
+    needs: [cpp-tests, ci-router]
+    if: always() && !cancelled() && github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - name: Checkout prebuild-status scripts from the default branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts/prebuild-status
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Publish C++ test status for Merge Guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CPP_TEST_RESULT: ${{ needs.cpp-tests.result }}
+          REUSE_HIT: ''
+          CI_ROUTER_RESULT: ${{ needs.ci-router.result }}
+          RUN_CPP_TESTS: ${{ needs.ci-router.outputs.run_cpp_tests }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTEXT: qvac/cpp-tests-ggml-rpc-server
+          KIND: cpp-tests
+        run: node .github/scripts/prebuild-status/publish.mjs
+
   merge-guard:
     needs:
       - fork-approval
@@ -225,11 +311,16 @@ jobs:
       - await-ts-checks
       - cpp-lint
       - prebuild
+      - cpp-tests
+      - integration-tests
       - ci-router
       - detect-fabric-stack
       - resolve-fabric-prebuilds
     if: always() && !cancelled()
     uses: ./.github/workflows/public-pr.yml
     with:
+      # A skipped suite passes only when ci-router chose not to run it.
+      cpp-tests-status: ${{ needs.cpp-tests.result == 'success' || (needs.cpp-tests.result == 'skipped' && needs.ci-router.result == 'success' && needs.ci-router.outputs.run_cpp_tests != 'true') }}
+      integration-tests-status: ${{ needs.integration-tests.result == 'success' || (needs.integration-tests.result == 'skipped' && needs.ci-router.result == 'success' && needs.ci-router.outputs.run_desktop != 'true') }}
       sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && needs.detect-fabric-stack.result == 'success' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (github.event_name != 'pull_request_target' || needs.await-ts-checks.result == 'success') && needs.cpp-lint.result == 'success' }}
       build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && needs.detect-fabric-stack.result == 'success' && (needs.detect-fabric-stack.outputs.needs_fabric_artifact != 'true' || needs.resolve-fabric-prebuilds.result == 'success') && (needs.prebuild.result == 'success' || (needs.prebuild.result == 'skipped' && needs.ci-router.result == 'success' && needs.ci-router.outputs.run_prebuilds == 'false')) }}
