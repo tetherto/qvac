@@ -46,6 +46,7 @@ import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
+import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
 import { TranslationExecutor } from '../shared/executors/translation-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
 import { HttpEmbeddingExecutor } from '../shared/executors/http-embedding-executor.js'
@@ -594,6 +595,10 @@ export const executor = createExecutor({
       'Tools test disabled on mobile'
     ),
     new SkipExecutor(
+      /^deferred-tools-(?!prompt-cost$|load-then-call$)/,
+      'Deferred tools: only the smoke cases run on mobile (no tools-qwen35 resource, model reloads too slow)'
+    ),
+    new SkipExecutor(
       /^(diffusion-|addon-logging-diffusion$)/,
       'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
     ),
@@ -681,6 +686,7 @@ export const executor = createExecutor({
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
+    new DeferredToolsExecutor(resources),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new MobileOcrExecutor(resources),

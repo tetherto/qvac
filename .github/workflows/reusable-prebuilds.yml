@@ -590,7 +590,7 @@ jobs:
       # Export-leak findings stay warnings during rollout (enforce-exports
       # defaults to false) until every ggml addon ships a symbols.map.
       - name: Verify prebuild symbols
-        uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@0bea369e1c448b8006e4e1461b11df9d711789c7
+        uses: tetherto/qvac/.github/actions/verify-prebuild-symbols@f54dae7d8156e7f7e29ceb8d5b316026dc0d1dfd
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
