@@ -206,8 +206,17 @@ const ecosystemChildren: Node[] = [
 /**
  * Resources holds what supports the products without documenting a release of
  * one: how to consume this site programmatically, how to build on a given
- * platform, and what to do when something will not start. None of it varies by
- * release, which is why it sits here in one copy rather than in each line.
+ * platform, what has already been built, and what to do when something will
+ * not start. None of it varies by release, which is why it sits here in one
+ * copy rather than in each line.
+ *
+ * What this site does not host is reached from here too, grouped by subject
+ * rather than by where it is published: the recipes on the main website teach
+ * building on a platform, so they sit among the tutorials, while sample
+ * projects and the articles behind them belong to no group of their own and
+ * are collected under Miscellaneous. All of them are named in the navigation
+ * rather than left to the collection's index, because a reader looking for
+ * what to build next is browsing, not reading the overview.
  */
 const resourcesChildren: Node[] = [
   {
@@ -238,6 +247,13 @@ const resourcesChildren: Node[] = [
     type: 'page',
     icon: resolveIcon('SiExpo'),
   },
+  offSite('Recipes', 'https://qvac.tether.io/recipes', 'ChefHat'),
+  {
+    type: 'separator',
+    name: 'Miscellaneous',
+  },
+  offSite('Sample projects', 'https://github.com/tetherto/qvac-examples', 'Github'),
+  offSite('Tech articles', 'https://qvac.tether.io/blog', 'Newspaper'),
   {
     type: 'separator',
     name: 'Help',
