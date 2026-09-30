@@ -15298,13 +15298,14 @@ class LoadModelSrcRequestGgmlOcrModelConfigBackendDevice(Enum):
     opencl = "opencl"
 
 
-class MainGpu2(RootModel[int]):
+class OcrMainGpuIndex(RootModel[int]):
     root: Annotated[
         int,
         Field(
             description="GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
             ge=0,
             le=2147483647,
+            title="OcrMainGpuIndex",
         ),
     ]
 
@@ -15501,7 +15502,7 @@ class LoadModelSrcRequestGgmlOcrModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu2 | LoadModelSrcRequestGgmlOcrModelConfigMainGpu | None,
+        OcrMainGpuIndex | LoadModelSrcRequestGgmlOcrModelConfigMainGpu | None,
         Field(
             alias="mainGpu",
             description="GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile.",
@@ -15579,7 +15580,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
     cpu = "cpu"
 
 
-class MainGpu3(RootModel[int]):
+class MainGpu2(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -17219,7 +17220,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu3 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
+        MainGpu2 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
         Field(
             alias="main-gpu",
             description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
