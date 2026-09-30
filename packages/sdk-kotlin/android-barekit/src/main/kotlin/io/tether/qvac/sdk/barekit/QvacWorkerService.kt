@@ -61,10 +61,15 @@ class QvacWorkerService : Service() {
     // call reads and removes the completed payload.
     private val requestAssembly = ConcurrentHashMap<String, StringBuilder>()
 
+    // Server-stream jobs keyed by request id, so cancelStream stops worker-side
+    // generation when the caller drops the flow.
+    private val streamJobs = ConcurrentHashMap<String, Job>()
+
     private val binder = object : IQvacWorkerService.Stub() {
         override fun call(payload: String, callback: IQvacWorkerCallback) = dispatchCall(payload, callback)
 
-        override fun stream(payload: String, callback: IQvacWorkerCallback) = dispatchStream(payload, callback)
+        override fun stream(requestId: String, payload: String, callback: IQvacWorkerCallback) =
+            dispatchStream(requestId, payload, callback)
 
         override fun requestChunk(requestId: String, chunk: String, endOfRequest: Boolean) {
             val builder = requestAssembly.getOrPut(requestId) { StringBuilder() }
@@ -75,7 +80,7 @@ class QvacWorkerService : Service() {
             dispatchCall(takeAssembledRequest(requestId), callback)
 
         override fun streamAssembled(requestId: String, callback: IQvacWorkerCallback) =
-            dispatchStream(takeAssembledRequest(requestId), callback)
+            dispatchStream(requestId, takeAssembledRequest(requestId), callback)
 
         override fun duplexAssembled(requestId: String, callback: IQvacWorkerCallback) =
             dispatchDuplex(requestId, takeAssembledRequest(requestId), callback)
@@ -92,11 +97,16 @@ class QvacWorkerService : Service() {
             input.send(chunk, endOfInput)
         }
 
+        override fun cancelStream(requestId: String) {
+            streamJobs.remove(requestId)?.cancel()
+        }
+
         override fun cancelDuplex(requestId: String) {
             duplexInputs.remove(requestId)?.cancel()
         }
 
         override fun close() {
+            streamJobs.values.forEach(Job::cancel)
             duplexInputs.values.forEach(DuplexInput::cancel)
             serviceScope.launch {
                 worker.await().close()
@@ -119,14 +129,23 @@ class QvacWorkerService : Service() {
         }
     }
 
-    private fun dispatchStream(payload: String, callback: IQvacWorkerCallback) {
-        serviceScope.launch {
-            runRpc(callback) {
-                worker.await().stream(parse(payload)).collect { response ->
-                    sendEnvelope(callback, response.toString())
+    private fun dispatchStream(requestId: String, payload: String, callback: IQvacWorkerCallback) {
+        val job = serviceScope.launch(start = CoroutineStart.LAZY) {
+            try {
+                runRpc(callback) {
+                    worker.await().stream(parse(payload)).collect { response ->
+                        sendEnvelope(callback, response.toString())
+                    }
                 }
+            } finally {
+                streamJobs.remove(requestId)
             }
         }
+        if (streamJobs.putIfAbsent(requestId, job) != null) {
+            job.cancel()
+            throw IllegalArgumentException("Duplicate stream request ID")
+        }
+        job.start()
     }
 
     private fun dispatchDuplex(
@@ -167,6 +186,8 @@ class QvacWorkerService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
+        streamJobs.values.forEach(Job::cancel)
+        streamJobs.clear()
         duplexInputs.values.forEach(DuplexInput::cancel)
         duplexInputs.clear()
         requestAssembly.clear()

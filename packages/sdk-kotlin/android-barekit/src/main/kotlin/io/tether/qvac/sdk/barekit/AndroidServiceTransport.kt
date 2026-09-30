@@ -94,6 +94,7 @@ class AndroidServiceTransport private constructor(
     override fun stream(payload: JsonObject): Flow<JsonObject> {
         return callbackFlow {
             deathCause?.let { close(asWorkerException(it)); return@callbackFlow }
+            val requestId = UUID.randomUUID().toString()
             val terminate: (Throwable) -> Unit = { close(asWorkerException(it)) }
             liveRequests.add(terminate)
             // AIDL callbacks are synchronous. Blocking the Binder callback when
@@ -103,13 +104,18 @@ class AndroidServiceTransport private constructor(
             runCatching {
                 val text = payload.toString()
                 if (text.length <= QvacWorkerService.MAX_BINDER_CHUNK_CHARS) {
-                    service.stream(text, callback)
+                    service.stream(requestId, text, callback)
                 } else {
-                    val requestId = chunkRequest(text)
+                    chunkRequest(text, requestId)
                     service.streamAssembled(requestId, callback)
                 }
             }.onFailure { close(asWorkerException(it)) }
-            awaitClose { liveRequests.remove(terminate) }
+            // Cancelling the collector must stop worker-side generation, not just
+            // drop the local flow, or the model keeps running in :qvac_worker.
+            awaitClose {
+                liveRequests.remove(terminate)
+                runCatching { service.cancelStream(requestId) }
+            }
         }
     }
 

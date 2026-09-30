@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 object JvmWorkerInstaller {
     fun install(
         cacheRoot: Path = defaultCacheRoot(),
-        npmExecutable: String = "npm",
+        npmExecutable: String = defaultNpmExecutable(),
         timeoutMinutes: Long = 10,
     ): Path {
         val prefix = cacheRoot.resolve(SDK_VERSION)
@@ -45,6 +45,11 @@ object JvmWorkerInstaller {
         JvmWorkerResolver.requireCompatibleSdk(sdkRoot)
         return sdkRoot
     }
+
+    // Windows resolves npm as `npm.cmd`; ProcessBuilder only appends `.exe`, so a
+    // bare "npm" throws IOException there.
+    private fun defaultNpmExecutable(): String =
+        if (System.getProperty("os.name").startsWith("Windows", true)) "npm.cmd" else "npm"
 
     private fun defaultCacheRoot(): Path {
         val configured = System.getenv("QVAC_WORKER_HOME")

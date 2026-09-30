@@ -4,7 +4,7 @@ import io.tether.qvac.sdk.barekit.IQvacWorkerCallback;
 
 interface IQvacWorkerService {
     void call(String payload, IQvacWorkerCallback callback);
-    void stream(String payload, IQvacWorkerCallback callback);
+    void stream(String requestId, String payload, IQvacWorkerCallback callback);
     void duplex(String requestId, String payload, IQvacWorkerCallback callback);
     void duplexChunk(String requestId, in byte[] chunk, boolean endOfInput);
     void requestChunk(String requestId, String chunk, boolean endOfRequest);
@@ -12,5 +12,6 @@ interface IQvacWorkerService {
     void streamAssembled(String requestId, IQvacWorkerCallback callback);
     void duplexAssembled(String requestId, IQvacWorkerCallback callback);
     void close();
+    void cancelStream(String requestId);
     void cancelDuplex(String requestId);
 }
