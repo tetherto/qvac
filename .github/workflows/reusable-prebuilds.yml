@@ -365,7 +365,7 @@ jobs:
           }
 
       - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@ef3d614873ab1ed71aaa07c3df7b23d2760fb12b
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
