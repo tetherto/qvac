@@ -235,6 +235,12 @@ export const customTree: Node[] = [
     icon: resolveIcon('Router'),
   },
   {
+    name: 'RPC servers',
+    url: '/p2p-capabilities/rpc-servers',
+    type: 'page',
+    icon: resolveIcon('Server'),
+  },
+  {
     type: 'separator',
     name: 'Runtime',
   },
