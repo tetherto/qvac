@@ -2364,7 +2364,11 @@ TEST_F(
   selection.devices[0].isRpc = true;
   selection.devices[1].isOpenCl = true;
   selection.devices[1].adrenoVersion = 830;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   const auto result = lfn::normalizeLoadForFit(
       "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
@@ -2389,7 +2393,11 @@ TEST_F(
   auto selection = splitSelection({"none"});
   selection.devices[0].isOpenCl = true;
   selection.devices[0].adrenoVersion = 740;
-  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.splitDevices = [selection](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
+    return selection;
+  };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
@@ -2572,7 +2580,9 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodePropagatesRegistrationFailure) {
         qvac_errors::general_error::InvalidArgument,
         "could not reach RPC server '127.0.0.1:50052'");
   };
-  dependencies.splitDevices = [&selectionAttempted]() {
+  dependencies.splitDevices = [&selectionAttempted](
+                                  const std::string&,
+                                  const backend_selection::LoadConstraints&) {
     selectionAttempted = true;
     return backend_selection::SplitDeviceSelection{};
   };
