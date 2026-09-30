@@ -200,7 +200,7 @@ test('ttsConfigSchema: accepts inclusive outputSampleRate boundaries', (t) => {
       outputSampleRate
     })
     t.is(r.success, true, `outputSampleRate ${outputSampleRate} must be accepted`)
-    if (r.success) {
+    if (r.success && r.data.ttsEngine === 'supertonic') {
       t.is(r.data.outputSampleRate, outputSampleRate)
     }
   }
@@ -918,6 +918,122 @@ test('ttsConfigSchema: validates Audio8 sampling ranges', (t) => {
     temperature: -1
   })
   t.is(negativeTemperature.success, false)
+})
+
+// === MOSS ===
+
+function moss(extra: Record<string, unknown>) {
+  return ttsConfigSchema.safeParse({
+    ttsEngine: 'moss',
+    mossCodecDecoderModelSrc: 's3:///example/moss-codec-decoder-f16.gguf',
+    ...extra
+  })
+}
+
+test('ttsConfigSchema: accepts the full MOSS load surface', (t) => {
+  const r = moss({
+    mossCodecEncoderModelSrc: 's3:///example/moss-codec-encoder-f16.gguf',
+    referenceAudioSrc: '/voices/speaker-24k.wav',
+    language: 'en',
+    durationTokens: 38,
+    streamChunkTokens: 25,
+    useGPU: true,
+    threads: 8,
+    nGpuLayers: 99,
+    seed: 7,
+    backendsDir: '/opt/backends'
+  })
+  t.is(r.success, true)
+})
+
+test('ttsConfigSchema: accepts a MOSS-TTSD dialogue config', (t) => {
+  const r = moss({
+    mossCodecEncoderModelSrc: 's3:///example/moss-codec-encoder-f16.gguf',
+    dialogueReferenceSrcs: ['/voices/alice-24k.wav', { src: '/voices/bob-24k.wav', name: 'bob' }],
+    streamChunkTokens: 25
+  })
+  t.is(r.success, true)
+})
+
+test('ttsConfigSchema: requires the MOSS codec decoder source', (t) => {
+  const r = ttsConfigSchema.safeParse({ ttsEngine: 'moss' })
+  t.is(r.success, false, 'mossCodecDecoderModelSrc is required')
+})
+
+test('ttsConfigSchema: MOSS cloning and dialogue need the codec encoder', (t) => {
+  const clone = moss({ referenceAudioSrc: '/voices/speaker-24k.wav' })
+  t.is(clone.success, false)
+  if (!clone.success) {
+    t.is(clone.error.issues[0]?.path.join('.'), 'mossCodecEncoderModelSrc')
+    t.ok(clone.error.issues[0]?.message.startsWith('referenceAudioSrc requires'))
+  }
+
+  const dialogue = moss({ dialogueReferenceSrcs: ['/voices/alice-24k.wav'] })
+  t.is(dialogue.success, false)
+  if (!dialogue.success) {
+    t.is(dialogue.error.issues[0]?.path.join('.'), 'mossCodecEncoderModelSrc')
+    t.ok(dialogue.error.issues[0]?.message.startsWith('dialogueReferenceSrcs requires'))
+  }
+
+  t.is(
+    moss({ mossCodecEncoderModelSrc: 's3:///example/encoder.gguf' }).success,
+    true,
+    'an encoder without a recording is unused but harmless, as in the addon'
+  )
+})
+
+test('ttsConfigSchema: MOSS referenceAudioSrc and dialogueReferenceSrcs are exclusive', (t) => {
+  const r = moss({
+    mossCodecEncoderModelSrc: 's3:///example/encoder.gguf',
+    referenceAudioSrc: '/voices/speaker-24k.wav',
+    dialogueReferenceSrcs: ['/voices/alice-24k.wav']
+  })
+  t.is(r.success, false)
+  if (!r.success) {
+    t.is(r.error.issues[0]?.path.join('.'), 'dialogueReferenceSrcs')
+  }
+})
+
+test('ttsConfigSchema: bounds the MOSS dialogue reference list to one-five speakers', (t) => {
+  const speakers = (count: number) =>
+    moss({
+      mossCodecEncoderModelSrc: 's3:///example/encoder.gguf',
+      dialogueReferenceSrcs: Array.from({ length: count }, (_, i) => `/voices/s${i + 1}.wav`)
+    })
+  t.is(speakers(0).success, false, 'the addon needs at least one speaker reference')
+  t.is(speakers(1).success, true)
+  t.is(speakers(5).success, true)
+  const six = speakers(6)
+  t.is(six.success, false, 'each entry is a source to resolve, so the list is capped')
+  if (!six.success) {
+    t.is(six.error.issues[0]?.path.join('.'), 'dialogueReferenceSrcs')
+  }
+})
+
+test('ttsConfigSchema: bounds MOSS durationTokens to the generation budget', (t) => {
+  t.is(moss({ durationTokens: 0 }).success, true, '0 keeps the length free')
+  t.is(moss({ durationTokens: 2015 }).success, true)
+  t.is(moss({ durationTokens: 2016 }).success, false)
+  t.is(moss({ durationTokens: -1 }).success, false)
+  t.is(moss({ durationTokens: 1.5 }).success, false)
+})
+
+test('ttsConfigSchema: rejects options the MOSS engine does not take', (t) => {
+  // The addon rejects each of these for MOSS at construction.
+  t.is(moss({ outputSampleRate: 48000 }).success, false, 'MOSS emits 24 kHz only')
+  t.is(moss({ streamFirstChunkTokens: 5 }).success, false, 'MOSS streams fixed-size chunks')
+  t.is(moss({ lavasrEnhancerModelSrc: 's3:///example/lavasr.gguf' }).success, false)
+  t.is(moss({ lavasrDenoiserModelSrc: 's3:///example/denoiser.gguf' }).success, false)
+  t.is(moss({ openclCacheDir: '/cache/opencl' }).success, false, 'desktop only')
+  t.is(moss({ emotion: 'happy' }).success, false, 'MOSS has no conditioning vocabulary')
+  t.is(moss({ referenceText: 'A transcript.' }).success, false, 'MOSS clones without one')
+  t.is(moss({ language: '  ' }).success, false, 'a blank language hint must not reach the prompt')
+})
+
+test('ttsConfigSchema: rejects a MOSS useGPU that contradicts nGpuLayers', (t) => {
+  t.is(moss({ useGPU: false, nGpuLayers: 99 }).success, false)
+  t.is(moss({ useGPU: true, nGpuLayers: 0 }).success, false)
+  t.is(moss({ useGPU: true, nGpuLayers: 1 }).success, true)
 })
 
 // === Chatterbox parity with @qvac/tts-ggml ===
