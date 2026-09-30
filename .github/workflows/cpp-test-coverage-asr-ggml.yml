@@ -271,6 +271,19 @@ jobs:
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
 
+      # Fuzz-only configure after coverage artifacts are collected: BUILD_FUZZING
+      # would pull FuzzTest into the coverage tree and reconfigure the same
+      # build/ dir. Bounded unit-test mode; libFuzzer + ASan is Linux-only.
+      - name: Build fuzz targets
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          npm run test:scripts
+          npm run fuzz:run
+
   coverage-report:
     permissions:
       contents: read

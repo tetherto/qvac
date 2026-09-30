@@ -14,6 +14,13 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- Bounded FuzzTest coverage for the untrusted s16le PCM decoder
+  (`decodeS16lePcm`). Linux C++ CI runs the suite after unit tests. The
+  decoder compiles without whisper/parakeet, so ASan and LeakSanitizer stay
+  at full strength. No public addon API changes.
+
 ## [0.7.0] - 2026-09-29
 
 ### Added
