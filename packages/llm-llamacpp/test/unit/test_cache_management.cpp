@@ -718,7 +718,7 @@ TEST_F(CacheManagementTest, AtomicWriteLeavesNoTmpArtifact) {
   EXPECT_FALSE(fs::exists(session1_path + ".tmp"));
 }
 
-TEST_F(CacheManagementTest, SaveFailureThrowsAndRemovesTmp) {
+TEST_F(CacheManagementTest, SaveFailureKeepsAnswerAndRemovesTmp) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
@@ -732,15 +732,12 @@ TEST_F(CacheManagementTest, SaveFailureThrowsAndRemovesTmp) {
   // to fail, exercising the throw path in writeCacheFile.
   const std::string bad_path = "/tmp/qvac_test_no_such_dir/session.bin";
 
-  try {
-    processPromptWithCacheOptions(
-        model, R"([{"role": "user", "content": "hi"}])", bad_path, true);
-    FAIL() << "expected UnableToSaveSessionFile throw";
-  } catch (const qvac_errors::StatusError& e) {
-    EXPECT_NE(
-        std::string(e.codeString()).find("UnableToSaveSessionFile"),
-        std::string::npos);
-  }
+  std::string output;
+  ASSERT_NO_THROW(
+      output = processPromptWithCacheOptions(
+          model, R"([{"role": "user", "content": "hi"}])", bad_path, true));
+  EXPECT_FALSE(output.empty());
+  EXPECT_EQ(getStatValue(model->runtimeStats(), "cacheSaveFailed"), 1.0);
 
   EXPECT_FALSE(fs::exists(bad_path + ".tmp"));
   EXPECT_FALSE(fs::exists(bad_path));

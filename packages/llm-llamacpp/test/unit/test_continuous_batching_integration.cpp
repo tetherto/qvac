@@ -1114,7 +1114,7 @@ TEST_F(
 
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    BatchUnsavedMissingParentSaveStillThrows) {
+    BatchUnsavedMissingParentSaveKeepsAnswer) {
   REQUIRE_MODEL(model_);
   auto model = loadModel();
   const fs::path badCacheDir =
@@ -1127,22 +1127,22 @@ TEST_F(
   prompt.cacheKey = badCachePath.string();
   prompt.saveCacheToDisk = true;
 
-  try {
-    model->processPromptBatch(
-        std::vector<LlamaModel::Prompt>{std::move(prompt)});
-    FAIL() << "expected UnableToSaveSessionFile throw";
-  } catch (const qvac_errors::StatusError& e) {
-    EXPECT_NE(
-        std::string(e.codeString()).find("UnableToSaveSessionFile"),
-        std::string::npos);
-  }
+  std::vector<std::string> outputs;
+  ASSERT_NO_THROW(
+      outputs = model->processPromptBatch(
+          std::vector<LlamaModel::Prompt>{std::move(prompt)}));
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_GE(
+      test_common::getStatValue(model->runtimeStats(), "cacheSaveFailed"),
+      1.0);
 
   EXPECT_FALSE(fs::exists(badCacheDir));
 }
 
 TEST_F(
     ContinuousBatchingIntegrationTest,
-    BatchPersistedCachePathReplacedByDirectoryStillThrows) {
+    BatchPersistedCachePathReplacedByDirectoryKeepsAnswer) {
   REQUIRE_MODEL(model_);
   config_["n_predict"] = "64";
   auto model = loadModel();
@@ -1172,15 +1172,15 @@ TEST_F(
     }
   };
 
-  try {
-    model->processPromptBatch(
-        std::vector<LlamaModel::Prompt>{std::move(followup)});
-    FAIL() << "expected UnableToSaveSessionFile throw";
-  } catch (const qvac_errors::StatusError& e) {
-    EXPECT_NE(
-        std::string(e.codeString()).find("UnableToSaveSessionFile"),
-        std::string::npos);
-  }
+  std::vector<std::string> outputs;
+  ASSERT_NO_THROW(
+      outputs = model->processPromptBatch(
+          std::vector<LlamaModel::Prompt>{std::move(followup)}));
+  ASSERT_EQ(outputs.size(), 1u);
+  EXPECT_FALSE(outputs[0].empty());
+  EXPECT_GE(
+      test_common::getStatValue(model->runtimeStats(), "cacheSaveFailed"),
+      1.0);
 
   EXPECT_TRUE(replacedWithDirectory.load())
       << "test setup: generation did not replace the cache path";

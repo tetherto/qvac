@@ -635,24 +635,18 @@ safeTest(
 )
 
 safeTest(
-  'saveCacheToDisk to unwritable path rejects with UnableToSaveSessionFile',
+  'saveCacheToDisk to unwritable path keeps the answer and reports cacheSaveFailed',
   { timeout: 600_000 },
   async (t) => {
     const { model } = await setupModel(t)
     const badPath = path.join(os.tmpdir(), 'qvac-nonexistent-dir-' + Date.now(), 'session.bin')
-    try {
-      const response = await model.run([...BASE_PROMPT], {
-        cacheKey: badPath,
-        saveCacheToDisk: true
-      })
-      await response.await()
-      t.fail('should have thrown on unwritable cache path')
-    } catch (err) {
-      t.ok(
-        /failed to save session file|failed to promote tmp file/.test(err.message),
-        'rejection message identifies the save failure'
-      )
-    }
+    const stats = await runAndCollectStats(model, [...BASE_PROMPT], {
+      cacheKey: badPath,
+      saveCacheToDisk: true
+    })
+    t.ok(stats._chunkCount > 0, 'the answer is still streamed')
+    t.is(stats.cacheSaveFailed, 1, 'the failed save is reported in stats')
+    t.absent(fs.existsSync(badPath), 'no cache file is written')
   }
 )
 
