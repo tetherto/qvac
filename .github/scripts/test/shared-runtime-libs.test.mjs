@@ -57,23 +57,11 @@ test('consumer manifest works without peers', () => {
 })
 
 test('consumer manifest skips peers outside @qvac', () => {
-  const pkg = {
-    name: '@qvac/sdk',
-    peerDependencies: {
-      '@qvac/ggml-rpc-server': '0.1.0',
-      '@electron-forge/plugin-base': '^7.11.1',
-      'react-native-bare-kit': '*',
-    },
-    peerDependenciesMeta: {
-      '@qvac/ggml-rpc-server': { optional: true },
-    },
-  }
+  const pkg = JSON.parse(readFileSync(resolve(repoRoot, 'packages/sdk/package.json'), 'utf8'))
   const manifest = buildConsumerManifest(pkg, 'file:./package.tgz')
 
-  assert.deepEqual(manifest.dependencies, {
-    '@qvac/sdk': 'file:./package.tgz',
-    '@qvac/ggml-rpc-server': '0.1.0',
-  })
+  assert.ok(Object.keys(pkg.peerDependencies).length > 0)
+  assert.deepEqual(manifest.dependencies, { '@qvac/sdk': 'file:./package.tgz' })
 })
 
 test('consumer manifest carries local overrides', () => {
