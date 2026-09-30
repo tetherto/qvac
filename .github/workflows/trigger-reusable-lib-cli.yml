@@ -105,8 +105,12 @@ jobs:
           fs.writeFileSync(target, npmrc, 'utf8');
           console.log(`::notice::.npmrc configured at ${target} (@tetherto → GPR via GITHUB_TOKEN)`);
 
+      # --ignore-scripts: the step above writes GITHUB_TOKEN into the workspace
+      # .npmrc, so a dependency lifecycle script would run with that token in
+      # reach. Nothing in this tree needs one — see
+      # .github/scripts/test/install-scripts-policy.test.mjs.
       - name: Install dependencies
-        run: npm install
+        run: npm install --ignore-scripts
         working-directory: ${{ env.WORKDIR }}
 
       - name: Link workspace SDK
