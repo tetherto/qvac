@@ -1,6 +1,6 @@
 name: General CI/CD (native addons, nx)
-# Consolidates the 13 on-merge-<pkg>.yml publish workflows (dorny selects the
-# changed package, matrix publishes it, no nx-affected). Excludes model-fit.
+# Consolidates native addon publishing (dorny selects the changed package,
+# matrix publishes it, no nx-affected).
 
 on:
   push:
@@ -20,6 +20,7 @@ on:
       - "packages/embed-llamacpp/**"
       - "packages/fabric/**"
       - "packages/llm-llamacpp/**"
+      - "packages/model-fit/**"
       - "packages/ocr-ggml/**"
       - "packages/translation-nmtcpp/**"
       - "packages/tts-ggml/**"
@@ -40,6 +41,7 @@ on:
           - embed-llamacpp
           - fabric
           - llm-llamacpp
+          - model-fit
           - ocr-ggml
           - translation-nmtcpp
           - tts-ggml
@@ -80,7 +82,7 @@ jobs:
       verify-generated-rows: ${{ steps.rows.outputs.verify-generated-rows }}
     steps:
       # fetch-depth: 0 is load-bearing: shallow, dorny cannot resolve
-      # github.event.before and reports every file as added, selecting all 13.
+      # github.event.before and reports every file as added, selecting all addons.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           fetch-depth: 0
@@ -103,6 +105,7 @@ jobs:
             embed-llamacpp: packages/embed-llamacpp/**
             fabric: packages/fabric/**
             llm-llamacpp: packages/llm-llamacpp/**
+            model-fit: packages/model-fit/**
             ocr-ggml: packages/ocr-ggml/**
             translation-nmtcpp: packages/translation-nmtcpp/**
             tts-ggml: packages/tts-ggml/**
@@ -141,7 +144,7 @@ jobs:
             fi
 
             # Directory name, not the short name older branches used: it is what
-            # decides which of the 13 packages this one workflow publishes.
+            # decides which package this workflow publishes.
             if [ ! -f "packages/${branch_pkg}/project.json" ]; then
               echo "::error::release branch names '${branch_pkg}' but packages/${branch_pkg}/project.json does not exist. Use the package directory name, e.g. release-llm-llamacpp-0.53.1 not release-llm-0.53.1. See docs/gitflow.md."
               exit 1
@@ -377,7 +380,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: release
-    # Per package, not per workflow: one group for all 13 lets an unrelated
+    # Per package, not per workflow: one group for all addons lets an unrelated
     # package's merge cancel a queued publish, since GitHub keeps only one
     # pending run per group even with cancel-in-progress: false.
     concurrency:
@@ -524,7 +527,7 @@ jobs:
           # fabric ships its C++ SDK under prebuilds/include and prebuilds/share.
           extra-dirs: ${{ matrix.prebuildExtraDirs && join(matrix.prebuildExtraDirs, ' ') || '' }}
 
-      # 12 of the 13 deleted workflows validated this before it reached the
+      # Most former per-package workflows validated this before it reached the
       # external action, and qvac-actions does not check the charset itself.
       - name: Validate npm_tag input
         if: inputs.npm_tag != ''
