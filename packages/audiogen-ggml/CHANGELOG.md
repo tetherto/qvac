@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `understand()` no longer repeats the previous run's `lyricsScore` in its
   stats after a `generateLrc` generation.
+- Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
+  reports more free device memory than total once the process has allocated
+  past the GPU's recommended working set, which made a model that does not fit
+  report `fits`. Generation is unchanged.
 
 ## [0.5.1] - 2026-09-29
 
