@@ -14,6 +14,7 @@ import {
 } from '@/runtime/runtime-lifecycle'
 
 const devices = [{ index: 0, freeMemory: 1024, totalMemory: 2048 }]
+const inventory = { devices, rdmaAvailable: false }
 
 class Peer extends EventEmitter {
   destroyed = false
@@ -70,7 +71,7 @@ test('RPC lookup deduplicates, rejects unreachable endpoints, uses shared hashed
     createSwarm: factory,
     probe: async (host) => {
       probed.push(host)
-      return host !== '10.0.0.3' ? devices : undefined
+      return host !== '10.0.0.3' ? inventory : undefined
     }
   })
   for (const host of ['10.0.0.2', '10.0.0.2', '10.0.0.3']) {
@@ -81,7 +82,7 @@ test('RPC lookup deduplicates, rejects unreachable endpoints, uses shared hashed
   const advertiser = fakeSwarm()
   const withdraw = await advertiseRpcServer('shared', '10.0.0.2:50052', advertiser.factory)
   t.alike(swarm.topics, advertiser.swarm.topics)
-  t.alike(await result, [{ url: '10.0.0.2:50052', devices }])
+  t.alike(await result, [{ url: '10.0.0.2:50052', ...inventory }])
   t.alike(probed, ['10.0.0.2', '10.0.0.3'])
   t.ok(swarm.destroyed)
   await withdraw()
@@ -94,7 +95,7 @@ test('RPC closed peers withdraw candidates and malformed or oversized peers are 
   const { swarm, factory } = fakeSwarm()
   const result = discoverRpcEndpoints('withdraw', 100, ctx, {
     createSwarm: factory,
-    probe: async () => devices
+    probe: async () => inventory
   })
   const peer = new Peer()
   swarm.connect(peer)
@@ -120,7 +121,7 @@ test('RPC fragmented frames are accepted; stale announcements expire', async (t)
     createSwarm: factory,
     probe: async () => {
       probes++
-      return devices
+      return inventory
     }
   })
   const peer = new Peer()
@@ -181,10 +182,10 @@ test('RPC discovery returns complete inventories before mapping multi-device end
     createSwarm: factory,
     probe: async (host) =>
       host === '10.0.0.2'
-        ? [devices[0]!, { ...devices[0]!, index: 1 }]
+        ? { devices: [devices[0]!, { ...devices[0]!, index: 1 }], rdmaAvailable: true }
         : host === '10.0.0.3'
-          ? devices
-          : []
+          ? inventory
+          : { devices: [], rdmaAvailable: true }
   })
   for (const host of ['10.0.0.2', '10.0.0.3', '10.0.0.4']) {
     const peer = new Peer()
@@ -192,6 +193,10 @@ test('RPC discovery returns complete inventories before mapping multi-device end
     peer.announce(`${host}:50052`)
   }
   const candidates = await result
+  t.alike(
+    candidates.map(({ rdmaAvailable }) => rdmaAvailable),
+    [true, false]
+  )
   t.alike(
     candidates.map(({ devices }) => devices.length),
     [2, 1]

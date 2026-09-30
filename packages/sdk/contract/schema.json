@@ -5151,6 +5151,10 @@
                 "type": "string",
                 "minLength": 1
               },
+              "rdmaAvailable": {
+                "type": "boolean",
+                "description": "Server advertised RDMA availability for this endpoint at discovery time. Actual transport depends on client support and negotiation."
+              },
               "devices": {
                 "type": "array",
                 "items": {
@@ -5182,7 +5186,7 @@
                 "description": "Native served devices in endpoint enumeration order."
               }
             },
-            "required": ["url", "devices"],
+            "required": ["url", "rdmaAvailable", "devices"],
             "additionalProperties": false,
             "title": "DiscoverRpcServersResponseServersItem"
           }

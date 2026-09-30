@@ -4550,6 +4550,13 @@ class DiscoverRpcServersResponseServersItem(GeneratedBaseModel):
         extra="forbid",
     )
     url: Annotated[str, Field(min_length=1)]
+    rdma_available: Annotated[
+        bool,
+        Field(
+            alias="rdmaAvailable",
+            description="Server advertised RDMA availability for this endpoint at discovery time. Actual transport depends on client support and negotiation.",
+        ),
+    ]
     devices: Annotated[
         list[DiscoverRpcServersResponseServersItemDevicesItem],
         Field(description="Native served devices in endpoint enumeration order."),

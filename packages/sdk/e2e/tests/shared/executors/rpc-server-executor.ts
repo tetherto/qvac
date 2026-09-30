@@ -29,14 +29,21 @@ export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
 
   async deviceMap(_params: object, expectation: Expectation): Promise<TestResult> {
     const device = { index: 0, freeMemory: 1024, totalMemory: 2048 }
-    const first = { url: '10.0.0.2:50052', devices: [device, { ...device, index: 1 }] }
-    const second = { url: '10.0.0.3:50052', devices: [device] }
-    const mapped = getRpcDeviceMap([first, second])
+    const first = {
+      url: '10.0.0.2:50052',
+      rdmaAvailable: true,
+      devices: [device, { ...device, index: 1 }]
+    }
+    const second = { url: '10.0.0.3:50052', rdmaAvailable: false, devices: [device] }
+    const selected = [second, first].sort(
+      (a, b) => Number(b.rdmaAvailable) - Number(a.rdmaAvailable)
+    )
+    const mapped = getRpcDeviceMap(selected)
     if (mapped[2]?.url !== second.url || mapped[2]?.index !== 0) {
       throw new Error('Second endpoint mapped to the wrong device')
     }
     return ValidationHelpers.validate(
-      `${mapped.map(({ alias }) => alias).join(',')}; second endpoint ${mapped[2].alias}`,
+      `RDMA preferred; ${mapped.map(({ alias }) => alias).join(',')}; second endpoint ${mapped[2].alias}`,
       expectation
     )
   }
@@ -52,6 +59,7 @@ export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
         getRpcDeviceMap([
           {
             url: '10.0.0.2:50052',
+            rdmaAvailable: false,
             devices: [{ index: 1, freeMemory: 1024, totalMemory: 2048 }]
           }
         ]),

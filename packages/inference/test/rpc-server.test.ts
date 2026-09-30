@@ -77,6 +77,25 @@ test('RPC request schemas and bounded discovery', (t) => {
   )
 })
 
+test('RPC discovery responses preserve and require endpoint RDMA availability', (t) => {
+  const candidate = {
+    url: '10.0.0.2:50052',
+    devices: [{ index: 0, freeMemory: 1024, totalMemory: 2048 }]
+  }
+  for (const rdmaAvailable of [false, true]) {
+    const response = { type: 'discoverRpcServers', servers: [{ ...candidate, rdmaAvailable }] }
+    t.alike(responseSchema.parse(response), response)
+  }
+  for (const rdmaAvailable of [undefined, null, 'true']) {
+    t.absent(
+      responseSchema.safeParse({
+        type: 'discoverRpcServers',
+        servers: [{ ...candidate, rdmaAvailable }]
+      }).success
+    )
+  }
+})
+
 test('RPC discovery accepts only private IPv4 endpoints and versioned small frames', (t) => {
   for (const url of ['10.0.0.2:1', '172.16.0.1:65535', '192.168.1.2:50052']) {
     t.ok(privateEndpoint(url), url)

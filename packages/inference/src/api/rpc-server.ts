@@ -38,7 +38,8 @@ export async function stopRpcServer(options: StopRpcServerOptions): Promise<void
 }
 
 /**
- * Find private-network candidates with native device indices and memory snapshots.
+ * Find private-network candidates with device inventories and server RDMA availability.
+ * RDMA availability is a server-side offer, not a guarantee of the negotiated transport.
  * Use getRpcDeviceMap with the chosen endpoint registration order before loadModel.
  * Cancel a pending search with its promise.requestId.
  */

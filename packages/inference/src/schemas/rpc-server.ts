@@ -81,6 +81,11 @@ export const rpcDeviceSchema = z.object({
 })
 export const rpcServerCandidateSchema = z.object({
   url: z.string().min(1),
+  rdmaAvailable: z
+    .boolean()
+    .describe(
+      'Server advertised RDMA availability for this endpoint at discovery time. Actual transport depends on client support and negotiation.'
+    ),
   devices: z.array(rpcDeviceSchema).describe('Native served devices in endpoint enumeration order.')
 })
 export type RpcDevice = z.infer<typeof rpcDeviceSchema>

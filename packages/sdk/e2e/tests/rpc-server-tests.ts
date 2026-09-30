@@ -47,7 +47,7 @@ export const rpcServerTests = [
     params: {},
     expectation: {
       validation: 'contains-all',
-      contains: ['RPC0,RPC1,RPC2', 'second endpoint RPC2']
+      contains: ['RDMA preferred', 'RPC0,RPC1,RPC2', 'second endpoint RPC2']
     },
     metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 1000 }
   },

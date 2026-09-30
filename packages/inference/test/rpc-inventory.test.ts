@@ -2,7 +2,7 @@ import test from 'brittle'
 import net from 'bare-net'
 import { Buffer } from 'bare-buffer'
 import { AbortController } from 'bare-abort-controller'
-import { queryRpcDevices } from '@/rpc/inventory'
+import { queryRpcInventory } from '@/rpc/inventory'
 import { getRpcDeviceMap } from '@/rpc/device-map'
 import { InferenceCancelledError } from '@/errors/index'
 
@@ -24,8 +24,11 @@ async function endpoint(reply: (command: number, payload: Buffer) => Buffer | un
       if (!response) return
       const header = Buffer.alloc(8)
       header.writeBigUInt64LE(BigInt(response.length))
-      socket.write(header.subarray(0, 3))
-      socket.write(Buffer.concat([Buffer.from(header.subarray(3)), response]))
+      const frame = Buffer.concat([header, response])
+      socket.write(frame.subarray(0, 3))
+      socket.write(frame.subarray(3, 14))
+      // Split HELLO inside QPN so parsing must wait for the complete capabilities.
+      if (frame.length > 14) setTimeout(() => socket.write(frame.subarray(14)), 5)
     })
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -33,7 +36,7 @@ async function endpoint(reply: (command: number, payload: Buffer) => Buffer | un
   if (!address || typeof address === 'string') throw new Error('No TCP address')
   return {
     query: (signal = new AbortController().signal) =>
-      queryRpcDevices('127.0.0.1', address.port, 100, signal),
+      queryRpcInventory('127.0.0.1', address.port, 100, signal),
     async [Symbol.asyncDispose]() {
       for (const socket of sockets) socket.destroy()
       await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -42,8 +45,12 @@ async function endpoint(reply: (command: number, payload: Buffer) => Buffer | un
 }
 
 const device = { index: 0, freeMemory: 1024, totalMemory: 2048 }
-const first = { url: '10.0.0.2:50052', devices: [device, { ...device, index: 1 }] }
-const second = { url: '10.0.0.3:50052', devices: [device] }
+const first = {
+  url: '10.0.0.2:50052',
+  rdmaAvailable: true,
+  devices: [device, { ...device, index: 1 }]
+}
+const second = { url: '10.0.0.3:50052', rdmaAvailable: false, devices: [device] }
 
 test('RPC aliases enumerate all devices before moving to the next endpoint', (t) => {
   const mapped = getRpcDeviceMap([first, second])
@@ -110,8 +117,53 @@ test('RPC inventory reads native device count and memory over fragmented TCP res
     memory.writeBigUInt64LE(2048n, 8)
     return memory
   })
-  t.alike(await server.query(), [device, { ...device, index: 1, freeMemory: 1025 }])
+  t.alike(await server.query(), {
+    devices: [device, { ...device, index: 1, freeMemory: 1025 }],
+    rdmaAvailable: false
+  })
   t.alike(commands, [14, 15, 11, 11])
+})
+
+for (const version of [108, 109]) {
+  for (const qpn of [0, 0x123456]) {
+    test(`RPC ${version} inventory reports RDMA availability for QPN ${qpn}`, async (t) => {
+      await using server = await endpoint((command, payload) => {
+        if (command === 14) {
+          t.alike(payload, Buffer.alloc(24), 'probe requests TCP even when server offers RDMA')
+          const hello = Buffer.alloc(28)
+          hello[0] = version
+          hello[2] = 1
+          hello.writeUInt32LE(qpn, 4)
+          hello.fill(255, 8)
+          return hello
+        }
+        if (command === 15) {
+          const count = Buffer.alloc(4)
+          count.writeUInt32LE(1)
+          return count
+        }
+        const memory = Buffer.alloc(16)
+        memory.writeBigUInt64LE(1024n, 0)
+        memory.writeBigUInt64LE(2048n, 8)
+        return memory
+      })
+      t.alike(await server.query(), { devices: [device], rdmaAvailable: qpn !== 0 })
+    })
+  }
+}
+
+test('RPC inventory preserves the RDMA offer when the server has no devices', async (t) => {
+  await using server = await endpoint((command) => {
+    if (command === 14) {
+      const hello = Buffer.alloc(28)
+      hello[0] = 109
+      hello.writeUInt32LE(1, 4)
+      return hello
+    }
+    t.is(command, 15)
+    return Buffer.alloc(4)
+  })
+  t.alike(await server.query(), { devices: [], rdmaAvailable: true })
 })
 
 test('RPC inventory rejects unsupported versions, invalid lengths and excessive device counts', async (t) => {

@@ -58,13 +58,14 @@ async def test_managed_rpc_server_wire_contract(rdma_capable):
     assert transport.sent == {"type": "stopRpcServer", "serverId": "owned"}
 
 
-async def test_discovery_preserves_candidate_order_and_empty_results():
+async def test_discovery_preserves_rdma_availability_candidate_order_and_empty_results():
     transport = FakeTransport(
         {
             "type": "discoverRpcServers",
             "servers": [
                 {
                     "url": "10.0.0.3:50052",
+                    "rdmaAvailable": False,
                     "devices": [
                         {"index": 0, "freeMemory": 1024, "totalMemory": 2048},
                         {"index": 1, "freeMemory": 512, "totalMemory": 2048},
@@ -72,6 +73,7 @@ async def test_discovery_preserves_candidate_order_and_empty_results():
                 },
                 {
                     "url": "10.0.0.2:50052",
+                    "rdmaAvailable": True,
                     "devices": [{"index": 0, "freeMemory": 4096, "totalMemory": 8192}],
                 },
             ],
@@ -84,6 +86,13 @@ async def test_discovery_preserves_candidate_order_and_empty_results():
         request_id="discover-rpc-request",
     )
     result = await discover_rpc_servers(transport, request)
+    assert [server.rdma_available for server in result.servers] == [False, True]
+    assert [
+        server.model_dump(by_alias=True)["rdmaAvailable"] for server in result.servers
+    ] == [
+        False,
+        True,
+    ]
     assert [device.index for device in result.servers[0].devices] == [0, 1]
     assert result.servers[1].devices[0].total_memory == 8192
     assert [server.url for server in result.servers] == [

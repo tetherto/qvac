@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { AbortController } from 'bare-abort-controller'
 import { ggmlRpcServerProvider } from '@/rpc/ggml-provider'
-import { queryRpcDevices } from '@/rpc/inventory'
+import { queryRpcInventory } from '@/rpc/inventory'
 import { rpcServerInfoSchema } from '@/schemas/rpc-server'
 import { ModelType } from '@/schemas/model-types'
 import { registerRpcServerProvider } from '@/rpc/provider'
@@ -14,18 +14,22 @@ test('published RPC provider starts, serves inventory over TCP, and stops', asyn
   try {
     t.is(typeof server.rdmaCapable, 'boolean')
     t.ok(rpcServerInfoSchema.safeParse({ ...server, serverId: 'native' }).success)
-    const devices = await queryRpcDevices(
+    const inventory = await queryRpcInventory(
       server.host,
       server.port,
       5000,
       new AbortController().signal
     )
-    t.ok(devices && devices.length > 0, 'native server answers TCP inventory probes')
+    t.ok(inventory && inventory.devices.length > 0, 'native server answers TCP inventory probes')
+    t.is(typeof inventory?.rdmaAvailable, 'boolean')
+    if (!server.rdmaCapable) {
+      t.is(inventory?.rdmaAvailable, false, 'TCP backend does not offer RDMA')
+    }
   } finally {
     await server.stop()
   }
   t.is(
-    await queryRpcDevices(server.host, server.port, 100, new AbortController().signal),
+    await queryRpcInventory(server.host, server.port, 100, new AbortController().signal),
     undefined,
     'stopped endpoint is unreachable'
   )

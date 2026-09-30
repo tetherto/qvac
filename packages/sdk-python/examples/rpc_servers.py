@@ -70,7 +70,14 @@ async def main() -> int:
                     ),
                 )
                 alias = 0
-                for server in sorted(result.servers, key=lambda item: item.url):
+                # Prefer server RDMA offers before assigning aliases. Transport still needs negotiation.
+                for server in sorted(
+                    result.servers, key=lambda item: (not item.rdma_available, item.url)
+                ):
+                    print(
+                        f"▸ {server.url}; server RDMA available: {server.rdma_available}",
+                        file=sys.stderr,
+                    )
                     for device in server.devices:
                         print(f"RPC{alias}: {server.url}, device {device.index}")
                         alias += 1

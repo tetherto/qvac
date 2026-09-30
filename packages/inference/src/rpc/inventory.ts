@@ -2,7 +2,7 @@ import net from 'bare-net'
 import { Buffer } from 'bare-buffer'
 import type { AbortSignal } from 'bare-abort-controller'
 import type { DisposableScope } from '@/runtime/disposable-scope'
-import type { RpcDevice } from '@/schemas/rpc-server'
+import type { RpcDevice, RpcServerCandidate } from '@/schemas/rpc-server'
 import { InferenceCancelledError } from '@/errors/index'
 import { throwIfAborted } from './network'
 
@@ -12,13 +12,15 @@ const DEVICE_COUNT = 15
 const GET_DEVICE_MEMORY = 11
 const MAX_DEVICES = 128
 
-export function queryRpcDevices(
+export type RpcInventory = Pick<RpcServerCandidate, 'devices' | 'rdmaAvailable'>
+
+export function queryRpcInventory(
   host: string,
   port: number,
   timeoutMs: number,
   signal: AbortSignal,
   scope?: DisposableScope
-): Promise<RpcDevice[] | undefined> {
+): Promise<RpcInventory | undefined> {
   throwIfAborted(signal)
   return new Promise((resolve, reject) => {
     const socket = new net.Socket()
@@ -27,10 +29,11 @@ export function queryRpcDevices(
     let command = HELLO
     let responseSize = 28
     let count = 0
+    let rdmaAvailable = false
     let finished = false
     const timer = setTimeout(() => finish(), timeoutMs)
     const abort = () => finish(undefined, new InferenceCancelledError('rpc'))
-    function finish(result?: RpcDevice[], error?: Error) {
+    function finish(result?: RpcInventory, error?: Error) {
       if (finished) return
       finished = true
       clearTimeout(timer)
@@ -71,18 +74,20 @@ export function queryRpcDevices(
       pending = Buffer.alloc(0)
       if (command === HELLO) {
         if ((payload[0] !== 108 && payload[0] !== 109) || payload[1] !== 0) return finish()
+        // QPN follows the four version/padding bytes. The probe itself stays on TCP.
+        rdmaAvailable = payload.readUInt32LE(4) !== 0
         send(DEVICE_COUNT, Buffer.alloc(0), 4)
       } else if (command === DEVICE_COUNT) {
         count = payload.readUInt32LE(0)
         if (count > MAX_DEVICES) return finish()
-        if (count === 0) return finish([])
+        if (count === 0) return finish({ devices, rdmaAvailable })
         memory()
       } else {
         const freeMemory = Number(payload.readBigUInt64LE(0))
         const totalMemory = Number(payload.readBigUInt64LE(8))
         if (!Number.isSafeInteger(freeMemory) || !Number.isSafeInteger(totalMemory)) return finish()
         devices.push({ index: devices.length, freeMemory, totalMemory })
-        if (devices.length === count) return finish(devices)
+        if (devices.length === count) return finish({ devices, rdmaAvailable })
         memory()
       }
     })

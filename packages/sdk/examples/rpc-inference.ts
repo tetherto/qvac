@@ -12,8 +12,9 @@ import {
 try {
   const topic = process.argv[2]
   if (!topic) throw new Error('Usage: rpc-inference.ts <topic>')
+  // Prefer server RDMA offers before assigning aliases. Transport is negotiated at load time.
   const selected = (await discoverRpcServers({ topic, timeoutMs: 5000 }))
-    .sort((a, b) => a.url.localeCompare(b.url))
+    .sort((a, b) => Number(b.rdmaAvailable) - Number(a.rdmaAvailable) || a.url.localeCompare(b.url))
     .slice(0, 2)
   if (selected.length !== 2) throw new Error('Two idle RPC servers are required')
   const devices = getRpcDeviceMap(selected)
