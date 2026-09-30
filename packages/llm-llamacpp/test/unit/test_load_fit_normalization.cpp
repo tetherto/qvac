@@ -680,6 +680,27 @@ TEST_F(LoadFitNormalizationTest, ExplicitMixedBackendsStillWarn) {
           "(Vulkan)"));
 }
 
+TEST_F(LoadFitNormalizationTest, StrictBackendAllowsExplicitRpcDevice) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+  config["devices"] = "rpc0,CUDA0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "CUDA0"}, {});
+  auto selection = splitSelection({"rpc0", "CUDA0", "Vulkan0"});
+  selection.devices[0].isRpc = true;
+  dependencies.allSplitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.mmproj_backend, "CUDA0");
+  ASSERT_NE(result.params.devices[0], nullptr);
+  ASSERT_NE(result.params.devices[1], nullptr);
+  EXPECT_EQ(result.params.devices[2], nullptr);
+}
+
 TEST_F(LoadFitNormalizationTest, StrictBackendRejectsEmptySplit) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
@@ -2791,17 +2812,11 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodePropagatesRegistrationFailure) {
     selectionAttempted = true;
     return backend_selection::SplitDeviceSelection{};
   };
-  dependencies.resolveBackend =
-      [&selectionAttempted](
-          backend_selection::BackendType,
-          const std::optional<backend_selection::MainGpu>&,
-          const ModelMetaData&,
-          bool,
-          const std::vector<std::string>&) {
-        selectionAttempted = true;
-        return lfn::SelectedBackend{
-            .type = backend_selection::CPU, .name = "none"};
-      };
+  dependencies.resolveBackend = [&selectionAttempted](
+                                    const backend_selection::BackendRequest&) {
+    selectionAttempted = true;
+    return lfn::SelectedBackend{.type = backend_selection::CPU, .name = "none"};
+  };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(

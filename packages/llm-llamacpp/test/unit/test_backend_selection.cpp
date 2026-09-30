@@ -2290,6 +2290,25 @@ TEST_F(BackendSelectionTest, StrictBackendFiltersEverySplitDevice) {
       getTensorSplitDeviceNames(
           mockBackend.toBackendInterface(), "cuda0", constraints),
       (std::vector<std::string>{"cuda0"}));
+  const SplitDeviceSelection selection = getSplitDeviceSelection(
+      mockBackend.toBackendInterface(), "cuda0", constraints);
+  ASSERT_EQ(selection.devices.size(), 2U);
+  EXPECT_EQ(selection.devices[0].name, "rpc0");
+  EXPECT_EQ(selection.devices[1].name, CUDA0_BACK);
+}
+
+TEST_F(BackendSelectionTest, StrictBackendKeepsRpcWhenNoLocalGpuMatches) {
+  mockBackend.addDevice(
+      MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  LoadConstraints constraints;
+  constraints.requiredBackendFamilies = {"cuda"};
+
+  const SplitDeviceSelection selection = getSplitDeviceSelection(
+      mockBackend.toBackendInterface(), "cuda0", constraints);
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, "rpc0");
 }
 
 TEST_F(BackendSelectionTest, StrictBackendKeepsSingleRegistrySplit) {

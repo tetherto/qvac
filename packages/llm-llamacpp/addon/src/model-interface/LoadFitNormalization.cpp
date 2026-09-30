@@ -1526,7 +1526,7 @@ NormalizedLoad normalizeLoadForFit(
              splitSelection.devices) {
           const std::string name = toLowerAscii(device.name);
           const bool matches =
-              !device.isRpc &&
+              device.isRpc ||
               std::ranges::any_of(
                   backendOverride, [&name](const std::string& family) {
                     return name.find(family) != std::string::npos ||
