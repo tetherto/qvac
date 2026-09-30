@@ -64,34 +64,49 @@ function buildTranscribeRequest(
  *          the list of transcript segments in emission order. The
  *          `requestId` is reachable synchronously so callers can target
  *          this in-flight transcription with `cancel({ requestId })`
- *          before `await` resolves.
+ *          before `await` resolves. `stats` resolves to the terminal engine
+ *          statistics, including Parakeet's per-run Core ML usage.
  */
+type TranscribeCall<T> = Promise<T> & {
+  requestId: string
+  stats: Promise<TranscribeStats | undefined>
+}
+
 export function transcribe(
   params: TranscribeClientParams & { metadata: true },
   options?: RPCOptions
-): Promise<TranscribeSegment[]> & { requestId: string }
+): TranscribeCall<TranscribeSegment[]>
 export function transcribe(
   params: TranscribeClientParams,
   options?: RPCOptions
-): Promise<string> & { requestId: string }
+): TranscribeCall<string>
 export function transcribe(
   params: TranscribeClientParams,
   options?: RPCOptions
-): Promise<string | TranscribeSegment[]> & { requestId: string } {
+): TranscribeCall<string | TranscribeSegment[]> {
   // Client-generated id surfaced synchronously on the returned promise
   // — same shape as `loadModel` / `downloadAsset` / `completion`. The
   // CLI cancel bridge in `qvac serve` binds `req.on('close')` to
   // `cancel({ requestId })` immediately after the call returns so a
   // client disconnect aborts the in-flight transcription.
   const requestId = generateClientRequestId()
-  const inner = runTranscribe(params, requestId, options)
-  return decoratePromise(inner, { requestId })
+  let resolveStats: (value: TranscribeStats | undefined) => void = () => {}
+  let rejectStats: (error: unknown) => void = () => {}
+  const stats = new Promise<TranscribeStats | undefined>((resolve, reject) => {
+    resolveStats = resolve
+    rejectStats = reject
+  })
+  stats.catch(() => {})
+  const inner = runTranscribe(params, requestId, options, resolveStats)
+  inner.then(() => resolveStats(undefined), rejectStats)
+  return decoratePromise(inner, { requestId, stats })
 }
 
 async function runTranscribe(
   params: TranscribeClientParams,
   requestId: string,
-  options?: RPCOptions
+  options: RPCOptions | undefined,
+  onStats: (stats: TranscribeStats | undefined) => void
 ): Promise<string | TranscribeSegment[]> {
   const request = buildTranscribeRequest(params, requestId)
 
@@ -106,6 +121,7 @@ async function runTranscribe(
         }
 
         if (parsed.done) {
+          onStats(parsed.stats)
           break
         }
       }
@@ -123,6 +139,7 @@ async function runTranscribe(
       }
 
       if (parsed.done) {
+        onStats(parsed.stats)
         break
       }
     }

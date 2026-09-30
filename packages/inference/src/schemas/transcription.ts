@@ -84,7 +84,11 @@ export const transcribeStatsSchema = z.object({
   encoderOnCoreml: z
     .number()
     .optional()
-    .describe('Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.')
+    .describe('Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.'),
+  encoderUsedCoreml: z
+    .number()
+    .optional()
+    .describe('Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.')
 })
 
 /**

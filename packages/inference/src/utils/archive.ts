@@ -176,7 +176,12 @@ export async function extractTarStream(
     // nominal private brand its shim can't carry (see types/tar-stream).
     const extractDest = extract as unknown as import('bare-stream').Writable
     if (gunzip) {
-      readStream.pipe(gunzip).pipe(extractDest)
+      // bare-fs and bare-zlib ship distinct stream type declarations even
+      // though both expose the same pipe chain at runtime.
+      const gzipPipe = readStream as unknown as {
+        pipe(destination: typeof gunzip): { pipe(destination: typeof extractDest): unknown }
+      }
+      gzipPipe.pipe(gunzip).pipe(extractDest)
     } else {
       readStream.pipe(extractDest)
     }

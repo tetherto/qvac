@@ -1,4 +1,4 @@
-import { transcribe } from '@qvac/sdk'
+import { getModelInfo, PARAKEET_UNIFIED_0_6B_Q4_0, transcribe } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite/mobile'
 import type { ResourceManager } from '../../shared/resource-manager.js'
 import { ModelAssetExecutor } from './model-asset-executor.js'
@@ -34,8 +34,39 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTe
     const p = params as { audioFileName: string; metadata?: boolean }
     const exp = expectation as Expectation
 
+    if (testId === 'parakeet-unified-coreml-ios') {
+      const info = await getModelInfo({ name: PARAKEET_UNIFIED_0_6B_Q4_0.name })
+      if (!info.registryPath?.includes('/2026-09-30/')) {
+        return { passed: false, output: `Expected the regenerated GGUF, got ${info.registryPath}` }
+      }
+    }
+
     const resourceKey = this.resolveResource(testId)
     const modelId = await this.resources.ensureLoaded(resourceKey)
+
+    if (testId === 'parakeet-unified-coreml-ios') {
+      const info = await getModelInfo({ name: PARAKEET_UNIFIED_0_6B_Q4_0.name })
+      const suffixes = [
+        'analytics/coremldata.bin',
+        'coremldata.bin',
+        'metadata.json',
+        'model.mil',
+        'weights/weight.bin'
+      ]
+      const bundleRoot = 'parakeet-unified-en-0.6b-encoder.mlmodelc/'
+      const missing = suffixes.filter(
+        (suffix) =>
+          !info.cacheFiles.some(
+            (file) => file.isCached && file.path.includes(bundleRoot + suffix)
+          )
+      )
+      if (!info.isCached || missing.length > 0) {
+        return {
+          passed: false,
+          output: `Core ML bundle incomplete in iOS cache: ${missing.join(', ') || 'model not cached'}`
+        }
+      }
+    }
 
     const audio = await this.loadAudioAssets()
     const assetModule = audio[p.audioFileName]
@@ -51,8 +82,19 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTe
         return validateParakeetSegments(segments)
       }
 
-      const text = await transcribe({ modelId, audioChunk: audioUri })
+      const operation = transcribe({ modelId, audioChunk: audioUri })
+      const text = await operation
       const trimmedText = text.trim()
+
+      if (testId === 'parakeet-unified-coreml-ios') {
+        const stats = await operation.stats
+        if (stats?.encoderOnCoreml !== 1 || stats.encoderUsedCoreml !== 1) {
+          return {
+            passed: false,
+            output: `Expected Core ML encoder use during batch transcription, got ${JSON.stringify(stats)}`
+          }
+        }
+      }
 
       if (exp.validation === 'throws-error') {
         return { passed: false, output: 'Expected error but transcription succeeded' }

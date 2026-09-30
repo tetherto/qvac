@@ -2103,20 +2103,7 @@
                               "enum": {
                                 "type": "array",
                                 "items": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "boolean"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "number", "boolean", "null"]
                                 }
                               }
                             },
@@ -2686,7 +2673,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -2978,7 +2969,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -3299,20 +3294,7 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
@@ -3926,20 +3908,7 @@
                         "enum": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "boolean"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "number", "boolean", "null"]
                           }
                         }
                       },
@@ -15118,14 +15087,7 @@
                     },
                     "max_vram": {
                       "description": "VRAM budget in GiB for diffusion and video graph-cut execution. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0.",
-                      "anyOf": [
-                        {
-                          "type": "number"
-                        },
-                        {
-                          "type": "string"
-                        }
-                      ]
+                      "type": ["number", "string"]
                     },
                     "stream_layers": {
                       "description": "Prefetch and evict diffusion layers from CPU RAM in diffusion and video mode. Only takes effect with graph cutting enabled by max_vram and CPU diffusion parameter residency. Does not stream from disk; use params_backend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -16341,14 +16303,7 @@
                         },
                         "maxVram": {
                           "description": "VRAM budget in GiB for the walk DiT graph. Positive values set a budget; negative values use free VRAM minus the absolute value as headroom; 0 disables graph cutting. Accepts per-device assignments such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the history KV cache and the decoder allocate on top of it. Default: 0.",
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ]
+                          "type": ["number", "string"]
                         },
                         "streamLayers": {
                           "description": "Prefetch and evict DiT layers from CPU RAM. Only takes effect with GPU execution, graph cutting enabled by maxVram, and CPU parameter residency for diffusion. Does not stream from disk; use paramsBackend: 'diffusion=disk' for on-demand file reads. Default: false.",
@@ -18563,7 +18518,10 @@
                   {
                     "type": "number"
                   }
-                ]
+                ],
+                "items": false,
+                "minItems": 4,
+                "maxItems": 4
               },
               "confidence": {
                 "type": "number"
@@ -19998,7 +19956,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
@@ -20392,7 +20354,11 @@
               "type": "number"
             },
             "encoderOnCoreml": {
-              "description": "Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.",
+              "description": "Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.",
+              "type": "number"
+            },
+            "encoderUsedCoreml": {
+              "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
               "type": "number"
             }
           },
