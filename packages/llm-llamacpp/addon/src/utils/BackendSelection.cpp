@@ -437,7 +437,15 @@ resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
     std::ranges::transform(id, id.begin(), [](unsigned char c) {
       return static_cast<char>(std::tolower(c));
     });
-    if (id == want.id) {
+    const size_t virtualSuffix = id.find("-v", want.id.size());
+    const bool samePhysicalId =
+        virtualSuffix == want.id.size() &&
+        id.compare(0, virtualSuffix, want.id) == 0 &&
+        virtualSuffix + 2 < id.size() &&
+        std::ranges::all_of(id.substr(virtualSuffix + 2), [](unsigned char c) {
+          return std::isdigit(c) != 0;
+        });
+    if (id == want.id || samePhysicalId) {
       matches.push_back(i);
     }
   }
@@ -1965,7 +1973,8 @@ backend_selection::splitModeDeviceNamesDetailed(
   }
 
   if ((registries.size() < 2 && !excludedByConstraints &&
-       !constraints.requireExplicitDeviceList) ||
+       !constraints.requireExplicitDeviceList &&
+       constraints.requiredBackendFamilies.empty()) ||
       selectedRegistry.empty()) {
     return {};
   }

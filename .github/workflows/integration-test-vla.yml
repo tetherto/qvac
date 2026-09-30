@@ -461,24 +461,8 @@ jobs:
           GROOT_TEST_ACTIVATIONS_V4: ${{ !(matrix.platform == 'darwin' && matrix.arch == 'x64') && format('{0}/{1}/test/groot-oracle/activations_v4.safetensors', github.workspace, env.WORKDIR) || '' }}
           QVAC_VLA_EXPECTED_BACKEND: ${{ matrix.expected_backend }}
         run: |
-          set +e
-          # Stream test output AND capture it so we can inspect the TAP summary
-          # if the process exits with a non-zero code. Some GPU configurations
-          # (qvac-ubuntu2404-x64-gpu with NVIDIA RTX 4000 SFF Ada + Vulkan)
-          # crash with SIGSEGV (exit code 139) during static-destructor teardown
-          # AFTER all tests have passed. Tolerate that specific case, but surface
-          # any real failure.
-          TESTLOG=$(mktemp)
-          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee "$TESTLOG"
-          EXIT=${PIPESTATUS[0]}
-          if [ "$EXIT" -eq 0 ]; then
-            exit 0
-          fi
-          if [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' "$TESTLOG" && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' "$TESTLOG"; then
-            echo "::warning::Tests all passed but process crashed at teardown with SIGSEGV (exit 139) on $(uname -srvmo). Known ggml/Vulkan static-destructor issue; treating as pass."
-            exit 0
-          fi
-          exit "$EXIT"
+          set -o pipefail
+          npm run test:integration ${{ matrix.platform }}-${{ matrix.arch }} 2>&1 | tee integration-test.log
 
       - name: Verify Vulkan fallback selection
         if: ${{ matrix.force_vulkan == 'true' }}
@@ -491,20 +475,23 @@ jobs:
           CUDA_VISIBLE_DEVICES: '-1'
         run: |
           npm run build:ts
-          set +e
-          TESTLOG=$(mktemp)
-          bare test/integration/backend-selection.test.js --exit 2>&1 | tee "$TESTLOG"
-          EXIT=${PIPESTATUS[0]}
-          if [ "$EXIT" -eq 0 ]; then
-            exit 0
-          fi
-          if [ "$EXIT" -eq 139 ] && grep -qE '^# ok$' "$TESTLOG" && grep -qE '^# tests = [0-9]+/[0-9]+ pass$' "$TESTLOG"; then
-            echo "::warning::Backend selection passed but the process crashed at teardown with SIGSEGV (exit 139) on $(uname -srvmo). Known ggml/Vulkan static-destructor issue; treating as pass."
-            exit 0
-          fi
-          exit "$EXIT"
+          set -o pipefail
+          bare test/integration/backend-selection.test.js --exit 2>&1 | tee backend-selection-test.log
+
+      - name: Verify explicit Vulkan override with CUDA visible
+        if: ${{ matrix.platform == 'linux' && matrix.arch == 'x64' && matrix.expected_backend == 'cuda' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          QVAC_VLA_MODEL: ${{ github.workspace }}/${{ env.WORKDIR }}/model/vla/smolvla-libero-vision-q8.gguf
+          QVAC_VLA_BACKEND_SELECTION_SMOKE: 'true'
+          QVAC_VLA_REQUESTED_BACKEND: vulkan
+          QVAC_VLA_EXPECTED_BACKEND: vulkan
+          QVAC_VLA_BACKEND_LOAD_ONLY: 'true'
+        run: bare test/integration/backend-selection.test.js --exit
 
       - name: Run integration test (Windows)
+        if: ${{ matrix.platform == 'win32' }}
         if: ${{ matrix.platform == 'win32' }}
         working-directory: ${{ env.WORKDIR }}
         shell: powershell
