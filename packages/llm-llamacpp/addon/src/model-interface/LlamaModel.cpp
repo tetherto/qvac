@@ -246,6 +246,33 @@ void LlamaModel::init(bool acquireLock) {
       std::move(llamaInit));
 
   if (snap->llmContext_) {
+    std::string placedDevices;
+    if (runtimeBackendDevice_ == 1) {
+      for (ggml_backend_dev_t device : params.devices) {
+        if (device == nullptr) {
+          break;
+        }
+        if (!placedDevices.empty()) {
+          placedDevices += ',';
+        }
+        placedDevices += ggml_backend_dev_name(device);
+      }
+      std::transform(
+          placedDevices.begin(),
+          placedDevices.end(),
+          placedDevices.begin(),
+          [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+          });
+    }
+    const std::string selectionLog =
+        "[backend-selection] selected=" +
+        (placedDevices.empty()
+             ? std::string(runtimeBackendDevice_ == 0 ? "none" : "unknown")
+             : placedDevices) +
+        " path=final";
+    LlamaModel::llamaLogCallback(
+        GGML_LOG_LEVEL_INFO, selectionLog.c_str(), nullptr);
     snap->cacheManager_.emplace(
         snap->llmContext_.get(),
         [this](bool resetStats) { this->resetState(resetStats); });

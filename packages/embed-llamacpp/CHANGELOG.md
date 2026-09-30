@@ -16,8 +16,9 @@
 
 ### Changed
 
-- **Breaking (logs):** backend selection emits one structured
-  `[backend-selection] selected=… registry=… path=… skipped=…` line in place of
+- **Breaking (logs):** backend selection emits a candidate line with
+  `[backend-selection] candidate=… registry=… path=… skipped=…`, then a
+  `selected=… path=final` line after model initialization, in place of
   the previous prose (`Chosen GPU CUDA`, `Chosen CPU`, …), matching
   `@qvac/llm-llamacpp` so one log grep works across both. Not an API, but
   anything matching those strings needs updating.

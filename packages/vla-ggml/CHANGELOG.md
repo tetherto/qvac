@@ -4,8 +4,9 @@
 
 ### Changed
 
-- **Breaking (logs):** backend selection emits one structured
-  `[backend-selection] selected=… path=… skipped=…` line in place of the previous
+- **Breaking (logs):** backend selection emits a candidate line with
+  `[backend-selection] candidate=… path=… skipped=…`, then a
+  `selected=… path=final` line after backend initialization, in place of the previous
   prose (`preferring CUDA GPU`, `… selected by backend override`), matching
   `@qvac/llm-llamacpp` and `@qvac/embed-llamacpp` so one log grep answers "what
   did this load run on" across all three addons. Not an API, but anything

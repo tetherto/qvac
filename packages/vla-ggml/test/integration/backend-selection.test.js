@@ -21,11 +21,21 @@ test('integration: NVIDIA backend selection', { timeout: 1800000 }, async (t) =>
   t.ok(modelPath && fs.existsSync(modelPath), 'SmolVLA model is available')
   if (!modelPath || !fs.existsSync(modelPath)) return
 
-  const model = new VlaModel({ files: { model: [path.resolve(modelPath)] } })
+  const nativeLog = []
+  const collect = (...args) => nativeLog.push(args.join(' '))
+  const model = new VlaModel({
+    files: { model: [path.resolve(modelPath)] },
+    logger: { error: collect, warn: collect, info: collect, debug: collect }
+  })
+  model.logger.setLevel('debug')
   try {
     await model.load({ backend: process.env.QVAC_VLA_REQUESTED_BACKEND || 'auto' })
     t.ok(model.backendName, 'backend name resolved')
     t.ok(model.backendName.toLowerCase().includes(expectedBackend), `${expectedBackend} selected`)
+    const selected = nativeLog.filter((line) => /\[backend-selection\] selected=/.test(line))
+    t.is(selected.length, 1, 'final backend selection logged once')
+    const selectedName = selected[0]?.match(/selected=([^\s]+)/)?.[1]
+    t.ok(selectedName && model.backendName.toLowerCase().includes(selectedName.toLowerCase()), 'final log matches backendName')
 
     if (process.env.QVAC_VLA_BACKEND_LOAD_ONLY === 'true') return
 

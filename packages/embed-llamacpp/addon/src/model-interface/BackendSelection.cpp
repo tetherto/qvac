@@ -530,12 +530,12 @@ const char* selectionPathName(backend_selection::SelectionPath path) {
   return "unknown";
 }
 
-/// The one line that says what selection decided and why. Same format as
-/// llm-llamacpp's, so one log grep works across both addons. QVAC-23763.
+/// Record the candidate and why it won this stage. Final placement is logged
+/// after model initialization.
 void emitSelectionLog(
     const BackendInterface& bckI, const backend_selection::SelectionTrace& t) {
   std::string text = string_format(
-      "[backend-selection] selected=%s registry=%s path=%s",
+      "[backend-selection] candidate=%s registry=%s path=%s",
       t.selectedName.empty() ? "none" : t.selectedName.c_str(),
       t.selectedRegistry.empty() ? "-" : t.selectedRegistry.c_str(),
       ::selectionPathName(t.path));

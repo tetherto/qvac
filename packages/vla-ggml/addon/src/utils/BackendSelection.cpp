@@ -283,7 +283,7 @@ ggml_backend_dev_t pickBestGpuDevice(
         if (backendNameMatchesFamily(backendLower, family)) {
           QLOG_IF(
               Priority::INFO,
-              "[backend-selection] selected=" + backendLower +
+              "[backend-selection] candidate=" + backendLower +
                   " path=override skipped=none");
           return dev;
         }
@@ -327,9 +327,7 @@ ggml_backend_dev_t pickBestGpuDevice(
             acceptedNames);
   }
 
-  // QVAC-23763: same [backend-selection] shape as llm-llamacpp and
-  // embed-llamacpp, so one grep answers "what did this load run on" across all
-  // three addons.
+  // Log the candidate here. The caller logs the selected backend after init.
   //
   // No skipped_reason field here: this picker has no per-candidate exclusion
   // reasons. Its one filter is the Adreno gate, which logs each rejection as it
@@ -347,7 +345,7 @@ ggml_backend_dev_t pickBestGpuDevice(
   if (adrenoOpenClDev != nullptr) {
     QLOG_IF(
         Priority::INFO,
-        "[backend-selection] selected=" + nameOf(adrenoOpenClDev) +
+        "[backend-selection] candidate=" + nameOf(adrenoOpenClDev) +
             " path=cascade skipped=none");
     return adrenoOpenClDev;
   }
@@ -358,7 +356,7 @@ ggml_backend_dev_t pickBestGpuDevice(
   if (cudaDev != nullptr) {
     QLOG_IF(
         Priority::INFO,
-        "[backend-selection] selected=" + nameOf(cudaDev) +
+        "[backend-selection] candidate=" + nameOf(cudaDev) +
             " path=cascade skipped=none (HIP and Vulkan are fallbacks)");
     return cudaDev;
   }
@@ -366,7 +364,7 @@ ggml_backend_dev_t pickBestGpuDevice(
   if (hipDev != nullptr) {
     QLOG_IF(
         Priority::INFO,
-        "[backend-selection] selected=" + nameOf(hipDev) +
+        "[backend-selection] candidate=" + nameOf(hipDev) +
             " path=cascade skipped=none (Vulkan is fallback)");
     return hipDev;
   }
@@ -374,15 +372,28 @@ ggml_backend_dev_t pickBestGpuDevice(
   if (fallbackGpu != nullptr) {
     QLOG_IF(
         Priority::INFO,
-        "[backend-selection] selected=" + nameOf(fallbackGpu) +
+        "[backend-selection] candidate=" + nameOf(fallbackGpu) +
             " path=cascade skipped=none");
   } else {
     // The caller falls back to the CPU backend from here.
     QLOG_IF(
         Priority::INFO,
-        "[backend-selection] selected=none path=cpu skipped=none");
+        "[backend-selection] candidate=none path=cpu skipped=none");
   }
   return fallbackGpu;
+}
+
+void logSelectedBackend(ggml_backend_t backend) {
+  using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
+  const ggml_backend_dev_t device = ggml_backend_get_device(backend);
+  const char* name =
+      device != nullptr ? ggml_backend_dev_name(device) : nullptr;
+  const bool isCpu = device == nullptr || ggml_backend_dev_type(device) ==
+                                              GGML_BACKEND_DEVICE_TYPE_CPU;
+  QLOG_IF(
+      Priority::INFO,
+      std::string("[backend-selection] selected=") +
+          (isCpu || name == nullptr ? "none" : name) + " path=final");
 }
 
 } // namespace vla_backend_selection

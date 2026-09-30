@@ -85,4 +85,6 @@ ggml_backend_dev_t pickBestGpuDevice(
     const std::vector<std::string>& backendOverride = {},
     bool backendRequired = false);
 
+void logSelectedBackend(ggml_backend_t backend);
+
 } // namespace vla_backend_selection

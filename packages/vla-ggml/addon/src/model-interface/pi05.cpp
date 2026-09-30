@@ -1168,6 +1168,7 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
         Priority::INFO,
         "pi05LoadModel: forceCpu=true — skipping GPU selection");
   }
+  vla_backend_selection::logSelectedBackend(m->backend);
 
   // GPU path: no_alloc=true so the GGUF loader doesn't mmap; we then
   // allocate a backend (device) buffer via pi05LoadWeightsAllocCopy

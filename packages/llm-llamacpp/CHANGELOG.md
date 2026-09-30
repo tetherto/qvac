@@ -241,8 +241,9 @@ This release migrates the addon off its bundled, statically-linked `qvac-fabric`
 
 ### Changed
 
-- **Breaking (logs):** backend selection emits one structured
-  `[backend-selection] selected=… registry=… path=… skipped=…` line in place of
+- **Breaking (logs):** backend selection emits a candidate line with
+  `[backend-selection] candidate=… registry=… path=… skipped=…`, then a
+  `selected=… path=final` line after model initialization, in place of
   the previous prose (`Chosen GPU CUDA`, `Chosen %s Backend (backend override)`,
   `Chosen CPU`). Not an API, but anything matching those strings needs updating.
   The named fields make which backend won, and why a higher-priority one did

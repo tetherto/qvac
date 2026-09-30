@@ -519,8 +519,9 @@ TEST_F(BackendSelectionTest, OpenClRegistryDeviceLandsInOpenClBucket) {
   mockBackend.addDevice(createIGPUDevice(ADRENO_DESC, VULKAN0_BACK));
   expectChosen(mockBackend, BackendType::GPU, "adreno0");
   EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
-    return log.second == "[backend-selection] selected=adreno0 registry=OpenCL "
-                         "path=cascade skipped=none";
+    return log.second ==
+           "[backend-selection] candidate=adreno0 registry=OpenCL "
+           "path=cascade skipped=none";
   }));
 }
 
