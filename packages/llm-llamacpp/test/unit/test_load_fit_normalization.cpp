@@ -517,7 +517,7 @@ TEST_F(LoadFitNormalizationTest, RuntimeStatsDescribeTheFinalSplitBackend) {
           backend_selection::ExclusionReason::KvCacheTypeUnsupported));
 }
 
-TEST_F(LoadFitNormalizationTest, EmptySplitReportsCpuAndKeepsSkipReason) {
+TEST_F(LoadFitNormalizationTest, EmptySplitReportsCpuWithoutStaleSkipReason) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
   lfn::SelectedBackend selected{
@@ -537,8 +537,7 @@ TEST_F(LoadFitNormalizationTest, EmptySplitReportsCpuAndKeepsSkipReason) {
       static_cast<int64_t>(backend_selection::BackendFamilyCode::Cpu));
   EXPECT_EQ(
       result.runtimeBackendSkipReason,
-      static_cast<int64_t>(
-          backend_selection::ExclusionReason::KvCacheTypeUnsupported));
+      static_cast<int64_t>(backend_selection::ExclusionReason::None));
 }
 
 TEST_F(

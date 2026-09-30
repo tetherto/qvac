@@ -2480,12 +2480,12 @@ TEST_F(
 
 TEST_F(BackendSelectionTest, BackendFamilyCodeOfClassifiesEachFamily) {
   EXPECT_EQ(
-      backendFamilyCodeOf(BackendType::GPU, "cuda0"), BackendFamilyCode::Cuda);
+      backendFamilyCodeOf(BackendType::GPU, "CUDA0"), BackendFamilyCode::Cuda);
   EXPECT_EQ(
-      backendFamilyCodeOf(BackendType::GPU, "vulkan1"),
+      backendFamilyCodeOf(BackendType::GPU, "Vulkan1"),
       BackendFamilyCode::Vulkan);
   EXPECT_EQ(
-      backendFamilyCodeOf(BackendType::GPU, "gpuopencl"),
+      backendFamilyCodeOf(BackendType::GPU, "GPUOpenCL"),
       BackendFamilyCode::OpenCl);
   // ggml-hip reports "ROCm%d"; both spellings land on the same family.
   EXPECT_EQ(

@@ -1567,6 +1567,9 @@ NormalizedLoad normalizeLoadForFit(
             anyDevice(&backend_selection::SplitDevice::isOpenCl);
         selected.isMetal = anyDevice(&backend_selection::SplitDevice::isMetal);
       } else {
+        // The split filter, not the earlier single-device cascade, caused
+        // this CPU fallback. Do not report the earlier device's skip reason.
+        selectionSkipReason = ExclusionReason::None;
         if (!splitSelection.rejectedDevices.empty()) {
           std::string rejected;
           for (const std::string& device : splitSelection.rejectedDevices) {

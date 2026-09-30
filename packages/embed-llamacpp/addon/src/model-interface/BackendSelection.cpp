@@ -585,7 +585,8 @@ constexpr std::string_view K_BACKEND_TRIM = " \t\r\n\v\f";
 /// some builds report "mtl..." instead of "Metal", which BertModel already
 /// special-cases the same way.
 bool backendNameMatchesFamily(
-    const std::string& lowercasedBackendName, std::string_view family) {
+    const std::string& backendName, std::string_view family) {
+  const std::string lowercasedBackendName = lowerCopy(backendName.c_str());
   if (lowercasedBackendName.find(family) != std::string::npos) {
     return true;
   }
