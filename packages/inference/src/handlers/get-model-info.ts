@@ -14,6 +14,7 @@ import { validateAndJoinPath } from '@/utils/path-security'
 import { ModelNotFoundError } from '@/errors/index'
 import {
   findParakeetCoremlCompanionSet,
+  findLocallyCachedParakeetCoremlCompanionSet,
   getParakeetCoremlBundleSpecs,
   getParakeetCoremlSetKey
 } from '@/handlers/load-model/parakeet-coreml'
@@ -116,26 +117,27 @@ export async function handleGetModelInfo(
 async function handleOptionalCoremlModel(model: RegistryItem): Promise<CacheStatusResult> {
   const platform = getRuntimeContext().platform
   if (getParakeetCoremlBundleSpecs(model.registryPath, model.registrySource, platform)) {
-    const filename = model.registryPath.split('/').pop() || model.registryPath
-    const primaryPath = validateAndJoinPath(
-      getModelsCacheDir(),
-      'sets',
-      getParakeetCoremlSetKey(model),
-      filename
-    )
+    const cachedSet = await findLocallyCachedParakeetCoremlCompanionSet(model, platform)
+    if (cachedSet) {
+      const cachedStatus = await handleCompanionSetModel(cachedSet, model.registryPath, model.addon)
+      if (cachedStatus.isCached) return cachedStatus
+    }
 
-    // Only consult the registry if this model has a local Core ML set. Plain
-    // GGUF cache checks remain offline and keep their existing behavior.
     try {
+      const filename = model.registryPath.split('/').pop() || model.registryPath
+      const primaryPath = validateAndJoinPath(
+        getModelsCacheDir(),
+        'sets',
+        getParakeetCoremlSetKey(model),
+        filename
+      )
       await fsPromises.access(primaryPath)
       const set = await findParakeetCoremlCompanionSet(await getRegistryClient(), model, platform)
       if (set) {
         const status = await handleCompanionSetModel(set, model.registryPath, model.addon)
         if (status.isCached) return status
       }
-    } catch {
-      // The registry may be unavailable while inspecting a previously loaded model.
-    }
+    } catch {}
   }
 
   return handleSingleFileModel(model.registryPath, model.expectedSize, model.sha256Checksum)

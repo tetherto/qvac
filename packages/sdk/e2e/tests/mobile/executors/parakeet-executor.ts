@@ -56,9 +56,7 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTe
       const bundleRoot = 'parakeet-unified-en-0.6b-encoder.mlmodelc/'
       const missing = suffixes.filter(
         (suffix) =>
-          !info.cacheFiles.some(
-            (file) => file.isCached && file.path.includes(bundleRoot + suffix)
-          )
+          !info.cacheFiles.some((file) => file.isCached && file.path.includes(bundleRoot + suffix))
       )
       if (!info.isCached || missing.length > 0) {
         return {

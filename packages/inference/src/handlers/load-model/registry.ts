@@ -27,7 +27,9 @@ import {
 import { downloadCompanionSetFromRegistry } from '@/handlers/load-model/registry-companion-set'
 import {
   findParakeetCoremlCompanionSet,
-  getParakeetCoremlBundleSpecs
+  findLocallyCachedParakeetCoremlCompanionSet,
+  getParakeetCoremlBundleSpecs,
+  writeCachedParakeetCoremlCompanionSet
 } from '@/handlers/load-model/parakeet-coreml'
 import {
   DownloadCancelledError,
@@ -366,7 +368,33 @@ export async function downloadModelFromRegistry(
         modelMetadata &&
         getParakeetCoremlBundleSpecs(registryPath, registrySource, getRuntimeContext().platform)
       ) {
+        const companionHooks: DownloadHooks = {
+          ...hooks,
+          markCacheHit: () => {
+            hooks?.markCacheHit?.()
+            ctx.setCacheHit(true)
+          },
+          markCacheMiss: () => {
+            hooks?.markCacheMiss?.()
+            ctx.setCacheHit(false)
+          }
+        }
         try {
+          const cachedSet = await findLocallyCachedParakeetCoremlCompanionSet(
+            modelMetadata,
+            getRuntimeContext().platform
+          )
+          if (cachedSet) {
+            return await downloadCompanionSetFromRegistry({
+              companionSet: cachedSet,
+              downloadKey,
+              progressCallback: ctx.broadcastProgress,
+              signal: ctx.signal,
+              hooks: companionHooks,
+              shouldClearCache: ctx.shouldClearCache
+            })
+          }
+
           const client = await getRegistryClient()
           const coremlSet = await findParakeetCoremlCompanionSet(
             client,
@@ -374,18 +402,7 @@ export async function downloadModelFromRegistry(
             getRuntimeContext().platform
           )
           if (coremlSet) {
-            const companionHooks: DownloadHooks = {
-              ...hooks,
-              markCacheHit: () => {
-                hooks?.markCacheHit?.()
-                ctx.setCacheHit(true)
-              },
-              markCacheMiss: () => {
-                hooks?.markCacheMiss?.()
-                ctx.setCacheHit(false)
-              }
-            }
-            return await downloadCompanionSetFromRegistry({
+            const modelPath = await downloadCompanionSetFromRegistry({
               companionSet: coremlSet,
               downloadKey,
               progressCallback: ctx.broadcastProgress,
@@ -393,6 +410,12 @@ export async function downloadModelFromRegistry(
               hooks: companionHooks,
               shouldClearCache: ctx.shouldClearCache
             })
+            try {
+              await writeCachedParakeetCoremlCompanionSet(modelMetadata, coremlSet)
+            } catch (error) {
+              logger.warn('Unable to save Core ML cache metadata', { registryPath, error })
+            }
+            return modelPath
           }
         } catch (error) {
           if (ctx.signal.aborted || error instanceof DownloadCancelledError) {

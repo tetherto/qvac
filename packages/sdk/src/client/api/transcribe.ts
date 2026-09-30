@@ -84,6 +84,14 @@ export function transcribe(
   params: TranscribeClientParams,
   options?: RPCOptions
 ): TranscribeCall<string | TranscribeSegment[]> {
+  return createTranscribeCall(params, options)
+}
+
+export function createTranscribeCall(
+  params: TranscribeClientParams,
+  options?: RPCOptions,
+  responseStream: typeof stream = stream
+): TranscribeCall<string | TranscribeSegment[]> {
   // Client-generated id surfaced synchronously on the returned promise
   // — same shape as `loadModel` / `downloadAsset` / `completion`. The
   // CLI cancel bridge in `qvac serve` binds `req.on('close')` to
@@ -97,7 +105,7 @@ export function transcribe(
     rejectStats = reject
   })
   stats.catch(() => {})
-  const inner = runTranscribe(params, requestId, options, resolveStats)
+  const inner = runTranscribe(params, requestId, options, resolveStats, responseStream)
   inner.then(() => resolveStats(undefined), rejectStats)
   return decoratePromise(inner, { requestId, stats })
 }
@@ -106,13 +114,14 @@ async function runTranscribe(
   params: TranscribeClientParams,
   requestId: string,
   options: RPCOptions | undefined,
-  onStats: (stats: TranscribeStats | undefined) => void
+  onStats: (stats: TranscribeStats | undefined) => void,
+  responseStream: typeof stream
 ): Promise<string | TranscribeSegment[]> {
   const request = buildTranscribeRequest(params, requestId)
 
   if (params.metadata === true) {
     const segments: TranscribeSegment[] = []
-    for await (const response of stream(request, options)) {
+    for await (const response of responseStream(request, options)) {
       if (response.type === 'transcribe') {
         const parsed = transcribeResponseSchema.parse(response)
 
@@ -130,7 +139,7 @@ async function runTranscribe(
   }
 
   let fullText = ''
-  for await (const response of stream(request, options)) {
+  for await (const response of responseStream(request, options)) {
     if (response.type === 'transcribe') {
       const parsed = transcribeResponseSchema.parse(response)
 

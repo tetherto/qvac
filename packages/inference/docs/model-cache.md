@@ -17,8 +17,9 @@ operations over its worker transport.
 
 Apple Parakeet loads with available Core ML encoder bundles use the existing
 `sets/<setKey>/` cache layout. The GGUF and each `.mlmodelc` directory live in
-that set, so `clearStorage` removes them together. When a sidecar is absent or
-unavailable, the GGUF uses its ordinary single-file cache path.
+that set with companion metadata used to reopen the set without registry access,
+so `clearStorage` removes them together. When a sidecar is absent or unavailable,
+the GGUF uses its ordinary single-file cache path.
 
 The current schemas and handlers are authoritative for supported fields and model
 types. Do not maintain a second field inventory here.
