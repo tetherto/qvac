@@ -49,6 +49,54 @@ set(QVAC_BARE_MAKE_TOOLCHAIN_FILE "${_qvac_bare_make_toolchain}" CACHE FILEPATH
   "bare-make toolchain forwarded to ExternalProject host tools" FORCE)
 message(STATUS "${_qvac_bare_make_label}: using bare-make toolchain ${QVAC_BARE_MAKE_TOOLCHAIN_FILE}")
 
+# bare-make's win32 toolchain asks `node` for the clang-cl path. On Windows,
+# CMake's execute_process runs an npm .cmd shim through cmd.exe, and the
+# shim's "%_prog%" line becomes a program named `"node"` (quotes included).
+# Fill the tool cache from the llvm-runtime .exe files so that lookup is
+# skipped. If a tool is missing, still force node.exe so the fallback spawn
+# is not a .cmd.
+if(_qvac_bare_make_toolchain_name MATCHES "^win32-(x64|arm64)\\.cmake$")
+  set(_qvac_win_arch "${CMAKE_MATCH_1}")
+  if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+    find_program(_qvac_node_exe NAMES node.exe)
+    if(_qvac_node_exe)
+      set(node "${_qvac_node_exe}" CACHE FILEPATH "node.exe used to resolve llvm-runtime" FORCE)
+    endif()
+  endif()
+
+  # cmake-toolchains and the llvm-runtime packages are siblings under node_modules.
+  get_filename_component(_qvac_llvm_modules "${_qvac_bare_make_toolchain}" DIRECTORY)
+  get_filename_component(_qvac_llvm_modules "${_qvac_llvm_modules}" DIRECTORY)
+  set(_qvac_clang_bin "${_qvac_llvm_modules}/llvm-runtime-clang-win32-${_qvac_win_arch}/bin")
+  set(_qvac_lld_bin "${_qvac_llvm_modules}/llvm-runtime-lld-win32-${_qvac_win_arch}/bin")
+  set(_qvac_resource_dir "${_qvac_llvm_modules}/llvm-runtime-resources-win32")
+
+  foreach(_qvac_tool IN ITEMS
+      clang-cl llvm-lib llvm-ml64 llvm-mt llvm-nm llvm-objdump
+      llvm-ranlib llvm-rc llvm-strip llvm-symbolizer)
+    if(EXISTS "${_qvac_clang_bin}/${_qvac_tool}.exe")
+      set("${_qvac_tool}" "${_qvac_clang_bin}/${_qvac_tool}.exe"
+        CACHE FILEPATH "llvm-runtime ${_qvac_tool}" FORCE)
+    endif()
+  endforeach()
+  if(EXISTS "${_qvac_lld_bin}/lld-link.exe")
+    set(lld-link "${_qvac_lld_bin}/lld-link.exe"
+      CACHE FILEPATH "llvm-runtime lld-link" FORCE)
+  endif()
+  if(EXISTS "${_qvac_resource_dir}")
+    set(llvm_resource_dir "${_qvac_resource_dir}"
+      CACHE PATH "llvm-runtime resource directory" FORCE)
+  endif()
+
+  unset(_qvac_win_arch)
+  unset(_qvac_node_exe)
+  unset(_qvac_llvm_modules)
+  unset(_qvac_clang_bin)
+  unset(_qvac_lld_bin)
+  unset(_qvac_resource_dir)
+  unset(_qvac_tool)
+endif()
+
 include("${QVAC_BARE_MAKE_TOOLCHAIN_FILE}")
 
 # CMAKE_LINKER_TYPE applies to every language enabled later. bare-make sets
