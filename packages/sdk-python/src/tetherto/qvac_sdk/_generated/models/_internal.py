@@ -942,7 +942,7 @@ class AudioGenStreamRequest(GeneratedBaseModel):
         int | None,
         Field(
             alias="inferenceSteps",
-            description="MiniMax flow steps for this generation; 0 uses the model default. MiniMax only; rejected by ACE-Step.",
+            description="MiniMax flow steps for this generation; 0 uses the engine default (20). MiniMax only; rejected by ACE-Step.",
             ge=0,
             le=1000,
         ),
@@ -18116,7 +18116,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
         int | None,
         Field(
             alias="inferenceSteps",
-            description="MiniMax flow sampling steps; `0` uses the model default.",
+            description="MiniMax flow sampling steps; `0` uses the engine default (20).",
             ge=0,
             le=1000,
         ),
