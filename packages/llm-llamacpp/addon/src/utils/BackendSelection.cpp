@@ -369,8 +369,8 @@ void tryEmplaceDevice(
 /// Resolve a backend-qualified or bus-id `main-gpu` to device indices.
 ///
 /// Scans rather than indexes: that is what makes these forms stable against
-/// backend load order. Returns empty and warns when nothing matches, so the
-/// caller can fall through to the full enumeration. A bus id keeps every
+/// backend load order. A missing match is an error: falling through could run
+/// on a different GPU. A bus id keeps every
 /// backend representation of that physical device so `backend` can choose.
 std::vector<size_t>
 resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
@@ -381,7 +381,11 @@ resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
     int seen = 0;
     for (size_t i = 0; i < deviceCount; ++i) {
       const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
-      std::string name = bckI.ggml_backend_dev_name(dev);
+      const char* namePtr = bckI.ggml_backend_dev_name(dev);
+      if (namePtr == nullptr) {
+        continue;
+      }
+      std::string name = namePtr;
       std::ranges::transform(name, name.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
       });
@@ -393,26 +397,22 @@ resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
       }
       ++seen;
     }
-    std::string msg = string_format(
-        "main-gpu '%s:%d' matched no device (%d %s device(s) present); using "
-        "the default device order instead",
+    const std::string msg = string_format(
+        "main-gpu '%s:%d' matched no device (%d %s device(s) present)",
         want.family.c_str(),
         want.index,
         seen,
         want.family.c_str());
-    bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, msg.c_str(), nullptr);
-    return {};
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, msg);
   }
 
   const MainGpuBusId& want = std::get<MainGpuBusId>(mainGpuValue);
   if (bckI.ggml_backend_dev_get_props == nullptr) {
-    bckI.llamaLogCallback(
-        GGML_LOG_LEVEL_WARN,
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
         "main-gpu was given a PCI bus id, but this build cannot read device "
-        "bus "
-        "ids; using the default device order instead",
-        nullptr);
-    return {};
+        "bus ids");
   }
   std::vector<size_t> matches;
   for (size_t i = 0; i < deviceCount; ++i) {
@@ -431,12 +431,9 @@ resolveNamedMainGpu(const BackendInterface& bckI, const MainGpu& mainGpuValue) {
   if (!matches.empty()) {
     return matches;
   }
-  std::string msg = string_format(
-      "main-gpu bus id '%s' matched no device; using the default device order "
-      "instead",
-      want.id.c_str());
-  bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, msg.c_str(), nullptr);
-  return {};
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      string_format("main-gpu bus id '%s' matched no device", want.id.c_str()));
 }
 
 /// Every device the request makes eligible, in ggml enumeration order.
@@ -480,18 +477,12 @@ Enumeration enumerateCandidates(
       // QVAC-23763: the two stable forms. Both resolve by scanning devices
       // rather than indexing, which is the whole point - an index is what
       // backend load order moves.
-      //
-      // Not found is a WARN and a fall-through to the full enumeration, exactly
-      // as an out-of-range integer behaves: the device may simply be absent on
-      // this machine, which is not a config error.
       const std::vector<size_t> resolved =
           ::resolveNamedMainGpu(bckI, mainGpuValue);
-      if (!resolved.empty()) {
-        for (const size_t index : resolved) {
-          ::tryEmplaceDevice(bckI, index, std::nullopt, out);
-        }
-        loopAllDevices = false;
+      for (const size_t index : resolved) {
+        ::tryEmplaceDevice(bckI, index, std::nullopt, out);
       }
+      loopAllDevices = false;
     }
   }
   for (size_t i = 0; loopAllDevices && i < bckI.ggml_backend_dev_count(); ++i) {
@@ -1532,7 +1523,8 @@ backend_selection::getSplitDeviceSelection(
     }
     const std::string deviceName = lowerCopy(namePtr);
     const bool isRpc = hasBackendFamily(deviceName, registryName, "rpc");
-    if (!isEligibleGpuDevice(bckI, dev, allowNonAdrenoOpenCl) ||
+    if ((isRpc && !constraints.requiredBackendFamilies.empty()) ||
+        !isEligibleGpuDevice(bckI, dev, allowNonAdrenoOpenCl) ||
         !deviceMeetsConstraints(bckI, dev, constraints) ||
         (!isRpc &&
          std::ranges::find(selectedNames, deviceName) == selectedNames.end())) {

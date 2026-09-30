@@ -8,7 +8,7 @@ export interface GGMLConfig {
     attention?: "causal" | "non-causal";
     embd_normalize?: NumericLike;
     flash_attn?: "on" | "off" | "auto";
-    /** Which GPU to use. A device index (e.g. '0') indexes ggml's full device list, whose order depends on which backends loaded, so adding CUDA moves it; the whole value must be an integer, so '1abc' is rejected. Prefer a backend-qualified index ('cuda:0') or a PCI bus id ('0000:65:00.0'), which are stable against backend order. A value matching no device warns and falls back to the default order. */
+    /** Which GPU to use. A device index (e.g. '0') indexes ggml's full device list, whose order depends on which backends loaded, so adding CUDA moves it; the whole value must be an integer, so '1abc' is rejected. Prefer a backend-qualified index ('cuda:0') or a PCI bus id ('0000:65:00.0'), which are stable against backend order. A qualified index or PCI bus id matching no device fails instead of selecting a different GPU. */
     "main-gpu"?: NumericLike | "integrated" | "dedicated" | string;
     /** Comma-separated GPU backend priority list, e.g. 'cuda,vulkan'. Accepted names: cuda, vulkan, metal, opencl, hip, rocm, sycl, plus auto for no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use device 'cpu' to run on CPU. */
     backend?: string;

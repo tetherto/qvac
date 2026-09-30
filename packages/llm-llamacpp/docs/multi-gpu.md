@@ -146,7 +146,7 @@ Selects which GPU to use. The behavior depends on the split mode:
 
 Accepts both `main-gpu` (hyphen) and `main_gpu` (underscore). Providing both throws an error. The string values are case-insensitive.
 
-A bare integer is not stable across backend changes. It indexes the raw registry, and adding a backend such as CUDA can move every index. Prefer a backend-qualified index or PCI bus id. These forms are resolved by scanning rather than indexing. If one matches no device, the addon warns and falls back to the default order.
+A bare integer is not stable across backend changes. It indexes the raw registry, and adding a backend such as CUDA can move every index. Prefer a backend-qualified index or PCI bus id. These forms are resolved by scanning rather than indexing. If one matches no device, the addon fails instead of selecting a different GPU.
 
 ## Distributed inference across machines (`rpc-servers`)
 

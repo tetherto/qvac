@@ -866,6 +866,10 @@ static void tryInitGpuBackend(
   }
   ggml_backend_t gpuBackend = ggml_backend_dev_init(gpu, nullptr);
   if (!gpuBackend) {
+    if (backendRequired) {
+      throw std::runtime_error(
+          "smolvla_load_model: required GPU backend initialization failed");
+    }
     return;
   }
   model.backend = gpuBackend;

@@ -1959,14 +1959,12 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedIsIndependentOfEnumerationOrder) {
       "cuda0");
 }
 
-TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeFallsThrough) {
+TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeThrows) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
-  // device 4 of the cuda family does not exist; selection warns and uses the
-  // default order rather than failing, as an out-of-range integer does
-  EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}).name,
-      "cuda0");
+  EXPECT_THROW(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}),
+      qvac_errors::StatusError);
 }
 
 TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
@@ -2001,21 +1999,19 @@ TEST_F(BackendSelectionTest, MainGpuShortBusIdSelectsMatchingDevice) {
       "cuda0");
 }
 
-TEST_F(BackendSelectionTest, MainGpuBusIdNotFoundFallsThrough) {
+TEST_F(BackendSelectionTest, MainGpuBusIdNotFoundThrows) {
   mockBackend.addDevice(
       withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
-  EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:ff:00.0"}).name,
-      "cuda0");
+  EXPECT_THROW(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:ff:00.0"}),
+      qvac_errors::StatusError);
 }
 
-// A backend that publishes no bus id cannot be addressed this way; falling
-// through beats failing a load over a device the caller may not have meant.
-TEST_F(BackendSelectionTest, MainGpuBusIdWithoutPublishedIdsFallsThrough) {
+TEST_F(BackendSelectionTest, MainGpuBusIdWithoutPublishedIdsThrows) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
-  EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:65:00.0"}).name,
-      "cuda0");
+  EXPECT_THROW(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:65:00.0"}),
+      qvac_errors::StatusError);
 }
 
 // ---- kvCacheTypeFromString ----
@@ -2231,6 +2227,8 @@ TEST_F(BackendSelectionTest, ExactMainGpuForcesSingleRegistryDeviceList) {
 }
 
 TEST_F(BackendSelectionTest, StrictBackendFiltersEverySplitDevice) {
+  mockBackend.addDevice(
+      MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
   mockBackend.addDevice(withDeviceId(
       createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
       "0000:01:00.0"));

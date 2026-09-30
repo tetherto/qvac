@@ -581,6 +581,41 @@ TEST_F(LoadFitNormalizationTest, StrictBackendConstrainsSplitDevices) {
   EXPECT_EQ(requiredFamilies, (std::vector<std::string>{"cuda"}));
 }
 
+TEST_F(LoadFitNormalizationTest, StrictBackendRejectsExplicitOtherFamily) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+  config["devices"] = "CUDA0,Vulkan0";
+
+  EXPECT_THROW(
+      lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend(
+              {.type = backend_selection::GPU, .name = "CUDA0"},
+              {"CUDA0", "Vulkan0"})),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, StrictBackendRejectsEmptySplit) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "cuda";
+  config["backend-required"] = "true";
+
+  EXPECT_THROW(
+      lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "CUDA0"}, {})),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
