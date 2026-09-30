@@ -2586,17 +2586,11 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodePropagatesRegistrationFailure) {
     selectionAttempted = true;
     return backend_selection::SplitDeviceSelection{};
   };
-  dependencies.resolveBackend =
-      [&selectionAttempted](
-          backend_selection::BackendType,
-          const std::optional<backend_selection::MainGpu>&,
-          const ModelMetaData&,
-          bool,
-          const std::vector<std::string>&) {
-        selectionAttempted = true;
-        return lfn::SelectedBackend{
-            .type = backend_selection::CPU, .name = "none"};
-      };
+  dependencies.resolveBackend = [&selectionAttempted](
+                                    const backend_selection::BackendRequest&) {
+    selectionAttempted = true;
+    return lfn::SelectedBackend{.type = backend_selection::CPU, .name = "none"};
+  };
 
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
