@@ -26,6 +26,23 @@ test('stripMultiGpuKeys: returns empty array and mutates nothing when no multi-G
   t.ok('gpu_layers' in config)
 })
 
+test('stripMultiGpuKeys: preserves diffusion backend and VRAM controls', (t) => {
+  // These select placement and memory budgets, not device enumeration or
+  // multi-GPU splitting, so they remain valid on a single-GPU mobile device.
+  const config: Record<string, unknown> = {
+    backend: 'gpu',
+    params_backend: 'diffusion=cpu',
+    max_vram: 6
+  }
+  const stripped = stripMultiGpuKeys(config)
+  t.alike([...stripped], [])
+  t.alike(config, {
+    backend: 'gpu',
+    params_backend: 'diffusion=cpu',
+    max_vram: 6
+  })
+})
+
 test('stripMultiGpuKeys: strips only the keys that are present', (t) => {
   const config: Record<string, unknown> = { 'tensor-split': '1,1', device: 'gpu' }
   const stripped = stripMultiGpuKeys(config)

@@ -22,7 +22,7 @@
 
 include_guard(GLOBAL)
 
-set(QVAC_ADDON_CMAKE_VERSION "0.1.0")
+set(QVAC_ADDON_CMAKE_VERSION "0.3.0")
 
 # ---------------------------------------------------------------------------
 # qvac_addon_preproject()
@@ -67,13 +67,19 @@ endmacro()
 # and Windows lean-headers defines. `.clang-format` / `.clang-tidy` are always
 # synced from lint-cpp; the valgrind suppression file and the pre-commit hook
 # are opt-in (most addons want them; a few historically didn't).
+#
+# This selects the C++ *library* on Linux but deliberately not how it is linked:
+# a target either imports the one runtime fabric owns
+# (qvac_addon_import_fabric_cxx_runtime) or carries its own
+# (qvac_addon_static_cxx_runtime), and that is a per-target choice the two
+# helpers make.
 # ---------------------------------------------------------------------------
 macro(qvac_addon_project_setup)
   cmake_parse_arguments(_QAPS "VALGRIND_SUPP;PRE_COMMIT_HOOK" "" "" ${ARGN})
 
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_compile_options(-stdlib=libc++)
-    add_link_options(-stdlib=libc++ -static-libstdc++)
+    add_link_options(-stdlib=libc++)
   endif()
 
   find_path(VCPKG_INSTALLED_PATH share/lint-cpp/.clang-format REQUIRED)
@@ -110,39 +116,194 @@ endmacro()
 #                            to the runtime-provided backendsDir before calling
 #                            ggml_backend_load_all_from_path().
 #
-# The ggml compute backends live in @qvac/fabric's own prebuilds and are loaded
-# once per process; the addon neither collects nor installs them.
+# The ggml compute backends live next to the fabric runtime and are loaded once
+# per process; the addon neither collects nor installs them.
 # ---------------------------------------------------------------------------
 macro(qvac_addon_use_fabric)
   set(qvac-fabric_DIR
       "${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake")
   find_package(qvac-fabric CONFIG REQUIRED)
-  include_bare_module("@qvac/fabric" qvac_fabric_target PREBUILD)
 
   bare_target(bare_target_value)
+  qvac_addon_fabric_layout("${bare_target_value}" "${CMAKE_CURRENT_SOURCE_DIR}"
+    _qvac_fabric_specifier _qvac_fabric_working_dir _qvac_fabric_prebuilds)
+  include_bare_module("${_qvac_fabric_specifier}" qvac_fabric_target PREBUILD
+    WORKING_DIRECTORY "${_qvac_fabric_working_dir}")
+
   set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/qvac__fabric")
   message(STATUS "qvac-addon: BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
 endmacro()
 
 # ---------------------------------------------------------------------------
+# qvac_addon_fabric_layout(<host> <base_dir> <out_specifier> <out_working_dir>
+#                          <out_prebuilds>)
+#
+# Which installed bare module provides prebuilds/<host>/qvac__fabric.bare, as an
+# include_bare_module() specifier + WORKING_DIRECTORY, plus that module's
+# prebuilds/ dir. Same precedence as @qvac/fabric's binding.js, so the build
+# links the runtime the addon will load:
+#
+#   1. @qvac/fabric itself when it carries prebuilds/<host>: every fabric before
+#      the 0.18 platform split, a source build or linked workspace, and the CI
+#      overlay, which writes the PR-built runtime there.
+#   2. The host's platform package, @qvac/fabric-<host>/addon. It is fabric's
+#      dependency rather than the addon's, so it is resolved from fabric's real
+#      path, as Node would from inside fabric (pnpm and nested npm installs do
+#      not put it in the addon's node_modules). Its addon/ manifest is named
+#      @qvac/fabric, which keeps the artifact qvac__fabric.bare and every
+#      shipped consumer's DT_NEEDED on it valid.
+#
+# With neither, configure fails naming the package to install. Cross-built
+# targets (android, ios) are never selected by os/cpu filters, so an addon that
+# builds them needs the platform package as a devDependency with the same range
+# as @qvac/fabric, so both resolve to the same release: the app supplies the
+# runtime at run time through its own direct dependency.
+# ---------------------------------------------------------------------------
+function(qvac_addon_fabric_layout host base_dir out_specifier out_working_dir out_prebuilds)
+  resolve_node_module("@qvac/fabric" _meta_dir WORKING_DIRECTORY "${base_dir}")
+  if(_meta_dir MATCHES "-NOTFOUND$")
+    message(FATAL_ERROR "qvac-addon: @qvac/fabric is not installed under ${base_dir}; run npm install first.")
+  endif()
+
+  set(${out_specifier} "@qvac/fabric" PARENT_SCOPE)
+  set(${out_working_dir} "${base_dir}" PARENT_SCOPE)
+  set(${out_prebuilds} "${_meta_dir}/prebuilds" PARENT_SCOPE)
+  if(IS_DIRECTORY "${_meta_dir}/prebuilds/${host}")
+    return()
+  endif()
+
+  if(host MATCHES "^ios-")
+    set(_platform_package "@qvac/fabric-ios")
+  else()
+    set(_platform_package "@qvac/fabric-${host}")
+  endif()
+
+  file(REAL_PATH "${_meta_dir}" _meta_real)
+  resolve_node_module("${_platform_package}/addon" _platform_addon WORKING_DIRECTORY "${_meta_real}")
+  if(NOT _platform_addon MATCHES "-NOTFOUND$")
+    message(STATUS "qvac-addon: fabric runtime from ${_platform_package}")
+    set(${out_specifier} "${_platform_package}/addon" PARENT_SCOPE)
+    set(${out_working_dir} "${_meta_real}" PARENT_SCOPE)
+    set(${out_prebuilds} "${_platform_addon}/prebuilds" PARENT_SCOPE)
+    return()
+  endif()
+
+  file(READ "${_meta_dir}/package.json" _meta_manifest)
+  string(JSON _meta_version GET "${_meta_manifest}" version)
+  if(host MATCHES "^(android|ios)-")
+    string(CONCAT _remedy
+      "Cross-built targets are never selected by os/cpu filters; add "
+      "\"${_platform_package}\": \"^${_meta_version}\" to devDependencies.")
+  else()
+    string(CONCAT _remedy
+      "It is an optional dependency of @qvac/fabric: reinstall without --omit=optional "
+      "(Yarn v1 skips optional dependencies), or build @qvac/fabric from source if it "
+      "publishes no runtime for ${host}.")
+  endif()
+  message(FATAL_ERROR
+    "qvac-addon: no fabric runtime for ${host}: @qvac/fabric has no prebuilds/${host} "
+    "and ${_platform_package} is not installed. ${_remedy}")
+endfunction()
+
+# ---------------------------------------------------------------------------
+# qvac_addon_import_fabric_cxx_runtime(<target> <fabric_target>)
+#
+# Linux only: link <target> without a C++ standard library of its own, so it
+# imports libc++ / libc++abi from @qvac/fabric instead.
+#
+# A second static libc++ in the same process is a second copy of every std::
+# typeinfo, and RTTI compares typeinfo by address, so an exception thrown by
+# libcommon inside fabric matched no `catch (const std::exception&)` in the
+# addon: llama's argument-validation errors fell through to JSCATCH's catch-all
+# and reached JS as "Unknown error" instead of the message. Fabric exports the
+# Itanium C++ ABI (see packages/fabric/symbols-linux-cxx-runtime.map) and is the
+# process' one C++ runtime; these symbols resolve from the fabric module already
+# on the target's link line.
+#
+# -nostdlib++ on its own does not achieve that, and this flag only works in
+# concert with the named version node in fabric's symbols.map. bare's executable
+# links GNU libstdc++.so.6, so libstdc++ is in the process' global lookup scope,
+# which the dynamic linker searches before a dlopen'd module's own DT_NEEDED
+# chain: a target linked only with -nostdlib++ takes __cxa_throw,
+# __gxx_personality_v0 and the std:: typeinfo objects from libstdc++ while still
+# getting the libc++-only names from fabric, and a std::exception_ptr that
+# crosses that seam is re-raised with a foreign exception class that GNU's
+# personality routine will only match against catch (...). The version node
+# makes the linker record a DT_VERNEED that libstdc++ cannot satisfy, which is
+# what pins these references to fabric. qvac_addon_finalize asserts the result
+# on the built module, because the failure is silent at both build and load
+# time.
+#
+# Only a target that links fabric may use this — anything else has nothing to
+# resolve libc++ from and wants qvac_addon_static_cxx_runtime instead.
+#
+# No other platform needs it: macOS resolves libc++ from the shared
+# libc++.1.dylib in the SDK, Android links c++_shared, and Windows consumers
+# import fabric's runtime surface through its import library. Linux was the only
+# platform that ended up with two C++ runtimes in one process. Full rationale
+# and the alternatives considered: arch/qips/linux-fabric-libcxx-ownership.md.
+# ---------------------------------------------------------------------------
+function(qvac_addon_import_fabric_cxx_runtime target fabric_target)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(${target} PRIVATE -nostdlib++)
+    # Records the module the runtime has to come from, so qvac_addon_finalize can
+    # assert the result against that exact binary.
+    set_property(TARGET ${target} PROPERTY
+      QVAC_ADDON_FABRIC_CXX_MODULE ${fabric_target}_module)
+  endif()
+endfunction()
+
+# ---------------------------------------------------------------------------
+# qvac_addon_static_cxx_runtime(<target>)
+#
+# Linux only: give <target> its own static copy of libc++, so the binary runs on
+# a host with no LLVM libc++ installed.
+#
+# This is for the targets that do NOT link fabric and therefore have nothing to
+# import a runtime from — currently the fuzz binaries declared without
+# LINK_FABRIC, which qvac_addon_add_fuzz_target wires up for you. A target that
+# does link fabric must use qvac_addon_import_fabric_cxx_runtime: one runtime per
+# process is what lets it catch an exception fabric threw.
+#
+# The two are mutually exclusive by construction rather than by precedence. Both
+# applied to one target would leave -static-libstdc++ inert (-nostdlib++
+# suppresses the driver's stdlib link outright) and the driver would warn that
+# the argument went unused, which is the intended signal, not something to
+# silence.
+#
+# No other platform has a choice to make: macOS and Android resolve libc++ from
+# a shared library that ships with the SDK or the APK, and Windows uses the MSVC
+# CRT.
+# ---------------------------------------------------------------------------
+function(qvac_addon_static_cxx_runtime target)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(${target} PRIVATE -static-libstdc++)
+  endif()
+endfunction()
+
+# ---------------------------------------------------------------------------
 # qvac_addon_link_fabric(<addon_target> <fabric_target>)
 #
 # The two-target link split: compile the addon library against the ggml headers,
-# and give the .bare module a DT_NEEDED on the shared runtime.
+# and give the .bare module a DT_NEEDED on the shared runtime — which on Linux
+# is also where its C++ runtime comes from.
 # ---------------------------------------------------------------------------
 function(qvac_addon_link_fabric addon_target fabric_target)
   target_link_libraries(${addon_target} PRIVATE qvac-fabric::headers)
   target_link_libraries(${addon_target}_module PRIVATE ${fabric_target}_module)
+  qvac_addon_import_fabric_cxx_runtime(${addon_target}_module ${fabric_target})
 endfunction()
 
 # ---------------------------------------------------------------------------
 # qvac_addon_finalize(<addon_target> [SUBDIR <value>])
 #
 # Apply the settings every addon module needs:
-#   * Linux symbol hygiene (--exclude-libs,ALL),
+#   * Linux symbol hygiene (--exclude-libs,ALL, plus a version script that
+#     narrows the module's exports to the bare C entry points),
+#   * the assertion that a fabric-linked module imports fabric's C++ runtime,
 #   * JS_LOGGER + BACKENDS_SUBDIR compile definitions,
-#   * platform-derived GGML_BACKEND_DL (Linux/Android load ggml backends as
-#     dlopen'd modules; macOS/Windows/iOS link them static into the runtime),
+#   * platform-derived GGML_BACKEND_DL (Linux/Android/Windows load ggml
+#     backends as modules; Apple platforms link them static into the runtime),
 #   * Android 16 KB page-size link flags,
 #   * Apple compiler-rt force_load for __isPlatformVersionAtLeast.
 #
@@ -153,8 +314,62 @@ endfunction()
 function(qvac_addon_finalize addon_target)
   cmake_parse_arguments(PARSE_ARGV 1 _QAF "" "SUBDIR" "")
 
+  # The module's outward interface is the bare entry points and nothing else;
+  # see addon-symbols.map. Hides definitions only, so the C++ runtime the module
+  # imports from fabric is unaffected. Applied to every ELF target, matching
+  # packages/asr-ggml, since co-loaded addons interposing each other's statics is
+  # as much an Android concern as a Linux one.
+  if(UNIX AND NOT APPLE)
+    set(_qaf_exports "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/addon-symbols.map")
+    target_link_options(${addon_target}_module PRIVATE
+      "-Wl,--version-script=${_qaf_exports}")
+    set_property(TARGET ${addon_target}_module APPEND PROPERTY
+      LINK_DEPENDS "${_qaf_exports}")
+  endif()
+
   if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(${addon_target}_module PRIVATE -Wl,--exclude-libs,ALL)
+
+    # A module that dropped its own C++ runtime must have actually inherited
+    # fabric's. Both halves of getting that wrong are silent, so it is checked on
+    # the built ELF rather than trusted to the link line.
+    get_property(_qaf_fabric_cxx_module TARGET ${addon_target}_module
+      PROPERTY QVAC_ADDON_FABRIC_CXX_MODULE)
+    if(_qaf_fabric_cxx_module)
+      # CMake sets CMAKE_READELF for ELF toolchains; fall back to PATH rather
+      # than skip the check on a host where it did not. find_program() skips
+      # its search when the result variable already holds a value, and an empty
+      # one from CMAKE_READELF counts, so the fallback needs a name of its own
+      # or it can only ever report failure.
+      set(_qaf_readelf "${CMAKE_READELF}")
+      if(NOT _qaf_readelf)
+        find_program(QVAC_ADDON_READELF NAMES llvm-readelf readelf
+          DOC "readelf used to verify addon modules import fabric's C++ runtime")
+        set(_qaf_readelf "${QVAC_ADDON_READELF}")
+      endif()
+      if(NOT _qaf_readelf)
+        message(FATAL_ERROR
+          "qvac-addon: no readelf found (CMAKE_READELF unset, nothing on "
+          "PATH). It verifies that ${addon_target} imports fabric's C++ "
+          "runtime, which nothing else detects; install binutils or llvm.")
+      endif()
+      # What to require of the module -- and whether to require anything, since
+      # a fabric that shares libc++ through a shared library exports no runtime
+      # to pin to -- is read out of fabric's own binary by the script, not out
+      # of QVAC_FABRIC_OWNS_CXX_RUNTIME / QVAC_FABRIC_ABI_VERSION in its
+      # package config. Those describe the platform whose prebuild leg wrote
+      # the config last: it installs to a platform-shared share/ path that every
+      # leg produces and the artifact merge collapses to one file. The module on
+      # this target's link line is per-platform and cannot be the wrong one.
+      add_custom_command(TARGET ${addon_target}_module POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+          -D "READELF=${_qaf_readelf}"
+          -D "MODULE=$<TARGET_FILE:${addon_target}_module>"
+          -D "FABRIC=$<TARGET_FILE:${_qaf_fabric_cxx_module}>"
+          -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/assert-fabric-cxx-runtime.cmake"
+        VERBATIM
+        COMMENT "qvac-addon: verifying ${addon_target} imports fabric's C++ runtime")
+    endif()
   endif()
 
   target_compile_definitions(${addon_target} PRIVATE JS_LOGGER)
@@ -163,7 +378,7 @@ function(qvac_addon_finalize addon_target)
       BACKENDS_SUBDIR="${_QAF_SUBDIR}")
   endif()
 
-  if((ANDROID OR UNIX) AND NOT APPLE)
+  if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
     target_compile_definitions(${addon_target} PRIVATE GGML_BACKEND_DL)
   endif()
 
@@ -298,11 +513,16 @@ endfunction()
 #   * GGML_BACKEND_DL / GGML_BACKEND_DIR so backend_env.cpp preloads the ggml
 #     backend modules from the test binary dir,
 #   * copy qvac__fabric@0.bare next to the test binary,
-#   * stage @qvac/fabric's dlopen'd ggml backends alongside it,
+#   * stage @qvac/fabric's dynamically loaded ggml backends alongside it,
 #   * $ORIGIN / @loader_path rpath so the copies resolve,
-#   * the Windows delay-load helper the imported module target doesn't carry.
+#   * the Windows delay-load helper the imported module target doesn't carry,
+#   * fabric's C++ runtime on Linux, so the test binary exercises the same
+#     single-runtime link as the production module (a test that kept its own
+#     libc++ could not catch an exception fabric threw).
 # ---------------------------------------------------------------------------
 function(qvac_addon_stage_fabric_for_test test_target fabric_target)
+  qvac_addon_import_fabric_cxx_runtime(${test_target} ${fabric_target})
+
   if((ANDROID OR UNIX OR WIN32) AND NOT APPLE)
     target_compile_definitions(${test_target} PRIVATE GGML_BACKEND_DL)
   endif()
@@ -320,16 +540,23 @@ function(qvac_addon_stage_fabric_for_test test_target fabric_target)
     COMMENT "Copying qvac__fabric@0.bare to test directory")
 
   bare_target(_qvac_host)
-  set(_qvac_fabric_test_backend_dir
-    "${CMAKE_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/${_qvac_host}/qvac__fabric")
+  qvac_addon_fabric_layout("${_qvac_host}" "${CMAKE_SOURCE_DIR}"
+    _qvac_fabric_test_specifier _qvac_fabric_test_working_dir _qvac_fabric_test_prebuilds)
   file(GLOB _qvac_fabric_test_backends
-    "${_qvac_fabric_test_backend_dir}/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    "${_qvac_fabric_test_prebuilds}/${_qvac_host}/qvac__fabric/*${CMAKE_SHARED_LIBRARY_SUFFIX}")
   if(_qvac_fabric_test_backends)
-    add_custom_command(TARGET ${test_target} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${_qvac_fabric_test_backends}
-        ${CMAKE_CURRENT_BINARY_DIR}/
-      COMMENT "Staging @qvac/fabric ggml backends next to ${test_target}")
+    get_property(_qvac_stage_target DIRECTORY PROPERTY QVAC_FABRIC_TEST_BACKENDS_TARGET)
+    if(NOT _qvac_stage_target)
+      string(MD5 _qvac_stage_id "${CMAKE_CURRENT_BINARY_DIR}")
+      set(_qvac_stage_target "qvac_fabric_test_backends_${_qvac_stage_id}")
+      add_custom_target(${_qvac_stage_target}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          ${_qvac_fabric_test_backends}
+          ${CMAKE_CURRENT_BINARY_DIR}/
+        COMMENT "Staging @qvac/fabric ggml backends for tests")
+      set_property(DIRECTORY PROPERTY QVAC_FABRIC_TEST_BACKENDS_TARGET "${_qvac_stage_target}")
+    endif()
+    add_dependencies(${test_target} ${_qvac_stage_target})
   endif()
 
   if(APPLE)
@@ -415,9 +642,12 @@ endmacro()
 #                                  then run `<target> --fuzz=Suite.Test`.
 #
 # The target is linked with AddressSanitizer; without LINK_FABRIC it keeps FULL
-# ASan + LeakSanitizer (the fabric prebuild's static-libstdc++ boundary is the
-# only thing that forces relaxed ASan options — see qvac_addon_stage_fabric_for_test),
-# so prefer fuzzing pure parse/transform code with LINK_FABRIC omitted.
+# ASan + LeakSanitizer (loading the non-ASan fabric prebuild is the only thing
+# that forces relaxed ASan options — see qvac_addon_stage_fabric_for_test), so
+# prefer fuzzing pure parse/transform code with LINK_FABRIC omitted.
+#
+# LINK_FABRIC also decides where the C++ runtime comes from: with it the target
+# imports fabric's, without it the target gets its own static libc++.
 # ---------------------------------------------------------------------------
 function(qvac_addon_add_fuzz_target target)
   cmake_parse_arguments(_QAFZ "LINK_FABRIC" "" "SOURCES;INCLUDE_DIRS;LINK_LIBS" ${ARGN})
@@ -475,6 +705,11 @@ function(qvac_addon_add_fuzz_target target)
     target_link_libraries(${target} PRIVATE
       qvac-fabric::headers ${qvac_fabric_target}_module)
     qvac_addon_stage_fabric_for_test(${target} ${qvac_fabric_target})
+  else()
+    # No fabric on the link line, so there is no shared C++ runtime to import:
+    # this target carries its own and stays runnable without an LLVM libc++
+    # installed on the host.
+    qvac_addon_static_cxx_runtime(${target})
   endif()
 
   include(GoogleTest)
@@ -484,10 +719,11 @@ function(qvac_addon_add_fuzz_target target)
   # Pin the sanitizer posture on the test itself instead of inheriting whatever
   # the invoking shell carries: ASan replaces its defaults with ASAN_OPTIONS
   # wholesale, so a value left over from an addon-test session would silently
-  # turn LeakSanitizer off here. A fabric-linked target has to run relaxed (the
-  # static-libstdc++ boundary trips alloc/dealloc-mismatch and fabric's
-  # long-lived globals look like leaks); everything else runs at full strength.
-  # Mirrors scripts/run-cpp-fuzz.js and scripts/run-cpp-tests.js.
+  # turn LeakSanitizer off here. A fabric-linked target has to run relaxed:
+  # fabric's long-lived runtime globals and its dlopen'd ggml backends look like
+  # leaks at exit, and alloc/dealloc-mismatch stays off as a backstop for
+  # allocations that cross the module boundary. Everything else runs at full
+  # strength. Mirrors scripts/run-cpp-fuzz.js and scripts/run-cpp-tests.js.
   if(NOT WIN32)
     if(_QAFZ_LINK_FABRIC)
       set(_qafz_asan_options "alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1")

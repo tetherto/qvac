@@ -1,0 +1,20 @@
+{
+  "cacheEpoch": 1,
+  "source": "huggingface",
+  "models": {
+    "ggml-tiny.bin": {
+      "urls": [
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin"
+      ],
+      "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+      "bytes": 77691713
+    },
+    "ggml-silero-v5.1.2.bin": {
+      "urls": [
+        "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v5.1.2.bin"
+      ],
+      "sha256": "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf",
+      "bytes": 885098
+    }
+  }
+}

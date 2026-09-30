@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import path = require("bare-path");
 import fs = require("bare-fs");
+import path = require("bare-path");
 import QvacLogger = require("@qvac/logging");
+import fabricBackends = require("@qvac/fabric/backends");
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   QvacResponse,
@@ -29,22 +30,19 @@ const BERGAMOT_TARGET_TOKEN_BY_PAIR: Record<string, string> = {
   "en:pt": ">>por<<",
 };
 
-// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, in the
-// @qvac/fabric dependency (prebuilds/<host>/qvac__fabric). We deliberately do
-// not copy them into this addon to avoid duplicating tens of MB per fabric
-// consumer. On desktop, resolve the single @qvac/fabric install and load the
-// backends from there. On mobile the package tree isn't resolvable at runtime
-// (the worklet runs from a packed bundle), so fall back to this addon's own
-// prebuilds, where the mobile packaging stages the backends. The native side
+// The ggml compute backends (GGML_BACKEND_DL modules) ship exactly once, next to
+// the @qvac/fabric runtime (<root>/<host>/qvac__fabric). We deliberately do not
+// copy them into this addon to avoid duplicating tens of MB per fabric
+// consumer. On desktop, @qvac/fabric/backends resolves that root in whichever
+// package holds the runtime. On mobile the package tree isn't resolvable at
+// runtime (the worklet runs from a packed bundle), so fall back to this addon's
+// own prebuilds, where the mobile packaging stages the backends. The native side
 // appends BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
 function resolveBackendsDir(): string {
-  try {
-    const fabricPkg = require.resolve("@qvac/fabric/package");
-    const fabricPrebuilds = path.join(path.dirname(fabricPkg), "prebuilds");
-    if (fs.existsSync(fabricPrebuilds)) return fabricPrebuilds;
-  } catch {
-    // Mobile worklets cannot resolve the @qvac/fabric package tree.
-  }
+  // fabric's resolver only checks that the platform package resolves, not that
+  // its prebuilds are on disk.
+  const fabricRoot = fabricBackends.resolveBackendsDir();
+  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
   return path.join(__dirname, "prebuilds");
 }
 
@@ -395,6 +393,48 @@ const TranslationNmtcpp: TranslationNmtcppConstructor = class TranslationNmtcpp 
 
   private async _load(): Promise<void> {
     const otherConfig: Record<string, unknown> = { ...this._config };
+    let mainGpu = otherConfig["main-gpu"] ?? otherConfig.main_gpu;
+    if (
+      otherConfig["main-gpu"] !== undefined &&
+      otherConfig.main_gpu !== undefined
+    ) {
+      throw new TypeError("Use only one of main-gpu and main_gpu");
+    }
+    if (
+      otherConfig["main-gpu"] !== undefined ||
+      otherConfig.main_gpu !== undefined
+    ) {
+      if (typeof mainGpu === "string") {
+        mainGpu = /^[+-]?\d+$/.test(mainGpu)
+          ? Number(mainGpu)
+          : mainGpu.toLowerCase();
+      }
+      if (
+        mainGpu !== "dedicated" &&
+        mainGpu !== "integrated" &&
+        !(
+          typeof mainGpu === "number" &&
+          Number.isInteger(mainGpu) &&
+          mainGpu >= -2147483648 &&
+          mainGpu <= 2147483647
+        )
+      ) {
+        throw new TypeError(
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or 'integrated'",
+        );
+      }
+      if (
+        ["gpu_backend", "gpuBackend", "gpu_device", "gpuDevice"].some(
+          (key) => otherConfig[key] !== undefined,
+        )
+      ) {
+        throw new TypeError(
+          "main-gpu cannot be combined with legacy GPU selectors",
+        );
+      }
+      otherConfig["main-gpu"] = mainGpu;
+      delete otherConfig.main_gpu;
+    }
 
     // Accept camelCase aliases for the GPU keys so the config object can
     // stay consistent with backendsDir/openclCacheDir. The C++ binding
@@ -711,6 +751,14 @@ namespace TranslationNmtcpp {
     gpu_backend?: string;
     gpuBackend?: string;
 
+    /** Raw ggml registry index or GPU class. Requires use_gpu/useGPU.
+     * Unsupported devices fall back to CPU; out-of-range indices warn and auto-select.
+     * Cannot be combined with gpu_backend/gpu_device or their camelCase aliases.
+     */
+    "main-gpu"?: number | string;
+    /** Alias for main-gpu; specifying both keys is rejected. */
+    main_gpu?: number | string;
+
     /**
      * Ordinal within the matching compute devices. Defaults to 0.
      * Example: { gpu_backend: "vulkan", gpu_device: 1 } → second Vulkan adapter.
@@ -724,8 +772,8 @@ namespace TranslationNmtcpp {
 
     /**
      * Path to the directory containing backend shared libraries
-     * (libqvac-ggml-vulkan.so, etc.). Defaults to `@qvac/fabric`'s `prebuilds/`
-     * on desktop, falling back to this package's `prebuilds/` on mobile where
+     * (libqvac-ggml-vulkan.so, etc.). Defaults to the root `@qvac/fabric/backends`
+     * resolves on desktop, falling back to this package's `prebuilds/` on mobile where
      * the package tree isn't resolvable from the packed worklet.
      */
     backendsDir?: string;

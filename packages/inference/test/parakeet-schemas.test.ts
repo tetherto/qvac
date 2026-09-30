@@ -95,9 +95,17 @@ test('parakeetRuntimeConfigSchema: accepts backend loader directories', (t) => {
   t.is(result.openclCacheDir, '/tmp/qvac-opencl-cache')
 })
 
-test('parakeetRuntimeConfigSchema: accepts multilingual CTC language id', (t) => {
-  const result = parakeetRuntimeConfigSchema.parse({ language: 'hi' })
-  t.is(result.language, 'hi')
+test('parakeetRuntimeConfigSchema: accepts Indic ids and Nemotron locale aliases', (t) => {
+  for (const language of ['hi', 'ta', 'en-US', 'hi-IN', 'auto', ''] as const) {
+    const result = parakeetRuntimeConfigSchema.parse({ language })
+    t.is(result.language, language)
+  }
+})
+
+test('parakeetRuntimeConfigSchema: rejects invalid language values', (t) => {
+  for (const language of ['english', 'en_US', 'en-US-extra', 'auto-US']) {
+    t.exception(() => parakeetRuntimeConfigSchema.parse({ language }), language)
+  }
 })
 
 test('parakeetRuntimeConfigSchema: rejects negative streamingSpkCacheLen', (t) => {

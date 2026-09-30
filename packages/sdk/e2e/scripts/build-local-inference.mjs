@@ -33,9 +33,9 @@ function step(message) {
 
 // Mirrors .github/actions/sdk-e2e-prepare-inference/prepare.mjs, win32 branch
 // included, so local and CI manifests carry the same spec.
-function toLocalTarballSpec(tarballPath) {
-  if (process.platform === 'win32') {
-    return path.win32.resolve(tarballPath).replaceAll('\\', '/')
+function toLocalTarballSpec(tarballPath, platform = process.platform) {
+  if (platform === 'win32') {
+    return `file:${path.win32.resolve(tarballPath).replaceAll('\\', '/')}`
   }
   return pathToFileURL(path.resolve(tarballPath)).href
 }

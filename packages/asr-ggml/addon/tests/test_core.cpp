@@ -1180,6 +1180,119 @@ TEST_F(WhisperModelTest, SetConfigUpdatesInternalConfig) {
   EXPECT_TRUE(model.isCaptionModeEnabled());
 }
 
+#ifdef QVAC_ASR_GGML_TESTING
+namespace {
+struct GpuSelectionMockDevice {
+  enum ggml_backend_dev_type type;
+  const char* backend;
+  const char* description;
+  const char* name = nullptr;
+};
+
+struct GpuSelectionMockRegistry {
+  std::vector<const GpuSelectionMockDevice*> devices;
+  size_t count() const { return devices.size(); }
+  const GpuSelectionMockDevice* get(size_t i) const { return devices[i]; }
+  auto type(const GpuSelectionMockDevice* dev) const { return dev->type; }
+  const char* backend(const GpuSelectionMockDevice* dev) const {
+    return dev->backend;
+  }
+  const char* description(const GpuSelectionMockDevice* dev) const {
+    return dev->description;
+  }
+  const char* name(const GpuSelectionMockDevice* dev) const {
+    return dev->name != nullptr ? dev->name : dev->description;
+  }
+};
+} // namespace
+
+TEST_F(
+    WhisperModelTest,
+    MainGpuResolutionUsesModelConfigForRawIndexAndClassSelectors) {
+  const GpuSelectionMockDevice cpu{GGML_BACKEND_DEVICE_TYPE_CPU, "CPU", "CPU"};
+  const GpuSelectionMockDevice dedicated{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA", "NVIDIA", "cuda0"};
+  const GpuSelectionMockDevice integrated{
+      GGML_BACKEND_DEVICE_TYPE_IGPU, "Vulkan", "Intel", "vulkan0"};
+  const GpuSelectionMockRegistry registry{{&cpu, &dedicated, &integrated}};
+
+  auto config = createTestConfig();
+  config.whisperContextCfg["use_gpu"] = true;
+  config.whisperContextCfg["main-gpu"] = 2.0;
+  WhisperModel rawIndexModel(config);
+  auto selected =
+      rawIndexModel.resolveMainGpuSelectionForTesting(true, 0, false, registry);
+  EXPECT_TRUE(selected.useGpu);
+  EXPECT_EQ(selected.gpuDevice, 1);
+
+  config.whisperContextCfg["main-gpu"] = std::string("dedicated");
+  WhisperModel dedicatedModel(config);
+  selected = dedicatedModel.resolveMainGpuSelectionForTesting(
+      true, 0, false, registry);
+  EXPECT_TRUE(selected.useGpu);
+  EXPECT_EQ(selected.gpuDevice, 0);
+
+  config.whisperContextCfg["main-gpu"] = std::string("integrated");
+  WhisperModel integratedModel(config);
+  selected = integratedModel.resolveMainGpuSelectionForTesting(
+      true, 0, false, registry);
+  EXPECT_TRUE(selected.useGpu);
+  EXPECT_EQ(selected.gpuDevice, 1);
+}
+
+TEST_F(WhisperModelTest, MainGpuResolutionRequestsWarningForCpuOnlyRegistry) {
+  const GpuSelectionMockDevice cpu{GGML_BACKEND_DEVICE_TYPE_CPU, "CPU", "CPU"};
+  const GpuSelectionMockRegistry registry{{nullptr, &cpu}};
+
+  auto config = createTestConfig();
+  config.whisperContextCfg["use_gpu"] = true;
+  WhisperModel model(config);
+
+  const auto selected =
+      model.resolveMainGpuSelectionForTesting(true, 0, false, registry);
+  EXPECT_FALSE(selected.useGpu);
+  EXPECT_TRUE(selected.warnMissingGpuFallback);
+  EXPECT_TRUE(selected.refused.empty());
+}
+
+TEST_F(WhisperModelTest, MainGpuSelectorContextChangeDetection) {
+  auto base = createTestConfig();
+  base.whisperContextCfg["use_gpu"] = true;
+
+  auto added = base;
+  added.whisperContextCfg["main-gpu"] = std::string("dedicated");
+  EXPECT_TRUE(WhisperModel::configContextIsChangedForTesting(base, added));
+
+  auto changed = added;
+  changed.whisperContextCfg["main-gpu"] = std::string("integrated");
+  EXPECT_TRUE(WhisperModel::configContextIsChangedForTesting(added, changed));
+
+  auto unchanged = changed;
+  EXPECT_FALSE(
+      WhisperModel::configContextIsChangedForTesting(changed, unchanged));
+
+  auto removed = changed;
+  removed.whisperContextCfg.erase("main-gpu");
+  EXPECT_TRUE(WhisperModel::configContextIsChangedForTesting(changed, removed));
+
+  auto aliasAdded = base;
+  aliasAdded.whisperContextCfg["main_gpu"] = 1.0;
+  EXPECT_TRUE(WhisperModel::configContextIsChangedForTesting(base, aliasAdded));
+
+  auto aliasChanged = aliasAdded;
+  aliasChanged.whisperContextCfg["main_gpu"] = 2.0;
+  EXPECT_TRUE(
+      WhisperModel::configContextIsChangedForTesting(aliasAdded, aliasChanged));
+  EXPECT_FALSE(WhisperModel::configContextIsChangedForTesting(
+      aliasChanged, aliasChanged));
+
+  auto aliasRemoved = aliasAdded;
+  aliasRemoved.whisperContextCfg.erase("main_gpu");
+  EXPECT_TRUE(
+      WhisperModel::configContextIsChangedForTesting(aliasAdded, aliasRemoved));
+}
+#endif
+
 TEST_F(WhisperModelTest, FormatCaptionOutput) {
   auto config = createTestConfig();
   WhisperModel model(config);

@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <cstddef>
+#include <filesystem>
 #include <string>
 
 #include "ggml-backend.h"
@@ -26,6 +27,14 @@ inline constexpr int kBackendIdNone = -1;
 // tts-cpp clamps it to the model's real layer count). Shared by both engines
 // so the useGpu->layers mapping can't drift between them.
 inline constexpr int kOffloadAllGpuLayers = 99;
+
+inline std::filesystem::path resolveBackendsDir(const std::string& configured) {
+  std::filesystem::path dir(configured);
+#ifdef BACKENDS_SUBDIR
+  dir = (dir / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
+#endif
+  return dir;
+}
 
 inline int backendIdFromName(const std::string& name) {
   if (name == "CPU") return 0;

@@ -25,13 +25,15 @@ export function buildBlobBinding(meta: {
   blobBlockLength: number
   blobByteOffset: number
   expectedSize: number
+  sha256Checksum: string
 }): QVACBlobBinding {
   return {
     coreKey: meta.blobCoreKey,
     blockOffset: meta.blobBlockOffset,
     blockLength: meta.blobBlockLength,
     byteOffset: meta.blobByteOffset,
-    byteLength: meta.expectedSize
+    byteLength: meta.expectedSize,
+    sha256: meta.sha256Checksum
   }
 }
 

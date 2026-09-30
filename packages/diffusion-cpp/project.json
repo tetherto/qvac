@@ -26,14 +26,7 @@
         "cwd": "packages/diffusion-cpp",
         "ci": {
           "artifactNamePrefix": "sd-cpp-",
-          "includeVulkanSdk": true,
-          "includeCuda": true,
-          "includeCudaWin32": true,
-          "includeCudaArm64": true,
-          "includeCudaArm64Jetson": true,
-          "cudaArm64JetsonCmakeOption": "SD_CUDA_JETSON",
-          "cudaArm64JetsonPrimaryCmakeOption": "SD_CUDA",
-          "platformCmakeDefines": "linux: -D SD_CUDA=ON\nwin32-x64: -D SD_CUDA=ON"
+          "includeVulkanSdk": true
         }
       },
       "inputs": [
@@ -148,7 +141,6 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/diffusion-cpp",
         "ci": {
-          "buildStep": "none",
           "verifyGenerated": true,
           "nameTransform": "scope-rewrite",
           "repoName": "diffusion-cpp",

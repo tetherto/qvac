@@ -12,15 +12,15 @@ const LLM_BASE = {
   modelSrc: 'model.gguf'
 }
 
-test('llmConfigBaseSchema: accepts valid split-mode values', (t) => {
+test('llmConfigBaseSchema: accepts supported split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'none' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'layer' }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'row' }).success, true)
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'tensor' }).success, true)
 })
 
 test('llmConfigBaseSchema: rejects invalid split-mode values', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'column' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'split-mode': 'row' }).success, false)
 })
 
 test('llmConfigBaseSchema: accepts valid flash-attn values', (t) => {
@@ -178,7 +178,7 @@ test('loadModelSrcRequestSchema: accepts split-mode for LLM', (t) => {
     type: 'loadModel',
     modelType: ModelType.llamacppCompletion,
     modelSrc: 'model.gguf',
-    modelConfig: { 'split-mode': 'row', 'tensor-split': '3,1', 'main-gpu': 0 }
+    modelConfig: { 'split-mode': 'layer', 'tensor-split': '3,1', 'main-gpu': 0 }
   })
   t.is(result.success, true)
 })
@@ -291,4 +291,72 @@ test('loadModelOptionsToRequestSchema: accepts mmproj-use-gpu for LLM', (t) => {
     }).success,
     true
   )
+})
+
+test('llmConfigBaseSchema: accepts valid tensor-read-lazy values', (t) => {
+  for (const value of ['on', 'auto', 'off']) {
+    t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': value }).success, true)
+  }
+})
+
+test('llmConfigBaseSchema: rejects invalid tensor-read-lazy values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': 'yes' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'tensor-read-lazy': true }).success, false)
+})
+
+test('llmConfigBaseSchema: accepts both forms of moe-cache-mib', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 2048 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 'auto' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects invalid moe-cache-mib values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 2048.5 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'moe-cache-mib': 'default' }).success, false)
+})
+
+test('llmConfigBaseSchema: accepts both forms of prefetch-weights', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': true }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 'auto' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects invalid prefetch-weights values', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 'on' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'prefetch-weights': 1 }).success, false)
+})
+
+test('llmConfigBaseSchema: accepts both forms of fit-target', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': 512 }).success, true)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '1024,512' }).success, true)
+})
+
+test('llmConfigBaseSchema: rejects fit-target values fabric would misparse', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': 'nonsense' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '512abc' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': '-1' }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-target': -1 }).success, false)
+})
+
+test('llmConfigBaseSchema: rejects non-positive batch and ubatch sizes', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'batch-size': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'ubatch-size': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-max-tokens': 0 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'image-min-tokens': 0 }).success, false)
+})
+
+test('llmConfigBaseSchema: rejects negative layer counts', (t) => {
+  t.is(llmConfigBaseSchema.safeParse({ 'n-cpu-moe': -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'n-cpu-ffn': -1 }).success, false)
+  t.is(llmConfigBaseSchema.safeParse({ 'fit-ctx': -1 }).success, false)
+})
+
+test('llmConfigSchema: gpu_layers stays unset', (t) => {
+  t.absent('gpu_layers' in llmConfigSchema.parse({}))
+  t.absent('gpu_layers' in llmConfigSchema.parse({ fit: true }))
+  t.absent('gpu_layers' in llmConfigSchema.parse({ fit: false }))
+})
+
+test('llmConfigSchema: an explicit gpu_layers is kept', (t) => {
+  t.is(llmConfigSchema.parse({ gpu_layers: 20 }).gpu_layers, 20)
+  t.is(llmConfigSchema.parse({ fit: true, gpu_layers: 20 }).gpu_layers, 20)
 })

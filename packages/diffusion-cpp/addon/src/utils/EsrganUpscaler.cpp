@@ -80,6 +80,13 @@ void sdLogCallback(sd_log_level_t level, const char* text, void* /*userData*/) {
     break;
   case SD_LOG_WARN:
     priority = lg::Priority::WARNING;
+    // Keep the engine's resolved streaming precondition visible by default.
+    if (text != nullptr && std::strstr(
+                               text,
+                               "stream_layers has no effect unless diffusion "
+                               "params backend is cpu") != nullptr) {
+      priority = lg::Priority::ERROR;
+    }
     break;
   default:
     break;

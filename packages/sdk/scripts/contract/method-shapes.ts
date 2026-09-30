@@ -8,7 +8,9 @@
  */
 export const methodShapes = {
   assessModelFit: 'reply',
+  audioEditStream: 'stream',
   audioGenStream: 'stream',
+  audioUnderstand: 'stream',
   batchCompletionStream: 'stream',
   bciTranscribe: 'stream',
   bciTranscribeStream: 'duplex',
@@ -44,6 +46,7 @@ export const methodShapes = {
   translate: 'stream',
   unloadModel: 'reply',
   upscaleStream: 'stream',
+  vectorIndex: 'reply',
   videoStream: 'stream',
   worldSceneStream: 'stream',
   worldStepStream: 'stream'

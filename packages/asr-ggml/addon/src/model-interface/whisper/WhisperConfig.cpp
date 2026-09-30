@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "WhisperHandlers.hpp"
+#include "model-interface/MainGpuSelection.hpp"
 
 // print for all variants
 
@@ -70,11 +71,19 @@ whisper_context_params
 toWhisperContextParams(const WhisperConfig& whisperConfig) {
 
   whisper_context_params contextParams = whisper_context_default_params();
+  try {
+    (void)main_gpu::parse(whisperConfig.whisperContextCfg);
+  } catch (const std::invalid_argument& error) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument, error.what());
+  }
   // GPU is opt-in: callers must explicitly set use_gpu=true.
   // Leaving it at the upstream default (true) causes a SIGSEGV at process exit
   // due to ggml Vulkan backend static cleanup (whisper.cpp#2373).
   contextParams.use_gpu = false;
   for (const auto& [key, value] : whisperConfig.whisperContextCfg) {
+    if (main_gpu::isSelectorKey(key))
+      continue;
     try {
       WHISPER_CONTEXT_HANDLERS.at(key)(contextParams, value);
     } catch (const std::exception& e) {

@@ -49,39 +49,6 @@ export function isAddonContextOverflowError(err: unknown): boolean {
   return CONTEXT_OVERFLOW_FORMS.some((form) => form.test(trimmed))
 }
 
-// Refusals thrown before any decode or disk save; the async transport delivers
-// exception.what() alone, so each form is matched complete and end-anchored.
-const PRE_MUTATION_REFUSAL_FORMS = [
-  /^ContinuousBatchScheduler::submit: prompt of \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
-  /^ContinuousBatchScheduler::submit: prompt of \d+ tokens leaves no room under per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
-  /^ContinuousBatchScheduler::submit: prefill prompt of \d+ tokens exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
-  /^ContinuousBatchScheduler::submit: n_predict [1-9]\d* \+ prompt \d+ KV cells exceeds per-sequence cap \d+ \(ctxTotalTokens \/ n_parallel\)$/,
-  /^ContinuousBatchScheduler::submit: failed to add to batch \(MultiRequestBatcher::AddStatus=[1-4]\)$/,
-  /^invalid generationParams\.json_schema: [^\r\n]*$/,
-  /^failed to initialise sampler with per-request generationParams \(invalid grammar or json_schema\?\)$/,
-  /^\[MtmdLlm\] Media buffer is empty$/,
-  /^\[MtmdLlm\] Filename is empty$/,
-  /^\[MtmdLlm\] Failed to load media from file: [^\r\n]*$/,
-  /^\[MtmdLlm\] preparePrefill: prompt must end with text after the last media item$/
-]
-
-export function isAddonPreMutationRefusal(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) return false
-  // A status code only exists on the synchronous throw path; when present it
-  // must be InvalidArgument, and its absence (the async transport) is fine.
-  const code = (err as { code?: unknown }).code
-  if (
-    code !== undefined &&
-    (typeof code !== 'string' || !/^\[\s*[\w.-]+\s*::\s*InvalidArgument\s*\]$/.test(code))
-  ) {
-    return false
-  }
-  const message = (err as { message?: unknown }).message
-  if (typeof message !== 'string') return false
-  const trimmed = message.trim()
-  return PRE_MUTATION_REFUSAL_FORMS.some((form) => form.test(trimmed))
-}
-
 export type ContextOverflowSizes = {
   /** The prompt alone, in tokens; unset when the guard reports KV cells. */
   promptTokens?: number

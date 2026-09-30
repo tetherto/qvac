@@ -1,5 +1,8 @@
 import test from 'brittle'
 import {
+  completionClientParamsSchema,
+  completionOrchestrateRequestSchema,
+  completionStreamRequestSchema,
   completionStreamResponseSchema,
   completionStatsSchema,
   generationParamsSchema,
@@ -117,4 +120,197 @@ test('completionStreamResponseSchema: round-trips backendDevice through completi
       t.is(statsEvent.stats.backendDevice, 'cpu')
     }
   }
+})
+
+test('generationParamsSchema: accepts tool_choice modes and a tool name, rejects other shapes', (t) => {
+  for (const tool_choice of ['auto', 'none', 'required', 'get_weather']) {
+    t.is(generationParamsSchema.safeParse({ tool_choice }).success, true, tool_choice)
+  }
+  t.is(generationParamsSchema.safeParse({ tool_choice: '' }).success, false, 'empty string')
+  t.is(
+    generationParamsSchema.safeParse({ tool_choice: { type: 'function' } }).success,
+    false,
+    'OpenAI object form is mapped by the caller, not accepted here'
+  )
+})
+
+const weatherTool = {
+  type: 'function' as const,
+  name: 'get_weather',
+  description: 'Get weather for a city',
+  parameters: { type: 'object' as const, properties: { city: { type: 'string' as const } } }
+}
+
+const baseCompletion = {
+  modelId: 'model',
+  history: [{ role: 'user', content: 'Weather in Lugano?' }],
+  stream: true
+}
+
+function acceptsCompletion(params: Record<string, unknown>): boolean {
+  return completionClientParamsSchema.safeParse({ ...baseCompletion, ...params }).success
+}
+
+test('completionClientParamsSchema: a demanding tool_choice needs matching tools', (t) => {
+  t.is(
+    acceptsCompletion({ generationParams: { tool_choice: 'required' } }),
+    false,
+    'required, no tools'
+  )
+  t.is(
+    acceptsCompletion({ generationParams: { tool_choice: 'get_weather' } }),
+    false,
+    'name, no tools'
+  )
+  t.is(
+    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'get_time' } }),
+    false,
+    'name not among the declared tools'
+  )
+  t.is(
+    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'required' } }),
+    true
+  )
+  t.is(
+    acceptsCompletion({ tools: [weatherTool], generationParams: { tool_choice: 'get_weather' } }),
+    true
+  )
+})
+
+test('completionClientParamsSchema: auto and none need no tools', (t) => {
+  t.is(acceptsCompletion({ generationParams: { tool_choice: 'auto' } }), true)
+  t.is(acceptsCompletion({ generationParams: { tool_choice: 'none' } }), true)
+})
+
+// The orchestrate request is the entry point for the worker's tool loop, and
+// the inner turn it dispatches is never re-parsed -- so an unmatched
+// tool_choice has to be rejected here or it reaches the addon.
+test('request schemas: every completion entry point rejects an unmatched tool_choice', (t) => {
+  const cases = [
+    { generationParams: { tool_choice: 'required' } },
+    { generationParams: { tool_choice: 'get_weather' } },
+    { tools: [weatherTool], generationParams: { tool_choice: 'get_time' } }
+  ]
+  const accepted = { tools: [weatherTool], generationParams: { tool_choice: 'get_weather' } }
+
+  for (const params of cases) {
+    t.is(
+      completionStreamRequestSchema.safeParse({
+        ...baseCompletion,
+        type: 'completionStream',
+        ...params
+      }).success,
+      false,
+      `completionStream: ${JSON.stringify(params.generationParams)}`
+    )
+    t.is(
+      completionOrchestrateRequestSchema.safeParse({
+        ...baseCompletion,
+        type: 'completionOrchestrate',
+        ...params
+      }).success,
+      false,
+      `completionOrchestrate: ${JSON.stringify(params.generationParams)}`
+    )
+  }
+
+  t.is(
+    completionStreamRequestSchema.safeParse({
+      ...baseCompletion,
+      type: 'completionStream',
+      ...accepted
+    }).success,
+    true
+  )
+  t.is(
+    completionOrchestrateRequestSchema.safeParse({
+      ...baseCompletion,
+      type: 'completionOrchestrate',
+      ...accepted
+    }).success,
+    true
+  )
+})
+
+test('toolSchema: deferLoading and group are optional and preserved', (t) => {
+  const base = {
+    type: 'function',
+    name: 'create_issue',
+    description: 'Open an issue',
+    parameters: { type: 'object', properties: {} }
+  }
+
+  t.is(toolSchema.safeParse(base).success, true, 'a tool without them is unchanged')
+
+  const parsed = toolSchema.safeParse({ ...base, deferLoading: true, group: 'github' })
+  t.is(parsed.success, true)
+  t.is(parsed.success && parsed.data.deferLoading, true)
+  t.is(parsed.success && parsed.data.group, 'github')
+})
+
+test('completionClientParamsSchema: "tool_search" is reserved only when something defers', (t) => {
+  const own = {
+    type: 'function',
+    name: 'tool_search',
+    description: 'mine',
+    parameters: { type: 'object', properties: {} }
+  }
+  const deferred = {
+    type: 'function',
+    name: 'create_issue',
+    description: 'Open an issue',
+    deferLoading: true,
+    parameters: { type: 'object', properties: {} }
+  }
+  const base = { modelId: 'm', history: [{ role: 'user', content: 'hi' }], stream: true }
+
+  t.is(
+    completionClientParamsSchema.safeParse({ ...base, tools: [own] }).success,
+    true,
+    'a caller tool named tool_search is fine when nothing defers'
+  )
+
+  const result = completionClientParamsSchema.safeParse({ ...base, tools: [own, deferred] })
+  t.is(result.success, false)
+  t.ok(
+    !result.success && result.error.issues.some((issue) => issue.message.includes('reserved')),
+    'the message says the name is reserved'
+  )
+})
+
+test('completionClientParamsSchema: tool_choice cannot name a deferred tool', (t) => {
+  const deferred = {
+    type: 'function',
+    name: 'create_issue',
+    description: 'Open an issue',
+    deferLoading: true,
+    parameters: { type: 'object', properties: {} }
+  }
+
+  const named = completionClientParamsSchema.safeParse({
+    modelId: 'm',
+    history: [{ role: 'user', content: 'hi' }],
+    stream: true,
+    tools: [deferred],
+    generationParams: { tool_choice: 'create_issue' }
+  })
+  t.is(named.success, false, 'its schema is not in the prompt, so it cannot be forced')
+
+  const search = completionClientParamsSchema.safeParse({
+    modelId: 'm',
+    history: [{ role: 'user', content: 'hi' }],
+    stream: true,
+    tools: [deferred],
+    generationParams: { tool_choice: 'tool_search' }
+  })
+  t.is(search.success, true, 'forcing a search is allowed when something defers')
+
+  const noDefer = completionClientParamsSchema.safeParse({
+    modelId: 'm',
+    history: [{ role: 'user', content: 'hi' }],
+    stream: true,
+    tools: [{ ...deferred, deferLoading: false }],
+    generationParams: { tool_choice: 'tool_search' }
+  })
+  t.is(noDefer.success, false, 'there is no search tool when nothing defers')
 })

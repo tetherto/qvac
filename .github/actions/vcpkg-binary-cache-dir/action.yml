@@ -1,0 +1,191 @@
+name: "vcpkg binary cache directory"
+description: >-
+  Point vcpkg at its binary cache and say whether that directory survives the
+  job. Exports VCPKG_BINARY_SOURCES, VCPKG_CACHE_DIR and VCPKG_CACHE_PERSISTENT.
+
+# Two cache layers, host first:
+#   - self-hosted: a directory on the HOST, shared by every runner instance on
+#     the box and surviving the workspace wipe. Reading it costs no download.
+#   - always: the workspace directory, carried between runs by the caller's
+#     actions/cache, which is repo-global and so covers landing on a host that
+#     has never built this package.
+#
+# Must run AFTER setup-vcpkg, which writes VCPKG_BINARY_SOURCES itself and would
+# otherwise win.
+#
+# The two events get OPPOSITE halves of the host layer, and neither gets both:
+#
+#   untrusted -> `read`   consume what is there, never add to it.
+#   trusted   -> `write`  populate it for the PR legs, never build from it.
+#
+# `write` rather than `readwrite` on the trusted side is what keeps each
+# actions/cache entry scoped to its own package. The host path has no package
+# component -- that is the design, and the cross-addon qvac-fabric reuse is the
+# win -- so a trusted run that READ it would restore another addon's archives
+# into its workspace and upload them under this package's key. Every PR leg would
+# then download the union of every addon built on that host.
+#
+# It also makes eviction recovery hold by construction instead of by copying:
+# with the host layer unreadable, a trusted run whose keyed entry is gone has
+# nothing to restore from, so it compiles, and the save recreates the entry from
+# a real build. That is why the sync in the callers only runs workspace -> host.
+#
+# And it closes the promotion path: archives in the shared directory cannot reach
+# the repo-global cache, because no run that writes that cache ever reads them.
+# See .github/AGENTS.md.
+
+inputs:
+  workdir:
+    description: "Package directory, e.g. packages/embed-llamacpp"
+    required: true
+  trusted:
+    description: "'true' when the triggering event may write the shared cache"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - if: runner.os != 'Windows'
+      shell: bash
+      env:
+        INPUT_WORKDIR: ${{ inputs.workdir }}
+        INPUT_TRUSTED: ${{ inputs.trusted }}
+      run: |
+        set -euo pipefail
+
+        # $INPUT_WORKDIR reaches $GITHUB_ENV unescaped, so a newline in it would
+        # inject further variables. setup-vcpkg guards its own inputs the same way.
+        if [[ ! "${INPUT_WORKDIR}" =~ ^packages/[A-Za-z0-9._-]+$ ]]; then
+          echo "::error::unexpected workdir: ${INPUT_WORKDIR}"
+          exit 1
+        fi
+
+        # Host layer is shared; workspace layer is job-local until the caller's
+        # actions/cache saves it, and that save is gated there. `write` not
+        # `readwrite` on the trusted side -- see the header for why a trusted run
+        # must never build from the shared directory.
+        mode="read"
+        if [ "${INPUT_TRUSTED}" = "true" ]; then mode="write"; fi
+
+        persistent="false"
+        host_dir=""
+        cache_dir="${GITHUB_WORKSPACE}/${INPUT_WORKDIR}/vcpkg/cache"
+
+        if [ "${RUNNER_ENVIRONMENT:-}" != "github-hosted" ]; then
+          # First writable candidate wins. /opt/qvac needs root, so it is only
+          # used if someone provisioned it. /var/tmp is already 1777 on every
+          # image, so the first runner creates the directory and the rest can
+          # write it -- /var/tmp not /tmp, which is tmpfs on some images and
+          # cleared on reboot. $HOME is per-user, so it is the last resort.
+          #
+          # Names must not collide with a directory an earlier run created before
+          # this action set 1777: the sticky bit would lock everyone else out.
+          candidates=""
+          if [ -n "${VCPKG_HOST_CACHE_DIR:-}" ]; then
+            candidates="${VCPKG_HOST_CACHE_DIR}"
+          elif [ "${RUNNER_OS}" = "macOS" ]; then
+            candidates="/opt/qvac/vcpkg-cache /Users/Shared/qvac-vcpkg-cache ${HOME}/.cache/qvac/vcpkg-cache"
+          else
+            candidates="/opt/qvac/vcpkg-cache /var/tmp/qvac-vcpkg-cache ${HOME}/.cache/qvac/vcpkg-cache"
+          fi
+
+          for candidate in ${candidates}; do
+            if [ ! -d "${candidate}" ]; then
+              mkdir -p "${candidate}" 2> /dev/null || continue
+              # Instances on one host run as different users; 1777 lets them
+              # all write, sticky stops them deleting each other's archives.
+              chmod 1777 "${candidate}" 2> /dev/null || true
+            fi
+            if [ -w "${candidate}" ]; then
+              host_dir="${candidate}"
+              persistent="true"
+              break
+            fi
+          done
+
+          # Not fatal: the workspace layer below still applies.
+          if [ "${persistent}" != "true" ]; then
+            echo "::warning::no writable host cache dir (${candidates}); workspace layer only"
+          fi
+        fi
+
+        mkdir -p "${cache_dir}"
+
+        # vcpkg reads the readable sources in order and writes every writable
+        # one, so a trusted build compiles against the workspace layer alone and
+        # still populates both.
+        sources="clear"
+        if [ -n "${host_dir}" ]; then
+          sources="${sources};files,${host_dir},${mode}"
+        fi
+        sources="${sources};files,${cache_dir},readwrite"
+
+        echo "VCPKG_BINARY_SOURCES=${sources}" >> "${GITHUB_ENV}"
+        echo "VCPKG_CACHE_DIR=${cache_dir}" >> "${GITHUB_ENV}"
+        echo "VCPKG_CACHE_PERSISTENT=${persistent}" >> "${GITHUB_ENV}"
+        echo "vcpkg binary sources: ${sources}"
+
+    - if: runner.os == 'Windows'
+      shell: powershell
+      env:
+        INPUT_WORKDIR: ${{ inputs.workdir }}
+        INPUT_TRUSTED: ${{ inputs.trusted }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # \A..\z, not ^..$: .NET's $ also matches before a trailing newline.
+        if ($env:INPUT_WORKDIR -notmatch '\Apackages/[A-Za-z0-9._-]+\z') {
+          Write-Output "::error::unexpected workdir: $env:INPUT_WORKDIR"
+          exit 1
+        }
+
+        # `write` not `readwrite` when trusted -- see the header.
+        $mode = if ($env:INPUT_TRUSTED -eq 'true') { 'write' } else { 'read' }
+
+        $persistent = 'false'
+        $hostDir = ''
+        # Native path required: a mixed-separator path resolves elsewhere and
+        # vcpkg silently finds nothing.
+        $cacheDir = [IO.Path]::GetFullPath((Join-Path $env:GITHUB_WORKSPACE (Join-Path $env:INPUT_WORKDIR 'vcpkg/cache')))
+
+        if ($env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+          # Same reasoning as the bash branch: runner instances on one host may
+          # run as different users, so try the shared location first and fall
+          # through to a per-user one rather than going cold. Writability is
+          # probed by actually writing, since ACLs make Test-Path insufficient.
+          $candidates = if ($env:VCPKG_HOST_CACHE_DIR) {
+            @($env:VCPKG_HOST_CACHE_DIR)
+          } else {
+            @('C:\qvac\vcpkg-cache', (Join-Path $env:LOCALAPPDATA 'qvac\vcpkg-cache'))
+          }
+
+          foreach ($candidate in $candidates) {
+            try {
+              New-Item -ItemType Directory -Force -Path $candidate -ErrorAction Stop | Out-Null
+              $probe = Join-Path $candidate ".write-probe-$env:GITHUB_RUN_ID"
+              Set-Content -Path $probe -Value 'ok' -ErrorAction Stop
+              Remove-Item $probe -Force
+              $hostDir = [IO.Path]::GetFullPath($candidate)
+              $persistent = 'true'
+              break
+            } catch {
+              continue
+            }
+          }
+
+          if ($persistent -ne 'true') {
+            Write-Output "::warning::no writable host cache dir ($($candidates -join ', ')); workspace layer only"
+          }
+        }
+
+        New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+
+        # Two layers, host first -- see the bash branch for why.
+        $sources = 'clear'
+        if ($hostDir) { $sources = "$sources;files,$hostDir,$mode" }
+        $sources = "$sources;files,$cacheDir,readwrite"
+
+        echo "VCPKG_BINARY_SOURCES=$sources" >> $env:GITHUB_ENV
+        echo "VCPKG_CACHE_DIR=$cacheDir" >> $env:GITHUB_ENV
+        echo "VCPKG_CACHE_PERSISTENT=$persistent" >> $env:GITHUB_ENV
+        Write-Output "vcpkg binary sources: $sources"

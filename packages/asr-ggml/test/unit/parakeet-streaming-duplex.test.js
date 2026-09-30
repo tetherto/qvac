@@ -206,6 +206,55 @@ test('endStreaming delivers undelivered Output backlog before JobEnded (tail-cut
   await model.unload()
 })
 
+test('runStreaming waits for failed-input teardown before opening the recovery session', async (t) => {
+  const binding = new MockedBinding()
+  binding.deferNextStreamingTerminal()
+
+  const model = createMockedModel({ binding })
+  await model.load()
+
+  let rejectInput
+  const failingStream = {
+    [Symbol.asyncIterator]() {
+      return {
+        next() {
+          return new Promise((resolve, reject) => {
+            rejectInput = reject
+          })
+        }
+      }
+    }
+  }
+
+  const firstResponse = await model.runStreaming(failingStream)
+  const firstDone = firstResponse.await().catch((error) => error)
+
+  rejectInput(new Error('client stream failed'))
+  await wait()
+
+  t.is(binding._streamingLog.ends, 1, 'Failed input started native teardown')
+
+  const recoveryStream = pushable()
+  let recoveryStarted = false
+  const recoveryStart = model.runStreaming(recoveryStream).then((response) => {
+    recoveryStarted = true
+    return response
+  })
+
+  await wait()
+  t.is(recoveryStarted, false, 'Recovery waits while the previous native terminal event is pending')
+
+  binding.flushDeferredStreamingTerminal()
+  const recoveryResponse = await recoveryStart
+
+  t.ok(await firstDone, 'The original iterator failure reaches its response')
+  t.is(binding._streamingLog.starts, 2, 'Recovery opens after teardown completes')
+
+  recoveryStream.end()
+  await recoveryResponse.await()
+  await model.unload()
+})
+
 test('concurrent endStreaming calls join the in-flight teardown without dropping outputs', async (t) => {
   // The first endStreaming removes the native session and waits for its
   // queued terminal event. A second concurrent call used to see

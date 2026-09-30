@@ -101,6 +101,18 @@ const WorldSessionHandlersMap WORLD_SESSION_HANDLERS = {
      [](WorldSessionConfig& c, const std::string& v) { c.backendsDir = v; }},
     {"backend",
      [](WorldSessionConfig& c, const std::string& v) { c.backend = v; }},
+    {"paramsBackend",
+     [](WorldSessionConfig& c, const std::string& v) { c.paramsBackend = v; }},
+    {"maxVram",
+     [](WorldSessionConfig& c, const std::string& v) { c.maxVram = v; }},
+    {"streamLayers",
+     [](WorldSessionConfig& c, const std::string& v) {
+       c.streamLayers = parseBool(v, "streamLayers");
+     }},
+    {"verbosity",
+     [](WorldSessionConfig& c, const std::string& v) {
+       c.verbosity = parseIntInRange(v, "verbosity", 0, 3);
+     }},
 
     {"threads",
      [](WorldSessionConfig& c, const std::string& v) {

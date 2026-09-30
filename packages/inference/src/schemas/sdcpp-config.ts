@@ -49,6 +49,28 @@ const cacheModeSchema = z.enum([
   'cache-dit'
 ])
 
+function removedBackendOption(key: string, guidance: string) {
+  return (
+    z
+      .custom<never>(() => false, {
+        // Keep unions from replacing the migration error with a fallback error.
+        abort: false,
+        error: (issue) =>
+          `${key} is no longer supported. ` +
+          (issue.input === false ||
+          issue.input === 0 ||
+          issue.input === 'false' ||
+          issue.input === '0'
+            ? 'Remove it; no replacement is needed when it is false.'
+            : guidance)
+      })
+      .optional()
+      .describe(`Removed. ${guidance}`)
+      // JSON Schema cannot infer the custom check's rejection of every value.
+      .meta({ not: {}, deprecated: true })
+  )
+}
+
 export const sdcppConfigSchema = z.object({
   mode: z
     .enum(['diffusion', 'upscale', 'video', 'world'])
@@ -76,8 +98,10 @@ export const sdcppConfigSchema = z.object({
         'worldCreateScene({ ... }) and worldStep({ ... }). It requires ' +
         '`taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes ' +
         'and/or `sceneSrc` to walk a pre-built one. World sessions run only on ' +
-        'the machine hosting the worker and need a dedicated GPU with at least ' +
-        '20 GB free VRAM.'
+        'the machine hosting the worker and need a dedicated GPU. At 832x480, ' +
+        'the default walk with resident weights needs at least 20 GB free VRAM. ' +
+        '`world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can ' +
+        'reduce that requirement.'
     ),
   threads: z.number().optional().describe('CPU threads for loading and CPU ops. Default: auto.'),
   device: z
@@ -131,8 +155,6 @@ export const sdcppConfigSchema = z.object({
     .enum(['cpu', 'cuda', 'std_default'])
     .optional()
     .describe('Sampler RNG type override. Default: auto (follows `rng`).'),
-  clip_on_cpu: z.boolean().optional().describe('Force CLIP text encoder to run on CPU'),
-  vae_on_cpu: z.boolean().optional().describe('Force VAE decoder to run on CPU'),
   vae_auto_cpu_fallback: z
     .boolean()
     .optional()
@@ -147,17 +169,65 @@ export const sdcppConfigSchema = z.object({
   offload_to_cpu: z
     .boolean()
     .optional()
-    .describe('Keep model weights in CPU memory and offload them during GPU compute'),
-  backend: z.string().optional().describe('Native compute backend assignment; overrides main-gpu.'),
+    .describe(
+      'Keep model weights in CPU memory and offload them during GPU compute. ' +
+        "Supplies a '*=cpu' parameter residency default; explicit params_backend assignments override it per module."
+    ),
+  control_net_cpu: removedBackendOption(
+    'control_net_cpu',
+    "Use modelConfig.backend: 'controlnet=cpu' to run the ControlNet graph on CPU."
+  ),
+  clip_on_cpu: removedBackendOption(
+    'clip_on_cpu',
+    "Use modelConfig.params_backend: 'te=cpu' to keep text encoder parameters in CPU RAM, " +
+      "or modelConfig.backend: 'te=cpu' to run its graph on CPU."
+  ),
+  vae_on_cpu: removedBackendOption(
+    'vae_on_cpu',
+    "Use modelConfig.params_backend: 'vae=cpu' to keep VAE parameters in CPU RAM, " +
+      "or modelConfig.backend: 'vae=cpu' to run its graph on CPU."
+  ),
+  backend: z
+    .string()
+    .max(4096)
+    .optional()
+    .describe(
+      'Runtime backend for diffusion and video graphs, globally or per module, ' +
+        "for example 'cuda0' or 'diffusion=vulkan0,te=cpu,vae=cpu'."
+    ),
   params_backend: z
     .string()
+    .max(4096)
     .optional()
-    .describe('Native parameter placement; overrides legacy CPU-offload flags.'),
+    .describe(
+      'Parameter residency for diffusion and video, independent of graph execution. ' +
+        "'diffusion=cpu' stages weights from CPU RAM; 'diffusion=disk' reads weights " +
+        'from the local model file on demand and releases them after use. Disk is ' +
+        'never selected automatically. With offload_to_cpu enabled, explicit ' +
+        'assignments override CPU residency only for the specified modules.'
+    ),
   max_vram: z
-    .union([z.number(), z.string()])
+    // No .max() on the string arm: a constraint here makes datamodel-codegen
+    // wrap it in a `MaxVram(RootModel[str])`, so Python callers read back a
+    // wrapper instead of a str. backend/params_backend keep their cap because
+    // they are not union members. The addon parses the spec either way.
+    .union([z.number().finite(), z.string()])
     .optional()
-    .describe('Native VRAM limit or per-backend limits, for example cuda0=6,vulkan0=2.'),
-  stream_layers: z.boolean().optional().describe('Stream model layers during native inference.'),
+    .describe(
+      'VRAM budget in GiB for diffusion and video graph-cut execution. Positive ' +
+        'values set a budget; negative values use free VRAM minus the absolute ' +
+        'value as headroom; 0 disables graph cutting. Accepts per-device assignments ' +
+        "such as 'cuda0=6,vulkan0=4'. Works without stream_layers. Default: 0."
+    ),
+  stream_layers: z
+    .boolean()
+    .optional()
+    .describe(
+      'Prefetch and evict diffusion layers from CPU RAM in diffusion and video ' +
+        'mode. Only takes effect with graph cutting enabled by max_vram and CPU ' +
+        'diffusion parameter residency. Does not stream from disk; use ' +
+        "params_backend: 'diffusion=disk' for on-demand file reads. Default: false."
+    ),
   flash_attn: z.boolean().optional().describe('Enable flash attention to reduce memory usage'),
   diffusion_fa: z
     .boolean()
@@ -304,6 +374,47 @@ export const sdcppConfigSchema = z.object({
         .boolean()
         .optional()
         .describe('Keep weights in CPU memory and offload during GPU compute.'),
+      paramsBackend: z
+        .string()
+        .max(4096)
+        .optional()
+        .describe(
+          'Parameter residency for the walk session, independent of graph ' +
+            "execution. 'diffusion' is the walk DiT and 'vae' the taehv decoder. " +
+            "'diffusion=cpu' stages DiT weights from CPU RAM; 'diffusion=disk' " +
+            'reads them from the model file on demand. Disk is never selected ' +
+            "automatically, and 'vae=disk' is rejected natively because taehv " +
+            'retains its prepared weights across steps. Explicit assignments ' +
+            'override offloadParamsToCpu for those modules.'
+        ),
+      maxVram: z
+        // No .max() on the string arm, for the same reason as the flat max_vram
+        // above: a constraint makes datamodel-codegen wrap it in a RootModel.
+        .union([z.number().finite(), z.string()])
+        .optional()
+        .describe(
+          'VRAM budget in GiB for the walk DiT graph. Positive values set a ' +
+            'budget; negative values use free VRAM minus the absolute value as ' +
+            'headroom; 0 disables graph cutting. Accepts per-device assignments ' +
+            "such as 'cuda0=6,vulkan0=4'. This budgets the DiT graph only — the " +
+            'history KV cache and the decoder allocate on top of it. Default: 0.'
+        ),
+      streamLayers: z
+        .boolean()
+        .optional()
+        .describe(
+          'Prefetch and evict DiT layers from CPU RAM. Only takes effect with ' +
+            'GPU execution, graph cutting enabled by maxVram, and CPU parameter ' +
+            'residency for diffusion. Does not stream from disk; use paramsBackend: ' +
+            "'diffusion=disk' for on-demand file reads. Default: false."
+        ),
+      verbosity: z
+        .union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)])
+        .optional()
+        .describe(
+          'Native log level while the session is alive: 0=ERROR, 1=WARN, ' +
+            '2=INFO, 3=DEBUG. The level is process-wide and restored on unload.'
+        ),
       frameJpegQuality: z
         .number()
         .int()
@@ -394,7 +505,10 @@ export const sdcppConfigSchema = z.object({
     )
 })
 
-export type SdcppConfig = z.input<typeof sdcppConfigSchema>
+export type SdcppConfig = Omit<
+  z.input<typeof sdcppConfigSchema>,
+  'control_net_cpu' | 'clip_on_cpu' | 'vae_on_cpu'
+>
 
 export const diffusionStatsSchema = z.object({
   modelLoadMs: z

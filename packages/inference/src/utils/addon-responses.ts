@@ -9,6 +9,9 @@ export interface LlmStats {
   promptTokens?: number
   generatedTokens?: number
   avgConcurrentSeq?: number
+  // Renders in this request that provably left the supplied tool definitions
+  // out; 0 when no tools were sent.
+  toolDefinitionsDropped?: number
   backendDevice?: 'cpu' | 'gpu'
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'

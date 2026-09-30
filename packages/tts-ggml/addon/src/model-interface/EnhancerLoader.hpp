@@ -33,15 +33,19 @@ struct LoadedEnhancer {
 //                 kBackendDeviceGpu), so an engine CPU-fallback keeps the
 //                 enhancer on CPU too instead of forcing it onto the GPU.
 //   errorContext  prefix for the InitializationFailed message on load failure.
+//   vulkanDevice  Vulkan adapter preference (EnhancerOptions::vulkan_device:
+//                 0 = first, N = Nth, -1 = auto-pick); engines with their own
+//                 adapter knob pass it so both land on the same adapter.
 inline LoadedEnhancer loadEnhancer(
     const std::string& ggufPath, bool resolvedGpu,
-    const std::string& errorContext) {
+    const std::string& errorContext, int vulkanDevice = 0) {
   LoadedEnhancer out;
   if (ggufPath.empty())
     return out;
 
   tts_cpp::lavasr::EnhancerOptions opts;
   opts.use_gpu = resolvedGpu;
+  opts.vulkan_device = vulkanDevice;
   try {
     out.enhancer = tts_cpp::lavasr::Enhancer::load(ggufPath, opts);
   } catch (const std::exception& e) {

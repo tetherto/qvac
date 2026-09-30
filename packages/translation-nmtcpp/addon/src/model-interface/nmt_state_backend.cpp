@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -329,9 +330,9 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
       oss_gpu_init.str());
 
   // Compute-device selection when use_gpu=true: GPU/IGPU Vulkan, Metal,
-  // OpenCL, CUDA and RPC are eligible. Without an explicit gpu_backend,
-  // OpenCL is only picked when QVAC_NMTCPP_USE_OPENCL is defined — otherwise
-  // Bergamot/IndicTrans on Adreno 830 hit a q4_0 transpose crash
+  // OpenCL and CUDA are eligible; RPC is excluded. Without an explicit
+  // gpu_backend, OpenCL is only picked when QVAC_NMTCPP_USE_OPENCL is defined
+  // because Bergamot/IndicTrans on Adreno 830 hit a q4_0 transpose crash
   // (QVAC-17790).
   // Delegate to the shared selector so make_buft_list (in nmt_loader.cpp)
   // and this function agree on the same physical device — historical
@@ -341,7 +342,9 @@ static ggml_backend_t nmt_backend_init_gpu(const nmt_context_params& params) {
       params.use_gpu,
       params.gpu_backend,
       params.gpu_device,
-      "nmt_backend_init_gpu");
+      "nmt_backend_init_gpu",
+      params.main_gpu,
+      params.legacy_gpu_selection);
 
   if (dev == nullptr) {
     QLOG(

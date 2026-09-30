@@ -251,4 +251,11 @@ void normalizePlanPlacement(
 FitResult runFit(const FitRequest& req);
 FitResult runLlamaFit(const LlamaLoadFitRequest& req);
 
+/// Registers the ggml backends a fit measures against. Idempotent, and
+/// serialised within this addon. `runFit`/`runLlamaFit` call it themselves;
+/// the async entry points also call it up front, on the JS thread. Throws
+/// `std::invalid_argument` for a `backendsDir` that is relative or not a
+/// directory.
+void registerBackends(const std::string& backendsDir);
+
 } // namespace model_fit

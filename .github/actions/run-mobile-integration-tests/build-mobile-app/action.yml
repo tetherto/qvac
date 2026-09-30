@@ -172,6 +172,18 @@ runs:
         fi
         echo "Test app built successfully"
 
+    # npm never selects a cross-built platform package, and bare-link reads
+    # only a package's own prebuilds/, so a split addon the framework installed
+    # (e.g. @qvac/fabric) would reach the app without its runtime. Must run
+    # after the framework installs the addon and before `npm run bundle` and
+    # the native project build.
+    - name: Overlay mobile platform prebuilds
+      shell: bash
+      working-directory: ./test-framework
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: node "$GITHUB_ACTION_PATH/overlay-platform-prebuilds.mjs" --platform "$PLATFORM"
+
     # Patches the freshly generated e2e/tests/app.test.js to bump the
     # per-test Mocha ceiling. Two ways to opt in:
     #   * per-test-timeout-minutes      → applies on ALL platforms (Android + iOS)
@@ -243,6 +255,10 @@ runs:
     - name: Setup Android SDK
       if: inputs.platform == 'Android'
       uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # 3.2.2
+      with:
+        # The action's default list still names the legacy `tools` package, which
+        # sdkmanager no longer serves; the build only needs platform-tools.
+        packages: platform-tools
 
     - name: Generate Android project
       if: inputs.platform == 'Android'

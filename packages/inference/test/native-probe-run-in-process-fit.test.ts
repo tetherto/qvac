@@ -208,6 +208,31 @@ test('runInProcessFit: returns the native projection', async (t) => {
   t.is(exists(crashedMarkerPath(stateDir, CONFIG)), false)
 })
 
+test('runInProcessFit: awaits a promise-returning fit and clears the marker', async (t) => {
+  const stateDir = tempDir()
+
+  const result = await runInProcessFit('completion', CONFIG, {
+    stateDir,
+    fit: async () => FIT_PLAN
+  })
+  t.alike(result, { status: 'completed', result: FIT_PLAN })
+  t.is(exists(crashMarkerPath(stateDir, CONFIG)), false)
+
+  const rejected = await runInProcessFit('completion', CONFIG, {
+    stateDir,
+    fit: async () => {
+      throw new RangeError('nCtx exceeds the context length the model declares')
+    }
+  })
+  t.is(rejected.status, 'unknown')
+  if (rejected.status === 'unknown') {
+    t.is(rejected.reason, 'invocation-error')
+    t.ok(/exceeds the context length/.test(rejected.message))
+  }
+  t.is(exists(crashMarkerPath(stateDir, CONFIG)), false)
+  t.is(exists(crashedMarkerPath(stateDir, CONFIG)), false)
+})
+
 test('runInProcessFit: leftover crash marker is unknown and skips the native call', async (t) => {
   const stateDir = tempDir()
   fs.writeFileSync(crashMarkerPath(stateDir, CONFIG), '')

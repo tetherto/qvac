@@ -8,9 +8,9 @@ export interface FitConfig {
      */
     modelPath: string;
     /**
-     * Directory holding ggml backend shared libraries. `@qvac/fabric`'s
-     * `prebuilds/` is used when omitted (desktop); on mobile the packed worklet
-     * falls back to this package's `prebuilds/`. Native code appends
+     * Directory holding ggml backend shared libraries. The root
+     * `@qvac/fabric/backends` resolves is used when omitted (desktop); on mobile
+     * the packed worklet falls back to this package's `prebuilds/`. Native code appends
      * `BACKENDS_SUBDIR` (`<host>/qvac__fabric`).
      *
      * Must be an absolute path that resolves to an existing directory; anything
@@ -232,19 +232,25 @@ export declare const FIT_STATUS: Readonly<{
  * which simulates allocations (no weights are loaded) to project whether the
  * model fits available device memory and, if so, with which offload plan.
  *
- * This is a synchronous, blocking in-process native call. Callers that need
- * isolation should use `@qvac/model-fit/process` to run it in a disposable
- * Bare subprocess.
+ * This is a synchronous, blocking in-process native call; `fitParamsAsync`
+ * runs the same fit on a worker thread. Callers that need isolation should use
+ * `@qvac/model-fit/process` to run it in a disposable Bare subprocess.
  *
  * Calls are serialised process-wide: `common_fit_params` mutates global llama
  * logger state and is not thread safe, so concurrent callers block instead of
  * running together.
  *
  * Backends must be registered before the fitter can see any device. When
- * `backendsDir` is omitted this package resolves `@qvac/fabric`'s `prebuilds/`
- * (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
+ * `backendsDir` is omitted this package uses the root `@qvac/fabric/backends`
+ * resolves (desktop) or this addon's `prebuilds/` (mobile worklet). Omit only for a
  * statically linked build, which self-registers.
  * Every backend library in that directory is `dlopen`ed into this process, so
  * it must be an application-controlled location — never remote or user input.
  */
 export declare function fitParams(config: FitConfig): FitResult;
+/**
+ * `fitParams` on a worker thread: same config, validation and result, without
+ * blocking the JS loop. Validation failures reject. Fits stay serialised
+ * process-wide.
+ */
+export declare function fitParamsAsync(config: FitConfig): Promise<FitResult>;

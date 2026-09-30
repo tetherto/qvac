@@ -7,7 +7,9 @@
 // CosyVoice3's ~2.4 GB model dir, while this one is listed on the dedicated
 // 'cosyvoice' row that pre-stages it (see test/mobile/test-groups.json).
 //
-// Text is kept short to bound CPU LM-decode time in CI, as in cosyvoice3.test.js.
+// As in cosyvoice3.test.js, the model-backed tests run on the GPU only and are
+// skipped on CPU-only runners (NO_GPU=true): even one short CosyVoice3 CPU
+// synthesis costs minutes there.
 //
 // Stage the enhancer GGUF via scripts/convert-lavasr-enhancer-to-gguf.py (from
 // the public LavaSRcpp ONNX release) into models/lavasr/lavasr-enhancer.gguf,
@@ -24,6 +26,8 @@ const {
   ensureLavaSRDenoiserGguf,
   ensureCosyvoiceModel
 } = require('../utils/downloadModel')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { NO_GPU, GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -117,7 +121,7 @@ async function stageCosyvoice(t, baseDir) {
 
 test(
   'CosyVoice3 + LavaSR enhancer (batch) reports 48 kHz enhanced output',
-  { timeout: 900000, skip: SKIP_COSYVOICE },
+  { timeout: 900000, skip: SKIP_COSYVOICE || NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const enh = await stageEnhancer(t, baseDir)
@@ -126,9 +130,10 @@ test(
     if (!dl) return
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: dl.modelDir, lavasrEnhancer: enh.path },
-      config: { language: 'en', useGPU: false },
+      config: { language: 'en', useGPU: GPU_ONLY_USE_GPU },
       opts: { stats: true }
     })
     await model.load()
@@ -139,8 +144,8 @@ test(
       t.ok(r.stats, 'runtimeStats returned (constructed with stats:true)')
       t.is(
         r.stats.enhancerBackendDevice,
-        0,
-        'enhancer loaded and ran on CPU (enhancerBackendDevice=0, not -1 = never loaded)'
+        r.stats.backendDevice,
+        'enhancer loaded and ran on the engine device (not -1 = never loaded)'
       )
     } finally {
       try {
@@ -152,7 +157,7 @@ test(
 
 test(
   'CosyVoice3 + LavaSR enhancer + native chunk streaming emits 48 kHz chunks',
-  { timeout: 900000, skip: SKIP_COSYVOICE },
+  { timeout: 900000, skip: SKIP_COSYVOICE || NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const enh = await stageEnhancer(t, baseDir)
@@ -161,10 +166,11 @@ test(
     if (!dl) return
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: dl.modelDir, lavasrEnhancer: enh.path },
       streamChunkTokens: 25,
-      config: { language: 'en', useGPU: false },
+      config: { language: 'en', useGPU: GPU_ONLY_USE_GPU },
       opts: { stats: true }
     })
     await model.load()
@@ -188,7 +194,7 @@ test(
 
 test(
   'CosyVoice3 + enhancer + streaming resamples every chunk to outputSampleRate',
-  { timeout: 900000, skip: SKIP_COSYVOICE },
+  { timeout: 900000, skip: SKIP_COSYVOICE || NO_GPU },
   async (t) => {
     // A non-native rate while streaming is only legal because the enhancer's
     // overlap-reprocess window folds the resample in seam-free. Without this the
@@ -201,10 +207,11 @@ test(
     if (!dl) return
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: dl.modelDir, lavasrEnhancer: enh.path },
       streamChunkTokens: 25,
-      config: { language: 'en', useGPU: false, outputSampleRate: 16000 },
+      config: { language: 'en', useGPU: GPU_ONLY_USE_GPU, outputSampleRate: 16000 },
       opts: { stats: true }
     })
     await model.load()
@@ -224,7 +231,7 @@ test(
 
 test(
   'CosyVoice3 + LavaSR denoiser changes the emitted PCM',
-  { timeout: 900000, skip: SKIP_COSYVOICE },
+  { timeout: 900000, skip: SKIP_COSYVOICE || NO_GPU },
   async (t) => {
     const baseDir = getBaseDir()
     const dl = await stageCosyvoice(t, baseDir)
@@ -240,9 +247,10 @@ test(
 
     const synth = async (files) => {
       const model = new TTSGgml({
+        threads: TTS_TEST_THREADS,
         engine: TTSGgml.ENGINE_COSYVOICE3,
         files: Object.assign({ cosyvoiceModelDir: dl.modelDir }, files),
-        config: { language: 'en', useGPU: false, seed: SEED },
+        config: { language: 'en', useGPU: GPU_ONLY_USE_GPU, seed: SEED },
         opts: { stats: true }
       })
       await model.load()
@@ -289,9 +297,11 @@ test(
     if (!dl) return
 
     const badEnhancer = path.join(baseDir, 'models', 'lavasr', 'invalid-enhancer.gguf')
+    fs.mkdirSync(path.dirname(badEnhancer), { recursive: true })
     fs.writeFileSync(badEnhancer, 'not a gguf')
 
     const model = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_COSYVOICE3,
       files: { cosyvoiceModelDir: dl.modelDir, lavasrEnhancer: badEnhancer },
       config: { language: 'en', useGPU: false },

@@ -13,7 +13,8 @@ import {
   type TranscribeStreamConversationSession,
   type TranscribeStreamEvent,
   type TranscribeStreamResponse,
-  type TranscribeStats
+  type TranscribeStats,
+  type InferenceBackendDiagnostics
 } from '@qvac/inference/surface'
 import { stream, duplex, type DuplexReadable } from '@/client/rpc/rpc-client'
 import { getClientLogger } from '@/logging'
@@ -54,8 +55,9 @@ function buildTranscribeRequest(
  * @param params.audioChunk - Audio input as either a file path (string) or audio buffer
  * @param params.prompt - Optional initial prompt to guide the transcription
  * @param params.metadata - When true, resolves to an array of transcript
- *                          segments (`{ text, startMs, endMs, append, id }`)
- *                          instead of joined text. Whisper engine only.
+ *                          segments (`{ text, startMs, endMs, append, id }`,
+ *                          plus `isEndOfTurn` and `startsWord` on parakeet)
+ *                          instead of joined text.
  * @param options - Optional RPC options including per-call profiling
  * @returns A promise (decorated with `requestId`) resolving to the
  *          complete transcribed text, or — when `metadata` is true —
@@ -162,8 +164,9 @@ export function transcribeStream(
  * @param params.modelId - The loaded transcription model to use
  * @param params.prompt - Optional initial prompt to guide transcription
  * @param params.metadata - When true, the session yields transcript segment
- *                          objects (`{ text, startMs, endMs, append, id }`)
- *                          instead of plain text. Whisper engine only.
+ *                          objects (`{ text, startMs, endMs, append, id }`,
+ *                          plus `isEndOfTurn` and `startsWord` on parakeet)
+ *                          instead of plain text.
  * @param options - Optional RPC options including per-call profiling.
  * @returns A session object: call `write(audioChunk)` with a `Uint8Array`
  *          (Node `Buffer` is a `Uint8Array` subtype) to feed audio,
@@ -284,12 +287,16 @@ export async function createTranscribeStreamSession<T>(
   options: RPCOptions | undefined,
   process: (
     line: string,
-    onStats: (stats: TranscribeStats | undefined) => void
+    onTerminal: (
+      stats: TranscribeStats | undefined,
+      diagnostics: InferenceBackendDiagnostics | undefined
+    ) => void
   ) => T | undefined | null,
   sessionName: string,
   duplexFactory: TranscribeDuplexFactory = duplex
 ): Promise<{
   stats: Promise<TranscribeStats | undefined>
+  diagnostics: Promise<InferenceBackendDiagnostics | undefined>
   write(audioChunk: Uint8Array): void
   end(): void
   destroy(): void
@@ -320,19 +327,61 @@ export async function createTranscribeStreamSession<T>(
     rejectStatsPromise(error)
   }
 
-  function resolveEmptyStats() {
-    resolveStats(undefined)
+  // Settled from the same terminal frame as `stats`, and on the same paths:
+  // resolved empty when the stream closes without one, rejected on error.
+  let diagnosticsSettled = false
+  let resolveDiagnosticsPromise: (value: InferenceBackendDiagnostics | undefined) => void = () => {}
+  let rejectDiagnosticsPromise: (error: unknown) => void = () => {}
+  const diagnostics = new Promise<InferenceBackendDiagnostics | undefined>((resolve, reject) => {
+    resolveDiagnosticsPromise = resolve
+    rejectDiagnosticsPromise = reject
+  })
+  diagnostics.catch(() => {})
+
+  function resolveDiagnostics(value: InferenceBackendDiagnostics | undefined) {
+    if (diagnosticsSettled) return
+    diagnosticsSettled = true
+    resolveDiagnosticsPromise(value)
+  }
+
+  function rejectDiagnostics(error: unknown) {
+    if (diagnosticsSettled) return
+    diagnosticsSettled = true
+    rejectDiagnosticsPromise(error)
+  }
+
+  function resolveTerminal(
+    statsValue: TranscribeStats | undefined,
+    diagnosticsValue: InferenceBackendDiagnostics | undefined
+  ) {
+    resolveStats(statsValue)
+    resolveDiagnostics(diagnosticsValue)
+  }
+
+  function resolveEmptyTerminal() {
+    resolveTerminal(undefined, undefined)
+  }
+
+  function rejectTerminal(error: unknown) {
+    rejectStats(error)
+    rejectDiagnostics(error)
   }
 
   function processResponse(line: string) {
-    return process(line, resolveStats)
+    return process(line, resolveTerminal)
   }
 
-  const responses = parseLines(responseStream, processResponse, resolveEmptyStats, rejectStats)
+  const responses = parseLines(
+    responseStream,
+    processResponse,
+    resolveEmptyTerminal,
+    rejectTerminal
+  )
   let consumed = false
 
   return {
     stats,
+    diagnostics,
     write(audioChunk: Uint8Array) {
       requestStream.write(audioChunk)
     },
@@ -340,7 +389,7 @@ export async function createTranscribeStreamSession<T>(
       requestStream.end()
     },
     destroy() {
-      resolveStats(undefined)
+      resolveEmptyTerminal()
       requestStream.destroy()
       responseStream.destroy()
     },
@@ -381,7 +430,7 @@ function transcribeStreamDuplexConversation(
   return createTranscribeStreamSession(
     params,
     options,
-    (line, onStats) => processLineConversation(line, wantsMetadata, onStats),
+    (line, onTerminal) => processLineConversation(line, wantsMetadata, onTerminal),
     'TranscribeStreamConversationSession'
   )
 }
@@ -452,13 +501,16 @@ function parseResponseLine(line: string): TranscribeStreamResponse | null {
 function processWith<T>(
   line: string,
   extract: (response: TranscribeStreamResponse) => T | undefined,
-  onStats: (stats: TranscribeStats | undefined) => void
+  onTerminal: (
+    stats: TranscribeStats | undefined,
+    diagnostics: InferenceBackendDiagnostics | undefined
+  ) => void
 ): T | undefined | null {
   const response = parseResponseLine(line)
   if (response === null) return undefined
   if (response.error) throw new TranscriptionFailedError(response.error)
   if (response.done) {
-    onStats(response.stats)
+    onTerminal(response.stats, response.diagnostics)
     return null
   }
   return extract(response)
@@ -466,26 +518,35 @@ function processWith<T>(
 
 export function processLine(
   line: string,
-  onStats: (stats: TranscribeStats | undefined) => void
+  onTerminal: (
+    stats: TranscribeStats | undefined,
+    diagnostics: InferenceBackendDiagnostics | undefined
+  ) => void
 ): string | undefined | null {
   return processWith(
     line,
     (response) => (response.text?.trim() ? response.text : undefined),
-    onStats
+    onTerminal
   )
 }
 
 function processLineMetadata(
   line: string,
-  onStats: (stats: TranscribeStats | undefined) => void
+  onTerminal: (
+    stats: TranscribeStats | undefined,
+    diagnostics: InferenceBackendDiagnostics | undefined
+  ) => void
 ): TranscribeSegment | undefined | null {
-  return processWith(line, (response) => response.segment, onStats)
+  return processWith(line, (response) => response.segment, onTerminal)
 }
 
-function processLineConversation(
+export function processLineConversation(
   line: string,
   wantsMetadata: boolean,
-  onStats: (stats: TranscribeStats | undefined) => void
+  onTerminal: (
+    stats: TranscribeStats | undefined,
+    diagnostics: InferenceBackendDiagnostics | undefined
+  ) => void
 ): TranscribeStreamEvent | undefined | null {
   return processWith(
     line,
@@ -494,7 +555,8 @@ function processLineConversation(
         return {
           type: 'vad',
           speaking: response.vad.speaking,
-          probability: response.vad.probability
+          probability: response.vad.probability,
+          ...(response.vad.source && { source: response.vad.source })
         }
       }
       if (response.endOfTurn) {
@@ -521,6 +583,6 @@ function processLineConversation(
       }
       return undefined
     },
-    onStats
+    onTerminal
   )
 }

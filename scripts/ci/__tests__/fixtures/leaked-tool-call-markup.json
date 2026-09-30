@@ -1,0 +1,117 @@
+{
+  "payloads": [
+    {
+      "text": "<tool_call>\n</tool_call>",
+      "mediaUrl": null
+    }
+  ],
+  "meta": {
+    "durationMs": 85573,
+    "agentMeta": {
+      "sessionId": "qvac-openclaw-upstream-compat-1",
+      "sessionFile": "agent:main:explicit:qvac-openclaw-upstream-compat-1",
+      "provider": "qvac",
+      "model": "qwen3.5-0.8b",
+      "contextTokens": 32768,
+      "contextTokensSource": "resolved",
+      "agentHarnessId": "openclaw",
+      "credentialSource": {
+        "kind": "direct",
+        "evidence": "provider-config",
+        "authorization": "declared"
+      },
+      "usage": {
+        "output": 32,
+        "cacheRead": 6336,
+        "cacheWrite": 0,
+        "total": 6368,
+        "cost": {
+          "total": 0
+        }
+      },
+      "lastCallUsage": {
+        "input": 0,
+        "output": 32,
+        "cacheRead": 6336,
+        "cacheWrite": 0,
+        "cost": {
+          "total": 0
+        },
+        "total": 6368
+      },
+      "promptTokens": 6336,
+      "contextBudgetStatus": {
+        "schemaVersion": 1,
+        "source": "pre-prompt-estimate",
+        "updatedAt": 1788969286008,
+        "provider": "qvac",
+        "model": "qwen3.5-0.8b",
+        "route": "fits",
+        "shouldCompact": false,
+        "estimatedPromptTokens": 7192,
+        "contextTokenBudget": 32768,
+        "promptBudgetBeforeReserve": 24576,
+        "reserveTokens": 8192,
+        "effectiveReserveTokens": 8192,
+        "remainingPromptBudgetTokens": 17384,
+        "overflowTokens": 0,
+        "toolResultReducibleChars": 0,
+        "messageCount": 0,
+        "unwindowedMessageCount": 0,
+        "sessionId": "qvac-openclaw-upstream-compat-1"
+      },
+      "codeModeEngaged": false,
+      "assistantTurns": 1,
+      "bridgeCalls": {
+        "search": 0,
+        "describe": 0,
+        "call": 0
+      },
+      "costUsd": 0,
+      "terminalReceipt": {
+        "runId": "c7c6bc13-6971-453a-9f06-46eb4cd1f151",
+        "sessionId": "qvac-openclaw-upstream-compat-1",
+        "turnId": "c7c6bc13-6971-453a-9f06-46eb4cd1f151",
+        "requested": {
+          "provider": "qvac",
+          "model": "qwen3.5-0.8b"
+        },
+        "effective": {
+          "provider": "qvac",
+          "model": "qwen3.5-0.8b",
+          "responseModel": "qwen3.5-0.8b"
+        },
+        "successfulToolNames": [],
+        "rerouted": false
+      }
+    },
+    "aborted": false,
+    "finalPromptText": "Answer in chat with the single word qvac-ok. Do not call any tools and do not write any files.",
+    "finalAssistantVisibleText": "<tool_call>\n</tool_call>",
+    "finalAssistantRawText": "<tool_call>\n</tool_call>",
+    "replayInvalid": false,
+    "livenessState": "working",
+    "stopReason": "stop",
+    "executionTrace": {
+      "winnerProvider": "qvac",
+      "winnerModel": "qwen3.5-0.8b",
+      "attempts": [
+        {
+          "provider": "qvac",
+          "model": "qwen3.5-0.8b",
+          "result": "success",
+          "stage": "assistant"
+        }
+      ],
+      "fallbackUsed": false,
+      "runner": "embedded"
+    },
+    "requestShaping": {
+      "thinking": "off"
+    },
+    "completion": {
+      "stopReason": "stop",
+      "finishReason": "stop"
+    }
+  }
+}

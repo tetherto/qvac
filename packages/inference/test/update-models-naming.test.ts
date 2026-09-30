@@ -371,6 +371,39 @@ test('llm: Qwen3-4B — full field mapping with legacy engine + s3 source', (t) 
   t.is(exportName, 'QWEN3_4B_INST_Q4')
 })
 
+test('llm: BitNet pretrained checkpoints use the base type tag, not instruct', (t) => {
+  const cases = [
+    {
+      path: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf',
+      params: '0.7B',
+      expected: 'BITNET_0_7B_BASE_TQ2_0'
+    },
+    {
+      path: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-xl-TQ2_0.gguf',
+      params: '1B',
+      expected: 'BITNET_1B_BASE_TQ2_0'
+    },
+    {
+      path: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-3B-TQ2_0.gguf',
+      params: '3B',
+      expected: 'BITNET_B1_58_3B_BASE_TQ2_0'
+    }
+  ]
+
+  for (const { path, params, expected } of cases) {
+    const exportName = generateExportName({
+      path,
+      engine: 'llamacpp-completion',
+      name: 'bitnet',
+      quantization: 'TQ2_0',
+      params,
+      tags: ['generation', 'base', 'bitnet'],
+      usedNames: new Set<string>()
+    })
+    t.is(exportName, expected)
+  }
+})
+
 test('llm: does not duplicate params already present in the model name', (t) => {
   const exportName = generateExportName({
     path: 'unsloth/Qwen3-4B-GGUF/resolve/revision/Qwen3-4B-Q4_K_M.gguf',
@@ -1739,6 +1772,32 @@ test('parakeet: Unified RNN-T GGUF keeps PARAKEET_UNIFIED_<params>_<quant>', (t)
   })
 
   t.is(exportName, 'PARAKEET_UNIFIED_0_6B_Q8_0')
+})
+
+test('parakeet: Nemotron GGUF includes NEMOTRON in the name', (t) => {
+  const coreKey = Buffer.from('dd'.repeat(32), 'hex')
+
+  const { exportName } = processAndName({
+    path: 'qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf',
+    source: 's3',
+    engine: 'parakeet-transcription',
+    license: 'nvidia-open-model-license',
+    name: '',
+    sizeBytes: 405212736,
+    sha256: 'dd'.repeat(32),
+    quantization: 'q4_0',
+    params: '0.6B',
+    tags: ['transcription', 'parakeet', 'nemotron', 'streaming'],
+    blobBinding: {
+      coreKey,
+      blockOffset: 1,
+      blockLength: 1,
+      byteOffset: 1,
+      byteLength: 405212736
+    }
+  })
+
+  t.is(exportName, 'PARAKEET_NEMOTRON_0_6B_Q4_0')
 })
 
 // ---------------------------------------------------------------------------

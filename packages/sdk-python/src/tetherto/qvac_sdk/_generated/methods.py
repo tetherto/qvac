@@ -17,8 +17,12 @@ from .._transport import Transport
 from . import (
     AssessModelFitRequest,
     AssessModelFitResponse,
+    AudioEditStreamRequest,
+    AudioEditStreamResponse,
     AudioGenStreamRequest,
     AudioGenStreamResponse,
+    AudioUnderstandRequest,
+    AudioUnderstandResponse,
     BatchCompletionStreamRequest,
     BatchCompletionStreamResponse,
     BciTranscribeRequest,
@@ -92,6 +96,8 @@ from . import (
     UnloadModelResponse,
     UpscaleStreamRequest,
     UpscaleStreamResponse,
+    VectorIndexRequest,
+    VectorIndexResponse,
     VideoStreamRequest,
     VideoStreamResponse,
     WorldSceneStreamRequest,
@@ -108,12 +114,28 @@ async def assess_model_fit(
     return AssessModelFitResponse.model_validate(await transport.call(payload))
 
 
+async def audio_edit_stream(
+    transport: Transport, params: AudioEditStreamRequest
+) -> AsyncIterator[AudioEditStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioEditStreamResponse.model_validate(chunk)
+
+
 async def audio_gen_stream(
     transport: Transport, params: AudioGenStreamRequest
 ) -> AsyncIterator[AudioGenStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield AudioGenStreamResponse.model_validate(chunk)
+
+
+async def audio_understand(
+    transport: Transport, params: AudioUnderstandRequest
+) -> AsyncIterator[AudioUnderstandResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield AudioUnderstandResponse.model_validate(chunk)
 
 
 async def batch_completion_stream(
@@ -431,6 +453,13 @@ async def upscale_stream(
         yield UpscaleStreamResponse.model_validate(chunk)
 
 
+async def vector_index(
+    transport: Transport, params: VectorIndexRequest
+) -> VectorIndexResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return VectorIndexResponse.model_validate(await transport.call(payload))
+
+
 async def video_stream(
     transport: Transport, params: VideoStreamRequest
 ) -> AsyncIterator[VideoStreamResponse]:
@@ -457,7 +486,9 @@ async def world_step_stream(
 
 __all__ = [
     "assess_model_fit",
+    "audio_edit_stream",
     "audio_gen_stream",
+    "audio_understand",
     "batch_completion_stream",
     "bci_transcribe",
     "bci_transcribe_stream",
@@ -497,6 +528,7 @@ __all__ = [
     "translate",
     "unload_model",
     "upscale_stream",
+    "vector_index",
     "video_stream",
     "world_scene_stream",
     "world_step_stream",

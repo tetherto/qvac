@@ -57,6 +57,13 @@ getConfigMap( // NOLINT(readability-static-definition-in-anonymous-namespace)
       hasPivotModel = true; // NOLINT(clang-analyzer-deadcode.DeadStores)
       continue;
     }
+    if ((keyString == "main-gpu" || keyString == "main_gpu") &&
+        (js::is<js::Boolean>(env, value) || js::is<js::BigInt>(env, value))) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "main-gpu must be a 32-bit integer registry index, 'dedicated', or "
+          "'integrated'");
+    }
     if (js::is<js::Boolean>(env, value)) {
       // Map booleans to int64 {0,1} so downstream config readers can treat
       // them uniformly (TranslationModel::setConfig reads "use_gpu" this way).

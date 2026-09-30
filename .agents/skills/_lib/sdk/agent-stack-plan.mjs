@@ -19,7 +19,15 @@ const { getPackageDir, getNpmName } = require(
 
 /** Lower → upper. */
 const STACK = Object.freeze([
-  { slug: 'sdk', role: 'runtime', dependsOn: null },
+  { slug: 'inference', role: 'engine', dependsOn: null },
+  {
+    slug: 'sdk',
+    role: 'runtime',
+    dependsOn: 'inference',
+    depField: 'dependencies',
+    depKey: '@qvac/inference',
+    sharesMajorMinorWith: 'inference'
+  },
   {
     slug: 'cli',
     role: 'openai-http',
@@ -126,18 +134,19 @@ function bumpMinor (version) {
   return v ? `${v.major}.${v.minor + 1}.0` : null
 }
 
-/** 0.x carets do not cross minors. */
+/** 0.x carets and every tilde stay inside one minor. */
 function rangeAllows (range, version) {
   if (!range || !version) return false
   const target = parseSemver(version)
   if (!target) return false
   for (const part of String(range).split('||').map((s) => s.trim())) {
-    const m = part.match(/^\^?(\d+)\.(\d+)(?:\.(\d+))?/)
+    const m = part.match(/^([\^~]?)(\d+)\.(\d+)(?:\.(\d+))?/)
     if (!m) continue
-    const major = Number(m[1])
-    const minor = Number(m[2])
+    const operator = m[1]
+    const major = Number(m[2])
+    const minor = Number(m[3])
     if (major !== target.major) continue
-    if (major === 0) {
+    if (major === 0 || operator === '~') {
       if (minor === target.minor) return true
       continue
     }
@@ -246,7 +255,20 @@ function subjectLooksMinor (subjects) {
   })
 }
 
-function recommendVersion (entry) {
+/**
+ * The major.minor a package is pinned to by a lower one it shares an API
+ * surface with, when that differs from the major.minor it sits on now.
+ */
+function pinnedMajorMinor (entry, spec, bySlug) {
+  if (!spec.sharesMajorMinorWith) return null
+  const target = parseSemver(targetLowerVersion(bySlug.get(spec.sharesMajorMinorWith)))
+  const current = parseSemver(entry.localVersion)
+  if (!target || !current) return null
+  if (target.major === current.major && target.minor === current.minor) return null
+  return target
+}
+
+function recommendVersion (entry, spec, bySlug) {
   const current = entry.localVersion
   if (entry.blockers.length > 0) {
     return {
@@ -260,6 +282,14 @@ function recommendVersion (entry) {
       suggested: null,
       kind: 'none',
       rationale: 'No release needed'
+    }
+  }
+  const pinned = pinnedMajorMinor(entry, spec, bySlug)
+  if (pinned) {
+    return {
+      suggested: `${pinned.major}.${pinned.minor}.0`,
+      kind: 'minor',
+      rationale: `Shares major.minor with @qvac/${spec.sharesMajorMinorWith}`
     }
   }
   if (
@@ -347,7 +377,7 @@ function inspectPackage (spec, ctx) {
   entry.reasons = deps.reasons
   entry.needsWork = entry.reasons.length > 0
   entry.needsRelease = entry.needsWork && entry.blockers.length === 0
-  entry.recommendation = recommendVersion(entry)
+  entry.recommendation = recommendVersion(entry, spec, ctx.bySlug)
   return entry
 }
 
@@ -375,7 +405,7 @@ function buildPlan (opts) {
     entry.reasons = deps.reasons
     entry.needsWork = entry.reasons.length > 0
     entry.needsRelease = entry.needsWork && entry.blockers.length === 0
-    entry.recommendation = recommendVersion(entry)
+    entry.recommendation = recommendVersion(entry, STACK[i], ctx.bySlug)
     ctx.bySlug.set(entry.slug, entry)
   }
 

@@ -11,7 +11,10 @@ const {
   ensureVADModel,
   getTestPaths,
   createAudioStream,
-  isMobile
+  isMobile,
+  WHISPER_TEST_THREADS,
+  NO_GPU,
+  WHISPER_GPU_CONTEXT_PARAMS
 } = require('./helpers.js')
 
 // Create a pushable Readable to simulate a live input source.
@@ -46,7 +49,7 @@ async function feedStreamLive({ readable, filePath, chunkBytes, bytesPerSecond }
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test(
   'Live stream simulation using pushable Readable with model.run()',
-  { timeout: 180000, skip: isMobile },
+  { timeout: 180000, skip: isMobile || NO_GPU },
   async (t) => {
     // Use standardized test paths from helpers
     const { modelPath } = getTestPaths()
@@ -71,11 +74,13 @@ test(
     const config = {
       engine: 'whisper',
       path: modelPath,
+      contextParams: WHISPER_GPU_CONTEXT_PARAMS,
       whisperConfig: {
         language: 'en',
         audio_format: 's16le',
         temperature: 0.0,
         suppress_nst: true,
+        n_threads: WHISPER_TEST_THREADS,
         // the no_context = false is important because it allows maintaining the context in live transcription
         // to provide better output quality
         no_context: false
@@ -161,7 +166,7 @@ test(
 // Skip on mobile - requires 10min audio file (~19MB) which is too large to bundle
 test(
   'Live segmented loop: repeated model.run per 3s chunk (no model teardown until end)',
-  { timeout: 180000, skip: isMobile },
+  { timeout: 180000, skip: isMobile || NO_GPU },
   async (t) => {
     // Use standardized test paths from helpers
     const { modelPath } = getTestPaths()
@@ -184,11 +189,13 @@ test(
     const config = {
       engine: 'whisper',
       path: modelPath,
+      contextParams: WHISPER_GPU_CONTEXT_PARAMS,
       whisperConfig: {
         language: 'en',
         audio_format: 's16le',
         temperature: 0.0,
-        suppress_nst: true
+        suppress_nst: true,
+        n_threads: WHISPER_TEST_THREADS
       }
     }
 
@@ -290,6 +297,7 @@ test(
         audio_format: 's16le',
         temperature: 0.0,
         suppress_nst: true,
+        n_threads: WHISPER_TEST_THREADS,
         vad_params: {
           threshold: 0.5,
           min_silence_duration_ms: 300,
