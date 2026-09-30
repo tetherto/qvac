@@ -5,8 +5,31 @@ import { AbortController } from 'bare-abort-controller'
 import { queryRpcInventory } from '@/rpc/inventory'
 import { getRpcDeviceMap } from '@/rpc/device-map'
 import { InferenceCancelledError } from '@/errors/index'
+import { getEngineLogger, LOG_ID } from '@/logging/index'
+import { registerLoggingStream, unregisterLoggingStream } from '@/runtime/logging-stream-registry'
 
-async function endpoint(reply: (command: number, payload: Buffer) => Buffer | undefined) {
+function captureWarnings() {
+  const warnings: string[] = []
+  const logger = getEngineLogger()
+  const level = logger.getLevel()
+  logger.setLevel('warn')
+  const collect = (level: string, _namespace: string, message: string) => {
+    if (level === 'warn') warnings.push(message)
+  }
+  registerLoggingStream(LOG_ID, collect)
+  return {
+    warnings,
+    [Symbol.dispose]() {
+      unregisterLoggingStream(LOG_ID, collect)
+      logger.setLevel(level)
+    }
+  }
+}
+
+async function endpoint(
+  reply: (command: number, payload: Buffer) => Buffer | undefined,
+  options: { splitAt?: number[]; transformFrame?: (frame: Buffer) => Buffer } = {}
+) {
   const sockets = new Set<net.Socket>()
   const server = net.createServer((socket) => {
     sockets.add(socket)
@@ -24,17 +47,30 @@ async function endpoint(reply: (command: number, payload: Buffer) => Buffer | un
       if (!response) return
       const header = Buffer.alloc(8)
       header.writeBigUInt64LE(BigInt(response.length))
-      const frame = Buffer.concat([header, response])
-      socket.write(frame.subarray(0, 3))
-      socket.write(frame.subarray(3, 14))
-      // Split HELLO inside QPN so parsing must wait for the complete capabilities.
-      if (frame.length > 14) setTimeout(() => socket.write(frame.subarray(14)), 5)
+      const responseFrame = Buffer.concat([header, response])
+      const frame = options.transformFrame?.(responseFrame) ?? responseFrame
+      // Separate writes in time so the tests exercise fragmented headers and payloads.
+      const cuts = [
+        0,
+        ...(options.splitAt ?? [3, 14]).filter((offset) => offset < frame.length),
+        frame.length
+      ]
+      for (let i = 1; i < cuts.length; i++) {
+        const part = frame.subarray(cuts[i - 1], cuts[i])
+        setTimeout(
+          () => {
+            if (!socket.destroyed) socket.write(part)
+          },
+          (i - 1) * 5
+        )
+      }
     })
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('No TCP address')
   return {
+    url: `127.0.0.1:${address.port}`,
     query: (signal = new AbortController().signal) =>
       queryRpcInventory('127.0.0.1', address.port, 100, signal),
     async [Symbol.asyncDispose]() {
@@ -95,6 +131,7 @@ test('RPC aliases follow only the current load, including on reused workers', (t
 })
 
 test('RPC inventory reads native device count and memory over fragmented TCP responses', async (t) => {
+  using logs = captureWarnings()
   const commands: number[] = []
   await using server = await endpoint((command, payload) => {
     commands.push(command)
@@ -122,6 +159,7 @@ test('RPC inventory reads native device count and memory over fragmented TCP res
     rdmaAvailable: false
   })
   t.alike(commands, [14, 15, 11, 11])
+  t.alike(logs.warnings, [], 'compatible inventory does not warn')
 })
 
 for (const version of [108, 109]) {
@@ -186,6 +224,7 @@ test('RPC inventory rejects unsupported versions, invalid lengths and excessive 
 })
 
 test('RPC inventory timeout and cancellation close stalled queries', async (t) => {
+  using logs = captureWarnings()
   await using server = await endpoint(() => undefined)
   t.is(await server.query(), undefined)
   const controller = new AbortController()
@@ -195,4 +234,100 @@ test('RPC inventory timeout and cancellation close stalled queries', async (t) =
     () => t.fail('expected cancellation'),
     (error: unknown) => t.ok(error instanceof InferenceCancelledError)
   )
+  t.alike(logs.warnings, [], 'unreachable peers are not reported as protocol mismatches')
+})
+
+test('RPC inventory warns once with the endpoint and received and supported versions', async (t) => {
+  for (const [major, minor] of [
+    [110, 0],
+    [109, 1],
+    [108, 1]
+  ]) {
+    using logs = captureWarnings()
+    const commands: number[] = []
+    await using server = await endpoint((command) => {
+      commands.push(command)
+      const hello = Buffer.alloc(28)
+      hello[0] = major!
+      hello[1] = minor!
+      hello[2] = 7
+      return hello
+    })
+    t.is(await server.query(), undefined)
+    t.alike(commands, [14], 'no inventory requests follow an incompatible HELLO')
+    t.is(logs.warnings.length, 1)
+    t.ok(logs.warnings[0]?.startsWith('RPC inventory HELLO rejected '))
+    const details = JSON.parse(logs.warnings[0]!.slice(logs.warnings[0]!.indexOf('{')))
+    t.alike(details, {
+      url: server.url,
+      reason: 'unsupported protocol version',
+      receivedVersion: `${major}.${minor}.7`,
+      supportedVersions: '108.0.x, 109.0.x',
+      receivedHelloBytes: '28',
+      expectedHelloBytes: 28
+    })
+  }
+})
+
+test('RPC inventory warns for short and oversized HELLO frames before parsing inventory', async (t) => {
+  for (const length of [0, 2, 27, 29, 65536]) {
+    for (const splitAt of [[], [3, 8], [3, 10]]) {
+      using logs = captureWarnings()
+      await using server = await endpoint(
+        () => {
+          const hello = Buffer.alloc(length)
+          if (length >= 3) hello[0] = 110
+          return hello
+        },
+        { splitAt }
+      )
+      t.is(await server.query(), undefined)
+      t.is(logs.warnings.length, 1, `one warning for ${length} bytes split at ${splitAt}`)
+      const details = JSON.parse(logs.warnings[0]!.slice(logs.warnings[0]!.indexOf('{')))
+      t.is(details.url, server.url)
+      t.is(details.receivedHelloBytes, String(length))
+      t.is(details.expectedHelloBytes, 28)
+      t.is(details.supportedVersions, '108.0.x, 109.0.x')
+      t.is(details.receivedVersion, splitAt.length === 0 && length >= 3 ? '110.0.0' : 'unavailable')
+      t.is(
+        details.reason,
+        splitAt.length === 0 && length > 28
+          ? 'response exceeds frame limit'
+          : 'unexpected response size'
+      )
+    }
+  }
+})
+
+test('RPC inventory bounds diagnostics for a huge declared length and excess trailing bytes', async (t) => {
+  for (const kind of ['header-only', 'trailing']) {
+    using logs = captureWarnings()
+    await using server = await endpoint(
+      () => {
+        const hello = Buffer.alloc(28)
+        hello[0] = 109
+        return hello
+      },
+      {
+        splitAt: [],
+        transformFrame(frame) {
+          if (kind === 'header-only') {
+            const header = Buffer.alloc(8)
+            header.writeBigUInt64LE(0xffffffffffffffffn)
+            return header
+          }
+          return Buffer.concat([frame, Buffer.alloc(65536)])
+        }
+      }
+    )
+    t.is(await server.query(), undefined)
+    t.is(logs.warnings.length, 1)
+    const details = JSON.parse(logs.warnings[0]!.slice(logs.warnings[0]!.indexOf('{')))
+    t.is(details.receivedHelloBytes, kind === 'header-only' ? '18446744073709551615' : '28')
+    t.is(details.receivedVersion, kind === 'header-only' ? 'unavailable' : '109.0.0')
+    t.is(
+      details.reason,
+      kind === 'header-only' ? 'unexpected response size' : 'response exceeds frame limit'
+    )
+  }
 })
