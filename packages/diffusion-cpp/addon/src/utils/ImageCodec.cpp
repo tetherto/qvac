@@ -287,8 +287,7 @@ std::string decodeFailureMessage(
   case DecodeFailure::DimensionLimit:
     return "image exceeds 16,384 pixel edge limit";
   case DecodeFailure::PixelLimit:
-    return "image exceeds " + describePixels(imagePixelLimit) +
-           " pixel limit";
+    return "image exceeds " + describePixels(imagePixelLimit) + " pixel limit";
   case DecodeFailure::JobPixelLimit:
     return "image exceeds remaining " + describePixels(jobPixelLimit) +
            " job pixel budget";
