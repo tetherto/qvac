@@ -19,6 +19,10 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 - Nemotron 3 Diarization streaming preserves first-chunk predictions with left
   context, applies the same peak gain as offline inference, and retains an
   explicitly requested 80 ms left context.
+- Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
+  reports more free device memory than total once the process has allocated
+  past the GPU's recommended working set, which made a model that does not fit
+  report `fits`. Transcription is unchanged.
 
 ### Added
 
