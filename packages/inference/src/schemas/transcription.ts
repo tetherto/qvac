@@ -139,10 +139,10 @@ export const vadStateEventSchema = z.object({
   speaking: z.boolean(),
   probability: z.number(),
   source: z
-    .enum(['silero', 'energy'])
+    .enum(['silero', 'energy', 'sortformer'])
     .optional()
     .describe(
-      "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events."
+      "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity."
     )
 })
 
