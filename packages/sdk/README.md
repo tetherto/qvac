@@ -22,6 +22,13 @@ For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.q
 
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 
+On Node.js, the SDK installs and launches its own Bare worker through `bare-runtime`.
+Its dependency range must satisfy `@qvac/inference`'s `engines.bare` requirement.
+When upgrading the SDK, reinstall dependencies with the existing lockfile so the
+package manager can replace an older, incompatible runtime. Remove any override
+or resolution that forces the worker below that requirement; installing a newer
+global `bare` executable does not change the SDK's worker dependency.
+
 ## Quickstart
 
 1. Create the examples workspace:
