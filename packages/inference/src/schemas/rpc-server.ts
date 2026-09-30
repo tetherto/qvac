@@ -23,6 +23,10 @@ export const startRpcServerOptionsSchema = z.object({
     .describe('Native server devices, in caller order.'),
   cache: z.boolean().optional().describe('Enable the native RPC tensor cache.'),
   threads: z.number().int().positive().optional().describe('Native server thread count.'),
+  expectRdma: z
+    .boolean()
+    .optional()
+    .describe('Require an RDMA-capable native backend. Reject before startup if unavailable.'),
   allowNonLoopbackHost: z
     .boolean()
     .optional()

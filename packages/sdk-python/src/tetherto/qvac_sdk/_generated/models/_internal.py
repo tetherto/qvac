@@ -20068,6 +20068,13 @@ class StartRpcServerRequest(GeneratedBaseModel):
         int | None,
         Field(description="Native server thread count.", gt=0, le=9007199254740991),
     ] = None
+    expect_rdma: Annotated[
+        bool | None,
+        Field(
+            alias="expectRdma",
+            description="Require an RDMA-capable native backend. Reject before startup if unavailable.",
+        ),
+    ] = None
     allow_non_loopback_host: Annotated[
         bool | None,
         Field(

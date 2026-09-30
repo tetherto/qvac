@@ -19963,6 +19963,10 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
+        "expectRdma": {
+          "description": "Require an RDMA-capable native backend. Reject before startup if unavailable.",
+          "type": "boolean"
+        },
         "allowNonLoopbackHost": {
           "description": "Explicitly allow a non-loopback bind on a trusted private network. This does not authenticate clients.",
           "type": "boolean"

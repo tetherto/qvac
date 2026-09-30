@@ -11,6 +11,7 @@ export const rpcServers = createRpcServerManager({
       ...(options.device !== undefined && { device: options.device }),
       ...(options.cache !== undefined && { cache: options.cache }),
       ...(options.threads !== undefined && { threads: options.threads }),
+      ...(options.expectRdma !== undefined && { expectRdma: options.expectRdma }),
       ...(options.allowNonLoopbackHost !== undefined && {
         allowNonLoopbackHost: options.allowNonLoopbackHost
       })

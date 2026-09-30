@@ -3,6 +3,7 @@ import env from 'bare-env'
 import os from 'bare-os'
 import path from 'bare-path'
 import net from 'bare-net'
+import fs from 'bare-fs'
 import { startRpcServer, stopRpcServer, discoverRpcServers } from '@/api/rpc-server'
 import { cancel } from '@/api/cancel'
 import { send, close } from '@/dispatch'
@@ -17,6 +18,9 @@ import { getRequestRegistry } from '@/runtime/request-context'
 import { getRegisteredResourceCounts } from '@/runtime/runtime-lifecycle'
 import { rpcServers } from '@/rpc/instance'
 import type { RpcServerProvider } from '@/schemas/rpc-server'
+import { initialize, isInitialized } from '@/runtime/lifecycle'
+import { getResourceCollector } from '@/resources/instance'
+import { getQvacPath } from '@/utils/qvac-paths'
 
 function expectCancelled(t: ReturnType<typeof test>, promise: Promise<unknown>, requestId: string) {
   return promise.then(
@@ -193,8 +197,20 @@ test('a server-only provider owns handles through stop failure and close retry',
     t.is((await send({ type: 'heartbeat' })).type, 'heartbeat')
     await t.exception(() => registerRpcServerProvider(provider), /already registered/)
     await t.exception(stopRpcServer({ serverId: server.serverId }), /temporary stop failure/)
+    const collector = getResourceCollector()
+    t.ok(collector)
+    t.ok(isInitialized())
+    t.ok(fs.existsSync(getQvacPath('.cache.lock')))
     await t.exception(close(), /Failed to stop owned/)
     t.ok(hasRpcServerProvider(), 'failed cleanup retains registration')
+    t.absent(isInitialized(), 'failed close resets engine state')
+    t.absent(getResourceCollector(), 'failed close has destroyed the collector')
+    t.absent(fs.existsSync(getQvacPath('.cache.lock')), 'failed close releases the cache lock')
+    initialize()
+    t.ok(isInitialized(), 'engine can initialize after a failed close')
+    t.ok(getResourceCollector(), 'initialization recreates the collector')
+    t.not(getResourceCollector(), collector)
+    t.ok(fs.existsSync(getQvacPath('.cache.lock')), 'initialization reacquires the cache lock')
     failStop = false
     await close()
     t.is(stops, 3)

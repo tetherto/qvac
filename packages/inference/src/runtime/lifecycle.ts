@@ -121,8 +121,9 @@ export async function close(): Promise<void> {
   } catch (error) {
     logger.error('❌ Error during cleanup:', error)
     throw error
+  } finally {
+    releaseCacheLock()
+    initialized = false
+    cleanupRan = false
   }
-  releaseCacheLock()
-  initialized = false
-  cleanupRan = false
 }
