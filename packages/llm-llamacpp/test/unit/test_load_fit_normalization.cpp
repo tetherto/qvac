@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -2299,6 +2300,52 @@ TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
 
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.runtimeBackendDevice, 1);
+}
+
+TEST_F(LoadFitNormalizationTest, RawCudaDeviceNameKeepsKvGuardArmed) {
+  for (const auto& [splitMode, explicitDevice] :
+       std::vector<std::pair<std::string, bool>>{
+           {"none", false}, {"layer", false}, {"none", true}}) {
+    auto config = baseConfig();
+    config["split-mode"] = splitMode;
+    config["cache-type-k"] = "tbq4_0";
+    if (explicitDevice) {
+      config["devices"] = "CUDA0";
+    }
+
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend(
+              {.type = backend_selection::GPU, .name = "CUDA0"}, {"CUDA0"})));
+      FAIL() << "CUDA0 must reject TurboQuant in " << splitMode;
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("CUDA backend"));
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, MixedSplitKeepsCudaKvGuardArmed) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-v"] = "pq3_0";
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "Vulkan0"},
+            {"Vulkan0", "CUDA0"})));
+    FAIL() << "a participating CUDA device must reject PolarQuant";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("CUDA backend"));
+  }
 }
 
 TEST_F(
