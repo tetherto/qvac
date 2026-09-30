@@ -162,7 +162,7 @@ test('MOSS-Speech: constructor rejects what the engine cannot do', (t) => {
   )
   t.exception(
     () => createMockedSpeechModel({ extra: { referenceAudio: '/abs/voice.wav' } }),
-    /takes its reply voice per call/
+    /takes its reply voice per call \(run\(\{ replyVoice, replyVoiceSampleRate \}\)\)/
   )
   t.exception(
     () => createMockedSpeechModel({ extra: { config: { outputSampleRate: 16000 } } }),
@@ -251,6 +251,8 @@ test('MOSS-Speech: malformed calls are rejected before queueing', async (t) => {
       /exactly one/
     ],
     [{ input: 'hi', replyVoice: audio }, /replyVoiceSampleRate must be an integer/],
+    [{ input: 'hi', replyVoiceSampleRate: NATIVE_RATE }, /replyVoiceSampleRate needs replyVoice/],
+    [{ input: 'hi', sampleRate: QUESTION_RATE }, /sampleRate needs audio/],
     [{ input: 'hi', maxReplySeconds: -1 }, /maxReplySeconds must be in \[0, 3600\]/],
     [{ input: 'hi', maxNewTokens: 5000 }, /maxNewTokens must be an integer in \[1, 4096\]/],
     [{ input: 'hi', temperature: 0 }, /temperature must be in \(0, 10\]/],
@@ -258,6 +260,22 @@ test('MOSS-Speech: malformed calls are rejected before queueing', async (t) => {
     [{ input: 'hi', topK: -1 }, /topK must be an integer >= 0/],
     [{ input: 'hi', greedy: 'yes' }, /greedy must be a boolean/],
     [{ input: 'hi', systemPrompt: 7 }, /systemPrompt must be a string/]
+  ]
+  await expectEachRejected(t, model, cases)
+  t.is(binding.jobs.length, 0, 'no job queued')
+  await model.unload()
+})
+
+test("MOSS-Speech: other engines' per-call fields are rejected", async (t) => {
+  const binding = new SpeechBinding()
+  const model = createMockedSpeechModel({ binding })
+  await model.load()
+  const cases = [
+    [{ input: 'hi', emotion: 'happy' }, /does not support `emotion`/],
+    [{ input: 'hi', instruct: 'Speak softly' }, /per-call instruct is cosyvoice3-only/],
+    [{ input: 'hi', description: 'A calm voice' }, /parler-only/],
+    [{ input: 'hi', referenceAudio: '/abs/voice.wav' }, /audio8-only/],
+    [{ input: 'hi', steps: 8 }, /moss-sfx-only options/]
   ]
   await expectEachRejected(t, model, cases)
   t.is(binding.jobs.length, 0, 'no job queued')

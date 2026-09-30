@@ -178,7 +178,7 @@ dependency, pinned to the exact `@qvac/tts-ggml` version:
 
 ## Model files
 
-Seven engine families are wrapped (Chatterbox, Supertonic, Parler,
+Eight engine families are wrapped (Chatterbox, Supertonic, Parler,
 CosyVoice3, Audio8, MOSS, MOSS-SoundEffect, MOSS-Speech), each with its own GGUF layout
 under `models/`:
 

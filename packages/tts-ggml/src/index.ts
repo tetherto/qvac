@@ -333,6 +333,7 @@ const MOSS_SPEECH_MAX_SAMPLE_RATE = 192000;
 const MOSS_SPEECH_MAX_NEW_TOKENS = 4096;
 const MOSS_SPEECH_MAX_REPLY_SECONDS = 3600;
 const MOSS_SPEECH_MAX_TEMPERATURE = 10;
+const MOSS_SPEECH_MAX_TOP_P = 1;
 const MOSS_SPEECH_ROLES = ["system", "user", "assistant"] as const;
 const MOSS_SPEECH_ONLY_KEYS = [
   "audio",
@@ -1584,6 +1585,10 @@ function assertSpeechMessages(messages: unknown, where: string): void {
   if (!Array.isArray(messages)) {
     throw new Error(`tts-ggml: ${where}: moss-speech messages must be an array`);
   }
+  assertEachSpeechMessage(messages, where);
+}
+
+function assertEachSpeechMessage(messages: unknown[], where: string): void {
   messages.forEach((message, index) => assertSpeechMessage(message, index, where));
 }
 
@@ -1623,20 +1628,32 @@ function assertSpeechControls(fields: MossSpeechFields, where: string): void {
     `an integer in [1, ${MOSS_SPEECH_MAX_NEW_TOKENS}]`, where);
   assertSpeechRange("temperature", fields.temperature,
     (n) => n > 0 && n <= MOSS_SPEECH_MAX_TEMPERATURE, `in (0, ${MOSS_SPEECH_MAX_TEMPERATURE}]`, where);
-  assertSpeechRange("topP", fields.topP, (n) => n > 0 && n <= 1, "in (0, 1]", where);
+  assertSpeechRange("topP", fields.topP,
+    (n) => n > 0 && n <= MOSS_SPEECH_MAX_TOP_P, `in (0, ${MOSS_SPEECH_MAX_TOP_P}]`, where);
   assertSpeechRange("topK", fields.topK, (n) => Number.isInteger(n) && n >= 0, "an integer >= 0", where);
-  for (const flag of ["textReply", "greedy"] as const) {
-    if (fields[flag] !== undefined && typeof fields[flag] !== "boolean") {
-      throw new Error(`tts-ggml: ${where}: moss-speech ${flag} must be a boolean`);
-    }
-  }
+  assertSpeechBooleans(fields, where);
   if (fields.systemPrompt !== undefined && typeof fields.systemPrompt !== "string") {
     throw new Error(`tts-ggml: ${where}: moss-speech systemPrompt must be a string`);
   }
 }
 
+function assertSpeechBooleans(fields: MossSpeechFields, where: string): void {
+  for (const flag of ["textReply", "greedy"] as const) {
+    if (fields[flag] !== undefined && typeof fields[flag] !== "boolean") {
+      throw new Error(`tts-ggml: ${where}: moss-speech ${flag} must be a boolean`);
+    }
+  }
+}
+
+function assertSpeechRateHasAudio(audio: unknown, rate: unknown, names: [string, string], where: string): void {
+  if (audio !== undefined || rate === undefined) return;
+  throw new Error(`tts-ggml: ${where}: moss-speech ${names[1]} needs ${names[0]}`);
+}
+
 function assertSpeechCall(fields: MossSpeechFields & { input?: string }, where: string): void {
   assertSpeechUserTurn(fields, where);
+  assertSpeechRateHasAudio(fields.audio, fields.sampleRate, ["audio", "sampleRate"], where);
+  assertSpeechRateHasAudio(fields.replyVoice, fields.replyVoiceSampleRate, ["replyVoice", "replyVoiceSampleRate"], where);
   assertSpeechMessages(fields.messages, where);
   if (fields.replyVoice !== undefined) {
     assertSpeechAudio(fields.replyVoice, fields.replyVoiceSampleRate, ["replyVoice", "replyVoiceSampleRate"], where);
@@ -3052,7 +3069,7 @@ class TTSGgml {
     if (this._referenceAudio) {
       throw new Error(
         "tts-ggml: the moss-speech engine takes its reply voice per call " +
-          "(run({ voice, voiceSampleRate })), not referenceAudio",
+          "(run({ replyVoice, replyVoiceSampleRate })), not referenceAudio",
       );
     }
     this._assertMossSpeechOutputRate();
@@ -3403,6 +3420,15 @@ class TTSGgml {
     );
   }
 
+  private _assertNoOtherEngineFields(
+    source: (ParlerJobSource & Audio8VoiceFields & CosyvoiceJobFields & MossSoundEffectFields) | null | undefined,
+    where: string,
+  ): void {
+    this._resolveConditioningJobFields(source, where, this._resolveJobInstruct(source, where));
+    this._resolveAudio8JobFields(source, where);
+    this._resolveSoundEffectJobFields(source, where);
+  }
+
   /**
    * Validate the MOSS-Speech call and fold the new user turn (spoken `audio`
    * or text `input`) and `systemPrompt` into the native `messages` list.
@@ -3457,6 +3483,7 @@ class TTSGgml {
     where: string,
   ): JobFields | undefined {
     if (this._engineType === ENGINE_MOSS_SPEECH) {
+      this._assertNoOtherEngineFields(source, where);
       return this._resolveSpeechJobFields(source, where);
     }
     const instruct = this._resolveJobInstruct(source, where);

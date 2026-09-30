@@ -1012,6 +1012,7 @@ declare class TTSGgml {
      */
     private _resolveAudio8JobFields;
     private _assertNoSpeechFields;
+    private _assertNoOtherEngineFields;
     /**
      * Validate the MOSS-Speech call and fold the new user turn (spoken `audio`
      * or text `input`) and `systemPrompt` into the native `messages` list.
