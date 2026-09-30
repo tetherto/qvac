@@ -865,7 +865,8 @@ void BertModel::init(BertModelSetup& setup) {
       if (!placedDevices.empty()) {
         placedDevices += ',';
       }
-      placedDevices += ggml_backend_dev_name(device);
+      const char* name = ggml_backend_dev_name(device);
+      placedDevices += name != nullptr ? name : "unknown";
     }
     std::transform(
         placedDevices.begin(),
