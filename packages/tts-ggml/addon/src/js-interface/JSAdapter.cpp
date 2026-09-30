@@ -112,6 +112,22 @@ readOptionalFiniteDouble(js::Object obj, js_env_t* env, const char* key) {
       std::string("Property '") + key + "' must be a number");
 }
 
+std::optional<float>
+readOptionalFiniteFloat(js::Object obj, js_env_t* env, const char* key) {
+  const auto value = readOptionalFiniteDouble(obj, env, key);
+  if (!value.has_value()) {
+    return std::nullopt;
+  }
+  if (const auto converted = finiteFloatFromJsNumber(*value)) {
+    return converted;
+  }
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key +
+          "' is outside the 32-bit float range (got " + formatJsNumber(*value) +
+          ")");
+}
+
 std::string readOptionalString(
     js::Object obj, js_env_t* env, const char* key) {
   auto v = obj.getOptionalPropertyAs<js::String, std::string>(env, key);
@@ -519,8 +535,8 @@ JSAdapter::readMossSoundEffectCall(js::Object job, js_env_t* env) {
   moss::MossSoundEffectCall call;
   call.seconds = readOptionalFiniteDouble(job, env, "seconds");
   call.steps = readOptionalInt(job, env, "steps");
-  call.guidance = readOptionalFloat(job, env, "guidance");
-  call.shift = readOptionalFloat(job, env, "shift");
+  call.guidance = readOptionalFiniteFloat(job, env, "guidance");
+  call.shift = readOptionalFiniteFloat(job, env, "shift");
   call.negativePrompt = readOptionalString(job, env, "negativePrompt");
   return call;
 }

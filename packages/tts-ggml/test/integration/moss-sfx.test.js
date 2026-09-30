@@ -7,6 +7,7 @@ const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 
 const SFX_SAMPLE_RATE = 48000
+const TENTHS_PER_SECOND = 10
 const TEST_TIMEOUT_MS = 1800000
 const PROMPT = 'A glass falls and shatters on a tile floor.'
 const MODEL_DIR_ENV = 'QVAC_TEST_MOSS_SFX_MODEL_DIR'
@@ -44,9 +45,17 @@ async function generate(model, fields) {
   return result
 }
 
+function samplesAtNativeDuration(seconds) {
+  return Math.round(seconds * TENTHS_PER_SECOND) * (SFX_SAMPLE_RATE / TENTHS_PER_SECOND)
+}
+
 function assertClip(t, label, result, seconds) {
   t.is(result.sampleRate, SFX_SAMPLE_RATE, `${label} reports 48 kHz`)
-  t.is(result.samples, Math.round(seconds * SFX_SAMPLE_RATE), `${label} lasts exactly ${seconds} s`)
+  t.is(
+    result.samples,
+    samplesAtNativeDuration(seconds),
+    `${label} lasts exactly ${seconds} s, rounded to 0.1 s as the engine documents`
+  )
   t.ok(result.stats, `${label} returns runtime stats`)
   t.is(result.stats.totalSamples, result.samples, `${label} reports the emitted samples`)
   t.ok(result.stats.totalTime > 0, `${label} reports its generation time`)

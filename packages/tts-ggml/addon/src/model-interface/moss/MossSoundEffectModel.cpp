@@ -101,9 +101,12 @@ tts_cpp::moss::SoundEffectRequest MossSoundEffectModel::toRequest(
   request.negative_prompt = input.call.negativePrompt;
   if (input.call.seconds.has_value())
     request.seconds = *input.call.seconds;
-  request.steps = input.call.steps.value_or(0);
-  request.guidance = input.call.guidance.value_or(0.0f);
-  request.shift = input.call.shift.value_or(0.0f);
+  if (input.call.steps.has_value())
+    request.steps = *input.call.steps;
+  if (input.call.guidance.has_value())
+    request.guidance = *input.call.guidance;
+  if (input.call.shift.has_value())
+    request.shift = *input.call.shift;
   if (cfg.seed.has_value())
     request.seed = static_cast<uint32_t>(*cfg.seed);
   return request;
