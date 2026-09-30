@@ -28,7 +28,11 @@ function captureWarnings() {
 
 async function endpoint(
   reply: (command: number, payload: Buffer) => Buffer | undefined,
-  options: { splitAt?: number[]; transformFrame?: (frame: Buffer) => Buffer } = {}
+  options: {
+    splitAt?: number[]
+    transformFrame?: (frame: Buffer) => Buffer
+    timeoutMs?: number
+  } = {}
 ) {
   const sockets = new Set<net.Socket>()
   const server = net.createServer((socket) => {
@@ -72,7 +76,7 @@ async function endpoint(
   return {
     url: `127.0.0.1:${address.port}`,
     query: (signal = new AbortController().signal) =>
-      queryRpcInventory('127.0.0.1', address.port, 100, signal),
+      queryRpcInventory('127.0.0.1', address.port, options.timeoutMs ?? 5000, signal),
     async [Symbol.asyncDispose]() {
       for (const socket of sockets) socket.destroy()
       await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -225,7 +229,7 @@ test('RPC inventory rejects unsupported versions, invalid lengths and excessive 
 
 test('RPC inventory timeout and cancellation close stalled queries', async (t) => {
   using logs = captureWarnings()
-  await using server = await endpoint(() => undefined)
+  await using server = await endpoint(() => undefined, { timeoutMs: 100 })
   t.is(await server.query(), undefined)
   const controller = new AbortController()
   const query = server.query(controller.signal)
