@@ -107,7 +107,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ env.WORKDIR }}
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: Run format
         working-directory: ${{ env.WORKDIR }}
