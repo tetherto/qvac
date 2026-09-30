@@ -1709,11 +1709,13 @@ TEST_F(BackendSelectionTest, KvConstraintChecksEveryRequestedType) {
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0", "q8_0"}).name, "vulkan0");
 }
 
-// Preserve the CPU fallback when no GPU can run the requested KV type.
-TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantFallsBackToCpu) {
+// CUDA cannot use the fabric CPU KV fallback for TurboQuant. Do not move the
+// entire model to CPU instead.
+TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantErrors) {
   mockBackend.addDevice(
       withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
-  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).type, BackendType::CPU);
+  EXPECT_THROW(
+      chooseWithKvTypes(mockBackend, {"tbq4_0"}), qvac_errors::StatusError);
 }
 
 TEST_F(BackendSelectionTest, VulkanKeepsGpuForFabricCpuKvFallback) {
@@ -1732,11 +1734,11 @@ TEST_F(BackendSelectionTest, UnsupportedCudaCanFallThroughToVulkanCpuKv) {
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).name, "vulkan0");
 }
 
-TEST_F(BackendSelectionTest, InactiveOpenClCapabilityMissFallsBackToCpu) {
+TEST_F(BackendSelectionTest, InactiveOpenClCapabilityMissErrors) {
   mockBackend.addDevice(
       withoutTurboQuant(createGPUDevice("Intel Arc A770", OPENCL_BACK)));
-  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
-  EXPECT_EQ(choice.type, BackendType::CPU);
+  EXPECT_THROW(
+      chooseWithKvTypes(mockBackend, {"tbq4_0"}), qvac_errors::StatusError);
 }
 
 // ...but a deliberate CPU load must not throw. No devices are enumerated, so
