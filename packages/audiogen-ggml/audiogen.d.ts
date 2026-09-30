@@ -9,6 +9,8 @@ export interface AudioGenConfigurationParams {
     inferenceSteps?: number;
     shift?: number;
     useGPU?: boolean;
+    /** MiniMax compute device ('cpu' | 'gpu' | 'auto'); overrides useGPU. */
+    device?: string;
     nGpuLayers?: number;
     threads?: number;
     /**
@@ -79,6 +81,7 @@ export interface AudioGenJobData {
     coverNoiseStrength?: number;
     maxFrames?: number;
     inferenceSteps?: number;
+    shift?: number;
     cfgScale?: number;
     editOperations?: AudioEditOperationJobData[];
 }

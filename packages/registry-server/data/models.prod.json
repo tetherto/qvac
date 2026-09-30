@@ -2848,7 +2848,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2859,7 +2859,7 @@
     "notes": "F16 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2870,7 +2870,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2893,7 +2893,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2905,7 +2905,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2917,7 +2917,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2928,7 +2928,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2972,7 +2972,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2983,7 +2983,7 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2992,6 +2992,28 @@
     "licenseId": "CC-BY-4.0",
     "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
     "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
+    "description": "Parakeet TDT 1.1B GGUF",
+    "quantization": "f16",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
+    "description": "Parakeet TDT 1.1B GGUF",
+    "quantization": "q8_0",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-1.1b"
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
@@ -3005,7 +3027,7 @@
     "notes": "F16 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3016,7 +3038,7 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3027,7 +3049,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -9122,7 +9144,7 @@
     "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9133,7 +9155,7 @@
     "notes": "F16 GGUF conversion of ai4bharat/indic-conformer"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9144,7 +9166,7 @@
     "notes": "Q4_0 GGUF conversion of ai4bharat/indic-conformer"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9331,7 +9353,7 @@
     "link": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -9342,7 +9364,7 @@
     "notes": "F16 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -9353,7 +9375,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
