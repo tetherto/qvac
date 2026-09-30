@@ -43,6 +43,11 @@ export interface TranscriptionSegment {
    * `"Speaker N: start - end"` lines of `text`.
    */
   speakerSegments?: SpeakerSegment[];
+  /**
+   * MOSS-Transcribe-Diarize: the model's speaker label (`"S01"`, `"S02"`,
+   * ...); `speakerId` carries the same speaker 0-based.
+   */
+  speaker?: string;
   /** Whisper: language the window was decoded in (e.g. `"en"`). */
   language?: string;
   /** Whisper: probability that the segment's window holds no speech. */

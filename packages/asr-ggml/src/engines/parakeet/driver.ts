@@ -22,6 +22,7 @@ import type {
 import type {
   ASRGgmlFiles,
   ASRGgmlReloadConfig,
+  ASRRunOptions,
   ASRStreamingOptions,
   AsrDriver,
   DriverContext,
@@ -218,6 +219,16 @@ const PARAKEET_STREAMING_OPT_KEYS: readonly string[] = [
   "spkCacheUpdatePeriod",
 ];
 
+/** Rejects per-call `run()` options on an engine that takes none. */
+export function assertNoRunOptions(options: ASRRunOptions, engine: string): void {
+  const keys = Object.keys(options ?? {});
+  if (keys.length === 0) return;
+  throw new QvacErrorAddonASRGgml({
+    code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+    adds: `${keys.join(", ")}: run options are moss-transcribe only (engine is ${engine})`,
+  });
+}
+
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
@@ -358,7 +369,9 @@ export class ParakeetDriver implements AsrDriver {
 
   run(
     audio: NormalizedAudioStream,
+    options: ASRRunOptions = {},
   ): Promise<QvacResponse<ASRRunOutput>> {
+    assertNoRunOptions(options, "parakeet");
     const response = this.ctx.job.start() as QvacResponse<ASRRunOutput>;
     void this._pumpBatchAudio(audio).catch((error: unknown) => {
       this.ctx.job.fail(asError(error));

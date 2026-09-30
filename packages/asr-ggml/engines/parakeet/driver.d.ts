@@ -1,7 +1,7 @@
 import type { QvacResponse } from "@qvac/infer-base";
 import { ParakeetInterface, type ParakeetConfigurationParams, type StreamingConfig } from "./parakeet";
 import type { ASRRunOutput, AudioInput, BackendInfo } from "../../lib/types";
-import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
+import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
 /**
  * Parakeet-specific configuration options. CTC, TDT, RNN-T, EOU, Nemotron,
  * and Sortformer are auto-detected from the loaded GGUF metadata.
@@ -130,6 +130,8 @@ export type ParakeetStreamingRunConfig = StreamingConfig;
 export interface ParakeetReloadConfig {
     parakeetConfig?: Partial<ParakeetConfig>;
 }
+/** Rejects per-call `run()` options on an engine that takes none. */
+export declare function assertNoRunOptions(options: ASRRunOptions, engine: string): void;
 /**
  * Parakeet engine driver: owns the `ParakeetInterface`, the parakeet event
  * mapping, and the parakeet streaming lifecycle. Backed by
@@ -152,7 +154,7 @@ export declare class ParakeetDriver implements AsrDriver {
     cancelActive(jobId?: number): Promise<void>;
     status(): Promise<string>;
     getBackendInfo(): BackendInfo | null;
-    run(audio: NormalizedAudioStream): Promise<QvacResponse<ASRRunOutput>>;
+    run(audio: NormalizedAudioStream, options?: ASRRunOptions): Promise<QvacResponse<ASRRunOutput>>;
     createStreamingSession(audio: NormalizedAudioStream, opts?: ASRStreamingOptions): Promise<StreamingSession>;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
     _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;

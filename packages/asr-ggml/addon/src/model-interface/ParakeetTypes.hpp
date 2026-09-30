@@ -50,6 +50,9 @@ struct Transcript {
   // the "Speaker N: start - end" text, which is kept for existing parsers.
   int speakerId = -1;
   std::vector<SpeakerSegment> speakerSegments;
+  // MOSS-Transcribe-Diarize only: the model's speaker label ("S01", "S02",
+  // ...); speakerId carries the same speaker 0-based. Empty elsewhere.
+  std::string speaker;
 
   Transcript()
       : toAppend{false}, start(-1.0F), end(-1.0F), id{0}, isEndOfTurn{false},

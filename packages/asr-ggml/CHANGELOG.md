@@ -14,6 +14,16 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Added
+
+- MOSS-Transcribe-Diarize engine (`engine: 'moss-transcribe'`, OpenMOSS
+  MOSS-Transcribe-Diarize): one pass over a whole recording returns
+  timestamped segments with the speaker label (`speaker: 'S01'`) and a 0-based
+  `speakerId`, validated for Spanish and Chinese. `run(audio, options)` takes
+  per-request `hotwords` (names and terms spelled as given), a custom
+  `prompt` and `maxNewTokens`; the other engines reject run options. There is
+  no streaming or reload for this engine.
+
 ### Changed
 
 - Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships
