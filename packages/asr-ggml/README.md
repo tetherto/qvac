@@ -447,7 +447,7 @@ Every verb has one signature and one meaning regardless of engine.
 | `getState()` | `{ configLoaded, weightsLoaded, destroyed }`. |
 | `getEngineType()` | `'whisper'` \| `'parakeet'` \| `'moss-transcribe'`. |
 | `getBackendInfo()` | `BackendInfo` or `null` before `load()`. |
-| `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). Neither engine implements a correct pause/resume. |
+| `pause()` / `unpause()` | Always reject with `NOT_SUPPORTED` (6019). No engine implements a correct pause/resume. |
 
 Constructor options:
 
@@ -723,7 +723,7 @@ including CPU-only and non-NVIDIA machines — skip the module and fall back
 to Vulkan or CPU instead of failing to load the addon. CUDA is compiled
 *alongside* Vulkan rather than replacing it; ggml registers CUDA ahead of
 Vulkan, so a `use_gpu` / `useGPU` request lands on CUDA when a supported
-device is present and falls back to Vulkan otherwise. Both engines report
+device is present and falls back to Vulkan otherwise. Every engine reports
 the winner through `getBackendInfo()` as `backendId: 2` (`BackendId.CUDA`).
 
 On x64 a CUDA build's module targets **compute capability 7.5 and newer**,
@@ -742,8 +742,9 @@ nvcc's clang host-compiler setup lives in
 `vcpkg-overlays/toolchains/linux-clang.cmake`, shared by every addon that
 compiles the CUDA backend.
 
-Both engines default to CPU: whisper needs `contextParams.use_gpu: true`,
-parakeet needs `parakeetConfig.useGPU: true`.
+Every engine defaults to CPU: whisper needs `contextParams.use_gpu: true`,
+parakeet needs `parakeetConfig.useGPU: true` and moss-transcribe needs
+`mossTranscribeConfig.useGPU: true`.
 
 
 For Whisper GPU selection, set `contextParams['main-gpu']` (or the alias
@@ -938,7 +939,7 @@ npm test                              # complete standard gate
 npm run test:all                      # same aggregate, named explicitly
 npm run test:unit
 npm run test:package                  # packed tarball and consumer contract
-npm run test:integration              # standard suites for both engines
+npm run test:integration              # standard suites for every engine
 npm run test:integration:whisper
 npm run test:integration:parakeet
 npm run test:cpp                      # native gtest suite

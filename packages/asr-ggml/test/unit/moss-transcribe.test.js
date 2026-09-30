@@ -148,6 +148,14 @@ test('MOSS-Transcribe: a custom prompt reaches the native job', async (t) => {
   await model.destroy()
 })
 
+test('MOSS-Transcribe: null run options mean the model defaults', async (t) => {
+  const { model, binding } = createMossModel()
+  await model.load()
+  await transcribe(model, null)
+  t.absent(binding.jobs[0].hotwords, 'no hotwords sent')
+  await model.destroy()
+})
+
 test('MOSS-Transcribe: malformed run options are rejected before queueing', async (t) => {
   const { model, binding } = createMossModel()
   await model.load()
@@ -159,8 +167,10 @@ test('MOSS-Transcribe: malformed run options are rejected before queueing', asyn
     [{ hotwords: Array.from({ length: 65 }, (_, i) => `w${i}`) }, /up to 64/],
     [{ prompt: 7 }, /prompt must be a string/],
     [{ prompt: 'x', hotwords: ['QVAC'] }, /cannot be combined with hotwords/],
-    [{ maxNewTokens: -1 }, /maxNewTokens must be a non-negative integer/],
-    [{ maxNewTokens: 1.5 }, /maxNewTokens must be a non-negative integer/],
+    [{ prompt: '技'.repeat(2731) }, /at most 8192 UTF-8 bytes/],
+    [{ maxNewTokens: -1 }, /maxNewTokens must be an integer in \[0, 2147483647\]/],
+    [{ maxNewTokens: 1.5 }, /maxNewTokens must be an integer/],
+    [{ maxNewTokens: 2 ** 32 + 10 }, /maxNewTokens must be an integer/],
     [{ language: 'es' }, /language is not a valid moss-transcribe run option/]
   ]
   for (const [options, pattern] of cases) {

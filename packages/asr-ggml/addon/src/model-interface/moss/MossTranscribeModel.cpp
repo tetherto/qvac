@@ -1,6 +1,7 @@
 #include "model-interface/moss/MossTranscribeModel.hpp"
 
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -73,6 +74,15 @@ bool allDigits(const std::string& text) {
   return !text.empty();
 }
 
+int speakerNumberOf(const std::string& digits) {
+  int number = 0;
+  const auto [end, error] =
+      std::from_chars(digits.data(), digits.data() + digits.size(), number);
+  if (error != std::errc() || end != digits.data() + digits.size())
+    return 0;
+  return number;
+}
+
 parakeet::Transcript
 transcriptOf(const ::parakeet::moss::TranscriptSegment& segment, size_t index) {
   parakeet::Transcript transcript(segment.text);
@@ -128,7 +138,7 @@ int MossTranscribeModel::speakerIdOf(const std::string& label) {
   const std::string digits = label.substr(1);
   if (!allDigits(digits))
     return -1;
-  return std::stoi(digits) - 1;
+  return speakerNumberOf(digits) - 1;
 }
 
 MossTranscribeModel::Output MossTranscribeModel::toTranscripts(

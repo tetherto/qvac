@@ -36,7 +36,7 @@ export interface MossTranscribeRunOptions {
     maxNewTokens?: number;
 }
 /** Validates the per-call options and returns the fields the native job reads. */
-export declare function mossTranscribeJobFields(options?: ASRRunOptions): Record<string, unknown>;
+export declare function mossTranscribeJobFields(options?: ASRRunOptions | null): Record<string, unknown>;
 /**
  * MOSS-Transcribe-Diarize engine driver: one pass over a whole recording
  * that returns timestamped, speaker-labelled segments. Backed by the

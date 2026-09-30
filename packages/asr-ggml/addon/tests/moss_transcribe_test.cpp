@@ -195,6 +195,7 @@ TEST(MossTranscribeSpeakers, MalformedLabelsHaveNoId) {
   EXPECT_EQ(MossTranscribeModel::speakerIdOf("S"), -1);
   EXPECT_EQ(MossTranscribeModel::speakerIdOf("X01"), -1);
   EXPECT_EQ(MossTranscribeModel::speakerIdOf("S0x"), -1);
+  EXPECT_EQ(MossTranscribeModel::speakerIdOf("S99999999999"), -1);
 }
 
 TEST(MossTranscribeTranscripts, SegmentsKeepTextTimesAndSpeakers) {

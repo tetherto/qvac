@@ -14,7 +14,8 @@ const MAX_HOTWORD_BYTES = 64;
 const ONE_BYTE_LIMIT = 0x80;
 const TWO_BYTE_LIMIT = 0x800;
 const THREE_BYTE_LIMIT = 0x10000;
-const MAX_PROMPT_CHARS = 8192;
+const MAX_PROMPT_BYTES = 8192;
+const MAX_NATIVE_INT = 2147483647;
 function asError(error) {
     return error instanceof Error ? error : new Error(String(error));
 }
@@ -49,8 +50,8 @@ function assertHotwords(hotwords) {
 function assertPrompt(prompt, hotwords) {
     if (prompt === undefined)
         return;
-    if (typeof prompt !== "string" || prompt.length > MAX_PROMPT_CHARS) {
-        throw invalidRunOption(`prompt must be a string of at most ${MAX_PROMPT_CHARS} characters`);
+    if (typeof prompt !== "string" || utf8Length(prompt) > MAX_PROMPT_BYTES) {
+        throw invalidRunOption(`prompt must be a string of at most ${MAX_PROMPT_BYTES} UTF-8 bytes`);
     }
     if (hotwords !== undefined) {
         throw invalidRunOption("prompt replaces the default instruction and cannot be combined with hotwords");
@@ -59,8 +60,8 @@ function assertPrompt(prompt, hotwords) {
 function assertMaxNewTokens(value) {
     if (value === undefined)
         return;
-    if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-        throw invalidRunOption("maxNewTokens must be a non-negative integer");
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > MAX_NATIVE_INT) {
+        throw invalidRunOption(`maxNewTokens must be an integer in [0, ${MAX_NATIVE_INT}]`);
     }
 }
 function assertKnownRunOptions(options) {
@@ -72,7 +73,7 @@ function assertKnownRunOptions(options) {
 }
 /** Validates the per-call options and returns the fields the native job reads. */
 function mossTranscribeJobFields(options = {}) {
-    const fields = options;
+    const fields = (options ?? {});
     assertKnownRunOptions(fields);
     assertHotwords(fields.hotwords);
     assertPrompt(fields.prompt, fields.hotwords);

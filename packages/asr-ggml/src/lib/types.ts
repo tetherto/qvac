@@ -20,7 +20,7 @@ export interface TranscriptionToken {
 }
 
 /**
- * A single transcription segment. Core fields are shared by both engines;
+ * A single transcription segment. Core fields are shared by every engine;
  * engine-specific extras pass through untouched via the index signature.
  */
 export interface TranscriptionSegment {
@@ -124,7 +124,7 @@ export interface BackendInfo {
   gpuMemFreeMb?: number;
 }
 
-/** Runtime-statistics fields shared by both engines. */
+/** Runtime-statistics fields shared by the Whisper and Parakeet engines. */
 export interface RuntimeStatsCore {
   backendId: number;
   backendDevice: number;
