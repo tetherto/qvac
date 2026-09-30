@@ -9,11 +9,14 @@ const { probeRpcServerProtocol } = require("../mobile/rpc-protocol.cjs");
 const RDMA_EXPECTED = Bare.platform === "linux";
 
 async function rejection(promise) {
+  let server;
   try {
-    await promise;
+    server = await promise;
   } catch (error) {
     return error;
   }
+  // A server that started anyway would keep the process alive.
+  await server?.stop?.();
   throw new Error("Expected the promise to reject");
 }
 
@@ -57,7 +60,7 @@ test("accepts an explicit thread count", async (t) => {
 });
 
 test("stop is idempotent, including concurrent calls", async (t) => {
-  const server = await startRpcServer({ device: "CPU" });
+  const server = await startStopped(t, { device: "CPU" });
 
   await Promise.all([server.stop(), server.stop()]);
   await server.stop();
@@ -65,7 +68,7 @@ test("stop is idempotent, including concurrent calls", async (t) => {
 });
 
 test("restarts on the same port after stopping", async (t) => {
-  const first = await startRpcServer({ device: "CPU" });
+  const first = await startStopped(t, { device: "CPU" });
   await probeRpcServerProtocol(net, first.host, first.port);
   await first.stop();
 
