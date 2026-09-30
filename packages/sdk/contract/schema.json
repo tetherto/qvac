@@ -19551,10 +19551,6 @@
           "type": "string",
           "minLength": 1
         },
-        "runtime": {
-          "type": "string",
-          "const": "in-process"
-        },
         "rdmaCapable": {
           "type": "boolean",
           "description": "Whether the native backend supports RDMA. It falls back to TCP for clients without RDMA."
@@ -19564,7 +19560,7 @@
           "const": "startRpcServer"
         }
       },
-      "required": ["serverId", "url", "runtime", "rdmaCapable", "type"],
+      "required": ["serverId", "url", "rdmaCapable", "type"],
       "additionalProperties": false
     },
     "state.request": {

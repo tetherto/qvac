@@ -25,7 +25,6 @@ async def test_managed_rpc_server_wire_contract(rdma_capable):
             "type": "startRpcServer",
             "serverId": "owned",
             "url": "10.0.0.2:50052",
-            "runtime": "in-process",
             "rdmaCapable": rdma_capable,
         }
     )
@@ -42,6 +41,7 @@ async def test_managed_rpc_server_wire_contract(rdma_capable):
     )
     assert server.server_id == "owned"
     assert server.rdma_capable is rdma_capable
+    assert "runtime" not in server.model_dump(by_alias=True)
     assert transport.sent == {
         "type": "startRpcServer",
         "host": "10.0.0.2",

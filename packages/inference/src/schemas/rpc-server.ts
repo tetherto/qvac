@@ -38,7 +38,6 @@ export const startRpcServerOptionsSchema = z.object({
 export const rpcServerInfoSchema = z.object({
   serverId: z.string().min(1),
   url: z.string().min(1),
-  runtime: z.literal('in-process'),
   rdmaCapable: z
     .boolean()
     .describe(
@@ -107,7 +106,6 @@ export interface RpcServerHandle {
   host: string
   port: number
   url: string
-  runtime: 'in-process'
   rdmaCapable: boolean
   stop(): Promise<void>
 }

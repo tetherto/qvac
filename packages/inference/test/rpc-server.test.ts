@@ -24,7 +24,6 @@ function fixture(overrides: Partial<RpcServerDependencies> = {}) {
         host: '10.0.0.2',
         port,
         url: `10.0.0.2:${port}`,
-        runtime: 'in-process',
         rdmaCapable: false,
         async stop() {
           events.push(`stop:${port}`)
@@ -73,7 +72,6 @@ test('RPC request schemas and bounded discovery', (t) => {
       type: 'startRpcServer',
       serverId: 'owned',
       url: '127.0.0.1:1234',
-      runtime: 'in-process',
       rdmaCapable: false
     }).success
   )
@@ -113,6 +111,7 @@ test('RPC manager advertises after readiness, owns multiple IDs and withdraws be
   const first = await manager.start(serving, ctx)
   const second = await manager.start(serving, ctx)
   t.not(first.serverId, second.serverId)
+  t.absent('runtime' in first, 'managed server response omits runtime')
   t.alike(events.slice(0, 3), ['start:50052', 'ready', 'advertise'])
   await manager.stop(first.serverId)
   t.alike(events.slice(-2), ['withdraw', 'stop:50052'])
@@ -172,7 +171,6 @@ test('RPC failed stop retains ownership, close attempts every server, retry succ
         host: '127.0.0.1',
         port: id + 1000,
         url: `127.0.0.1:${id + 1000}`,
-        runtime: 'in-process',
         rdmaCapable: false,
         async stop() {
           stopped.push(id)
@@ -203,7 +201,6 @@ test('RPC stalled stop stays pending and shutdown still attempts other servers',
         host: '127.0.0.1',
         port: id + 1000,
         url: `127.0.0.1:${id + 1000}`,
-        runtime: 'in-process',
         rdmaCapable: false,
         async stop() {
           stopped.push(id)
@@ -259,7 +256,6 @@ test('RPC failed rollback retains its native handle for shutdown retry', async (
         host: '127.0.0.1',
         port: 1000,
         url: '127.0.0.1:1000',
-        runtime: 'in-process',
         rdmaCapable: false,
         async stop() {
           if (fail) throw new Error('cannot stop yet')
@@ -310,7 +306,6 @@ test('RPC rollback stalled in native stop does not prevent stopping other owned 
         host: '127.0.0.1',
         port,
         url: `127.0.0.1:${port}`,
-        runtime: 'in-process',
         rdmaCapable: false,
         async stop() {
           stops.push(port)

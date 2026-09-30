@@ -91,7 +91,7 @@ export function createRpcServerManager(deps: RpcServerDependencies) {
     if (closing) throw new Error('RPC server manager is closing')
     entry.active = true
     transferred = true
-    return { serverId, url: handle.url, runtime: handle.runtime, rdmaCapable: handle.rdmaCapable }
+    return { serverId, url: handle.url, rdmaCapable: handle.rdmaCapable }
   }
 
   function start(options: StartRpcServerOptions, ctx: RequestContext): Promise<RpcServerInfo> {

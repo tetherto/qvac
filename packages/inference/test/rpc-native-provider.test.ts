@@ -7,7 +7,6 @@ import { rpcServerInfoSchema } from '@/schemas/rpc-server'
 test('published RPC provider starts, serves inventory over TCP, and stops', async (t) => {
   const server = await ggmlRpcServerProvider.start({})
   try {
-    t.is(server.runtime, 'in-process')
     t.is(typeof server.rdmaCapable, 'boolean')
     t.ok(rpcServerInfoSchema.safeParse({ ...server, serverId: 'native' }).success)
     const devices = await queryRpcDevices(

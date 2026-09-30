@@ -27,7 +27,6 @@ async function runStartRpcServer(options: StartRpcServerOptions, requestId: stri
   return {
     serverId: response.serverId,
     url: response.url,
-    runtime: response.runtime,
     rdmaCapable: response.rdmaCapable
   }
 }

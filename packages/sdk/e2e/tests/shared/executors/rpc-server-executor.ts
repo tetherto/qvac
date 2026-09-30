@@ -70,7 +70,7 @@ export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
         throw new Error('Servers share an ID or endpoint')
       for (const server of [first, second]) {
         if (
-          server.runtime !== 'in-process' ||
+          'runtime' in server ||
           typeof server.rdmaCapable !== 'boolean' ||
           !server.url.startsWith('127.0.0.1:')
         )

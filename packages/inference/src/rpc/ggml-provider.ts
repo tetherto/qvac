@@ -18,7 +18,6 @@ export const ggmlRpcServerProvider: RpcServerProvider = {
       host: handle.host,
       port: handle.port,
       url: handle.url,
-      runtime: 'in-process',
       rdmaCapable: handle.rdmaCapable,
       stop: () => handle.stop()
     }

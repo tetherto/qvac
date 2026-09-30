@@ -116,7 +116,6 @@ test('public RPC start cancellation rolls back the handle when the provider retu
         host: '127.0.0.1',
         port: 1,
         url: '127.0.0.1:1',
-        runtime: 'in-process',
         rdmaCapable: false,
         async stop() {
           stops++
@@ -178,7 +177,6 @@ test('a server-only provider owns handles through stop failure and close retry',
         host: '127.0.0.1',
         port: address.port,
         url: `127.0.0.1:${address.port}`,
-        runtime: 'in-process',
         rdmaCapable: false,
         async stop() {
           stops++

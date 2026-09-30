@@ -19553,7 +19553,6 @@ class StartRpcServerResponse(GeneratedBaseModel):
     )
     server_id: Annotated[str, Field(alias="serverId", min_length=1)]
     url: Annotated[str, Field(min_length=1)]
-    runtime: Literal["in-process"] = "in-process"
     rdma_capable: Annotated[
         bool,
         Field(
