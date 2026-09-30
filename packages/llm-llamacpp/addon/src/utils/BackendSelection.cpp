@@ -1554,8 +1554,7 @@ backend_selection::getSplitDeviceSelection(
     }
     const std::string deviceName = lowerCopy(namePtr);
     const bool isRpc = hasBackendFamily(deviceName, registryName, "rpc");
-    if ((isRpc && !constraints.requiredBackendFamilies.empty()) ||
-        !isEligibleGpuDevice(bckI, dev, allowNonAdrenoOpenCl) ||
+    if (!isEligibleGpuDevice(bckI, dev, allowNonAdrenoOpenCl) ||
         !deviceMeetsConstraints(bckI, dev, constraints) ||
         (!isRpc &&
          std::ranges::find(selectedNames, deviceName) == selectedNames.end())) {
