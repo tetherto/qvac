@@ -27,6 +27,8 @@ Compared to generating text embeddings only, the key differences are:
    - [`ragListWorkspaces()`](/reference/api#raglistworkspaces) — list workspaces
    - [`ragCloseWorkspace()`](/reference/api#ragcloseworkspace) — release resources
    - [`ragDeleteWorkspace()`](/reference/api#ragdeleteworkspace) — delete workspace and data
+   - [`createVectorIndex()`](/reference/api#createvectorindex) — build a TurboVec index over your own documents
+   - [`loadVectorIndex()`](/reference/api#loadvectorindex) — reopen a saved TurboVec index
 4. [`unloadModel()`](/reference/api#unloadmodel)
 
 For how to use each function, see [SDK — API reference](/reference/api/).
@@ -37,6 +39,7 @@ Create your RAG pipeline using [text embeddings](/ai-capabilities/text-embedding
 
 Regarding vector storage, you may use:
 - **External vector DB:** use [`embed()`](/reference/api#embed) to generate vectors and store them wherever you want (e.g., MongoDB, LanceDB, ChromaDB, SQLite-Vector). Choose this when you need custom persistence, filtering, or integration with an existing database.
+- **Built-in TurboVec index with your own document store:** use [`embed()`](/reference/api#embed) for vectors and [`createVectorIndex()`](/reference/api#createvectorindex) for on-device nearest-neighbour search. QVAC indexes the vectors; your documents stay in whatever store you already have, and results come back as the ids you assigned. Snapshots can be saved and reopened with [`loadVectorIndex()`](/reference/api#loadvectorindex).
 - **Built-in vector store:** use the RAG workspace functions ([`ragIngest()`](/reference/api#ragingest), [`ragSearch()`](/reference/api#ragsearch), etc.). QVAC persists the vectors for you, so this is the simplest path.
 
 <Callout type="warn">
@@ -77,6 +80,32 @@ The following script shows how to ingest documents into a built-in RAG workspace
 
 <Callout type="info">
 **Swap the backend:** to store the vectors in a TurboVec index instead of the default HyperDB, set `"ragTurbovec": true` in `qvac.config.json`. The RAG API is the same. See [Configuration › `ragTurbovec`](/configuration#options) for details.
+</Callout>
+
+### TurboVec index with your own document store
+
+The following script keeps the documents in a plain `Map`, embeds them with `embed()`, and indexes the vectors in a TurboVec index created with `createVectorIndex()`. Search returns the ids you assigned, so the documents can live in any database. The index is saved with `write()` and reopened with `loadVectorIndex()`; only the vectors are stored, never the documents.
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/rag/rag-turbovec.js title="rag-turbovec.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/rag/rag-turbovec.ts title="rag-turbovec.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+TurboVec quantises vectors (`VectorIndexStorage.TURBOVEC_Q4` by default, `TURBOVEC_Q2` for half the memory) and needs a dimension divisible by 8 and no greater than 1024. `GTE_LARGE_FP16` produces 1024-dimensional vectors and fits. Search uses dot products, so L2-normalise vectors when you need cosine similarity. The index lives in the SDK worker; after a worker restart, reopen it from the snapshot.
 </Callout>
 
 ### External vector DB

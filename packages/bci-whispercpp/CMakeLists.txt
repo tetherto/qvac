@@ -179,6 +179,7 @@ if(BUILD_TESTING)
   add_executable(
       test-bci-core
       ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
+      ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp
   )
 
   target_include_directories(test-bci-core PRIVATE
@@ -197,6 +198,23 @@ if(BUILD_TESTING)
       GTest::gtest_main
       GTest::gmock
   )
+
+  # Exercise the real model load/reload path against deterministic backend
+  # boundaries, without requiring GPU hardware or the large BCI model assets.
+  # GNU ld/lld --wrap is available on the Linux native-test runners.
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(test-bci-core PRIVATE
+        ${PROJECT_SOURCE_DIR}/addon/tests/test_model_load.cpp
+    )
+    foreach(_symbol IN ITEMS
+        ggml_backend_dev_count ggml_backend_dev_get ggml_backend_dev_type
+        ggml_backend_dev_backend_reg ggml_backend_reg_name
+        ggml_backend_dev_name ggml_backend_dev_description ggml_backend_dev_memory
+        ggml_backend_load_all ggml_backend_load_all_from_path
+        whisper_init_from_file_with_params whisper_free whisper_full)
+      target_link_options(test-bci-core PRIVATE "LINKER:--wrap=${_symbol}")
+    endforeach()
+  endif()
 
   set_target_properties(test-bci-core PROPERTIES
       RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/addon/tests

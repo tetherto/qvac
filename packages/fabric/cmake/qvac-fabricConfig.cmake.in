@@ -2,4 +2,13 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/qvac-fabricTargets.cmake")
 
+# Nothing platform-dependent belongs in this file. It installs to
+# share/qvac-fabric/cmake, which every prebuild leg writes and the artifact
+# merge collapses to a single copy in the published package, so a value that
+# differs per platform would describe whichever leg finished last -- and a
+# consumer reading it would be wrong without any way to tell. Keep it to facts
+# that hold for every triplet; a consumer that needs to know how this build
+# links its C++ runtime reads that out of the module for its own triplet, the
+# way cmake/qvac-addon/assert-fabric-cxx-runtime.cmake does.
+
 check_required_components(qvac-fabric)

@@ -1,0 +1,225 @@
+# Fill Fit Blobs (Registry-server)
+#
+# Manual-only. Calls the fill-fit-blobs RPC on the staging registry, which makes
+# the indexer write a weightless description of each artifact and record a
+# fitBlobBinding on the model row. The work happens on the indexer; this job is
+# only the RPC client.
+#
+# Dispatch requires write access on the repository, and the release environment
+# holds the writer secrets.
+
+name: Fill Fit Blobs (Registry-server)
+
+run-name: "Fill fit blobs${{ inputs.dry_run == true && ' (dry run)' || '' }}: ${{ inputs.filter || 'whole catalogue' }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: "Substring match on the record path. Empty means the whole catalogue."
+        required: false
+        type: string
+        default: ""
+      limit:
+        description: "Stop after this many records. Empty means no limit."
+        required: false
+        type: string
+        default: ""
+      dry_run:
+        description: "Report the selection without writing anything."
+        required: false
+        type: boolean
+        default: true
+      force:
+        description: "Re-fill records that already carry a fitBlobBinding. Requires a filter or a limit."
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PKG_DIR: packages/registry-server
+
+permissions:
+  contents: read
+
+# One lane with the deploy and sync in
+# pr-models-validation-registry-server.yml. A pm2 reload mid-fill leaves an
+# uploaded blob with no pointer appended, and two fills at once overwrite each
+# other's rows. A group holds one pending run, so a long fill plus two merges to
+# main cancels the earlier merge's deploy rather than queueing it.
+concurrency:
+  group: registry-server-staging-write
+  cancel-in-progress: false
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 330
+    env:
+      QVAC_AUTOBASE_KEY: ${{ secrets.QVAC_AUTOBASE_KEY }}
+      QVAC_REGISTRY_CORE_KEY: ${{ secrets.QVAC_REGISTRY_CORE_KEY }}
+      QVAC_WRITER_PUBLIC_KEY: ${{ secrets.QVAC_WRITER_PUBLIC_KEY }}
+      QVAC_WRITER_SECRET_KEY: ${{ secrets.QVAC_WRITER_SECRET_KEY }}
+      QVAC_INDEXER_KEYS: ${{ secrets.QVAC_INDEXER_KEYS }}
+    steps:
+      # QVAC_INDEXER_KEYS is one comma-separated secret, so the runner masks the
+      # list and not the keys in it. The RPC client logs the key it picked.
+      - name: Mask each indexer key
+        shell: bash
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra keys <<< "${QVAC_INDEXER_KEYS:-}" || true
+          for key in "${keys[@]:-}"; do
+            trimmed="$(echo "$key" | tr -cd '[:alnum:]')"
+            if [ -n "$trimmed" ]; then echo "::add-mask::$trimmed"; fi
+          done
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Validate required secrets
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          missing=""
+          [ -z "$QVAC_AUTOBASE_KEY" ] && missing="$missing QVAC_AUTOBASE_KEY"
+          [ -z "$QVAC_REGISTRY_CORE_KEY" ] && missing="$missing QVAC_REGISTRY_CORE_KEY"
+          [ -z "$QVAC_WRITER_PUBLIC_KEY" ] && missing="$missing QVAC_WRITER_PUBLIC_KEY"
+          [ -z "$QVAC_WRITER_SECRET_KEY" ] && missing="$missing QVAC_WRITER_SECRET_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            exit 1
+          fi
+          echo "✓ All required secrets are set"
+
+      - name: Validate inputs
+        shell: bash
+        env:
+          FILTER: ${{ inputs.filter }}
+          LIMIT: ${{ inputs.limit }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          if [ -n "$LIMIT" ] && ! echo "$LIMIT" | grep -qE '^[1-9][0-9]*$'; then
+            echo "::error::limit must be a positive integer, got '$LIMIT'"
+            exit 1
+          fi
+          if [ "$FORCE" = "true" ] && [ -z "$FILTER" ] && [ -z "$LIMIT" ]; then
+            echo "::error::force over the whole catalogue is not allowed — set a filter or a limit"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: npm install
+
+      - name: Fill
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        env:
+          FILTER: ${{ inputs.filter }}
+          LIMIT: ${{ inputs.limit }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "$FILTER" ]; then args+=(--filter "$FILTER"); fi
+          if [ -n "$LIMIT" ]; then args+=(--limit "$LIMIT"); fi
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ "$FORCE" = "true" ]; then args+=(--force); fi
+          node scripts/fill-fit-blobs.js "${args[@]}" 2>&1 | tee fill.log
+
+          # The peer that answered. The verify step queries this same node.
+          grep -A1 'Connected to server' fill.log |
+            grep -oE '[a-z0-9]{40,}' |
+            head -1 > "$RUNNER_TEMP/fill-peer" || true
+
+      # An indexer on a schema older than 0.4.0 encodes no fitBlobBinding, so a
+      # fill against one reports every record filled and persists none. A record
+      # the fill skipped carries no pointer either and re-selects exactly once,
+      # which is the allowance.
+      #
+      # QVAC_INDEXER_KEYS holds only the peer that served the fill:
+      # connectToRegistry dials one key at random out of whatever the list
+      # holds. Each attempt is a fresh connection, and the append resolves on
+      # the writer core while listModels reads the view, so a landed pointer is
+      # readable some time after the fill returns.
+      - name: Verify the pointers persisted
+        if: inputs.dry_run != true && inputs.force != true && inputs.limit == ''
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        env:
+          FILTER: ${{ inputs.filter }}
+          ATTEMPTS: "5"
+          DELAY_SECONDS: "20"
+        run: |
+          set -euo pipefail
+          args=(--dry-run)
+          if [ -n "$FILTER" ]; then args+=(--filter "$FILTER"); fi
+
+          peer="$(cat "$RUNNER_TEMP/fill-peer" 2>/dev/null || true)"
+          if [ -n "$peer" ]; then
+            export QVAC_INDEXER_KEYS="$peer"
+            echo "querying the indexer that served the fill"
+          else
+            echo "::warning::Could not read the fill's peer from the log — querying any indexer"
+          fi
+
+          skipped=$(grep -c 'skipped ' fill.log || true)
+          echo "records the fill skipped: $skipped"
+
+          remaining=""
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            if [ "$attempt" -gt 1 ]; then sleep "$DELAY_SECONDS"; fi
+
+            node scripts/fill-fit-blobs.js "${args[@]}" 2>&1 | tee verify.log
+            remaining=$(grep -oE 'Selected: *[0-9]+' verify.log | tail -1 | grep -oE '[0-9]+' || true)
+
+            if [ -z "$remaining" ]; then
+              echo "::error::Could not read a Selected count out of the verify run"
+              exit 1
+            fi
+
+            echo "attempt $attempt of $ATTEMPTS — remaining: $remaining"
+            if [ "$remaining" -eq "$skipped" ]; then
+              echo "✓ Pointers persisted"
+              exit 0
+            fi
+          done
+
+          echo "::error::$remaining records still select against the $skipped the fill skipped. Check the schema version on the indexers and the fill log for per-record errors."
+          exit 1
+
+      - name: Scrub indexer keys from the logs
+        if: always()
+        working-directory: ${{ env.PKG_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra keys <<< "${QVAC_INDEXER_KEYS:-}" || true
+          for log in fill.log verify.log; do
+            [ -f "$log" ] || continue
+            for key in "${keys[@]:-}"; do
+              trimmed="$(echo "$key" | tr -cd '[:alnum:]')"
+              [ -n "$trimmed" ] || continue
+              sed -i "s/${trimmed}/***/g" "$log"
+            done
+          done
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: fill-fit-blobs-logs
+          path: |
+            ${{ env.PKG_DIR }}/fill.log
+            ${{ env.PKG_DIR }}/verify.log
+          if-no-files-found: ignore
+          retention-days: 14

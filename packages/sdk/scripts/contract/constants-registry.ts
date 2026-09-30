@@ -5,6 +5,9 @@ import {
   SUPPORTED_AUDIO_FORMATS,
   AUDIOGEN_ENGINES,
   AUDIOGEN_TASK_TYPES,
+  AUDIOGEN_EDIT_OPERATIONS,
+  AUDIOGEN_REPAINT_MODES,
+  AUDIOGEN_TRACKS,
   TTS_ENGINES,
   TTS_PACES,
   TTS_PARLER_EMOTIONS,
@@ -14,7 +17,8 @@ import {
   TTS_COSYVOICE3_EMOTIONS,
   TTS_COSYVOICE3_INSTRUCT_DIALECTS,
   TTS_COSYVOICE3_INSTRUCT_VOLUMES,
-  TTS_COSYVOICE3_INSTRUCT_STYLES
+  TTS_COSYVOICE3_INSTRUCT_STYLES,
+  VectorIndexStorage
 } from '@qvac/inference/surface'
 import {
   PLUGIN_LLM,
@@ -103,5 +107,9 @@ export const constantsRegistry = {
   TtsCosyvoice3InstructVolume: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_VOLUMES),
   TtsCosyvoice3InstructStyle: enumFromVocabulary(TTS_COSYVOICE3_INSTRUCT_STYLES),
   AudioGenEngine: enumFromVocabulary(AUDIOGEN_ENGINES),
-  AudioGenTaskType: enumFromVocabulary(AUDIOGEN_TASK_TYPES)
+  AudioGenTaskType: enumFromVocabulary(AUDIOGEN_TASK_TYPES),
+  AudioGenEditOperation: enumFromVocabulary(AUDIOGEN_EDIT_OPERATIONS),
+  AudioGenRepaintMode: enumFromVocabulary(AUDIOGEN_REPAINT_MODES),
+  AudioGenTrack: enumFromVocabulary(AUDIOGEN_TRACKS),
+  VectorIndexStorage: z.enum(VectorIndexStorage)
 } as const

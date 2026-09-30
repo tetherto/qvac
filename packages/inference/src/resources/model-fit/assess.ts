@@ -1,11 +1,12 @@
 import type {
   AssessModelFitResult,
   ModelFitBasis,
-  ModelFitCandidate,
+  ModelFitEstimateTarget,
   ModelFitEvidence,
   ModelFitExecution,
   ModelFitModelResult,
-  ModelFitVerdict
+  ModelFitVerdict,
+  NativeProbeFit
 } from '@/schemas/assess-model-fit'
 import type { GPUResourceCapabilities, SystemResources } from '@/schemas/system-resources'
 import type { ModelResourceProfile } from '@/schemas/model-resource-profile'
@@ -71,7 +72,7 @@ type Evaluation =
   | Extract<EstimatorResult, { kind: 'unknown' }>
 
 export interface AssessModelFitOptions {
-  models: readonly ModelFitCandidate[]
+  models: readonly ModelFitEstimateTarget[]
   execution: ModelFitExecution
   resources: SystemResources
   /**
@@ -96,6 +97,15 @@ export interface AssessModelFitOptions {
   ) => PlatformCalibration | undefined
   /** Defaults to the generated catalog table; injected in tests. */
   resolveProfile?: ProfileResolver
+  /**
+   * The engine's own verdict for the single candidate, from the registry's fit
+   * stub. Resolved in the handler, which is where the network is.
+   *
+   * Only ever set for a one-candidate assessment: the fitter answers about one
+   * model against the whole machine, and two such answers cannot be summed into
+   * a combined budget the way two byte estimates can.
+   */
+  nativeFit?: NativeProbeFit | undefined
 }
 
 /**
@@ -290,6 +300,24 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
     )
   }
 
+  // The engine's own fitter, where it reached a verdict, replaces the modelled
+  // one: it read this model's tensor list and measured this machine, which is
+  // what the coefficients above approximate. The estimator's reasons and
+  // assumptions describe the path not taken, so none of them are reported.
+  const native = nativeModelResult(options.nativeFit, modelResults)
+  if (native) {
+    return {
+      verdict: native.verdict,
+      basis,
+      execution,
+      evidence: 'native-fit',
+      ...(budget && { budget }),
+      models: [native],
+      reasons: ['the engine fitter read the registry description of this model'],
+      assumptions: []
+    }
+  }
+
   return {
     verdict,
     basis,
@@ -307,6 +335,36 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
 }
 
 /**
+ * The per-model result a native fit produces, or `undefined` when the modelled
+ * one stands.
+ *
+ * The probe answers about one model against the whole machine. Two such answers
+ * carry no byte demand that could be summed under one budget, so a multi-model
+ * assessment keeps the estimator that can aggregate. `unknown` — the probe
+ * disabled, the load shape unsupported, the child unusable — is not a verdict
+ * and falls through the same way.
+ */
+function nativeModelResult(
+  nativeFit: NativeProbeFit | undefined,
+  modelResults: readonly ModelFitModelResult[]
+): ModelFitModelResult | undefined {
+  if (!nativeFit || modelResults.length !== 1) return undefined
+  if (nativeFit.verdict === 'unknown') return undefined
+
+  const modelled = modelResults[0]
+  if (!modelled) return undefined
+
+  return {
+    name: modelled.name,
+    verdict: nativeFit.verdict === 'fit' ? 'likely-fits' : 'likely-too-large',
+    evidence: 'native-fit',
+    estimatorVersion: nativeFit.estimatorVersion,
+    reasons:
+      nativeFit.message === undefined ? [nativeFit.reason] : [nativeFit.reason, nativeFit.message]
+  }
+}
+
+/**
  * Whether every allocation a load makes comes out of the memory the system (or
  * process) budget measures — the precondition for the computed floor to be
  * compared against that budget.
@@ -317,7 +375,7 @@ export function assessModelFitFromResources(options: AssessModelFitOptions): Ass
  * told (an AMD APU on linux), fails it: the weights may live where the budget
  * cannot see them.
  */
-function boundBySystemMemory(
+export function boundBySystemMemory(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined
 ): boolean {
@@ -337,14 +395,14 @@ function boundBySystemMemory(
  * a floor.
  */
 function evaluate(
-  candidate: ModelFitCandidate,
+  candidate: ModelFitEstimateTarget,
   platform: ModelFitPlatform | undefined,
   calibration: PlatformCalibration | undefined,
   resources: SystemResources,
   resolveProfile: ProfileResolver,
   gpuMode: boolean,
   floorApplies: boolean
-): { candidate: ModelFitCandidate; result: Evaluation } {
+): { candidate: ModelFitEstimateTarget; result: Evaluation } {
   const profile = resolveProfile(candidate.model.sha256Checksum)
   if (!profile) {
     return { candidate, result: unknown('no resource profile in the catalog for this checksum') }
@@ -379,7 +437,7 @@ function unknown(reason: string): Extract<EstimatorResult, { kind: 'unknown' }> 
 
 /** Runs the calibrated estimator for a candidate, or says why it cannot. */
 function estimate(
-  candidate: ModelFitCandidate,
+  candidate: ModelFitEstimateTarget,
   profile: ModelResourceProfile,
   extraArtifactBytes: number,
   platform: ModelFitPlatform | undefined,
@@ -424,7 +482,7 @@ function estimate(
  *   an incomplete artifact set must not be silently under-counted.
  */
 function extraArtifactBytes(
-  candidate: ModelFitCandidate,
+  candidate: ModelFitEstimateTarget,
   resolveProfile: ProfileResolver
 ): number | undefined {
   if (!candidate.artifacts || candidate.artifacts.length === 0) return 0
@@ -683,7 +741,7 @@ function worst(a: ModelFitVerdict, b: ModelFitVerdict): ModelFitVerdict {
  * per-process cap, so it deliberately keeps the system basis with the mobile
  * reserve.
  */
-function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
+export function resolveBasis(platform: ModelFitPlatform | undefined): ModelFitBasis {
   return platform === 'ios-arm64' ? 'process-memory' : 'system-memory'
 }
 
@@ -703,7 +761,7 @@ function basisEvidence(basis: ModelFitBasis) {
  * relation the OS enforces — so every budget field keeps the same meaning
  * under either basis.
  */
-function resolveBudget(
+export function resolveBudget(
   resources: SystemResources,
   platform: ModelFitPlatform | undefined,
   basis: ModelFitBasis,
@@ -859,7 +917,7 @@ function compare(estimate: ByteRange, budget: number): ModelFitVerdict {
 }
 
 function toModelResult(
-  candidate: ModelFitCandidate,
+  candidate: ModelFitEstimateTarget,
   result: Evaluation,
   budget: AssessModelFitResult['budget'],
   /** Every candidate GPU budget, when the host has more than one. */

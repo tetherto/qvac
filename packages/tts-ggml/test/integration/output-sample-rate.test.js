@@ -12,6 +12,8 @@ const test = require('brittle')
 const TTSGgml = require('@qvac/tts-ggml')
 
 const { ensureSupertonicModel, ensureParlerModel } = require('../utils/downloadModel')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { SKIP_PARLER_GPU_ONLY, PARLER_GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -40,6 +42,7 @@ async function collect(model, text) {
 // JS half, which must forward the combination rather than reject it up front.
 test('CosyVoice3: enhancer + streaming forwards a non-native outputSampleRate', (t) => {
   const model = new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_COSYVOICE3,
     files: {
       cosyvoiceModelDir: './models/cosyvoice3',
@@ -72,6 +75,7 @@ test(
     const text = 'Output rate selection resamples the synthesized audio.'
 
     const native = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: dl.path },
       voice: 'F1',
@@ -91,6 +95,7 @@ test(
     }
 
     const resampled = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_SUPERTONIC,
       files: { supertonicModel: dl.path },
       voice: 'F1',
@@ -119,7 +124,7 @@ test(
 
 test(
   'Parler: outputSampleRate=16000 resamples and reports 16 kHz',
-  { timeout: 600000 },
+  { timeout: 600000, skip: SKIP_PARLER_GPU_ONLY },
   async (t) => {
     const baseDir = getBaseDir()
     const dl = await ensureParlerModel({ targetDir: path.join(baseDir, 'models') })
@@ -131,10 +136,12 @@ test(
     const text = 'Output rate selection resamples the synthesized audio.'
 
     const native = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: dl.path },
       voice: 'Laura',
       seed: 42,
+      config: { useGPU: PARLER_GPU_ONLY_USE_GPU },
       opts: { stats: true }
     })
     await native.load()
@@ -150,11 +157,12 @@ test(
     }
 
     const resampled = new TTSGgml({
+      threads: TTS_TEST_THREADS,
       engine: TTSGgml.ENGINE_PARLER,
       files: { parlerModel: dl.path },
       voice: 'Laura',
       seed: 42,
-      config: { outputSampleRate: 16000 },
+      config: { outputSampleRate: 16000, useGPU: PARLER_GPU_ONLY_USE_GPU },
       opts: { stats: true }
     })
     await resampled.load()

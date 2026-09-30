@@ -25,13 +25,13 @@
 #include <cstdarg>
 #include <cstring>
 
+#include "inference-addon-cpp/Logger.hpp"
 #include "nmt_beam_search.hpp"
 #include "nmt_graph_decoder.hpp"
 #include "nmt_graph_encoder.hpp"
 #include "nmt_state_backend.hpp"
 #include "nmt_tokenization.hpp"
 #include "nmt_utils.hpp"
-#include "inference-addon-cpp/Logger.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -59,6 +59,8 @@ struct nmt_context_params nmt_context_default_params() {
       /*.flash_attn           =*/false,
       /*.gpu_device           =*/0,
       /*.gpu_backend          =*/{},
+      /*.main_gpu             =*/{},
+      /*.legacy_gpu_selection =*/false,
       /*.op_offload_min_batch =*/-1,
   };
   return result;

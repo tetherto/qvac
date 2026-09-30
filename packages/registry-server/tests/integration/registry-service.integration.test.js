@@ -2,15 +2,19 @@
 
 const test = require('brittle')
 const Corestore = require('corestore')
+const Hyperblobs = require('hyperblobs')
 const Hyperswarm = require('hyperswarm')
 const createTestnet = require('hyperdht/testnet')
 const fs = require('fs').promises
 const path = require('path')
+const crypto = require('crypto')
 
 const RegistryService = require('../../lib/registry-service')
 const RegistryConfig = require('../../lib/config')
 const { AUTOBASE_NAMESPACE, QVAC_MAIN_REGISTRY } = require('../../shared/constants')
 const { createTempStorage, waitFor } = require('../helpers/test-utils')
+const { buildGguf, buildSafetensors } = require('../helpers/gguf-fixture')
+const { fitBlobContent } = require('../../lib/fit-blob')
 
 const DISPATCH_ADD_INDEXER = `@${QVAC_MAIN_REGISTRY}/add-indexer`
 const DISPATCH_PUT_MODEL = `@${QVAC_MAIN_REGISTRY}/put-model`
@@ -631,6 +635,655 @@ test('addModel extracts GGUF metadata for .gguf files', async (t) => {
     t.alike(retrieved.ggufMetadata, ggufModel.ggufMetadata, 'metadata persisted')
   } finally {
     await cleanupService(ctx)
+  }
+})
+
+async function addLocalArtifact(ctx, { filename, buffer, engine = '@test/engine' }) {
+  const tempDir = await createTempStorage(ctx.t)
+  const artifactPath = path.join(tempDir, filename)
+  await fs.writeFile(artifactPath, buffer)
+
+  ctx.service._downloadArtifact = async (sourceInfo, localPath) => {
+    await fs.copyFile(artifactPath, localPath)
+  }
+
+  const model = await ctx.service.addModel({
+    source: `s3://test-bucket/${filename}`,
+    engine,
+    licenseId: 'MIT'
+  })
+  await flushAutobases(ctx.service.base)
+
+  return model
+}
+
+async function fitBlobFor(t, filename, buffer) {
+  const dir = await createTempStorage(t)
+  const filePath = path.join(dir, filename)
+  await fs.writeFile(filePath, buffer)
+  return fitBlobContent(filePath)
+}
+
+async function readBlob(service, binding) {
+  const core = service.blobsStore.get({ key: binding.coreKey })
+  await core.ready()
+  const blobs = new Hyperblobs(core)
+  await blobs.ready()
+
+  const chunks = []
+  for await (const chunk of blobs.createReadStream(binding)) {
+    chunks.push(chunk)
+  }
+  await core.close()
+  return Buffer.concat(chunks)
+}
+
+test('addModel stores a weightless description and points the record at it', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildGguf({ tensorCount: 4, dataBytes: 4096 })
+    const model = await addLocalArtifact(ctx, {
+      filename: 'model.gguf',
+      buffer: fixture.buffer
+    })
+
+    const expected = await fitBlobFor(t, 'model.gguf', fixture.buffer)
+
+    t.ok(model.fitBlobBinding, 'record carries a fit blob pointer')
+    t.is(model.fitBlobBinding.byteLength, expected.length, 'pointer covers the description only')
+    t.ok(
+      model.fitBlobBinding.byteLength < model.blobBinding.byteLength,
+      'the description is smaller than the artifact'
+    )
+    t.not(
+      model.fitBlobBinding.sha256,
+      model.blobBinding.sha256,
+      'the description has its own checksum'
+    )
+
+    const stored = await readBlob(ctx.service, model.fitBlobBinding)
+    t.alike(stored, expected, 'stored bytes are the weightless description')
+    t.is(
+      crypto.createHash('sha256').update(stored).digest('hex'),
+      model.fitBlobBinding.sha256,
+      'the recorded checksum matches what was stored'
+    )
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    t.alike(retrieved.fitBlobBinding, model.fitBlobBinding, 'pointer persisted')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('every shard of a split model gets its own description', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const first = buildGguf({ tensorCount: 2, dataBytes: 512 })
+    const second = buildGguf({ tensorCount: 9, dataBytes: 512 })
+
+    const shard1 = await addLocalArtifact(ctx, {
+      filename: 'model-00001-of-00002.gguf',
+      buffer: first.buffer
+    })
+    const shard2 = await addLocalArtifact(ctx, {
+      filename: 'model-00002-of-00002.gguf',
+      buffer: second.buffer
+    })
+
+    const expectedFirst = await fitBlobFor(t, 'model-00001-of-00002.gguf', first.buffer)
+    const expectedSecond = await fitBlobFor(t, 'model-00002-of-00002.gguf', second.buffer)
+
+    t.ok(shard1.fitBlobBinding, 'first shard has a pointer')
+    t.ok(shard2.fitBlobBinding, 'later shard has a pointer')
+    t.is(shard1.fitBlobBinding.byteLength, expectedFirst.length)
+    t.is(shard2.fitBlobBinding.byteLength, expectedSecond.length)
+    t.not(
+      shard1.fitBlobBinding.sha256,
+      shard2.fitBlobBinding.sha256,
+      'each shard is described separately'
+    )
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('a safetensors artifact stores its JSON header', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildSafetensors()
+    const model = await addLocalArtifact(ctx, {
+      filename: 'vae.safetensors',
+      buffer: fixture.buffer
+    })
+
+    t.ok(model.fitBlobBinding, 'record carries a fit blob pointer')
+    t.is(model.fitBlobBinding.byteLength, fixture.metadataLength)
+
+    const stored = await readBlob(ctx.service, model.fitBlobBinding)
+    t.alike(stored, fixture.buffer.subarray(0, fixture.metadataLength))
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('a format with no separable metadata region is added without a pointer', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const model = await addLocalArtifact(ctx, {
+      filename: 'ggml-tiny.bin',
+      buffer: Buffer.alloc(256, 3)
+    })
+
+    t.absent(model.fitBlobBinding, 'no pointer for an unsupported format')
+    t.ok(model.blobBinding, 'the artifact itself is still stored')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs adds a pointer to records ingested without one', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildGguf({ tensorCount: 5, dataBytes: 2048 })
+    const originalUpload = ctx.service._uploadFitBlob
+    ctx.service._uploadFitBlob = () => null
+
+    const model = await addLocalArtifact(ctx, {
+      filename: 'legacy.gguf',
+      buffer: fixture.buffer
+    })
+    t.absent(model.fitBlobBinding, 'ingested without a pointer')
+
+    ctx.service._uploadFitBlob = originalUpload
+
+    const planned = await ctx.service.fillFitBlobs({ dryRun: true })
+    t.is(planned.selected, 1, 'dry run selects the record')
+    t.is(planned.filled, 0, 'dry run writes nothing')
+    t.alike(planned.paths, [model.path], 'dry run names what it would write')
+
+    const report = await ctx.service.fillFitBlobs()
+    await flushAutobases(ctx.service.base)
+
+    t.is(report.filled, 1, 'one record filled')
+    t.is(report.replaced, 0, 'nothing was replaced')
+    t.is(report.downloaded, 0, 'the active core is read without a download')
+    t.alike(report.skipped, [], 'nothing skipped')
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    const expected = await fitBlobFor(t, 'legacy.gguf', fixture.buffer)
+
+    t.ok(retrieved.fitBlobBinding, 'record now carries a pointer')
+    t.is(retrieved.fitBlobBinding.byteLength, expected.length)
+    t.alike(retrieved.blobBinding, model.blobBinding, 'the weights were not re-uploaded')
+
+    const stored = await readBlob(ctx.service, retrieved.fitBlobBinding)
+    t.alike(stored, expected)
+
+    const second = await ctx.service.fillFitBlobs()
+    t.is(second.selected, 0, 'a second run has nothing to do')
+
+    const forced = await ctx.service.fillFitBlobs({ force: true })
+    t.is(forced.selected, 1, 'force considers a record that already has a pointer')
+    t.is(forced.unchanged, 1, 'an identical copy is left in place')
+    t.is(forced.replaced, 0, 'no second blob was written')
+
+    const afterForce = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    t.alike(afterForce.fitBlobBinding, retrieved.fitBlobBinding, 'the pointer is untouched')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs replaces a pointer whose copy no longer matches', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildGguf({ tensorCount: 4, dataBytes: 1024 })
+    const model = await addLocalArtifact(ctx, {
+      filename: 'stale.gguf',
+      buffer: fixture.buffer
+    })
+    t.ok(model.fitBlobBinding, 'ingested with a pointer')
+
+    await ctx.service._appendOperation(DISPATCH_PUT_MODEL, {
+      ...model,
+      fitBlobBinding: { ...model.fitBlobBinding, sha256: 'stale'.padEnd(64, '0') }
+    })
+    await flushAutobases(ctx.service.base)
+
+    const report = await ctx.service.fillFitBlobs({ force: true })
+    await flushAutobases(ctx.service.base)
+
+    t.is(report.replaced, 1, 'the stale pointer was replaced')
+    t.is(report.filled, 0, 'it counts as a replacement, not a fill')
+    t.is(report.unchanged, 0)
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    t.is(
+      retrieved.fitBlobBinding.sha256,
+      model.fitBlobBinding.sha256,
+      'the pointer describes the artifact again'
+    )
+
+    const stored = await readBlob(ctx.service, retrieved.fitBlobBinding)
+    t.alike(stored, await fitBlobFor(t, 'stale.gguf', fixture.buffer))
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs leaves formats it cannot describe alone', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    await addLocalArtifact(ctx, {
+      filename: 'ggml-tiny.bin',
+      buffer: Buffer.alloc(256, 3)
+    })
+
+    const report = await ctx.service.fillFitBlobs({ force: true })
+    t.is(report.selected, 0, 'an unsupported format is never selected, even under force')
+    t.is(report.filled, 0)
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs honours filter and limit', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const originalUpload = ctx.service._uploadFitBlob
+    ctx.service._uploadFitBlob = () => null
+
+    for (const filename of ['qwen-a.gguf', 'qwen-b.gguf', 'flux-a.gguf']) {
+      await addLocalArtifact(ctx, { filename, buffer: buildGguf().buffer })
+    }
+
+    ctx.service._uploadFitBlob = originalUpload
+
+    const filtered = await ctx.service.fillFitBlobs({ filter: 'qwen', dryRun: true })
+    t.is(filtered.selected, 2, 'filter narrows to the matching paths')
+
+    const limited = await ctx.service.fillFitBlobs({ limit: 1, dryRun: true })
+    t.is(limited.selected, 1, 'limit caps the batch')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs reads the core the record names and writes to the active one', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildGguf({ tensorCount: 3, dataBytes: 1024 })
+    const originalUpload = ctx.service._uploadFitBlob
+    ctx.service._uploadFitBlob = () => null
+
+    const model = await addLocalArtifact(ctx, {
+      filename: 'rotated.gguf',
+      buffer: fixture.buffer
+    })
+
+    ctx.service._uploadFitBlob = originalUpload
+    ctx.service.activeBlobCoreLabel = 'models-2'
+
+    const report = await ctx.service.fillFitBlobs()
+    await flushAutobases(ctx.service.base)
+
+    t.is(report.filled, 1, 'the weights are found through the key on the record')
+    t.is(report.downloaded, 0, 'a local core is read rather than downloaded')
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    const { core } = await ctx.service._getOrCreateBlobsCore('models-2')
+
+    t.alike(retrieved.fitBlobBinding.coreKey, core.key, 'the pointer names the core written to')
+    t.unlike(
+      retrieved.fitBlobBinding.coreKey,
+      retrieved.blobBinding.coreKey,
+      'which is not the core holding the weights'
+    )
+    t.alike(
+      await readBlob(ctx.service, retrieved.fitBlobBinding),
+      await fitBlobFor(t, 'rotated.gguf', fixture.buffer)
+    )
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs downloads the artifact when no local core holds it', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildGguf({ tensorCount: 4, dataBytes: 2048 })
+    const originalUpload = ctx.service._uploadFitBlob
+    ctx.service._uploadFitBlob = () => null
+
+    const model = await addLocalArtifact(ctx, {
+      filename: 'elsewhere.gguf',
+      buffer: fixture.buffer
+    })
+
+    ctx.service._uploadFitBlob = originalUpload
+    await ctx.service._appendOperation(DISPATCH_PUT_MODEL, {
+      ...model,
+      blobBinding: { ...model.blobBinding, coreKey: Buffer.alloc(32, 7) }
+    })
+    await flushAutobases(ctx.service.base)
+
+    const report = await ctx.service.fillFitBlobs()
+    await flushAutobases(ctx.service.base)
+
+    t.is(report.filled, 1, 'the record is filled from its source')
+    t.is(report.downloaded, 1, 'the fallback ran')
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    t.alike(
+      await readBlob(ctx.service, retrieved.fitBlobBinding),
+      await fitBlobFor(t, 'elsewhere.gguf', fixture.buffer)
+    )
+    t.is(
+      retrieved.blobBinding.byteLength,
+      model.blobBinding.byteLength,
+      'the weight binding is left as it was'
+    )
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs skips a record whose source no longer matches the recorded hash', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const originalUpload = ctx.service._uploadFitBlob
+    ctx.service._uploadFitBlob = () => null
+
+    const model = await addLocalArtifact(ctx, {
+      filename: 'mutated.gguf',
+      buffer: buildGguf({ tensorCount: 2, dataBytes: 512 }).buffer
+    })
+
+    ctx.service._uploadFitBlob = originalUpload
+    await ctx.service._appendOperation(DISPATCH_PUT_MODEL, {
+      ...model,
+      blobBinding: { ...model.blobBinding, coreKey: Buffer.alloc(32, 7) }
+    })
+    await flushAutobases(ctx.service.base)
+
+    const replacement = buildGguf({ tensorCount: 9, dataBytes: 512 }).buffer
+    ctx.service._downloadArtifact = async (sourceInfo, localPath) => {
+      await fs.writeFile(localPath, replacement)
+    }
+
+    const report = await ctx.service.fillFitBlobs()
+
+    t.is(report.filled, 0, 'nothing is published from bytes the record does not bind')
+    t.is(report.skipped.length, 1)
+    t.ok(report.skipped[0].reason.includes('the record binds'), report.skipped[0].reason)
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    t.absent(retrieved.fitBlobBinding, 'no pointer is published')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs falls back when the local blocks were cleared after mirroring', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const fixture = buildGguf({ tensorCount: 3, dataBytes: 4096 })
+    const originalUpload = ctx.service._uploadFitBlob
+    ctx.service._uploadFitBlob = () => null
+
+    const model = await addLocalArtifact(ctx, {
+      filename: 'cleared.gguf',
+      buffer: fixture.buffer
+    })
+
+    ctx.service._uploadFitBlob = originalUpload
+    const { core } = await ctx.service._getOrCreateBlobsCore(ctx.service.activeBlobCoreLabel)
+    await core.clear(0, core.length)
+
+    const started = Date.now()
+    const report = await ctx.service.fillFitBlobs()
+    await flushAutobases(ctx.service.base)
+
+    t.is(report.filled, 1, 'the record is still filled')
+    t.is(report.downloaded, 1, 'the source supplies the weights')
+    t.ok(Date.now() - started < 20000, 'the read of the cleared core returns at once')
+
+    const retrieved = await ctx.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    t.alike(
+      await readBlob(ctx.service, retrieved.fitBlobBinding),
+      await fitBlobFor(t, 'cleared.gguf', fixture.buffer)
+    )
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+test('fillFitBlobs reports a failed download and carries on with the batch', async (t) => {
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const ctx = await createService(t, { swarmBootstrap: bootstrap })
+  ctx.t = t
+
+  try {
+    await ctx.service.ready()
+    await ensureIndexer(ctx.service)
+
+    const originalUpload = ctx.service._uploadFitBlob
+    ctx.service._uploadFitBlob = () => null
+
+    const unreachable = await addLocalArtifact(ctx, {
+      filename: 'gone.gguf',
+      buffer: buildGguf({ tensorCount: 2, dataBytes: 512 }).buffer
+    })
+    const reachable = await addLocalArtifact(ctx, {
+      filename: 'present.gguf',
+      buffer: buildGguf({ tensorCount: 3, dataBytes: 512 }).buffer
+    })
+
+    ctx.service._uploadFitBlob = originalUpload
+    await ctx.service._appendOperation(DISPATCH_PUT_MODEL, {
+      ...unreachable,
+      blobBinding: { ...unreachable.blobBinding, coreKey: Buffer.alloc(32, 7) }
+    })
+    await flushAutobases(ctx.service.base)
+
+    const copyArtifact = ctx.service._downloadArtifact
+    ctx.service._downloadArtifact = async (sourceInfo, localPath) => {
+      if (sourceInfo.path === unreachable.path) {
+        throw Object.assign(new Error('403 Forbidden'), { statusCode: 403 })
+      }
+      await copyArtifact(sourceInfo, localPath)
+    }
+
+    const report = await ctx.service.fillFitBlobs()
+    await flushAutobases(ctx.service.base)
+
+    t.is(report.skipped.length, 1, 'the unreachable model is reported')
+    t.is(report.skipped[0].path, unreachable.path)
+    t.ok(report.skipped[0].reason.includes('403'), report.skipped[0].reason)
+    t.is(report.filled, 1, 'the rest of the batch still runs')
+
+    const stagingRoot = ctx.service.config.getTempStorage()
+    const staged = await fs.readdir(stagingRoot).catch(() => [])
+    t.alike(
+      staged.filter((entry) => entry.startsWith('fit-')),
+      [],
+      'no staging directory is left behind'
+    )
+
+    const filled = await ctx.service.getModelByKey({
+      path: reachable.path,
+      source: reachable.source
+    })
+    t.ok(filled.fitBlobBinding, 'the reachable model got its pointer')
+  } finally {
+    await cleanupService(ctx)
+  }
+})
+
+// The two writers replicate over a piped stream pair, so the case does not
+// depend on peer discovery.
+test('fillFitBlobs on a second indexer downloads what the first one ingested', async (t) => {
+  const writer1 = await createService(t)
+  await writer1.service.ready()
+  await ensureIndexer(writer1.service)
+  writer1.t = t
+
+  const writer2 = await createService(t, { bootstrap: writer1.service.base.key })
+  await writer2.service.ready()
+
+  const stream1 = writer1.store.replicate(true)
+  const stream2 = writer2.store.replicate(false)
+  stream1.pipe(stream2).pipe(stream1)
+
+  try {
+    await writer1.service._appendOperation(DISPATCH_ADD_INDEXER, {
+      key: writer2.service.base.local.key
+    })
+    await flushAutobases(writer1.service.base, writer2.service.base)
+    await waitFor(async () => {
+      await flushAutobases(writer1.service.base, writer2.service.base)
+      return writer2.service.base.isIndexer === true
+    }, 30000)
+
+    const fixture = buildGguf({ tensorCount: 4, dataBytes: 2048 })
+    const originalUpload = writer1.service._uploadFitBlob
+    writer1.service._uploadFitBlob = () => null
+
+    const model = await addLocalArtifact(writer1, {
+      filename: 'ingested-elsewhere.gguf',
+      buffer: fixture.buffer
+    })
+    writer1.service._uploadFitBlob = originalUpload
+
+    await flushAutobases(writer1.service.base, writer2.service.base)
+    await waitFor(async () => (await writer2.service.listModels()).length === 1, 30000)
+
+    const artifactDir = await createTempStorage(t)
+    const artifactPath = path.join(artifactDir, 'ingested-elsewhere.gguf')
+    await fs.writeFile(artifactPath, fixture.buffer)
+    writer2.service._downloadArtifact = async (sourceInfo, localPath) => {
+      await fs.copyFile(artifactPath, localPath)
+    }
+
+    const report = await writer2.service.fillFitBlobs()
+    await flushAutobases(writer2.service.base, writer1.service.base)
+
+    t.is(report.filled, 1, 'the second indexer fills the record')
+    t.is(report.downloaded, 1, 'the weights are in no core it holds')
+
+    const retrieved = await writer2.service.getModelByKey({
+      path: model.path,
+      source: model.source
+    })
+    const { core } = await writer2.service._getOrCreateBlobsCore(
+      writer2.service.activeBlobCoreLabel
+    )
+    t.alike(retrieved.fitBlobBinding.coreKey, core.key, 'the pointer names the filling indexer')
+    t.unlike(retrieved.blobBinding.coreKey, core.key, 'the weights stay in the ingesting one')
+    t.alike(
+      await readBlob(writer2.service, retrieved.fitBlobBinding),
+      await fitBlobFor(t, 'ingested-elsewhere.gguf', fixture.buffer)
+    )
+  } finally {
+    await cleanupService(writer1)
+    await cleanupService(writer2)
   }
 })
 

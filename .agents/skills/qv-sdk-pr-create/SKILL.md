@@ -54,6 +54,14 @@ Consequences for release changelog / metadata PRs:
 `backmerge/release-<pkg>-<x.y.z>` heads are fine — they do not match the
 `release-*` push trigger.
 
+**Release changelog PRs** (metadata + notes onto `release-<pkg>-x.y.z`):
+
+- Title is `chore:` (optional `[mod]` when the cut is catalog-only). Do not put
+  `[bc]` on the release title; breaking lives in `breaking.md`.
+- Body API / Models / Breaking sections are copied from
+  `changelog/<this version>/`, not from an earlier hop or the generator
+  summary. Delete a section only when that file is absent.
+
 ## Workflow
 
 1. Identify base and current branch — note whether the base is `main` or a `release-<pkg>-<x.y.z>` branch. For release PRs, apply **Release PR branch naming** above (base three-part; head not `release-*`)
@@ -64,7 +72,7 @@ Consequences for release changelog / metadata PRs:
 6. Fill template sections based on changes
 7. Validate tag requirements ([bc]/[api]/[mod])
 8. **If the diff exposes or changes a user-facing SDK capability**, apply first-class product parity (see below) before outputting the description
-9. **If diff touches the `version` of `packages/inference` / `packages/sdk`, or sdk's dep blocks**, chain into the `qv-sdk-lockstep-sync` skill (see "SDK Lockstep Client Sync Trigger" below)
+9. **If diff touches the `version` of `packages/sdk` or its `@qvac/inference` range, or sdk's dep blocks**, chain into the `qv-sdk-inference-version` skill (see "SDK @qvac/inference Version Trigger" below)
 10. **If the diff touches user-facing paths under `packages/sdk`, `packages/cli`, or `packages/sdk-python` and `docs/website/content/docs` is not already in the diff**, apply the docs website trigger (see "Docs Website Trigger" below) before outputting the description
 11. Output complete PR description
 12. If base is a release branch, chain into the dual-PR flow (see "Release Target Dual-PR Flow" below)
@@ -93,6 +101,7 @@ Infer first, ask only if uncertain:
 - `[bc]`: removed/changed existing public API signatures
 - `[mod]`: changes to model constant definitions
 - ASK only if change scope is ambiguous
+- **Release changelog PRs** (base `release-*`, diff is notes / NOTICE / version / generated docs): title is `chore:` (optional `[mod]`). Do not copy `[bc]` / `[api]` from the notes into the title. Body API / Models / Breaking still copy `changelog/<this version>/`.
 
 **Testing section:**
 - If test files modified → "Unit tests added/updated for X"
@@ -177,25 +186,27 @@ gh pr view --repo tetherto/qvac BRANCH --web
 6. If gh not available, output the copy-ready markdown format above
 7. As part of the output, provide a clickable hyperlink (not plain text) to the PR on GitHub.
 
-## SDK Lockstep Client Sync Trigger
+## SDK @qvac/inference Version Trigger
 
-**Trigger:** the PR diff (`<base>...<head-remote>/<branch>` or local `HEAD`) modifies the `version` of `packages/inference/package.json` or `packages/sdk/package.json` (`@qvac/inference` is the anchor that drives the pod version), or sdk's `dependencies` / `optionalDependencies` / `peerDependencies`.
+**Trigger:** the PR diff (`<base>...<head-remote>/<branch>` or local `HEAD`) modifies the `version` of `packages/sdk/package.json` or its `@qvac/inference` range, or sdk's `dependencies` / `optionalDependencies` / `peerDependencies`.
 
-When triggered, prompt the user to run `qv-sdk-lockstep-sync` so the pod stays aligned in the same commit/PR: `@qvac/sdk` stamped to the inference anchor, and `tetherto-qvac-sdk` (generated `SDK_VERSION` / `_generated/`). Letting them drift creates work for the next `release-*` cut.
+When triggered, prompt the user to run `qv-sdk-inference-version` so the versions and the generated Python client are right in the same commit/PR: `@qvac/sdk`'s version and its `@qvac/inference` range sharing a major.minor, and `tetherto-qvac-sdk` (generated `SDK_VERSION` / `_generated/`) at the SDK's version. A range on a different major.minor fails the SDK's `lint` on every PR.
+
+A change to `packages/inference/package.json` alone is not a trigger — the engine has its own version and its own release.
 
 ### Steps (after Step 8 of Workflow above)
 
 1. Detect the trigger condition by inspecting the diff:
-   - `git diff <base>...<head-remote>/<branch> -- packages/inference/package.json packages/sdk/package.json` (or vs local `HEAD`) shows changes
-   - Changes touch a `version` line (inference / sdk) OR sdk's `dependencies` / `optionalDependencies` / `peerDependencies` block
-2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-lockstep-sync` for sdk-python?" [Yes / No (skip)]
-3. If yes, read `.agents/skills/qv-sdk-lockstep-sync/SKILL.md` and follow it inline.
-4. Verify: `packages/sdk-python` `generate.py --check` must pass.
-5. Stage and commit lockstep client changes onto the same branch BEFORE proceeding to Output step.
+   - `git diff <base>...<head-remote>/<branch> -- packages/sdk/package.json` (or vs local `HEAD`) shows changes
+   - Changes touch sdk's `version` line, its `@qvac/inference` range, OR sdk's `dependencies` / `optionalDependencies` / `peerDependencies` block
+2. If triggered, ask user: "PR touches sdk's deps/version. Run `qv-sdk-inference-version` (version + sdk-python)?" [Yes / No (skip)]
+3. If yes, read `.agents/skills/qv-sdk-inference-version/SKILL.md` and follow it inline.
+4. Verify: `bun run enforce-inference-versions` in `packages/sdk` and `packages/sdk-python` `generate.py --check` must both pass.
+5. Stage and commit the version changes onto the same branch BEFORE proceeding to Output step.
 
 ### Opt-out
 
-To skip lockstep sync for a single run, the user can invoke `/qv-sdk-pr-create --no-sync`. The skill proceeds normally and emits a reminder at the end: "Reminder: sdk deps/version changed but lockstep clients were not synced. Run `/qv-sdk-lockstep-sync` before merge."
+To skip this sync for a single run, the user can invoke `/qv-sdk-pr-create --no-sync`. The skill proceeds normally and emits a reminder at the end: "Reminder: sdk deps/version changed but the `@qvac/inference` version was not synced. Run `/qv-sdk-inference-version` before merge."
 
 ## Docs Website Trigger
 
@@ -268,16 +279,17 @@ Before outputting the PR description, verify:
 - [ ] "What problem" describes user impact, not implementation
 - [ ] "How it solves" is high-level approach, not line-by-line
 - [ ] Unused sections are deleted
-- [ ] `[bc]` tag has BEFORE/AFTER code examples
+- [ ] `[bc]` tag has BEFORE/AFTER code examples (feature PRs). Release changelog PRs: no `[bc]` on the title; Breaking section copies `breaking.md` when that file exists
 - [ ] `[api]` tag has usage example
 - [ ] `[mod]` tag has Added/Removed models list
 - [ ] Description is concise - bullet points, no fluff
 - [ ] Generated helper notes, template instructions, and tool footers are removed from the PR body
 - [ ] If the diff is a user-facing SDK capability, CLI was updated in this PR, the body says library-only, or the skip reminder was emitted
-- [ ] If diff touches the `version` of inference / sdk (or sdk's deps), `qv-sdk-lockstep-sync` ran (or `--no-sync` was set with a reminder emitted), and sdk-python checks pass
+- [ ] If diff touches sdk's `version` / `@qvac/inference` range (or sdk's deps), `qv-sdk-inference-version` ran (or `--no-sync` was set with a reminder emitted), and the version checks plus sdk-python checks pass
 - [ ] For sdk releases with generated docs, `git status` shows only `reference/api/**`, `reference/release-notes/**`, and `src/lib/versions.ts` as committable docs changes — disposable byproducts (`api-data.json`, `out/`, `.next/`, `dist/`, etc.) are gitignored
 - [ ] If base is `release-<pkg>-<x.y.z>`, the dual-PR flow ran (or `--no-backmerge` was set), and both PR URLs are reported
 - [ ] Release PRs: base is three-part `release-<pkg>-x.y.z`; org head is `chore/<pkg>-<x.y.z>-changelog` (or other non-`release-*` name)
+- [ ] Release changelog PRs: title is `chore:` (no `[bc]`); body API / Models / Breaking match `changelog/<this version>/`
 - [ ] Head was pushed to the org remote when write access allows; fork path only used as fallback (with `fork-ci` re-approval called out)
 - [ ] PR is Ready for review when baseline CI is expected (not left as Draft unintentionally)
 
@@ -288,6 +300,6 @@ Before outputting the PR description, verify:
 - PR template: `.github/PULL_REQUEST_TEMPLATE/sdk-pod.md`
 - Format rules: `docs/gitflow.md` and this skill's validation section
 - Backmerge skill: `.agents/skills/qv-sdk-backmerge/SKILL.md`
-- sdk lockstep clients: `.agents/skills/qv-sdk-lockstep-sync/SKILL.md`
+- sdk @qvac/inference version: `.agents/skills/qv-sdk-inference-version/SKILL.md`
 - GitFlow: `docs/gitflow.md` — still documents fork-first contribution; for internal SDK PRs, prefer the org-branch path in this skill until DevOps updates gitflow
 - Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)

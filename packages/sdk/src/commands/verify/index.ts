@@ -223,6 +223,7 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
         ? await collectAddonsFromBundle({
             bundlePath: resolvedAddonsSource,
             projectRoot,
+            hosts,
             diagnostics
           })
         : await collectAddonsFromNodeModules({

@@ -45,14 +45,6 @@ void requireFinite(float value, const char* what) {
   }
 }
 
-std::filesystem::path resolveBackendsDir(const std::string& configured) {
-  std::filesystem::path dir(configured);
-#ifdef BACKENDS_SUBDIR
-  dir = (dir / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-  return dir;
-}
-
 tts_cpp::audio8::EngineOptions toEngineOptions(const Audio8Config& cfg) {
   tts_cpp::audio8::EngineOptions opts;
   opts.lm_gguf_path = cfg.lmModelPath;
@@ -265,13 +257,19 @@ void Audio8Model::loadLocked() {
   backendName_ = engine_->backend_name();
   backendDevice_ = backendDeviceCode(engine_->backend_device());
   backendId_ = backendIdFromName(backendName_);
+  codecSidecarLoaded_ = engine_->codec_on_coreml();
+  codecOnCoreml_ = false;
   const bool wantsGpu = cfg_.nGpuLayers.has_value()
                             ? (*cfg_.nGpuLayers != 0)
                             : cfg_.useGpu.value_or(false);
   gpuUnsupported_ = wantsGpu && backendDevice_ == kBackendDeviceCpu;
 }
 
-void Audio8Model::unloadLocked() { engine_.reset(); }
+void Audio8Model::unloadLocked() {
+  engine_.reset();
+  codecSidecarLoaded_ = false;
+  codecOnCoreml_ = false;
+}
 
 void Audio8Model::cancel() const {
   cancelRequested_.store(true, std::memory_order_relaxed);
@@ -346,17 +344,11 @@ Audio8Model::Output Audio8Model::synthesize(const AnyInput& input) {
         std::string("audio8.synthesize: ") + e.what());
   }
   const auto t1 = std::chrono::steady_clock::now();
-
-  sampleRate_ = result.sample_rate;
-  generatedFrames_ = result.frames;
-  totalSamples_ = static_cast<int64_t>(result.pcm.size());
-  audioDurationMs_ = static_cast<double>(result.duration_s) * 1000.0;
-  totalTime_ = std::chrono::duration<double>(t1 - t0).count();
-  realTimeFactor_ =
-      audioDurationMs_ > 0.0 ? (totalTime_ * 1000.0) / audioDurationMs_ : 0.0;
-  tokensPerSecond_ = totalTime_ > 0.0
-                         ? static_cast<double>(generatedFrames_) / totalTime_
-                         : 0.0;
+  completeSynthesis(
+      engine,
+      result,
+      std::chrono::duration<double>(t1 - t0).count(),
+      engine->codec_on_coreml());
 
   return pcmFloatToInt16(result.pcm);
 }
@@ -385,7 +377,46 @@ std::any Audio8Model::process(const std::any& input) {
   return std::any(synthesize(*anyInput));
 }
 
+bool Audio8Model::codecBackendIsCoreml(const std::string& backend) {
+  return backend.rfind(COREML_BACKEND_PREFIX, 0) == 0;
+}
+
+void Audio8Model::recordSynthesisResult(
+    const tts_cpp::audio8::SynthesisResult& result, double totalSeconds) {
+  std::lock_guard lk(engineMu_);
+  recordSynthesisResultLocked(result, totalSeconds);
+}
+
+void Audio8Model::completeSynthesis(
+    const std::shared_ptr<tts_cpp::audio8::Engine>& engine,
+    const tts_cpp::audio8::SynthesisResult& result, double totalSeconds,
+    bool sidecarLoaded) {
+  std::lock_guard lk(engineMu_);
+  // A completed job may belong to an engine that reload or unload replaced.
+  if (engine_ != engine)
+    return;
+  recordSynthesisResultLocked(result, totalSeconds);
+  codecSidecarLoaded_ = sidecarLoaded;
+}
+
+void Audio8Model::recordSynthesisResultLocked(
+    const tts_cpp::audio8::SynthesisResult& result, double totalSeconds) {
+  sampleRate_ = result.sample_rate;
+  generatedFrames_ = result.frames;
+  timings_ = result.timings;
+  totalSamples_ = static_cast<int64_t>(result.pcm.size());
+  codecOnCoreml_ = codecBackendIsCoreml(result.codec_synthesis_backend);
+  audioDurationMs_ = static_cast<double>(result.duration_s) * 1000.0;
+  totalTime_ = totalSeconds;
+  realTimeFactor_ =
+      audioDurationMs_ > 0.0 ? (totalTime_ * 1000.0) / audioDurationMs_ : 0.0;
+  tokensPerSecond_ = totalTime_ > 0.0
+                         ? static_cast<double>(generatedFrames_) / totalTime_
+                         : 0.0;
+}
+
 qvac_lib_inference_addon_cpp::RuntimeStats Audio8Model::runtimeStats() const {
+  std::lock_guard lk(engineMu_);
   qvac_lib_inference_addon_cpp::RuntimeStats stats;
   stats.emplace_back("totalTime", totalTime_);
   stats.emplace_back("tokensPerSecond", tokensPerSecond_);
@@ -393,9 +424,23 @@ qvac_lib_inference_addon_cpp::RuntimeStats Audio8Model::runtimeStats() const {
   stats.emplace_back("audioDurationMs", audioDurationMs_);
   stats.emplace_back("totalSamples", totalSamples_);
   stats.emplace_back("generatedFrames", static_cast<int64_t>(generatedFrames_));
+  // Engine StageTimings of the last synthesis (ms; disjoint stages).
+  stats.emplace_back("voiceEncodeMs", timings_.voice_encode_ms);
+  stats.emplace_back("promptMs", timings_.prompt_ms);
+  stats.emplace_back("prefillMs", timings_.prefill_ms);
+  stats.emplace_back("sampleMs", timings_.sample_ms);
+  stats.emplace_back("fastDecodeMs", timings_.fast_decode_ms);
+  stats.emplace_back("slowDecodeMs", timings_.slow_decode_ms);
+  stats.emplace_back("codecLatentMs", timings_.codec_latent_ms);
+  stats.emplace_back("codecSynthMs", timings_.codec_synth_ms);
+  stats.emplace_back("resampleMs", timings_.resample_ms);
+  stats.emplace_back("stageTotalMs", timings_.total_ms);
   stats.emplace_back("backendDevice", static_cast<int64_t>(backendDevice_));
   stats.emplace_back("backendId", static_cast<int64_t>(backendId_));
   stats.emplace_back("gpuUnsupported", static_cast<int64_t>(gpuUnsupported_));
+  stats.emplace_back(
+      "codecSidecarLoaded", static_cast<int64_t>(codecSidecarLoaded_));
+  stats.emplace_back("codecOnCoreml", static_cast<int64_t>(codecOnCoreml_));
   return stats;
 }
 

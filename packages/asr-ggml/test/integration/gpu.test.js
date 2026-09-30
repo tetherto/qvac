@@ -33,12 +33,12 @@ const {
   getAssetPath,
   getTestPaths,
   ensureWhisperModel,
-  createAudioStream
+  createAudioStream,
+  NO_GPU
 } = require('./helpers.js')
 
 const platform = os.platform()
 const RELAX = process.env && process.env.QVAC_WHISPER_GPU_RELAX === '1'
-const NO_GPU = process.env && process.env.NO_GPU === 'true'
 
 const SAMPLE_AUDIO_NAME = 'sample.raw'
 

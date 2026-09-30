@@ -46,6 +46,7 @@ import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { EmbeddingExecutor } from '../shared/executors/embedding-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
+import { DeferredToolsExecutor } from '../shared/executors/deferred-tools-executor.js'
 import { TranslationExecutor } from '../shared/executors/translation-executor.js'
 import { ShardedModelExecutor } from '../shared/executors/sharded-model-executor.js'
 import { HttpEmbeddingExecutor } from '../shared/executors/http-embedding-executor.js'
@@ -64,6 +65,7 @@ import { MobileOcrExecutor } from './executors/ocr-executor.js'
 import { VlaExecutor } from '../shared/executors/vla-executor.js'
 import { MobileClassificationExecutor } from './executors/classification-executor.js'
 import { MobileRagExecutor } from './executors/rag-executor.js'
+import { VectorIndexExecutor } from '../shared/executors/vector-index-executor.js'
 import { MobileConfigReloadExecutor } from './executors/config-reload-executor.js'
 import { MobileTtsExecutor } from './executors/tts-executor.js'
 import { DownloadExecutor } from '../shared/executors/download-executor.js'
@@ -593,12 +595,16 @@ export const executor = createExecutor({
       'Tools test disabled on mobile'
     ),
     new SkipExecutor(
+      /^deferred-tools-(?!prompt-cost$|load-then-call$)/,
+      'Deferred tools: only the smoke cases run on mobile (no tools-qwen35 resource, model reloads too slow)'
+    ),
+    new SkipExecutor(
       /^(diffusion-|addon-logging-diffusion$)/,
       'SD v2.1 1B Q8_0 cold-load is too heavy for Device Farm devices (OOM, 3+GB)'
     ),
     new SkipExecutor(
-      /^audio-gen-/,
-      'ACE-Step AudioGen uses four large GGUFs and is covered by desktop e2e'
+      /^audio-(gen|edit|understand)-/,
+      'ACE-Step AudioGen loads four large GGUFs and is covered by desktop e2e'
     ),
     new SkipExecutor(
       /^vla-pi05-/,
@@ -675,10 +681,12 @@ export const executor = createExecutor({
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
     new MobileRagExecutor(resources),
+    new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
+    new DeferredToolsExecutor(resources),
     new TranslationExecutor(resources),
     new ShardedModelExecutor(resources),
     new MobileOcrExecutor(resources),

@@ -117,6 +117,10 @@ runs:
                 ${WORKDIR}/vcpkg.json|${WORKDIR}/vcpkg-configuration.json) CHANGED=true; break ;;
                 ${WORKDIR}/vcpkg/*) CHANGED=true; break ;;
                 vcpkg-overlays/*) CHANGED=true; break ;;
+                # Shared by every addon that includes it, and it decides link
+                # lines, exported symbols and build-time assertions, so an edit
+                # there changes the binary exactly as a CMakeLists.txt edit does.
+                cmake/qvac-addon/*) CHANGED=true; break ;;
               esac
             done <<< "$DIFF_FILES"
           fi
@@ -128,8 +132,8 @@ runs:
         # Hash the HEAD native tree. The file set MUST stay in lockstep with the
         # detection predicate above. git ls-tree reads the tree object without
         # checkout — secure and correct.
-        NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" 2>/dev/null \
-          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/' \
+        NATIVE_HASH=$(git ls-tree -r "$HEAD_SHA" -- "$WORKDIR" "vcpkg-overlays" "cmake/qvac-addon" 2>/dev/null \
+          | grep -E '\.(cpp|hpp|c|h)$|CMakeLists\.txt$|vcpkg\.json$|vcpkg-configuration\.json$|/vcpkg/|vcpkg-overlays/|cmake/qvac-addon/' \
           | sha256sum | cut -d' ' -f1)
         [ -z "$NATIVE_HASH" ] && NATIVE_HASH="empty-$(date +%s)"
 

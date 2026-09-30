@@ -1,0 +1,35 @@
+# An addon module's entire outward interface is the pair of C entry points the
+# bare runtime resolves by name. Everything else is implementation detail.
+#
+# Without this, a module also exports every C++ symbol with default visibility
+# that --exclude-libs,ALL does not cover: its own and nlohmann's typeinfo,
+# typeinfo names and vtables, and the whole of inference-addon-cpp -- close to
+# 2000 symbols for a typical addon, against the two below.
+#
+# bare loads modules with RTLD_LOCAL, so those exports are unreachable rather
+# than actively harmful today. Declaring the interface makes the addon/fabric
+# pair a closed unit by construction instead of by the loader flags of whichever
+# host loads it: under RTLD_GLOBAL two addons would be free to interpose each
+# other's typeinfo and inference-addon-cpp statics, which is the same class of
+# bug as the libstdc++ interposition that made fabric's C++ runtime ownership
+# necessary in the first place.
+#
+# Imports are unaffected -- `local: *;` constrains what this module defines, not
+# what it resolves from fabric.
+#
+# packages/asr-ggml/symbols.map is this same list, applied by hand for the same
+# reason; that package does not use this template, so the two are kept in step
+# by hand.
+{
+  global:
+    # bare_register_module_v0 and bare_get_module_name_v0. The "v0" suffix is the
+    # bare module ABI version (BARE_MODULE_VERSION in bare/module.h).
+    bare_*;
+    # Nothing defines these today -- an addon resolves Node-API from the bare
+    # runtime rather than providing it -- but a module that grows its own napi_
+    # shim needs it reachable, and a pattern that matches nothing costs nothing.
+    napi_*;
+
+  local:
+    *;
+};

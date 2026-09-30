@@ -1,7 +1,6 @@
 {
   "name": "qvac-fabric",
-  "version": "10549.1.0",
-  "port-version": 1,
+  "version": "10549.4.0",
   "description": "LLM inference in C/C++",
   "homepage": "https://github.com/tetherto/qvac-fabric-llm.cpp",
   "license": "MIT",
@@ -60,6 +59,22 @@
     },
     "openmp": {
       "description": "Enable openmp on Android."
+    },
+    "rpc-rdma": {
+      "description": "Enable libibverbs/RDMA auto-negotiation for ggml RPC on Linux builds. Requires the system libibverbs development headers and library.",
+      "supports": "linux"
+    },
+    "rpc-server": {
+      "description": "Build and install the ggml-rpc-server tool from the same qvac-fabric revision.",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "default-features": false,
+          "features": [
+            "llama"
+          ]
+        }
+      ]
     },
     "vector-index": {
       "description": "Build and install the ggml vector index library."

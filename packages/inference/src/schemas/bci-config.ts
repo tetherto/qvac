@@ -52,7 +52,7 @@ const bciWhisperConfigSchema = z
       .boolean()
       .optional()
       .describe(
-        "Not supported natively (rejected by the addon); use `language: 'auto'` to auto-detect the spoken language."
+        "Detect the spoken language and stop: whisper.cpp returns straight after detection, so the transcript comes back empty. Use `language: 'auto'` to detect and transcribe in one call."
       ),
     greedy_best_of: z
       .number()

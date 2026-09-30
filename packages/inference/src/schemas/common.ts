@@ -47,6 +47,7 @@ import {
 } from '@/schemas/text-to-speech'
 import { errorResponseSchema } from '@/schemas/error'
 import { ragRequestSchema, ragResponseSchema, ragProgressUpdateSchema } from '@/schemas/rag'
+import { vectorIndexRequestSchema, vectorIndexResponseSchema } from '@/schemas/vector-index'
 import {
   getModelInfoRequestSchema,
   getModelInfoResponseSchema,
@@ -102,10 +103,19 @@ import {
   stateResponseSchema
 } from '@/schemas/lifecycle'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
-import { audioGenStreamRequestSchema, audioGenStreamResponseSchema } from '@/schemas/audio-gen'
+import {
+  audioEditStreamRequestSchema,
+  audioEditStreamResponseSchema,
+  audioGenStreamRequestSchema,
+  audioGenStreamResponseSchema,
+  audioUnderstandRequestSchema,
+  audioUnderstandResponseSchema
+} from '@/schemas/audio-gen'
 
 export const requestSchema = z.union([
   audioGenStreamRequestSchema,
+  audioEditStreamRequestSchema,
+  audioUnderstandRequestSchema,
   heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
@@ -124,6 +134,7 @@ export const requestSchema = z.union([
   textToSpeechStreamRequestSchema,
   cancelRequestSchema,
   ragRequestSchema,
+  vectorIndexRequestSchema,
   deleteCacheRequestSchema,
   getModelInfoRequestSchema,
   getLoadedModelInfoRequestSchema,
@@ -149,6 +160,8 @@ export const requestSchema = z.union([
 
 export const responseSchema = z.discriminatedUnion('type', [
   audioGenStreamResponseSchema,
+  audioEditStreamResponseSchema,
+  audioUnderstandResponseSchema,
   heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
@@ -170,6 +183,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   errorResponseSchema,
   ragResponseSchema,
   ragProgressUpdateSchema,
+  vectorIndexResponseSchema,
   deleteCacheResponseSchema,
   getModelInfoResponseSchema,
   getLoadedModelInfoResponseSchema,

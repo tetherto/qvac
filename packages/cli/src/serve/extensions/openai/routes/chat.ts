@@ -4,13 +4,20 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
+import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
 import {
   drainCompletion,
+  type DrainedOpenAICompletion,
   type OpenAiFinishReason
 } from '@/serve/extensions/openai/adapters/completion-result'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-enabled'
+import {
+  MAX_TOOL_SEARCH_ROUNDS,
+  foldToolSearch,
+  stripToolSearchCalls
+} from '@/serve/lib/tool-search'
 import {
   chatCompletionsBody,
   CHAT_UNSUPPORTED_PARAMS,
@@ -22,9 +29,11 @@ import {
 import { resolveToolDialect } from '@/serve/lib/tool-dialect'
 import {
   InvalidResponseFormatError,
+  InvalidToolChoiceError,
   UnsupportedImageContentError
 } from '@/serve/extensions/openai/schemas/common'
 import { sdkToolCallsToOpenaiDeltas } from '@/serve/extensions/openai/adapters/tool-calls'
+import { openaiState } from '@/serve/extensions/openai/state'
 import {
   buildUsage,
   chatCompletionChunk,
@@ -58,6 +67,9 @@ async function prepare(
   } catch (err) {
     if (err instanceof InvalidResponseFormatError) {
       throw new HttpError(400, 'invalid_response_format', err.message)
+    }
+    if (err instanceof InvalidToolChoiceError) {
+      throw new HttpError(400, 'invalid_tool_choice', err.message)
     }
     if (err instanceof UnsupportedImageContentError) {
       throw new HttpError(400, 'unsupported_image_content', err.message)
@@ -121,8 +133,8 @@ function formatStats(stats: CompletionStats | undefined): string {
 const descriptions = {
   completion: `
 OpenAI-compatible chat completion. Accepts a chat-style \`messages\` array,
-optional \`tools\` for function-calling, and an optional \`response_format\`
-(\`text\` / \`json_object\` / \`json_schema\`).
+optional \`tools\` for function-calling, an optional \`tool_choice\`, and an
+optional \`response_format\` (\`text\` / \`json_object\` / \`json_schema\`).
 
 **Streaming**: pass \`stream: true\` to receive Server-Sent Events. The stream
 ends with \`data: [DONE]\\n\\n\` (OpenAI compatibility).
@@ -131,6 +143,25 @@ ends with \`data: [DONE]\\n\\n\` (OpenAI compatibility).
 \`response_format: { type: 'json_object' | 'json_schema' }\` is rejected with
 \`invalid_response_format\`. A \`tools\` request for a model loaded without
 \`config.tools: true\` is rejected with \`tools_not_enabled\`.
+
+**\`tool_choice\`**: \`"auto"\` (default), \`"none"\`, \`"required"\`, or
+\`{ type: 'function', function: { name } }\` to force one tool. \`required\` and
+a named tool constrain generation with the chat template's tool grammar. Both
+need a matching entry in \`tools\`; anything else — including a bare tool name
+in place of the object form — is rejected with \`invalid_tool_choice\`. A tool
+that sets \`defer_loading\` cannot be named: its schema is not in the prompt, so
+there is nothing to constrain. Name \`tool_search\` instead.
+
+**Deferred tools**: a \`tools[]\` entry may set \`defer_loading: true\` (and an
+optional \`group\`), keeping its parameter schema out of the prompt until the
+model asks for it. The model sees a compact catalog carried by a built-in
+\`tool_search\` tool; the server runs that search itself and asks the model
+again, so the response only carries tool calls the client can execute.
+
+**Unparseable tool calls**: a tool call the model emits but that fails to parse
+or validate is dropped, so the response carries \`finish_reason: "stop"\` and no
+\`tool_calls\`. The server log records the count and error codes
+(\`toolerrors=N (PARSE_ERROR)\`); OpenAI has no response field for them.
 
 **Ignored params** (warned, not rejected): \`logit_bias\`, \`n\`, \`user\`,
 \`seed\`, \`logprobs\`, \`top_logprobs\`, \`frequency_penalty\`,
@@ -195,27 +226,50 @@ async function runBlocking(
 ): Promise<void> {
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
-    const result = completion({
-      modelId: p.sdkModelId,
-      history,
-      stream: false,
-      captureThinking: true,
-      // Auto-cache keys on the conversation prefix so a follow-up turn only
-      // prefills the new tail instead of the whole history. The SDK normalizes
-      // out think blocks before hashing, so a client that round-trips plain
-      // assistant text still hits the cache.
-      kvCache: true,
-      ...(p.tools !== undefined ? { tools: p.tools } : {}),
-      ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
-      ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
-    })
-    req.bindCancel(result.requestId)
+    const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
 
-    const { text, thinking, toolCalls, stats, completionTokens, finishReason } =
-      await drainCompletion(result)
+    // A `tool_search` call is answered here and the model asked again, so the
+    // response only ever carries tool calls the client can run. Requests that
+    // declare no deferred tools leave the loop on the first pass.
+    let turnHistory = history
+    let drained
+    let total: DrainedOpenAICompletion | undefined
+    for (let round = 0; ; round++) {
+      const result = completionFn({
+        modelId: p.sdkModelId,
+        history: turnHistory,
+        stream: false,
+        captureThinking: true,
+        // Auto-cache keys on the conversation prefix so a follow-up turn only
+        // prefills the new tail instead of the whole history. The SDK normalizes
+        // out think blocks before hashing, so a client that round-trips plain
+        // assistant text still hits the cache.
+        kvCache: true,
+        ...(p.tools !== undefined ? { tools: p.tools } : {}),
+        ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
+        ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
+      })
+      req.bindCancel(result.requestId)
+      drained = await drainCompletion(result)
+      total = accumulateUsage(total, drained)
+
+      if (round >= MAX_TOOL_SEARCH_ROUNDS) break
+      const extended = foldToolSearch(
+        p.tools,
+        turnHistory,
+        drained.toolCalls,
+        drained.rawFullText ?? drained.text
+      )
+      if (!extended) break
+      turnHistory = extended
+    }
+
+    const { text, thinking, toolCalls, toolErrors, stats, completionTokens, finishReason } =
+      stripToolSearchCalls(p.tools, total ?? drained)
 
     req.server.qvac.logger.info(
-      `  completion done tokens=${completionTokens} finish=${finishReason}${formatStats(stats)}`
+      `  completion done tokens=${completionTokens} finish=${finishReason}` +
+        `${formatStats(stats)}${formatToolErrors(toolErrors)}`
     )
 
     reply.send(
@@ -245,18 +299,7 @@ async function runStreaming(
 ): Promise<void> {
   const { history, tmpPaths } = await writeChatImages(p.history)
   try {
-    const result = completion({
-      modelId: p.sdkModelId,
-      history,
-      stream: true,
-      captureThinking: true,
-      // See runBlocking: auto-cache the conversation prefix for cross-turn reuse.
-      kvCache: true,
-      ...(p.tools !== undefined ? { tools: p.tools } : {}),
-      ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
-      ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
-    })
-    req.bindCancel(result.requestId)
+    const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
 
     initSSE(reply)
     const raw = reply.raw
@@ -275,15 +318,59 @@ async function runStreaming(
 
     sendSSE(raw, chunk({ role: 'assistant', content: '' }, null))
 
-    const { toolCalls, stats, completionTokens, finishReason } = await drainCompletion(
-      result,
-      (token) => sendSSE(raw, chunk({ content: token }, null)),
-      (token) => sendSSE(raw, chunk({ reasoning_content: token }, null))
+    // Every turn streams live. Tool-call syntax is framed into `toolCall`
+    // events by the normalizer, so a search turn emits no content deltas to
+    // withhold; what it can emit is a preamble ("let me look that up"), which
+    // is fine to show. Only the SSE stream is held open across a search round.
+    let turnHistory = history
+    let drained
+    let total: DrainedOpenAICompletion | undefined
+    for (let round = 0; ; round++) {
+      const emit = (delta: ChatCompletionDelta) => sendSSE(raw, chunk(delta, null))
+
+      const result = completionFn({
+        modelId: p.sdkModelId,
+        history: turnHistory,
+        stream: true,
+        captureThinking: true,
+        // See runBlocking: auto-cache the conversation prefix for cross-turn reuse.
+        kvCache: true,
+        ...(p.tools !== undefined ? { tools: p.tools } : {}),
+        ...(p.generationParams !== undefined ? { generationParams: p.generationParams } : {}),
+        ...(p.responseFormat !== undefined ? { responseFormat: p.responseFormat } : {})
+      })
+      req.bindCancel(result.requestId)
+
+      drained = await drainCompletion(
+        result,
+        (token) => emit({ content: token }),
+        (token) => emit({ reasoning_content: token })
+      )
+      total = accumulateUsage(total, drained)
+
+      const extended =
+        round >= MAX_TOOL_SEARCH_ROUNDS
+          ? null
+          : foldToolSearch(
+              p.tools,
+              turnHistory,
+              drained.toolCalls,
+              drained.rawFullText ?? drained.text
+            )
+      if (!extended) break
+      // The search turn loaded definitions; ask again with them in the history.
+      turnHistory = extended
+    }
+
+    const { toolCalls, toolErrors, stats, completionTokens, finishReason } = stripToolSearchCalls(
+      p.tools,
+      total ?? drained
     )
     const hasToolCalls = toolCalls.length > 0
 
     req.server.qvac.logger.info(
-      `  streaming done tokens=${completionTokens} finish=${finishReason}${formatStats(stats)}`
+      `  streaming done tokens=${completionTokens} finish=${finishReason}` +
+        `${formatStats(stats)}${formatToolErrors(toolErrors)}`
     )
 
     if (hasToolCalls) {

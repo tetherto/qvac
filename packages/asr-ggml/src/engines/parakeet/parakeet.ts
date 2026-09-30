@@ -37,11 +37,18 @@ export interface ParakeetConfigurationParams {
   /** Indic CTC language id or Nemotron locale alias; empty selects auto. */
   language?: string;
   streaming?: boolean;
-  /** Model-specific when omitted: Nemotron 320 ms, existing models 2000 ms. */
+  /**
+   * Model-specific when omitted: Nemotron 320 ms, Unified RNN-T 560 ms,
+   * existing models 2000 ms.
+   */
   streamingChunkMs?: number;
   streamingHistoryMs?: number;
   streamingEmitPartials?: boolean;
   streamingEnergyVad?: boolean;
+  streamingEnergyVadThresholdDb?: number;
+  streamingEnergyVadWindowMs?: number;
+  streamingEnergyVadHangoverMs?: number;
+  streamingSpeakerVad?: boolean;
   streamingLeftContextMs?: number;
   streamingRightLookaheadMs?: number;
   streamingSpkCacheEnable?: boolean;
@@ -50,6 +57,12 @@ export interface ParakeetConfigurationParams {
   streamingChunkLeftContextMs?: number;
   streamingChunkRightContextMs?: number;
   streamingSpkCacheUpdatePeriod?: number;
+  diarizationThreshold?: number;
+  diarizationMinSegmentMs?: number;
+  prewarm?: boolean;
+  prewarmAudioSeconds?: number;
+  longFormWindowFrames?: number;
+  longFormContextFrames?: number;
   backendsDir?: string;
   openclCacheDir?: string;
 }
@@ -61,6 +74,12 @@ export interface StreamingConfig {
   rightLookaheadMs?: number;
   emitPartials?: boolean;
   emitEnergyVad?: boolean;
+  energyVadThresholdDb?: number;
+  energyVadWindowMs?: number;
+  energyVadHangoverMs?: number;
+  emitSpeakerVad?: boolean;
+  diarizationThreshold?: number;
+  diarizationMinSegmentMs?: number;
   spkCacheEnable?: boolean;
   spkCacheLen?: number;
   fifoLen?: number;
@@ -243,6 +262,14 @@ export class ParakeetInterface {
     );
   }
 
+  private _looksLikeVadEvent(data: unknown): boolean {
+    return (
+      data !== null &&
+      typeof data === "object" &&
+      (data as { type?: unknown }).type === "vad"
+    );
+  }
+
   private _looksLikeStats(data: unknown): boolean {
     return (
       data !== null &&
@@ -277,6 +304,7 @@ export class ParakeetInterface {
       return eventStr;
     }
     if (isError || eventStr.includes("Error")) return "Error";
+    if (this._looksLikeVadEvent(data)) return "VadState";
     if (eventStr.includes("RuntimeStats")) return "JobEnded";
     if (eventStr.includes("Output")) return "Output";
     if (this._looksLikeStats(data)) return "JobEnded";

@@ -53,7 +53,7 @@ Do **not** use it for:
 
 **`fabric` is NOT a refusal.** An earlier version of this skill refused it, claiming its release read
 `packages/fabric/release-notes/v<ver>.md` via `create-github-release-fabric.yml`. That workflow does
-not exist and is referenced nowhere; `on-merge-fabric.yml` passes
+not exist and is referenced nowhere; `on-merge-nx.yml` passes
 `changelog-path: packages/fabric/CHANGELOG.md`, and that file is current and correctly bracketed.
 `packages/fabric/release-notes/` holds only a `v0.1.0.md` leftover and is not the release source.
 Treat `fabric` like any other addon.
@@ -175,8 +175,9 @@ Rules:
 
 ## Step 6 — Report what happens next
 
-Look up the git tag by reading `repo_name:` from `.github/workflows/on-merge-<pkg>.yml`. **Never derive
-the tag from the directory name** — several are counter-intuitive:
+Look up the git tag by reading `repoName` from `packages/<pkg>/project.json`
+(`targets.on-merge.options.ci`), which `on-merge-nx.yml` passes to `create-release-tag.yml`.
+**Never derive the tag from the directory name** — several are counter-intuitive:
 
 | Package | Tag |
 |---|---|
@@ -187,11 +188,12 @@ the tag from the directory name** — several are counter-intuitive:
 | `ocr-ggml` | `ocr-ggml-v<ver>` |
 | `classification-ggml` | `classification-ggml-v<ver>` |
 
-Addons get a **git tag only, no GitHub Release** — `on-merge-<pkg>.yml` calls `create-release-tag.yml`
+Addons get a **git tag only, no GitHub Release** — `on-merge-nx.yml` calls `create-release-tag.yml`
 since #2602. Do not promise a Releases-page entry; only the SDK publishes one.
 
 Then tell the user the next step is `/release <pkg>`, which cuts `release-<pkg>-<version>`, dispatches
-`on-merge-<pkg>.yml`, and pauses at the human-only `npm` approval gate.
+`on-merge-nx.yml` with `package=<pkg>` (or `on-merge-model-fit.yml` for `model-fit`), and pauses at
+the human-only `npm` approval gate.
 
 ## Step 7 — Verify before committing
 

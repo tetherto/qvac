@@ -64,6 +64,8 @@ Configure `expo-build-properties` and add `@qvac/sdk/expo-plugin` to the `plugin
 }
 ```
 
+Speech addons (`tts-ggml`, `asr-ggml`, `audiogen-ggml`) ship Android and iOS binaries in a separate package. If you enable those plugins, add that package as a direct dependency, pinned to the same exact version as the JavaScript package — for example `"@qvac/tts-ggml": "x.y.z"` and `"@qvac/tts-ggml-android-arm64": "x.y.z"` (iOS uses `@qvac/tts-ggml-ios`). Llama does not need an extra package. `npx expo prebuild` names the missing pin if you forget.
+
 </Step>
 
 <Step>

@@ -1,0 +1,209 @@
+name: On Merge Model Cache (ASR)
+
+# Seeds the asr-ggml entry that integration-test-asr-ggml.yml restores. That
+# workflow is only reachable from a pull_request_target caller, where
+# cache-models takes its restore-only branch, so nothing writes it.
+#
+# Two legs, linux and win32. `enable-cross-os: 'false'` at the call site does
+# NOT mean one entry per platform: @actions/cache only appends a version
+# component when the flag is off AND the runner is Windows, so linux and macOS
+# share an entry. Seeding both would race two identical keys at post-job save
+# and throw away whichever lost. darwin restores the linux archive; its Core ML
+# sidecars are staged unconditionally by the integration lane's own darwin step.
+#
+# Only the call site at integration-test-asr-ggml.yml:370 is seeded. The one at
+# :121 lives in `pin-model-manifest`, which is dispatch-gated and therefore
+# already takes cache-models' save branch and seeds itself.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/asr-ggml/test/integration/*.manifest.json"
+      # `paths` is pinned at the call site, but cache-models still builds the key
+      # string and resolves the hash glob, so an edit there can still move this
+      # entry. A run that finds nothing moved costs seconds: the probe answers
+      # from a lookup.
+      - ".github/actions/cache-models/**"
+      # And this file. A commit that fixes the seed itself -- a corrected
+      # cache-key-suffix, say -- would otherwise sit dormant until the cron.
+      - ".github/workflows/on-merge-model-cache-asr.yml"
+  # Every two days. The cache server prunes at CACHE_CLEANUP_OLDER_THAN_DAYS=5,
+  # and Mon/Thu left a 4-day gap -- inside the window, but with no slack: ONE
+  # failed run stretched it to 7 days and the entry was gone. `*/2` caps the gap
+  # at 2 days, and at 4 after a missed run, so a single failure is survivable.
+  # The hour is offset per addon so the seeds do not contend for a runner.
+  schedule:
+    - cron: "17 14 */2 * *"
+  # No workflow_call. This job assumes the AWS OIDC role and runs repo-local
+  # composites from `github.sha`, which under a `pull_request` caller resolves
+  # to the merge commit -- PR-head code next to live credentials. Dispatch
+  # already covers on-demand runs.
+  workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Restore the archive even on a hit, exactly as the cron does. That download is what resets the cache server's prune clock; the probe alone does not."
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  seed:
+    needs: runner_names
+    runs-on: ${{ needs.runner_names.outputs[matrix.runner_key] }}
+    # AWS_OIDC_ROLE_ARN's trust policy is scoped to this environment.
+    environment: release
+    timeout-minutes: 180
+    name: seed-model-cache-${{ matrix.platform }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner_key: linux_ubuntu2404_x64
+          - platform: win32
+            runner_key: win_2025_x64
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # Must match integration-test-asr-ggml.yml's "Cache integration test models"
+      # step in the integration-tests job. Named, not line-numbered: the line moves.
+      - name: Cache integration test models
+        id: model-cache
+        uses: ./.github/actions/cache-models
+        with:
+          package: asr-ggml
+          paths: packages/asr-ggml/models
+          hash-files-glob: packages/asr-ggml/test/integration/*.manifest.json
+          warm: 'false'
+          enable-cross-os: 'false'
+          seed-probe: 'true'
+          force-refresh: ${{ inputs.force_refresh || false }}
+
+      # stage-integration-models.mjs imports only node builtins and shells out
+      # to the AWS CLI, so no npm install is needed here.
+      - name: Stage Parakeet GGUFs from QVAC registry (manifest-driven)
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: packages/asr-ggml
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: |
+          set -euo pipefail
+          node scripts/stage-integration-models.mjs
+          ls -lh models/
+
+      # packages/asr-ggml/models is ONE entry covering BOTH engines: parakeet
+      # from S3 above, and the whisper + VAD models the tests pull from
+      # HuggingFace at runtime (integration-test-asr-ggml.yml says as much on
+      # its own cache step). Staging parakeet alone would hand every PR leg an
+      # exact primary-key hit, which makes actions/cache skip its save by
+      # design -- so the entry could never grow to hold them and all seven legs
+      # would re-fetch ~78 MB from HuggingFace on every run, permanently.
+      # Node built-ins only, so this runs on the win32 leg too.
+      - name: Stage whisper + VAD models from HuggingFace (manifest-driven)
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: packages/asr-ggml
+        run: |
+          set -euo pipefail
+          node scripts/stage-whisper-models.mjs
+          ls -lh models/
+
+  # actions/cache only WARNS when the cache server rejects a reservation, so the
+  # seed job above reports success whether or not an entry was written. This
+  # turns that into a red run. It has to be a separate job: the save runs in the
+  # seed job's post-steps, after every step there has finished.
+  #
+  # Matrixed like the seed: `enable-cross-os: 'false'` gives win32 its own cache
+  # version, so each leg has to be checked on the platform that wrote it.
+  verify:
+    needs: [runner_names, seed]
+    # Not the default `success()`. The seed matrices are fail-fast: false, so one
+    # leg failing for an unrelated reason would skip this job outright -- and the
+    # silent write failure it exists to catch would go unreported on every other
+    # leg. Each leg asserts its own entry, so a genuinely failed seed leg just
+    # fails here too. runner_names is still required: without its outputs there
+    # is no runs-on.
+    if: ${{ !cancelled() && needs.runner_names.result == 'success' }}
+    # No id-token: nothing here talks to AWS; the lookup needs the
+    # repository and nothing else.
+    permissions:
+      contents: read
+    runs-on: ${{ needs.runner_names.outputs[matrix.runner_key] }}
+    timeout-minutes: 15
+    name: verify-model-cache-${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner_key: linux_ubuntu2404_x64
+          - platform: win32
+            runner_key: win_2025_x64
+
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      # Inputs must stay identical to the seed step's: `path` feeds the cache
+      # version, so a different one silently probes a different entry.
+      - name: Assert the seeded entry exists
+        uses: ./.github/actions/cache-models
+        with:
+          package: asr-ggml
+          paths: packages/asr-ggml/models
+          hash-files-glob: packages/asr-ggml/test/integration/*.manifest.json
+          warm: 'false'
+          enable-cross-os: 'false'
+          assert-exists: 'true'

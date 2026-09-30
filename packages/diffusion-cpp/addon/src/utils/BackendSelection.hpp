@@ -55,24 +55,6 @@ struct GpuCandidate {
 std::optional<std::string> selectMainGpuName(
     const std::vector<GpuCandidate>& devices, const MainGpuSpec& spec);
 
-/** Parse a comma-separated GPU backend priority list. */
-std::vector<std::string> parseBackendOverride(const std::string& backend);
-
-/** Pure backend selection over a normalized device list. */
-std::optional<std::string> selectGpuBackendName(
-    const std::vector<GpuCandidate>& devices,
-    const std::vector<std::string>& backendPriority,
-    const std::optional<MainGpuSpec>& mainGpu = std::nullopt);
-
-/**
- * Select an exact ggml device name using backend priority, optionally limited
- * by main-gpu. When the explicit list has no available device, the normal
- * CUDA, Vulkan, Metal, OpenCL, ROCm, and SYCL cascade is used.
- */
-std::optional<std::string> resolveGpuBackendName(
-    const std::vector<std::string>& backendPriority,
-    const std::optional<MainGpuSpec>& mainGpu = std::nullopt);
-
 /**
  * Resolve a `main-gpu` spec to a concrete ggml device backend name (e.g.
  * "Vulkan1") suitable for `sd_ctx_params_t.backend`. Enumerates ggml devices
@@ -154,5 +136,28 @@ preferredEsrganBackendForConfigDevice(const std::string& device);
  * Elsewhere mirrors resolveBackendForDevice().
  */
 std::string expectedEsrganBackendDeviceForConfig(const std::string& device);
+
+/**
+ * True when a fitted placement is the one a `params_backend` of "*=cpu" load
+ * already makes: every module's compute on the first GPU device, every
+ * module's params on the CPU, and tiling or layer streaming only where the
+ * caller asked for it.
+ */
+/**
+ * True when the first of @p gpuDeviceNames is an OpenCL device, in enumeration
+ * order. `sd_fit_params` plans against that device and never reads
+ * `preferred_gpu_backend`, so an OpenCL-preferred load is only projected
+ * against the backend it will run on when this holds.
+ */
+bool openClPreferenceMatchesFirstGpu(
+    const std::vector<std::string>& gpuDeviceNames);
+
+/** Applies `openClPreferenceMatchesFirstGpu` to the live ggml registry. */
+bool openClPreferenceMatchesEnumeratedGpu();
+
+bool matchesCpuOffloadPlacement(
+    const std::string& runtimeSpec, const std::string& paramsSpec,
+    bool vaeTiling, bool streamLayers, bool vaeTilingRequested,
+    bool streamLayersConfigured);
 
 } // namespace sd_backend_selection

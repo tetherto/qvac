@@ -20,7 +20,8 @@
  *
  * Optional env: HOST (127.0.0.1), PORT (8787), ABOT_THREADS, ABOT_SEED,
  * ABOT_BACKEND (e.g. "cpu", "cuda"), ABOT_KV_CACHE=1 (per-layer history KV
- * cache, the main speed knob - forwarded as the kvCache session param),
+ * cache), ABOT_PARAMS_BACKEND, ABOT_MAX_VRAM (GiB or device assignments),
+ * ABOT_STREAM_LAYERS=1, ABOT_VERBOSITY (0..3; 3 includes segment residency),
  * ABOT_PROF=1 (native timing logs), ABOT_JPEG_QUALITY (0/unset = PNG
  * frames; 1..100 = JPEG at that quality).
  *
@@ -116,8 +117,7 @@ const TAEHV_PATH = resolveModelFile('ABOT_TAEHV', ['taew2_2_f16.gguf'])
 // The scene pack may not exist yet (native creation writes it at startup),
 // so resolve its PATH without requiring the file to be present.
 const SCENE_PATH =
-  process.env.ABOT_SCENE ||
-  path.join(process.env.ABOT_MODELS_DIR || '.', 'scene.safetensors')
+  process.env.ABOT_SCENE || path.join(process.env.ABOT_MODELS_DIR || '.', 'scene.safetensors')
 // Scene-creation encoder names (resolved lazily by requireSceneEncoder).
 // Q8 first: that is the published P2P-registry set; F16 covers local converts.
 const T5_NAMES = ['umt5-xxl-enc-q8_0.gguf', 'umt5-xxl-enc-f16.gguf']
@@ -132,6 +132,10 @@ function makeWorld() {
       threads: process.env.ABOT_THREADS || undefined,
       seed: process.env.ABOT_SEED || undefined,
       backend: process.env.ABOT_BACKEND || undefined,
+      paramsBackend: process.env.ABOT_PARAMS_BACKEND || undefined,
+      maxVram: process.env.ABOT_MAX_VRAM || undefined,
+      streamLayers: process.env.ABOT_STREAM_LAYERS === '1' || undefined,
+      verbosity: process.env.ABOT_VERBOSITY || undefined,
       // 0/unset = lossless PNG frames; 1..100 = JPEG at that quality (much
       // smaller frames, so remote/tunneled browsers stream far less data).
       // Number(): frameJpegQuality is validated with Number.isInteger, so the
@@ -200,7 +204,9 @@ function broadcastFrame(entry) {
       const okTail = res.write('\r\n')
       if (!(okHead && okBody && okTail)) {
         res._abotWaitDrain = true
-        res.once('drain', () => { res._abotWaitDrain = false })
+        res.once('drain', () => {
+          res._abotWaitDrain = false
+        })
       }
     } catch (_) {
       streamClients.delete(res)
@@ -219,9 +225,7 @@ const PACED_QUEUE_CAP = 18 // ~1.5 blocks; beyond this, drop oldest (stay live)
 let pacerRunning = false
 
 function paceInterval() {
-  const avg = blockMsLog.length
-    ? blockMsLog.reduce((a, b) => a + b, 0) / blockMsLog.length
-    : 1500
+  const avg = blockMsLog.length ? blockMsLog.reduce((a, b) => a + b, 0) / blockMsLog.length : 1500
   return Math.min(Math.max(avg / 12, 60), 200)
 }
 
@@ -284,7 +288,7 @@ async function walkLoop() {
     const mask = currentMask()
     if (mask !== prevBlockMask) {
       telemetry.keyApply = {
-        block: state.block,                       // first block generated with the new keys
+        block: state.block, // first block generated with the new keys
         keyTs: lastKeyChangeTs || t0,
         applyTs: t0,
         waitMs: lastKeyChangeTs ? t0 - lastKeyChangeTs : 0
@@ -349,7 +353,10 @@ async function handle(req, res) {
 
   if (req.method === 'GET' && url.pathname === '/') {
     const body = Buffer.from(PAGE_HTML)
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': body.length })
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Length': body.length
+    })
     res.end(body)
     return
   }
@@ -411,7 +418,7 @@ async function handle(req, res) {
     res.writeHead(200, {
       'Content-Type': isJpeg ? 'image/jpeg' : 'image/png',
       'Content-Length': frame.png.length,
-      'X-Frame-Ts': String(frame.ts),      // server time the frame became available
+      'X-Frame-Ts': String(frame.ts), // server time the frame became available
       'X-Frame-Block': String(frame.block) // walk block that produced it
     })
     res.end(frame.png)
@@ -462,7 +469,9 @@ async function handle(req, res) {
         path.dirname(currentScenePath),
         `scene_upload_${Date.now()}.safetensors`
       )
-      console.log(`world-walk-server: creating world from uploaded image (${image.length} bytes), prompt "${prompt.slice(0, 60)}"`)
+      console.log(
+        `world-walk-server: creating world from uploaded image (${image.length} bytes), prompt "${prompt.slice(0, 60)}"`
+      )
       const t0 = Date.now()
       currentScenePath = scenePath
       world = makeWorld()
@@ -476,7 +485,9 @@ async function handle(req, res) {
         height: Number(process.env.ABOT_HEIGHT || 480)
       })
       await response.onUpdate(() => {}).await()
-      console.log(`world-walk-server: scene written to ${scenePath} in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+      console.log(
+        `world-walk-server: scene written to ${scenePath} in ${((Date.now() - t0) / 1000).toFixed(1)}s`
+      )
       await world.load()
       state.block = 0
       state.lastStepMs = 0
@@ -945,7 +956,9 @@ async function createSceneIfRequested() {
     height: Number(process.env.ABOT_HEIGHT || 480)
   })
   await response.onUpdate(() => {}).await()
-  console.log(`world-walk-server: scene written to ${SCENE_PATH} in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+  console.log(
+    `world-walk-server: scene written to ${SCENE_PATH} in ${((Date.now() - t0) / 1000).toFixed(1)}s`
+  )
 }
 
 async function startup() {

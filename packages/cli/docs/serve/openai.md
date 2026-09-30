@@ -122,6 +122,58 @@ curl 'http://localhost:11434/v1/models/catalog?search=qwen'
 The live remote model registry and on-disk download state are not included yet (planned
 follow-ups).
 
+## Tools: deferred loading
+
+`tools[]` entries accept `defer_loading: true` (and an optional `group`), either
+on the `function` object or on the tool entry. A deferred tool is registered but
+its parameter schema stays out of the prompt — the model sees its name and
+description in a catalog carried by a built-in `tool_search` tool, and the
+schema is loaded when the model searches for it.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<alias>",
+    "messages": [{"role": "user", "content": "open an issue about the flaky test"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "create_issue",
+        "description": "Open a new issue on a repository",
+        "parameters": {"type": "object", "properties": {"title": {"type": "string"}}},
+        "defer_loading": true,
+        "group": "github"
+      }
+    }]
+  }'
+```
+
+`tool_search` never reaches the client: the server runs it, appends the
+definitions and asks the model again, so the response only ever carries tool
+calls you can execute. Up to four searches run per request before the turn is
+answered as it stands.
+
+Consequences worth knowing:
+
+- The search happens inside one request. The `tool` message holding the loaded
+  definitions is not part of the response, so a later request re-searches if the
+  model needs the same tool again.
+- On `stream: true`, a search round stays on the same SSE stream, so a model
+  that says something before searching streams that text too.
+- A turn that asks for a search _and_ calls a tool you can run is returned as it
+  stands with the search dropped — the call is yours to answer, and the model
+  searches again on your next request.
+- `usage` counts every round the request ran, search rounds included.
+- The round after a search runs without the tool-call grammar unless the
+  request sets a `tool_choice` other than `auto`: the grammar only knows the
+  tools in the prompt, and the loaded definitions sit in the conversation.
+- `tool_choice` naming a deferred tool is rejected with `400`
+  `invalid_tool_choice` — its schema is not in the prompt, so the call cannot be
+  forced. Name `tool_search` instead.
+
+Tools without `defer_loading` behave exactly as before.
+
 ## `POST /v1/completions`
 
 Legacy (pre-chat) OpenAI text-completions endpoint, kept for compatibility with
@@ -648,7 +700,7 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
 - **Fields:**
   - `model` (required) — alias, resolved as described above
   - `input` (required) — non-empty string, capped at **`serve.openai.audio.speech.maxInputChars`** (default **4096**, OpenAI's documented limit; set to `null` to disable)
-  - `voice` (optional, defaults to `defaultVoice`)
+  - `voice` (optional, defaults to `defaultVoice`) — an OpenAI built-in voice name (`alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`), any other string, or a custom voice reference `{ "id": "voice_1234" }`. The object form routes the same way as its `id` string.
   - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
 - **Accepted but ignored:** `speed`, `instructions`, `stream_format` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
 
@@ -696,7 +748,7 @@ ffplay -f s16le -ar 24000 -ac 1 speech.pcm  # rate/channels come from the respon
 | 400  | `missing_model`           | `model` field is missing                                                                                |
 | 400  | `missing_input`           | `input` is missing or empty/whitespace                                                                  |
 | 400  | `input_too_long`          | `input.length` exceeds `maxInputChars` (default 4096)                                                   |
-| 400  | `missing_voice`           | `voice` not sent and `defaultVoice` is `null`                                                           |
+| 400  | `missing_voice`           | `voice` not sent and `defaultVoice` is `null`, or `voice` is neither a string nor `{ "id": "..." }`     |
 | 400  | `invalid_response_format` | Anything other than `wav` / `pcm` / `mp3` / `opus` / `aac` / `flac`                                     |
 | 400  | `invalid_model_type`      | Alias is not a `speech` model                                                                           |
 | 404  | `model_not_found`         | No `voices` mapping, no hyphen alias, no bare alias matches                                             |

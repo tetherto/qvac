@@ -7,6 +7,7 @@ import { constantsRegistry } from './constants-registry'
 import { buildModelsRegistry } from './build-models-registry'
 import { buildModelTypeMaps } from './build-model-type-maps'
 import { buildErrorCodes } from './build-error-codes'
+import { buildNumericConstants } from './build-numeric-constants'
 
 export const contractDir = new URL('../../contract/', import.meta.url)
 
@@ -676,11 +677,13 @@ export async function renderContractFiles() {
   const modelsRegistry = buildModelsRegistry()
   const modelTypeMaps = buildModelTypeMaps()
   const errorCodes = buildErrorCodes()
+  const numericConstants = buildNumericConstants()
   return {
     'schema.json': await formatJson(schemaDocument, 'schema.json'),
     'manifest.json': await formatJson(manifest, 'manifest.json'),
     'models.json': await formatJson(modelsRegistry, 'models.json'),
     'model-type-maps.json': await formatJson(modelTypeMaps, 'model-type-maps.json'),
-    'error-codes.json': await formatJson(errorCodes, 'error-codes.json')
+    'error-codes.json': await formatJson(errorCodes, 'error-codes.json'),
+    'numeric-constants.json': await formatJson(numericConstants, 'numeric-constants.json')
   }
 }

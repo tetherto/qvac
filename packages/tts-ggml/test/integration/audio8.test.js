@@ -10,6 +10,7 @@ const TTSGgml = require('@qvac/tts-ggml')
 const { ensureAudio8Models } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
+const { TTS_TEST_THREADS } = require('../utils/testThreads')
 
 const AUDIO8_SAMPLE_RATE = 44100
 const AUDIO8_MAX_FRAMES = 16
@@ -46,6 +47,7 @@ function resolveAudio8Files(models, useModelDir) {
 
 function createAudio8Model(models, useGPU, useModelDir) {
   return new TTSGgml({
+    threads: TTS_TEST_THREADS,
     engine: TTSGgml.ENGINE_AUDIO8,
     files: resolveAudio8Files(models, useModelDir),
     greedy: true,
@@ -84,6 +86,9 @@ function assertAudio(t, label, result) {
   )
   t.ok(result.stats.tokensPerSecond > 0, `${label} reports codec frames per second`)
   t.ok(result.stats.audioDurationMs > 0, `${label} reports audio duration`)
+  for (const key of ['prefillMs', 'fastDecodeMs', 'codecSynthMs', 'stageTotalMs']) {
+    t.ok(result.stats[key] > 0, `${label} reports the engine's ${key}`)
+  }
 }
 
 function sampleBytes(samples) {
@@ -145,6 +150,7 @@ test(
       assertAudio(t, 'Audio8 text-only', textOnly)
       t.is(textOnly.stats.backendDevice, CPU_DEVICE, 'text-only CPU run reports a CPU device')
       t.is(textOnly.stats.backendId, CPU_BACKEND, 'text-only CPU run reports the CPU backend')
+      t.is(textOnly.stats.voiceEncodeMs, 0, 'text-only run encodes no reference voice')
       recordAudio8(t, 'audio8 text-only', textOnly, Date.now() - textStarted)
 
       const cloneStarted = Date.now()
@@ -154,6 +160,7 @@ test(
       })
       assertAudio(t, 'Audio8 voice clone', cloned)
       t.is(cloned.stats.backendDevice, CPU_DEVICE, 'voice cloning remains on the requested CPU')
+      t.ok(cloned.stats.voiceEncodeMs > 0, 'voice cloning reports the reference encode time')
       t.ok(
         samplesDiffer(textOnly.samples, cloned.samples),
         'per-call reference audio changes the synthesized voice'

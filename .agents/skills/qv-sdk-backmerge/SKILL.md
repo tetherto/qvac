@@ -19,6 +19,8 @@ Create the backmerge PR that keeps `main` aligned with what shipped on a `releas
 
 The backmerge PR carries the version bump + changelog metadata from the release branch onto `main` so future development sees it. It is tagged `[skiplog]` to keep it out of subsequent changelogs.
 
+`@qvac/inference` and `@qvac/sdk` release separately, so a new major.minor produces two release branches and two backmerges: `release-inference-<x.y.z>` (engine version + changelog) and then `release-sdk-<x.y.z>` (SDK version + its `@qvac/inference` range + changelog + docs). Run this skill once per release branch.
+
 ## Inputs (resolve in priority order)
 
 1. **Active release-PR context** (when chained from `sdk-pr-create`): release PR number/URL, release branch, source head branch, ticket

@@ -106,3 +106,10 @@ test('stoppedByLength: positive prediction budget exhaustion remains a length st
     true
   )
 })
+
+test('normalizeCompletionStats: carries toolDefinitionsDropped through', (t) => {
+  const normalized = normalizeCompletionStats({ generatedTokens: 3, toolDefinitionsDropped: 1 })
+
+  t.alike(normalized, { generatedTokens: 3, toolDefinitionsDropped: 1 })
+  t.is(completionStatsSchema.safeParse(normalized).success, true)
+})

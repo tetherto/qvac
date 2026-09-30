@@ -4421,6 +4421,60 @@ PARAKEET_INDIC_CONFORMER_CTC_Q8_0 = ModelConstant(
     params="600M",
 )
 
+PARAKEET_NEMOTRON_0_6B_F16 = ModelConstant(
+    name="PARAKEET_NEMOTRON_0_6B_F16",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3527630,
+    blob_block_length=21818,
+    blob_byte_offset=231169009638,
+    model_id="nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    expected_size=1429807168,
+    sha256_checksum="af090772797632dcea0546985b112f86a9a10e0d87d10a2b74bd6ae57464aded",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="f16",
+    params="0.6B",
+)
+
+PARAKEET_NEMOTRON_0_6B_Q4_0 = ModelConstant(
+    name="PARAKEET_NEMOTRON_0_6B_Q4_0",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3549448,
+    blob_block_length=6184,
+    blob_byte_offset=232598816806,
+    model_id="nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    expected_size=405212736,
+    sha256_checksum="fee699b3257ce0cfd249f490ab9f9791d9e0f6f8781e4354db2aa5584e594c82",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_0",
+    params="0.6B",
+)
+
+PARAKEET_NEMOTRON_0_6B_Q8_0 = ModelConstant(
+    name="PARAKEET_NEMOTRON_0_6B_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    registry_source="s3",
+    blob_core_key="4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+    blob_block_offset=3555632,
+    blob_block_length=11621,
+    blob_byte_offset=233004029542,
+    model_id="nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    expected_size=761593408,
+    sha256_checksum="f6ad1b9912c03c95b3377eaf0fc2fee635a4e4904409d8efac1944343d9f3360",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="0.6B",
+)
+
 PARAKEET_SORTFORMER_4SPK_V1_F16 = ModelConstant(
     name="PARAKEET_SORTFORMER_4SPK_V1_F16",
     src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
@@ -7835,6 +7889,9 @@ __all__ = [
     "PARAKEET_INDIC_CONFORMER_CTC_F16",
     "PARAKEET_INDIC_CONFORMER_CTC_Q4_0",
     "PARAKEET_INDIC_CONFORMER_CTC_Q8_0",
+    "PARAKEET_NEMOTRON_0_6B_F16",
+    "PARAKEET_NEMOTRON_0_6B_Q4_0",
+    "PARAKEET_NEMOTRON_0_6B_Q8_0",
     "PARAKEET_SORTFORMER_4SPK_V1_F16",
     "PARAKEET_SORTFORMER_4SPK_V1_Q4_0",
     "PARAKEET_SORTFORMER_4SPK_V1_Q8_0",
