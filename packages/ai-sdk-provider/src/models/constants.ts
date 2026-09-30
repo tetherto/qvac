@@ -10814,60 +10814,6 @@ export const allModels = [
     endpointCategory: "ocr"
   } as const,
   {
-    name: "PARAKEET_INDIC_CONFORMER_CTC_F16",
-    src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf`,
-    registryPath: "qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
-    registrySource: "s3",
-    blobCoreKey: "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blobBlockOffset: 3248455,
-    blobBlockLength: 21061,
-    blobByteOffset: 212873512294,
-    modelId: "indic-conformer-ctc.f16.gguf",
-    addon: "parakeet",
-    expectedSize: 1380198336,
-    sha256Checksum: "78566cbce8fe23b85c5c956d3bd9125a351d6aedd43e8e38470ecb00075e3b37",
-    engine: "parakeet-transcription",
-    quantization: "f16",
-    params: "600M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_INDIC_CONFORMER_CTC_Q4_0",
-    src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blobBlockOffset: 3269516,
-    blobBlockLength: 5973,
-    blobByteOffset: 214253710630,
-    modelId: "indic-conformer-ctc.q4_0.gguf",
-    addon: "parakeet",
-    expectedSize: 391389696,
-    sha256Checksum: "adf2dbe247896ab2812404a693f4c4b52145dc76811c88490e286d2efe6f5b32",
-    engine: "parakeet-transcription",
-    quantization: "q4_0",
-    params: "600M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_INDIC_CONFORMER_CTC_Q8_0",
-    src: `registry://s3/qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blobBlockOffset: 3275489,
-    blobBlockLength: 11221,
-    blobByteOffset: 214645100326,
-    modelId: "indic-conformer-ctc.q8_0.gguf",
-    addon: "parakeet",
-    expectedSize: 735323136,
-    sha256Checksum: "ed7df4144243f7a41cb6d057a824f22c52c3aabb5971b6654803b8d94e0f1f1a",
-    engine: "parakeet-transcription",
-    quantization: "q8_0",
-    params: "600M",
-    endpointCategory: "transcription"
-  } as const,
-  {
     name: "PARAKEET_CTC_0_6B_Q8_0",
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf`,
     registryPath: "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-ctc-0.6b.q8_0.gguf",
@@ -10880,42 +10826,6 @@ export const allModels = [
     addon: "parakeet",
     expectedSize: 731222912,
     sha256Checksum: "934a88915e4bbd87c067ea4a149d711238a516f75d336a74d47dc0a7828ddda4",
-    engine: "parakeet-transcription",
-    quantization: "q8_0",
-    params: "0.6B",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_EOU_120M_V1_Q8_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blobBlockOffset: 738800,
-    blobBlockLength: 2107,
-    blobByteOffset: 48415430110,
-    modelId: "parakeet-eou-120m-v1.q8_0.gguf",
-    addon: "parakeet",
-    expectedSize: 138051456,
-    sha256Checksum: "c7b7f62d27791ef96049955667de5650684617f4a29f4cf5810e9ab831492cd3",
-    engine: "parakeet-transcription",
-    quantization: "q8_0",
-    params: "120M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_TDT_0_6B_V3_Q8_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blobBlockOffset: 727361,
-    blobBlockLength: 11439,
-    blobByteOffset: 47665804894,
-    modelId: "parakeet-tdt-0.6b-v3.q8_0.gguf",
-    addon: "parakeet",
-    expectedSize: 749625216,
-    sha256Checksum: "0f26bd6cfe8ba53624ea67ed2df7ddaa70179efc82160264561a0f05b70ba23d",
     engine: "parakeet-transcription",
     quantization: "q8_0",
     params: "0.6B",
@@ -10937,96 +10847,6 @@ export const allModels = [
     engine: "parakeet-transcription",
     quantization: "q8_0",
     params: "123M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_SORTFORMER_4SPK_V2_1_F16",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
-    registrySource: "s3",
-    blobCoreKey: "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blobBlockOffset: 1600284,
-    blobBlockLength: 4015,
-    blobByteOffset: 104870911729,
-    modelId: "diar_streaming_sortformer_4spk-v2.1.f16.gguf",
-    addon: "parakeet",
-    expectedSize: 263080256,
-    sha256Checksum: "ed0d50e801a8c763642e1e08b8f1189deadee14e219261bc4f4f7c9c0d22d8af",
-    engine: "parakeet-transcription",
-    quantization: "f16",
-    params: "123M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blobBlockOffset: 1606447,
-    blobBlockLength: 1152,
-    blobByteOffset: 105274709937,
-    modelId: "diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
-    addon: "parakeet",
-    expectedSize: 75458048,
-    sha256Checksum: "bbd05057baf15e32311e1366edb4a77ade897a29ca152ec36cac4fb05005469c",
-    engine: "parakeet-transcription",
-    quantization: "q4_0",
-    params: "123M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blobBlockOffset: 1604299,
-    blobBlockLength: 2148,
-    blobByteOffset: 105133991985,
-    modelId: "diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
-    addon: "parakeet",
-    expectedSize: 140717952,
-    sha256Checksum: "1d593b947fbf5dca16f6d17266e4c587f01fb265994b2612783287c5cd735d15",
-    engine: "parakeet-transcription",
-    quantization: "q8_0",
-    params: "123M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_EOU_120M_V1_Q4_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blobBlockOffset: 1613496,
-    blobBlockLength: 1131,
-    blobByteOffset: 105736572977,
-    modelId: "parakeet-eou-120m-v1.q4_0.gguf",
-    addon: "parakeet",
-    expectedSize: 74110976,
-    sha256Checksum: "a1fb4ab2a6dd8a931e67d08b24e6e277e5163d26abb495fe730a23385964fc36",
-    engine: "parakeet-transcription",
-    quantization: "q4_0",
-    params: "120M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_TDT_0_6B_V3_Q4_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "d90c0263033385abdb2290a69936d5cef030d5c63c87baa33c3a4a2d01b84ca8",
-    blobBlockOffset: 1614627,
-    blobBlockLength: 6085,
-    blobByteOffset: 105810683953,
-    modelId: "parakeet-tdt-0.6b-v3.q4_0.gguf",
-    addon: "parakeet",
-    expectedSize: 398735040,
-    sha256Checksum: "e29d2749b0d38d827f9649c410a075894a329409f750287b8e7dfb1c6e2e7b5e",
-    engine: "parakeet-transcription",
-    quantization: "q4_0",
-    params: "0.6B",
     endpointCategory: "transcription"
   } as const,
   {
@@ -11084,42 +10904,6 @@ export const allModels = [
     endpointCategory: "transcription"
   } as const,
   {
-    name: "PARAKEET_EOU_120M_V1_F16",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
-    registrySource: "s3",
-    blobCoreKey: "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blobBlockOffset: 2226755,
-    blobBlockLength: 3936,
-    blobByteOffset: 145916414946,
-    modelId: "parakeet-eou-120m-v1.f16.gguf",
-    addon: "parakeet",
-    expectedSize: 257939840,
-    sha256Checksum: "d474dacc63ad8df1a9003f888bcb48c476d7dadec3e2ef5106a75f426e47cb63",
-    engine: "parakeet-transcription",
-    quantization: "f16",
-    params: "120M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_TDT_0_6B_V3_F16",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
-    registrySource: "s3",
-    blobCoreKey: "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blobBlockOffset: 2230691,
-    blobBlockLength: 21478,
-    blobByteOffset: 146174354786,
-    modelId: "parakeet-tdt-0.6b-v3.f16.gguf",
-    addon: "parakeet",
-    expectedSize: 1407544256,
-    sha256Checksum: "896463ab74886d027538709f3a21d141b7a99061d4b337a2777c142926f91416",
-    engine: "parakeet-transcription",
-    quantization: "f16",
-    params: "0.6B",
-    endpointCategory: "transcription"
-  } as const,
-  {
     name: "PARAKEET_SORTFORMER_4SPK_V1_F16",
     src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf`,
     registryPath: "qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
@@ -11135,114 +10919,6 @@ export const allModels = [
     engine: "parakeet-transcription",
     quantization: "f16",
     params: "123M",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_UNIFIED_0_6B_F16",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
-    registrySource: "s3",
-    blobCoreKey: "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-    blobBlockOffset: 6357702,
-    blobBlockLength: 21220,
-    blobByteOffset: 416645480362,
-    modelId: "parakeet-unified-en-0.6b.f16.gguf",
-    addon: "parakeet",
-    expectedSize: 1390644608,
-    sha256Checksum: "a9b228101e8c3eeabeb5a38f1948f2a0a1ced9262e3261fcb301a935e38c4f28",
-    engine: "parakeet-transcription",
-    quantization: "f16",
-    params: "0.6B",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_UNIFIED_0_6B_Q4_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-    blobBlockOffset: 6378922,
-    blobBlockLength: 6028,
-    blobByteOffset: 418036124970,
-    modelId: "parakeet-unified-en-0.6b.q4_0.gguf",
-    addon: "parakeet",
-    expectedSize: 395029120,
-    sha256Checksum: "98651c49ef4e3dbc2606f91bbc870431b84fdad739e9ff491e958d0f61c89a97",
-    engine: "parakeet-transcription",
-    quantization: "q4_0",
-    params: "0.6B",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_UNIFIED_0_6B_Q8_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "6309722b3460d91d38ad7526875ecfa29183245826b717949c55ba443093d963",
-    blobBlockOffset: 6384950,
-    blobBlockLength: 11312,
-    blobByteOffset: 418431154090,
-    modelId: "parakeet-unified-en-0.6b.q8_0.gguf",
-    addon: "parakeet",
-    expectedSize: 741330176,
-    sha256Checksum: "48102e55d61aaa827b89af03d772106e37de6ee12e8746f278f6315e71d980ad",
-    engine: "parakeet-transcription",
-    quantization: "q8_0",
-    params: "0.6B",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_NEMOTRON_0_6B_F16",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
-    registrySource: "s3",
-    blobCoreKey: "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blobBlockOffset: 3527630,
-    blobBlockLength: 21818,
-    blobByteOffset: 231169009638,
-    modelId: "nemotron-3.5-asr-streaming-0.6b.f16.gguf",
-    addon: "parakeet",
-    expectedSize: 1429807168,
-    sha256Checksum: "af090772797632dcea0546985b112f86a9a10e0d87d10a2b74bd6ae57464aded",
-    engine: "parakeet-transcription",
-    quantization: "f16",
-    params: "0.6B",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_NEMOTRON_0_6B_Q4_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blobBlockOffset: 3549448,
-    blobBlockLength: 6184,
-    blobByteOffset: 232598816806,
-    modelId: "nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
-    addon: "parakeet",
-    expectedSize: 405212736,
-    sha256Checksum: "fee699b3257ce0cfd249f490ab9f9791d9e0f6f8781e4354db2aa5584e594c82",
-    engine: "parakeet-transcription",
-    quantization: "q4_0",
-    params: "0.6B",
-    endpointCategory: "transcription"
-  } as const,
-  {
-    name: "PARAKEET_NEMOTRON_0_6B_Q8_0",
-    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf`,
-    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
-    registrySource: "s3",
-    blobCoreKey: "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
-    blobBlockOffset: 3555632,
-    blobBlockLength: 11621,
-    blobByteOffset: 233004029542,
-    modelId: "nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
-    addon: "parakeet",
-    expectedSize: 761593408,
-    sha256Checksum: "f6ad1b9912c03c95b3377eaf0fc2fee635a4e4904409d8efac1944343d9f3360",
-    engine: "parakeet-transcription",
-    quantization: "q8_0",
-    params: "0.6B",
     endpointCategory: "transcription"
   } as const,
   {
@@ -12016,6 +11692,366 @@ export const allModels = [
     sha256Checksum: "9c3a5d0a4f8876d1dfc0d2385df42ae21adbec7e9866af45a934621d7566d84e",
     engine: "parakeet-transcription",
     quantization: "",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_SORTFORMER_4SPK_V2_1_F16",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.f16.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 587595,
+    blobBlockLength: 4015,
+    blobByteOffset: 38505348996,
+    modelId: "diar_streaming_sortformer_4spk-v2.1.f16.gguf",
+    addon: "parakeet",
+    expectedSize: 263080384,
+    sha256Checksum: "71d5aeddc532f4efba19ccf4a6a451dbcb2731683d214c45e4f2fe5019b1a2cc",
+    engine: "parakeet-transcription",
+    quantization: "f16",
+    params: "123M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 593762,
+    blobBlockLength: 1152,
+    blobByteOffset: 38909283460,
+    modelId: "diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 75458176,
+    sha256Checksum: "c96214b73932d6411f817030c6308c1d1f3b5db945315e8f3f2eeb3d0493713d",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "123M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 591612,
+    blobBlockLength: 2148,
+    blobByteOffset: 38768497380,
+    modelId: "diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    addon: "parakeet",
+    expectedSize: 140718080,
+    sha256Checksum: "7fef9f1edf82f9e5c308f89509d017fb85781e03c1dc05447b617e0421f51d90",
+    engine: "parakeet-transcription",
+    quantization: "q8_0",
+    params: "123M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_INDIC_CONFORMER_600M_F16",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.f16.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.f16.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 736028,
+    blobBlockLength: 21061,
+    blobByteOffset: 48232202724,
+    modelId: "indic-conformer-600m-multilingual.f16.gguf",
+    addon: "parakeet",
+    expectedSize: 1380198400,
+    sha256Checksum: "a2f5e4b2eaf688d9dfbcff17d4c36b6952c53b23247ffb0a573fea8453e9db64",
+    engine: "parakeet-transcription",
+    quantization: "f16",
+    params: "600M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_INDIC_CONFORMER_600M_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q4_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 757090,
+    blobBlockLength: 5973,
+    blobByteOffset: 49612464708,
+    modelId: "indic-conformer-600m-multilingual.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 391389760,
+    sha256Checksum: "1d69f29ab1d43a94aa9680d54aac6b2447a0ff8ef308aed52d7f047afb6c6a84",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "600M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_INDIC_CONFORMER_600M_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q8_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 763064,
+    blobBlockLength: 11221,
+    blobByteOffset: 50003918052,
+    modelId: "indic-conformer-600m-multilingual.q8_0.gguf",
+    addon: "parakeet",
+    expectedSize: 735323200,
+    sha256Checksum: "ebce21ec8ed0f137bba0da671326bf77df375309b048f69d6ce0c2fdadaab620",
+    engine: "parakeet-transcription",
+    quantization: "q8_0",
+    params: "600M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_NEMOTRON_0_6B_F16",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 774286,
+    blobBlockLength: 21818,
+    blobByteOffset: 50739304836,
+    modelId: "nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    addon: "parakeet",
+    expectedSize: 1429807168,
+    sha256Checksum: "3dcc79ad01db53d9b9f7f893f43fc81e7124bce2dbf4675c81d4bf9001f3f658",
+    engine: "parakeet-transcription",
+    quantization: "f16",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_NEMOTRON_0_6B_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 796105,
+    blobBlockLength: 6184,
+    blobByteOffset: 52169161956,
+    modelId: "nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 405212736,
+    sha256Checksum: "7296314b2930a0b45edd96470f8667fc88c6edbf877aa4f1bae5e0e5bfea7523",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_NEMOTRON_0_6B_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 802290,
+    blobBlockLength: 11621,
+    blobByteOffset: 52574424644,
+    modelId: "nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    addon: "parakeet",
+    expectedSize: 761593408,
+    sha256Checksum: "7bd5394dbf10a5f7537dd1817bffa9cefd97d200e14e45754328b90a4f8fe4b6",
+    engine: "parakeet-transcription",
+    quantization: "q8_0",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_EOU_120M_V1_F16",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.f16.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.f16.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 615682,
+    blobBlockLength: 3936,
+    blobByteOffset: 40345494692,
+    modelId: "parakeet_realtime_eou_120m-v1.f16.gguf",
+    addon: "parakeet",
+    expectedSize: 257940000,
+    sha256Checksum: "a8fbce44032eda4fdf6d098f4c3602fca309859a129f4cdb33d2709b48ba7d32",
+    engine: "parakeet-transcription",
+    quantization: "f16",
+    params: "120M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_EOU_120M_V1_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q4_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 608464,
+    blobBlockLength: 1131,
+    blobByteOffset: 39872567492,
+    modelId: "parakeet_realtime_eou_120m-v1.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 74111136,
+    sha256Checksum: "b620dd0d76e1ecae77e37454737499c30cbe690694a5e11290c1552f50c4075d",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "120M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_EOU_120M_V1_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q8_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 606356,
+    blobBlockLength: 2107,
+    blobByteOffset: 39734481508,
+    modelId: "parakeet_realtime_eou_120m-v1.q8_0.gguf",
+    addon: "parakeet",
+    expectedSize: 138051616,
+    sha256Checksum: "b2aeab6f28b70e11e273a53d85a0443064aed88dacab8c4a636feb009fad4049",
+    engine: "parakeet-transcription",
+    quantization: "q8_0",
+    params: "120M",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_TDT_0_6B_V3_F16",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.f16.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.f16.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 619619,
+    blobBlockLength: 21478,
+    blobByteOffset: 40603469060,
+    modelId: "parakeet-tdt-0.6b-v3.f16.gguf",
+    addon: "parakeet",
+    expectedSize: 1407544192,
+    sha256Checksum: "24811607850b4ef37f8c87c7f3b6c6755424174fc47d22d57597bac409cc8b5d",
+    engine: "parakeet-transcription",
+    quantization: "f16",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_TDT_0_6B_V3_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q4_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 609596,
+    blobBlockLength: 6085,
+    blobByteOffset: 39946712996,
+    modelId: "parakeet-tdt-0.6b-v3.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 398734976,
+    sha256Checksum: "00c33768333062bcb45e480171441f1e385757bb4b97610727901a783a2923a0",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_TDT_0_6B_V3_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q8_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 594916,
+    blobBlockLength: 11439,
+    blobByteOffset: 38984809636,
+    modelId: "parakeet-tdt-0.6b-v3.q8_0.gguf",
+    addon: "parakeet",
+    expectedSize: 749625152,
+    sha256Checksum: "fe3013294baaa39e77615d39ec75c627496c60b95e72b1097674db64eebf9aaf",
+    engine: "parakeet-transcription",
+    quantization: "q8_0",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_TDT_1_1B_F16",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.f16.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.f16.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 641098,
+    blobBlockLength: 36769,
+    blobByteOffset: 42011059972,
+    modelId: "parakeet-tdt-1.1b.f16.gguf",
+    addon: "parakeet",
+    expectedSize: 2409663264,
+    sha256Checksum: "41f12eedb6af7d0fa0139fbd7ed4e7bdef7f91a9cdce2ae325b2fb23e1fb9c15",
+    engine: "parakeet-transcription",
+    quantization: "f16",
+    params: "1.1B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_TDT_1_1B_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.q8_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 677869,
+    blobBlockLength: 19594,
+    blobByteOffset: 44420832644,
+    modelId: "parakeet-tdt-1.1b.q8_0.gguf",
+    addon: "parakeet",
+    expectedSize: 1284062944,
+    sha256Checksum: "91a4028ee0795526154185eb46edf2e63b06674f279fb6e3987a2a82e0c9edb7",
+    engine: "parakeet-transcription",
+    quantization: "q8_0",
+    params: "1.1B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_UNIFIED_0_6B_F16",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.f16.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.f16.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 697465,
+    blobBlockLength: 21220,
+    blobByteOffset: 45705004996,
+    modelId: "parakeet-unified-en-0.6b.f16.gguf",
+    addon: "parakeet",
+    expectedSize: 1390644896,
+    sha256Checksum: "75ee1e9caaa14477ca623f19c4711dafba032f794fd4220f98539c28cc4da5b7",
+    engine: "parakeet-transcription",
+    quantization: "f16",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_UNIFIED_0_6B_Q4_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q4_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q4_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 718686,
+    blobBlockLength: 6028,
+    blobByteOffset: 47095714212,
+    modelId: "parakeet-unified-en-0.6b.q4_0.gguf",
+    addon: "parakeet",
+    expectedSize: 395029408,
+    sha256Checksum: "bd58f79047d62b6811270026c1cc6c9f1b894bafac90c3eded732069bb955067",
+    engine: "parakeet-transcription",
+    quantization: "q4_0",
+    params: "0.6B",
+    endpointCategory: "transcription"
+  } as const,
+  {
+    name: "PARAKEET_UNIFIED_0_6B_Q8_0",
+    src: `registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q8_0.gguf`,
+    registryPath: "qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q8_0.gguf",
+    registrySource: "s3",
+    blobCoreKey: "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blobBlockOffset: 724715,
+    blobBlockLength: 11312,
+    blobByteOffset: 47490807940,
+    modelId: "parakeet-unified-en-0.6b.q8_0.gguf",
+    addon: "parakeet",
+    expectedSize: 741330464,
+    sha256Checksum: "8e4d4881ae07ddf3180bba38e98d5e0375b250432fef8a327575b09c37a47d68",
+    engine: "parakeet-transcription",
+    quantization: "q8_0",
     params: "0.6B",
     endpointCategory: "transcription"
   } as const,
@@ -14376,185 +14412,187 @@ export const OCR_DOCTR: ModelConstant<"ocr"> = allModels[590];
 export const OCR_DOCTR_1: ModelConstant<"ocr"> = allModels[591];
 export const OCR_CRAFT: ModelConstant<"ocr"> = allModels[592];
 export const OCR_LATIN: ModelConstant<"ocr"> = allModels[593];
-export const PARAKEET_INDIC_CONFORMER_CTC_F16: ModelConstant<"transcription"> = allModels[594];
-export const PARAKEET_INDIC_CONFORMER_CTC_Q4_0: ModelConstant<"transcription"> = allModels[595];
-export const PARAKEET_INDIC_CONFORMER_CTC_Q8_0: ModelConstant<"transcription"> = allModels[596];
-export const PARAKEET_CTC_0_6B_Q8_0: ModelConstant<"transcription"> = allModels[597];
-export const PARAKEET_EOU_120M_V1_Q8_0: ModelConstant<"transcription"> = allModels[598];
-export const PARAKEET_TDT_0_6B_V3_Q8_0: ModelConstant<"transcription"> = allModels[599];
-export const PARAKEET_SORTFORMER_4SPK_V1_Q8_0: ModelConstant<"transcription"> = allModels[600];
-export const PARAKEET_SORTFORMER_4SPK_V2_1_F16: ModelConstant<"transcription"> = allModels[601];
-export const PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0: ModelConstant<"transcription"> = allModels[602];
-export const PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0: ModelConstant<"transcription"> = allModels[603];
-export const PARAKEET_EOU_120M_V1_Q4_0: ModelConstant<"transcription"> = allModels[604];
-export const PARAKEET_TDT_0_6B_V3_Q4_0: ModelConstant<"transcription"> = allModels[605];
-export const PARAKEET_SORTFORMER_4SPK_V1_Q4_0: ModelConstant<"transcription"> = allModels[606];
-export const PARAKEET_CTC_0_6B_F16: ModelConstant<"transcription"> = allModels[607];
-export const PARAKEET_CTC_0_6B_Q4_0: ModelConstant<"transcription"> = allModels[608];
-export const PARAKEET_EOU_120M_V1_F16: ModelConstant<"transcription"> = allModels[609];
-export const PARAKEET_TDT_0_6B_V3_F16: ModelConstant<"transcription"> = allModels[610];
-export const PARAKEET_SORTFORMER_4SPK_V1_F16: ModelConstant<"transcription"> = allModels[611];
-export const PARAKEET_UNIFIED_0_6B_F16: ModelConstant<"transcription"> = allModels[612];
-export const PARAKEET_UNIFIED_0_6B_Q4_0: ModelConstant<"transcription"> = allModels[613];
-export const PARAKEET_UNIFIED_0_6B_Q8_0: ModelConstant<"transcription"> = allModels[614];
-export const PARAKEET_NEMOTRON_0_6B_F16: ModelConstant<"transcription"> = allModels[615];
-export const PARAKEET_NEMOTRON_0_6B_Q4_0: ModelConstant<"transcription"> = allModels[616];
-export const PARAKEET_NEMOTRON_0_6B_Q8_0: ModelConstant<"transcription"> = allModels[617];
-export const PARAKEET_COREMLDATA: ModelConstant<"transcription"> = allModels[618];
-export const PARAKEET_COREMLDATA_1: ModelConstant<"transcription"> = allModels[619];
-export const PARAKEET_METADATA: ModelConstant<"transcription"> = allModels[620];
-export const PARAKEET_MODEL: ModelConstant<"transcription"> = allModels[621];
-export const PARAKEET_WEIGHT: ModelConstant<"transcription"> = allModels[622];
-export const PARAKEET_COREMLDATA_2: ModelConstant<"transcription"> = allModels[623];
-export const PARAKEET_COREMLDATA_3: ModelConstant<"transcription"> = allModels[624];
-export const PARAKEET_METADATA_1: ModelConstant<"transcription"> = allModels[625];
-export const PARAKEET_MODEL_1: ModelConstant<"transcription"> = allModels[626];
-export const PARAKEET_WEIGHT_1: ModelConstant<"transcription"> = allModels[627];
-export const PARAKEET_INDIC_CONFORMER_COREMLDATA: ModelConstant<"transcription"> = allModels[628];
-export const PARAKEET_INDIC_CONFORMER_COREMLDATA_1: ModelConstant<"transcription"> = allModels[629];
-export const PARAKEET_INDIC_CONFORMER_METADATA: ModelConstant<"transcription"> = allModels[630];
-export const PARAKEET_INDIC_CONFORMER_MODEL: ModelConstant<"transcription"> = allModels[631];
-export const PARAKEET_INDIC_CONFORMER_WEIGHT: ModelConstant<"transcription"> = allModels[632];
-export const PARAKEET_NEMOTRON_COREMLDATA: ModelConstant<"transcription"> = allModels[633];
-export const PARAKEET_NEMOTRON_COREMLDATA_1: ModelConstant<"transcription"> = allModels[634];
-export const PARAKEET_NEMOTRON_METADATA: ModelConstant<"transcription"> = allModels[635];
-export const PARAKEET_NEMOTRON_MODEL: ModelConstant<"transcription"> = allModels[636];
-export const PARAKEET_NEMOTRON_WEIGHT: ModelConstant<"transcription"> = allModels[637];
-export const PARAKEET_COREMLDATA_4: ModelConstant<"transcription"> = allModels[638];
-export const PARAKEET_COREMLDATA_5: ModelConstant<"transcription"> = allModels[639];
-export const PARAKEET_METADATA_2: ModelConstant<"transcription"> = allModels[640];
-export const PARAKEET_MODEL_2: ModelConstant<"transcription"> = allModels[641];
-export const PARAKEET_WEIGHT_2: ModelConstant<"transcription"> = allModels[642];
-export const PARAKEET_CTC_COREMLDATA: ModelConstant<"transcription"> = allModels[643];
-export const PARAKEET_CTC_COREMLDATA_1: ModelConstant<"transcription"> = allModels[644];
-export const PARAKEET_CTC_METADATA: ModelConstant<"transcription"> = allModels[645];
-export const PARAKEET_CTC_WEIGHT: ModelConstant<"transcription"> = allModels[646];
-export const PARAKEET_TDT_COREMLDATA: ModelConstant<"transcription"> = allModels[647];
-export const PARAKEET_TDT_COREMLDATA_1: ModelConstant<"transcription"> = allModels[648];
-export const PARAKEET_TDT_METADATA: ModelConstant<"transcription"> = allModels[649];
-export const PARAKEET_TDT_MODEL: ModelConstant<"transcription"> = allModels[650];
-export const PARAKEET_TDT_WEIGHT: ModelConstant<"transcription"> = allModels[651];
-export const PARAKEET_TDT_COREMLDATA_2: ModelConstant<"transcription"> = allModels[652];
-export const PARAKEET_TDT_COREMLDATA_3: ModelConstant<"transcription"> = allModels[653];
-export const PARAKEET_TDT_METADATA_1: ModelConstant<"transcription"> = allModels[654];
-export const PARAKEET_TDT_MODEL_1: ModelConstant<"transcription"> = allModels[655];
-export const PARAKEET_TDT_WEIGHT_1: ModelConstant<"transcription"> = allModels[656];
-export const PARAKEET_UNIFIED_COREMLDATA: ModelConstant<"transcription"> = allModels[657];
-export const PARAKEET_UNIFIED_METADATA: ModelConstant<"transcription"> = allModels[658];
-export const PARAKEET_UNIFIED_MODEL: ModelConstant<"transcription"> = allModels[659];
-export const PARAKEET_UNIFIED_WEIGHT: ModelConstant<"transcription"> = allModels[660];
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX: ModelConstant<"speech"> = allModels[661];
-export const TTS_S3GEN_EN_CHATTERBOX: ModelConstant<"speech"> = allModels[662];
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16: ModelConstant<"speech"> = allModels[663];
-export const TTS_T3_TURBO_EN_CHATTERBOX_FP16: ModelConstant<"speech"> = allModels[664];
-export const TTS_MECAB_IPADIC_CHATTERBOX: ModelConstant<"speech"> = allModels[665];
-export const TTS_MECAB_IPADIC_CHATTERBOX_1: ModelConstant<"speech"> = allModels[666];
-export const TTS_MECAB_IPADIC_CHATTERBOX_2: ModelConstant<"speech"> = allModels[667];
-export const TTS_MECAB_IPADIC_CHATTERBOX_3: ModelConstant<"speech"> = allModels[668];
-export const TTS_MECAB_IPADIC_CHATTERBOX_4: ModelConstant<"speech"> = allModels[669];
-export const TTS_MECAB_IPADIC_CHATTERBOX_5: ModelConstant<"speech"> = allModels[670];
-export const TTS_CODEC_DECODER_AUDIO8_FP16: ModelConstant<"speech"> = allModels[671];
-export const TTS_CODEC_DECODER_AUDIO8_Q8_0: ModelConstant<"speech"> = allModels[672];
-export const TTS_CODEC_ENCODER_AUDIO8_FP16: ModelConstant<"speech"> = allModels[673];
-export const TTS_CODEC_ENCODER_AUDIO8_Q8_0: ModelConstant<"speech"> = allModels[674];
-export const TTS_LM_MULTILINGUAL_AUDIO8_FP16: ModelConstant<"speech"> = allModels[675];
-export const TTS_LM_MULTILINGUAL_AUDIO8_Q8_0: ModelConstant<"speech"> = allModels[676];
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<"speech"> = allModels[677];
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<"speech"> = allModels[678];
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0: ModelConstant<"speech"> = allModels[679];
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0: ModelConstant<"speech"> = allModels[680];
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<"speech"> = allModels[681];
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<"speech"> = allModels[682];
-export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<"speech"> = allModels[683];
-export const TTS_S3GEN_EN_CHATTERBOX_Q4_0: ModelConstant<"speech"> = allModels[684];
-export const TTS_S3GEN_EN_CHATTERBOX_Q5_0: ModelConstant<"speech"> = allModels[685];
-export const TTS_S3GEN_EN_CHATTERBOX_Q8_0: ModelConstant<"speech"> = allModels[686];
-export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<"speech"> = allModels[687];
-export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0: ModelConstant<"speech"> = allModels[688];
-export const TTS_CANGJIE_ZH_CHATTERBOX: ModelConstant<"speech"> = allModels[689];
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP32: ModelConstant<"speech"> = allModels[690];
-export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP32: ModelConstant<"speech"> = allModels[691];
-export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0: ModelConstant<"speech"> = allModels[692];
-export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE: ModelConstant<"speech"> = allModels[693];
-export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1: ModelConstant<"speech"> = allModels[694];
-export const TTS_COSYVOICE3_VOICE_COSYVOICE: ModelConstant<"speech"> = allModels[695];
-export const TTS_COSYVOICE3_VOICE_COSYVOICE_1: ModelConstant<"speech"> = allModels[696];
-export const TTS_COSYVOICE3_VOICE_COSYVOICE_2: ModelConstant<"speech"> = allModels[697];
-export const TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32: ModelConstant<"speech"> = allModels[698];
-export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16: ModelConstant<"speech"> = allModels[699];
-export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32: ModelConstant<"speech"> = allModels[700];
-export const TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0: ModelConstant<"speech"> = allModels[701];
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_BF16: ModelConstant<"speech"> = allModels[702];
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP16: ModelConstant<"speech"> = allModels[703];
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0: ModelConstant<"speech"> = allModels[704];
-export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0: ModelConstant<"speech"> = allModels[705];
-export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP16: ModelConstant<"speech"> = allModels[706];
-export const TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0: ModelConstant<"speech"> = allModels[707];
-export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1: ModelConstant<"speech"> = allModels[708];
-export const TTS_ENHANCER_LAVASR_FP16: ModelConstant<"speech"> = allModels[709];
-export const TTS_ENHANCER_LAVASR_FP32: ModelConstant<"speech"> = allModels[710];
-export const TTS_DENOISER_LAVASR_FP16: ModelConstant<"speech"> = allModels[711];
-export const TTS_DENOISER_LAVASR_FP32: ModelConstant<"speech"> = allModels[712];
-export const TTS_CODEC_DECODER_MOSS_TTS_F16: ModelConstant<"speech"> = allModels[713];
-export const TTS_CODEC_ENCODER_MOSS_TTS_F16: ModelConstant<"speech"> = allModels[714];
-export const TTS_DELAY_LLM_MOSS_TTS_F16: ModelConstant<"speech"> = allModels[715];
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16: ModelConstant<"speech"> = allModels[716];
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32: ModelConstant<"speech"> = allModels[717];
-export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0: ModelConstant<"speech"> = allModels[718];
-export const TTS_LARGE_V1_EN_PARLER_TTS_FP16: ModelConstant<"speech"> = allModels[719];
-export const TTS_LARGE_V1_EN_PARLER_TTS_FP32: ModelConstant<"speech"> = allModels[720];
-export const TTS_LARGE_V1_EN_PARLER_TTS_Q8_0: ModelConstant<"speech"> = allModels[721];
-export const TTS_MINI_V1_EN_PARLER_TTS_FP16: ModelConstant<"speech"> = allModels[722];
-export const TTS_MINI_V1_EN_PARLER_TTS_FP32: ModelConstant<"speech"> = allModels[723];
-export const TTS_MINI_V1_EN_PARLER_TTS_Q8_0: ModelConstant<"speech"> = allModels[724];
-export const TTS_EN_SUPERTONIC_Q4_0: ModelConstant<"speech"> = allModels[725];
-export const TTS_EN_SUPERTONIC_Q8_0: ModelConstant<"speech"> = allModels[726];
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0: ModelConstant<"speech"> = allModels[727];
-export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0: ModelConstant<"speech"> = allModels[728];
-export const TTS_MULTILINGUAL_SUPERTONIC3_FP16: ModelConstant<"speech"> = allModels[729];
-export const TTS_MULTILINGUAL_SUPERTONIC3_FP32: ModelConstant<"speech"> = allModels[730];
-export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0: ModelConstant<"speech"> = allModels[731];
-export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0: ModelConstant<"speech"> = allModels[732];
-export const WHISPER_BASE_Q8_0: ModelConstant<"transcription"> = allModels[733];
-export const WHISPER_BASE_Q0F16: ModelConstant<"transcription"> = allModels[734];
-export const WHISPER_EN_BASE_Q8_0: ModelConstant<"transcription"> = allModels[735];
-export const WHISPER_EN_BASE_Q0F16: ModelConstant<"transcription"> = allModels[736];
-export const WHISPER_LARGE_V3_TURBO: ModelConstant<"transcription"> = allModels[737];
-export const WHISPER_SMALL_Q8_0: ModelConstant<"transcription"> = allModels[738];
-export const WHISPER_SMALL_Q0F16: ModelConstant<"transcription"> = allModels[739];
-export const WHISPER_EN_SMALL_Q8_0: ModelConstant<"transcription"> = allModels[740];
-export const WHISPER_EN_SMALL_Q0F16: ModelConstant<"transcription"> = allModels[741];
-export const WHISPER_TINY_Q8_0: ModelConstant<"transcription"> = allModels[742];
-export const WHISPER_TINY: ModelConstant<"transcription"> = allModels[743];
-export const WHISPER_EN_TINY_Q8_0: ModelConstant<"transcription"> = allModels[744];
-export const WHISPER_EN_TINY_Q0F16: ModelConstant<"transcription"> = allModels[745];
-export const VAD_SILERO_5_1_2: ModelConstant<"transcription"> = allModels[746];
-export const WHISPER_FRENCH_BASE_F16: ModelConstant<"transcription"> = allModels[747];
-export const WHISPER_FRENCH_BASE_Q8_0: ModelConstant<"transcription"> = allModels[748];
-export const WHISPER_FRENCH_TINY_F16: ModelConstant<"transcription"> = allModels[749];
-export const WHISPER_FRENCH_TINY_Q8_0: ModelConstant<"transcription"> = allModels[750];
-export const WHISPER_GERMAN_BASE_F16: ModelConstant<"transcription"> = allModels[751];
-export const WHISPER_GERMAN_BASE_Q8_0: ModelConstant<"transcription"> = allModels[752];
-export const WHISPER_GERMAN_TINY_F16: ModelConstant<"transcription"> = allModels[753];
-export const WHISPER_GERMAN_TINY_Q8_0: ModelConstant<"transcription"> = allModels[754];
-export const WHISPER_ITALIAN_BASE_F16: ModelConstant<"transcription"> = allModels[755];
-export const WHISPER_ITALIAN_BASE_Q8_0: ModelConstant<"transcription"> = allModels[756];
-export const WHISPER_ITALIAN_TINY_F16: ModelConstant<"transcription"> = allModels[757];
-export const WHISPER_ITALIAN_TINY_Q8_0: ModelConstant<"transcription"> = allModels[758];
-export const WHISPER_JAPANESE_BASE_F16: ModelConstant<"transcription"> = allModels[759];
-export const WHISPER_JAPANESE_BASE_Q8_0: ModelConstant<"transcription"> = allModels[760];
-export const WHISPER_JAPANESE_TINY_F16: ModelConstant<"transcription"> = allModels[761];
-export const WHISPER_JAPANESE_TINY_Q8_0: ModelConstant<"transcription"> = allModels[762];
-export const WHISPER_NORWEGIAN_TINY: ModelConstant<"transcription"> = allModels[763];
-export const WHISPER_PORTUGUESE_BASE_F16: ModelConstant<"transcription"> = allModels[764];
-export const WHISPER_PORTUGUESE_BASE_Q8_0: ModelConstant<"transcription"> = allModels[765];
-export const WHISPER_PORTUGUESE_TINY_F16: ModelConstant<"transcription"> = allModels[766];
-export const WHISPER_PORTUGUESE_TINY_Q8_0: ModelConstant<"transcription"> = allModels[767];
-export const WHISPER_RUSSIAN_BASE_F16: ModelConstant<"transcription"> = allModels[768];
-export const WHISPER_RUSSIAN_BASE_Q8_0: ModelConstant<"transcription"> = allModels[769];
-export const WHISPER_RUSSIAN_TINY_F16: ModelConstant<"transcription"> = allModels[770];
-export const WHISPER_RUSSIAN_TINY_Q8_0: ModelConstant<"transcription"> = allModels[771];
-export const WHISPER_SPANISH_TINY_F16: ModelConstant<"transcription"> = allModels[772];
-export const WHISPER_SPANISH_TINY_Q8_0: ModelConstant<"transcription"> = allModels[773];
-export const WHISPER_Q8_0: ModelConstant<"transcription"> = allModels[774];
-export const WHISPER_Q8_0_1: ModelConstant<"transcription"> = allModels[775];
+export const PARAKEET_CTC_0_6B_Q8_0: ModelConstant<"transcription"> = allModels[594];
+export const PARAKEET_SORTFORMER_4SPK_V1_Q8_0: ModelConstant<"transcription"> = allModels[595];
+export const PARAKEET_SORTFORMER_4SPK_V1_Q4_0: ModelConstant<"transcription"> = allModels[596];
+export const PARAKEET_CTC_0_6B_F16: ModelConstant<"transcription"> = allModels[597];
+export const PARAKEET_CTC_0_6B_Q4_0: ModelConstant<"transcription"> = allModels[598];
+export const PARAKEET_SORTFORMER_4SPK_V1_F16: ModelConstant<"transcription"> = allModels[599];
+export const PARAKEET_COREMLDATA: ModelConstant<"transcription"> = allModels[600];
+export const PARAKEET_COREMLDATA_1: ModelConstant<"transcription"> = allModels[601];
+export const PARAKEET_METADATA: ModelConstant<"transcription"> = allModels[602];
+export const PARAKEET_MODEL: ModelConstant<"transcription"> = allModels[603];
+export const PARAKEET_WEIGHT: ModelConstant<"transcription"> = allModels[604];
+export const PARAKEET_COREMLDATA_2: ModelConstant<"transcription"> = allModels[605];
+export const PARAKEET_COREMLDATA_3: ModelConstant<"transcription"> = allModels[606];
+export const PARAKEET_METADATA_1: ModelConstant<"transcription"> = allModels[607];
+export const PARAKEET_MODEL_1: ModelConstant<"transcription"> = allModels[608];
+export const PARAKEET_WEIGHT_1: ModelConstant<"transcription"> = allModels[609];
+export const PARAKEET_INDIC_CONFORMER_COREMLDATA: ModelConstant<"transcription"> = allModels[610];
+export const PARAKEET_INDIC_CONFORMER_COREMLDATA_1: ModelConstant<"transcription"> = allModels[611];
+export const PARAKEET_INDIC_CONFORMER_METADATA: ModelConstant<"transcription"> = allModels[612];
+export const PARAKEET_INDIC_CONFORMER_MODEL: ModelConstant<"transcription"> = allModels[613];
+export const PARAKEET_INDIC_CONFORMER_WEIGHT: ModelConstant<"transcription"> = allModels[614];
+export const PARAKEET_NEMOTRON_COREMLDATA: ModelConstant<"transcription"> = allModels[615];
+export const PARAKEET_NEMOTRON_COREMLDATA_1: ModelConstant<"transcription"> = allModels[616];
+export const PARAKEET_NEMOTRON_METADATA: ModelConstant<"transcription"> = allModels[617];
+export const PARAKEET_NEMOTRON_MODEL: ModelConstant<"transcription"> = allModels[618];
+export const PARAKEET_NEMOTRON_WEIGHT: ModelConstant<"transcription"> = allModels[619];
+export const PARAKEET_COREMLDATA_4: ModelConstant<"transcription"> = allModels[620];
+export const PARAKEET_COREMLDATA_5: ModelConstant<"transcription"> = allModels[621];
+export const PARAKEET_METADATA_2: ModelConstant<"transcription"> = allModels[622];
+export const PARAKEET_MODEL_2: ModelConstant<"transcription"> = allModels[623];
+export const PARAKEET_WEIGHT_2: ModelConstant<"transcription"> = allModels[624];
+export const PARAKEET_CTC_COREMLDATA: ModelConstant<"transcription"> = allModels[625];
+export const PARAKEET_CTC_COREMLDATA_1: ModelConstant<"transcription"> = allModels[626];
+export const PARAKEET_CTC_METADATA: ModelConstant<"transcription"> = allModels[627];
+export const PARAKEET_CTC_WEIGHT: ModelConstant<"transcription"> = allModels[628];
+export const PARAKEET_TDT_COREMLDATA: ModelConstant<"transcription"> = allModels[629];
+export const PARAKEET_TDT_COREMLDATA_1: ModelConstant<"transcription"> = allModels[630];
+export const PARAKEET_TDT_METADATA: ModelConstant<"transcription"> = allModels[631];
+export const PARAKEET_TDT_MODEL: ModelConstant<"transcription"> = allModels[632];
+export const PARAKEET_TDT_WEIGHT: ModelConstant<"transcription"> = allModels[633];
+export const PARAKEET_TDT_COREMLDATA_2: ModelConstant<"transcription"> = allModels[634];
+export const PARAKEET_TDT_COREMLDATA_3: ModelConstant<"transcription"> = allModels[635];
+export const PARAKEET_TDT_METADATA_1: ModelConstant<"transcription"> = allModels[636];
+export const PARAKEET_TDT_MODEL_1: ModelConstant<"transcription"> = allModels[637];
+export const PARAKEET_TDT_WEIGHT_1: ModelConstant<"transcription"> = allModels[638];
+export const PARAKEET_UNIFIED_COREMLDATA: ModelConstant<"transcription"> = allModels[639];
+export const PARAKEET_UNIFIED_METADATA: ModelConstant<"transcription"> = allModels[640];
+export const PARAKEET_UNIFIED_MODEL: ModelConstant<"transcription"> = allModels[641];
+export const PARAKEET_UNIFIED_WEIGHT: ModelConstant<"transcription"> = allModels[642];
+export const PARAKEET_SORTFORMER_4SPK_V2_1_F16: ModelConstant<"transcription"> = allModels[643];
+export const PARAKEET_SORTFORMER_4SPK_V2_1_Q4_0: ModelConstant<"transcription"> = allModels[644];
+export const PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0: ModelConstant<"transcription"> = allModels[645];
+export const PARAKEET_INDIC_CONFORMER_600M_F16: ModelConstant<"transcription"> = allModels[646];
+export const PARAKEET_INDIC_CONFORMER_600M_Q4_0: ModelConstant<"transcription"> = allModels[647];
+export const PARAKEET_INDIC_CONFORMER_600M_Q8_0: ModelConstant<"transcription"> = allModels[648];
+export const PARAKEET_NEMOTRON_0_6B_F16: ModelConstant<"transcription"> = allModels[649];
+export const PARAKEET_NEMOTRON_0_6B_Q4_0: ModelConstant<"transcription"> = allModels[650];
+export const PARAKEET_NEMOTRON_0_6B_Q8_0: ModelConstant<"transcription"> = allModels[651];
+export const PARAKEET_EOU_120M_V1_F16: ModelConstant<"transcription"> = allModels[652];
+export const PARAKEET_EOU_120M_V1_Q4_0: ModelConstant<"transcription"> = allModels[653];
+export const PARAKEET_EOU_120M_V1_Q8_0: ModelConstant<"transcription"> = allModels[654];
+export const PARAKEET_TDT_0_6B_V3_F16: ModelConstant<"transcription"> = allModels[655];
+export const PARAKEET_TDT_0_6B_V3_Q4_0: ModelConstant<"transcription"> = allModels[656];
+export const PARAKEET_TDT_0_6B_V3_Q8_0: ModelConstant<"transcription"> = allModels[657];
+export const PARAKEET_TDT_1_1B_F16: ModelConstant<"transcription"> = allModels[658];
+export const PARAKEET_TDT_1_1B_Q8_0: ModelConstant<"transcription"> = allModels[659];
+export const PARAKEET_UNIFIED_0_6B_F16: ModelConstant<"transcription"> = allModels[660];
+export const PARAKEET_UNIFIED_0_6B_Q4_0: ModelConstant<"transcription"> = allModels[661];
+export const PARAKEET_UNIFIED_0_6B_Q8_0: ModelConstant<"transcription"> = allModels[662];
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX: ModelConstant<"speech"> = allModels[663];
+export const TTS_S3GEN_EN_CHATTERBOX: ModelConstant<"speech"> = allModels[664];
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_FP16: ModelConstant<"speech"> = allModels[665];
+export const TTS_T3_TURBO_EN_CHATTERBOX_FP16: ModelConstant<"speech"> = allModels[666];
+export const TTS_MECAB_IPADIC_CHATTERBOX: ModelConstant<"speech"> = allModels[667];
+export const TTS_MECAB_IPADIC_CHATTERBOX_1: ModelConstant<"speech"> = allModels[668];
+export const TTS_MECAB_IPADIC_CHATTERBOX_2: ModelConstant<"speech"> = allModels[669];
+export const TTS_MECAB_IPADIC_CHATTERBOX_3: ModelConstant<"speech"> = allModels[670];
+export const TTS_MECAB_IPADIC_CHATTERBOX_4: ModelConstant<"speech"> = allModels[671];
+export const TTS_MECAB_IPADIC_CHATTERBOX_5: ModelConstant<"speech"> = allModels[672];
+export const TTS_CODEC_DECODER_AUDIO8_FP16: ModelConstant<"speech"> = allModels[673];
+export const TTS_CODEC_DECODER_AUDIO8_Q8_0: ModelConstant<"speech"> = allModels[674];
+export const TTS_CODEC_ENCODER_AUDIO8_FP16: ModelConstant<"speech"> = allModels[675];
+export const TTS_CODEC_ENCODER_AUDIO8_Q8_0: ModelConstant<"speech"> = allModels[676];
+export const TTS_LM_MULTILINGUAL_AUDIO8_FP16: ModelConstant<"speech"> = allModels[677];
+export const TTS_LM_MULTILINGUAL_AUDIO8_Q8_0: ModelConstant<"speech"> = allModels[678];
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<"speech"> = allModels[679];
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<"speech"> = allModels[680];
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q4_0: ModelConstant<"speech"> = allModels[681];
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q8_0: ModelConstant<"speech"> = allModels[682];
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0: ModelConstant<"speech"> = allModels[683];
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<"speech"> = allModels[684];
+export const TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q8_0: ModelConstant<"speech"> = allModels[685];
+export const TTS_S3GEN_EN_CHATTERBOX_Q4_0: ModelConstant<"speech"> = allModels[686];
+export const TTS_S3GEN_EN_CHATTERBOX_Q5_0: ModelConstant<"speech"> = allModels[687];
+export const TTS_S3GEN_EN_CHATTERBOX_Q8_0: ModelConstant<"speech"> = allModels[688];
+export const TTS_T3_MULTILINGUAL_CHATTERBOX_Q5_0: ModelConstant<"speech"> = allModels[689];
+export const TTS_T3_TURBO_EN_CHATTERBOX_Q5_0: ModelConstant<"speech"> = allModels[690];
+export const TTS_CANGJIE_ZH_CHATTERBOX: ModelConstant<"speech"> = allModels[691];
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP32: ModelConstant<"speech"> = allModels[692];
+export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP32: ModelConstant<"speech"> = allModels[693];
+export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0: ModelConstant<"speech"> = allModels[694];
+export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE: ModelConstant<"speech"> = allModels[695];
+export const TTS_COSYVOICE3_TOKENIZER_COSYVOICE_1: ModelConstant<"speech"> = allModels[696];
+export const TTS_COSYVOICE3_VOICE_COSYVOICE: ModelConstant<"speech"> = allModels[697];
+export const TTS_COSYVOICE3_VOICE_COSYVOICE_1: ModelConstant<"speech"> = allModels[698];
+export const TTS_COSYVOICE3_VOICE_COSYVOICE_2: ModelConstant<"speech"> = allModels[699];
+export const TTS_COSYVOICE3_CAMPPLUS_COSYVOICE_FP32: ModelConstant<"speech"> = allModels[700];
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP16: ModelConstant<"speech"> = allModels[701];
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_FP32: ModelConstant<"speech"> = allModels[702];
+export const TTS_COSYVOICE3_S3TOK_COSYVOICE_Q8_0: ModelConstant<"speech"> = allModels[703];
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_BF16: ModelConstant<"speech"> = allModels[704];
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_FP16: ModelConstant<"speech"> = allModels[705];
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0: ModelConstant<"speech"> = allModels[706];
+export const TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0: ModelConstant<"speech"> = allModels[707];
+export const TTS_COSYVOICE3_HIFT_COSYVOICE_FP16: ModelConstant<"speech"> = allModels[708];
+export const TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0: ModelConstant<"speech"> = allModels[709];
+export const TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0_1: ModelConstant<"speech"> = allModels[710];
+export const TTS_ENHANCER_LAVASR_FP16: ModelConstant<"speech"> = allModels[711];
+export const TTS_ENHANCER_LAVASR_FP32: ModelConstant<"speech"> = allModels[712];
+export const TTS_DENOISER_LAVASR_FP16: ModelConstant<"speech"> = allModels[713];
+export const TTS_DENOISER_LAVASR_FP32: ModelConstant<"speech"> = allModels[714];
+export const TTS_CODEC_DECODER_MOSS_TTS_F16: ModelConstant<"speech"> = allModels[715];
+export const TTS_CODEC_ENCODER_MOSS_TTS_F16: ModelConstant<"speech"> = allModels[716];
+export const TTS_DELAY_LLM_MOSS_TTS_F16: ModelConstant<"speech"> = allModels[717];
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP16: ModelConstant<"speech"> = allModels[718];
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_FP32: ModelConstant<"speech"> = allModels[719];
+export const TTS_INDIC_MULTILINGUAL_PARLER_TTS_Q8_0: ModelConstant<"speech"> = allModels[720];
+export const TTS_LARGE_V1_EN_PARLER_TTS_FP16: ModelConstant<"speech"> = allModels[721];
+export const TTS_LARGE_V1_EN_PARLER_TTS_FP32: ModelConstant<"speech"> = allModels[722];
+export const TTS_LARGE_V1_EN_PARLER_TTS_Q8_0: ModelConstant<"speech"> = allModels[723];
+export const TTS_MINI_V1_EN_PARLER_TTS_FP16: ModelConstant<"speech"> = allModels[724];
+export const TTS_MINI_V1_EN_PARLER_TTS_FP32: ModelConstant<"speech"> = allModels[725];
+export const TTS_MINI_V1_EN_PARLER_TTS_Q8_0: ModelConstant<"speech"> = allModels[726];
+export const TTS_EN_SUPERTONIC_Q4_0: ModelConstant<"speech"> = allModels[727];
+export const TTS_EN_SUPERTONIC_Q8_0: ModelConstant<"speech"> = allModels[728];
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q4_0: ModelConstant<"speech"> = allModels[729];
+export const TTS_MULTILINGUAL_SUPERTONIC2_Q8_0: ModelConstant<"speech"> = allModels[730];
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP16: ModelConstant<"speech"> = allModels[731];
+export const TTS_MULTILINGUAL_SUPERTONIC3_FP32: ModelConstant<"speech"> = allModels[732];
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q8_0: ModelConstant<"speech"> = allModels[733];
+export const TTS_MULTILINGUAL_SUPERTONIC3_Q4_0: ModelConstant<"speech"> = allModels[734];
+export const WHISPER_BASE_Q8_0: ModelConstant<"transcription"> = allModels[735];
+export const WHISPER_BASE_Q0F16: ModelConstant<"transcription"> = allModels[736];
+export const WHISPER_EN_BASE_Q8_0: ModelConstant<"transcription"> = allModels[737];
+export const WHISPER_EN_BASE_Q0F16: ModelConstant<"transcription"> = allModels[738];
+export const WHISPER_LARGE_V3_TURBO: ModelConstant<"transcription"> = allModels[739];
+export const WHISPER_SMALL_Q8_0: ModelConstant<"transcription"> = allModels[740];
+export const WHISPER_SMALL_Q0F16: ModelConstant<"transcription"> = allModels[741];
+export const WHISPER_EN_SMALL_Q8_0: ModelConstant<"transcription"> = allModels[742];
+export const WHISPER_EN_SMALL_Q0F16: ModelConstant<"transcription"> = allModels[743];
+export const WHISPER_TINY_Q8_0: ModelConstant<"transcription"> = allModels[744];
+export const WHISPER_TINY: ModelConstant<"transcription"> = allModels[745];
+export const WHISPER_EN_TINY_Q8_0: ModelConstant<"transcription"> = allModels[746];
+export const WHISPER_EN_TINY_Q0F16: ModelConstant<"transcription"> = allModels[747];
+export const VAD_SILERO_5_1_2: ModelConstant<"transcription"> = allModels[748];
+export const WHISPER_FRENCH_BASE_F16: ModelConstant<"transcription"> = allModels[749];
+export const WHISPER_FRENCH_BASE_Q8_0: ModelConstant<"transcription"> = allModels[750];
+export const WHISPER_FRENCH_TINY_F16: ModelConstant<"transcription"> = allModels[751];
+export const WHISPER_FRENCH_TINY_Q8_0: ModelConstant<"transcription"> = allModels[752];
+export const WHISPER_GERMAN_BASE_F16: ModelConstant<"transcription"> = allModels[753];
+export const WHISPER_GERMAN_BASE_Q8_0: ModelConstant<"transcription"> = allModels[754];
+export const WHISPER_GERMAN_TINY_F16: ModelConstant<"transcription"> = allModels[755];
+export const WHISPER_GERMAN_TINY_Q8_0: ModelConstant<"transcription"> = allModels[756];
+export const WHISPER_ITALIAN_BASE_F16: ModelConstant<"transcription"> = allModels[757];
+export const WHISPER_ITALIAN_BASE_Q8_0: ModelConstant<"transcription"> = allModels[758];
+export const WHISPER_ITALIAN_TINY_F16: ModelConstant<"transcription"> = allModels[759];
+export const WHISPER_ITALIAN_TINY_Q8_0: ModelConstant<"transcription"> = allModels[760];
+export const WHISPER_JAPANESE_BASE_F16: ModelConstant<"transcription"> = allModels[761];
+export const WHISPER_JAPANESE_BASE_Q8_0: ModelConstant<"transcription"> = allModels[762];
+export const WHISPER_JAPANESE_TINY_F16: ModelConstant<"transcription"> = allModels[763];
+export const WHISPER_JAPANESE_TINY_Q8_0: ModelConstant<"transcription"> = allModels[764];
+export const WHISPER_NORWEGIAN_TINY: ModelConstant<"transcription"> = allModels[765];
+export const WHISPER_PORTUGUESE_BASE_F16: ModelConstant<"transcription"> = allModels[766];
+export const WHISPER_PORTUGUESE_BASE_Q8_0: ModelConstant<"transcription"> = allModels[767];
+export const WHISPER_PORTUGUESE_TINY_F16: ModelConstant<"transcription"> = allModels[768];
+export const WHISPER_PORTUGUESE_TINY_Q8_0: ModelConstant<"transcription"> = allModels[769];
+export const WHISPER_RUSSIAN_BASE_F16: ModelConstant<"transcription"> = allModels[770];
+export const WHISPER_RUSSIAN_BASE_Q8_0: ModelConstant<"transcription"> = allModels[771];
+export const WHISPER_RUSSIAN_TINY_F16: ModelConstant<"transcription"> = allModels[772];
+export const WHISPER_RUSSIAN_TINY_Q8_0: ModelConstant<"transcription"> = allModels[773];
+export const WHISPER_SPANISH_TINY_F16: ModelConstant<"transcription"> = allModels[774];
+export const WHISPER_SPANISH_TINY_Q8_0: ModelConstant<"transcription"> = allModels[775];
+export const WHISPER_Q8_0: ModelConstant<"transcription"> = allModels[776];
+export const WHISPER_Q8_0_1: ModelConstant<"transcription"> = allModels[777];

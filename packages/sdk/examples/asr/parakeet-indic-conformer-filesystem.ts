@@ -4,14 +4,14 @@
  * Usage:
  *   bun run examples/asr/parakeet-indic-conformer-filesystem.ts <wav-file> <language> [gguf]
  *
- * Loads a single GGUF checkpoint (`PARAKEET_INDIC_CONFORMER_CTC_Q8_0` by
+ * Loads a single GGUF checkpoint (`PARAKEET_INDIC_CONFORMER_600M_Q8_0` by
  * default) and transcribes with the batch `transcribe` API. `language` is
  * required (e.g. `hi`, `ta`) because Indic Conformer CTC masks the vocab
  * with `parakeet.ctc.lang_*` ranges. English Parakeet CTC ignores this field.
  *
  * Audio should be 16 kHz mono PCM in a WAV container.
  */
-import { loadModel, unloadModel, transcribe, PARAKEET_INDIC_CONFORMER_CTC_Q8_0 } from '@qvac/sdk'
+import { loadModel, unloadModel, transcribe, PARAKEET_INDIC_CONFORMER_600M_Q8_0 } from '@qvac/sdk'
 
 const args = process.argv.slice(2)
 
@@ -27,7 +27,7 @@ if (!args[0] || !args[1]) {
 
 const audioFilePath = args[0]
 const language = args[1]
-const parakeetModelSrc = args[2] ?? PARAKEET_INDIC_CONFORMER_CTC_Q8_0
+const parakeetModelSrc = args[2] ?? PARAKEET_INDIC_CONFORMER_600M_Q8_0
 
 try {
   console.log('▸ Loading Indic Conformer CTC model...')
