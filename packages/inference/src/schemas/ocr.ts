@@ -66,12 +66,59 @@ export const ocrConfigSchema = z.object({
     .describe(
       "0-based GPU device index for `'vulkan'`/`'metal'`/`'opencl'`; when omitted, prefers a discrete GPU. Ignored for `'cpu'`."
     ),
+  mainGpu: z
+    .union([z.number().int().min(0).max(2147483647), z.enum(['integrated', 'dedicated'])])
+    .optional()
+    .describe(
+      "GPU to use on multi-GPU systems: a ggml registry index, or `'integrated'`/`'dedicated'` to restrict selection to that class. Requires `backendDevice` `'vulkan'`, `'metal'`, or `'opencl'`; cannot be combined with `gpuDevice`. An unavailable class or refused device falls back to CPU; an out-of-range index uses automatic selection. Stripped on mobile."
+    ),
   detectorModelSrc: modelSrcInputSchema
     .optional()
     .describe(
       'Text-detector model source (easyocr: CRAFT; doctr: DBNet). Derived from the recognizer model source when omitted.'
     )
 })
+
+const OCR_GPU_BACKEND_DEVICES: ReadonlySet<OCRConfig['backendDevice']> = new Set([
+  'vulkan',
+  'metal',
+  'opencl'
+])
+
+// Applied where a model config is validated rather than on `ocrConfigSchema`
+// itself: zod refuses `.partial()` on an object carrying refinements.
+// Request schemas run before device defaults are merged, so they only reject
+// the selector conflict the caller wrote; `backendDevice` may still come from
+// a default.
+export function refineOcrMainGpuSelector(
+  config: Pick<OCRConfig, 'gpuDevice' | 'mainGpu'>,
+  ctx: z.RefinementCtx
+) {
+  if (config.mainGpu === undefined || config.gpuDevice === undefined) return
+  ctx.addIssue({
+    code: 'custom',
+    path: ['mainGpu'],
+    message: 'mainGpu cannot be combined with gpuDevice. Use only one GPU selector.'
+  })
+}
+
+// Full rule, for the merged config the plugin loads.
+export function refineOcrMainGpu(
+  config: Pick<OCRConfig, 'backendDevice' | 'gpuDevice' | 'mainGpu'>,
+  ctx: z.RefinementCtx
+) {
+  refineOcrMainGpuSelector(config, ctx)
+  if (config.mainGpu === undefined) return
+  if (!OCR_GPU_BACKEND_DEVICES.has(config.backendDevice)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['mainGpu'],
+      message: `mainGpu requires backendDevice 'vulkan', 'metal', or 'opencl' (got ${config.backendDevice === undefined ? "the default 'cpu'" : `'${config.backendDevice}'`}).`
+    })
+  }
+}
+
+export const ocrLoadConfigSchema = ocrConfigSchema.superRefine(refineOcrMainGpu)
 
 // Image input types
 export const imageInputSchema = z.discriminatedUnion('type', [
