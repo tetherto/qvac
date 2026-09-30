@@ -37,7 +37,9 @@ const {
   ASRGgml,
   setupJsLogger,
   getTestPaths,
-  loadGgufOrSkip
+  loadGgufOrSkip,
+  NO_GPU,
+  GPU_ONLY_USE_GPU
 } = require('./parakeet-helpers.js')
 
 const { samplesDir } = getTestPaths()
@@ -136,7 +138,7 @@ function parseSpeakerId(text) {
 
 test(
   'Sortformer v2.1 AOSC — default config streams diarization segments',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const loggerBinding = setupJsLogger(binding)
 
@@ -160,7 +162,7 @@ test(
             // streamingSpkCacheEnable defaults to true; left unset so
             // the AOSC default path runs as it would for real users.
             maxThreads: 4,
-            useGPU: false
+            useGPU: GPU_ONLY_USE_GPU
           }
         }
       })
@@ -205,7 +207,7 @@ test(
 
 test(
   'Sortformer v2.1 AOSC — streamingSpkCacheEnable=false falls back to v1 path',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const loggerBinding = setupJsLogger(binding)
 
@@ -232,7 +234,7 @@ test(
             // they would not with AOSC active.
             streamingSpkCacheEnable: false,
             maxThreads: 4,
-            useGPU: false
+            useGPU: GPU_ONLY_USE_GPU
           }
         }
       })
@@ -269,7 +271,7 @@ test(
 
 test(
   'Sortformer v2.1 AOSC — emitSpeakerVad reports speech start/stop with the speaker',
-  { timeout: 600000 },
+  { timeout: 600000, skip: NO_GPU },
   async (t) => {
     const loggerBinding = setupJsLogger(binding)
 
@@ -291,7 +293,7 @@ test(
             streaming: true,
             streamingChunkMs: STREAM_CHUNK_MS,
             maxThreads: 4,
-            useGPU: false
+            useGPU: GPU_ONLY_USE_GPU
           }
         }
       })

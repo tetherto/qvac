@@ -836,6 +836,61 @@ importers:
         specifier: ^17.0.0
         version: 17.1.2(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(supports-color@8.1.1)
 
+  packages/ggml-rpc-server:
+    dependencies:
+      '@qvac/fabric':
+        specifier: ^0.18.1
+        version: link:../fabric
+      bare-net:
+        specifier: ^2.3.2
+        version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path:
+        specifier: ^3.0.0
+        version: 3.1.1
+    devDependencies:
+      '@qvac/fabric-android-arm64':
+        specifier: 0.18.1
+        version: 0.18.1
+      '@qvac/fabric-ios':
+        specifier: 0.18.1
+        version: 0.18.1
+      '@types/node':
+        specifier: ^24.2.1
+        version: 24.13.3
+      cmake-bare:
+        specifier: ^1.7.5
+        version: 1.8.0
+      cmake-npm:
+        specifier: ^1.1.0
+        version: 1.1.2
+      cmake-vcpkg:
+        specifier: ^1.1.0
+        version: 1.2.0
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
+      eslint-import-resolver-typescript:
+        specifier: ^4.4.5
+        version: 4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      eslint-plugin-import:
+        specifier: ^2.32.0
+        version: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5)(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      lunte:
+        specifier: ^1.8.4
+        version: 1.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.6
+      prettier-config-holepunch:
+        specifier: ^2.0.0
+        version: 2.0.0(prettier@3.9.6)
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.63.0
+        version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
+
   packages/infer-base:
     dependencies:
       bare-abort-controller:
@@ -4321,8 +4376,16 @@ packages:
     resolution: {integrity: sha512-QRRVJ04cBZuGbDEed6NsPVz/h9E7n4Nl8HxTFwZQEfBIK/XTyz48pvilIhodwMabETdb8iMcyJQspOpSRa3jJA==}
     engines: {bare: '>=1.24.0'}
 
+  '@qvac/fabric-android-arm64@0.18.1':
+    resolution: {integrity: sha512-33aM/Rr0DBl186Ff/ebXxyCh/Vj1W0vkcgQ43yXP1tTwy7QTb5vtqbFFR3Q7QJ2GvnjG6sF2yCSBCNsH3P4D5g==}
+    engines: {bare: '>=1.24.0'}
+
   '@qvac/fabric-ios@0.18.0':
     resolution: {integrity: sha512-TBCE+HTUXVWjhIss3mcBFYS624JdGPDZ/aqIcOirXhfHA9F9qkzox5GZT7tJmoXVTzOEmVfpR31lWFrPA+ahew==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric-ios@0.18.1':
+    resolution: {integrity: sha512-Yt4mv0KCM7Rhx2P61npZ+L4vm5H9ubh+R3jdIYoQH7y4+JpOzLe7O0zFZQBpt1nyGcFpvAxvmujvTUuAp8UYmw==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric@0.16.1':
@@ -13555,7 +13618,11 @@ snapshots:
 
   '@qvac/fabric-android-arm64@0.18.0': {}
 
+  '@qvac/fabric-android-arm64@0.18.1': {}
+
   '@qvac/fabric-ios@0.18.0': {}
+
+  '@qvac/fabric-ios@0.18.1': {}
 
   '@qvac/fabric@0.16.1': {}
 
