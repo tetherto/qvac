@@ -291,7 +291,7 @@ jobs:
           git config --global url."https://$($env:GIT_PAT):@github.com/".insteadOf "git@github.com:"
 
       - name: Setup Bare runtime
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@ef3d614873ab1ed71aaa07c3df7b23d2760fb12b
         with:
           shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
 
@@ -314,7 +314,7 @@ jobs:
       # After npm install, which would otherwise restore the released fabric.
       - name: Download fabric-prebuilds for overlay
         if: ${{ inputs.fabric-overlay-artifact != '' && contains(fromJSON(inputs.fabric-consumers), matrix.package) }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        uses: tetherto/qvac/.github/actions/download-artifact-retry@3cff82f19ea62235ddf2963124610bed239e49f8
         with:
           name: ${{ inputs.fabric-overlay-artifact }}
           path: ${{ runner.temp }}/fabric-prebuilds

@@ -1,6 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import {
+  collectHostAddonPackages,
   resolvePlatformPackageName,
   selectMobilePlatformPackages
 } from '../../dist/cli/commands/build-consumer-mobile.js'
@@ -151,6 +155,142 @@ test('an addon with no package for the target platform is skipped', () => {
   assert.deepEqual(selectMobilePlatformPackages('android', [desktopOnly], {}), {})
   assert.deepEqual(selectMobilePlatformPackages('ios', [desktopOnly], {}), {})
 })
+
+test('a pnpm install still selects the fabric slice of a transitive dependency', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-mobile-pnpm-'))
+  try {
+    const configDir = path.join(root, 'app')
+    const store = path.join(configDir, 'node_modules', '.pnpm', 'llm@0.55.0', 'node_modules')
+    writePackage(path.join(store, '@qvac', 'llm-llamacpp'), {
+      name: '@qvac/llm-llamacpp',
+      version: '0.55.0',
+      dependencies: { '@qvac/fabric': '0.18.0' },
+      imports: { '#host-addon': hostAddonMap('@qvac/llm-llamacpp') }
+    })
+    writePackage(path.join(store, '@qvac', 'fabric'), {
+      name: '@qvac/fabric',
+      version: '0.18.0',
+      dependencies: { '@qvac/llm-llamacpp': '0.55.0' },
+      imports: { '#host-addon': hostAddonMap('@qvac/fabric') }
+    })
+    const topLlm = path.join(configDir, 'node_modules', '@qvac', 'llm-llamacpp')
+    fs.mkdirSync(path.dirname(topLlm), { recursive: true })
+    fs.symlinkSync(path.join(store, '@qvac', 'llm-llamacpp'), topLlm)
+
+    const additions = selectMobilePlatformPackages('android', collectHostAddonPackages(configDir), {
+      '@qvac/llm-llamacpp': '0.55.0'
+    })
+
+    assert.equal(additions['@qvac/fabric-android-arm64'], '0.18.0')
+    assert.equal(additions['@qvac/fabric'], '0.18.0')
+    assert.equal(additions['@qvac/llm-llamacpp-android-arm64'], '0.55.0')
+    assert.equal(fs.existsSync(path.join(configDir, 'node_modules', '@qvac', 'fabric')), false)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('an npm-nested fabric install is selected from the addon that depends on it', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-mobile-nested-'))
+  try {
+    const configDir = path.join(root, 'app')
+    const llmDir = path.join(configDir, 'node_modules', '@qvac', 'llm-llamacpp')
+    writePackage(llmDir, {
+      name: '@qvac/llm-llamacpp',
+      version: '0.55.0',
+      dependencies: { '@qvac/fabric': '0.18.0' },
+      imports: { '#host-addon': hostAddonMap('@qvac/llm-llamacpp') }
+    })
+    writePackage(path.join(llmDir, 'node_modules', '@qvac', 'fabric'), {
+      name: '@qvac/fabric',
+      version: '0.18.0',
+      imports: { '#host-addon': hostAddonMap('@qvac/fabric') }
+    })
+
+    const additions = selectMobilePlatformPackages('ios', collectHostAddonPackages(configDir), {
+      '@qvac/llm-llamacpp': '0.55.0'
+    })
+
+    assert.equal(additions['@qvac/fabric-ios'], '0.18.0')
+    assert.equal(additions['@qvac/llm-llamacpp-ios'], '0.55.0')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('installed copies of one package at different versions fail the selection', () => {
+  const copies = [splitAddon('@qvac/fabric', '0.18.1'), splitAddon('@qvac/fabric', '0.18.0')]
+
+  assert.throws(
+    () => selectMobilePlatformPackages('android', copies, {}),
+    /@qvac\/fabric disagree on version: 0\.18\.1 at .* and 0\.18\.0 at .*@qvac\/fabric-android-arm64/
+  )
+})
+
+test('installed copies of one package at the same version select it once', () => {
+  const copies = [splitAddon('@qvac/fabric', '0.18.0'), splitAddon('@qvac/fabric', '0.18.0')]
+
+  assert.deepEqual(selectMobilePlatformPackages('android', copies, {}), {
+    '@qvac/fabric-android-arm64': '0.18.0',
+    '@qvac/fabric': '0.18.0'
+  })
+})
+
+test('a consumer pin settles which of two installed versions gets its slice', () => {
+  const copies = [splitAddon('@qvac/fabric', '0.18.1'), splitAddon('@qvac/fabric', '0.18.0')]
+
+  assert.deepEqual(selectMobilePlatformPackages('android', copies, { '@qvac/fabric': '0.18.1' }), {
+    '@qvac/fabric-android-arm64': '0.18.1'
+  })
+})
+
+test('a hoisted and a nested fabric at different versions are both found and rejected', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-mobile-conflict-'))
+  try {
+    const configDir = path.join(root, 'app')
+    const modules = path.join(configDir, 'node_modules', '@qvac')
+    writePackage(path.join(modules, 'llm-llamacpp'), {
+      name: '@qvac/llm-llamacpp',
+      version: '0.55.0',
+      dependencies: { '@qvac/fabric': '^0.18.1' }
+    })
+    writePackage(path.join(modules, 'fabric'), {
+      name: '@qvac/fabric',
+      version: '0.18.1',
+      imports: { '#host-addon': hostAddonMap('@qvac/fabric') }
+    })
+    const embedDir = path.join(modules, 'embed-llamacpp')
+    writePackage(embedDir, {
+      name: '@qvac/embed-llamacpp',
+      version: '0.43.0',
+      dependencies: { '@qvac/fabric': '0.18.0' }
+    })
+    writePackage(path.join(embedDir, 'node_modules', '@qvac', 'fabric'), {
+      name: '@qvac/fabric',
+      version: '0.18.0',
+      imports: { '#host-addon': hostAddonMap('@qvac/fabric') }
+    })
+
+    const found = collectHostAddonPackages(configDir)
+    assert.deepEqual(
+      found.map((addon) => addon.packageRoot),
+      [...found.map((addon) => addon.packageRoot)].sort(),
+      'the walk returns copies in a stable order'
+    )
+    assert.deepEqual(found.map((addon) => addon.version).sort(), ['0.18.0', '0.18.1'])
+    assert.throws(
+      () => selectMobilePlatformPackages('android', found, {}),
+      /@qvac\/fabric disagree on version/
+    )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+function writePackage(dir, manifest) {
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(manifest))
+}
 
 test('resolvePlatformPackageName reads the addon own imports map', () => {
   const map = hostAddonMap('@qvac/tts-ggml')
