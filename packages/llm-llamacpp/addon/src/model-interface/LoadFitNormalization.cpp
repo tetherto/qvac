@@ -1788,7 +1788,14 @@ NormalizedLoad normalizeLoadForFit(
     isGpu = useGpu;
     isOpenCl = isGpu && selected.isOpenCl;
     isMetal = isGpu && selected.isMetal;
-    isCuda = isGpu && selected.name.find("cuda") != std::string::npos;
+    isCuda = isGpu &&
+             (toLowerAscii(selected.name).find("cuda") != std::string::npos ||
+              std::ranges::any_of(
+                  splitSelection.devices,
+                  [](const backend_selection::SplitDevice& device) {
+                    return toLowerAscii(device.name).find("cuda") !=
+                           std::string::npos;
+                  }));
   }
 
   tuneLoadConfigMap(

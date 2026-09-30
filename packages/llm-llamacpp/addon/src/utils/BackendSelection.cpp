@@ -248,14 +248,6 @@ void emplaceIfValidDevice(
     const ggml_backend_dev_t dev, const ggml_backend_reg_t reg,
     const DeviceDescription& devDescr,
     const enum ggml_backend_dev_type backendTypeEnum) {
-  // RPC devices are intentionally excluded from automatic single-backend
-  // selection. They remain eligible for split modes through
-  // getSplitDeviceSelection(), and callers can name them explicitly with
-  // LoadFitNormalization's devices/device-list option.
-  if (isRpc) {
-    return;
-  }
-
   auto logEmplaceGpuBackend = [&](const std::string& gpuBackend) {
 #ifndef NDEBUG
     std::string text =
@@ -271,6 +263,11 @@ void emplaceIfValidDevice(
   const bool isOpenCl =
       hasBackendFamily(devDescr.gpuBackend, registryName, "opencl");
   const bool isRpc = hasBackendFamily(devDescr.gpuBackend, registryName, "rpc");
+  // RPC devices remain available to split modes and explicit device lists,
+  // but never enter the automatic single-backend cascade.
+  if (isRpc) {
+    return;
+  }
   const bool isAdreno =
       devDescr.gpuDescription.find("dreno") != std::string::npos;
   // QVAC-21867: track Mali GPUs (description is lowercased by
@@ -597,6 +594,11 @@ void applyExclusions(
   }
   for (Candidate& c : enumeration.candidates) {
     if (c.excluded != ExclusionReason::None) {
+      continue;
+    }
+    // Keep Adreno OpenCL's existing KV validation path. Passing it over could
+    // choose the same phone's Vulkan backend for a KV type not validated there.
+    if (c.family == DeviceFamily::OpenClAdreno) {
       continue;
     }
     for (const enum ggml_type kvType : req.constraints.kvCacheTypes) {
@@ -1050,27 +1052,6 @@ backend_selection::kvCacheTypeFromString(const std::string& name) {
   return GGML_TYPE_COUNT;
 }
 
-backend_selection::ExclusionKind
-backend_selection::kindOf(const ExclusionReason reason) {
-  // No default: a new reason must be classified here before this compiles.
-  switch (reason) {
-  case ExclusionReason::None:
-  case ExclusionReason::FinetuneAdrenoBelow800:
-  case ExclusionReason::FinetuneAdreno800Plus:
-  case ExclusionReason::BitnetAdrenoBelow800:
-  case ExclusionReason::BitnetAdreno800Plus:
-    // These guards actively want another backend, and CPU is a legitimate
-    // destination for all of them - it is where they already land today.
-    return ExclusionKind::PreferOther;
-  case ExclusionReason::KvCacheTypeUnsupported:
-    // Not a preference: the device genuinely cannot run this load. If nothing
-    // else can either, that is worth failing rather than silently running an
-    // order of magnitude slower than the caller asked for.
-    return ExclusionKind::Incapable;
-  }
-  return ExclusionKind::PreferOther;
-}
-
 backend_selection::BackendChoice backend_selection::chooseBackend(
     const BackendRequest& request, const BackendInterface& bckI) {
   if (request.backendRequired && request.preferred != BackendType::GPU) {
@@ -1191,18 +1172,47 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
     }
   }
 
-  // QVAC-23763: nothing survived. If any candidate was ruled Incapable rather
-  // than merely deprioritised, the caller asked for a GPU load this host cannot
-  // run, and quietly dropping to CPU would be an order of magnitude slower than
-  // what they asked for. Say what was filtered and why.
-  //
-  // The PreferOther guards deliberately do not reach here as an error: landing
-  // on CPU is what BitNet-on-Adreno<800 and finetuning-on-Adreno<800 are for.
+  // If no backend can run the requested KV type directly, keep a safe GPU
+  // placement so fabric can move only that layer's KV cache to a CPU buffer.
+  // CUDA, OpenCL and Metal have addon guards for these types, so they cannot
+  // use this fallback path.
+  const auto canUseCpuKvFallback = [](const Candidate& c) {
+    return c.excluded == ExclusionReason::KvCacheTypeUnsupported &&
+           !backendNameMatchesFamily(c.name, "cuda") &&
+           !backendNameMatchesFamily(c.name, "opencl") &&
+           !backendNameMatchesFamily(c.name, "metal");
+  };
+  if (request.preferred == BackendType::GPU) {
+    for (const std::string& wanted : request.backendOverride) {
+      for (const Candidate& c : enumeration.candidates) {
+        if (canUseCpuKvFallback(c) &&
+            backendNameMatchesFamily(c.name, wanted)) {
+          bckI.llamaLogCallback(
+              GGML_LOG_LEVEL_WARN,
+              "GPU KV-cache type unsupported; using fabric CPU KV fallback",
+              nullptr);
+          return settle(c, SelectionPath::Override);
+        }
+      }
+    }
+    for (const DeviceFamily family : ::K_CASCADE_ORDER) {
+      for (const Candidate& c : enumeration.candidates) {
+        if (c.family == family && canUseCpuKvFallback(c)) {
+          bckI.llamaLogCallback(
+              GGML_LOG_LEVEL_WARN,
+              "GPU KV-cache type unsupported; using fabric CPU KV fallback",
+              nullptr);
+          return settle(c, SelectionPath::Cascade);
+        }
+      }
+    }
+  }
+
+  // No safe GPU placement remains. Make the full CPU fallback visible.
   if (request.preferred == BackendType::GPU) {
     std::string incapable;
     for (const Candidate& c : enumeration.candidates) {
-      if (c.excluded == ExclusionReason::None ||
-          kindOf(c.excluded) != ExclusionKind::Incapable) {
+      if (c.excluded != ExclusionReason::KvCacheTypeUnsupported) {
         continue;
       }
       bool considered =
@@ -1227,15 +1237,12 @@ backend_selection::BackendChoice backend_selection::chooseBackend(
         }
         kvTypes += ggml_type_name(kvType);
       }
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          string_format(
-              "No available GPU can run KV-cache type %s. Passed over: %s. "
-              "Either pick a different cache type "
-              "(f32/f16/bf16/q4_0/q4_1/q5_0/q5_1/q8_0/iq4_nl) or set "
-              "device to cpu.\n",
-              kvTypes.c_str(),
-              incapable.c_str()));
+      const std::string warning = string_format(
+          "No available GPU can run KV-cache type %s. Passed over: %s; "
+          "falling back to CPU\n",
+          kvTypes.c_str(),
+          incapable.c_str());
+      bckI.llamaLogCallback(GGML_LOG_LEVEL_WARN, warning.c_str(), nullptr);
     }
     if (enumeration.candidates.empty() &&
         !enumeration.rejectedDevices.empty() &&

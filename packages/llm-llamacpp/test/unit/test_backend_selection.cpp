@@ -1680,6 +1680,16 @@ TEST_F(BackendSelectionTest, CudaDemotedForPolarQuantToo) {
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"pq3_0"}).name, "vulkan0");
 }
 
+TEST_F(BackendSelectionTest, AdrenoOpenClKvGuardDoesNotMoveToVulkan) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(ADRENO_DESC, OPENCL_BACK)));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::GPU);
+  EXPECT_EQ(choice.name, "gpuopencl");
+}
+
 // A quantized type CUDA *can* run must not trigger the filter, or every
 // quantized-KV load on an NVIDIA host silently moves to Vulkan.
 TEST_F(BackendSelectionTest, CudaKeptForStandardQuantizedKvType) {
@@ -1699,19 +1709,27 @@ TEST_F(BackendSelectionTest, KvConstraintChecksEveryRequestedType) {
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0", "q8_0"}).name, "vulkan0");
 }
 
-// No GPU can run it and the caller asked for a GPU: failing is better than
-// quietly running an order of magnitude slower on CPU.
-TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantThrows) {
+// Preserve the CPU fallback when no GPU can run the requested KV type.
+TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantFallsBackToCpu) {
   mockBackend.addDevice(
       withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
-  try {
-    chooseWithKvTypes(mockBackend, {"tbq4_0"});
-    FAIL() << "expected a StatusError";
-  } catch (const qvac_errors::StatusError& e) {
-    const std::string what = e.what();
-    EXPECT_NE(what.find("cuda0"), std::string::npos) << what;
-    EXPECT_NE(what.find("tbq4_0"), std::string::npos) << what;
-  }
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).type, BackendType::CPU);
+}
+
+TEST_F(BackendSelectionTest, VulkanKeepsGpuForFabricCpuKvFallback) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, VULKAN0_BACK)));
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::GPU);
+  EXPECT_EQ(choice.name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, UnsupportedCudaCanFallThroughToVulkanCpuKv) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, VULKAN0_BACK)));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).name, "vulkan0");
 }
 
 TEST_F(BackendSelectionTest, InactiveOpenClCapabilityMissFallsBackToCpu) {
