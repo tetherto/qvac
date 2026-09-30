@@ -14,6 +14,7 @@ from tetherto.qvac_sdk.errors import (
     ModelLoadFailedError,
     ModelSrcTypeMismatchError,
     ModelTypeRequiredError,
+    RequestValidationError,
     StreamEndedError,
 )
 from tetherto.qvac_sdk.model_types import (
@@ -192,3 +193,33 @@ async def test_load_model_with_progress_stream_ending_early_raises():
         await api.load_model(
             transport, model_src=QWEN3_600M_INST_Q4, on_progress=lambda e: None
         )
+
+
+async def test_load_model_sends_empty_model_src_for_a_bundled_addon():
+    transport = FakeTransport(response=OK)
+    model_id = await api.load_model(transport, model_type="ggml-classification")
+    assert model_id == "m-1"
+    # Every arm of the wire union requires the field; omitting it matches none.
+    assert transport.sent["modelSrc"] == ""
+
+
+async def test_load_model_accepts_a_config_key_spelled_by_its_python_name():
+    transport = FakeTransport(response=OK)
+    await api.load_model(
+        transport,
+        model_src="/m/ocr-latin.gguf",
+        model_type="ggml-ocr",
+        model_config={"detector_model_src": "/m/craft.gguf"},
+    )
+    assert transport.sent is not None
+
+
+async def test_load_model_rejects_a_model_config_key_the_type_does_not_define():
+    transport = FakeTransport(response=OK)
+    with pytest.raises(RequestValidationError):
+        await api.load_model(
+            transport,
+            model_src=QWEN3_600M_INST_Q4,
+            model_config={"no_mmap": True},
+        )
+    assert transport.sent is None
