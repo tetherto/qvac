@@ -83,6 +83,11 @@ on:
         type: string
         required: false
         default: ""
+      fabric_prebuild_run_id:
+        description: "Run id whose `prebuild-fabric-<host>` artifacts replace the published @qvac/fabric runtime on the device — the PR's `On PR Trigger (Fabric)` run. Set it whenever the change under test touches fabric; empty keeps the published runtime."
+        type: string
+        required: false
+        default: ""
       bergamot_language_pair:
         description: "Bergamot language pair, e.g. 'enit'"
         type: string
@@ -247,6 +252,9 @@ jobs:
         id: build
         uses: ./.github/actions/run-mobile-integration-tests/build-mobile-app
         with:
+          # Dispatch-only, like prebuild_run_id: empty under workflow_call.
+          fabric-prebuild-run-id: ${{ inputs.fabric_prebuild_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           platform: ${{ matrix.platform }}
           addon-workdir: ${{ inputs.workdir || 'packages/translation-nmtcpp' }}
           addon-npm-name: '@qvac/translation-nmtcpp'
