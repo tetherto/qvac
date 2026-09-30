@@ -26,7 +26,7 @@ description: |
 
   It also resolves BOTH package layouts: addons split by QVAC-24574 ship a
   JS-only @qvac meta package, so a tarball with no prebuilds/ is followed by a
-  second resolve of the per-platform package named in its optionalDependencies.
+  second resolve of the per-platform package its #host-addon map names.
   Unsplit addons and every @tetherto dev build still ship prebuilds/ inline.
 
   Pre-condition: the consumer has already checked out the addon repository
@@ -580,8 +580,9 @@ runs:
         # JS-only meta package plus per-platform ones
         # (scripts/ci/slice-platform-packages.mjs); only the @qvac npmjs release
         # is sliced, so @tetherto -mono dev builds never reach this branch.
-        # Which slice to fetch is read from the meta's optionalDependencies
-        # rather than guessed, so the tarball names its own parts.
+        # The slice is named by the meta's `#host-addon` imports map, the same
+        # lookup build-mobile-app/overlay-platform-prebuilds.mjs uses. Mobile
+        # slices are cross-built, so they are not in optionalDependencies.
         if [ ! -d "$META_DIR/package/prebuilds" ]; then
           case "$PACKED_NAME" in
             @tetherto/*)
@@ -602,34 +603,31 @@ runs:
               ;;
           esac
           PLATFORM_PKG="$PACKED_NAME-$PLATFORM_SUFFIX"
-          PLATFORM_PKG_VERSION=$(node -p "(require('$PACKED_MANIFEST').optionalDependencies||{})['$PLATFORM_PKG']||''" 2>/dev/null || echo "")
-          if [ -z "$PLATFORM_PKG_VERSION" ]; then
-            echo "::error::No prebuilds in $PACKED_NAME@$PACKED_VERSION and no $PLATFORM_PKG in its optionalDependencies."
-            echo "A split addon lists every slice there; an unsplit one ships prebuilds/ in the"
-            echo "tarball. This package has neither, so there is no $PLATFORM binary to test."
+          MAPPED_PKG=$(node -e '
+            const [manifestPath, suffix] = process.argv.slice(1)
+            const map = (require(manifestPath).imports || {})["#host-addon"] || {}
+            let entry = suffix === "ios" ? map.ios : (map.android || {}).arm64
+            if (Array.isArray(entry)) entry = entry[0]
+            process.stdout.write(typeof entry === "string" ? entry : "")
+          ' "$PACKED_MANIFEST" "$PLATFORM_SUFFIX" 2>/dev/null || echo "")
+          # The map is registry-controlled, so it may only confirm the name the
+          # slicer writes, never choose a different package.
+          if [ "$MAPPED_PKG" != "$PLATFORM_PKG" ]; then
+            echo "::error::No prebuilds in $PACKED_NAME@$PACKED_VERSION, and its #host-addon map does not name $PLATFORM_PKG (got '${MAPPED_PKG:-nothing}')."
+            echo "A split addon routes each platform to its slice there; an unsplit one ships"
+            echo "prebuilds/ in the tarball. This package has neither, so there is no $PLATFORM binary to test."
             exit 1
           fi
-          # This version is registry-controlled — it comes from the downloaded
-          # manifest, not the caller. `name@<spec>` is an npm ALIAS, so the half
-          # after '@' decides the spec type: "evil/repo" or "git+https://…" would
-          # make the pack below clone from an attacker and RUN its prepare script,
-          # in a step holding a GPR credential. Same hazard the spec regex above
-          # closes for the caller's spec. Bash =~ matches the WHOLE string, so a
-          # newline cannot hide a payload past it the way a line-oriented grep
-          # would allow. buildOptionalDependencies() copies metaManifest.version,
-          # so the pin must also BE that version — following a different one
-          # would install a build the caller never pinned, after the step already
-          # printed "Verified: … (pinned)" for the meta (the QVAC-21879 shape).
+          # Slices are published at the meta's exact version. For a dist-tag or
+          # empty spec that version came from the registry, and `name@<spec>` is
+          # an npm alias, so anything but exact semver ("evil/repo", a git URL)
+          # could make the pack below clone and run a prepare script in a step
+          # holding a GPR credential. =~ matches the whole string, newlines too.
+          PLATFORM_PKG_VERSION="$PACKED_VERSION"
           if [[ ! "$PLATFORM_PKG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9._-]+)*$ ]]; then
-            echo "::error::$PACKED_NAME@$PACKED_VERSION pins $PLATFORM_PKG at '$PLATFORM_PKG_VERSION', which is not an exact version."
-            echo "The slicer only ever writes exact semver. A dist-tag, a range, or a"
+            echo "::error::$PACKED_NAME resolved to version '$PLATFORM_PKG_VERSION', which is not an exact version."
+            echo "The slicer only ever publishes exact semver. A dist-tag, a range, or a"
             echo "git/file/https/github/npm alias is refused rather than resolved."
-            exit 1
-          fi
-          if [ "$PLATFORM_PKG_VERSION" != "$PACKED_VERSION" ]; then
-            echo "::error::$PACKED_NAME@$PACKED_VERSION pins $PLATFORM_PKG at $PLATFORM_PKG_VERSION, not at its own version."
-            echo "These always match for a package the slicer produced. Refusing to install"
-            echo "binaries from a build other than the one verified above."
             exit 1
           fi
           PLATFORM_SPEC="$PLATFORM_PKG@$PLATFORM_PKG_VERSION"

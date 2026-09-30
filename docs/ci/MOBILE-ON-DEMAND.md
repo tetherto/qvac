@@ -352,7 +352,7 @@ clear one, rather than picking for you.
 Some addons publish their `@qvac` release as a JS-only meta package plus
 per-platform packages (`@qvac/<addon>-ios`, `@qvac/<addon>-android-arm64`). For
 those you will see the setup step resolve twice — the meta package, then the
-platform package pinned in its `optionalDependencies` — and the second
+platform package its `#host-addon` map names, at the same version — and the second
 `Verified:` line names the package the binaries actually came from. Nothing
 changes about what you pass; the `@tetherto` dev builds are published unsliced
 and always resolve in one step.

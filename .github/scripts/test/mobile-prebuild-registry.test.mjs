@@ -557,7 +557,7 @@ test('a @qvac package with neither prebuilds/ nor slices is rejected', () => {
   assert.match(run.output, /No prebuilds in @qvac\/llm-llamacpp@0\.47\.0/)
   assert.match(
     run.output,
-    /no @qvac\/llm-llamacpp-android-arm64 in its optionalDependencies/,
+    /#host-addon map does not name @qvac\/llm-llamacpp-android-arm64/,
     'the failure must name the platform package it looked for',
   )
   assert.equal(run.androidPrebuildInstalled, false)
@@ -630,26 +630,56 @@ test('a split addon with an empty package-version reaches the device', () => {
   )
 })
 
-// buildOptionalDependencies() copies metaManifest.version into every entry, so
-// these are equal for anything the slicer produced. Following a difference would
-// install a build the caller never pinned, after the step already printed
-// "Verified: ... (pinned)" for the meta — the QVAC-21879 shape.
-test('a slice pinned away from the meta version is refused', () => {
+// Releases up to asr-ggml 0.5.0 also listed the mobile slices in
+// optionalDependencies; #4499 dropped them. Both layouts carry the map.
+test('a split addon published in the pre-#4499 layout still resolves', () => {
   const run = runStep({
     addonName: '@qvac/asr-ggml',
     packageVersion: '@qvac/asr-ggml@0.5.0',
     force: 'true',
-    npmEnv: { ...SPLIT, MOCK_NPM_SLICE_PIN: '0.4.9' },
+    npmEnv: { ...SPLIT, MOCK_NPM_SPLIT_LEGACY: '1' },
   })
 
-  assert.notEqual(run.status, 0, 'must not follow a pin away from the meta version')
-  assert.match(run.output, /not at its own version/)
-  assert.doesNotMatch(
-    run.invocations,
-    /-android-arm64@/,
-    'npm must not be invoked for a slice pinned away from the meta version',
-  )
-  assert.equal(run.androidPrebuildInstalled, false)
+  assert.equal(run.status, 0, run.output)
+  assert.match(run.invocations, /spec=@qvac\/asr-ggml-android-arm64@0\.5\.0/)
+  assert.ok(run.androidPrebuildInstalled)
+})
+
+// The map is registry-controlled: it may confirm the slice name the slicer
+// writes, never redirect the install to another package.
+const FOREIGN_MAP_ENTRIES = [
+  '@qvac/tts-ggml-android-arm64',
+  '@evil/payload',
+  './addon-unavailable.js',
+]
+
+for (const entry of FOREIGN_MAP_ENTRIES) {
+  test(`a #host-addon map naming ${entry} is refused`, () => {
+    const run = runStep({
+      addonName: '@qvac/asr-ggml',
+      packageVersion: '@qvac/asr-ggml@0.5.0',
+      force: 'true',
+      npmEnv: { ...SPLIT, MOCK_NPM_HOST_ADDON_ANDROID: entry },
+    })
+
+    assert.notEqual(run.status, 0, `must not follow a map entry of ${entry}`)
+    assert.match(run.output, /#host-addon map does not name @qvac\/asr-ggml-android-arm64/)
+    assert.equal(run.invocations.match(/^spec=/gm).length, 1, 'no slice resolve')
+    assert.equal(run.androidPrebuildInstalled, false)
+  })
+}
+
+test('a split meta without a #host-addon map is refused', () => {
+  const run = runStep({
+    addonName: '@qvac/asr-ggml',
+    packageVersion: '@qvac/asr-ggml@0.5.0',
+    force: 'true',
+    npmEnv: { ...SPLIT, MOCK_NPM_NO_HOST_ADDON: '1' },
+  })
+
+  assert.notEqual(run.status, 0)
+  assert.match(run.output, /got 'nothing'/)
+  assert.equal(run.invocations.match(/^spec=/gm).length, 1, 'no slice resolve')
 })
 
 test('a slice that resolves to a different version fails instead of installing', () => {
@@ -754,11 +784,12 @@ test('a @tetherto dev build of a split addon still uses its inline prebuilds', (
   )
 })
 
-// The slice spec's version half is REGISTRY-CONTROLLED. `name@<spec>` is an npm
-// alias, so whatever follows the '@' decides the spec type: "evil/repo" resolves
-// as a GitHub shorthand and `npm pack` would clone it and RUN its prepare script,
-// in a step holding a GPR credential. The caller's spec is already regex-gated
-// for this reason; the slice spec must be too.
+// The slice is packed at the meta's version, and on an empty or dist-tag spec
+// that version is REGISTRY-CONTROLLED. `name@<spec>` is an npm alias, so
+// whatever follows the '@' decides the spec type: "evil/repo" resolves as a
+// GitHub shorthand and `npm pack` would clone it and RUN its prepare script, in
+// a step holding a GPR credential. The caller's spec is already regex-gated for
+// this reason; the slice spec must be too.
 const HOSTILE_SLICE_PINS = [
   'evil/repo',
   'git+https://github.com/evil/x.git',
@@ -776,12 +807,10 @@ const HOSTILE_SLICE_PINS = [
 ]
 
 for (const pin of HOSTILE_SLICE_PINS) {
-  test(`a slice pinned to a non-exact-version spec is refused: ${JSON.stringify(pin)}`, () => {
+  test(`a split meta resolving to a non-exact version is refused: ${JSON.stringify(pin)}`, () => {
     const run = runStep({
       addonName: '@qvac/asr-ggml',
-      packageVersion: '@qvac/asr-ggml@0.5.0',
-      force: 'true',
-      npmEnv: { ...SPLIT, MOCK_NPM_SLICE_PIN: pin },
+      npmEnv: { MOCK_NPM_SPLIT: '1', MOCK_NPM_VERSION: pin },
     })
 
     assert.notEqual(run.status, 0, `must fail closed on slice pin ${pin}`)
