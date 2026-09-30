@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Raise the `speech-cpp` floor to `2026-09-29#2`, the revision that ships the
   MOSS-SoundEffect and MOSS-Speech engines.
 
+### Fixed
+
+- Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
+  reports more free device memory than total once the process has allocated
+  past the GPU's recommended working set, which made a model that does not fit
+  report `fits`. Synthesis is unchanged.
+
 ## [0.10.1] - 2026-09-29
 
 ### Fixed
