@@ -261,13 +261,13 @@ jobs:
 
       - name: Setup Bare tooling (composite)
         if: matrix.mode == 'standard'
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@8668ac46334eb595aa095c94b53322c557b1bc39
+        uses: tetherto/qvac/.github/actions/setup-bare-tooling@ef3d614873ab1ed71aaa07c3df7b23d2760fb12b
         with:
           shell_type: ${{ (matrix.platform == 'win32' || matrix.platform == 'windows') && 'powershell' || 'bash' }}
 
       - name: Install bare tooling (global)
         if: matrix.mode == 'coverage'
-        run: npm install -g --force bare bare-make
+        run: npm install -g --force bare bare-make@1.8.0
 
       - name: Setup Apple Clang
         if: matrix.mode == 'standard' && matrix.platform == 'darwin'
