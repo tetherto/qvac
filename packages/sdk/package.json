@@ -222,6 +222,7 @@
     "@qvac/diffusion-cpp": "^0.25.0",
     "@qvac/embed-llamacpp": "0.43.0",
     "@qvac/error": "^0.1.1",
+    "@qvac/ggml-rpc-server": "0.1.0",
     "@qvac/inference": "^0.20.0",
     "@qvac/langdetect-text": "^0.1.2",
     "@qvac/llm-llamacpp": "0.55.0",
@@ -289,8 +290,7 @@
     "tsc-alias": "^1.8.17",
     "tsx": "4.23.1",
     "typescript": "^5.9.3",
-    "@qvac/infer-base": "0.4.2",
-    "@qvac/ggml-rpc-server": "0.1.0"
+    "@qvac/infer-base": "0.4.2"
   },
   "peerDependencies": {
     "@electron-forge/plugin-base": "^7.11.1",
@@ -301,8 +301,7 @@
     "expo-modules-core": ">=3.0.0",
     "pear-pipe": ">=1.0.0",
     "react-native-bare-kit": "*",
-    "tsx": "*",
-    "@qvac/ggml-rpc-server": "0.1.0"
+    "tsx": "*"
   },
   "peerDependenciesMeta": {
     "@electron-forge/plugin-base": {
@@ -330,9 +329,6 @@
       "optional": true
     },
     "tsx": {
-      "optional": true
-    },
-    "@qvac/ggml-rpc-server": {
       "optional": true
     }
   },

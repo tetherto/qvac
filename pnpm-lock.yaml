@@ -1726,6 +1726,9 @@ importers:
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
+      '@qvac/ggml-rpc-server':
+        specifier: 0.1.0
+        version: link:../ggml-rpc-server
       '@qvac/inference':
         specifier: ^0.20.0
         version: link:../inference
@@ -1847,9 +1850,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.29.0(supports-color@8.1.1)(zod@4.4.3)
-      '@qvac/ggml-rpc-server':
-        specifier: 0.1.0
-        version: link:../ggml-rpc-server
       '@qvac/infer-base':
         specifier: 0.4.2
         version: 0.4.2(bare-abort-controller@1.1.2)
