@@ -438,16 +438,6 @@ jobs:
         shell: bash
         run: |
           npm install --no-save bare-make
-          # Windows-only, until runners install current bare-make globally and
-          # this local install can go away. llvm-runtime drops an extensionless
-          # llvm-nm script into node_modules/.bin. Prepending that directory
-          # makes find_program() select the script over
-          # C:\Program Files\LLVM\bin\llvm-nm.exe, and cmake cannot execute it
-          # when generating qvac-fabric-exports.def. Remove the shims so the
-          # system llvm-nm still scans the MSVC archives.
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            rm -f node_modules/.bin/llvm-nm node_modules/.bin/llvm-nm.cmd node_modules/.bin/llvm-nm.ps1
-          fi
           echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
           ./node_modules/.bin/bare-make --version
 
@@ -508,10 +498,12 @@ jobs:
           fi
           echo "DEFINES=$DEFINES" >> "$GITHUB_ENV"
 
+      # Default shell: bash on Linux and macOS, pwsh on Windows. Git bash
+      # selects npm's extensionless llvm-nm shim, which cmake cannot execute.
+      # pwsh resolves the .cmd / .ps1 shims instead.
       - name: Run bare-make generate
         working-directory: ${{ env.WORKDIR }}
-        shell: bash
-        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} $DEFINES
+        run: bare-make generate --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} ${{ matrix.flags }} ${{ env.DEFINES }}
 
       - name: Dump vcpkg build logs on failure
         if: failure()
