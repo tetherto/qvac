@@ -401,7 +401,10 @@ function formatMissingPrebuilds(issues: VerifyBundleIssue[]): string[] {
   if (matches.length === 0) return []
   const lines = ['  Missing prebuild:']
   for (const issue of matches) {
-    lines.push(`    - ${issue.addon} for ${issue.host}`)
+    const pin = issue.platformPackage
+    const needs =
+      pin === undefined ? '' : ` (needs "${pin.name}": "${pin.version}" in package.json)`
+    lines.push(`    - ${issue.addon} for ${issue.host}${needs}`)
   }
   lines.push('')
   return lines

@@ -149,6 +149,8 @@ export {
   type TtsCosyvoice3RuntimeConfig,
   type TtsAudio8LoadConfig,
   type TtsAudio8RuntimeConfig,
+  type TtsMossLoadConfig,
+  type TtsMossRuntimeConfig,
   type CompletionParams,
   type ToolDialect,
   type RagSearchResult,
