@@ -91,8 +91,8 @@ This release migrates the addon off its bundled, statically-linked `qvac-fabric`
 - `main-gpu` accepts two stable forms beside the existing ones: a
   backend-qualified index (`"cuda:0"`, the nth device of that family) and a PCI
   bus id (`"0000:65:00.0"`). Both resolve by scanning devices rather than
-  indexing, so neither moves when a backend is added. A value matching no device
-  warns and falls back to the default order rather than failing.
+  indexing, so neither moves when a backend is added. A qualified index or PCI
+  bus id matching no device fails instead of selecting a different GPU.
 - Tool calls are now constrained by the chat template's native tool grammar:
   when a prompt carries tool definitions the sampler applies the grammar the
   template computes, so malformed tool-call markup and schema-invalid

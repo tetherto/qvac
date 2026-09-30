@@ -1485,6 +1485,29 @@ NormalizedLoad normalizeLoadForFit(
                   K_LEGACY_PARSER_NAME.data()));
         }
       }
+      if (backendRequired) {
+        for (const backend_selection::SplitDevice& device :
+             splitSelection.devices) {
+          const std::string name = toLowerAscii(device.name);
+          const bool matches =
+              !device.isRpc &&
+              std::ranges::any_of(
+                  backendOverride, [&name](const std::string& family) {
+                    return name.find(family) != std::string::npos ||
+                           (family == "rocm" &&
+                            name.find("hip") != std::string::npos) ||
+                           (family == "metal" && name.rfind("mtl", 0) == 0);
+                  });
+          if (!matches) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InvalidArgument,
+                string_format(
+                    "%s: device '%s' does not match the required backend.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    device.name.c_str()));
+          }
+        }
+      }
       // Restrict the final split set as well as the primary backend choice.
       const size_t explicitDeviceCount = splitSelection.devices.size();
       backend_selection::applyAdrenoRestrictions(
@@ -1567,6 +1590,11 @@ NormalizedLoad normalizeLoadForFit(
             anyDevice(&backend_selection::SplitDevice::isOpenCl);
         selected.isMetal = anyDevice(&backend_selection::SplitDevice::isMetal);
       } else {
+        if (backendRequired) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              "backend-required matched no eligible split device");
+        }
         // The split filter, not the earlier single-device cascade, caused
         // this CPU fallback. Do not report the earlier device's skip reason.
         selectionSkipReason = ExclusionReason::None;
@@ -1790,15 +1818,18 @@ NormalizedLoad normalizeLoadForFit(
     isGpu = useGpu;
     isOpenCl = isGpu && selected.isOpenCl;
     isMetal = isGpu && selected.isMetal;
-    isCuda = isGpu && (selected.name.find("cuda") != std::string::npos ||
-                       std::ranges::any_of(
-                           splitSelection.devices,
-                           [](const backend_selection::SplitDevice& device) {
-                             return backend_selection::backendFamilyCodeOf(
-                                        backend_selection::BackendType::GPU,
-                                        device.name) ==
-                                    backend_selection::BackendFamilyCode::Cuda;
-                           }));
+    isCuda =
+        isGpu &&
+        (backend_selection::backendFamilyCodeOf(
+             backend_selection::BackendType::GPU, selected.name) ==
+             backend_selection::BackendFamilyCode::Cuda ||
+         std::ranges::any_of(
+             splitSelection.devices,
+             [](const backend_selection::SplitDevice& device) {
+               return backend_selection::backendFamilyCodeOf(
+                          backend_selection::BackendType::GPU, device.name) ==
+                      backend_selection::BackendFamilyCode::Cuda;
+             }));
   }
 
   tuneLoadConfigMap(

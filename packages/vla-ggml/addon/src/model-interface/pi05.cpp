@@ -1151,6 +1151,10 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
                 (bname != nullptr ? bname : "?") + " (" +
                 (ddesc != nullptr ? ddesc : "?") + ")");
       } else {
+        if (backendRequired) {
+          throw std::runtime_error(
+              "pi05LoadModel: required GPU backend initialization failed");
+        }
         QLOG_IF(
             Priority::WARNING,
             "pi05LoadModel: ggml_backend_dev_init returned null; "
@@ -1297,6 +1301,10 @@ static std::unique_ptr<Pi05ModelInternal> pi05LoadModel(
     const int64_t nTensorsInGguf = gguf_get_n_tensors(m->gguf);
     if (!pi05LoadWeightsAllocCopy(
             *m, ggufPath.c_str(), m->gguf, buft, dataOffset, nTensorsInGguf)) {
+      if (backendRequired) {
+        throw std::runtime_error(
+            "pi05LoadModel: required GPU weight allocation failed");
+      }
       QLOG_IF(
           Priority::WARNING,
           "pi05LoadModel: GPU weight alloc failed — falling back to CPU");

@@ -565,6 +565,11 @@ BertModelSetup setupParams(
         chosenBackend = {BackendType::GPU, traits.backendName};
         isOpenCl = traits.isOpenCl;
       } else {
+        if (backendRequired) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              "backend-required matched no eligible split device");
+        }
         if (!splitSelection.rejectedDevices.empty()) {
           std::string message =
               "[BertModel] no eligible GPU backend found; rejected ";

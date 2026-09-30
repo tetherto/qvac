@@ -138,20 +138,6 @@ enum class ExclusionReason : std::uint8_t {
   KvCacheTypeUnsupported,
 };
 
-/// @brief Whether landing on CPU because every GPU carries this reason is an
-/// acceptable outcome or an error.
-///
-/// PreferOther means the guard actively wants another backend, and CPU is a
-/// legitimate destination - this is every Adreno/BitNet/finetune rule, and
-/// falling to CPU is what they already do. Incapable means the device cannot
-/// run the load at all; if nothing else can either, that is worth failing over
-/// rather than silently running somewhere far slower than the caller asked for.
-enum class ExclusionKind : std::uint8_t { PreferOther, Incapable };
-
-/// Total by construction: a new ExclusionReason must be classified before this
-/// compiles.
-ExclusionKind kindOf(ExclusionReason reason);
-
 /// @brief What the load requires of a device beyond its being a GPU.
 ///
 /// Default-constructed means no extra constraint, which is every pre-QVAC-23763

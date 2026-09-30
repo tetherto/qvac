@@ -1681,6 +1681,16 @@ TEST_F(BackendSelectionTest, CudaDemotedForPolarQuantToo) {
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"pq3_0"}).name, "vulkan0");
 }
 
+TEST_F(BackendSelectionTest, AdrenoOpenClKvGuardDoesNotMoveToVulkan) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(ADRENO_DESC, OPENCL_BACK)));
+  mockBackend.addDevice(createGPUDevice(ADRENO_DESC, VULKAN0_BACK));
+
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::GPU);
+  EXPECT_EQ(choice.name, "gpuopencl");
+}
+
 // A quantized type CUDA *can* run must not trigger the filter, or every
 // quantized-KV load on an NVIDIA host silently moves to Vulkan.
 TEST_F(BackendSelectionTest, CudaKeptForStandardQuantizedKvType) {
@@ -1700,19 +1710,27 @@ TEST_F(BackendSelectionTest, KvConstraintChecksEveryRequestedType) {
   EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0", "q8_0"}).name, "vulkan0");
 }
 
-// No GPU can run it and the caller asked for a GPU: failing is better than
-// quietly running an order of magnitude slower on CPU.
-TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantThrows) {
+// Preserve the CPU fallback when no GPU can run the requested KV type.
+TEST_F(BackendSelectionTest, CudaOnlyHostWithTurboQuantFallsBackToCpu) {
   mockBackend.addDevice(
       withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
-  try {
-    chooseWithKvTypes(mockBackend, {"tbq4_0"});
-    FAIL() << "expected a StatusError";
-  } catch (const qvac_errors::StatusError& e) {
-    const std::string what = e.what();
-    EXPECT_NE(what.find("cuda0"), std::string::npos) << what;
-    EXPECT_NE(what.find("tbq4_0"), std::string::npos) << what;
-  }
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).type, BackendType::CPU);
+}
+
+TEST_F(BackendSelectionTest, VulkanKeepsGpuForFabricCpuKvFallback) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, VULKAN0_BACK)));
+  const BackendChoice choice = chooseWithKvTypes(mockBackend, {"tbq4_0"});
+  EXPECT_EQ(choice.type, BackendType::GPU);
+  EXPECT_EQ(choice.name, "vulkan0");
+}
+
+TEST_F(BackendSelectionTest, UnsupportedCudaCanFallThroughToVulkanCpuKv) {
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, CUDA0_BACK)));
+  mockBackend.addDevice(
+      withoutTurboQuant(createGPUDevice(TESLA_DESC, VULKAN0_BACK)));
+  EXPECT_EQ(chooseWithKvTypes(mockBackend, {"tbq4_0"}).name, "vulkan0");
 }
 
 TEST_F(BackendSelectionTest, InactiveOpenClCapabilityMissFallsBackToCpu) {
@@ -1960,14 +1978,12 @@ TEST_F(BackendSelectionTest, MainGpuQualifiedIsIndependentOfEnumerationOrder) {
       "cuda0");
 }
 
-TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeFallsThrough) {
+TEST_F(BackendSelectionTest, MainGpuQualifiedOutOfRangeThrows) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, VULKAN0_BACK));
-  // device 4 of the cuda family does not exist; selection warns and uses the
-  // default order rather than failing, as an out-of-range integer does
-  EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}).name,
-      "cuda0");
+  EXPECT_THROW(
+      chooseWithMainGpu(mockBackend, MainGpuQualified{"cuda", 4}),
+      qvac_errors::StatusError);
 }
 
 TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
@@ -2002,21 +2018,19 @@ TEST_F(BackendSelectionTest, MainGpuShortBusIdSelectsMatchingDevice) {
       "cuda0");
 }
 
-TEST_F(BackendSelectionTest, MainGpuBusIdNotFoundFallsThrough) {
+TEST_F(BackendSelectionTest, MainGpuBusIdNotFoundThrows) {
   mockBackend.addDevice(
       withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
-  EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:ff:00.0"}).name,
-      "cuda0");
+  EXPECT_THROW(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:ff:00.0"}),
+      qvac_errors::StatusError);
 }
 
-// A backend that publishes no bus id cannot be addressed this way; falling
-// through beats failing a load over a device the caller may not have meant.
-TEST_F(BackendSelectionTest, MainGpuBusIdWithoutPublishedIdsFallsThrough) {
+TEST_F(BackendSelectionTest, MainGpuBusIdWithoutPublishedIdsThrows) {
   mockBackend.addDevice(createGPUDevice(TESLA_DESC, CUDA0_BACK));
-  EXPECT_EQ(
-      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:65:00.0"}).name,
-      "cuda0");
+  EXPECT_THROW(
+      chooseWithMainGpu(mockBackend, MainGpuBusId{"0000:65:00.0"}),
+      qvac_errors::StatusError);
 }
 
 // ---- kvCacheTypeFromString ----
@@ -2232,6 +2246,8 @@ TEST_F(BackendSelectionTest, ExactMainGpuForcesSingleRegistryDeviceList) {
 }
 
 TEST_F(BackendSelectionTest, StrictBackendFiltersEverySplitDevice) {
+  mockBackend.addDevice(
+      MockDevice("remote", "rpc0", GGML_BACKEND_DEVICE_TYPE_GPU, "RPC"));
   mockBackend.addDevice(withDeviceId(
       createGPUDeviceInRegistry(NVIDIA_DESC, CUDA0_BACK, CUDA_REG),
       "0000:01:00.0"));

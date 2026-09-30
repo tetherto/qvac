@@ -168,7 +168,11 @@ for (const kv of KV_COMBOS) {
       // addon's TBQ guard. Treat that as a clean skip rather than
       // a test failure — the guard itself is exercised on the
       // Metal/iOS path above.
-      if (isAndroid && /TurboQuant.*not supported/i.test(err.message)) {
+      if (
+        isAndroid &&
+        (/TurboQuant.*not supported/i.test(err.message) ||
+          /quantized KV-cache is not supported on the OpenCL/i.test(err.message))
+      ) {
         t.comment(`Android backend does not support TBQ: ${err.message}`)
         t.pass('addon rejected TBQ on this Android backend (likely OpenCL)')
         return

@@ -1439,6 +1439,9 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
             std::string("grootLoadModel: using GPU backend: ") +
                 (bname != nullptr ? bname : "?") + " (" +
                 (ddesc != nullptr ? ddesc : "?") + ")");
+      } else if (backendRequired) {
+        throw std::runtime_error(
+            "grootLoadModel: required GPU backend initialization failed");
       }
     }
   }
@@ -1645,6 +1648,10 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
     const int64_t nTensorsInGguf = gguf_get_n_tensors(m->gguf);
     if (!grootLoadWeightsAllocCopy(
             *m, ggufPath.c_str(), m->gguf, buft, dataOffset, nTensorsInGguf)) {
+      if (backendRequired) {
+        throw std::runtime_error(
+            "grootLoadModel: required GPU weight allocation failed");
+      }
       QLOG_IF(
           Priority::WARNING,
           "grootLoadModel: GPU weight alloc failed — falling back to CPU");
