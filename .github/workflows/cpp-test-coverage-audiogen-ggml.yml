@@ -1,14 +1,9 @@
 name: CPP Tests (AudioGen GGML)
 
-# Stub lane. The audiogen-ggml addon has no addon-level C++ unit tests yet
-# (CMakeLists.txt BUILD_TESTING is OFF, reserved for a future addon suite).
-# The ACE-Step engine's deterministic C++ unit tests (test_acestep_units:
-# philox, FSQ, scheduler, VAE progress) live in and run from
-# qvac-fabric-speech.cpp's engines/audiogen CI, so there is nothing to build
-# or run here today. This job exists so on-pr-audiogen-ggml.yml's
-# cpp-tests-coverage gate resolves green; replace the body with a real
-# build/coverage flow (mirror cpp-test-coverage-tts-ggml.yml) once the addon
-# grows its own C++ tests.
+# The audiogen-ggml addon has no addon-level C++ unit tests yet (CMakeLists.txt
+# BUILD_TESTING is reserved for a future suite). The ACE-Step engine's
+# deterministic C++ unit tests live in qvac-fabric-speech.cpp. This lane runs
+# the header-only config-parse fuzz target on Linux (libFuzzer + ASan).
 
 on:
   workflow_call:
@@ -23,14 +18,76 @@ on:
 permissions:
   contents: read
 
+env:
+  PKG_DIR: packages/audiogen-ggml
+
 jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
   cpp-tests:
-    name: audiogen-ggml C++ tests (stub)
-    runs-on: ubuntu-latest
+    needs: runner_names
+    permissions:
+      contents: read
+      id-token: write
+      checks: write
+    runs-on: ${{ matrix.runner || matrix.os }}
+    environment: release
+    name: ${{ matrix.platform }}-${{ matrix.arch }}-cpp-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x64
+            runner: ${{ needs.runner_names.outputs.linux_ubuntu2204_x64 }}
+    env:
+      VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/vcpkg/cache,readwrite"
+
     steps:
-      - name: No addon-level C++ tests yet
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        shell: bash
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+
+      - name: Install bare tooling
+        run: npm install -g --force bare bare-make
+
+      - name: Install NPM dependencies
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm install
+
+      - if: ${{ matrix.os == 'ubuntu-22.04' }}
+        name: Configure vcpkg in linux
+        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> $GITHUB_ENV
+
+      - name: Cleanup vcpkg
         shell: bash
         run: |
-          echo "audiogen-ggml has no addon-level C++ unit tests yet." >> "$GITHUB_STEP_SUMMARY"
-          echo "The ACE-Step engine unit tests run in qvac-fabric-speech.cpp's audiogen CI." >> "$GITHUB_STEP_SUMMARY"
-          echo "Nothing to build/run here — passing."
+          rm -rf $VCPKG_ROOT/buildtrees/*
+          rm -rf $VCPKG_ROOT/packages/*
+
+      - name: Build fuzz targets
+        working-directory: ${{ env.PKG_DIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        working-directory: ${{ env.PKG_DIR }}
+        run: |
+          node --test scripts/__tests__/run-cpp-fuzz.test.js
+          npm run fuzz:run
