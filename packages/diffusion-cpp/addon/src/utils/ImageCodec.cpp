@@ -32,7 +32,8 @@ namespace image_codec {
 
 namespace {
 
-constexpr uint64_t MAX_HIGH_MEMORY_SOURCE_BYTES = 64ULL * 1024 * 1024;
+constexpr uint64_t MAX_16_BIT_PNG_SOURCE_BYTES = 64ULL * 1024 * 1024;
+constexpr uint64_t MAX_FOUR_COMPONENT_JPEG_SOURCE_BYTES = 128ULL * 1024 * 1024;
 constexpr int MAX_JPEG_SCANS = 32;
 
 uint32_t readBigEndian32(const uint8_t* bytes) {
@@ -103,7 +104,7 @@ bool validatePngInflate(
   }
   const uint64_t pixels = static_cast<uint64_t>(width) * height;
   if (depth == 16 &&
-      pixels * sourceChannels * 2 > MAX_HIGH_MEMORY_SOURCE_BYTES) {
+      pixels * sourceChannels * 2 > MAX_16_BIT_PNG_SOURCE_BYTES) {
     failure = DecodeFailure::HighMemoryInputLimit;
     return false;
   }
@@ -209,7 +210,8 @@ bool validateJpegScans(
       return false;
     }
     if ((marker == 0xC0 || marker == 0xC1 || marker == 0xC2) && length >= 8 &&
-        bytes[pos + 7] == 4 && pixels * 4 > MAX_HIGH_MEMORY_SOURCE_BYTES) {
+        bytes[pos + 7] == 4 &&
+        pixels * 4 > MAX_FOUR_COMPONENT_JPEG_SOURCE_BYTES) {
       failure = DecodeFailure::HighMemoryInputLimit;
       return false;
     }
@@ -291,7 +293,8 @@ std::string decodeFailureMessage(
     return "image exceeds remaining " + describePixels(jobPixelLimit) +
            " job pixel budget";
   case DecodeFailure::HighMemoryInputLimit:
-    return "high-bit-depth PNG or CMYK JPEG exceeds 64 MiB source budget";
+    return "high-bit-depth PNG exceeds 64 MiB or CMYK JPEG exceeds 128 MiB "
+           "source budget";
   case DecodeFailure::PngInflateLimit:
     return "PNG inflated data exceeds declared image size or is invalid";
   case DecodeFailure::JpegScanLimit:

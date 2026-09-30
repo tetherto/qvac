@@ -521,6 +521,16 @@ TEST_F(StbImageSecurityTest, RejectsHighMemoryFourComponentJpeg) {
       image_codec::decodeImage(jpeg, image_codec::MAX_DECODED_PIXELS, &failure);
   EXPECT_EQ(decoded.data, nullptr);
   EXPECT_EQ(failure, image_codec::DecodeFailure::HighMemoryInputLimit);
+
+  auto withinSourceBudget = jpeg;
+  withinSourceBudget[7] = 0x0F;
+  withinSourceBudget[8] = 0xA0;
+  withinSourceBudget[9] = 0x17;
+  withinSourceBudget[10] = 0x70;
+  auto invalidData = image_codec::decodeImage(
+      withinSourceBudget, image_codec::MAX_DECODED_PIXELS, &failure);
+  EXPECT_EQ(invalidData.data, nullptr);
+  EXPECT_NE(failure, image_codec::DecodeFailure::HighMemoryInputLimit);
 }
 
 TEST_F(StbImageSecurityTest, RejectsExcessiveJpegScans) {
