@@ -1999,7 +1999,9 @@ TEST_F(BackendSelectionTest, MainGpuBusIdSelectsMatchingDevice) {
 
 TEST_F(BackendSelectionTest, MainGpuBusIdKeepsBackendRepresentations) {
   mockBackend.addDevice(
-      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0"));
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA0_BACK), "0000:65:00.0-v0"));
+  mockBackend.addDevice(
+      withDeviceId(createGPUDevice(TESLA_DESC, CUDA1_BACK), "0000:65:00.0-v1"));
   mockBackend.addDevice(
       withDeviceId(createGPUDevice(TESLA_DESC, VULKAN0_BACK), "0000:65:00.0"));
   BackendRequest request;
@@ -2009,6 +2011,9 @@ TEST_F(BackendSelectionTest, MainGpuBusIdKeepsBackendRepresentations) {
   request.backendRequired = true;
   EXPECT_EQ(
       chooseBackend(request, mockBackend.toBackendInterface()).name, "vulkan0");
+  request.backendOverride = {"cuda"};
+  EXPECT_EQ(
+      chooseBackend(request, mockBackend.toBackendInterface()).name, "cuda0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuShortBusIdSelectsMatchingDevice) {
@@ -2267,6 +2272,17 @@ TEST_F(BackendSelectionTest, StrictBackendFiltersEverySplitDevice) {
       getTensorSplitDeviceNames(
           mockBackend.toBackendInterface(), "cuda0", constraints),
       (std::vector<std::string>{"cuda0"}));
+}
+
+TEST_F(BackendSelectionTest, StrictBackendKeepsSingleRegistrySplit) {
+  mockBackend.addDevice(
+      createGPUDeviceInRegistry(NVIDIA_DESC, VULKAN0_BACK, VULKAN_REG));
+  LoadConstraints constraints;
+  constraints.requiredBackendFamilies = {"vulkan"};
+  const SplitDeviceSelection selection = getSplitDeviceSelection(
+      mockBackend.toBackendInterface(), "vulkan0", constraints);
+  ASSERT_EQ(selection.devices.size(), 1U);
+  EXPECT_EQ(selection.devices[0].name, VULKAN0_BACK);
 }
 
 TEST_F(BackendSelectionTest, SplitModeDeviceNamesEmptyWithNoGpuAtAll) {
